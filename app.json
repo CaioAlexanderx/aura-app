@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Aura.",
+    "slug": "aura-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "aura",
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.getaura.app" },
+    "android": { "package": "com.getaura.app" },
+    "web": { "bundler": "metro" },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": { "typedRoutes": true }
+  }
+}
