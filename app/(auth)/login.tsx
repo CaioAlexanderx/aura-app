@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from "react-native";
+import {
+  View, Text, TextInput, TouchableOpacity,
+  ActivityIndicator, StyleSheet, Alert,
+} from "react-native";
 import { Link } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
@@ -25,25 +28,39 @@ export default function LoginScreen() {
         <Text style={s.wordmark}>Aura.</Text>
         <Text style={s.subtitle}>Gestão para o seu negócio</Text>
       </View>
+
       <View style={s.card}>
         <Text style={s.title}>Entrar</Text>
+
         <View style={s.field}>
           <Text style={s.label}>E-mail</Text>
-          <TextInput style={s.input} value={email} onChangeText={setEmail}
+          <TextInput
+            style={s.input} value={email} onChangeText={setEmail}
             placeholder="seu@email.com" placeholderTextColor={Colors.ink3}
-            autoCapitalize="none" keyboardType="email-address" />
+            autoCapitalize="none" keyboardType="email-address" autoComplete="email"
+          />
         </View>
+
         <View style={s.field}>
           <Text style={s.label}>Senha</Text>
-          <TextInput style={s.input} value={password} onChangeText={setPassword}
-            placeholder="••••••••" placeholderTextColor={Colors.ink3} secureTextEntry />
+          <TextInput
+            style={s.input} value={password} onChangeText={setPassword}
+            placeholder="••••••••" placeholderTextColor={Colors.ink3}
+            secureTextEntry
+          />
         </View>
+
         <TouchableOpacity style={s.btn} onPress={handleLogin} disabled={isLoading}>
-          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Entrar</Text>}
+          {isLoading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.btnText}>Entrar</Text>}
         </TouchableOpacity>
+
         <View style={s.footer}>
           <Text style={s.footerText}>Ainda não tem conta? </Text>
-          <Link href="/(auth)/register"><Text style={s.link}>Criar conta</Text></Link>
+          <Link href="/(auth)/register">
+            <Text style={s.link}>Criar conta</Text>
+          </Link>
         </View>
       </View>
     </View>

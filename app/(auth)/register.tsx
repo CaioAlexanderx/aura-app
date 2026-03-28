@@ -1,19 +1,24 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, ScrollView } from "react-native";
+import {
+  View, Text, TextInput, TouchableOpacity,
+  ActivityIndicator, StyleSheet, Alert, ScrollView,
+} from "react-native";
 import { Link } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
 export default function RegisterScreen() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const { register, isLoading } = useAuthStore();
+  const [name, setName]             = useState("");
+  const [email, setEmail]           = useState("");
+  const [password, setPassword]     = useState("");
+  const [companyName, setCompany]   = useState("");
+  const { register, isLoading }     = useAuthStore();
 
   async function handleRegister() {
-    if (!name || !email || !password || !companyName) { Alert.alert("Preencha todos os campos"); return; }
+    if (!name || !email || !password || !companyName) {
+      Alert.alert("Preencha todos os campos"); return;
+    }
     try {
       await register(name.trim(), email.trim().toLowerCase(), password, companyName.trim());
     } catch (err) {
@@ -22,10 +27,10 @@ export default function RegisterScreen() {
   }
 
   const fields = [
-    { label: "Seu nome", value: name, set: setName, placeholder: "João Mendes" },
-    { label: "E-mail", value: email, set: setEmail, placeholder: "joao@empresa.com", keyboard: "email-address" as const },
-    { label: "Senha", value: password, set: setPassword, placeholder: "8+ caracteres", secure: true },
-    { label: "Nome da empresa", value: companyName, set: setCompanyName, placeholder: "Minha Empresa Ltda." },
+    { label: "Seu nome",        value: name,        set: setName,    placeholder: "João Mendes" },
+    { label: "E-mail",          value: email,       set: setEmail,   placeholder: "joao@empresa.com", keyboard: "email-address" as const },
+    { label: "Senha",           value: password,    set: setPassword,placeholder: "8+ caracteres", secure: true },
+    { label: "Nome da empresa", value: companyName, set: setCompany, placeholder: "Minha Empresa Ltda." },
   ];
 
   return (
@@ -34,23 +39,33 @@ export default function RegisterScreen() {
         <Text style={s.wordmark}>Aura.</Text>
         <Text style={s.subtitle}>Crie sua conta grátis</Text>
       </View>
+
       <View style={s.card}>
         <Text style={s.title}>Criar conta</Text>
         {fields.map(f => (
           <View style={s.field} key={f.label}>
             <Text style={s.label}>{f.label}</Text>
-            <TextInput style={s.input} value={f.value} onChangeText={f.set}
+            <TextInput
+              style={s.input} value={f.value} onChangeText={f.set}
               placeholder={f.placeholder} placeholderTextColor={Colors.ink3}
-              secureTextEntry={f.secure} keyboardType={f.keyboard ?? "default"}
-              autoCapitalize={f.keyboard === "email-address" ? "none" : "words"} />
+              secureTextEntry={f.secure}
+              keyboardType={f.keyboard ?? "default"}
+              autoCapitalize={f.keyboard === "email-address" ? "none" : "words"}
+            />
           </View>
         ))}
+
         <TouchableOpacity style={s.btn} onPress={handleRegister} disabled={isLoading}>
-          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta</Text>}
+          {isLoading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.btnText}>Criar conta</Text>}
         </TouchableOpacity>
+
         <View style={s.footer}>
           <Text style={s.footerText}>Já tem conta? </Text>
-          <Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link>
+          <Link href="/(auth)/login">
+            <Text style={s.link}>Entrar</Text>
+          </Link>
         </View>
       </View>
     </ScrollView>

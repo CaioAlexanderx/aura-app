@@ -3,9 +3,11 @@ import { Colors } from "@/constants/colors";
 
 export default function AuthLayout() {
   return (
-    <Stack screenOptions={{
-      headerShown: false,
-      contentStyle: { backgroundColor: Colors.bg },
-    }} />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: Colors.bg },
+      }}
+    />
   );
 }
