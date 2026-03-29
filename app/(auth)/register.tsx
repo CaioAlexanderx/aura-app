@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
-const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/logo.jpeg";
+const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
 const FEATURES = [
   { icon: "📊", label: "Organização Financeira" },
@@ -35,8 +35,8 @@ export default function RegisterScreen() {
   }
 
   const fields = [
-    { label: "Seu nome",        value: name,     set: setName,     placeholder: "João Mendes" },
-    { label: "E-mail",          value: email,    set: setEmail,    placeholder: "joao@empresa.com", keyboard: "email-address" as const },
+    { label: "Seu nome",        value: name,     set: setName,     placeholder: "Maria Silva" },
+    { label: "E-mail",          value: email,    set: setEmail,    placeholder: "maria@empresa.com", keyboard: "email-address" as const },
     { label: "Senha",           value: password, set: setPassword, placeholder: "8+ caracteres", secure: true },
     { label: "Nome da empresa", value: company,  set: setCompany,  placeholder: "Minha Empresa Ltda." },
   ];
