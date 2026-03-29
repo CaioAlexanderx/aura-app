@@ -35,24 +35,24 @@ export default function DashboardScreen() {
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <View style={s.header}>
         <View>
-          <Text style={s.greeting}>Bom dia, {user?.name?.split(" ")[0]} \uD83D\uDC4B</Text>
-          <Text style={s.company}>{company?.name ?? "\u2014"} \u00b7 {company?.plan ?? "\u2014"}</Text>
+          <Text style={s.greeting}>Bom dia, {user?.name?.split(" ")[0]} 👋</Text>
+          <Text style={s.company}>{company?.name ?? "—"} · {company?.plan ?? "—"}</Text>
         </View>
         <TouchableOpacity onPress={logout}><Text style={s.logout}>Sair</Text></TouchableOpacity>
       </View>
 
       <View style={s.hero}>
-        <Text style={s.heroEye}>Mar\u00e7o \u00b7 2026</Text>
-        <Text style={s.heroTitle}>Sua empresa est\u00e1 saud\u00e1vel.</Text>
-        <Text style={s.heroSub}>DAS vence em 14 dias \u2014 estimativa preparada.</Text>
+        <Text style={s.heroEye}>Março · 2026</Text>
+        <Text style={s.heroTitle}>Sua empresa está saudável.</Text>
+        <Text style={s.heroSub}>DAS vence em 14 dias — estimativa preparada.</Text>
       </View>
 
-      <Text style={s.section}>Vis\u00e3o geral</Text>
+      <Text style={s.section}>Visão geral</Text>
       {isLoading ? <Text style={s.loading}>Carregando...</Text> : (
         <View style={s.grid}>
-          <KpiCard label="Receita do m\u00eas"  value={fmt(18420)} delta="\u25b2 12% vs anterior" deltaUp />
-          <KpiCard label="Despesas"        value={fmt(7840)}  delta="\u25b2 3% vs anterior"  deltaUp={false} />
-          <KpiCard label="Saldo l\u00edquido"   value={fmt(10580)} delta="\u25b2 18% vs anterior" deltaUp />
+          <KpiCard label="Receita do mês"  value={fmt(18420)} delta="▲ 12% vs anterior" deltaUp />
+          <KpiCard label="Despesas"        value={fmt(7840)}  delta="▲ 3% vs anterior"  deltaUp={false} />
+          <KpiCard label="Saldo líquido"   value={fmt(10580)} delta="▲ 18% vs anterior" deltaUp />
           <KpiCard label="Vendas hoje"     value="47"         delta="Atualizado agora" />
         </View>
       )}
