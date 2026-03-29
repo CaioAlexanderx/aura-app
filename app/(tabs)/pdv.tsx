@@ -7,21 +7,52 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-// ── Mock Products ────────────────────────────────────────────
 const MOCK_PRODUCTS = [
-  { id: "1", name: "Corte Masculino", price: 45.00, category: "Servicos", stock: null },
-  { id: "2", name: "Barba Completa", price: 30.00, category: "Servicos", stock: null },
-  { id: "3", name: "Pomada Modeladora", price: 35.90, category: "Produtos", stock: 24 },
-  { id: "4", name: "Shampoo Anticaspa", price: 28.50, category: "Produtos", stock: 18 },
-  { id: "5", name: "Oleo para Barba", price: 42.00, category: "Produtos", stock: 12 },
-  { id: "6", name: "Corte + Barba", price: 65.00, category: "Combos", stock: null },
-  { id: "7", name: "Hidratacao Capilar", price: 55.00, category: "Servicos", stock: null },
-  { id: "8", name: "Cera Capilar", price: 32.90, category: "Produtos", stock: 15 },
-  { id: "9", name: "Toalha Quente", price: 10.00, category: "Extras", stock: null },
-  { id: "10", name: "Cerveja Artesanal", price: 14.00, category: "Extras", stock: 36 },
+  { id: "1", name: "Corte Masculino", price: 45.00, category: "Servicos", stock: null, barcode: null },
+  { id: "2", name: "Barba Completa", price: 30.00, category: "Servicos", stock: null, barcode: null },
+  { id: "3", name: "Pomada Modeladora", price: 35.90, category: "Produtos", stock: 24, barcode: "7891000315507" },
+  { id: "4", name: "Shampoo Anticaspa", price: 28.50, category: "Produtos", stock: 18, barcode: "7891000428901" },
+  { id: "5", name: "Oleo para Barba", price: 42.00, category: "Produtos", stock: 12, barcode: null },
+  { id: "6", name: "Corte + Barba", price: 65.00, category: "Combos", stock: null, barcode: null },
+  { id: "7", name: "Hidratacao Capilar", price: 55.00, category: "Servicos", stock: null, barcode: null },
+  { id: "8", name: "Cera Capilar", price: 32.90, category: "Produtos", stock: 15, barcode: "7891000532104" },
+  { id: "9", name: "Toalha Quente", price: 10.00, category: "Extras", stock: null, barcode: null },
+  { id: "10", name: "Cerveja Artesanal", price: 14.00, category: "Extras", stock: 36, barcode: "7891000667802" },
 ];
 
 type CartItem = { productId: string; name: string; price: number; qty: number };
+type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string };
+
+// ── Hover Button ─────────────────────────────────────────────
+
+function HoverButton({ label, color, bgColor, onPress, icon, full }: {
+  label: string; color: string; bgColor: string; onPress: () => void; icon?: string; full?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const isWeb = Platform.OS === "web";
+  return (
+    <Pressable
+      onPress={onPress}
+      onHoverIn={isWeb ? () => setHovered(true) : undefined}
+      onHoverOut={isWeb ? () => setHovered(false) : undefined}
+      style={[
+        hb.btn,
+        { backgroundColor: bgColor },
+        full && { flex: 1 },
+        hovered && { transform: [{ translateY: -2 }, { scale: 1.03 }], shadowColor: color, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
+        isWeb && { transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" } as any,
+      ]}
+    >
+      {icon && <Text style={[hb.icon, { color }]}>{icon}</Text>}
+      <Text style={[hb.text, { color }]}>{label}</Text>
+    </Pressable>
+  );
+}
+const hb = StyleSheet.create({
+  btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 16 },
+  icon: { fontSize: 15, fontWeight: "700" },
+  text: { fontSize: 14, fontWeight: "700" },
+});
 
 // ── Product Card ─────────────────────────────────────────────
 
@@ -30,6 +61,7 @@ function ProductCard({ product, onAdd }: {
 }) {
   const [hovered, setHovered] = useState(false);
   const isWeb = Platform.OS === "web";
+  const catIcon = product.category === "Servicos" ? "S" : product.category === "Combos" ? "C" : product.category === "Extras" ? "E" : "P";
   return (
     <Pressable
       onPress={onAdd}
@@ -37,30 +69,87 @@ function ProductCard({ product, onAdd }: {
       onHoverOut={isWeb ? () => setHovered(false) : undefined}
       style={[
         pc.card,
-        hovered && { borderColor: Colors.border2, transform: [{ scale: 1.02 }] },
-        isWeb && { transition: "all 0.15s ease" } as any,
+        hovered && pc.cardHovered,
+        isWeb && { transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" } as any,
       ]}
     >
-      <View style={pc.iconWrap}>
-        <Text style={pc.icon}>{product.category === "Servicos" ? "S" : product.category === "Combos" ? "C" : "P"}</Text>
+      <View style={[pc.iconWrap, hovered && pc.iconWrapHovered]}>
+        <Text style={pc.icon}>{catIcon}</Text>
       </View>
       <Text style={pc.name} numberOfLines={1}>{product.name}</Text>
       <Text style={pc.price}>{fmt(product.price)}</Text>
-      {product.stock != null && (
-        <Text style={[pc.stock, product.stock < 5 && { color: Colors.red }]}>
-          {product.stock} un
-        </Text>
-      )}
+      <View style={pc.bottomRow}>
+        {product.stock != null && (
+          <Text style={[pc.stock, product.stock < 5 && { color: Colors.red }]}>
+            {product.stock} un
+          </Text>
+        )}
+        {product.barcode && <Text style={pc.barcodeBadge}>EAN</Text>}
+      </View>
     </Pressable>
   );
 }
 const pc = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, width: IS_WIDE ? "30%" : "47%", margin: IS_WIDE ? "1.5%" : "1.5%", alignItems: "center", gap: 6 },
-  iconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: Colors.border, width: IS_WIDE ? "30%" : "47%", margin: IS_WIDE ? "1.5%" : "1.5%", alignItems: "center", gap: 6 },
+  cardHovered: { borderColor: Colors.violet2, transform: [{ translateY: -4 }, { scale: 1.04 }], shadowColor: Colors.violet, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 8, backgroundColor: Colors.bg4 },
+  iconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", marginBottom: 6, borderWidth: 1, borderColor: Colors.border2 },
+  iconWrapHovered: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   icon: { fontSize: 16, fontWeight: "700", color: Colors.violet3 },
-  name: { fontSize: 12, color: Colors.ink, fontWeight: "600", textAlign: "center" },
-  price: { fontSize: 14, color: Colors.green, fontWeight: "700" },
+  name: { fontSize: 13, color: Colors.ink, fontWeight: "600", textAlign: "center" },
+  price: { fontSize: 15, color: Colors.green, fontWeight: "800" },
+  bottomRow: { flexDirection: "row", gap: 6, alignItems: "center" },
   stock: { fontSize: 10, color: Colors.ink3 },
+  barcodeBadge: { fontSize: 8, color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, fontWeight: "600" },
+});
+
+// ── Scanner Bar ──────────────────────────────────────────────
+
+function ScannerBar({ onScan }: { onScan: (code: string) => void }) {
+  const [code, setCode] = useState("");
+  const [scanning, setScanning] = useState(false);
+
+  function handleScan() {
+    if (!code.trim()) return;
+    onScan(code.trim());
+    setCode("");
+  }
+
+  function simulateScan() {
+    setScanning(true);
+    setTimeout(() => {
+      const mockCode = "7891000315507";
+      setCode(mockCode);
+      onScan(mockCode);
+      setScanning(false);
+    }, 800);
+  }
+
+  return (
+    <View style={sc.bar}>
+      <TextInput
+        style={sc.input}
+        placeholder="Codigo de barras ou QR..."
+        placeholderTextColor={Colors.ink3}
+        value={code}
+        onChangeText={setCode}
+        onSubmitEditing={handleScan}
+      />
+      <Pressable onPress={handleScan} style={sc.btn}>
+        <Text style={sc.btnText}>Buscar</Text>
+      </Pressable>
+      <Pressable onPress={simulateScan} style={[sc.btn, sc.scanBtn]}>
+        <Text style={sc.scanBtnText}>{scanning ? "..." : "Escanear"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+const sc = StyleSheet.create({
+  bar: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  input: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: Colors.ink },
+  btn: { backgroundColor: Colors.bg4, borderRadius: 10, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
+  btnText: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  scanBtn: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  scanBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
 });
 
 // ── Cart Item Row ────────────────────────────────────────────
@@ -108,7 +197,7 @@ const cr = StyleSheet.create({
   removeText: { fontSize: 11, color: Colors.red, fontWeight: "700" },
 });
 
-// ── Payment Method Select ────────────────────────────────────
+// ── Payment Select ───────────────────────────────────────────
 
 const PAYMENTS = [
   { key: "pix", label: "Pix" },
@@ -120,11 +209,14 @@ const PAYMENTS = [
 function PaymentSelect({ selected, onSelect }: { selected: string; onSelect: (k: string) => void }) {
   return (
     <View style={ps.row}>
-      {PAYMENTS.map(p => (
-        <Pressable key={p.key} onPress={() => onSelect(p.key)} style={[ps.chip, selected === p.key && ps.chipActive]}>
-          <Text style={[ps.chipText, selected === p.key && ps.chipTextActive]}>{p.label}</Text>
-        </Pressable>
-      ))}
+      {PAYMENTS.map(p => {
+        const active = selected === p.key;
+        return (
+          <Pressable key={p.key} onPress={() => onSelect(p.key)} style={[ps.chip, active && ps.chipActive]}>
+            <Text style={[ps.chipText, active && ps.chipTextActive]}>{p.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -136,6 +228,66 @@ const ps = StyleSheet.create({
   chipTextActive: { color: "#fff", fontWeight: "600" },
 });
 
+// ── Sale Complete Screen ─────────────────────────────────────
+
+function SaleCompleteView({ sale, onNewSale, onEmitNfe }: {
+  sale: SaleResult; onNewSale: () => void; onEmitNfe: () => void;
+}) {
+  return (
+    <View style={sv.container}>
+      <View style={sv.card}>
+        <View style={sv.checkCircle}>
+          <Text style={sv.checkIcon}>OK</Text>
+        </View>
+        <Text style={sv.title}>Venda registrada!</Text>
+        <Text style={sv.saleId}>#{sale.id}</Text>
+
+        <View style={sv.summaryRow}>
+          <Text style={sv.summaryLabel}>Total</Text>
+          <Text style={sv.summaryValue}>{fmt(sale.total)}</Text>
+        </View>
+        <View style={sv.summaryRow}>
+          <Text style={sv.summaryLabel}>Pagamento</Text>
+          <Text style={sv.summaryMeta}>{PAYMENTS.find(p => p.key === sale.payment)?.label}</Text>
+        </View>
+        <View style={sv.summaryRow}>
+          <Text style={sv.summaryLabel}>Itens</Text>
+          <Text style={sv.summaryMeta}>{sale.items.reduce((s, i) => s + i.qty, 0)} produtos</Text>
+        </View>
+
+        <View style={sv.divider} />
+
+        <View style={sv.actions}>
+          <HoverButton label="Emitir NF-e" icon="N" color={Colors.ink} bgColor={Colors.bg4} onPress={onEmitNfe} full />
+          <HoverButton label="Nova venda" icon="+" color="#fff" bgColor={Colors.violet} onPress={onNewSale} full />
+        </View>
+
+        <View style={sv.secondaryActions}>
+          <Pressable style={sv.linkBtn}><Text style={sv.linkText}>Imprimir cupom</Text></Pressable>
+          <Pressable style={sv.linkBtn}><Text style={sv.linkText}>Enviar por WhatsApp</Text></Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+const sv = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
+  card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.border, maxWidth: 420, width: "100%" },
+  checkCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", marginBottom: 16, borderWidth: 2, borderColor: Colors.green },
+  checkIcon: { fontSize: 20, color: Colors.green, fontWeight: "800" },
+  title: { fontSize: 20, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  saleId: { fontSize: 12, color: Colors.ink3, marginBottom: 20 },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", width: "100%", paddingVertical: 8 },
+  summaryLabel: { fontSize: 13, color: Colors.ink3 },
+  summaryValue: { fontSize: 18, color: Colors.green, fontWeight: "800" },
+  summaryMeta: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: Colors.border, width: "100%", marginVertical: 16 },
+  actions: { flexDirection: "row", gap: 10, width: "100%" },
+  secondaryActions: { flexDirection: "row", gap: 16, marginTop: 16 },
+  linkBtn: { paddingVertical: 6 },
+  linkText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
+});
+
 // ── Main Screen ──────────────────────────────────────────────
 
 export default function PdvScreen() {
@@ -144,7 +296,7 @@ export default function PdvScreen() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState("pix");
   const [category, setCategory] = useState("Todos");
-  const [saleComplete, setSaleComplete] = useState(false);
+  const [lastSale, setLastSale] = useState<SaleResult | null>(null);
 
   const categories = ["Todos", ...Array.from(new Set(MOCK_PRODUCTS.map(p => p.category)))];
 
@@ -154,8 +306,17 @@ export default function PdvScreen() {
     return matchSearch && matchCat;
   });
 
+  function handleScan(code: string) {
+    const product = MOCK_PRODUCTS.find(p => p.barcode === code);
+    if (product) {
+      addToCart(product);
+    } else {
+      setSearch(code);
+    }
+  }
+
   function addToCart(product: typeof MOCK_PRODUCTS[0]) {
-    setSaleComplete(false);
+    setLastSale(null);
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i);
@@ -180,26 +341,55 @@ export default function PdvScreen() {
 
   function finalizeSale() {
     if (cart.length === 0) return;
-    setSaleComplete(true);
+    const saleId = Date.now().toString(36).toUpperCase().slice(-6);
+    setLastSale({
+      id: saleId,
+      total,
+      payment,
+      items: [...cart],
+      date: new Date().toLocaleString("pt-BR"),
+    });
     setCart([]);
   }
 
-  // ── Render ───────────────────────────────────────────────
+  function newSale() {
+    setLastSale(null);
+    setCart([]);
+    setSearch("");
+  }
 
+  function emitNfe() {
+    // TODO: integrate with NF-e route
+    alert("Emissao de NF-e sera integrada com NFE.io apos CNPJ aprovado.");
+  }
+
+  // ── Sale Complete View ─────────────────────────────────────
+  if (lastSale) {
+    if (IS_WIDE) {
+      return (
+        <View style={s.webRoot}>
+          <View style={{ flex: 1 }}>
+            <SaleCompleteView sale={lastSale} onNewSale={newSale} onEmitNfe={emitNfe} />
+          </View>
+        </View>
+      );
+    }
+    return <SaleCompleteView sale={lastSale} onNewSale={newSale} onEmitNfe={emitNfe} />;
+  }
+
+  // ── Product Grid ───────────────────────────────────────────
   const productGrid = (
     <View style={s.productsSection}>
-      {/* Search */}
+      <ScannerBar onScan={handleScan} />
       <View style={s.searchRow}>
         <TextInput
           style={s.searchInput}
-          placeholder="Buscar produto..."
+          placeholder="Buscar produto por nome..."
           placeholderTextColor={Colors.ink3}
           value={search}
           onChangeText={setSearch}
         />
       </View>
-
-      {/* Category filter */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catScroll} contentContainerStyle={s.catRow}>
         {categories.map(c => (
           <Pressable key={c} onPress={() => setCategory(c)} style={[s.catChip, category === c && s.catChipActive]}>
@@ -207,35 +397,29 @@ export default function PdvScreen() {
           </Pressable>
         ))}
       </ScrollView>
-
-      {/* Products */}
       <View style={s.productGrid}>
         {filtered.map(p => (
           <ProductCard key={p.id} product={p} onAdd={() => addToCart(p)} />
         ))}
+        {filtered.length === 0 && (
+          <View style={s.noResults}><Text style={s.noResultsText}>Nenhum produto encontrado</Text></View>
+        )}
       </View>
     </View>
   );
 
+  // ── Cart Panel ─────────────────────────────────────────────
   const cartPanel = (
     <View style={s.cartSection}>
       <View style={s.cartHeader}>
         <Text style={s.cartTitle}>Carrinho</Text>
-        <View style={s.cartBadge}><Text style={s.cartBadgeText}>{itemCount}</Text></View>
+        {itemCount > 0 && <View style={s.cartBadge}><Text style={s.cartBadgeText}>{itemCount}</Text></View>}
       </View>
 
-      {cart.length === 0 && !saleComplete && (
+      {cart.length === 0 && (
         <View style={s.emptyCart}>
           <Text style={s.emptyIcon}>$</Text>
-          <Text style={s.emptyText}>Toque em um produto para adicionar</Text>
-        </View>
-      )}
-
-      {saleComplete && (
-        <View style={s.successCard}>
-          <Text style={s.successIcon}>OK</Text>
-          <Text style={s.successTitle}>Venda registrada!</Text>
-          <Text style={s.successSub}>Pagamento: {PAYMENTS.find(p => p.key === payment)?.label}</Text>
+          <Text style={s.emptyText}>Toque em um produto ou escaneie um codigo</Text>
         </View>
       )}
 
@@ -254,20 +438,14 @@ export default function PdvScreen() {
       {cart.length > 0 && (
         <View style={s.cartFooter}>
           <View style={s.divider} />
-
           <Text style={s.payLabel}>Pagamento</Text>
           <PaymentSelect selected={payment} onSelect={setPayment} />
-
           <View style={s.divider} />
-
           <View style={s.totalRow}>
             <Text style={s.totalLabel}>Total</Text>
             <Text style={s.totalValue}>{fmt(total)}</Text>
           </View>
-
-          <Pressable style={s.finalizeBtn} onPress={finalizeSale}>
-            <Text style={s.finalizeBtnText}>Finalizar venda</Text>
-          </Pressable>
+          <HoverButton label="Finalizar venda" icon="$" color="#fff" bgColor={Colors.violet} onPress={finalizeSale} />
         </View>
       )}
     </View>
@@ -279,13 +457,9 @@ export default function PdvScreen() {
         <ScrollView style={s.webLeft} contentContainerStyle={s.webLeftContent}>
           <Text style={s.pageTitle}>PDV</Text>
           {productGrid}
-          {isDemo && (
-            <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo - dados ilustrativos</Text></View>
-          )}
+          {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo - dados ilustrativos</Text></View>}
         </ScrollView>
-        <View style={s.webRight}>
-          {cartPanel}
-        </View>
+        <View style={s.webRight}>{cartPanel}</View>
       </View>
     );
   }
@@ -295,9 +469,7 @@ export default function PdvScreen() {
       <Text style={s.pageTitle}>PDV</Text>
       {productGrid}
       {cartPanel}
-      {isDemo && (
-        <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo - dados ilustrativos</Text></View>
-      )}
+      {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo - dados ilustrativos</Text></View>}
     </ScrollView>
   );
 }
@@ -305,62 +477,40 @@ export default function PdvScreen() {
 // ── Styles ─────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  // Mobile
   screen: { flex: 1, backgroundColor: Colors.bg },
   content: { padding: 20, paddingBottom: 48 },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
-
-  // Web split layout
   webRoot: { flex: 1, flexDirection: "row", backgroundColor: Colors.bg },
   webLeft: { flex: 1 },
   webLeftContent: { padding: 32, paddingBottom: 48 },
-  webRight: { width: 360, borderLeftWidth: 1, borderLeftColor: Colors.border, backgroundColor: Colors.bg2 },
-
-  // Search
+  webRight: { width: 380, borderLeftWidth: 1, borderLeftColor: Colors.border, backgroundColor: Colors.bg2 },
   searchRow: { marginBottom: 12 },
   searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
-
-  // Categories
   catScroll: { flexGrow: 0, marginBottom: 16 },
   catRow: { flexDirection: "row", gap: 6 },
   catChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   catChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   catChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   catChipTextActive: { color: Colors.violet3, fontWeight: "600" },
-
-  // Products
   productsSection: {},
   productGrid: { flexDirection: "row", flexWrap: "wrap" },
-
-  // Cart
+  noResults: { width: "100%", alignItems: "center", paddingVertical: 40 },
+  noResultsText: { fontSize: 13, color: Colors.ink3 },
   cartSection: { padding: IS_WIDE ? 20 : 0, marginTop: IS_WIDE ? 0 : 24, flex: IS_WIDE ? 1 : undefined },
   cartHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
   cartTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700" },
   cartBadge: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   cartBadgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
-
   emptyCart: { alignItems: "center", paddingVertical: 40, gap: 8 },
   emptyIcon: { fontSize: 32, color: Colors.ink3 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
-
-  successCard: { alignItems: "center", paddingVertical: 24, gap: 6, backgroundColor: Colors.greenD, borderRadius: 14, marginBottom: 16 },
-  successIcon: { fontSize: 24, color: Colors.green, fontWeight: "700" },
-  successTitle: { fontSize: 16, color: Colors.green, fontWeight: "700" },
-  successSub: { fontSize: 12, color: Colors.ink3 },
-
-  cartList: { maxHeight: IS_WIDE ? 300 : undefined },
-
+  cartList: { maxHeight: IS_WIDE ? 280 : undefined },
   cartFooter: { marginTop: 12 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
   payLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
-
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   totalLabel: { fontSize: 16, color: Colors.ink, fontWeight: "600" },
   totalValue: { fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 },
-
-  finalizeBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-  finalizeBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
