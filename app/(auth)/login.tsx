@@ -8,20 +8,19 @@ import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
-// jsDelivr serve o GitHub com cache confiável
 const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
 const FEATURES = [
-  { icon: "📊", label: "Organização Financeira" },
-  { icon: "📦", label: "Controle de Estoque e Vendas" },
-  { icon: "📋", label: "Contabilidade Integrada" },
-  { icon: "🌐", label: "Identidade Digital para seu negócio" },
+  { icon: "\u{1F4CA}", label: "Organiza\u00e7\u00e3o Financeira" },
+  { icon: "\u{1F4E6}", label: "Controle de Estoque e Vendas" },
+  { icon: "\u{1F4CB}", label: "Contabilidade Integrada" },
+  { icon: "\u{1F310}", label: "Identidade Digital para seu neg\u00f3cio" },
 ];
 
 export default function LoginScreen() {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const { login, isLoading }    = useAuthStore();
+  const { login, loginDemo, isLoading } = useAuthStore();
   const isWeb = Platform.OS === "web";
 
   async function handleLogin() {
@@ -31,6 +30,10 @@ export default function LoginScreen() {
     } catch (err) {
       Alert.alert("Erro", err instanceof ApiError ? err.message : "Erro ao entrar.");
     }
+  }
+
+  async function handleDemo() {
+    await loginDemo();
   }
 
   const formCard = (
@@ -46,16 +49,20 @@ export default function LoginScreen() {
       <View style={s.field}>
         <Text style={s.label}>Senha</Text>
         <TextInput style={s.input} value={password} onChangeText={setPassword}
-          placeholder="••••••••" placeholderTextColor={Colors.ink3}
+          placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" placeholderTextColor={Colors.ink3}
           secureTextEntry />
       </View>
       <TouchableOpacity style={s.btn} onPress={handleLogin} disabled={isLoading}>
         {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Entrar</Text>}
       </TouchableOpacity>
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Ainda não tem conta? </Text>
+        <Text style={s.footerText}>Ainda n\u00e3o tem conta? </Text>
         <Link href="/(auth)/register"><Text style={s.link}>Criar conta</Text></Link>
       </View>
+      <View style={s.divider} />
+      <TouchableOpacity style={s.demoBtn} onPress={handleDemo} disabled={isLoading}>
+        <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -83,19 +90,13 @@ export default function LoginScreen() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 56px" } as any}>
         <a href="https://getaura.com.br" target="_blank" rel="noreferrer"
           style={{ display: "block", textDecoration: "none", marginBottom: 40 } as any}>
-          <img
-            src={LOGO_URL}
-            alt="Aura."
-            style={{ width: 260, height: "auto", display: "block" } as any}
-          />
+          <img src={LOGO_URL} alt="Aura." style={{ width: 260, height: "auto", display: "block" } as any} />
         </a>
-
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
-          Você fez a escolha certa, hora de{" "}
+          Voc\u00ea fez a escolha certa, hora de{" "}
           <span style={{ color: Colors.violet3, fontWeight: 600 } as any}>revolucionar</span>{" "}
           sua empresa com:
         </p>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 300 } as any}>
           {FEATURES.map(f => (
             <div key={f.label} style={{
@@ -131,14 +132,17 @@ const s = StyleSheet.create({
     borderRadius: 20, padding: 32,
     borderWidth: 1, borderColor: Colors.border2,
   },
-  title:     { fontSize: 24, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
-  subtitle:  { fontSize: 13, color: Colors.ink3, marginBottom: 24 },
-  field:     { marginBottom: 16 },
-  label:     { fontSize: 12, color: Colors.ink3, marginBottom: 6, fontWeight: "500" },
-  input:     { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, padding: 13, fontSize: 14, color: Colors.ink },
-  btn:       { backgroundColor: Colors.violet, borderRadius: 8, padding: 14, alignItems: "center", marginTop: 4 },
-  btnText:   { color: "#fff", fontSize: 14, fontWeight: "600" },
-  footerRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  footerText:{ fontSize: 13, color: Colors.ink3 },
-  link:      { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  title:      { fontSize: 24, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  subtitle:   { fontSize: 13, color: Colors.ink3, marginBottom: 24 },
+  field:      { marginBottom: 16 },
+  label:      { fontSize: 12, color: Colors.ink3, marginBottom: 6, fontWeight: "500" },
+  input:      { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, padding: 13, fontSize: 14, color: Colors.ink },
+  btn:        { backgroundColor: Colors.violet, borderRadius: 8, padding: 14, alignItems: "center", marginTop: 4 },
+  btnText:    { color: "#fff", fontSize: 14, fontWeight: "600" },
+  footerRow:  { flexDirection: "row", justifyContent: "center", marginTop: 20 },
+  footerText: { fontSize: 13, color: Colors.ink3 },
+  link:       { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  divider:    { height: 1, backgroundColor: Colors.border, marginVertical: 20 },
+  demoBtn:    { borderRadius: 8, padding: 12, alignItems: "center", borderWidth: 1, borderColor: Colors.border2 },
+  demoBtnText:{ color: Colors.violet3, fontSize: 13, fontWeight: "500" },
 });
