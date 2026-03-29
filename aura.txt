@@ -1,0 +1,520 @@
+# AURA. — CONTEXTO DO PROJETO
+# Documento de referência para sessões no Claude Projects
+# Atualizado em: 29/03/2026
+# Fundador: Caio (CRC ativo) — Jacareí/SP
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INSTRUÇÃO PARA O ASSISTENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Antes de executar qualquer tarefa, se algo não estiver claro ou faltar
+informação essencial (ex.: SHA de arquivo, qual tela implementar primeiro,
+comportamento esperado de um componente), PERGUNTE antes de agir.
+Não assuma — pergunte. Uma pergunta objetiva antes poupa horas de retrabalho.
+
+O fundador se chama CAIO (não João). Sempre se referir a ele como Caio.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. IDENTIDADE DO PRODUTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Nome: Aura. (ponto é elemento de identidade da marca)
+Tagline: "Tecnologia para Negócios"
+Domínio: getaura.com.br
+Público: MEI, ME e pequenos negócios — Vale do Paraíba/SP
+Posicionamento: SaaS all-in-one para gestão de negócios
+
+Proposta de valor core:
+- Para MEI: software autônomo que faz quase tudo sozinho
+- Para ME/SN: software prepara tudo, Caio (CRC) executa em minutos
+- Argumento financeiro: ContaAzul ME (R$310) + contador (R$400) + apps (R$150) = R$860+
+  vs. Aura Negócio = R$200 com tudo incluso
+
+Identidade visual:
+- Paleta: violeta (#6d28d9 a #c084fc) com arcos concêntricos como símbolo
+- Tipografia: Instrument Serif (títulos) + DM Sans (corpo)
+- Tema: dark mode padrão, light mode disponível
+- Logo: assets/logo.jpeg no repo aura-app (JPEG, 140KB)
+  CDN: https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/logo.jpeg
+
+IMPORTANTE — REMOVIDO DO ESCOPO:
+- Analista CRC incluso não é mais diferencial/feature dos planos
+  → Não mencionar como vantagem comercial
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. PLANOS E PRECIFICAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Plano      | Preço      | Público           |
+|------------|------------|-------------------|
+| Essencial  | R$ 59/mês  | Para começar      |
+| Negócio    | R$ 200/mês | Para crescer      |
+| Expansão   | R$ 320/mês | Para escalar      |
+
+Add-on: Módulo Vertical — R$ 69/mês (a partir do Negócio)
+Multi-usuário: R$ 19/funcionário adicional/mês (a partir do Negócio)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. ARQUITETURA DO PRODUTO — 6 MÓDULOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Financeiro (Core)
+   - Lançamentos, DRE gerencial, A receber (fonte de verdade)
+   - Aba "Minha Retirada": waterfall interativo + slider
+   - NF-e/NFS-e automática
+
+2. Vendas & PDV (Core)
+   - PDV mobile, estoque com Custo Avançado (Expansão)
+   - Categorias + curva ABC
+   - Analytics de vendas: ontem/hoje/semana/mês
+
+3. Clientes & CRM (Pro)
+   - Ficha completa: aniversário, Instagram, última venda
+   - Ranking por LTV e frequência
+   - Dashboard: novos vs voltando
+   - Avaliação de compra + redirect Google (sem review gating)
+
+4. Canal Digital (Pro)
+   - Mini-site + loja online + analytics
+   - Google Meu Negócio, agendamento
+
+5. Apoio Contábil (Pro)
+   - Calendário fiscal por regime, alertas (15d/7d/3d/1d)
+   - DAS estimado com QR Code Pix
+   - Checkpoints gamificados com streak
+   - LINGUAGEM: sempre "estimativa e lembrete", nunca "declaração oficial"
+
+6. Assistente IA (Expansão)
+   - Posts, previsão de caixa, cobranças automáticas
+   - System prompt: não dar assessoria fiscal vinculante
+
+Módulos Verticais (Add-on R$69/mês):
+- Odontologia: odontograma interativo, prontuário, agenda
+- Barbearia/Salão: agenda, fila espera, comissões, histórico corte
+- Estética, Academia, Pet Shop, Food Service, Moda/Varejo
+- Ativados exclusivamente pela equipe Aura via toggle na Gestão Aura
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. SIDEBAR — ESTRUTURA v7 (APROVADA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6 categorias, 12 itens + avatar dropdown:
+
+Principal: Painel · Financeiro · NF-e
+Contábil: Contabilidade (fusão com Obrigações) · Meu Analista · Documentos
+Vendas: PDV · Estoque · Canal Digital
+Equipe: Folha de Pagamento
+Clientes: Clientes · WhatsApp
+Crescimento: Assistente IA · [Módulo Vertical quando ativo]
+
+Avatar dropdown (canto superior direito):
+→ Minha Empresa
+→ Meu Plano
+→ Alternar tema
+→ Sair
+
+Demo vertical (fundo sidebar cliente):
+🦷 Dentista | ✂️ Salão | ✕ Desativar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. BACKEND — ESTADO ATUAL (COMPLETO / SECURITY AUDIT OK)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Stack: Node.js + Express + PostgreSQL (Supabase) + Redis (Upstash/Railway)
+Repo: github.com/CaioAlexanderx/aura-backend (privado)
+API live: https://aura-backend-production-f805.up.railway.app
+Sentry: org slug = "aura-50", project = "aura-backend"
+
+Status da segurança: TODOS OS BLOQUEADORES RESOLVIDOS
+- B-01 a B-05 + A-01 a A-05 todos resolvidos
+- 250 testes · 0 falhas
+- Multi-tenant isolation via requireCompanyAccess(opts) middleware
+- Auth routes (/register, /login, /me) implementadas
+- Rate limiting, CORS enforcement, Sentry PII masking
+- Security audit documentado em docs/SECURITY_AUDIT.md
+
+Middleware chave (src/middleware/auth.js):
+- requireAuth — valida JWT
+- requireCompanyAccess(opts) — isolamento multi-tenant
+  ⚠️ REGRA CRÍTICA: qualquer teste em rota protegida por este middleware
+     DEVE incluir db.query.mockResolvedValueOnce({ rows: [{ role: 'owner' }] })
+     como PRIMEIRO mock — falhar nisso causa cascata de 250 falhas
+- requireRole() — RBAC (client/analyst/admin)
+- requirePlan() — controle de features por plano
+
+Endpoints principais:
+POST   /auth/register, /auth/login, /auth/me
+GET    /cnpj/lookup/:cnpj
+GET    /companies, POST /companies
+GET    /companies/:id/transactions, POST /companies/:id/transactions
+POST   /companies/:id/payment-links
+GET    /companies/:id/withdrawal/summary
+POST   /companies/:id/payroll/calculate
+GET    /companies/:id/obligations
+
+Packages: usa bcrypt (NÃO bcryptjs) — misturar causa falha total do app
+
+Pendências manuais para Caio no backend:
+□ B-05: Aplicar 19 migrations no Supabase SQL Editor em ordem lexicográfica
+□ B-03: Editar ci.yml no GitHub: substituir --on-error-continue por
+         -v ON_ERROR_STOP=1
+□ Railway: adicionar env ALLOWED_ORIGINS=https://getaura.com.br,https://app.getaura.com.br
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. FRONTEND — ESTADO ATUAL (FASE ATIVA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Repo: github.com/CaioAlexanderx/aura-app (público temporariamente — por causa CDN)
+Stack: Expo Universal (iOS + Android + Web), TypeScript, Expo Router v4,
+       Zustand v5, React Query v5, StyleSheet.create() (sem NativeWind)
+
+Versões exatas (package.json):
+  expo ~52, expo-router ~4.0, react 18.3.1, react-native 0.76.5
+  @tanstack/react-query ^5, zustand ^5, react-hook-form ^7, zod ^3
+  NativeWind: REMOVIDO (causava conflito com react-native-worklets)
+
+Estrutura atual do repo:
+  app/(auth)/login.tsx        ✅ COMPLETO — layout dois painéis, UTF-8 correto
+  app/(auth)/register.tsx     ✅ COMPLETO — layout dois painéis, UTF-8 correto
+  app/(tabs)/index.tsx        ⚠️  BÁSICO — painel com KPIs mockados
+  constants/colors.ts         ✅ Paleta violeta completa
+  services/api.ts             ✅ Cliente HTTP com interceptor JWT
+  stores/auth.ts              ✅ Zustand store com login/register/logout
+  assets/logo.jpeg            ❌ CORROMPIDA (12KB no repo vs 140KB real)
+  package.json / app.json / tsconfig.json / babel.config.js  ✅
+
+PROBLEMA CRÍTICO PENDENTE — LOGO CORROMPIDA:
+  O arquivo assets/logo.jpeg no repo tem apenas 12KB (corrompido).
+  A logo real está em /mnt/user-data/uploads/Aura.jpeg (140032 bytes, JPEG válido).
+  O CDN jsDelivr serve do repo → logo aparece quebrada nas telas.
+
+  SOLUÇÃO (Caio executa):
+    Opção A — GitHub Web:
+      1. Acesse https://github.com/CaioAlexanderx/aura-app/blob/main/assets/logo.jpeg
+      2. Clique no lápis → "Delete file" → commit
+      3. Vá em assets/ → "Add file > Upload files"
+      4. Faça upload do Aura.jpeg → commit
+
+    Opção B — Terminal:
+      cd aura-app
+      cp /caminho/para/Aura.jpeg assets/logo.jpeg
+      git add assets/logo.jpeg
+      git commit -m "fix: logo Aura correta (140KB)"
+      git push origin main
+
+Design das telas de auth (aprovado por Caio):
+  Painel esquerdo (1/2 da tela):
+    - Logo Aura clicável → getaura.com.br
+    - Texto: "Você fez a escolha certa, hora de revolucionar sua empresa com:"
+    - 4 feature cards com ícone + label:
+        📊 Organização Financeira
+        📦 Controle de Estoque e Vendas
+        📋 Contabilidade Integrada
+        🌐 Identidade Digital para seu negócio
+  Painel direito (1/2 da tela):
+    - Background rgba(6,8,22,0.55)
+    - Formulário login/cadastro em card violeta com borda
+  Background geral: gradiente radial violeta (3 camadas)
+  Mobile: painel único com logo + formulário em scroll
+
+Lição aprendida — encoding:
+  push_files MCP escapa Unicode como literais (\u00ea) → NUNCA usar para TSX/JS.
+  Usar create_or_update_file com base64 gerado via Python:
+    python3 -c "
+    import base64
+    content = open('arquivo.tsx').read()
+    b64 = base64.b64encode(content.encode('utf-8')).decode('ascii')
+    open('/tmp/out_b64.txt','w').write(b64)
+    "
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. PROTÓTIPO HTML — v7 (REFERÊNCIA DE DESIGN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Arquivo: /mnt/user-data/outputs/aura_v7.html
+Tamanho: ~191KB · 22 páginas · 56 funções JS
+Status: APROVADO — serve como referência visual para implementar as telas
+
+Páginas no protótipo:
+  dashboard, contabil, analista, empresa, financeiro, nfe,
+  documentos, pdv, estoque, crm, whatsapp, canal, ia, folha,
+  planos, g-central, g-honorarios, g-atendimentos, g-relatorios,
+  onboarding, vertical-odonto, vertical-salao
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. BACKLOG FRONTEND — TELAS A IMPLEMENTAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIORIDADE IMEDIATA (bloqueadores de teste real):
+FE-00: Fix logo (ver seção 6 — Caio executa manualmente)
+FE-01: Dashboard (app/(tabs)/index.tsx)
+        KPIs reais: faturamento dia/semana/mês, saldo caixa, pedidos pendentes
+        Conectar ao backend: GET /companies/:id/transactions + /withdrawal/summary
+FE-02: Fluxo de navegação e auth guard
+        Se não logado → redireciona para /(auth)/login
+        Expo Router layout files para grupos (auth) e (tabs)
+FE-03: Tela Financeiro (app/(tabs)/financeiro.tsx)
+        4 abas: Lançamentos · A Receber · Minha Retirada · Resumo
+        Minha Retirada: waterfall interativo + slider (ver protótipo)
+
+TELAS CORE (MVP):
+FE-04: PDV mobile (app/(tabs)/pdv.tsx)
+        Lista de produtos, busca, carrinho, finalizar venda
+FE-05: Estoque (app/(tabs)/estoque.tsx)
+        Lista produtos + curva ABC, Custo Avançado (badge Expansão)
+FE-06: NF-e (app/(tabs)/nfe.tsx)
+        Emissão de nota, histórico, status (autorizada/cancelada)
+FE-07: Clientes / CRM (app/(tabs)/clientes.tsx)
+        Ficha: aniversário, Instagram, última venda, LTV, ranking
+FE-08: Contabilidade (app/(tabs)/contabilidade.tsx)
+        Calendário fiscal, alertas, DAS com QR Code Pix, checkpoints streak
+
+TELAS PRO:
+FE-09: WhatsApp (app/(tabs)/whatsapp.tsx)
+        Notificações automáticas, resumo diário, cobranças
+FE-10: Canal Digital (app/(tabs)/canal.tsx)
+        3 abas: Site · Loja · Analytics
+FE-11: Folha de Pagamento (app/(tabs)/folha.tsx)
+        Cálculo INSS/IRRF/FGTS, holerite
+
+TELAS EXPANSÃO:
+FE-12: Assistente IA (app/(tabs)/ia.tsx)
+        Posts, previsão de caixa, cobranças automáticas
+FE-13: Módulos Verticais (app/(tabs)/vertical.tsx)
+        Odontograma interativo (odonto), agenda + comissões (salão)
+
+TELAS DE GESTÃO (Caio — visão operacional):
+FE-14: Gestão Aura — Central de Controle
+        KPIs MRR, tabela clientes, slide-over lateral, toggle vertical
+FE-15: Gestão Aura — Honorários, Atendimentos, Relatórios
+
+TELAS DE PERFIL/CONFIGURAÇÃO:
+FE-16: Minha Empresa (app/(tabs)/empresa.tsx)
+FE-17: Meu Plano (app/(tabs)/plano.tsx) — upgrade/downgrade
+FE-18: Onboarding (fluxo de primeiro acesso)
+        Passo a passo: cadastro empresa, CNPJ lookup, regime tributário
+
+COMPONENTES COMPARTILHADOS:
+FC-01: Sidebar + navegação (Expo Router tabs ou drawer)
+FC-02: Theme toggle dark/light (contexto global)
+FC-03: KPICard, TransactionRow, ProductRow, CustomerRow
+FC-04: Badge de plano (lock icon para features de planos superiores)
+FC-05: Avatar dropdown no topbar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. BACKLOG BACKEND — AINDA A IMPLEMENTAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BE-01: Analytics vendas por período e funcionário
+        GET /companies/:id/sales/analytics?period=&group_by=
+BE-02: Funcionário do mês — ranking automático
+        GET /companies/:id/employees/ranking
+BE-03: Categorias de produtos + curva ABC
+        Migration 002: campo category em products
+        GET /companies/:id/products/ranking
+BE-04: Analytics financeiro histórico — comparativo anual
+        GET /companies/:id/financial/history?year=&granularity=
+BE-05: CRM expandido — ficha completa + ranking
+        Migration 002: birth_date, instagram_handle, follows_instagram
+        GET /companies/:id/customers/ranking
+        GET /companies/:id/customers/birthdays?days=7
+BE-06: Avaliação de compra + Google Review redirect (sem review gating)
+        POST /reviews (público via link WhatsApp)
+BE-07: Dashboard CRM — retenção novos vs voltando
+        GET /companies/:id/customers/retention
+BE-08: Notificações WhatsApp — resumo diário (cron 8h + 20h)
+BE-09: Multi-usuário RBAC estendido
+        Tabelas: company_members, roles, role_templates
+BE-10: Obrigações fiscais automatizadas MEI/SN
+        Worker mensal + alerta DAS (Caio valida linguagem antes de publicar)
+BE-11: Módulos verticais no backend
+        Migration 003: appointments, patient_records, dental_records
+BE-12: Integração real APIs — NFE.io, Asaas, WhatsApp
+        ⚠️ BLOQUEADOR DE DEPLOY — sem isso o MVP não funciona
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. OBRIGAÇÕES FISCAIS — REGRAS DO PRODUTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🤖 AURA FAZ TUDO (automático):
+- DAS-MEI: calcula valor, gera QR Code Pix, alerta prazos
+- NF-e/NFS-e: emissão automática em toda venda PJ
+- FGTS: calcula e gera guia junto com holerite
+- Controle limite faturamento MEI (R$81k/ano)
+
+🤝 AURA FACILITA (cliente confirma, 5-10 min):
+- DASN-SIMEI: consolida faturamento + abre portal pré-preenchido
+- eSocial MEI: monta arquivo XML, cliente transmite no gov.br
+- PGDAS-D (ME/SN): apura receita bruta, calcula DAS estimado
+- DEFIS: consolida dados do ano, analista transmite
+
+🔔 AURA ALERTA + GUIA:
+- IRPF do titular MEI: alerta se obrigado + orientação
+- DIRBI: verifica se empresa tem benefícios fiscais
+
+🔒 REQUER CRC — ANALISTA/PARCEIRO:
+- Transmissão oficial PGDAS-D, DEFIS, DASN-SIMEI
+- ECD/ECF, eSocial/DCTFWeb/EFD-Reinf (transmissão)
+- RAIS (transmissão via MTE)
+
+REGRA DE LINGUAGEM (inviolável):
+- SEMPRE: "estimativa", "apoio contábil", "informativo"
+- NUNCA: "declaração oficial", "transmissão", "assessoria tributária"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. CONSTITUIÇÃO DA PJ — STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Natureza jurídica: Sociedade Empresária Limitada (Ltda Unipessoal / SLU)
+Status: Redesim aberto — análise de viabilidade em andamento na JUCESP
+Município: Jacareí/SP
+ISS Jacareí para TI: 2% — igual para CNAEs 6202 e 6204
+
+CNAEs:
+- Principal:   6202-3/00 — Desenvolvimento e licenciamento de software SaaS
+- Secundário:  6204-0/00 — Consultoria em TI
+- Secundário:  6311-9/00 — Tratamento de dados e hospedagem
+- Secundário:  6209-1/00 — Suporte técnico em TI
+- NÃO incluir: 6920-6/01 (contabilidade) — risco regulatório CRC
+
+Regime: Simples Nacional | Capital: R$ 10.000
+Fator R: pró-labore ≥ 28% do faturamento → Anexo III (6%)
+
+Marca "Aura" no INPI:
+- Classe 36 (financeiro): livre → protocolar
+- Classe 42 (software): pedido concorrente aguardando exame
+  → Protocolar com especificação delimitada + logotipo (marca mista)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. INFRAESTRUTURA — STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Domínio: getaura.com.br (registro.br)
+✅ Cloudflare: configurado — DNS + WAF
+✅ Railway: backend deployado em produção
+✅ Supabase: conta criada — plano Free (migrar para Pro no go-live)
+✅ NFE.io: conta criada — integração pendente (BE-12)
+✅ WhatsApp Business API: conta criada no Meta Business Manager
+✅ Contrato SaaS: pronto
+
+🟡 PENDENTE — Caio executa após CNPJ aprovado:
+   → Abrir Asaas (gateway) + Cora PJ (conta corrente)
+   → Integração real: NFE.io, Asaas, WhatsApp API (BE-12)
+   → Billing recorrente dos planos
+
+Stack de infra:
+- Servidor: Railway Hobby (~US$5/mês)
+- Banco: Supabase Free → Pro (US$25/mês) no go-live
+- Cache: Redis via Railway
+- Storage: Cloudflare R2 (XMLs de NF-e, 5 anos)
+- CDN/DNS/SSL/WAF: Cloudflare (gratuito)
+- Frontend: Cloudflare Pages (gratuito) — ou Expo EAS
+- Custo total infra MVP: ~US$30/mês (~R$180)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+13. PARCEIROS DE PAGAMENTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ASAAS (gateway/pagamentos) — após CNPJ:
+  Taxa Pix: 0,99% | Boleto: R$1,99 | Débito: 1,89%
+  Cobrança recorrente ✅ | Split ✅ | Negativação Serasa ✅ | NFS-e ✅
+
+CORA (conta PJ) — após CNPJ:
+  Pix PJ gratuito e ilimitado | Boleto: grátis até 100/mês
+  Usa para: conta corrente + receber repasses do Asaas
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+14. REGRAS DO PRODUTO (INVIOLÁVEIS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Linguagem fiscal: sempre "estimativa" e "apoio contábil"
+   Nunca: "declaração oficial", "transmissão", "assessoria tributária"
+
+2. Transmissões fiscais oficiais (PGDAS-D, DEFIS, eSocial):
+   Sempre pelo analista (Caio com CRC) ou contador parceiro
+
+3. Dados de saúde (odonto/estética): consentimento granular LGPD Art.11
+
+4. CNAE 6920-6/01 (contabilidade) NUNCA incluir no CNPJ da Aura
+
+5. Review gating PROIBIDO: link de avaliação vai para todos os clientes
+
+6. PCI-DSS: dados de cartão nunca passam pelo servidor da Aura —
+   sempre tokenização pelo parceiro (Asaas)
+
+7. Segurança: webhook sempre com validação HMAC-SHA256
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+15. ROADMAP ATUAL — FOCO FRONTEND
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FASE ATUAL: Desenvolvimento de telas (Expo Universal)
+  Backend: ✅ completo e seguro (Railway, 250 testes)
+  Frontend: 🔄 em andamento — telas de auth prontas, restante pendente
+
+Próximos passos por prioridade:
+  1. Caio: fix da logo (assets/logo.jpeg corrompida — ver seção 6)
+  2. Claude: Dashboard com KPIs reais (FE-01)
+  3. Claude: Auth guard + navegação estruturada (FE-02)
+  4. Claude: Telas core — Financeiro, PDV, Estoque, Contabilidade (FE-03 a FE-08)
+  5. Caio (paralelo): migrations Supabase, ci.yml, Railway vars
+  6. Deploy: Cloudflare Pages (frontend) — EAS se mobile prioritário
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+16. LIÇÕES APRENDIDAS — ARMADILHAS A EVITAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FRONTEND:
+- push_files MCP escapa Unicode → SEMPRE usar create_or_update_file com
+  base64 gerado por Python para arquivos com acentos
+- Logo upload via API pode corromper → verificar tamanho após commit
+  (logo.jpeg deve ter ~140KB, não 12KB)
+- Expo template: usar with-router, não blank-typescript
+  (blank-typescript gera Expo 55 canary com React 19 instável)
+- NativeWind v4 requer react-native-worklets → remover NativeWind e
+  usar StyleSheet.create() é o caminho mais simples
+- GitHub MCP: confirmar token tem write em repos privados antes de operar
+
+BACKEND:
+- bcrypt (não bcryptjs) — misturar causa falha total (250 testes → 0)
+- requireCompanyAccess consome db.query mock → sempre primeiro mock nos testes
+- CI: --on-error-continue silencia erros de migration; usar ON_ERROR_STOP=1
+- Migrations: aplicar em ordem lexicográfica no Supabase SQL Editor
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+17. ARQUIVOS E REPOS IMPORTANTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Repos:
+  Frontend:   github.com/CaioAlexanderx/aura-app      (público temporariamente)
+  Backend:    github.com/CaioAlexanderx/aura-backend  (privado)
+
+Arquivos chave no aura-app:
+  app/(auth)/login.tsx        Tela de login (2 painéis, UTF-8 OK)
+  app/(auth)/register.tsx     Tela de cadastro (2 painéis, UTF-8 OK)
+  app/(tabs)/index.tsx        Dashboard (basicão, precisa expandir)
+  constants/colors.ts         Paleta violeta completa do design system
+  services/api.ts             Axios client + interceptor JWT
+  stores/auth.ts              Zustand: login, register, logout, token
+  assets/logo.jpeg            ❌ CORROMPIDA — Caio precisa substituir
+
+Arquivos chave no aura-backend:
+  src/middleware/auth.js      requireAuth, requireCompanyAccess, requireRole
+  src/routes/auth.js          POST /register, /login, /me
+  migrations/001_initial_schema.sql
+  docs/SECURITY_AUDIT.md
+  docs/ARCHITECTURE.md
+
+CDN da logo (funciona após fix):
+  https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/logo.jpeg
+
+Protótipo de referência:
+  /mnt/user-data/outputs/aura_v7.html  (22 páginas, referência visual)
+
+Transcripts de sessões anteriores:
+  /mnt/transcripts/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIM DO DOCUMENTO — Cole no campo "Project Instructions" do Claude Projects
+Atualizar este arquivo ao final de cada sessão significativa.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
