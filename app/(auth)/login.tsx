@@ -9,7 +9,7 @@ import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
 // jsDelivr serve o GitHub com cache confiável
-const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/logo.jpeg";
+const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
 const FEATURES = [
   { icon: "📊", label: "Organização Financeira" },
