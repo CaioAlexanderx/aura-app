@@ -17,8 +17,7 @@ function getGreeting(): string {
   return "Boa noite";
 }
 function getMonthName(): string {
-  const m = ["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  return m[new Date().getMonth()];
+  return new Date().toLocaleString("pt-BR", { month: "long" }).replace(/^\w/, c => c.toUpperCase());
 }
 
 const MOCK = {
@@ -34,9 +33,9 @@ const MOCK = {
   ],
   obligations: [
     { id: "1", name: "DAS-MEI", due: "20/04/2026", amount: 76.90, status: "pending", category: "aura_resolve" },
-    { id: "2", name: "DASN-SIMEI", due: "31/05/2026", amount: null, status: "future", category: "voce_faz" },
+    { id: "2", name: "DASN-SIMEI", due: "31/05/2026", amount: null, status: "future", category: "aura_facilita" },
     { id: "3", name: "FGTS", due: "07/04/2026", amount: 320.00, status: "pending", category: "aura_resolve" },
-    { id: "4", name: "eSocial", due: "15/04/2026", amount: null, status: "future", category: "requer_crc" },
+    { id: "4", name: "eSocial", due: "15/04/2026", amount: null, status: "future", category: "aura_facilita" },
   ],
 };
 
@@ -50,13 +49,13 @@ const av = StyleSheet.create({
 });
 
 function PlanBadge({ plan }: { plan: string }) {
-  const label = plan === "expansao" ? "Expansao" : plan === "negocio" ? "Negocio" : "Essencial";
-  return (<View style={pb.badge}><View style={pb.dot} /><Text style={pb.text}>{label}</Text></View>);
+  const map: Record<string,string> = { expansao: "Expansao", negocio: "Negocio", essencial: "Essencial" };
+  return (<View style={pb.badge}><View style={pb.dot} /><Text style={pb.text}>{map[plan] || plan}</Text></View>);
 }
 const pb = StyleSheet.create({
   badge: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, gap: 5 },
-  dot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.green },
-  text:  { fontSize: 11, color: Colors.violet3, fontWeight: "600", letterSpacing: 0.3 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.green },
+  text: { fontSize: 11, color: Colors.violet3, fontWeight: "600", letterSpacing: 0.3 },
 });
 
 function HoverCard({ children, style, highlight }: { children: React.ReactNode; style?: any; highlight?: boolean }) {
@@ -96,7 +95,7 @@ function KpiCard({ icon, label, value, delta, deltaUp, accent, highlight }: {
       {delta && (
         <View style={[kpi.deltaBox, { backgroundColor: deltaUp ? Colors.greenD : Colors.redD }]}>
           <Text style={[kpi.deltaText, { color: deltaUp ? Colors.green : Colors.red }]}>
-            {deltaUp ? "\u25B2" : "\u25BC"} {delta}
+            {deltaUp ? "+" : "-"} {delta}
           </Text>
         </View>
       )}
@@ -156,7 +155,7 @@ function SaleRow({ customer, amount, time, method }: { customer: string; amount:
         <View style={sr.avatar}><Text style={sr.avatarText}>{customer.charAt(0)}</Text></View>
         <View>
           <Text style={sr.name}>{customer}</Text>
-          <Text style={sr.time}>{time}{method ? ` \u00B7 ${method}` : ""}</Text>
+          <Text style={sr.time}>{time}{method ? (" / " + method) : ""}</Text>
         </View>
       </View>
       <Text style={sr.amount}>+{fmt(amount)}</Text>
@@ -179,8 +178,8 @@ function ObligationRow({ name, due, amount, status, category }: {
   const [hovered, setHovered] = useState(false);
   const isWeb = Platform.OS === "web";
   const statusColor = status === "pending" ? Colors.amber : Colors.ink3;
-  const catLabel = category === "aura_resolve" ? "Aura resolve" : category === "voce_faz" ? "Voce confirma" : "Requer CRC";
-  const catColor = category === "aura_resolve" ? Colors.green : category === "voce_faz" ? Colors.amber : Colors.violet3;
+  const catLabel = category === "aura_resolve" ? "Aura resolve" : "Aura facilita, voce resolve";
+  const catColor = category === "aura_resolve" ? Colors.green : Colors.amber;
   return (
     <Pressable
       style={[ob.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}
@@ -235,7 +234,7 @@ export default function DashboardScreen() {
           <Avatar name={user?.name ?? "A"} />
           <View>
             <Text style={s.greeting}>{greeting}, {user?.name?.split(" ")[0] ?? "usuario"}</Text>
-            <Text style={s.companyName}>{company?.name ?? "\u2014"}</Text>
+            <Text style={s.companyName}>{company?.name ?? "---"}</Text>
           </View>
         </View>
         <View style={s.headerRight}>
@@ -248,7 +247,7 @@ export default function DashboardScreen() {
 
       <HoverCard style={s.hero}>
         <View style={s.heroTop}>
-          <Text style={s.heroEye}>{month} \u00B7 {year}</Text>
+          <Text style={s.heroEye}>{month} {year}</Text>
           <View style={s.healthBadge}>
             <View style={s.healthDot} />
             <Text style={s.healthText}>Saudavel</Text>
@@ -258,9 +257,9 @@ export default function DashboardScreen() {
         <Text style={s.heroLabel}>Lucro liquido do mes</Text>
         {d.dasAlert && (
           <View style={s.dasAlert}>
-            <Text style={s.dasIcon}>{"\u26A0"}</Text>
+            <Text style={s.dasIcon}>!</Text>
             <Text style={s.dasText}>
-              DAS vence em {d.dasAlert.days} dias \u2014 estimativa {fmt(d.dasAlert.amount)}
+              DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}
             </Text>
           </View>
         )}
@@ -268,21 +267,21 @@ export default function DashboardScreen() {
 
       <Text style={s.section}>Visao geral</Text>
       <View style={s.grid}>
-        <KpiCard icon={"\u2191"} label="Receita do mes" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp accent={Colors.green} highlight />
-        <KpiCard icon={"\u2193"} label="Despesas" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} accent={Colors.red} />
-        <KpiCard icon={"\u25C6"} label="Lucro liquido" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp accent={Colors.green} highlight />
-        <KpiCard icon={"\u25CF"} label="Vendas hoje" value={String(d.salesToday)} accent={Colors.violet} />
-        <KpiCard icon={"\u25CE"} label="Ticket medio" value={fmt(d.avgTicket)} accent={Colors.amber} />
-        <KpiCard icon={"\u25C9"} label="Clientes novos" value={String(d.newCustomers)} delta="este mes" deltaUp accent={Colors.violet} />
+        <KpiCard icon="$" label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp accent={Colors.green} highlight />
+        <KpiCard icon="-" label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} accent={Colors.red} />
+        <KpiCard icon="=" label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp accent={Colors.green} highlight />
+        <KpiCard icon="#" label="VENDAS HOJE" value={String(d.salesToday)} accent={Colors.violet} />
+        <KpiCard icon="~" label="TICKET MEDIO" value={fmt(d.avgTicket)} accent={Colors.amber} />
+        <KpiCard icon="+" label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp accent={Colors.violet} />
       </View>
 
       <Text style={s.section}>Acesso rapido</Text>
       <View style={s.actions}>
-        <QuickAction icon={"\u229E"} label="PDV" />
-        <QuickAction icon={"\u2261"} label="Financeiro" />
-        <QuickAction icon={"\u25A6"} label="Estoque" />
-        <QuickAction icon={"\u25E7"} label="NF-e" />
-        <QuickAction icon={"\u25A3"} label="Contabil" />
+        <QuickAction icon="$" label="PDV" />
+        <QuickAction icon="%" label="Financeiro" />
+        <QuickAction icon="#" label="Estoque" />
+        <QuickAction icon="N" label="NF-e" />
+        <QuickAction icon="C" label="Contabil" />
       </View>
 
       <View style={s.sectionHeader}>
@@ -310,7 +309,7 @@ export default function DashboardScreen() {
 
       {isDemo && (
         <View style={s.demoBanner}>
-          <Text style={s.demoText}>Modo demonstrativo \u2014 dados ilustrativos</Text>
+          <Text style={s.demoText}>Modo demonstrativo - dados ilustrativos</Text>
         </View>
       )}
     </ScrollView>
@@ -336,7 +335,7 @@ const s = StyleSheet.create({
   heroValue: { fontSize: 36, fontWeight: "800", color: Colors.ink, letterSpacing: -1, marginBottom: 4 },
   heroLabel: { fontSize: 13, color: Colors.ink3, marginBottom: 16 },
   dasAlert: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12 },
-  dasIcon: { fontSize: 14 },
+  dasIcon: { fontSize: 14, color: Colors.amber, fontWeight: "700" },
   dasText: { fontSize: 12, color: Colors.amber, fontWeight: "500", flex: 1 },
   section: { fontSize: 15, color: Colors.ink, fontWeight: "600", marginBottom: 14 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
