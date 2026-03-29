@@ -73,7 +73,6 @@ export default function LoginScreen() {
       {/* Painel esquerdo */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: 56 } as any}>
         <a href="https://getaura.com.br" target="_blank" rel="noreferrer" style={{ textDecoration: "none", textAlign: "center" } as any}>
-          {/* Logo SVG */}
           <svg width="100" height="100" viewBox="0 0 120 120">
             <defs>
               <radialGradient id="lg" cx="50%" cy="50%" r="50%">
@@ -105,14 +104,14 @@ export default function LoginScreen() {
           </div>
         </a>
 
-        <div style={{ width: 44, height: 1, background: Colors.border2, margin: "28px 0" } as any} />
+        <div style={{ width: 44, height: 1, background: Colors.border2, margin: "32px 0" } as any} />
 
-        <p style={{ fontSize: 18, color: Colors.ink2, lineHeight: 1.75, textAlign: "center", marginBottom: 28, margin: 0 } as any}>
-          Gest\u00e3o completa<br />para MEI e ME \u2014<br />com analista CRC incluso.
+        <p style={{ fontSize: 18, color: Colors.ink2, lineHeight: 1.75, textAlign: "center", margin: 0 } as any}>
+          Gest\u00e3o completa<br />para MEI e ME.
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 210, marginTop: 28 } as any}>
-          {["\u2713 Financeiro & DRE", "\u2713 PDV & Estoque", "\u2713 Contabilidade", "\u2713 Analista humano"].map(b => (
+          {["\u2713 Financeiro & DRE", "\u2713 PDV & Estoque", "\u2713 Contabilidade", "\u2713 Canal Digital"].map(b => (
             <div key={b} style={{ background: Colors.violetD, border: `1px solid ${Colors.border2}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, color: Colors.violet3 } as any}>{b}</div>
           ))}
         </div>

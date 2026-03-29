@@ -4,24 +4,15 @@ import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
-function KpiCard({
-  label, value, delta, deltaUp,
-}: {
-  label: string; value: string; delta?: string; deltaUp?: boolean;
-}) {
+function KpiCard({ label, value, delta, deltaUp }: { label: string; value: string; delta?: string; deltaUp?: boolean }) {
   return (
     <View style={k.card}>
       <Text style={k.label}>{label}</Text>
       <Text style={k.value}>{value}</Text>
-      {delta && (
-        <Text style={[k.delta, { color: deltaUp ? Colors.green : Colors.red }]}>
-          {delta}
-        </Text>
-      )}
+      {delta && <Text style={[k.delta, { color: deltaUp ? Colors.green : Colors.red }]}>{delta}</Text>}
     </View>
   );
 }
-
 const k = StyleSheet.create({
   card:  { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: "45%", margin: 5 },
   label: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
@@ -31,7 +22,6 @@ const k = StyleSheet.create({
 
 export default function DashboardScreen() {
   const { user, company, token, logout } = useAuthStore();
-
   const { isLoading } = useQuery({
     queryKey: ["dashboard", company?.id],
     queryFn:  () => dashboardApi.summary(company!.id, token!),
@@ -39,50 +29,33 @@ export default function DashboardScreen() {
     retry: 1,
   });
 
-  const fmt = (n: number) =>
-    `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+  const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
-      {/* Header */}
       <View style={s.header}>
         <View>
-          <Text style={s.greeting}>Bom dia, {user?.name?.split(" ")[0]} 👋</Text>
-          <Text style={s.company}>
-            {company?.name ?? "—"} · {company?.plan ?? "—"}
-          </Text>
+          <Text style={s.greeting}>Bom dia, {user?.name?.split(" ")[0]} \uD83D\uDC4B</Text>
+          <Text style={s.company}>{company?.name ?? "\u2014"} \u00b7 {company?.plan ?? "\u2014"}</Text>
         </View>
-        <TouchableOpacity onPress={logout}>
-          <Text style={s.logout}>Sair</Text>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={logout}><Text style={s.logout}>Sair</Text></TouchableOpacity>
       </View>
 
-      {/* Hero */}
       <View style={s.hero}>
-        <Text style={s.heroEye}>Março · 2026</Text>
-        <Text style={s.heroTitle}>Sua empresa está saudável.</Text>
-        <Text style={s.heroSub}>DAS vence em 14 dias — estimativa preparada.</Text>
+        <Text style={s.heroEye}>Mar\u00e7o \u00b7 2026</Text>
+        <Text style={s.heroTitle}>Sua empresa est\u00e1 saud\u00e1vel.</Text>
+        <Text style={s.heroSub}>DAS vence em 14 dias \u2014 estimativa preparada.</Text>
       </View>
 
-      {/* KPIs */}
-      <Text style={s.section}>Visão geral</Text>
-      {isLoading ? (
-        <Text style={s.loading}>Carregando...</Text>
-      ) : (
+      <Text style={s.section}>Vis\u00e3o geral</Text>
+      {isLoading ? <Text style={s.loading}>Carregando...</Text> : (
         <View style={s.grid}>
-          <KpiCard label="Receita do mês"  value={fmt(18420)} delta="▲ 12% vs anterior" deltaUp />
-          <KpiCard label="Despesas"        value={fmt(7840)}  delta="▲ 3% vs anterior"  deltaUp={false} />
-          <KpiCard label="Saldo líquido"   value={fmt(10580)} delta="▲ 18% vs anterior" deltaUp />
+          <KpiCard label="Receita do m\u00eas"  value={fmt(18420)} delta="\u25b2 12% vs anterior" deltaUp />
+          <KpiCard label="Despesas"        value={fmt(7840)}  delta="\u25b2 3% vs anterior"  deltaUp={false} />
+          <KpiCard label="Saldo l\u00edquido"   value={fmt(10580)} delta="\u25b2 18% vs anterior" deltaUp />
           <KpiCard label="Vendas hoje"     value="47"         delta="Atualizado agora" />
         </View>
       )}
-
-      {/* Alerta analista */}
-      <View style={s.alert}>
-        <Text style={s.alertText}>
-          ⚡ Analista disponível · PGDAS-D aguardando revisão
-        </Text>
-      </View>
     </ScrollView>
   );
 }
@@ -101,6 +74,4 @@ const s = StyleSheet.create({
   section:   { fontSize: 16, color: Colors.ink, fontWeight: "600", marginBottom: 12 },
   loading:   { color: Colors.ink3, textAlign: "center", marginVertical: 20 },
   grid:      { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -5, marginBottom: 20 },
-  alert:     { backgroundColor: Colors.violetD, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: Colors.border2 },
-  alertText: { fontSize: 13, color: Colors.violet3 },
 });

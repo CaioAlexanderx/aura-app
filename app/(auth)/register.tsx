@@ -109,7 +109,7 @@ export default function RegisterScreen() {
           </div>
         </a>
 
-        <div style={{ width: 44, height: 1, background: Colors.border2, margin: "28px 0" } as any} />
+        <div style={{ width: 44, height: 1, background: Colors.border2, margin: "32px 0" } as any} />
 
         <p style={{ fontSize: 18, color: Colors.ink2, lineHeight: 1.75, textAlign: "center", margin: 0, marginBottom: 28 } as any}>
           Comece gr\u00e1tis.<br />Sem cart\u00e3o de cr\u00e9dito.<br />Cancele quando quiser.
@@ -119,9 +119,6 @@ export default function RegisterScreen() {
           <div style={{ fontSize: 9, color: Colors.violet3, letterSpacing: 2, marginBottom: 6 } as any}>A PARTIR DE</div>
           <div style={{ fontSize: 36, color: Colors.ink, fontWeight: 800, letterSpacing: -1 } as any}>
             R$ 59<span style={{ fontSize: 14, fontWeight: 400, color: Colors.ink3 }}>/m\u00eas</span>
-          </div>
-          <div style={{ fontSize: 11, color: Colors.ink3, marginTop: 8, lineHeight: 1.5 } as any}>
-            Analista CRC incluso em todos os planos pagos
           </div>
         </div>
       </div>
