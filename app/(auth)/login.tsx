@@ -1,27 +1,27 @@
 import { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
-  StyleSheet, Alert, Linking, Platform, ScrollView, Image,
+  StyleSheet, Alert, Linking, Platform, ScrollView,
 } from "react-native";
 import { Link } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
-// URL pública da logo no GitHub (repo público)
-const LOGO_URL = "https://raw.githubusercontent.com/CaioAlexanderx/aura-app/main/assets/logo.jpeg";
+// jsDelivr serve o GitHub com cache confiável
+const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/logo.jpeg";
 
 const FEATURES = [
-  { icon: "\uD83D\uDCCA", label: "Organização Financeira" },
-  { icon: "\uD83D\uDCE6", label: "Controle de Estoque e Vendas" },
-  { icon: "\uD83D\uDCCB", label: "Contabilidade Integrada" },
-  { icon: "\uD83C\uDF10", label: "Identidade Digital para seu negócio" },
+  { icon: "📊", label: "Organização Financeira" },
+  { icon: "📦", label: "Controle de Estoque e Vendas" },
+  { icon: "📋", label: "Contabilidade Integrada" },
+  { icon: "🌐", label: "Identidade Digital para seu negócio" },
 ];
 
 export default function LoginScreen() {
-  const [email, setEmail]     = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const { login, isLoading }  = useAuthStore();
+  const { login, isLoading }    = useAuthStore();
   const isWeb = Platform.OS === "web";
 
   async function handleLogin() {
@@ -46,32 +46,30 @@ export default function LoginScreen() {
       <View style={s.field}>
         <Text style={s.label}>Senha</Text>
         <TextInput style={s.input} value={password} onChangeText={setPassword}
-          placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" placeholderTextColor={Colors.ink3}
+          placeholder="••••••••" placeholderTextColor={Colors.ink3}
           secureTextEntry />
       </View>
       <TouchableOpacity style={s.btn} onPress={handleLogin} disabled={isLoading}>
         {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Entrar</Text>}
       </TouchableOpacity>
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Ainda n\u00e3o tem conta? </Text>
+        <Text style={s.footerText}>Ainda não tem conta? </Text>
         <Link href="/(auth)/register"><Text style={s.link}>Criar conta</Text></Link>
       </View>
     </View>
   );
 
-  // Mobile
   if (!isWeb) {
     return (
       <ScrollView contentContainerStyle={s.mobile}>
         <TouchableOpacity onPress={() => Linking.openURL("https://getaura.com.br")} style={s.mobileLogo}>
-          <Image source={{ uri: LOGO_URL }} style={s.mobileLogoImg} resizeMode="contain" />
+          <img src={LOGO_URL} alt="Aura." style={{ width: 180, height: "auto" } as any} />
         </TouchableOpacity>
         {formCard}
       </ScrollView>
     );
   }
 
-  // Web: dois painéis
   return (
     <div style={{
       display: "flex", flexDirection: "row", height: "100vh", width: "100vw",
@@ -83,25 +81,21 @@ export default function LoginScreen() {
 
       {/* Painel esquerdo */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 56px" } as any}>
-
-        {/* Logo clicável */}
         <a href="https://getaura.com.br" target="_blank" rel="noreferrer"
           style={{ display: "block", textDecoration: "none", marginBottom: 40 } as any}>
           <img
             src={LOGO_URL}
-            alt="Aura. - Tecnologia para Neg\u00f3cios"
+            alt="Aura."
             style={{ width: 260, height: "auto", display: "block" } as any}
           />
         </a>
 
-        {/* Pitch */}
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
-          Voc\u00ea fez a escolha certa, hora de{" "}
+          Você fez a escolha certa, hora de{" "}
           <span style={{ color: Colors.violet3, fontWeight: 600 } as any}>revolucionar</span>{" "}
           sua empresa com:
         </p>
 
-        {/* Feature cards */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 300 } as any}>
           {FEATURES.map(f => (
             <div key={f.label} style={{
@@ -129,9 +123,8 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
-  mobile:       { flexGrow: 1, backgroundColor: Colors.bg, padding: 28, justifyContent: "center", alignItems: "center" },
-  mobileLogo:   { marginBottom: 32, alignItems: "center" },
-  mobileLogoImg:{ width: 200, height: 80 },
+  mobile:     { flexGrow: 1, backgroundColor: Colors.bg, padding: 28, justifyContent: "center", alignItems: "center" },
+  mobileLogo: { marginBottom: 32, alignItems: "center" },
   card: {
     width: "100%", maxWidth: 400,
     backgroundColor: Colors.bg3,

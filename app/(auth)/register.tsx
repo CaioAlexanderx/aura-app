@@ -1,20 +1,20 @@
 import { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
-  StyleSheet, Alert, Linking, Platform, ScrollView, Image,
+  StyleSheet, Alert, Linking, Platform, ScrollView,
 } from "react-native";
 import { Link } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
-const LOGO_URL = "https://raw.githubusercontent.com/CaioAlexanderx/aura-app/main/assets/logo.jpeg";
+const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/logo.jpeg";
 
 const FEATURES = [
-  { icon: "\uD83D\uDCCA", label: "Organização Financeira" },
-  { icon: "\uD83D\uDCE6", label: "Controle de Estoque e Vendas" },
-  { icon: "\uD83D\uDCCB", label: "Contabilidade Integrada" },
-  { icon: "\uD83C\uDF10", label: "Identidade Digital para seu negócio" },
+  { icon: "📊", label: "Organização Financeira" },
+  { icon: "📦", label: "Controle de Estoque e Vendas" },
+  { icon: "📋", label: "Contabilidade Integrada" },
+  { icon: "🌐", label: "Identidade Digital para seu negócio" },
 ];
 
 export default function RegisterScreen() {
@@ -35,7 +35,7 @@ export default function RegisterScreen() {
   }
 
   const fields = [
-    { label: "Seu nome",        value: name,     set: setName,     placeholder: "Jo\u00e3o Mendes" },
+    { label: "Seu nome",        value: name,     set: setName,     placeholder: "João Mendes" },
     { label: "E-mail",          value: email,    set: setEmail,    placeholder: "joao@empresa.com", keyboard: "email-address" as const },
     { label: "Senha",           value: password, set: setPassword, placeholder: "8+ caracteres", secure: true },
     { label: "Nome da empresa", value: company,  set: setCompany,  placeholder: "Minha Empresa Ltda." },
@@ -44,7 +44,7 @@ export default function RegisterScreen() {
   const formCard = (
     <View style={s.card}>
       <Text style={s.title}>Criar conta</Text>
-      <Text style={s.subtitle}>Gr\u00e1tis para come\u00e7ar</Text>
+      <Text style={s.subtitle}>Grátis para começar</Text>
       {fields.map(f => (
         <View style={s.field} key={f.label}>
           <Text style={s.label}>{f.label}</Text>
@@ -55,28 +55,26 @@ export default function RegisterScreen() {
         </View>
       ))}
       <TouchableOpacity style={s.btn} onPress={handleRegister} disabled={isLoading}>
-        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta gr\u00e1tis</Text>}
+        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta grátis</Text>}
       </TouchableOpacity>
       <View style={s.footerRow}>
-        <Text style={s.footerText}>J\u00e1 tem conta? </Text>
+        <Text style={s.footerText}>Já tem conta? </Text>
         <Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link>
       </View>
     </View>
   );
 
-  // Mobile
   if (!isWeb) {
     return (
       <ScrollView contentContainerStyle={s.mobile}>
         <TouchableOpacity onPress={() => Linking.openURL("https://getaura.com.br")} style={s.mobileLogo}>
-          <Image source={{ uri: LOGO_URL }} style={s.mobileLogoImg} resizeMode="contain" />
+          <img src={LOGO_URL} alt="Aura." style={{ width: 180, height: "auto" } as any} />
         </TouchableOpacity>
         {formCard}
       </ScrollView>
     );
   }
 
-  // Web: dois painéis
   return (
     <div style={{
       display: "flex", flexDirection: "row", height: "100vh", width: "100vw",
@@ -88,18 +86,17 @@ export default function RegisterScreen() {
 
       {/* Painel esquerdo */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 56px" } as any}>
-
         <a href="https://getaura.com.br" target="_blank" rel="noreferrer"
           style={{ display: "block", textDecoration: "none", marginBottom: 40 } as any}>
           <img
             src={LOGO_URL}
-            alt="Aura. - Tecnologia para Neg\u00f3cios"
+            alt="Aura."
             style={{ width: 260, height: "auto", display: "block" } as any}
           />
         </a>
 
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
-          Voc\u00ea fez a escolha certa, hora de{" "}
+          Você fez a escolha certa, hora de{" "}
           <span style={{ color: Colors.violet3, fontWeight: 600 } as any}>revolucionar</span>{" "}
           sua empresa com:
         </p>
@@ -131,9 +128,8 @@ export default function RegisterScreen() {
 }
 
 const s = StyleSheet.create({
-  mobile:       { flexGrow: 1, backgroundColor: Colors.bg, padding: 28, justifyContent: "center", alignItems: "center" },
-  mobileLogo:   { marginBottom: 32, alignItems: "center" },
-  mobileLogoImg:{ width: 200, height: 80 },
+  mobile:     { flexGrow: 1, backgroundColor: Colors.bg, padding: 28, justifyContent: "center", alignItems: "center" },
+  mobileLogo: { marginBottom: 32, alignItems: "center" },
   card: {
     width: "100%", maxWidth: 400,
     backgroundColor: Colors.bg3,
