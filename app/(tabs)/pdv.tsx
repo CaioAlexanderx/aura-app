@@ -477,10 +477,10 @@ export default function PdvScreen() {
 // ── Styles ─────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.bg },
+  screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: 20, paddingBottom: 48 },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
-  webRoot: { flex: 1, flexDirection: "row", backgroundColor: Colors.bg },
+  webRoot: { flex: 1, flexDirection: "row", backgroundColor: "transparent" },
   webLeft: { flex: 1 },
   webLeftContent: { padding: 32, paddingBottom: 48 },
   webRight: { width: 380, borderLeftWidth: 1, borderLeftColor: Colors.border, backgroundColor: Colors.bg2 },

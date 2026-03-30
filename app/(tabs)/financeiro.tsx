@@ -384,7 +384,7 @@ export default function FinanceiroScreen() {
 // ── Shared Styles ────────────────────────────────────────────
 
 const g = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.bg },
+  screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
   row: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 20 },

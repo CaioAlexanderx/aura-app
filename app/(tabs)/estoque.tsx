@@ -598,7 +598,7 @@ export default function EstoqueScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.bg },
+  screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },

@@ -336,7 +336,7 @@ export default function ContabilidadeScreen() {
 }
 
 const z = StyleSheet.create({
-  scr: { flex: 1, backgroundColor: Colors.bg },
+  scr: { flex: 1, backgroundColor: "transparent" },
   cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   gridItem: { width: IS_WIDE ? "48.5%" : "100%", flexShrink: 0 },

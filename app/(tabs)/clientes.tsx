@@ -127,7 +127,7 @@ export default function ClientesScreen() {
   const tot=cust.length;const ltv=cust.reduce((s,c)=>s+c.totalSpent,0);const rated=cust.filter(c=>c.rating!=null);const avg=rated.length?(rated.reduce((s,c)=>s+(c.rating||0),0)/rated.length).toFixed(1):"0";
   const ranked=[...cust].sort((a,b)=>rm==="ltv"?b.totalSpent-a.totalSpent:b.visits-a.visits);
   function addC(c:Cust){sCust(p=>[c,...p]);sAdd(false);}
-  return <ScrollView style={{flex:1,backgroundColor:Colors.bg}} contentContainerStyle={{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"}}>
+  return <ScrollView style={{flex:1,backgroundColor: "transparent"}} contentContainerStyle={{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"}}>
     <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <Text style={{fontSize:22,color:Colors.ink,fontWeight:"700"}}>Clientes</Text>
       <Pressable onPress={()=>{sAdd(true);sTab(0);}} style={{backgroundColor:Colors.violet,paddingHorizontal:18,paddingVertical:10,borderRadius:10}}><Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>+ Adicionar cliente</Text></Pressable>
