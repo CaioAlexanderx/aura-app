@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 
 const LOGO="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
-const NAV=[{s:"Principal",i:[{r:"/",l:"Painel",ic:"dashboard"},{r:"/financeiro",l:"Financeiro",ic:"wallet"},{r:"/nfe",l:"NF-e",ic:"file_text"}]},{s:"Contabil",i:[{r:"/contabilidade",l:"Contabilidade",ic:"calculator"}]},{s:"Vendas",i:[{r:"/pdv",l:"PDV",ic:"cart"},{r:"/estoque",l:"Estoque",ic:"package"}]},{s:"Clientes",i:[{r:"/clientes",l:"Clientes",ic:"users"}]}];
+const NAV=[{s:"Principal",i:[{r:"/",l:"Painel",ic:"dashboard"},{r:"/financeiro",l:"Financeiro",ic:"wallet"},{r:"/nfe",l:"NF-e",ic:"file_text"}]},{s:"Contabil",i:[{r:"/contabilidade",l:"Contabilidade",ic:"calculator"}]},{s:"Vendas",i:[{r:"/pdv",l:"PDV",ic:"cart"},{r:"/estoque",l:"Estoque",ic:"package"}]},{s:"Equipe",i:[{r:"/folha",l:"Folha de Pagamento",ic:"payroll"}]},{s:"Clientes",i:[{r:"/clientes",l:"Clientes",ic:"users"}]}];
 const MTABS=[{r:"/",l:"Painel",ic:"dashboard"},{r:"/pdv",l:"PDV",ic:"cart"},{r:"/financeiro",l:"Fin",ic:"wallet"},{r:"/clientes",l:"Clientes",ic:"users"},{r:"/contabilidade",l:"Contabil",ic:"calculator"}];
 const GRAD=`radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${Colors.bg}`;
 
