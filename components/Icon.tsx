@@ -1,6 +1,5 @@
 import { Platform, View, Text, StyleSheet } from "react-native";
 
-// SVG icon paths (Lucide-inspired, 24x24 viewBox)
 const PATHS: Record<string, string> = {
   dashboard: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M9 22V12h6v10",
   wallet: "M21 12V7H5a2 2 0 010-4h14v4 M3 5v16h18v-8H3 M18 16h.01",
@@ -24,6 +23,8 @@ const PATHS: Record<string, string> = {
   alert: "M12 9v4 M12 17h.01 M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
   calendar: "M16 2v4 M8 2v4 M3 10h18 M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z",
   payroll: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 8v4 M21 10h4",
+  chevron_left: "M15 18l-6-6 6-6",
+  chevron_right: "M9 18l6-6-6-6",
 };
 
 type IconProps = {
@@ -47,12 +48,11 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     );
   }
 
-  // Native fallback - simple text icon
   const fallback: Record<string, string> = {
     dashboard:"P",wallet:"F",file_text:"N",calculator:"C",cart:"$",package:"E",users:"U",
     dollar:"$",trending_up:"+",trending_down:"-",receipt:"~",user_plus:"+",bag:"#",
     bar_chart:"B",clipboard:"D",star:"*",settings:"S",logout:"X",check:"V",alert:"!",
-    calendar:"C",payroll:"F",
+    calendar:"C",payroll:"F",chevron_left:"<",chevron_right:">",
   };
   return <Text style={{ fontSize: size * 0.6, fontWeight: "700", color, textAlign: "center" }}>{fallback[name as string] || "?"}</Text>;
 }
