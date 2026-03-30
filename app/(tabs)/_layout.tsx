@@ -6,6 +6,7 @@ import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
+import { ToastContainer } from "@/components/Toast";
 
 const LOGO="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean };
@@ -157,16 +158,20 @@ export default function TabsLayout() {
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
   if (w) return (
-    <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg } as any}>
+    <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
       <Sidebar />
-      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto" } as any}>
+      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative" } as any}>
+        <ToastContainer />
         <PageTransition><Slot /></PageTransition>
       </div>
     </div>
   );
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View key={themeKey} style={{ flex: 1 }}><PageTransition><Slot /></PageTransition></View>
+      <View key={themeKey} style={{ flex: 1 }}>
+        <ToastContainer />
+        <PageTransition><Slot /></PageTransition>
+      </View>
       <MBar />
     </View>
   );
