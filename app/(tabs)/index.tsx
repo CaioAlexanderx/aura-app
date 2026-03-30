@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { DemoTour } from "@/components/DemoTour";
 
 const { width: W } = Dimensions.get("window");
 const IS = W > 768;
@@ -71,50 +72,53 @@ export default function DashboardScreen(){
   const d=isDemo?MOCK:(data??MOCK);const greeting=grt();const month=gm();const year=new Date().getFullYear();const go=(p:string)=>router.push(p as any);
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.content}>
-      <View style={s.header}>
-        <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
-        <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>
-      </View>
+    <View style={{flex:1}}>
+      <DemoTour visible={isDemo} />
+      <ScrollView style={s.scroll} contentContainerStyle={s.content}>
+        <View style={s.header}>
+          <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
+          <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>
+        </View>
 
-      <HC style={s.hero} onPress={()=>go("/financeiro")}>
-        <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudavel</Text></View></View>
-        <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
-        {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
-      </HC>
+        <HC style={s.hero} onPress={()=>go("/financeiro")}>
+          <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudavel</Text></View></View>
+          <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
+          {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
+        </HC>
 
-      <Text style={s.sec}>Visao geral</Text>
-      <View style={s.grid}>
-        <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
-        <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
-        <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
-        <KPI ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
-        <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
-        <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
-      </View>
+        <Text style={s.sec}>Visao geral</Text>
+        <View style={s.grid}>
+          <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+          <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
+          <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+          <KPI ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
+          <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+          <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
+        </View>
 
-      <Text style={s.sec}>Acesso rapido</Text>
-      <View style={s.acts}>
-        <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
-        <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
-        <QA ic="package" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
-        <QA ic="file_text" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
-        <QA ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
-      </View>
+        <Text style={s.sec}>Acesso rapido</Text>
+        <View style={s.acts}>
+          <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
+          <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
+          <QA ic="package" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
+          <QA ic="file_text" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
+          <QA ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
+        </View>
 
-      <View style={s.sh}><Text style={s.sec}>Obrigacoes contabeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
-      <HC style={s.lc} onPress={()=>go("/contabilidade")}>
-        {(d.obligations??MOCK.obligations).map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
-        <View style={s.lf}><Text style={s.lft}>Apoio contabil informativo</Text></View>
-      </HC>
+        <View style={s.sh}><Text style={s.sec}>Obrigacoes contabeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
+        <HC style={s.lc} onPress={()=>go("/contabilidade")}>
+          {(d.obligations??MOCK.obligations).map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
+          <View style={s.lf}><Text style={s.lft}>Apoio contabil informativo</Text></View>
+        </HC>
 
-      <View style={s.sh}><Text style={s.sec}>Ultimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
-      <HC style={s.lc}>
-        {(d.recentSales??MOCK.recentSales).map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
-      </HC>
+        <View style={s.sh}><Text style={s.sec}>Ultimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
+        <HC style={s.lc}>
+          {(d.recentSales??MOCK.recentSales).map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
+        </HC>
 
-      {isDemo&&<View style={s.dm}><Text style={s.dmt}>Modo demonstrativo - dados ilustrativos</Text></View>}
-    </ScrollView>
+        {isDemo&&<View style={s.dm}><Text style={s.dmt}>Modo demonstrativo - dados ilustrativos</Text></View>}
+      </ScrollView>
+    </View>
   );
 }
 
