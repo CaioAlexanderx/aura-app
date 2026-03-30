@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable, Dimensions, Platform } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
@@ -58,11 +59,12 @@ const pb = StyleSheet.create({
   text: { fontSize: 11, color: Colors.violet3, fontWeight: "600", letterSpacing: 0.3 },
 });
 
-function HoverCard({ children, style, highlight }: { children: React.ReactNode; style?: any; highlight?: boolean }) {
+function HoverCard({ children, style, highlight, onPress }: { children: React.ReactNode; style?: any; highlight?: boolean; onPress?: () => void }) {
   const [hovered, setHovered] = useState(false);
   const isWeb = Platform.OS === "web";
   return (
     <Pressable
+      onPress={onPress}
       onHoverIn={isWeb ? () => setHovered(true) : undefined}
       onHoverOut={isWeb ? () => setHovered(false) : undefined}
       style={[
@@ -79,11 +81,11 @@ function HoverCard({ children, style, highlight }: { children: React.ReactNode; 
   );
 }
 
-function KpiCard({ icon, label, value, delta, deltaUp, accent, highlight }: {
-  icon: string; label: string; value: string; delta?: string; deltaUp?: boolean; accent?: string; highlight?: boolean;
+function KpiCard({ icon, label, value, delta, deltaUp, accent, highlight, onPress }: {
+  icon: string; label: string; value: string; delta?: string; deltaUp?: boolean; accent?: string; highlight?: boolean; onPress?: () => void;
 }) {
   return (
-    <HoverCard style={[kpi.card, highlight && kpi.highlight]} highlight={highlight}>
+    <HoverCard style={[kpi.card, highlight && kpi.highlight]} highlight={highlight} onPress={onPress}>
       <View style={kpi.header}>
         <View style={[kpi.iconCircle, accent ? { backgroundColor: accent + "18" } : {}]}>
           <Text style={kpi.icon}>{icon}</Text>
@@ -142,11 +144,12 @@ const qa = StyleSheet.create({
   label: { fontSize: 10, color: Colors.ink3, fontWeight: "500", textAlign: "center" },
 });
 
-function SaleRow({ customer, amount, time, method }: { customer: string; amount: number; time: string; method?: string }) {
+function SaleRow({ customer, amount, time, method, onPress }: { customer: string; amount: number; time: string; method?: string; onPress?: () => void }) {
   const [hovered, setHovered] = useState(false);
   const isWeb = Platform.OS === "web";
   return (
     <Pressable
+      onPress={onPress}
       style={[sr.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}
       onHoverIn={isWeb ? () => setHovered(true) : undefined}
       onHoverOut={isWeb ? () => setHovered(false) : undefined}
@@ -172,8 +175,8 @@ const sr = StyleSheet.create({
   amount: { fontSize: 13, color: Colors.green, fontWeight: "600" },
 });
 
-function ObligationRow({ name, due, amount, status, category }: {
-  name: string; due: string; amount: number | null; status: string; category: string;
+function ObligationRow({ name, due, amount, status, category, onPress }: {
+  name: string; due: string; amount: number | null; status: string; category: string; onPress?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const isWeb = Platform.OS === "web";
@@ -182,6 +185,7 @@ function ObligationRow({ name, due, amount, status, category }: {
   const catColor = category === "aura_resolve" ? Colors.green : Colors.amber;
   return (
     <Pressable
+      onPress={onPress}
       style={[ob.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}
       onHoverIn={isWeb ? () => setHovered(true) : undefined}
       onHoverOut={isWeb ? () => setHovered(false) : undefined}
@@ -216,6 +220,7 @@ const ob = StyleSheet.create({
 
 export default function DashboardScreen() {
   const { user, company, token, isDemo, logout } = useAuthStore();
+  const router = useRouter();
   const { data } = useQuery({
     queryKey: ["dashboard", company?.id],
     queryFn: () => dashboardApi.summary(company!.id, token!),
@@ -226,6 +231,8 @@ export default function DashboardScreen() {
   const greeting = getGreeting();
   const month = getMonthName();
   const year = new Date().getFullYear();
+
+  const go = (path: string) => router.push(path as any);
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -245,7 +252,7 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      <HoverCard style={s.hero}>
+      <HoverCard style={s.hero} onPress={() => go("/financeiro")}>
         <View style={s.heroTop}>
           <Text style={s.heroEye}>{month} {year}</Text>
           <View style={s.healthBadge}>
@@ -256,41 +263,42 @@ export default function DashboardScreen() {
         <Text style={s.heroValue}>{fmt(d.net)}</Text>
         <Text style={s.heroLabel}>Lucro liquido do mes</Text>
         {d.dasAlert && (
-          <View style={s.dasAlert}>
+          <Pressable onPress={() => go("/contabilidade")} style={s.dasAlert}>
             <Text style={s.dasIcon}>!</Text>
             <Text style={s.dasText}>
               DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}
             </Text>
-          </View>
+            <Text style={s.dasLink}>Ver</Text>
+          </Pressable>
         )}
       </HoverCard>
 
       <Text style={s.section}>Visao geral</Text>
       <View style={s.grid}>
-        <KpiCard icon="$" label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp accent={Colors.green} highlight />
-        <KpiCard icon="-" label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} accent={Colors.red} />
-        <KpiCard icon="=" label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp accent={Colors.green} highlight />
-        <KpiCard icon="#" label="VENDAS HOJE" value={String(d.salesToday)} accent={Colors.violet} />
-        <KpiCard icon="~" label="TICKET MEDIO" value={fmt(d.avgTicket)} accent={Colors.amber} />
-        <KpiCard icon="+" label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp accent={Colors.violet} />
+        <KpiCard icon="$" label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp accent={Colors.green} highlight onPress={() => go("/financeiro")} />
+        <KpiCard icon="-" label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} accent={Colors.red} onPress={() => go("/financeiro")} />
+        <KpiCard icon="=" label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp accent={Colors.green} highlight onPress={() => go("/financeiro")} />
+        <KpiCard icon="#" label="VENDAS HOJE" value={String(d.salesToday)} accent={Colors.violet} onPress={() => go("/pdv")} />
+        <KpiCard icon="~" label="TICKET MEDIO" value={fmt(d.avgTicket)} accent={Colors.amber} onPress={() => go("/financeiro")} />
+        <KpiCard icon="+" label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp accent={Colors.violet} onPress={() => go("/clientes")} />
       </View>
 
       <Text style={s.section}>Acesso rapido</Text>
       <View style={s.actions}>
-        <QuickAction icon="$" label="PDV" />
-        <QuickAction icon="%" label="Financeiro" />
-        <QuickAction icon="#" label="Estoque" />
-        <QuickAction icon="N" label="NF-e" />
-        <QuickAction icon="C" label="Contabil" />
+        <QuickAction icon="$" label="PDV" onPress={() => go("/pdv")} />
+        <QuickAction icon="%" label="Financeiro" onPress={() => go("/financeiro")} />
+        <QuickAction icon="#" label="Estoque" onPress={() => go("/estoque")} />
+        <QuickAction icon="N" label="NF-e" onPress={() => go("/nfe")} />
+        <QuickAction icon="C" label="Contabil" onPress={() => go("/contabilidade")} />
       </View>
 
       <View style={s.sectionHeader}>
         <Text style={s.section}>Obrigacoes contabeis</Text>
         <View style={s.disclaimerBadge}><Text style={s.disclaimerText}>Estimativa</Text></View>
       </View>
-      <HoverCard style={s.listCard}>
+      <HoverCard style={s.listCard} onPress={() => go("/contabilidade")}>
         {(d.obligations ?? MOCK.obligations).map((obl: any) => (
-          <ObligationRow key={obl.id} name={obl.name} due={obl.due} amount={obl.amount} status={obl.status} category={obl.category} />
+          <ObligationRow key={obl.id} name={obl.name} due={obl.due} amount={obl.amount} status={obl.status} category={obl.category} onPress={() => go("/contabilidade")} />
         ))}
         <View style={s.listFooter}>
           <Text style={s.listFooterText}>Apoio contabil informativo</Text>
@@ -299,11 +307,11 @@ export default function DashboardScreen() {
 
       <View style={s.sectionHeader}>
         <Text style={s.section}>Ultimas vendas</Text>
-        <TouchableOpacity><Text style={s.seeAll}>Ver todas</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => go("/financeiro")}><Text style={s.seeAll}>Ver todas</Text></TouchableOpacity>
       </View>
       <HoverCard style={s.listCard}>
         {(d.recentSales ?? MOCK.recentSales).map((sale: any) => (
-          <SaleRow key={sale.id} customer={sale.customer} amount={sale.amount} time={sale.time} method={sale.method} />
+          <SaleRow key={sale.id} customer={sale.customer} amount={sale.amount} time={sale.time} method={sale.method} onPress={() => go("/clientes")} />
         ))}
       </HoverCard>
 
@@ -337,6 +345,7 @@ const s = StyleSheet.create({
   dasAlert: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12 },
   dasIcon: { fontSize: 14, color: Colors.amber, fontWeight: "700" },
   dasText: { fontSize: 12, color: Colors.amber, fontWeight: "500", flex: 1 },
+  dasLink: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   section: { fontSize: 15, color: Colors.ink, fontWeight: "600", marginBottom: 14 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -5, marginBottom: 28 },
