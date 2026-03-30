@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { Platform } from "react-native";
 
-// ── Dark palette (default) ───────────────────────────────────
+// ── Dark palette ─────────────────────────────────────────────
 const Dark = {
   bg: "#060816", bg2: "#090c1a", bg3: "#0e1228", bg4: "#141830",
   ink: "#f0edff", ink2: "rgba(220,215,255,0.75)", ink3: "rgba(170,160,235,0.65)",
@@ -15,14 +15,14 @@ const Dark = {
 
 // ── Light palette ────────────────────────────────────────────
 const Light = {
-  bg: "#f8f7fc", bg2: "#ffffff", bg3: "#ffffff", bg4: "#f0eef6",
-  ink: "#1a1a2e", ink2: "rgba(30,25,60,0.72)", ink3: "rgba(80,70,130,0.6)",
-  border: "rgba(0,0,0,0.08)", border2: "rgba(120,100,240,0.18)",
+  bg: "#f5f3ff", bg2: "#ffffff", bg3: "#ffffff", bg4: "#f0edf8",
+  ink: "#1a1a2e", ink2: "#3d3660", ink3: "#6b6193",
+  border: "rgba(109,40,217,0.10)", border2: "rgba(120,100,240,0.15)",
   violet: "#7c3aed", violet2: "#8b5cf6", violet3: "#6d28d9", violet4: "#5b21b6",
-  violetD: "rgba(109,40,217,0.08)",
+  violetD: "rgba(109,40,217,0.06)",
   green: "#059669", greenD: "rgba(5,150,105,0.08)",
-  red: "#dc2626", redD: "rgba(220,38,38,0.08)",
-  amber: "#d97706", amberD: "rgba(217,119,6,0.08)",
+  red: "#dc2626", redD: "rgba(220,38,38,0.06)",
+  amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
 } as const;
 
 // ── Theme store ──────────────────────────────────────────────
@@ -33,10 +33,11 @@ type ThemeState = {
   toggle: () => void;
 };
 
+// Default: LIGHT (changed from dark)
 export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: Platform.OS === "web"
-    ? (typeof localStorage !== "undefined" ? localStorage.getItem(THEME_KEY) !== "light" : true)
-    : true,
+    ? (typeof localStorage !== "undefined" ? localStorage.getItem(THEME_KEY) === "dark" : false)
+    : false,
   toggle: () => {
     const next = !get().isDark;
     if (Platform.OS === "web" && typeof localStorage !== "undefined") {
@@ -46,16 +47,24 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 }));
 
-// ── Hook to get current colors ───────────────────────────────
+// ── Hook to get current colors (for components with hooks) ───
 export function useColors() {
   const isDark = useThemeStore(s => s.isDark);
   return isDark ? Dark : Light;
 }
 
-// ── Static export (backward compat - always dark) ────────────
-// Screens that don't need dynamic theming can still use this
-export const Colors = Dark;
+// ── Proxy-based Colors (backward compat - ALL screens react) ─
+// Every read of Colors.bg, Colors.ink etc reads from current theme
+// This makes existing screens theme-aware without changing imports
+type ColorKeys = keyof typeof Dark;
+export const Colors = new Proxy({} as typeof Dark, {
+  get: (_target, key: string) => {
+    const isDark = useThemeStore.getState().isDark;
+    const palette = isDark ? Dark : Light;
+    return palette[key as ColorKeys];
+  },
+});
 
-// ── Palette exports for layout ───────────────────────────────
+// ── Palette exports ──────────────────────────────────────────
 export const DarkPalette = Dark;
 export const LightPalette = Light;
