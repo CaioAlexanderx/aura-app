@@ -35,7 +35,6 @@ const MORE_ITEMS = [
 ];
 const GRAD = `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${Colors.bg}`;
 
-// ── Inject Google Fonts via DOM (web only) ───────────────────
 function useWebFonts() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -64,6 +63,7 @@ function useWebFonts() {
       "*, *::before, *::after { font-family: " + Fonts.body + " !important; }",
       "[data-testid] { font-family: " + Fonts.body + " !important; }",
       "div[dir] { font-family: " + Fonts.body + " !important; }",
+      "@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }",
     ].join("\n");
     document.head.appendChild(style);
   }, []);
