@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Alert, Modal } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
@@ -25,70 +25,71 @@ function cP(e:Employee){const i=cINSS(e.salary);const r=Math.max(0,cIRRF(e.salar
 const HIST=[{id:"h1",month:"Fevereiro/2026",total:5600,liquid:4612.40,paidAt:"05/03/2026",employees:3},{id:"h2",month:"Janeiro/2026",total:5600,liquid:4612.40,paidAt:"05/02/2026",employees:3},{id:"h3",month:"Dezembro/2025",total:5600,liquid:4612.40,paidAt:"05/01/2026",employees:3}];
 const stMap={active:{l:"Ativo",c:Colors.green},vacation:{l:"Ferias",c:Colors.amber},dismissed:{l:"Desligado",c:Colors.red}};
 
-// -- Payslip HTML document generator --
-function genPayslipHTML(emp: Employee, companyName: string){
-  const p=cP(emp);const cost=emp.salary+p.fgts;
-  const fmtBR=(n:number)=>n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const LOGO_CDN="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
+
+type CoInfo = { name: string; cnpj?: string; logo?: string; address?: string };
+
+function genPayslipHTML(emp: Employee, co: CoInfo){
+  const p=cP(emp);
+  const f2=(n:number)=>n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const logoHtml=co.logo?`<img src="${co.logo}" alt="${co.name}" style="max-height:48px;max-width:180px;object-fit:contain"/>`:`<div class="lt">Aura<span>.</span></div>`;
+  const cnpjHtml=co.cnpj?`<div class="cd">CNPJ: ${co.cnpj}</div>`:"";
+  const addrHtml=co.address?`<div class="cd">${co.address}</div>`:"";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
-body{background:#fff;padding:32px;max-width:720px;margin:0 auto;color:#1a1a2e}
-.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #6d28d9;padding-bottom:16px;margin-bottom:20px}
-.logo{font-size:22px;font-weight:800;color:#6d28d9;letter-spacing:-0.5px}.logo span{color:#8b5cf6}
-.company{font-size:11px;color:#64748b;margin-top:4px}
-.doc-title{text-align:right}.doc-title h2{font-size:14px;color:#6d28d9;text-transform:uppercase;letter-spacing:1px}.doc-title p{font-size:11px;color:#64748b;margin-top:2px}
-.emp-info{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#f5f3ff;border:1px solid #e9e5f5;border-radius:8px;padding:14px;margin-bottom:20px}
-.emp-info .label{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px}.emp-info .value{font-size:13px;font-weight:600;color:#1a1a2e;margin-top:2px}
-table{width:100%;border-collapse:collapse;margin-bottom:16px}
-th{background:#6d28d9;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:8px 12px;text-align:left}
+body{background:#fff;padding:40px;max-width:720px;margin:0 auto;color:#1a1a2e}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #6d28d9;padding-bottom:18px;margin-bottom:24px}
+.ci{display:flex;flex-direction:column;gap:4px}
+.lt{font-size:24px;font-weight:800;color:#6d28d9;letter-spacing:-0.5px}.lt span{color:#8b5cf6}
+.cn{font-size:14px;font-weight:700;color:#1a1a2e;margin-top:6px}
+.cd{font-size:11px;color:#64748b}
+.dt{text-align:right}.dt h2{font-size:14px;color:#6d28d9;text-transform:uppercase;letter-spacing:1.5px}.dt p{font-size:11px;color:#64748b;margin-top:3px}
+.ei{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#f5f3ff;border:1px solid #e9e5f5;border-radius:10px;padding:16px;margin-bottom:24px}
+.ei .lb{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px}.ei .vl{font-size:13px;font-weight:600;color:#1a1a2e;margin-top:2px}
+.st{font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;margin-top:20px}
+table{width:100%;border-collapse:collapse;margin-bottom:4px}
+th{background:#6d28d9;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:10px 14px;text-align:left}
 th:last-child{text-align:right}
-td{padding:8px 12px;font-size:12px;border-bottom:1px solid #e9e5f5;color:#334155}
-td:last-child{text-align:right;font-weight:600}
-td.neg{color:#dc2626}
-.total-row td{background:#f5f3ff;font-weight:700;font-size:13px;border-top:2px solid #6d28d9}
-.total-row td:last-child{color:#059669;font-size:16px}
-.encargos{background:#fafafa;border:1px solid #e9e5f5;border-radius:8px;padding:14px;margin-bottom:16px}
-.encargos h3{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
-.enc-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#334155}
-.enc-row.total{border-top:1px solid #e9e5f5;margin-top:6px;padding-top:8px;font-weight:700;font-size:13px}
-.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e9e5f5;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
-.disclaimer{background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:10px;margin-top:16px;font-size:10px;color:#92400e;text-align:center}
-@media print{body{padding:16px}button{display:none!important}}
+td{padding:10px 14px;font-size:12px;border-bottom:1px solid #ede9fe;color:#334155}
+td:last-child{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+td.pos{color:#059669}td.neg{color:#dc2626}
+.sr td{background:#faf5ff;font-weight:600;font-size:12px;border-top:1px solid #e9e5f5}
+.sr td:last-child{color:#6d28d9}
+.ts{background:#f5f3ff;border:2px solid #6d28d9;border-radius:10px;padding:16px;margin-top:20px;display:flex;justify-content:space-between;align-items:center}
+.tl{font-size:14px;font-weight:600;color:#334155}.tv{font-size:22px;font-weight:800;color:#059669}
+.ft{margin-top:32px;padding-top:14px;border-top:1px solid #e9e5f5;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
+@media print{body{padding:20px}button{display:none!important}}
 </style></head><body>
-<div class="header">
-  <div><div class="logo">Aura<span>.</span></div><div class="company">${companyName}</div></div>
-  <div class="doc-title"><h2>Holerite</h2><p>Competencia: Marco/2026</p></div>
-</div>
-<div class="emp-info">
-  <div><div class="label">Funcionario</div><div class="value">${emp.name}</div></div>
-  <div><div class="label">Cargo</div><div class="value">${emp.role}</div></div>
-  <div><div class="label">Admissao</div><div class="value">${emp.admDate}</div></div>
-  <div><div class="label">Status</div><div class="value">${stMap[emp.status].l}</div></div>
-</div>
+<div class="hdr"><div class="ci">${logoHtml}<div class="cn">${co.name}</div>${cnpjHtml}${addrHtml}</div>
+<div class="dt"><h2>Holerite</h2><p>Competencia: Marco/2026</p><p>Emissao: ${new Date().toLocaleDateString("pt-BR")}</p></div></div>
+<div class="ei"><div><div class="lb">Funcionario</div><div class="vl">${emp.name}</div></div><div><div class="lb">Cargo</div><div class="vl">${emp.role}</div></div><div><div class="lb">Admissao</div><div class="vl">${emp.admDate}</div></div><div><div class="lb">Status</div><div class="vl">${stMap[emp.status].l}</div></div></div>
+<div class="st">Proventos</div>
 <table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody>
-<tr><td>Salario base</td><td>30 dias</td><td>${fmtBR(emp.salary)}</td></tr>
-<tr><td>INSS</td><td>${(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%</td><td class="neg">-${fmtBR(p.inss)}</td></tr>
-<tr><td>IRRF</td><td>${p.irrf>0?(p.irrf/emp.salary*100).toFixed(1)+"%":"Isento"}</td><td${p.irrf>0?' class="neg"':''}>${p.irrf>0?"-"+fmtBR(p.irrf):"Isento"}</td></tr>
-</tbody><tfoot><tr class="total-row"><td colspan="2">Salario liquido</td><td>${fmtBR(p.liquid)}</td></tr></tfoot></table>
-<div class="encargos"><h3>Encargos do empregador</h3>
-<div class="enc-row"><span>FGTS (8%)</span><span>R$ ${fmtBR(p.fgts)}</span></div>
-<div class="enc-row total"><span>Custo total empresa</span><span>R$ ${fmtBR(cost)}</span></div></div>
-<div class="disclaimer">Valores estimados para apoio contabil. Consulte a legislacao vigente para confirmacao oficial.</div>
-<div class="footer"><span>Gerado por Aura. - getaura.com.br</span><span>${new Date().toLocaleDateString("pt-BR")}</span></div>
+<tr><td>Salario base</td><td>30 dias</td><td class="pos">${f2(emp.salary)}</td></tr>
+</tbody><tfoot><tr class="sr"><td colspan="2">Total proventos</td><td>${f2(emp.salary)}</td></tr></tfoot></table>
+<div class="st">Descontos</div>
+<table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody>
+<tr><td>INSS</td><td>${(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%</td><td class="neg">-${f2(p.inss)}</td></tr>
+<tr><td>IRRF</td><td>${p.irrf>0?(p.irrf/emp.salary*100).toFixed(1)+"%":"Isento"}</td><td${p.irrf>0?' class="neg"':""}>
+${p.irrf>0?"-"+f2(p.irrf):"Isento"}</td></tr>
+</tbody><tfoot><tr class="sr"><td colspan="2">Total descontos</td><td>-${f2(p.inss+p.irrf)}</td></tr></tfoot></table>
+<div class="ts"><div class="tl">Salario liquido a receber</div><div class="tv">R$ ${f2(p.liquid)}</div></div>
+<div class="ft"><span>Gerado por Aura. - getaura.com.br</span><span>${new Date().toLocaleDateString("pt-BR")}</span></div>
 </body></html>`;
 }
 
-// -- Send Modal --
 function SendModal({visible,emp,onClose}:{visible:boolean;emp:Employee;onClose:()=>void}){
   const {company}=useAuthStore();const [sent,setSent]=useState<string|null>(null);
+  const coInfo: CoInfo = { name: company?.name || "Minha Empresa", cnpj: (company as any)?.cnpj, logo: (company as any)?.logo || LOGO_CDN, address: (company as any)?.address };
   function handleSend(via:string){setSent(via);setTimeout(()=>{setSent(null);onClose();Alert.alert("Holerite enviado","Enviado via "+via+" para "+emp.name);},1500);}
   function handlePreview(){
-    if(Platform.OS==="web"){const w=window.open("","_blank");if(w){w.document.write(genPayslipHTML(emp,company?.name||"Aura."));w.document.close();}}
+    if(Platform.OS==="web"){const w=window.open("","_blank");if(w){w.document.write(genPayslipHTML(emp,coInfo));w.document.close();}}
   }
   if(!visible)return null;
   return <View style={sm.overlay}><View style={sm.modal}>
     <Text style={sm.title}>Enviar holerite</Text>
     <Text style={sm.sub}>Selecione como enviar o holerite de {emp.name}</Text>
-    <View style={sm.preview}><View style={sm.previewHeader}><Text style={sm.previewLogo}>Aura.</Text><Text style={sm.previewDoc}>Holerite - Marco/2026</Text></View><View style={sm.previewBody}><Text style={sm.previewName}>{emp.name} / {emp.role}</Text><Text style={sm.previewVal}>Liquido: {fmt(cP(emp).liquid)}</Text></View></View>
+    <View style={sm.preview}><View style={sm.previewHeader}><Text style={sm.previewLogo}>{coInfo.name}</Text><Text style={sm.previewDoc}>Holerite - Marco/2026</Text></View><View style={sm.previewBody}><Text style={sm.previewName}>{emp.name} / {emp.role}</Text><Text style={sm.previewVal}>Liquido: {fmt(cP(emp).liquid)}</Text></View></View>
     <Pressable onPress={handlePreview} style={sm.previewBtn}><Icon name="file_text" size={14} color={Colors.violet3}/><Text style={sm.previewBtnText}>Visualizar documento completo</Text></Pressable>
     <View style={sm.options}>
       <Pressable onPress={()=>handleSend("WhatsApp")} style={[sm.optBtn,{backgroundColor:"#075e54"}]}><Text style={sm.optIcon}>W</Text><View><Text style={sm.optTitle}>WhatsApp</Text><Text style={sm.optSub}>Envia PDF pelo WhatsApp Business</Text></View>{sent==="WhatsApp"&&<Text style={sm.sending}>Enviando...</Text>}</Pressable>
@@ -97,9 +98,8 @@ function SendModal({visible,emp,onClose}:{visible:boolean;emp:Employee;onClose:(
     <Pressable onPress={onClose} style={sm.closeBtn}><Text style={sm.closeText}>Cancelar</Text></Pressable>
   </View></View>;
 }
-const sm=StyleSheet.create({overlay:{position:"absolute" as any,top:0,left:0,right:0,bottom:0,backgroundColor:"rgba(0,0,0,0.6)",justifyContent:"center",alignItems:"center",zIndex:100},modal:{backgroundColor:Colors.bg3,borderRadius:20,padding:28,maxWidth:440,width:"90%",borderWidth:1,borderColor:Colors.border2},title:{fontSize:20,color:Colors.ink,fontWeight:"700",marginBottom:4},sub:{fontSize:13,color:Colors.ink3,marginBottom:20},preview:{backgroundColor:"#fff",borderRadius:12,padding:16,marginBottom:12},previewHeader:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",borderBottomWidth:2,borderBottomColor:"#6d28d9",paddingBottom:8,marginBottom:10},previewLogo:{fontSize:16,fontWeight:"800",color:"#6d28d9"},previewDoc:{fontSize:10,color:"#6d28d9",fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5},previewBody:{gap:4},previewName:{fontSize:12,color:"#334155",fontWeight:"600"},previewVal:{fontSize:14,color:"#059669",fontWeight:"700"},previewBtn:{flexDirection:"row",alignItems:"center",gap:6,alignSelf:"center",marginBottom:20,paddingVertical:8},previewBtnText:{fontSize:12,color:Colors.violet3,fontWeight:"600"},options:{gap:10,marginBottom:16},optBtn:{flexDirection:"row",alignItems:"center",gap:12,borderRadius:14,padding:16},optIcon:{fontSize:18,fontWeight:"800",color:"#fff",width:32,textAlign:"center"},optTitle:{fontSize:14,color:"#fff",fontWeight:"700"},optSub:{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:1},sending:{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:"600",marginLeft:"auto" as any},closeBtn:{alignItems:"center",paddingVertical:10},closeText:{fontSize:13,color:Colors.ink3,fontWeight:"500"}});
+const sm=StyleSheet.create({overlay:{position:"absolute" as any,top:0,left:0,right:0,bottom:0,backgroundColor:"rgba(0,0,0,0.6)",justifyContent:"center",alignItems:"center",zIndex:100},modal:{backgroundColor:Colors.bg3,borderRadius:20,padding:28,maxWidth:440,width:"90%",borderWidth:1,borderColor:Colors.border2},title:{fontSize:20,color:Colors.ink,fontWeight:"700",marginBottom:4},sub:{fontSize:13,color:Colors.ink3,marginBottom:20},preview:{backgroundColor:"#fff",borderRadius:12,padding:16,marginBottom:12},previewHeader:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",borderBottomWidth:2,borderBottomColor:"#6d28d9",paddingBottom:8,marginBottom:10},previewLogo:{fontSize:14,fontWeight:"700",color:"#6d28d9"},previewDoc:{fontSize:10,color:"#6d28d9",fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5},previewBody:{gap:4},previewName:{fontSize:12,color:"#334155",fontWeight:"600"},previewVal:{fontSize:14,color:"#059669",fontWeight:"700"},previewBtn:{flexDirection:"row",alignItems:"center",gap:6,alignSelf:"center",marginBottom:20,paddingVertical:8},previewBtnText:{fontSize:12,color:Colors.violet3,fontWeight:"600"},options:{gap:10,marginBottom:16},optBtn:{flexDirection:"row",alignItems:"center",gap:12,borderRadius:14,padding:16},optIcon:{fontSize:18,fontWeight:"800",color:"#fff",width:32,textAlign:"center"},optTitle:{fontSize:14,color:"#fff",fontWeight:"700"},optSub:{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:1},sending:{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:"600",marginLeft:"auto" as any},closeBtn:{alignItems:"center",paddingVertical:10},closeText:{fontSize:13,color:Colors.ink3,fontWeight:"500"}});
 
-// -- Employee Card --
 function EC({emp,onCalc}:{emp:Employee;onCalc:()=>void}){
   const st=stMap[emp.status];
   return <HoverCard style={ec.card}><View style={ec.top}><View style={ec.av}><Text style={ec.at}>{emp.name.charAt(0)}</Text></View><View style={ec.inf}><Text style={ec.nm}>{emp.name}</Text><Text style={ec.rl}>{emp.role}</Text></View><View style={[ec.sb,{backgroundColor:st.c+"18"}]}><Text style={[ec.st,{color:st.c}]}>{st.l}</Text></View></View>
@@ -109,9 +109,8 @@ function EC({emp,onCalc}:{emp:Employee;onCalc:()=>void}){
 }
 const ec=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,marginBottom:10},top:{flexDirection:"row",alignItems:"center",gap:12,marginBottom:14},av:{width:40,height:40,borderRadius:12,backgroundColor:Colors.violetD,alignItems:"center",justifyContent:"center"},at:{fontSize:16,fontWeight:"700",color:Colors.violet3},inf:{flex:1,gap:2},nm:{fontSize:15,color:Colors.ink,fontWeight:"700"},rl:{fontSize:12,color:Colors.ink3},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:10,fontWeight:"600"},det:{flexDirection:"row",gap:20,marginBottom:12},di:{gap:2},dl:{fontSize:9,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5},dv:{fontSize:14,color:Colors.ink,fontWeight:"600"},acts:{paddingTop:12,borderTopWidth:1,borderTopColor:Colors.border},cb:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violetD,borderRadius:10,paddingHorizontal:14,paddingVertical:9,alignSelf:"flex-start",borderWidth:1,borderColor:Colors.border2},ct:{fontSize:12,color:Colors.violet3,fontWeight:"600"}});
 
-// -- Payslip View with Send --
 function PS({emp,onBack}:{emp:Employee;onBack:()=>void}){
-  const p=cP(emp);const cost=emp.salary+p.fgts;const[showSend,setShowSend]=useState(false);
+  const p=cP(emp);const[showSend,setShowSend]=useState(false);
   return <View>
     <SendModal visible={showSend} emp={emp} onClose={()=>setShowSend(false)}/>
     <Pressable onPress={onBack} style={{marginBottom:16}}><Text style={{fontSize:13,color:Colors.violet3,fontWeight:"600"}}>Voltar</Text></Pressable>
@@ -119,17 +118,14 @@ function PS({emp,onBack}:{emp:Employee;onBack:()=>void}){
       <View style={pss.hdr}><View><Text style={pss.title}>Holerite - {emp.name}</Text><Text style={pss.sub}>{emp.role} / Competencia: Marco/2026</Text></View>
         <Pressable onPress={()=>setShowSend(true)} style={pss.sendBtn}><Icon name="file_text" size={16} color="#fff"/><Text style={pss.sendText}>Enviar holerite</Text></Pressable>
       </View>
-      <View style={pss.sec}><Text style={pss.secT}>Proventos</Text><View style={pss.row}><Text style={pss.rl}>Salario base</Text><Text style={pss.rv}>{fmt(emp.salary)}</Text></View></View>
-      <View style={pss.sec}><Text style={pss.secT}>Descontos</Text><View style={pss.row}><Text style={pss.rl}>INSS ({(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[pss.rv,{color:Colors.red}]}>-{fmt(p.inss)}</Text></View><View style={pss.row}><Text style={pss.rl}>IRRF</Text><Text style={[pss.rv,{color:p.irrf>0?Colors.red:Colors.ink3}]}>{p.irrf>0?"-"+fmt(p.irrf):"Isento"}</Text></View></View>
-      <View style={pss.div}/><View style={pss.row}><Text style={[pss.rl,{fontWeight:"700",color:Colors.ink}]}>Salario liquido</Text><Text style={[pss.rv,{fontSize:18,color:Colors.green}]}>{fmt(p.liquid)}</Text></View><View style={pss.div}/>
-      <View style={pss.sec}><Text style={pss.secT}>Encargos do empregador</Text><View style={pss.row}><Text style={pss.rl}>FGTS (8%)</Text><Text style={pss.rv}>{fmt(p.fgts)}</Text></View><View style={[pss.row,{marginTop:8}]}><Text style={[pss.rl,{fontWeight:"700",color:Colors.ink}]}>Custo total</Text><Text style={[pss.rv,{fontWeight:"700"}]}>{fmt(cost)}</Text></View></View>
-      <View style={pss.disc}><Icon name="alert" size={14} color={Colors.amber}/><Text style={pss.discT}>Valores estimados para apoio contabil.</Text></View>
+      <View style={pss.sec}><Text style={pss.secT}>Proventos</Text><View style={pss.row}><Text style={pss.rl}>Salario base</Text><Text style={[pss.rv,{color:Colors.green}]}>{fmt(emp.salary)}</Text></View><View style={[pss.row,{borderTopWidth:1,borderTopColor:Colors.border,marginTop:4,paddingTop:8}]}><Text style={[pss.rl,{fontWeight:"600",color:Colors.ink}]}>Total proventos</Text><Text style={[pss.rv,{fontWeight:"700"}]}>{fmt(emp.salary)}</Text></View></View>
+      <View style={pss.sec}><Text style={pss.secT}>Descontos</Text><View style={pss.row}><Text style={pss.rl}>INSS ({(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[pss.rv,{color:Colors.red}]}>-{fmt(p.inss)}</Text></View><View style={pss.row}><Text style={pss.rl}>IRRF</Text><Text style={[pss.rv,{color:p.irrf>0?Colors.red:Colors.ink3}]}>{p.irrf>0?"-"+fmt(p.irrf):"Isento"}</Text></View><View style={[pss.row,{borderTopWidth:1,borderTopColor:Colors.border,marginTop:4,paddingTop:8}]}><Text style={[pss.rl,{fontWeight:"600",color:Colors.ink}]}>Total descontos</Text><Text style={[pss.rv,{fontWeight:"700",color:Colors.red}]}>-{fmt(p.inss+p.irrf)}</Text></View></View>
+      <View style={pss.totalCard}><Text style={pss.totalLabel}>Salario liquido a receber</Text><Text style={pss.totalValue}>{fmt(p.liquid)}</Text></View>
     </View>
   </View>;
 }
-const pss=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:20,padding:24,borderWidth:1,borderColor:Colors.border2},hdr:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12},title:{fontSize:20,color:Colors.ink,fontWeight:"700"},sub:{fontSize:12,color:Colors.ink3,marginTop:2},sendBtn:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violet,borderRadius:10,paddingHorizontal:16,paddingVertical:10},sendText:{fontSize:13,color:"#fff",fontWeight:"600"},sec:{marginBottom:16},secT:{fontSize:11,color:Colors.ink3,fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:6},rl:{fontSize:13,color:Colors.ink3},rv:{fontSize:14,color:Colors.ink,fontWeight:"600"},div:{height:1,backgroundColor:Colors.border,marginVertical:12},disc:{flexDirection:"row",gap:8,backgroundColor:Colors.amberD,borderRadius:12,padding:14,marginTop:16},discT:{fontSize:11,color:Colors.amber,flex:1,lineHeight:16}});
+const pss=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:20,padding:24,borderWidth:1,borderColor:Colors.border2},hdr:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12},title:{fontSize:20,color:Colors.ink,fontWeight:"700"},sub:{fontSize:12,color:Colors.ink3,marginTop:2},sendBtn:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violet,borderRadius:10,paddingHorizontal:16,paddingVertical:10},sendText:{fontSize:13,color:"#fff",fontWeight:"600"},sec:{marginBottom:16},secT:{fontSize:11,color:Colors.ink3,fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:6},rl:{fontSize:13,color:Colors.ink3},rv:{fontSize:14,color:Colors.ink,fontWeight:"600"},totalCard:{backgroundColor:Colors.violetD,borderRadius:14,padding:18,marginTop:8,flexDirection:"row",justifyContent:"space-between",alignItems:"center",borderWidth:1,borderColor:Colors.border2},totalLabel:{fontSize:14,color:Colors.ink,fontWeight:"600"},totalValue:{fontSize:22,color:Colors.green,fontWeight:"800"}});
 
-// -- Calc Tab --
 function CT(){
   const tB=EMPS.filter(e=>e.status==="active").reduce((s,e)=>s+e.salary,0);
   const tot=EMPS.filter(e=>e.status==="active").reduce((a,e)=>{const p=cP(e);return{inss:a.inss+p.inss,irrf:a.irrf+p.irrf,fgts:a.fgts+p.fgts,liquid:a.liquid+p.liquid};},{inss:0,irrf:0,fgts:0,liquid:0});
@@ -142,11 +138,9 @@ function CT(){
 }
 const ct=StyleSheet.create({sc:{backgroundColor:Colors.bg3,borderRadius:16,padding:20,borderWidth:1,borderColor:Colors.border2,marginBottom:20},st:{fontSize:16,color:Colors.ink,fontWeight:"700",marginBottom:16},sg:{flexDirection:"row",flexWrap:"wrap",gap:12,marginBottom:16},si:{width:IS_WIDE?"30%":"46%",backgroundColor:Colors.bg4,borderRadius:10,padding:12,gap:4},sl:{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5},sv:{fontSize:16,color:Colors.ink,fontWeight:"700"},cr:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.violetD,borderRadius:10,padding:14,borderWidth:1,borderColor:Colors.border2},cl:{fontSize:13,color:Colors.ink3,fontWeight:"500"},cv:{fontSize:18,color:Colors.violet3,fontWeight:"700"},bt:{fontSize:15,color:Colors.ink,fontWeight:"700",marginBottom:12},er:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.bg3,borderRadius:12,padding:14,borderWidth:1,borderColor:Colors.border,marginBottom:6},ei:{gap:2},en:{fontSize:13,color:Colors.ink,fontWeight:"600"},erl:{fontSize:11,color:Colors.ink3},ens:{alignItems:"flex-end",gap:2},eb:{fontSize:12,color:Colors.ink3},el:{fontSize:13,color:Colors.green,fontWeight:"600"}});
 
-// -- History Tab --
 function HT(){return <View>{HIST.map(h=><HoverRow key={h.id} style={hs.row}><View style={hs.left}><View style={hs.ck}><Icon name="check" size={12} color={Colors.green}/></View><View style={hs.inf}><Text style={hs.mo}>{h.month}</Text><Text style={hs.me}>{h.employees} funcionarios - pago em {h.paidAt}</Text></View></View><View style={hs.right}><Text style={hs.to}>{fmt(h.total)}</Text><Text style={hs.li}>Liquido: {fmt(h.liquid)}</Text></View></HoverRow>)}</View>;}
 const hs=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,marginBottom:8},left:{flexDirection:"row",alignItems:"center",gap:12},ck:{width:28,height:28,borderRadius:8,backgroundColor:Colors.greenD,alignItems:"center",justifyContent:"center"},inf:{gap:2},mo:{fontSize:14,color:Colors.ink,fontWeight:"600"},me:{fontSize:11,color:Colors.ink3},right:{alignItems:"flex-end",gap:2},to:{fontSize:14,color:Colors.ink,fontWeight:"600"},li:{fontSize:11,color:Colors.green}});
 
-// -- Main --
 export default function FolhaScreen(){
   const[tab,sTab]=useState(0);const[psEmp,sPsEmp]=useState<Employee|null>(null);
   if(psEmp) return <ScrollView style={z.scr} contentContainerStyle={z.cnt}><PS emp={psEmp} onBack={()=>sPsEmp(null)}/><DemoBanner/></ScrollView>;
