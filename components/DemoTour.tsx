@@ -39,7 +39,7 @@ const STEPS: TourStep[] = [
   },
   {
     title: "Pronto para explorar!",
-    description: "Navegue pelas telas usando a sidebar ou os atalhos. Quando quiser criar sua conta real, clique em Sair e depois em Criar conta.",
+    description: "Navegue livremente pelas telas usando a sidebar ou os atalhos. Este e o modo demonstrativo - ao adquirir a Aura, seus dados reais serao carregados aqui.",
     icon: "check",
     position: "center",
   },
@@ -127,7 +127,7 @@ const t = StyleSheet.create({
   overlay: {
     position: "absolute" as any,
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.35)",
     zIndex: 1000,
     alignItems: "center",
     padding: 20,
