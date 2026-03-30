@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
@@ -9,8 +9,10 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
+import { BackButton } from "@/components/BackButton";
+import { toast } from "@/components/Toast";
 
-const TABS = ["Funcionarios", "Calcular folha", "Historico"];
+const TABS = ["Funcionarios", "Resumo mensal", "Historico"];
 type Employee = { id: string; name: string; role: string; salary: number; admDate: string; status: "active" | "vacation" | "dismissed" };
 const EMPS: Employee[] = [
   { id: "1", name: "Ana Costa", role: "Atendente", salary: 1800, admDate: "15/03/2025", status: "active" },
@@ -81,7 +83,7 @@ ${p.irrf>0?"-"+f2(p.irrf):"Isento"}</td></tr>
 function SendModal({visible,emp,onClose}:{visible:boolean;emp:Employee;onClose:()=>void}){
   const {company}=useAuthStore();const [sent,setSent]=useState<string|null>(null);
   const coInfo: CoInfo = { name: company?.name || "Minha Empresa", cnpj: (company as any)?.cnpj, logo: (company as any)?.logo || LOGO_CDN, address: (company as any)?.address };
-  function handleSend(via:string){setSent(via);setTimeout(()=>{setSent(null);onClose();Alert.alert("Holerite enviado","Enviado via "+via+" para "+emp.name);},1500);}
+  function handleSend(via:string){setSent(via);setTimeout(()=>{setSent(null);onClose();toast.success("Holerite enviado via "+via+" para "+emp.name);},1500);}
   function handlePreview(){
     if(Platform.OS==="web"){const w=window.open("","_blank");if(w){w.document.write(genPayslipHTML(emp,coInfo));w.document.close();}}
   }
@@ -113,7 +115,7 @@ function PS({emp,onBack}:{emp:Employee;onBack:()=>void}){
   const p=cP(emp);const[showSend,setShowSend]=useState(false);
   return <View>
     <SendModal visible={showSend} emp={emp} onClose={()=>setShowSend(false)}/>
-    <Pressable onPress={onBack} style={{marginBottom:16}}><Text style={{fontSize:13,color:Colors.violet3,fontWeight:"600"}}>Voltar</Text></Pressable>
+    <BackButton onPress={onBack} />
     <View style={pss.card}>
       <View style={pss.hdr}><View><Text style={pss.title}>Holerite - {emp.name}</Text><Text style={pss.sub}>{emp.role} / Competencia: Marco/2026</Text></View>
         <Pressable onPress={()=>setShowSend(true)} style={pss.sendBtn}><Icon name="file_text" size={16} color="#fff"/><Text style={pss.sendText}>Enviar holerite</Text></Pressable>

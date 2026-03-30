@@ -6,6 +6,10 @@ import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+// Dashboard uses specialized inline components (KPI, QA, SR, OR)
+// Intentionally NOT shared — they have dashboard-specific features
+// (highlight mode, delta badges, icon bg colors, hover effects)
+// Shared components: Icon, DemoTour
 import { DemoTour } from "@/components/DemoTour";
 
 const { width: W } = Dimensions.get("window");
