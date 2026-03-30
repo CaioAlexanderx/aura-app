@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Alert, Image } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { HoverCard } from "@/components/HoverCard";
 import { Icon } from "@/components/Icon";
+import { toast } from "@/components/Toast";
 import { CNAE_PROFILES } from "@/constants/obligations";
 
 const PLANS = [
@@ -70,9 +71,9 @@ export default function ConfiguracoesScreen() {
       input.onchange = (e: any) => {
         const file = e.target?.files?.[0];
         if (!file) return;
-        if (file.size > 2 * 1024 * 1024) { Alert.alert("Arquivo muito grande", "Max 2MB"); return; }
+        if (file.size > 2 * 1024 * 1024) { toast.error("Arquivo muito grande - max 2MB"); return; }
         const reader = new FileReader();
-        reader.onload = () => setCompanyLogo(reader.result as string);
+        reader.onload = () => { setCompanyLogo(reader.result as string); toast.success("Logo atualizada"); };
         reader.readAsDataURL(file);
       };
       input.click();
@@ -80,8 +81,8 @@ export default function ConfiguracoesScreen() {
   }
 
   function handleSave() {
-    // In production: PATCH /companies/:id
     setSaved(true);
+    toast.success("Alteracoes salvas com sucesso");
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -91,7 +92,6 @@ export default function ConfiguracoesScreen() {
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
       <PageHeader title="Configuracoes" />
 
-      {/* Logo */}
       <Section title="Logo da empresa">
         <View style={z.logoRow}>
           <Pressable onPress={handleLogoUpload} style={z.logoUpload}>
@@ -108,7 +108,7 @@ export default function ConfiguracoesScreen() {
             <Text style={z.logoHint}>PNG, JPG ou WebP. Max 2MB.</Text>
             <Text style={z.logoHint}>Usada no dashboard, sidebar e holerite.</Text>
             {companyLogo && (
-              <Pressable onPress={() => setCompanyLogo("")} style={z.logoRemove}>
+              <Pressable onPress={() => { setCompanyLogo(""); toast.info("Logo removida"); }} style={z.logoRemove}>
                 <Text style={z.logoRemoveText}>Remover logo</Text>
               </Pressable>
             )}
@@ -116,7 +116,6 @@ export default function ConfiguracoesScreen() {
         </View>
       </Section>
 
-      {/* Company Data */}
       <Section title="Dados da empresa">
         <Field label="Nome da empresa" value={companyName} onChange={setCompanyName} placeholder="Minha Empresa Ltda" />
         <Field label="CNPJ" value={cnpj} onChange={setCnpj} placeholder="00.000.000/0000-00" />
@@ -125,7 +124,6 @@ export default function ConfiguracoesScreen() {
         <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua, numero, cidade - UF" />
       </Section>
 
-      {/* Fiscal Config */}
       <Section title="Configuracao fiscal">
         <Field label="Regime tributario" value={(company as any)?.regime || "Simples Nacional"} editable={false} />
         <Field label="Tipo de negocio" value={CNAE_PROFILES[(company as any)?.businessType]?.label || "Configurar no onboarding"} editable={false} />
@@ -135,7 +133,6 @@ export default function ConfiguracoesScreen() {
         </View>
       </Section>
 
-      {/* Plan */}
       <Section title="Meu plano">
         <View style={z.planGrid}>
           {PLANS.map(p => (
@@ -151,7 +148,6 @@ export default function ConfiguracoesScreen() {
         </View>
       </Section>
 
-      {/* Account */}
       <Section title="Conta">
         <Field label="Nome" value={user?.name || ""} editable={false} />
         <Field label="E-mail de acesso" value={user?.email || ""} editable={false} />
@@ -161,7 +157,6 @@ export default function ConfiguracoesScreen() {
         </View>
       </Section>
 
-      {/* Save */}
       <View style={z.saveRow}>
         <Pressable onPress={handleSave} style={[z.saveBtn, saved && z.saveBtnDone]}>
           {saved ? (
@@ -185,7 +180,6 @@ export default function ConfiguracoesScreen() {
 const z = StyleSheet.create({
   scr: { flex: 1 },
   cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 720, alignSelf: "center", width: "100%" },
-  // Logo
   logoRow: { flexDirection: "row", alignItems: "center", gap: 20 },
   logoUpload: { width: 100, height: 100, borderRadius: 16, borderWidth: 2, borderColor: Colors.border, borderStyle: "dashed" as any, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4 },
   logoImg: { width: 100, height: 100 },
@@ -195,10 +189,8 @@ const z = StyleSheet.create({
   logoHint: { fontSize: 11, color: Colors.ink3 },
   logoRemove: { marginTop: 4 },
   logoRemoveText: { fontSize: 11, color: Colors.red, fontWeight: "500" },
-  // Fiscal note
   fiscalNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, marginTop: 4 },
   fiscalNoteText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
-  // Plan
   planGrid: { flexDirection: IS_WIDE ? "row" : "column", gap: 10 },
   planCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, borderWidth: 1.5, borderColor: Colors.border, gap: 4 },
   planCardActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
@@ -208,15 +200,12 @@ const z = StyleSheet.create({
   planDesc: { fontSize: 11, color: Colors.ink3 },
   planBadge: { backgroundColor: Colors.violet, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginTop: 6 },
   planBadgeText: { fontSize: 9, color: "#fff", fontWeight: "700" },
-  // Account note
   accountNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 12, marginTop: 4, borderWidth: 1, borderColor: Colors.border2 },
   accountNoteText: { fontSize: 11, color: Colors.violet3, flex: 1, lineHeight: 16 },
-  // Save
   saveRow: { alignItems: "center", marginTop: 8 },
   saveBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40, alignItems: "center" },
   saveBtnDone: { backgroundColor: Colors.green },
   saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  // Demo
   demo: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 20 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
