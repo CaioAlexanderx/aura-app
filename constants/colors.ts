@@ -1,6 +1,18 @@
 import { create } from "zustand";
 import { Platform } from "react-native";
 
+const THEME_KEY = "aura_theme";
+
+// ── Resolve theme at load time ───────────────────────────────
+function getInitialTheme(): boolean {
+  if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+    return localStorage.getItem(THEME_KEY) === "dark";
+  }
+  return false; // light default
+}
+
+const IS_DARK = getInitialTheme();
+
 // ── Dark palette ─────────────────────────────────────────────
 const Dark = {
   bg: "#060816", bg2: "#090c1a", bg3: "#0e1228", bg4: "#141830",
@@ -25,45 +37,33 @@ const Light = {
   amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
 } as const;
 
-// ── Theme store ──────────────────────────────────────────────
-const THEME_KEY = "aura_theme";
+// ── Colors: resolved ONCE at load from localStorage ──────────
+// StyleSheet.create() captures these at module load — correct values from the start
+export const Colors = IS_DARK ? { ...Dark } : { ...Light };
 
+// ── Theme store ──────────────────────────────────────────────
 type ThemeState = {
   isDark: boolean;
   toggle: () => void;
 };
 
-// Default: LIGHT (changed from dark)
-export const useThemeStore = create<ThemeState>((set, get) => ({
-  isDark: Platform.OS === "web"
-    ? (typeof localStorage !== "undefined" ? localStorage.getItem(THEME_KEY) === "dark" : false)
-    : false,
+export const useThemeStore = create<ThemeState>(() => ({
+  isDark: IS_DARK,
   toggle: () => {
-    const next = !get().isDark;
     if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+      const next = !IS_DARK;
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      // Reload to apply — StyleSheet.create() needs fresh module evaluation
+      window.location.reload();
     }
-    set({ isDark: next });
   },
 }));
 
-// ── Hook to get current colors (for components with hooks) ───
+// ── Hook for layout components that need reactive colors ─────
 export function useColors() {
   const isDark = useThemeStore(s => s.isDark);
   return isDark ? Dark : Light;
 }
-
-// ── Proxy-based Colors (backward compat - ALL screens react) ─
-// Every read of Colors.bg, Colors.ink etc reads from current theme
-// This makes existing screens theme-aware without changing imports
-type ColorKeys = keyof typeof Dark;
-export const Colors = new Proxy({} as typeof Dark, {
-  get: (_target, key: string) => {
-    const isDark = useThemeStore.getState().isDark;
-    const palette = isDark ? Dark : Light;
-    return palette[key as ColorKeys];
-  },
-});
 
 // ── Palette exports ──────────────────────────────────────────
 export const DarkPalette = Dark;
