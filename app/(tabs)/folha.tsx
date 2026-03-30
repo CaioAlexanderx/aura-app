@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Alert, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
@@ -8,303 +8,155 @@ import { HoverRow } from "@/components/HoverRow";
 import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
+import { useAuthStore } from "@/stores/auth";
 
 const TABS = ["Funcionarios", "Calcular folha", "Historico"];
-
 type Employee = { id: string; name: string; role: string; salary: number; admDate: string; status: "active" | "vacation" | "dismissed" };
-
-const EMPLOYEES: Employee[] = [
+const EMPS: Employee[] = [
   { id: "1", name: "Ana Costa", role: "Atendente", salary: 1800, admDate: "15/03/2025", status: "active" },
   { id: "2", name: "Carlos Silva", role: "Barbeiro", salary: 2200, admDate: "01/06/2024", status: "active" },
   { id: "3", name: "Julia Santos", role: "Recepcionista", salary: 1600, admDate: "10/09/2025", status: "active" },
 ];
+const INSS_F=[{ate:1412,aliq:0.075},{ate:2666.68,aliq:0.09},{ate:4000.03,aliq:0.12},{ate:7786.02,aliq:0.14}];
+function cINSS(s:number){let i=0,p=0;for(const f of INSS_F){const b=Math.min(s,f.ate)-p;if(b<=0)break;i+=b*f.aliq;p=f.ate;}return i;}
+function cIRRF(s:number,i:number){const b=s-i;if(b<=2259.20)return 0;if(b<=2826.65)return b*0.075-169.44;if(b<=3751.05)return b*0.15-381.44;if(b<=4664.68)return b*0.225-662.77;return b*0.275-896;}
+const FR=0.08;
+function cP(e:Employee){const i=cINSS(e.salary);const r=Math.max(0,cIRRF(e.salary,i));const f=e.salary*FR;return{inss:i,irrf:r,fgts:f,liquid:e.salary-i-r};}
+const HIST=[{id:"h1",month:"Fevereiro/2026",total:5600,liquid:4612.40,paidAt:"05/03/2026",employees:3},{id:"h2",month:"Janeiro/2026",total:5600,liquid:4612.40,paidAt:"05/02/2026",employees:3},{id:"h3",month:"Dezembro/2025",total:5600,liquid:4612.40,paidAt:"05/01/2026",employees:3}];
+const stMap={active:{l:"Ativo",c:Colors.green},vacation:{l:"Ferias",c:Colors.amber},dismissed:{l:"Desligado",c:Colors.red}};
 
-const INSS_FAIXAS = [
-  { ate: 1412.00, aliq: 0.075 },
-  { ate: 2666.68, aliq: 0.09 },
-  { ate: 4000.03, aliq: 0.12 },
-  { ate: 7786.02, aliq: 0.14 },
-];
+// -- Payslip HTML document generator --
+function genPayslipHTML(emp: Employee, companyName: string){
+  const p=cP(emp);const cost=emp.salary+p.fgts;
+  const fmtBR=(n:number)=>n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:#fff;padding:32px;max-width:720px;margin:0 auto;color:#1a1a2e}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #6d28d9;padding-bottom:16px;margin-bottom:20px}
+.logo{font-size:22px;font-weight:800;color:#6d28d9;letter-spacing:-0.5px}.logo span{color:#8b5cf6}
+.company{font-size:11px;color:#64748b;margin-top:4px}
+.doc-title{text-align:right}.doc-title h2{font-size:14px;color:#6d28d9;text-transform:uppercase;letter-spacing:1px}.doc-title p{font-size:11px;color:#64748b;margin-top:2px}
+.emp-info{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#f5f3ff;border:1px solid #e9e5f5;border-radius:8px;padding:14px;margin-bottom:20px}
+.emp-info .label{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px}.emp-info .value{font-size:13px;font-weight:600;color:#1a1a2e;margin-top:2px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+th{background:#6d28d9;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:8px 12px;text-align:left}
+th:last-child{text-align:right}
+td{padding:8px 12px;font-size:12px;border-bottom:1px solid #e9e5f5;color:#334155}
+td:last-child{text-align:right;font-weight:600}
+td.neg{color:#dc2626}
+.total-row td{background:#f5f3ff;font-weight:700;font-size:13px;border-top:2px solid #6d28d9}
+.total-row td:last-child{color:#059669;font-size:16px}
+.encargos{background:#fafafa;border:1px solid #e9e5f5;border-radius:8px;padding:14px;margin-bottom:16px}
+.encargos h3{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+.enc-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#334155}
+.enc-row.total{border-top:1px solid #e9e5f5;margin-top:6px;padding-top:8px;font-weight:700;font-size:13px}
+.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e9e5f5;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
+.disclaimer{background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:10px;margin-top:16px;font-size:10px;color:#92400e;text-align:center}
+@media print{body{padding:16px}button{display:none!important}}
+</style></head><body>
+<div class="header">
+  <div><div class="logo">Aura<span>.</span></div><div class="company">${companyName}</div></div>
+  <div class="doc-title"><h2>Holerite</h2><p>Competencia: Marco/2026</p></div>
+</div>
+<div class="emp-info">
+  <div><div class="label">Funcionario</div><div class="value">${emp.name}</div></div>
+  <div><div class="label">Cargo</div><div class="value">${emp.role}</div></div>
+  <div><div class="label">Admissao</div><div class="value">${emp.admDate}</div></div>
+  <div><div class="label">Status</div><div class="value">${stMap[emp.status].l}</div></div>
+</div>
+<table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody>
+<tr><td>Salario base</td><td>30 dias</td><td>${fmtBR(emp.salary)}</td></tr>
+<tr><td>INSS</td><td>${(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%</td><td class="neg">-${fmtBR(p.inss)}</td></tr>
+<tr><td>IRRF</td><td>${p.irrf>0?(p.irrf/emp.salary*100).toFixed(1)+"%":"Isento"}</td><td${p.irrf>0?' class="neg"':''}>${p.irrf>0?"-"+fmtBR(p.irrf):"Isento"}</td></tr>
+</tbody><tfoot><tr class="total-row"><td colspan="2">Salario liquido</td><td>${fmtBR(p.liquid)}</td></tr></tfoot></table>
+<div class="encargos"><h3>Encargos do empregador</h3>
+<div class="enc-row"><span>FGTS (8%)</span><span>R$ ${fmtBR(p.fgts)}</span></div>
+<div class="enc-row total"><span>Custo total empresa</span><span>R$ ${fmtBR(cost)}</span></div></div>
+<div class="disclaimer">Valores estimados para apoio contabil. Consulte a legislacao vigente para confirmacao oficial.</div>
+<div class="footer"><span>Gerado por Aura. - getaura.com.br</span><span>${new Date().toLocaleDateString("pt-BR")}</span></div>
+</body></html>`;
+}
 
-function calcINSS(sal: number): number {
-  let inss = 0, prev = 0;
-  for (const f of INSS_FAIXAS) {
-    const base = Math.min(sal, f.ate) - prev;
-    if (base <= 0) break;
-    inss += base * f.aliq;
-    prev = f.ate;
+// -- Send Modal --
+function SendModal({visible,emp,onClose}:{visible:boolean;emp:Employee;onClose:()=>void}){
+  const {company}=useAuthStore();const [sent,setSent]=useState<string|null>(null);
+  function handleSend(via:string){setSent(via);setTimeout(()=>{setSent(null);onClose();Alert.alert("Holerite enviado","Enviado via "+via+" para "+emp.name);},1500);}
+  function handlePreview(){
+    if(Platform.OS==="web"){const w=window.open("","_blank");if(w){w.document.write(genPayslipHTML(emp,company?.name||"Aura."));w.document.close();}}
   }
-  return inss;
-}
-
-function calcIRRF(sal: number, inss: number): number {
-  const base = sal - inss;
-  if (base <= 2259.20) return 0;
-  if (base <= 2826.65) return base * 0.075 - 169.44;
-  if (base <= 3751.05) return base * 0.15 - 381.44;
-  if (base <= 4664.68) return base * 0.225 - 662.77;
-  return base * 0.275 - 896.00;
-}
-
-const FGTS_RATE = 0.08;
-
-function calcPayroll(emp: Employee) {
-  const inss = calcINSS(emp.salary);
-  const irrf = Math.max(0, calcIRRF(emp.salary, inss));
-  const fgts = emp.salary * FGTS_RATE;
-  const liquid = emp.salary - inss - irrf;
-  return { inss, irrf, fgts, liquid };
-}
-
-const HISTORY = [
-  { id: "h1", month: "Fevereiro/2026", total: 5600, liquid: 4612.40, paidAt: "05/03/2026", employees: 3 },
-  { id: "h2", month: "Janeiro/2026", total: 5600, liquid: 4612.40, paidAt: "05/02/2026", employees: 3 },
-  { id: "h3", month: "Dezembro/2025", total: 5600, liquid: 4612.40, paidAt: "05/01/2026", employees: 3 },
-];
-
-const statusMap = { active: { label: "Ativo", color: Colors.green }, vacation: { label: "Ferias", color: Colors.amber }, dismissed: { label: "Desligado", color: Colors.red } };
-
-// ── Employee Card ────────────────────────────────────────────
-
-function EmpCard({ emp, onCalc }: { emp: Employee; onCalc: () => void }) {
-  const st = statusMap[emp.status];
-  return (
-    <HoverCard style={ec.card}>
-      <View style={ec.top}>
-        <View style={ec.avatar}><Text style={ec.avatarText}>{emp.name.charAt(0)}</Text></View>
-        <View style={ec.info}>
-          <Text style={ec.name}>{emp.name}</Text>
-          <Text style={ec.role}>{emp.role}</Text>
-        </View>
-        <View style={[ec.statusBadge, { backgroundColor: st.color + "18" }]}><Text style={[ec.statusText, { color: st.color }]}>{st.label}</Text></View>
-      </View>
-      <View style={ec.details}>
-        <View style={ec.detail}><Text style={ec.detailLabel}>Salario bruto</Text><Text style={ec.detailValue}>{fmt(emp.salary)}</Text></View>
-        <View style={ec.detail}><Text style={ec.detailLabel}>Admissao</Text><Text style={ec.detailValue}>{emp.admDate}</Text></View>
-      </View>
-      <View style={ec.actions}>
-        <Pressable onPress={onCalc} style={ec.calcBtn}><Icon name="receipt" size={14} color={Colors.violet3}/><Text style={ec.calcText}>Ver holerite</Text></Pressable>
-      </View>
-    </HoverCard>
-  );
-}
-const ec = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
-  top: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
-  avatar: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 16, fontWeight: "700", color: Colors.violet3 },
-  info: { flex: 1, gap: 2 },
-  name: { fontSize: 15, color: Colors.ink, fontWeight: "700" },
-  role: { fontSize: 12, color: Colors.ink3 },
-  statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  statusText: { fontSize: 10, fontWeight: "600" },
-  details: { flexDirection: "row", gap: 20, marginBottom: 12 },
-  detail: { gap: 2 },
-  detailLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  detailValue: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  actions: { paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
-  calcBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, alignSelf: "flex-start", borderWidth: 1, borderColor: Colors.border2 },
-  calcText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-});
-
-// ── Payslip View ─────────────────────────────────────────────
-
-function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) {
-  const p = calcPayroll(emp);
-  const costTotal = emp.salary + p.fgts;
-  return (
-    <View>
-      <Pressable onPress={onBack} style={{ marginBottom: 16 }}><Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>Voltar</Text></Pressable>
-      <View style={ps.card}>
-        <View style={ps.header}>
-          <Text style={ps.title}>Holerite - {emp.name}</Text>
-          <Text style={ps.sub}>{emp.role} / Competencia: Marco/2026</Text>
-        </View>
-        <View style={ps.section}>
-          <Text style={ps.secTitle}>Proventos</Text>
-          <View style={ps.row}><Text style={ps.rowLabel}>Salario base</Text><Text style={ps.rowValue}>{fmt(emp.salary)}</Text></View>
-        </View>
-        <View style={ps.section}>
-          <Text style={ps.secTitle}>Descontos</Text>
-          <View style={ps.row}><Text style={ps.rowLabel}>INSS ({(calcINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[ps.rowValue, { color: Colors.red }]}>-{fmt(p.inss)}</Text></View>
-          <View style={ps.row}><Text style={ps.rowLabel}>IRRF</Text><Text style={[ps.rowValue, { color: p.irrf > 0 ? Colors.red : Colors.ink3 }]}>{p.irrf > 0 ? "-" + fmt(p.irrf) : "Isento"}</Text></View>
-        </View>
-        <View style={ps.divider} />
-        <View style={ps.row}><Text style={[ps.rowLabel, { fontWeight: "700", color: Colors.ink }]}>Salario liquido</Text><Text style={[ps.rowValue, { fontSize: 18, color: Colors.green }]}>{fmt(p.liquid)}</Text></View>
-        <View style={ps.divider} />
-        <View style={ps.section}>
-          <Text style={ps.secTitle}>Encargos do empregador</Text>
-          <View style={ps.row}><Text style={ps.rowLabel}>FGTS (8%)</Text><Text style={ps.rowValue}>{fmt(p.fgts)}</Text></View>
-          <View style={[ps.row, { marginTop: 8 }]}><Text style={[ps.rowLabel, { fontWeight: "700", color: Colors.ink }]}>Custo total</Text><Text style={[ps.rowValue, { fontWeight: "700" }]}>{fmt(costTotal)}</Text></View>
-        </View>
-        <View style={ps.disclaimer}><Icon name="alert" size={14} color={Colors.amber}/><Text style={ps.disclaimerText}>Valores estimados para apoio contabil. Consulte a legislacao vigente.</Text></View>
-      </View>
+  if(!visible)return null;
+  return <View style={sm.overlay}><View style={sm.modal}>
+    <Text style={sm.title}>Enviar holerite</Text>
+    <Text style={sm.sub}>Selecione como enviar o holerite de {emp.name}</Text>
+    <View style={sm.preview}><View style={sm.previewHeader}><Text style={sm.previewLogo}>Aura.</Text><Text style={sm.previewDoc}>Holerite - Marco/2026</Text></View><View style={sm.previewBody}><Text style={sm.previewName}>{emp.name} / {emp.role}</Text><Text style={sm.previewVal}>Liquido: {fmt(cP(emp).liquid)}</Text></View></View>
+    <Pressable onPress={handlePreview} style={sm.previewBtn}><Icon name="file_text" size={14} color={Colors.violet3}/><Text style={sm.previewBtnText}>Visualizar documento completo</Text></Pressable>
+    <View style={sm.options}>
+      <Pressable onPress={()=>handleSend("WhatsApp")} style={[sm.optBtn,{backgroundColor:"#075e54"}]}><Text style={sm.optIcon}>W</Text><View><Text style={sm.optTitle}>WhatsApp</Text><Text style={sm.optSub}>Envia PDF pelo WhatsApp Business</Text></View>{sent==="WhatsApp"&&<Text style={sm.sending}>Enviando...</Text>}</Pressable>
+      <Pressable onPress={()=>handleSend("E-mail")} style={[sm.optBtn,{backgroundColor:Colors.violet}]}><Text style={sm.optIcon}>@</Text><View><Text style={sm.optTitle}>E-mail</Text><Text style={sm.optSub}>Envia PDF por e-mail</Text></View>{sent==="E-mail"&&<Text style={sm.sending}>Enviando...</Text>}</Pressable>
     </View>
-  );
+    <Pressable onPress={onClose} style={sm.closeBtn}><Text style={sm.closeText}>Cancelar</Text></Pressable>
+  </View></View>;
 }
-const ps = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2 },
-  header: { marginBottom: 20 },
-  title: { fontSize: 20, color: Colors.ink, fontWeight: "700" },
-  sub: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-  section: { marginBottom: 16 },
-  secTitle: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
-  rowLabel: { fontSize: 13, color: Colors.ink3 },
-  rowValue: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  disclaimer: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, marginTop: 16 },
-  disclaimerText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
-});
+const sm=StyleSheet.create({overlay:{position:"absolute" as any,top:0,left:0,right:0,bottom:0,backgroundColor:"rgba(0,0,0,0.6)",justifyContent:"center",alignItems:"center",zIndex:100},modal:{backgroundColor:Colors.bg3,borderRadius:20,padding:28,maxWidth:440,width:"90%",borderWidth:1,borderColor:Colors.border2},title:{fontSize:20,color:Colors.ink,fontWeight:"700",marginBottom:4},sub:{fontSize:13,color:Colors.ink3,marginBottom:20},preview:{backgroundColor:"#fff",borderRadius:12,padding:16,marginBottom:12},previewHeader:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",borderBottomWidth:2,borderBottomColor:"#6d28d9",paddingBottom:8,marginBottom:10},previewLogo:{fontSize:16,fontWeight:"800",color:"#6d28d9"},previewDoc:{fontSize:10,color:"#6d28d9",fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5},previewBody:{gap:4},previewName:{fontSize:12,color:"#334155",fontWeight:"600"},previewVal:{fontSize:14,color:"#059669",fontWeight:"700"},previewBtn:{flexDirection:"row",alignItems:"center",gap:6,alignSelf:"center",marginBottom:20,paddingVertical:8},previewBtnText:{fontSize:12,color:Colors.violet3,fontWeight:"600"},options:{gap:10,marginBottom:16},optBtn:{flexDirection:"row",alignItems:"center",gap:12,borderRadius:14,padding:16},optIcon:{fontSize:18,fontWeight:"800",color:"#fff",width:32,textAlign:"center"},optTitle:{fontSize:14,color:"#fff",fontWeight:"700"},optSub:{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:1},sending:{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:"600",marginLeft:"auto" as any},closeBtn:{alignItems:"center",paddingVertical:10},closeText:{fontSize:13,color:Colors.ink3,fontWeight:"500"}});
 
-// ── Calculate Tab ────────────────────────────────────────────
-
-function CalcTab() {
-  const totalBruto = EMPLOYEES.filter(e => e.status === "active").reduce((s, e) => s + e.salary, 0);
-  const totals = EMPLOYEES.filter(e => e.status === "active").reduce((acc, e) => {
-    const p = calcPayroll(e);
-    return { inss: acc.inss + p.inss, irrf: acc.irrf + p.irrf, fgts: acc.fgts + p.fgts, liquid: acc.liquid + p.liquid };
-  }, { inss: 0, irrf: 0, fgts: 0, liquid: 0 });
-
-  return (
-    <View>
-      <HoverCard style={ct.summaryCard}>
-        <Text style={ct.summaryTitle}>Resumo da folha - Marco/2026</Text>
-        <View style={ct.summaryGrid}>
-          <View style={ct.summaryItem}><Text style={ct.summaryLabel}>Funcionarios ativos</Text><Text style={ct.summaryValue}>{EMPLOYEES.filter(e => e.status === "active").length}</Text></View>
-          <View style={ct.summaryItem}><Text style={ct.summaryLabel}>Total bruto</Text><Text style={ct.summaryValue}>{fmt(totalBruto)}</Text></View>
-          <View style={ct.summaryItem}><Text style={ct.summaryLabel}>INSS total</Text><Text style={[ct.summaryValue, { color: Colors.red }]}>-{fmt(totals.inss)}</Text></View>
-          <View style={ct.summaryItem}><Text style={ct.summaryLabel}>IRRF total</Text><Text style={[ct.summaryValue, { color: totals.irrf > 0 ? Colors.red : Colors.ink3 }]}>{totals.irrf > 0 ? "-" + fmt(totals.irrf) : "Isento"}</Text></View>
-          <View style={ct.summaryItem}><Text style={ct.summaryLabel}>Total liquido</Text><Text style={[ct.summaryValue, { color: Colors.green, fontSize: 18 }]}>{fmt(totals.liquid)}</Text></View>
-          <View style={ct.summaryItem}><Text style={ct.summaryLabel}>FGTS a depositar</Text><Text style={ct.summaryValue}>{fmt(totals.fgts)}</Text></View>
-        </View>
-        <View style={ct.costRow}>
-          <Text style={ct.costLabel}>Custo total para a empresa</Text>
-          <Text style={ct.costValue}>{fmt(totalBruto + totals.fgts)}</Text>
-        </View>
-      </HoverCard>
-
-      <Text style={ct.breakdownTitle}>Detalhamento por funcionario</Text>
-      {EMPLOYEES.filter(e => e.status === "active").map(emp => {
-        const p = calcPayroll(emp);
-        return (
-          <HoverRow key={emp.id} style={ct.empRow}>
-            <View style={ct.empInfo}>
-              <Text style={ct.empName}>{emp.name}</Text>
-              <Text style={ct.empRole}>{emp.role}</Text>
-            </View>
-            <View style={ct.empNums}>
-              <Text style={ct.empBruto}>Bruto: {fmt(emp.salary)}</Text>
-              <Text style={ct.empLiquid}>Liquido: {fmt(p.liquid)}</Text>
-            </View>
-          </HoverRow>
-        );
-      })}
-    </View>
-  );
+// -- Employee Card --
+function EC({emp,onCalc}:{emp:Employee;onCalc:()=>void}){
+  const st=stMap[emp.status];
+  return <HoverCard style={ec.card}><View style={ec.top}><View style={ec.av}><Text style={ec.at}>{emp.name.charAt(0)}</Text></View><View style={ec.inf}><Text style={ec.nm}>{emp.name}</Text><Text style={ec.rl}>{emp.role}</Text></View><View style={[ec.sb,{backgroundColor:st.c+"18"}]}><Text style={[ec.st,{color:st.c}]}>{st.l}</Text></View></View>
+    <View style={ec.det}><View style={ec.di}><Text style={ec.dl}>Salario bruto</Text><Text style={ec.dv}>{fmt(emp.salary)}</Text></View><View style={ec.di}><Text style={ec.dl}>Admissao</Text><Text style={ec.dv}>{emp.admDate}</Text></View></View>
+    <View style={ec.acts}><Pressable onPress={onCalc} style={ec.cb}><Icon name="receipt" size={14} color={Colors.violet3}/><Text style={ec.ct}>Ver holerite</Text></Pressable></View>
+  </HoverCard>;
 }
-const ct = StyleSheet.create({
-  summaryCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
-  summaryTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700", marginBottom: 16 },
-  summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
-  summaryItem: { width: IS_WIDE ? "30%" : "46%", backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, gap: 4 },
-  summaryLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  summaryValue: { fontSize: 16, color: Colors.ink, fontWeight: "700" },
-  costRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: Colors.violetD, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: Colors.border2 },
-  costLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  costValue: { fontSize: 18, color: Colors.violet3, fontWeight: "700" },
-  breakdownTitle: { fontSize: 15, color: Colors.ink, fontWeight: "700", marginBottom: 12 },
-  empRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 6 },
-  empInfo: { gap: 2 },
-  empName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  empRole: { fontSize: 11, color: Colors.ink3 },
-  empNums: { alignItems: "flex-end", gap: 2 },
-  empBruto: { fontSize: 12, color: Colors.ink3 },
-  empLiquid: { fontSize: 13, color: Colors.green, fontWeight: "600" },
-});
+const ec=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,marginBottom:10},top:{flexDirection:"row",alignItems:"center",gap:12,marginBottom:14},av:{width:40,height:40,borderRadius:12,backgroundColor:Colors.violetD,alignItems:"center",justifyContent:"center"},at:{fontSize:16,fontWeight:"700",color:Colors.violet3},inf:{flex:1,gap:2},nm:{fontSize:15,color:Colors.ink,fontWeight:"700"},rl:{fontSize:12,color:Colors.ink3},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:10,fontWeight:"600"},det:{flexDirection:"row",gap:20,marginBottom:12},di:{gap:2},dl:{fontSize:9,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5},dv:{fontSize:14,color:Colors.ink,fontWeight:"600"},acts:{paddingTop:12,borderTopWidth:1,borderTopColor:Colors.border},cb:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violetD,borderRadius:10,paddingHorizontal:14,paddingVertical:9,alignSelf:"flex-start",borderWidth:1,borderColor:Colors.border2},ct:{fontSize:12,color:Colors.violet3,fontWeight:"600"}});
 
-// ── History Tab ──────────────────────────────────────────────
-
-function HistTab() {
-  return (
-    <View>
-      {HISTORY.map(h => (
-        <HoverRow key={h.id} style={hs.row}>
-          <View style={hs.left}>
-            <View style={hs.check}><Icon name="check" size={12} color={Colors.green}/></View>
-            <View style={hs.info}><Text style={hs.month}>{h.month}</Text><Text style={hs.meta}>{h.employees} funcionarios - pago em {h.paidAt}</Text></View>
-          </View>
-          <View style={hs.right}>
-            <Text style={hs.total}>{fmt(h.total)}</Text>
-            <Text style={hs.liquid}>Liquido: {fmt(h.liquid)}</Text>
-          </View>
-        </HoverRow>
-      ))}
-    </View>
-  );
-}
-const hs = StyleSheet.create({
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  left: { flexDirection: "row", alignItems: "center", gap: 12 },
-  check: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
-  info: { gap: 2 },
-  month: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  meta: { fontSize: 11, color: Colors.ink3 },
-  right: { alignItems: "flex-end", gap: 2 },
-  total: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  liquid: { fontSize: 11, color: Colors.green },
-});
-
-// ── Main Screen ──────────────────────────────────────────────
-
-export default function FolhaScreen() {
-  const [tab, setTab] = useState(0);
-  const [payslipEmp, setPayslipEmp] = useState<Employee | null>(null);
-
-  if (payslipEmp) {
-    return (
-      <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-        <Payslip emp={payslipEmp} onBack={() => setPayslipEmp(null)} />
-        <DemoBanner />
-      </ScrollView>
-    );
-  }
-
-  const activeCount = EMPLOYEES.filter(e => e.status === "active").length;
-  const totalBruto = EMPLOYEES.filter(e => e.status === "active").reduce((s, e) => s + e.salary, 0);
-  const totalFGTS = EMPLOYEES.filter(e => e.status === "active").reduce((s, e) => s + e.salary * FGTS_RATE, 0);
-
-  return (
-    <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-      <PageHeader title="Folha de Pagamento" />
-
-      {/* Summary KPIs */}
-      <View style={z.kpis}>
-        <View style={z.kpi}><Icon name="users" size={20} color={Colors.violet3}/><Text style={z.kpiVal}>{activeCount}</Text><Text style={z.kpiLbl}>Ativos</Text></View>
-        <View style={z.kpi}><Icon name="dollar" size={20} color={Colors.green}/><Text style={z.kpiVal}>{fmt(totalBruto)}</Text><Text style={z.kpiLbl}>Folha bruta</Text></View>
-        <View style={z.kpi}><Icon name="trending_up" size={20} color={Colors.amber}/><Text style={z.kpiVal}>{fmt(totalFGTS)}</Text><Text style={z.kpiLbl}>FGTS</Text></View>
+// -- Payslip View with Send --
+function PS({emp,onBack}:{emp:Employee;onBack:()=>void}){
+  const p=cP(emp);const cost=emp.salary+p.fgts;const[showSend,setShowSend]=useState(false);
+  return <View>
+    <SendModal visible={showSend} emp={emp} onClose={()=>setShowSend(false)}/>
+    <Pressable onPress={onBack} style={{marginBottom:16}}><Text style={{fontSize:13,color:Colors.violet3,fontWeight:"600"}}>Voltar</Text></Pressable>
+    <View style={pss.card}>
+      <View style={pss.hdr}><View><Text style={pss.title}>Holerite - {emp.name}</Text><Text style={pss.sub}>{emp.role} / Competencia: Marco/2026</Text></View>
+        <Pressable onPress={()=>setShowSend(true)} style={pss.sendBtn}><Icon name="file_text" size={16} color="#fff"/><Text style={pss.sendText}>Enviar holerite</Text></Pressable>
       </View>
-
-      <TabBar tabs={TABS} active={tab} onSelect={setTab} />
-
-      {tab === 0 && (
-        <View>
-          {EMPLOYEES.map(emp => <EmpCard key={emp.id} emp={emp} onCalc={() => setPayslipEmp(emp)} />)}
-        </View>
-      )}
-      {tab === 1 && <CalcTab />}
-      {tab === 2 && <HistTab />}
-
-      <DemoBanner />
-    </ScrollView>
-  );
+      <View style={pss.sec}><Text style={pss.secT}>Proventos</Text><View style={pss.row}><Text style={pss.rl}>Salario base</Text><Text style={pss.rv}>{fmt(emp.salary)}</Text></View></View>
+      <View style={pss.sec}><Text style={pss.secT}>Descontos</Text><View style={pss.row}><Text style={pss.rl}>INSS ({(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[pss.rv,{color:Colors.red}]}>-{fmt(p.inss)}</Text></View><View style={pss.row}><Text style={pss.rl}>IRRF</Text><Text style={[pss.rv,{color:p.irrf>0?Colors.red:Colors.ink3}]}>{p.irrf>0?"-"+fmt(p.irrf):"Isento"}</Text></View></View>
+      <View style={pss.div}/><View style={pss.row}><Text style={[pss.rl,{fontWeight:"700",color:Colors.ink}]}>Salario liquido</Text><Text style={[pss.rv,{fontSize:18,color:Colors.green}]}>{fmt(p.liquid)}</Text></View><View style={pss.div}/>
+      <View style={pss.sec}><Text style={pss.secT}>Encargos do empregador</Text><View style={pss.row}><Text style={pss.rl}>FGTS (8%)</Text><Text style={pss.rv}>{fmt(p.fgts)}</Text></View><View style={[pss.row,{marginTop:8}]}><Text style={[pss.rl,{fontWeight:"700",color:Colors.ink}]}>Custo total</Text><Text style={[pss.rv,{fontWeight:"700"}]}>{fmt(cost)}</Text></View></View>
+      <View style={pss.disc}><Icon name="alert" size={14} color={Colors.amber}/><Text style={pss.discT}>Valores estimados para apoio contabil.</Text></View>
+    </View>
+  </View>;
 }
+const pss=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:20,padding:24,borderWidth:1,borderColor:Colors.border2},hdr:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12},title:{fontSize:20,color:Colors.ink,fontWeight:"700"},sub:{fontSize:12,color:Colors.ink3,marginTop:2},sendBtn:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violet,borderRadius:10,paddingHorizontal:16,paddingVertical:10},sendText:{fontSize:13,color:"#fff",fontWeight:"600"},sec:{marginBottom:16},secT:{fontSize:11,color:Colors.ink3,fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:6},rl:{fontSize:13,color:Colors.ink3},rv:{fontSize:14,color:Colors.ink,fontWeight:"600"},div:{height:1,backgroundColor:Colors.border,marginVertical:12},disc:{flexDirection:"row",gap:8,backgroundColor:Colors.amberD,borderRadius:12,padding:14,marginTop:16},discT:{fontSize:11,color:Colors.amber,flex:1,lineHeight:16}});
 
-const z = StyleSheet.create({
-  scr: { flex: 1 },
-  cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  kpis: { flexDirection: "row", gap: 10, marginBottom: 20 },
-  kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 6 },
-  kpiVal: { fontSize: 18, fontWeight: "700", color: Colors.ink },
-  kpiLbl: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-});
+// -- Calc Tab --
+function CT(){
+  const tB=EMPS.filter(e=>e.status==="active").reduce((s,e)=>s+e.salary,0);
+  const tot=EMPS.filter(e=>e.status==="active").reduce((a,e)=>{const p=cP(e);return{inss:a.inss+p.inss,irrf:a.irrf+p.irrf,fgts:a.fgts+p.fgts,liquid:a.liquid+p.liquid};},{inss:0,irrf:0,fgts:0,liquid:0});
+  return <View><HoverCard style={ct.sc}><Text style={ct.st}>Resumo da folha - Marco/2026</Text>
+    <View style={ct.sg}><View style={ct.si}><Text style={ct.sl}>Funcionarios ativos</Text><Text style={ct.sv}>{EMPS.filter(e=>e.status==="active").length}</Text></View><View style={ct.si}><Text style={ct.sl}>Total bruto</Text><Text style={ct.sv}>{fmt(tB)}</Text></View><View style={ct.si}><Text style={ct.sl}>INSS total</Text><Text style={[ct.sv,{color:Colors.red}]}>-{fmt(tot.inss)}</Text></View><View style={ct.si}><Text style={ct.sl}>IRRF total</Text><Text style={[ct.sv,{color:tot.irrf>0?Colors.red:Colors.ink3}]}>{tot.irrf>0?"-"+fmt(tot.irrf):"Isento"}</Text></View><View style={ct.si}><Text style={ct.sl}>Total liquido</Text><Text style={[ct.sv,{color:Colors.green,fontSize:18}]}>{fmt(tot.liquid)}</Text></View><View style={ct.si}><Text style={ct.sl}>FGTS a depositar</Text><Text style={ct.sv}>{fmt(tot.fgts)}</Text></View></View>
+    <View style={ct.cr}><Text style={ct.cl}>Custo total para a empresa</Text><Text style={ct.cv}>{fmt(tB+tot.fgts)}</Text></View></HoverCard>
+    <Text style={ct.bt}>Detalhamento por funcionario</Text>
+    {EMPS.filter(e=>e.status==="active").map(e=>{const p=cP(e);return <HoverRow key={e.id} style={ct.er}><View style={ct.ei}><Text style={ct.en}>{e.name}</Text><Text style={ct.erl}>{e.role}</Text></View><View style={ct.ens}><Text style={ct.eb}>Bruto: {fmt(e.salary)}</Text><Text style={ct.el}>Liquido: {fmt(p.liquid)}</Text></View></HoverRow>;})}
+  </View>;
+}
+const ct=StyleSheet.create({sc:{backgroundColor:Colors.bg3,borderRadius:16,padding:20,borderWidth:1,borderColor:Colors.border2,marginBottom:20},st:{fontSize:16,color:Colors.ink,fontWeight:"700",marginBottom:16},sg:{flexDirection:"row",flexWrap:"wrap",gap:12,marginBottom:16},si:{width:IS_WIDE?"30%":"46%",backgroundColor:Colors.bg4,borderRadius:10,padding:12,gap:4},sl:{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5},sv:{fontSize:16,color:Colors.ink,fontWeight:"700"},cr:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.violetD,borderRadius:10,padding:14,borderWidth:1,borderColor:Colors.border2},cl:{fontSize:13,color:Colors.ink3,fontWeight:"500"},cv:{fontSize:18,color:Colors.violet3,fontWeight:"700"},bt:{fontSize:15,color:Colors.ink,fontWeight:"700",marginBottom:12},er:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.bg3,borderRadius:12,padding:14,borderWidth:1,borderColor:Colors.border,marginBottom:6},ei:{gap:2},en:{fontSize:13,color:Colors.ink,fontWeight:"600"},erl:{fontSize:11,color:Colors.ink3},ens:{alignItems:"flex-end",gap:2},eb:{fontSize:12,color:Colors.ink3},el:{fontSize:13,color:Colors.green,fontWeight:"600"}});
+
+// -- History Tab --
+function HT(){return <View>{HIST.map(h=><HoverRow key={h.id} style={hs.row}><View style={hs.left}><View style={hs.ck}><Icon name="check" size={12} color={Colors.green}/></View><View style={hs.inf}><Text style={hs.mo}>{h.month}</Text><Text style={hs.me}>{h.employees} funcionarios - pago em {h.paidAt}</Text></View></View><View style={hs.right}><Text style={hs.to}>{fmt(h.total)}</Text><Text style={hs.li}>Liquido: {fmt(h.liquid)}</Text></View></HoverRow>)}</View>;}
+const hs=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,marginBottom:8},left:{flexDirection:"row",alignItems:"center",gap:12},ck:{width:28,height:28,borderRadius:8,backgroundColor:Colors.greenD,alignItems:"center",justifyContent:"center"},inf:{gap:2},mo:{fontSize:14,color:Colors.ink,fontWeight:"600"},me:{fontSize:11,color:Colors.ink3},right:{alignItems:"flex-end",gap:2},to:{fontSize:14,color:Colors.ink,fontWeight:"600"},li:{fontSize:11,color:Colors.green}});
+
+// -- Main --
+export default function FolhaScreen(){
+  const[tab,sTab]=useState(0);const[psEmp,sPsEmp]=useState<Employee|null>(null);
+  if(psEmp) return <ScrollView style={z.scr} contentContainerStyle={z.cnt}><PS emp={psEmp} onBack={()=>sPsEmp(null)}/><DemoBanner/></ScrollView>;
+  const ac=EMPS.filter(e=>e.status==="active");const tB=ac.reduce((s,e)=>s+e.salary,0);const tF=ac.reduce((s,e)=>s+e.salary*FR,0);
+  return <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
+    <PageHeader title="Folha de Pagamento"/>
+    <View style={z.kpis}><View style={z.kpi}><Icon name="users" size={20} color={Colors.violet3}/><Text style={z.kv}>{ac.length}</Text><Text style={z.kl}>Ativos</Text></View><View style={z.kpi}><Icon name="dollar" size={20} color={Colors.green}/><Text style={z.kv}>{fmt(tB)}</Text><Text style={z.kl}>Folha bruta</Text></View><View style={z.kpi}><Icon name="trending_up" size={20} color={Colors.amber}/><Text style={z.kv}>{fmt(tF)}</Text><Text style={z.kl}>FGTS</Text></View></View>
+    <TabBar tabs={TABS} active={tab} onSelect={sTab}/>
+    {tab===0&&<View>{EMPS.map(e=><EC key={e.id} emp={e} onCalc={()=>sPsEmp(e)}/>)}</View>}
+    {tab===1&&<CT/>}{tab===2&&<HT/>}<DemoBanner/>
+  </ScrollView>;
+}
+const z=StyleSheet.create({scr:{flex:1},cnt:{padding:IS_WIDE?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"},kpis:{flexDirection:"row",gap:10,marginBottom:20},kpi:{flex:1,backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,alignItems:"center",gap:6},kv:{fontSize:18,fontWeight:"700",color:Colors.ink},kl:{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5}});
