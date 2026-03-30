@@ -84,7 +84,6 @@ function Sidebar() {
           <View style={{ flex: 1 }}><Text style={{ fontSize: 12, color: C.ink, fontWeight: "600" }} numberOfLines={1}>{u?.name || "---"}</Text><Text style={{ fontSize: 10, color: C.violet3, marginTop: 1 }}>{pl}</Text></View>
         </View>
         <View style={{ gap: 6 }}>
-          {/* Theme toggle */}
           <Pressable onPress={toggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
             <Icon name={isDark ? "star" : "dashboard"} size={14} color={C.ink3} />
             <Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>{isDark ? "Modo claro" : "Modo escuro"}</Text>
@@ -151,6 +150,7 @@ export default function TabsLayout() {
   useWebFonts();
   const C = useColors();
   const { isDark } = useThemeStore();
+  const themeKey = isDark ? "dark" : "light";
   const w = Platform.OS === "web";
   const grad = isDark
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
@@ -159,14 +159,14 @@ export default function TabsLayout() {
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg } as any}>
       <Sidebar />
-      <div style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto" } as any}>
+      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto" } as any}>
         <PageTransition><Slot /></PageTransition>
       </div>
     </div>
   );
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ flex: 1 }}><PageTransition><Slot /></PageTransition></View>
+      <View key={themeKey} style={{ flex: 1 }}><PageTransition><Slot /></PageTransition></View>
       <MBar />
     </View>
   );
