@@ -11,3 +11,4 @@ export { EmptyState } from "./EmptyState";
 export { DemoTour } from "./DemoTour";
 export { PageTransition } from "./PageTransition";
 export { Breadcrumb } from "./Breadcrumb";
+export { Skeleton, SkeletonCard, SkeletonKPI, SkeletonRow, SkeletonList, SkeletonDashboard } from "./Skeleton";
