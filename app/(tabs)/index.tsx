@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 
 const { width: W } = Dimensions.get("window");
 const IS = W > 768;
@@ -28,23 +29,23 @@ function HC({children,style,highlight,onPress}:{children:React.ReactNode;style?:
   return <Pressable onPress={onPress} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[style,h&&{transform:[{translateY:-3},{scale:1.015}],borderColor:highlight?Colors.violet2:Colors.border2,shadowColor:Colors.violet,shadowOffset:{width:0,height:8},shadowOpacity:0.15,shadowRadius:20,elevation:8},w&&{transition:"all 0.25s cubic-bezier(0.4,0,0.2,1)"}as any]}>{children}</Pressable>;
 }
 
-function KPI({icon,iconColor,label,value,delta,deltaUp,large,onPress}:{icon:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
+function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress}:{ic:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
   return <HC style={[k.card,large&&k.large]} highlight={large} onPress={onPress}>
-    <View style={k.header}><View style={[k.ic,{backgroundColor:iconColor+"22",borderColor:iconColor+"44"}]}><Text style={[k.icT,{color:iconColor}]}>{icon}</Text></View>{large&&<View style={[k.sb,{backgroundColor:iconColor+"18"}]}><Text style={[k.st,{color:iconColor}]}>Destaque</Text></View>}</View>
+    <View style={k.header}><View style={[k.ic,{backgroundColor:iconColor+"22",borderColor:iconColor+"44"}]}><Icon name={ic as any} size={20} color={iconColor}/></View>{large&&<View style={[k.sb,{backgroundColor:iconColor+"18"}]}><Text style={[k.st,{color:iconColor}]}>Destaque</Text></View>}</View>
     <Text style={[k.val,large&&{fontSize:28}]}>{value}</Text><Text style={k.lb}>{label}</Text>
     {delta&&<View style={[k.db,{backgroundColor:deltaUp?Colors.greenD:Colors.redD}]}><Text style={[k.dt,{color:deltaUp?Colors.green:Colors.red}]}>{deltaUp?"+":"-"} {delta}</Text></View>}
   </HC>;
 }
-const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"45%",flex:2},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},icT:{fontSize:18,fontWeight:"800"},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
+const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"45%",flex:2},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
 
-function QA({icon,iconColor,label,onPress}:{icon:string;iconColor:string;label:string;onPress?:()=>void}){
+function QA({ic,iconColor,label,onPress}:{ic:string;iconColor:string;label:string;onPress?:()=>void}){
   const[h,sH]=useState(false);const w=Platform.OS==="web";
   return <Pressable style={[qa.btn,w&&{transition:"all 0.2s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} onPress={onPress}>
-    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55",transform:[{scale:1.1},{translateY:-2}]},w&&{transition:"all 0.2s ease"}as any]}><Text style={[qa.ic,{color:iconColor}]}>{icon}</Text></View>
+    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55",transform:[{scale:1.1},{translateY:-2}]},w&&{transition:"all 0.2s ease"}as any]}><Icon name={ic as any} size={22} color={iconColor}/></View>
     <Text style={[qa.lb,h&&{color:Colors.ink}]}>{label}</Text>
   </Pressable>;
 }
-const qa=StyleSheet.create({btn:{alignItems:"center",gap:8,minWidth:72},iw:{width:52,height:52,borderRadius:16,backgroundColor:Colors.bg3,borderWidth:1.5,alignItems:"center",justifyContent:"center"},ic:{fontSize:20,fontWeight:"700"},lb:{fontSize:10,color:Colors.ink3,fontWeight:"600",textAlign:"center"}});
+const qa=StyleSheet.create({btn:{alignItems:"center",gap:8,minWidth:72},iw:{width:52,height:52,borderRadius:16,backgroundColor:Colors.bg3,borderWidth:1.5,alignItems:"center",justifyContent:"center"},lb:{fontSize:10,color:Colors.ink3,fontWeight:"600",textAlign:"center"}});
 
 function SR({customer,amount,time,method,onPress}:{customer:string;amount:number;time:string;method?:string;onPress?:()=>void}){
   const[h,sH]=useState(false);const w=Platform.OS==="web";
@@ -73,32 +74,32 @@ export default function DashboardScreen(){
     <ScrollView style={s.scroll} contentContainerStyle={s.content}>
       <View style={s.header}>
         <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
-        <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><Text style={s.lt}>Sair</Text></TouchableOpacity></View>
+        <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>
       </View>
 
       <HC style={s.hero} onPress={()=>go("/financeiro")}>
         <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudavel</Text></View></View>
         <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
-        {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Text style={s.di}>!</Text><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
+        {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
       </HC>
 
       <Text style={s.sec}>Visao geral</Text>
       <View style={s.grid}>
-        <KPI icon="$" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
-        <KPI icon="-" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
-        <KPI icon="=" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
-        <KPI icon="#" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
-        <KPI icon="~" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
-        <KPI icon="+" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
+        <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+        <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
+        <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+        <KPI ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
+        <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+        <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
       </View>
 
       <Text style={s.sec}>Acesso rapido</Text>
       <View style={s.acts}>
-        <QA icon="$" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
-        <QA icon="%" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
-        <QA icon="#" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
-        <QA icon="N" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
-        <QA icon="C" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
+        <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
+        <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
+        <QA ic="package" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
+        <QA ic="file_text" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
+        <QA ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
       </View>
 
       <View style={s.sh}><Text style={s.sec}>Obrigacoes contabeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
@@ -131,7 +132,7 @@ const s=StyleSheet.create({
   hd:{width:6,height:6,borderRadius:3,backgroundColor:Colors.green},hx:{fontSize:11,color:Colors.green,fontWeight:"600"},
   hv:{fontSize:36,fontWeight:"800",color:Colors.ink,letterSpacing:-1,marginBottom:4},hl2:{fontSize:13,color:Colors.ink3,marginBottom:16},
   da:{flexDirection:"row",alignItems:"center",gap:8,backgroundColor:Colors.amberD,borderRadius:10,padding:12},
-  di:{fontSize:14,color:Colors.amber,fontWeight:"700"},dt:{fontSize:12,color:Colors.amber,fontWeight:"500",flex:1},dl:{fontSize:12,color:Colors.violet3,fontWeight:"600"},
+  dt:{fontSize:12,color:Colors.amber,fontWeight:"500",flex:1},dl:{fontSize:12,color:Colors.violet3,fontWeight:"600"},
   sec:{fontSize:15,color:Colors.ink,fontWeight:"600",marginBottom:14},sh:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},
   grid:{flexDirection:"row",flexWrap:"wrap",marginHorizontal:-5,marginBottom:28},
   acts:{flexDirection:"row",gap:16,marginBottom:28,paddingVertical:4},
