@@ -7,7 +7,7 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-const TABS = ["Lancamentos", "A Receber", "Minha Retirada", "Resumo"];
+const TABS = ["Lançamentos", "A Receber", "Minha Retirada", "Resumo"];
 
 // ── Mock Data ────────────────────────────────────────────────
 

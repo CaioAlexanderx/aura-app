@@ -30,7 +30,7 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
   cnpj_config: {
     id: "cnpj_config", name: "CNPJ e regime configurados", icon: "#",
     category: "aura_resolve", frequency: "initial",
-    description: "Regime tributario detectado via Receita Federal. Obrigacoes carregadas automaticamente.",
+    description: "Regime tributário detectado via Receita Federal. Obrigacoes carregadas automaticamente.",
     dueDay: null, dueMonth: null, hasAmount: false,
     steps: [
       { text: "Aura detecta seu regime tributario", auto: true, media: null, hint: "Via consulta ao CNPJ" },

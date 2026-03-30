@@ -133,7 +133,7 @@ export default function ClientesScreen() {
       <Pressable onPress={()=>{sAdd(true);sTab(0);}} style={{backgroundColor:Colors.violet,paddingHorizontal:18,paddingVertical:10,borderRadius:10}}><Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>+ Adicionar cliente</Text></Pressable>
     </View>
     <View style={{flexDirection:"row",flexWrap:"wrap",marginHorizontal:-4,marginBottom:16}}>
-      <SC l="TOTAL CLIENTES" v={String(tot)}/><SC l="FATURAMENTO TOTAL" v={fmt(ltv)} c={Colors.green}/><SC l="TICKET MEDIO" v={fmt(RET.avgT)}/><SC l="MEDIA VISITAS" v={RET.avgV.toFixed(1)}/>
+      <SC l="TOTAL CLIENTES" v={String(tot)}/><SC l="FATURAMENTO TOTAL" v={fmt(ltv)} c={Colors.green}/><SC l="TICKET MÉDIO" v={fmt(RET.avgT)}/><SC l="MEDIA VISITAS" v={RET.avgV.toFixed(1)}/>
     </View>
     <View style={{flexDirection:"row",flexWrap:"wrap",gap:12,backgroundColor:Colors.bg3,borderRadius:12,padding:12,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>
       <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Tag tag="VIP"/><Text style={{fontSize:11,color:Colors.ink3}}>Gasto acima de R$ 2.000</Text></View>

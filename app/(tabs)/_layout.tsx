@@ -31,7 +31,7 @@ const MORE_ITEMS = [
   { r: "/estoque", l: "Estoque", ic: "package" },
   { r: "/nfe", l: "NF-e", ic: "file_text" },
   { r: "/folha", l: "Folha de Pagamento", ic: "payroll" },
-  { r: "/configuracoes", l: "Configuracoes", ic: "settings" },
+  { r: "/configuracoes", l: "Configurações", ic: "settings" },
 ];
 
 function useWebFonts() {
@@ -113,7 +113,7 @@ function MBar() {
           <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }} onPress={() => setMoreOpen(false)} />
           <View style={{ backgroundColor: C.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: C.border }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.bg4, alignSelf: "center", marginBottom: 16 }} />
-            <Text style={{ fontSize: 14, color: C.ink, fontWeight: "700", marginBottom: 14 }}>Mais opcoes</Text>
+            <Text style={{ fontSize: 14, color: C.ink, fontWeight: "700", marginBottom: 14 }}>Mais opções</Text>
             {MORE_ITEMS.map(item => {
               const a = isA(p, item.r);
               return (

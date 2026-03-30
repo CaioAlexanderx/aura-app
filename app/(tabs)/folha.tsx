@@ -12,7 +12,7 @@ import { useAuthStore } from "@/stores/auth";
 import { BackButton } from "@/components/BackButton";
 import { toast } from "@/components/Toast";
 
-const TABS = ["Funcionarios", "Resumo mensal", "Historico"];
+const TABS = ["Funcionários", "Resumo mensal", "Histórico"];
 type Employee = { id: string; name: string; role: string; salary: number; admDate: string; status: "active" | "vacation" | "dismissed" };
 const EMPS: Employee[] = [
   { id: "1", name: "Ana Costa", role: "Atendente", salary: 1800, admDate: "15/03/2025", status: "active" },
@@ -25,7 +25,7 @@ function cIRRF(s:number,i:number){const b=s-i;if(b<=2259.20)return 0;if(b<=2826.
 const FR=0.08;
 function cP(e:Employee){const i=cINSS(e.salary);const r=Math.max(0,cIRRF(e.salary,i));const f=e.salary*FR;return{inss:i,irrf:r,fgts:f,liquid:e.salary-i-r};}
 const HIST=[{id:"h1",month:"Fevereiro/2026",total:5600,liquid:4612.40,paidAt:"05/03/2026",employees:3},{id:"h2",month:"Janeiro/2026",total:5600,liquid:4612.40,paidAt:"05/02/2026",employees:3},{id:"h3",month:"Dezembro/2025",total:5600,liquid:4612.40,paidAt:"05/01/2026",employees:3}];
-const stMap={active:{l:"Ativo",c:Colors.green},vacation:{l:"Ferias",c:Colors.amber},dismissed:{l:"Desligado",c:Colors.red}};
+const stMap={active:{l:"Ativo",c:Colors.green},vacation:{l:"Férias",c:Colors.amber},dismissed:{l:"Desligado",c:Colors.red}};
 
 const LOGO_CDN="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
@@ -67,7 +67,7 @@ td.pos{color:#059669}td.neg{color:#dc2626}
 <div class="ei"><div><div class="lb">Funcionario</div><div class="vl">${emp.name}</div></div><div><div class="lb">Cargo</div><div class="vl">${emp.role}</div></div><div><div class="lb">Admissao</div><div class="vl">${emp.admDate}</div></div><div><div class="lb">Status</div><div class="vl">${stMap[emp.status].l}</div></div></div>
 <div class="st">Proventos</div>
 <table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody>
-<tr><td>Salario base</td><td>30 dias</td><td class="pos">${f2(emp.salary)}</td></tr>
+<tr><td>Salário base</td><td>30 dias</td><td class="pos">${f2(emp.salary)}</td></tr>
 </tbody><tfoot><tr class="sr"><td colspan="2">Total proventos</td><td>${f2(emp.salary)}</td></tr></tfoot></table>
 <div class="st">Descontos</div>
 <table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody>
@@ -75,7 +75,7 @@ td.pos{color:#059669}td.neg{color:#dc2626}
 <tr><td>IRRF</td><td>${p.irrf>0?(p.irrf/emp.salary*100).toFixed(1)+"%":"Isento"}</td><td${p.irrf>0?' class="neg"':""}>
 ${p.irrf>0?"-"+f2(p.irrf):"Isento"}</td></tr>
 </tbody><tfoot><tr class="sr"><td colspan="2">Total descontos</td><td>-${f2(p.inss+p.irrf)}</td></tr></tfoot></table>
-<div class="ts"><div class="tl">Salario liquido a receber</div><div class="tv">R$ ${f2(p.liquid)}</div></div>
+<div class="ts"><div class="tl">Salário líquido a receber</div><div class="tv">R$ ${f2(p.liquid)}</div></div>
 <div class="ft"><span>Gerado por Aura. - getaura.com.br</span><span>${new Date().toLocaleDateString("pt-BR")}</span></div>
 </body></html>`;
 }
@@ -105,7 +105,7 @@ const sm=StyleSheet.create({overlay:{position:"absolute" as any,top:0,left:0,rig
 function EC({emp,onCalc}:{emp:Employee;onCalc:()=>void}){
   const st=stMap[emp.status];
   return <HoverCard style={ec.card}><View style={ec.top}><View style={ec.av}><Text style={ec.at}>{emp.name.charAt(0)}</Text></View><View style={ec.inf}><Text style={ec.nm}>{emp.name}</Text><Text style={ec.rl}>{emp.role}</Text></View><View style={[ec.sb,{backgroundColor:st.c+"18"}]}><Text style={[ec.st,{color:st.c}]}>{st.l}</Text></View></View>
-    <View style={ec.det}><View style={ec.di}><Text style={ec.dl}>Salario bruto</Text><Text style={ec.dv}>{fmt(emp.salary)}</Text></View><View style={ec.di}><Text style={ec.dl}>Admissao</Text><Text style={ec.dv}>{emp.admDate}</Text></View></View>
+    <View style={ec.det}><View style={ec.di}><Text style={ec.dl}>Salário bruto</Text><Text style={ec.dv}>{fmt(emp.salary)}</Text></View><View style={ec.di}><Text style={ec.dl}>Admissao</Text><Text style={ec.dv}>{emp.admDate}</Text></View></View>
     <View style={ec.acts}><Pressable onPress={onCalc} style={ec.cb}><Icon name="receipt" size={14} color={Colors.violet3}/><Text style={ec.ct}>Ver holerite</Text></Pressable></View>
   </HoverCard>;
 }
@@ -120,9 +120,9 @@ function PS({emp,onBack}:{emp:Employee;onBack:()=>void}){
       <View style={pss.hdr}><View><Text style={pss.title}>Holerite - {emp.name}</Text><Text style={pss.sub}>{emp.role} / Competencia: Marco/2026</Text></View>
         <Pressable onPress={()=>setShowSend(true)} style={pss.sendBtn}><Icon name="file_text" size={16} color="#fff"/><Text style={pss.sendText}>Enviar holerite</Text></Pressable>
       </View>
-      <View style={pss.sec}><Text style={pss.secT}>Proventos</Text><View style={pss.row}><Text style={pss.rl}>Salario base</Text><Text style={[pss.rv,{color:Colors.green}]}>{fmt(emp.salary)}</Text></View><View style={[pss.row,{borderTopWidth:1,borderTopColor:Colors.border,marginTop:4,paddingTop:8}]}><Text style={[pss.rl,{fontWeight:"600",color:Colors.ink}]}>Total proventos</Text><Text style={[pss.rv,{fontWeight:"700"}]}>{fmt(emp.salary)}</Text></View></View>
+      <View style={pss.sec}><Text style={pss.secT}>Proventos</Text><View style={pss.row}><Text style={pss.rl}>Salário base</Text><Text style={[pss.rv,{color:Colors.green}]}>{fmt(emp.salary)}</Text></View><View style={[pss.row,{borderTopWidth:1,borderTopColor:Colors.border,marginTop:4,paddingTop:8}]}><Text style={[pss.rl,{fontWeight:"600",color:Colors.ink}]}>Total proventos</Text><Text style={[pss.rv,{fontWeight:"700"}]}>{fmt(emp.salary)}</Text></View></View>
       <View style={pss.sec}><Text style={pss.secT}>Descontos</Text><View style={pss.row}><Text style={pss.rl}>INSS ({(cINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[pss.rv,{color:Colors.red}]}>-{fmt(p.inss)}</Text></View><View style={pss.row}><Text style={pss.rl}>IRRF</Text><Text style={[pss.rv,{color:p.irrf>0?Colors.red:Colors.ink3}]}>{p.irrf>0?"-"+fmt(p.irrf):"Isento"}</Text></View><View style={[pss.row,{borderTopWidth:1,borderTopColor:Colors.border,marginTop:4,paddingTop:8}]}><Text style={[pss.rl,{fontWeight:"600",color:Colors.ink}]}>Total descontos</Text><Text style={[pss.rv,{fontWeight:"700",color:Colors.red}]}>-{fmt(p.inss+p.irrf)}</Text></View></View>
-      <View style={pss.totalCard}><Text style={pss.totalLabel}>Salario liquido a receber</Text><Text style={pss.totalValue}>{fmt(p.liquid)}</Text></View>
+      <View style={pss.totalCard}><Text style={pss.totalLabel}>Salário líquido a receber</Text><Text style={pss.totalValue}>{fmt(p.liquid)}</Text></View>
     </View>
   </View>;
 }
@@ -132,9 +132,9 @@ function CT(){
   const tB=EMPS.filter(e=>e.status==="active").reduce((s,e)=>s+e.salary,0);
   const tot=EMPS.filter(e=>e.status==="active").reduce((a,e)=>{const p=cP(e);return{inss:a.inss+p.inss,irrf:a.irrf+p.irrf,fgts:a.fgts+p.fgts,liquid:a.liquid+p.liquid};},{inss:0,irrf:0,fgts:0,liquid:0});
   return <View><HoverCard style={ct.sc}><Text style={ct.st}>Resumo da folha - Marco/2026</Text>
-    <View style={ct.sg}><View style={ct.si}><Text style={ct.sl}>Funcionarios ativos</Text><Text style={ct.sv}>{EMPS.filter(e=>e.status==="active").length}</Text></View><View style={ct.si}><Text style={ct.sl}>Total bruto</Text><Text style={ct.sv}>{fmt(tB)}</Text></View><View style={ct.si}><Text style={ct.sl}>INSS total</Text><Text style={[ct.sv,{color:Colors.red}]}>-{fmt(tot.inss)}</Text></View><View style={ct.si}><Text style={ct.sl}>IRRF total</Text><Text style={[ct.sv,{color:tot.irrf>0?Colors.red:Colors.ink3}]}>{tot.irrf>0?"-"+fmt(tot.irrf):"Isento"}</Text></View><View style={ct.si}><Text style={ct.sl}>Total liquido</Text><Text style={[ct.sv,{color:Colors.green,fontSize:18}]}>{fmt(tot.liquid)}</Text></View><View style={ct.si}><Text style={ct.sl}>FGTS a depositar</Text><Text style={ct.sv}>{fmt(tot.fgts)}</Text></View></View>
+    <View style={ct.sg}><View style={ct.si}><Text style={ct.sl}>Funcionários ativos</Text><Text style={ct.sv}>{EMPS.filter(e=>e.status==="active").length}</Text></View><View style={ct.si}><Text style={ct.sl}>Total bruto</Text><Text style={ct.sv}>{fmt(tB)}</Text></View><View style={ct.si}><Text style={ct.sl}>INSS total</Text><Text style={[ct.sv,{color:Colors.red}]}>-{fmt(tot.inss)}</Text></View><View style={ct.si}><Text style={ct.sl}>IRRF total</Text><Text style={[ct.sv,{color:tot.irrf>0?Colors.red:Colors.ink3}]}>{tot.irrf>0?"-"+fmt(tot.irrf):"Isento"}</Text></View><View style={ct.si}><Text style={ct.sl}>Total líquido</Text><Text style={[ct.sv,{color:Colors.green,fontSize:18}]}>{fmt(tot.liquid)}</Text></View><View style={ct.si}><Text style={ct.sl}>FGTS a depositar</Text><Text style={ct.sv}>{fmt(tot.fgts)}</Text></View></View>
     <View style={ct.cr}><Text style={ct.cl}>Custo total para a empresa</Text><Text style={ct.cv}>{fmt(tB+tot.fgts)}</Text></View></HoverCard>
-    <Text style={ct.bt}>Detalhamento por funcionario</Text>
+    <Text style={ct.bt}>Detalhamento por funcionário</Text>
     {EMPS.filter(e=>e.status==="active").map(e=>{const p=cP(e);return <HoverRow key={e.id} style={ct.er}><View style={ct.ei}><Text style={ct.en}>{e.name}</Text><Text style={ct.erl}>{e.role}</Text></View><View style={ct.ens}><Text style={ct.eb}>Bruto: {fmt(e.salary)}</Text><Text style={ct.el}>Liquido: {fmt(p.liquid)}</Text></View></HoverRow>;})}
   </View>;
 }

@@ -62,7 +62,7 @@ function SR({customer,amount,time,method,onPress}:{customer:string;amount:number
 const sr=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:8,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},left:{flexDirection:"row",alignItems:"center",gap:12},av:{width:34,height:34,borderRadius:17,backgroundColor:Colors.bg4,alignItems:"center",justifyContent:"center"},at:{fontSize:12,fontWeight:"600",color:Colors.violet3},nm:{fontSize:13,color:Colors.ink,fontWeight:"500"},tm:{fontSize:11,color:Colors.ink3,marginTop:1},am:{fontSize:13,color:Colors.green,fontWeight:"600"}});
 
 function OR({name,due,amount,status,category,onPress}:{name:string;due:string;amount:number|null;status:string;category:string;onPress?:()=>void}){
-  const[h,sH]=useState(false);const w=Platform.OS==="web";const sc=status==="pending"?Colors.amber:Colors.ink3;const cl=category==="aura_resolve"?"Aura resolve":"Aura facilita, voce resolve";const cc=category==="aura_resolve"?Colors.green:Colors.amber;
+  const[h,sH]=useState(false);const w=Platform.OS==="web";const sc=status==="pending"?Colors.amber:Colors.ink3;const cl=category==="aura_resolve"?"Aura resolve":"Aura facilita, você resolve";const cc=category==="aura_resolve"?Colors.green:Colors.amber;
   return <Pressable onPress={onPress} style={[ob.row,h&&{backgroundColor:Colors.bg4},w&&{transition:"background-color 0.15s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined}>
     <View style={ob.left}><View style={[ob.dot,{backgroundColor:sc}]}/><View><Text style={ob.nm}>{name}</Text><Text style={ob.du}>Vencimento: {due}</Text></View></View>
     <View style={ob.right}>{amount!=null&&<Text style={ob.am}>{fmt(amount)}</Text>}<View style={[ob.cb,{backgroundColor:cc+"18"}]}><Text style={[ob.ct,{color:cc}]}>{cl}</Text></View></View>
@@ -85,22 +85,22 @@ export default function DashboardScreen(){
         </View>
 
         <HC style={s.hero} onPress={()=>go("/financeiro")}>
-          <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudavel</Text></View></View>
-          <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
+          <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudável</Text></View></View>
+          <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro líquido do mês</Text>
           {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
         </HC>
 
-        <Text style={s.sec}>Visao geral</Text>
+        <Text style={s.sec}>Visão geral</Text>
         <View style={s.grid}>
-          <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+          <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
           <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
-          <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+          <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
           <KPI ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
-          <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+          <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MÉDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
           <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
         </View>
 
-        <Text style={s.sec}>Acesso rapido</Text>
+        <Text style={s.sec}>Acesso rápido</Text>
         <View style={s.acts}>
           <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
           <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
@@ -109,13 +109,13 @@ export default function DashboardScreen(){
           <QA ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
         </View>
 
-        <View style={s.sh}><Text style={s.sec}>Obrigacoes contabeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
+        <View style={s.sh}><Text style={s.sec}>Obrigações contábeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
         <HC style={s.lc} onPress={()=>go("/contabilidade")}>
           {(d.obligations??MOCK.obligations).map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
-          <View style={s.lf}><Text style={s.lft}>Apoio contabil informativo</Text></View>
+          <View style={s.lf}><Text style={s.lft}>Apoio contábil informativo</Text></View>
         </HC>
 
-        <View style={s.sh}><Text style={s.sec}>Ultimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
+        <View style={s.sh}><Text style={s.sec}>Últimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
         <HC style={s.lc}>
           {(d.recentSales??MOCK.recentSales).map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
         </HC>

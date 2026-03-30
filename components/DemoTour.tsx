@@ -15,31 +15,31 @@ type TourStep = {
 const STEPS: TourStep[] = [
   {
     title: "Bem-vindo ao modo demonstrativo!",
-    description: "Explore todas as funcionalidades da Aura com dados ilustrativos. Nada aqui e real - fique a vontade para clicar em tudo.",
+    description: "Explore todas as funcionalidades da Aura com dados ilustrativos. Nada aqui e real - fique à vontade para clicar em tudo.",
     icon: "star",
     position: "center",
   },
   {
     title: "Seu painel financeiro",
-    description: "Aqui voce acompanha faturamento, despesas e lucro do mes. Clique no card para ver detalhes no Financeiro.",
+    description: "Aqui voce acompanha faturamento, despesas e lucro do mês. Clique no card para ver detalhes no Financeiro.",
     icon: "wallet",
     position: "top",
   },
   {
-    title: "Acesso rapido",
+    title: "Acesso rápido",
     description: "PDV, Financeiro, Estoque, NF-e e Contabilidade - tudo a um clique. Use tambem a sidebar para navegar.",
     icon: "dashboard",
     position: "center",
   },
   {
-    title: "Obrigacoes contabeis",
-    description: "A Aura organiza seus prazos e guia voce passo a passo. Veja a tela de Contabilidade para mais detalhes.",
+    title: "Obrigações contábeis",
+    description: "A Aura organiza seus prazos e guia você passo a passo. Veja a tela de Contabilidade para mais detalhes.",
     icon: "calculator",
     position: "bottom",
   },
   {
     title: "Pronto para explorar!",
-    description: "Navegue livremente pelas telas usando a sidebar ou os atalhos. Este e o modo demonstrativo - ao adquirir a Aura, seus dados reais serao carregados aqui.",
+    description: "Navegue livremente pelas telas usando a sidebar ou os atalhos. Este e o modo demonstrativo - ao adquirir a Aura, seus dados reais serão carregados aqui.",
     icon: "check",
     position: "center",
   },

@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { CNAE_PROFILES, detectProfileFromCnae } from "@/constants/obligations";
 import { Icon } from "@/components/Icon";
 
-const STEPS = ["Boas-vindas", "Sua empresa", "Tipo de negocio", "Funcionarios", "Pronto!"];
+const STEPS = ["Boas-vindas", "Sua empresa", "Tipo de negócio", "Funcionários", "Pronto!"];
 const BIZ_TYPES = [
   { key: "barbearia_salao", label: "Barbearia / Salao", icon: "S" },
   { key: "odontologia", label: "Odontologia", icon: "D" },
@@ -97,14 +97,14 @@ export default function OnboardingScreen() {
       {step === 0 && (
         <SC>
           <Text style={z.emoji}>*</Text>
-          <Text style={z.title}>Bem-vindo a Aura, {user?.name?.split(" ")[0] || "empreendedor"}!</Text>
+          <Text style={z.title}>Bem-vindo à Aura, {user?.name?.split(" ")[0] || "empreendedor"}!</Text>
           <Text style={z.sub}>Vamos configurar sua empresa em poucos minutos. Depois disso, a Aura cuida de organizar tudo pra voce.</Text>
           <View style={z.features}>
-            {["Obrigacoes contabeis organizadas","Vendas e estoque integrados","Guias passo a passo para cada tarefa","Tudo em um so lugar"].map(f => (
+            {["Obrigações contábeis organizadas","Vendas e estoque integrados","Guias passo a passo para cada tarefa","Tudo em um so lugar"].map(f => (
               <View key={f} style={z.featureRow}><View style={z.featureDot} /><Text style={z.featureText}>{f}</Text></View>
             ))}
           </View>
-          <Pressable onPress={() => setStep(1)} style={z.primaryBtn}><Text style={z.primaryBtnText}>Vamos comecar</Text></Pressable>
+          <Pressable onPress={() => setStep(1)} style={z.primaryBtn}><Text style={z.primaryBtnText}>Vamos começar</Text></Pressable>
         </SC>
       )}
 
@@ -145,7 +145,7 @@ export default function OnboardingScreen() {
             </Pressable>
             <View style={z.divider} />
             <Pressable onPress={() => { setCnpjData({ razaoSocial: company?.name || "Minha Empresa", cnae: "---", regime: "MEI", uf: "SP", municipio: "---" }); setStep(2); }} style={z.skipBtn}>
-              <Text style={z.skipText}>Ainda nao tenho CNPJ - configurar depois</Text>
+              <Text style={z.skipText}>Ainda não tenho CNPJ - configurar depois</Text>
             </Pressable>
           </View>
           <Pressable onPress={() => setStep(0)} style={z.backBtn}><Text style={z.backText}>Voltar</Text></Pressable>
@@ -154,11 +154,11 @@ export default function OnboardingScreen() {
 
       {step === 2 && (
         <SC>
-          <Text style={z.stepTitle}>Tipo de negocio</Text>
+          <Text style={z.stepTitle}>Tipo de negócio</Text>
           {cnpjData && cnpjData.cnae !== "---" && (
             <View style={z.detectedCard}><Text style={z.detectedLabel}>Detectado pelo CNPJ</Text><Text style={z.detectedValue}>{cnpjData.razaoSocial}</Text><Text style={z.detectedMeta}>CNAE: {cnpjData.cnae} / {cnpjData.regime} / {cnpjData.municipio}-{cnpjData.uf}</Text></View>
           )}
-          <Text style={z.stepSub}>Selecione o tipo que melhor descreve seu negocio:</Text>
+          <Text style={z.stepSub}>Selecione o tipo que melhor descreve seu negócio:</Text>
           <View style={z.typesGrid}>
             {BIZ_TYPES.map(t => (
               <Pressable key={t.key} onPress={() => setBizType(t.key)} style={[z.typeCard, bizType === t.key && z.typeCardActive]}>
@@ -169,29 +169,29 @@ export default function OnboardingScreen() {
           </View>
           <View style={z.navRow}>
             <Pressable onPress={() => setStep(1)} style={z.backBtn}><Text style={z.backText}>Voltar</Text></Pressable>
-            <Pressable onPress={() => { if (!bizType) { Alert.alert("Selecione um tipo de negocio"); return; } setStep(3); }} style={z.primaryBtn}><Text style={z.primaryBtnText}>Continuar</Text></Pressable>
+            <Pressable onPress={() => { if (!bizType) { Alert.alert("Selecione um tipo de negócio"); return; } setStep(3); }} style={z.primaryBtn}><Text style={z.primaryBtnText}>Continuar</Text></Pressable>
           </View>
         </SC>
       )}
 
       {step === 3 && (
         <SC>
-          <Text style={z.stepTitle}>Voce tem funcionarios?</Text>
-          <Text style={z.stepSub}>Isso define quais obrigacoes contabeis a Aura vai configurar pra voce.</Text>
+          <Text style={z.stepTitle}>Você tem funcionários?</Text>
+          <Text style={z.stepSub}>Isso define quais obrigações contábeis a Aura vai configurar pra você.</Text>
           <View style={z.toggleRow}>
             <Pressable onPress={() => setHasEmp(false)} style={[z.toggleCard, !hasEmp && z.toggleActive]}>
               <Text style={[z.toggleIcon, !hasEmp && { color: Colors.green }]}>-</Text>
-              <Text style={[z.toggleTitle, !hasEmp && { color: Colors.ink }]}>Nao tenho</Text>
-              <Text style={z.toggleSub}>Trabalho sozinho ou com socios</Text>
+              <Text style={[z.toggleTitle, !hasEmp && { color: Colors.ink }]}>Não tenho</Text>
+              <Text style={z.toggleSub}>Trabalho sozinho ou com sócios</Text>
             </Pressable>
             <Pressable onPress={() => setHasEmp(true)} style={[z.toggleCard, hasEmp && z.toggleActive]}>
               <Text style={[z.toggleIcon, hasEmp && { color: Colors.violet3 }]}>+</Text>
               <Text style={[z.toggleTitle, hasEmp && { color: Colors.ink }]}>Sim, tenho</Text>
-              <Text style={z.toggleSub}>Funcionarios registrados</Text>
+              <Text style={z.toggleSub}>Funcionários registrados</Text>
             </Pressable>
           </View>
-          {hasEmp && <View style={{ marginTop: 16, gap: 6 }}><Text style={z.fieldLabel}>Quantos funcionarios?</Text><TextInput style={inp as any} value={empCount} onChangeText={setEmpCount} keyboardType="number-pad" placeholder="1" placeholderTextColor={Colors.ink3} /></View>}
-          {hasEmp && <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Com funcionarios, a Aura vai gerenciar:</Text><View style={z.oblList}><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.green}]} /><Text style={z.oblText}>FGTS mensal (Aura resolve)</Text></View><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.amber}]} /><Text style={z.oblText}>eSocial (Aura facilita, voce resolve)</Text></View></View></View>}
+          {hasEmp && <View style={{ marginTop: 16, gap: 6 }}><Text style={z.fieldLabel}>Quantos funcionários?</Text><TextInput style={inp as any} value={empCount} onChangeText={setEmpCount} keyboardType="number-pad" placeholder="1" placeholderTextColor={Colors.ink3} /></View>}
+          {hasEmp && <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Com funcionarios, a Aura vai gerenciar:</Text><View style={z.oblList}><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.green}]} /><Text style={z.oblText}>FGTS mensal (Aura resolve)</Text></View><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.amber}]} /><Text style={z.oblText}>eSocial (Aura facilita, você resolve)</Text></View></View></View>}
           <View style={z.navRow}>
             <Pressable onPress={() => setStep(2)} style={z.backBtn}><Text style={z.backText}>Voltar</Text></Pressable>
             <Pressable onPress={() => setStep(4)} style={z.primaryBtn}><Text style={z.primaryBtnText}>Continuar</Text></Pressable>
@@ -203,7 +203,7 @@ export default function OnboardingScreen() {
         <SC>
           {logo ? <Image source={{ uri: logo }} style={z.doneLogo} resizeMode="contain" /> : <View style={z.doneCircle}><Text style={z.doneCheck}>OK</Text></View>}
           <Text style={z.title}>Tudo pronto!</Text>
-          <Text style={z.sub}>Sua empresa esta configurada. A Aura ja organizou suas obrigacoes contabeis e esta pronta pra voce usar.</Text>
+          <Text style={z.sub}>Sua empresa está configurada. A Aura ja organizou suas obrigações contábeis e está pronta pra você usar.</Text>
           <View style={z.summaryCard}>
             <Text style={z.summaryTitle}>Resumo</Text>
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Empresa</Text><Text style={z.summaryValue}>{cnpjData?.razaoSocial || company?.name || "---"}</Text></View>
@@ -211,9 +211,9 @@ export default function OnboardingScreen() {
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Regime</Text><Text style={z.summaryValue}>{cnpjData?.regime || "MEI"}</Text></View>
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Tipo</Text><Text style={z.summaryValue}>{CNAE_PROFILES[bizType]?.label || bizType}</Text></View>
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Funcionarios</Text><Text style={z.summaryValue}>{hasEmp ? empCount : "Nenhum"}</Text></View>
-            <View style={z.summaryRow}><Text style={z.summaryLabel}>Logo</Text><Text style={z.summaryValue}>{logo ? "Enviada" : "Nao enviada"}</Text></View>
+            <View style={z.summaryRow}><Text style={z.summaryLabel}>Logo</Text><Text style={z.summaryValue}>{logo ? "Enviada" : "Não enviada"}</Text></View>
           </View>
-          <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Obrigacoes configuradas:</Text><View style={z.oblList}>
+          <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Obrigações configuradas:</Text><View style={z.oblList}>
             {(CNAE_PROFILES[hasEmp ? bizType.replace(/_salao$/,"_salao_func").replace(/mei_(comercio|servicos)$/,"mei_com_funcionario") : bizType]?.obligations || CNAE_PROFILES[bizType]?.obligations || []).slice(0, 6).map(o => (
               <View key={o} style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.violet3}]} /><Text style={z.oblText}>{o.replace(/_/g, " ").replace(/^\w/,c=>c.toUpperCase())}</Text></View>
             ))}

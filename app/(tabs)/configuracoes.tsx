@@ -10,7 +10,7 @@ import { toast } from "@/components/Toast";
 import { CNAE_PROFILES } from "@/constants/obligations";
 
 const PLANS = [
-  { key: "essencial", label: "Essencial", price: "R$ 59/mes", desc: "Para comecar" },
+  { key: "essencial", label: "Essencial", price: "R$ 59/mes", desc: "Para começar" },
   { key: "negocio", label: "Negocio", price: "R$ 200/mes", desc: "Para crescer" },
   { key: "expansao", label: "Expansao", price: "R$ 320/mes", desc: "Para escalar" },
 ];
@@ -82,7 +82,7 @@ export default function ConfiguracoesScreen() {
 
   function handleSave() {
     setSaved(true);
-    toast.success("Alteracoes salvas com sucesso");
+    toast.success("Alterações salvas com sucesso");
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -90,7 +90,7 @@ export default function ConfiguracoesScreen() {
 
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-      <PageHeader title="Configuracoes" />
+      <PageHeader title="Configurações" />
 
       <Section title="Logo da empresa">
         <View style={z.logoRow}>
@@ -121,12 +121,12 @@ export default function ConfiguracoesScreen() {
         <Field label="CNPJ" value={cnpj} onChange={setCnpj} placeholder="00.000.000/0000-00" />
         <Field label="E-mail" value={email} onChange={setEmail} placeholder="contato@empresa.com" />
         <Field label="Telefone" value={phone} onChange={setPhone} placeholder="(12) 99999-0000" />
-        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua, numero, cidade - UF" />
+        <Field label="Endereço" value={address} onChange={setAddress} placeholder="Rua, numero, cidade - UF" />
       </Section>
 
-      <Section title="Configuracao fiscal">
-        <Field label="Regime tributario" value={(company as any)?.regime || "Simples Nacional"} editable={false} />
-        <Field label="Tipo de negocio" value={CNAE_PROFILES[(company as any)?.businessType]?.label || "Configurar no onboarding"} editable={false} />
+      <Section title="Configuração fiscal">
+        <Field label="Regime tributário" value={(company as any)?.regime || "Simples Nacional"} editable={false} />
+        <Field label="Tipo de negócio" value={CNAE_PROFILES[(company as any)?.businessType]?.label || "Configurar no onboarding"} editable={false} />
         <View style={z.fiscalNote}>
           <Icon name="alert" size={14} color={Colors.amber} />
           <Text style={z.fiscalNoteText}>Regime e tipo de negocio sao detectados automaticamente via CNPJ. Para alterar, entre em contato com o suporte.</Text>
@@ -165,13 +165,13 @@ export default function ConfiguracoesScreen() {
               <Text style={z.saveBtnText}>Salvo!</Text>
             </View>
           ) : (
-            <Text style={z.saveBtnText}>Salvar alteracoes</Text>
+            <Text style={z.saveBtnText}>Salvar alterações</Text>
           )}
         </Pressable>
       </View>
 
       {isDemo && (
-        <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo - alteracoes nao sao persistidas</Text></View>
+        <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo - alterações não são persistidas</Text></View>
       )}
     </ScrollView>
   );

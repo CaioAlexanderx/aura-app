@@ -41,7 +41,7 @@ export default function NfeScreen() {
         <EmptyState
           icon="file_text"
           title="Nenhuma nota fiscal emitida"
-          description="As notas fiscais serao emitidas automaticamente a cada venda PJ. Configure sua empresa para comecar."
+          description="As notas fiscais serão emitidas automaticamente a cada venda PJ. Configure sua empresa para comecar."
           actionLabel="Ir para o PDV"
           onAction={() => router.push("/pdv" as any)}
           secondaryLabel="Configurar empresa"
@@ -66,7 +66,7 @@ export default function NfeScreen() {
 
       <View style={z.configCard}>
         <Icon name="check" size={16} color={Colors.green} />
-        <Text style={z.configText}>Configuracao fiscal ativa. CNAE, ISS e aliquotas configurados via CNPJ.</Text>
+        <Text style={z.configText}>Configuração fiscal ativa. CNAE, ISS e alíquotas configurados via CNPJ.</Text>
       </View>
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />

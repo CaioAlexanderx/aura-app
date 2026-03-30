@@ -7,7 +7,7 @@ import { HoverRow } from "@/components/HoverRow";
 import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 
-const TABS = ["Checkpoints", "Guias", "Historico"];
+const TABS = ["Checkpoints", "Guias", "Histórico"];
 type Step = { text: string; auto: boolean; media: string | null; hint: string };
 type Obl = { id: string; name: string; icon: string; due: string; dl: number; amt: number | null; status: "done" | "progress" | "pending" | "future"; cat: string; desc: string; steps: Step[] };
 
@@ -147,7 +147,7 @@ function Checkpoint({ o, onGuide }: { o: Obl; onGuide: () => void }) {
       </View>
       <View style={cp.respRow}>
         <View style={[cp.resp, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}>
-          <Text style={[cp.respText, { color: isR ? Colors.green : Colors.amber }]}>{isR ? "Aura resolve" : "Voce confirma"}</Text>
+          <Text style={[cp.respText, { color: isR ? Colors.green : Colors.amber }]}>{isR ? "Aura resolve" : "Você confirma"}</Text>
         </View>
       </View>
       <Text style={cp.desc} numberOfLines={2}>{o.desc}</Text>
@@ -202,7 +202,7 @@ function Guide({ o, onBack }: { o: Obl; onBack: () => void }) {
       <View style={gv.hero}>
         <View style={{ flex: 1, gap: 8 }}>
           <Text style={{ fontSize: 22, color: Colors.ink, fontWeight: "800" }}>{o.name}</Text>
-          <View style={[{ borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2, alignSelf: "flex-start" }, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 10, fontWeight: "600", color: isR ? Colors.green : Colors.amber }}>{isR ? "Aura resolve" : "Aura facilita, voce resolve"}</Text></View>
+          <View style={[{ borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2, alignSelf: "flex-start" }, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 10, fontWeight: "600", color: isR ? Colors.green : Colors.amber }}>{isR ? "Aura resolve" : "Aura facilita, você resolve"}</Text></View>
           <Text style={{ fontSize: 13, color: Colors.ink3, lineHeight: 20 }}>{o.desc}</Text>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {o.due !== "Inicial" && o.due !== "Sempre" && o.due !== "Auto" && <View style={gv.chip}><Text style={gv.chipL}>Vencimento</Text><Text style={gv.chipV}>{o.due}</Text></View>}
@@ -264,7 +264,7 @@ const gv = StyleSheet.create({
 // ── Guides List ──────────────────────────────────────────────
 
 function GList({ obls, onSel }: { obls: Obl[]; onSel: (id: string) => void }) {
-  const gs = [{ t: "Aura resolve", h: "Tudo automatico", c: Colors.green, it: obls.filter(o => o.cat === "aura_resolve") }, { t: "Aura facilita, voce resolve", h: "Aura prepara, voce confirma", c: Colors.amber, it: obls.filter(o => o.cat === "aura_facilita") }];
+  const gs = [{ t: "Aura resolve", h: "Tudo automatico", c: Colors.green, it: obls.filter(o => o.cat === "aura_resolve") }, { t: "Aura facilita, você resolve", h: "Aura prepara, voce confirma", c: Colors.amber, it: obls.filter(o => o.cat === "aura_facilita") }];
   return (
     <View>
       <View style={{ flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 }}><Text style={{ fontSize: 14, color: Colors.violet3, fontWeight: "700" }}>i</Text><Text style={{ fontSize: 12, color: Colors.ink2, flex: 1, lineHeight: 18 }}>Guias visuais com screenshots para cada etapa. A Aura prepara os dados e te guia pelo processo.</Text></View>
