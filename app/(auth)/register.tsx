@@ -11,10 +11,10 @@ import { Colors } from "@/constants/colors";
 const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
 const FEATURES = [
-  { icon: "\u{1F4CA}", label: "Organiza\u00e7\u00e3o Financeira" },
+  { icon: "\u{1F4CA}", label: "Organização Financeira" },
   { icon: "\u{1F4E6}", label: "Controle de Estoque e Vendas" },
   { icon: "\u{1F4CB}", label: "Contabilidade Integrada" },
-  { icon: "\u{1F310}", label: "Identidade Digital para seu neg\u00f3cio" },
+  { icon: "\u{1F310}", label: "Identidade Digital para seu negócio" },
 ];
 
 export default function RegisterScreen() {
@@ -48,7 +48,7 @@ export default function RegisterScreen() {
   const formCard = (
     <View style={s.card}>
       <Text style={s.title}>Criar conta</Text>
-      <Text style={s.subtitle}>Gr\u00e1tis para come\u00e7ar</Text>
+      <Text style={s.subtitle}>Grátis para começar</Text>
       {fields.map(f => (
         <View style={s.field} key={f.label}>
           <Text style={s.label}>{f.label}</Text>
@@ -59,10 +59,10 @@ export default function RegisterScreen() {
         </View>
       ))}
       <TouchableOpacity style={s.btn} onPress={handleRegister} disabled={isLoading}>
-        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta gr\u00e1tis</Text>}
+        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta grátis</Text>}
       </TouchableOpacity>
       <View style={s.footerRow}>
-        <Text style={s.footerText}>J\u00e1 tem conta? </Text>
+        <Text style={s.footerText}>Já tem conta? </Text>
         <Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link>
       </View>
       <View style={s.divider} />
@@ -99,7 +99,7 @@ export default function RegisterScreen() {
           <img src={LOGO_URL} alt="Aura." style={{ width: 260, height: "auto", display: "block" } as any} />
         </a>
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
-          Voc\u00ea fez a escolha certa, hora de{" "}
+          Você fez a escolha certa, hora de{" "}
           <span style={{ color: Colors.violet3, fontWeight: 600 } as any}>revolucionar</span>{" "}
           sua empresa com:
         </p>

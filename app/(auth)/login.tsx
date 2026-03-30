@@ -11,10 +11,10 @@ import { Colors } from "@/constants/colors";
 const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
 const FEATURES = [
-  { icon: "\u{1F4CA}", label: "Organiza\u00e7\u00e3o Financeira" },
+  { icon: "\u{1F4CA}", label: "Organização Financeira" },
   { icon: "\u{1F4E6}", label: "Controle de Estoque e Vendas" },
   { icon: "\u{1F4CB}", label: "Contabilidade Integrada" },
-  { icon: "\u{1F310}", label: "Identidade Digital para seu neg\u00f3cio" },
+  { icon: "\u{1F310}", label: "Identidade Digital para seu negócio" },
 ];
 
 export default function LoginScreen() {
@@ -56,7 +56,7 @@ export default function LoginScreen() {
         {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Entrar</Text>}
       </TouchableOpacity>
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Ainda n\u00e3o tem conta? </Text>
+        <Text style={s.footerText}>Ainda não tem conta? </Text>
         <Link href="/(auth)/register"><Text style={s.link}>Criar conta</Text></Link>
       </View>
       <View style={s.divider} />
@@ -93,7 +93,7 @@ export default function LoginScreen() {
           <img src={LOGO_URL} alt="Aura." style={{ width: 260, height: "auto", display: "block" } as any} />
         </a>
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
-          Voc\u00ea fez a escolha certa, hora de{" "}
+          Você fez a escolha certa, hora de{" "}
           <span style={{ color: Colors.violet3, fontWeight: 600 } as any}>revolucionar</span>{" "}
           sua empresa com:
         </p>
