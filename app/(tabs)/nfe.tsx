@@ -15,7 +15,7 @@ export default function NfeScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg, justifyContent: "center", alignItems: "center", padding: 20 },
+  container: { flex: 1, backgroundColor: "transparent", justifyContent: "center", alignItems: "center", padding: 20 },
   card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 40, alignItems: "center", borderWidth: 1, borderColor: Colors.border, maxWidth: 400, width: "100%" },
   icon: { fontSize: 40, marginBottom: 16, color: Colors.violet3 },
   title: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 8 },
