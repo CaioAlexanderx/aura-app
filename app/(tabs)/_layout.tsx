@@ -4,212 +4,51 @@ import { Slot, usePathname, useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 
-const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
+const LOGO="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
+const NAV=[{s:"Principal",i:[{r:"/",l:"Painel",c:"P"},{r:"/financeiro",l:"Financeiro",c:"F"},{r:"/nfe",l:"NF-e",c:"N"}]},{s:"Contabil",i:[{r:"/contabilidade",l:"Contabilidade",c:"C"}]},{s:"Vendas",i:[{r:"/pdv",l:"PDV",c:"$"},{r:"/estoque",l:"Estoque",c:"E"}]},{s:"Clientes",i:[{r:"/clientes",l:"Clientes",c:"U"}]}];
+const MTABS=[{r:"/",l:"Painel",c:"P"},{r:"/pdv",l:"PDV",c:"$"},{r:"/financeiro",l:"Fin",c:"F"},{r:"/clientes",l:"Clientes",c:"U"},{r:"/contabilidade",l:"Contabil",c:"C"}];
+const GRAD=`radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${Colors.bg}`;
 
-const NAV = [
-  { section: "Principal", items: [
-    { route: "/", label: "Painel", icon: "P" },
-    { route: "/financeiro", label: "Financeiro", icon: "F" },
-    { route: "/nfe", label: "NF-e", icon: "N" },
-  ]},
-  { section: "Contabil", items: [
-    { route: "/contabilidade", label: "Contabilidade", icon: "C" },
-  ]},
-  { section: "Vendas", items: [
-    { route: "/pdv", label: "PDV", icon: "$" },
-    { route: "/estoque", label: "Estoque", icon: "E" },
-  ]},
-  { section: "Clientes", items: [
-    { route: "/clientes", label: "Clientes", icon: "U" },
-  ]},
-];
+function isA(p:string,r:string){if(r==="/")return p==="/"||p===""||p.endsWith("/index")||p==="/(tabs)";return p.includes(r.replace("/",""));}
 
-const MOBILE_TABS = [
-  { route: "/", label: "Painel", icon: "P" },
-  { route: "/pdv", label: "PDV", icon: "$" },
-  { route: "/financeiro", label: "Fin", icon: "F" },
-  { route: "/clientes", label: "Clientes", icon: "U" },
-  { route: "/contabilidade", label: "Contabil", icon: "C" },
-];
-
-function isActive(pathname: string, route: string): boolean {
-  if (route === "/") return pathname === "/" || pathname === "" || pathname.endsWith("/index") || pathname === "/(tabs)";
-  const segment = route.replace("/", "");
-  return pathname.includes(segment);
+function SI({l,ic,a,onP}:{l:string;ic:string;a:boolean;onP:()=>void}){
+  const [h,sH]=useState(false);
+  return <Pressable onPress={onP} onHoverIn={()=>sH(true)} onHoverOut={()=>sH(false)} style={[si.item,a&&si.active,h&&!a&&si.hovered,{transition:"all 0.15s ease"}as any]}>
+    <View style={[si.ib,a&&si.iba]}><Text style={[si.ic,a&&si.ica]}>{ic}</Text></View>
+    <Text style={[si.lb,a&&si.lba,h&&!a&&si.lbh]}>{l}</Text>
+  </Pressable>;
 }
+const si=StyleSheet.create({item:{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:9,paddingHorizontal:12,borderRadius:10,marginBottom:2},active:{backgroundColor:Colors.violetD},hovered:{backgroundColor:"rgba(255,255,255,0.03)"},ib:{width:30,height:30,borderRadius:8,backgroundColor:Colors.bg4,alignItems:"center",justifyContent:"center"},iba:{backgroundColor:Colors.violet},ic:{fontSize:12,fontWeight:"700",color:Colors.ink3},ica:{color:"#fff"},lb:{fontSize:13,color:Colors.ink3,fontWeight:"500"},lba:{color:Colors.ink,fontWeight:"600"},lbh:{color:Colors.ink2}});
 
-// ── Sidebar (Web) ────────────────────────────────────────────
-
-function SidebarItem({ label, icon, active, onPress }: {
-  label: string; icon: string; active: boolean; onPress: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <Pressable
-      onPress={onPress}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
-      style={[
-        si.item,
-        active && si.active,
-        hovered && !active && si.hovered,
-        { transition: "all 0.15s ease" } as any,
-      ]}
-    >
-      <View style={[si.iconBox, active && si.iconBoxActive]}>
-        <Text style={[si.icon, active && si.iconActive]}>{icon}</Text>
-      </View>
-      <Text style={[si.label, active && si.labelActive, hovered && !active && si.labelHovered]}>{label}</Text>
-    </Pressable>
-  );
-}
-const si = StyleSheet.create({
-  item: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10, marginBottom: 2 },
-  active: { backgroundColor: Colors.violetD },
-  hovered: { backgroundColor: "rgba(255,255,255,0.03)" },
-  iconBox: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  iconBoxActive: { backgroundColor: Colors.violet },
-  icon: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
-  iconActive: { color: "#fff" },
-  label: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  labelActive: { color: Colors.ink, fontWeight: "600" },
-  labelHovered: { color: Colors.ink2 },
-});
-
-function Sidebar() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const { user, company, logout } = useAuthStore();
-  const planLabel = company?.plan === "negocio" ? "Negocio" : company?.plan === "expansao" ? "Expansao" : "Essencial";
-
-  return (
-    <View style={sb.container}>
-      {/* Logo */}
-      <Pressable onPress={() => router.push("/")} style={sb.logoWrap}>
-        <Image source={{ uri: LOGO_URL }} style={sb.logo} resizeMode="contain" />
-      </Pressable>
-
-      <View style={sb.divider} />
-
-      {/* Nav sections */}
-      <ScrollView style={sb.nav} showsVerticalScrollIndicator={false}>
-        {NAV.map(section => (
-          <View key={section.section} style={sb.section}>
-            <Text style={sb.sectionLabel}>{section.section}</Text>
-            {section.items.map(item => (
-              <SidebarItem
-                key={item.route}
-                label={item.label}
-                icon={item.icon}
-                active={isActive(pathname, item.route)}
-                onPress={() => router.push(item.route as any)}
-              />
-            ))}
-          </View>
-        ))}
-      </ScrollView>
-
-      <View style={sb.divider} />
-
-      {/* User footer */}
-      <View style={sb.footer}>
-        <View style={sb.userRow}>
-          <View style={sb.avatar}>
-            <Text style={sb.avatarText}>{(user?.name || "A").charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={sb.userInfo}>
-            <Text style={sb.userName} numberOfLines={1}>{user?.name || "---"}</Text>
-            <Text style={sb.userPlan}>{planLabel}</Text>
-          </View>
-        </View>
-        <Pressable onPress={logout} style={sb.logoutBtn}>
-          <Text style={sb.logoutText}>Sair</Text>
-        </Pressable>
-      </View>
+function Sidebar(){
+  const p=usePathname(),ro=useRouter(),{user:u,company:co,logout}=useAuthStore();
+  const pl=co?.plan==="negocio"?"Negocio":co?.plan==="expansao"?"Expansao":"Essencial";
+  return <View style={sb.c}>
+    <Pressable onPress={()=>ro.push("/")} style={sb.lw}><Image source={{uri:LOGO}} style={sb.lo} resizeMode="contain"/></Pressable>
+    <View style={sb.d}/>
+    <ScrollView style={sb.n} showsVerticalScrollIndicator={false}>{NAV.map(s=><View key={s.s} style={sb.sc}><Text style={sb.sl}>{s.s}</Text>{s.i.map(i=><SI key={i.r} l={i.l} ic={i.c} a={isA(p,i.r)} onP={()=>ro.push(i.r as any)}/>)}</View>)}</ScrollView>
+    <View style={sb.d}/>
+    <View style={sb.f}>
+      <View style={sb.ur}><View style={sb.av}><Text style={sb.at}>{(u?.name||"A").charAt(0).toUpperCase()}</Text></View><View style={sb.ui}><Text style={sb.un} numberOfLines={1}>{u?.name||"---"}</Text><Text style={sb.up}>{pl}</Text></View></View>
+      <Pressable onPress={logout} style={sb.lb}><Text style={sb.lt}>Sair</Text></Pressable>
     </View>
-  );
+  </View>;
 }
-const sb = StyleSheet.create({
-  container: { width: 240, backgroundColor: Colors.bg2, borderRightWidth: 1, borderRightColor: Colors.border, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 14, justifyContent: "flex-start" },
-  logoWrap: { paddingHorizontal: 8, paddingBottom: 16, alignItems: "flex-start" },
-  logo: { width: 100, height: 36 },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 8 },
-  nav: { flex: 1, marginTop: 4 },
-  section: { marginBottom: 16 },
-  sectionLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 },
-  footer: { paddingTop: 8 },
-  userRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, marginBottom: 10 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  userInfo: { flex: 1 },
-  userName: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
-  userPlan: { fontSize: 10, color: Colors.violet3, marginTop: 1 },
-  logoutBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
-  logoutText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-});
+const sb=StyleSheet.create({c:{width:240,backgroundColor:Colors.bg2,borderRightWidth:1,borderRightColor:Colors.border,paddingTop:20,paddingBottom:16,paddingHorizontal:14,justifyContent:"flex-start"},lw:{paddingHorizontal:8,paddingBottom:16,alignItems:"flex-start"},lo:{width:100,height:36},d:{height:1,backgroundColor:Colors.border,marginVertical:8},n:{flex:1,marginTop:4},sc:{marginBottom:16},sl:{fontSize:10,color:Colors.ink3,fontWeight:"600",textTransform:"uppercase",letterSpacing:1.2,paddingHorizontal:12,marginBottom:6},f:{paddingTop:8},ur:{flexDirection:"row",alignItems:"center",gap:10,paddingHorizontal:4,marginBottom:10},av:{width:34,height:34,borderRadius:17,backgroundColor:Colors.violet,alignItems:"center",justifyContent:"center"},at:{fontSize:13,fontWeight:"700",color:"#fff"},ui:{flex:1},un:{fontSize:12,color:Colors.ink,fontWeight:"600"},up:{fontSize:10,color:Colors.violet3,marginTop:1},lb:{paddingVertical:8,paddingHorizontal:12,borderRadius:8,borderWidth:1,borderColor:Colors.border,alignItems:"center"},lt:{fontSize:11,color:Colors.ink3,fontWeight:"500"}});
 
-// ── Bottom Bar (Mobile) ──────────────────────────────────────
-
-function MobileBar() {
-  const pathname = usePathname();
-  const router = useRouter();
-
-  return (
-    <View style={mb.bar}>
-      {MOBILE_TABS.map(tab => {
-        const active = isActive(pathname, tab.route);
-        return (
-          <Pressable key={tab.route} style={mb.tab} onPress={() => router.push(tab.route as any)}>
-            <View style={[mb.iconWrap, active && mb.iconWrapActive]}>
-              <Text style={[mb.icon, active && mb.iconActive]}>{tab.icon}</Text>
-            </View>
-            <Text style={[mb.label, active && mb.labelActive]}>{tab.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+function MBar(){
+  const p=usePathname(),ro=useRouter();
+  return <View style={mb.b}>{MTABS.map(t=>{const a=isA(p,t.r);return <Pressable key={t.r} style={mb.t} onPress={()=>ro.push(t.r as any)}><View style={[mb.iw,a&&mb.ia]}><Text style={[mb.ic,a&&mb.ica]}>{t.c}</Text></View><Text style={[mb.lb,a&&mb.la]}>{t.l}</Text></Pressable>;})}</View>;
 }
-const mb = StyleSheet.create({
-  bar: { flexDirection: "row", backgroundColor: Colors.bg2, borderTopWidth: 1, borderTopColor: Colors.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 },
-  tab: { flex: 1, alignItems: "center", gap: 3 },
-  iconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  iconWrapActive: { backgroundColor: Colors.violetD },
-  icon: { fontSize: 14, fontWeight: "700", color: Colors.ink3 },
-  iconActive: { color: Colors.violet3 },
-  label: { fontSize: 9, color: Colors.ink3, fontWeight: "500" },
-  labelActive: { color: Colors.violet3, fontWeight: "600" },
-});
+const mb=StyleSheet.create({b:{flexDirection:"row",backgroundColor:Colors.bg2,borderTopWidth:1,borderTopColor:Colors.border,paddingBottom:Platform.OS==="ios"?20:6,paddingTop:6},t:{flex:1,alignItems:"center",gap:3},iw:{width:32,height:32,borderRadius:10,alignItems:"center",justifyContent:"center"},ia:{backgroundColor:Colors.violetD},ic:{fontSize:14,fontWeight:"700",color:Colors.ink3},ica:{color:Colors.violet3},lb:{fontSize:9,color:Colors.ink3,fontWeight:"500"},la:{color:Colors.violet3,fontWeight:"600"}});
 
-// ── Layout ───────────────────────────────────────────────────
-
-export default function TabsLayout() {
-  const isWeb = Platform.OS === "web";
-
-  if (isWeb) {
-    return (
-      <View style={layout.webRoot}>
-        <Sidebar />
-        <View style={layout.webContent}>
-          <Slot />
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={layout.mobileRoot}>
-      <View style={layout.mobileContent}>
-        <Slot />
-      </View>
-      <MobileBar />
-    </View>
+export default function TabsLayout(){
+  const w=Platform.OS==="web";
+  if(w) return (
+    <div style={{display:"flex",flexDirection:"row",height:"100vh",width:"100%",background:Colors.bg} as any}>
+      <Sidebar/>
+      <div style={{flex:1,minHeight:"100%",background:GRAD,overflow:"auto"} as any}><Slot/></div>
+    </div>
   );
+  return <View style={{flex:1,backgroundColor:Colors.bg}}><View style={{flex:1}}><Slot/></View><MBar/></View>;
 }
-
-const layout = StyleSheet.create({
-  webRoot: { flexDirection: "row", flex: 1, backgroundColor: Colors.bg, height: "100%" as any },
-  webContent: { flex: 1, overflow: "auto" as any },
-  mobileRoot: { flex: 1, backgroundColor: Colors.bg },
-  mobileContent: { flex: 1 },
-});
