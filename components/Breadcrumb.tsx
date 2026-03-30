@@ -10,7 +10,7 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
   if (items.length <= 1) return null;
 
   return (
-    <View style={s.row}>
+    <View style={s.container}>
       {items.map((item, i) => {
         const isLast = i === items.length - 1;
         return (
@@ -31,11 +31,32 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
 }
 
 const s = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", marginBottom: 12, gap: 2 },
-  item: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sep: { fontSize: 12, color: Colors.ink3, fontWeight: "400" },
-  link: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
-  current: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    flexWrap: "wrap",
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  sep: {
+    fontSize: 12,
+    color: Colors.ink3,
+    marginHorizontal: 6,
+    fontWeight: "300",
+  },
+  link: {
+    fontSize: 12,
+    color: Colors.violet3,
+    fontWeight: "500",
+  },
+  current: {
+    fontSize: 12,
+    color: Colors.ink3,
+    fontWeight: "500",
+  },
 });
 
 export default Breadcrumb;
