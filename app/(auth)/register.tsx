@@ -11,10 +11,10 @@ import { Colors } from "@/constants/colors";
 const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 
 const FEATURES = [
-  { icon: "📊", label: "Organização Financeira" },
-  { icon: "📦", label: "Controle de Estoque e Vendas" },
-  { icon: "📋", label: "Contabilidade Integrada" },
-  { icon: "🌐", label: "Identidade Digital para seu negócio" },
+  { icon: "\u{1F4CA}", label: "Organiza\u00e7\u00e3o Financeira" },
+  { icon: "\u{1F4E6}", label: "Controle de Estoque e Vendas" },
+  { icon: "\u{1F4CB}", label: "Contabilidade Integrada" },
+  { icon: "\u{1F310}", label: "Identidade Digital para seu neg\u00f3cio" },
 ];
 
 export default function RegisterScreen() {
@@ -22,7 +22,7 @@ export default function RegisterScreen() {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [company, setCompany]   = useState("");
-  const { register, isLoading } = useAuthStore();
+  const { register, loginDemo, isLoading } = useAuthStore();
   const isWeb = Platform.OS === "web";
 
   async function handleRegister() {
@@ -32,6 +32,10 @@ export default function RegisterScreen() {
     } catch (err) {
       Alert.alert("Erro", err instanceof ApiError ? err.message : "Erro ao criar conta.");
     }
+  }
+
+  async function handleDemo() {
+    await loginDemo();
   }
 
   const fields = [
@@ -44,7 +48,7 @@ export default function RegisterScreen() {
   const formCard = (
     <View style={s.card}>
       <Text style={s.title}>Criar conta</Text>
-      <Text style={s.subtitle}>Grátis para começar</Text>
+      <Text style={s.subtitle}>Gr\u00e1tis para come\u00e7ar</Text>
       {fields.map(f => (
         <View style={s.field} key={f.label}>
           <Text style={s.label}>{f.label}</Text>
@@ -55,12 +59,16 @@ export default function RegisterScreen() {
         </View>
       ))}
       <TouchableOpacity style={s.btn} onPress={handleRegister} disabled={isLoading}>
-        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta grátis</Text>}
+        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta gr\u00e1tis</Text>}
       </TouchableOpacity>
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Já tem conta? </Text>
+        <Text style={s.footerText}>J\u00e1 tem conta? </Text>
         <Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link>
       </View>
+      <View style={s.divider} />
+      <TouchableOpacity style={s.demoBtn} onPress={handleDemo} disabled={isLoading}>
+        <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -88,19 +96,13 @@ export default function RegisterScreen() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 56px" } as any}>
         <a href="https://getaura.com.br" target="_blank" rel="noreferrer"
           style={{ display: "block", textDecoration: "none", marginBottom: 40 } as any}>
-          <img
-            src={LOGO_URL}
-            alt="Aura."
-            style={{ width: 260, height: "auto", display: "block" } as any}
-          />
+          <img src={LOGO_URL} alt="Aura." style={{ width: 260, height: "auto", display: "block" } as any} />
         </a>
-
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
-          Você fez a escolha certa, hora de{" "}
+          Voc\u00ea fez a escolha certa, hora de{" "}
           <span style={{ color: Colors.violet3, fontWeight: 600 } as any}>revolucionar</span>{" "}
           sua empresa com:
         </p>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 300 } as any}>
           {FEATURES.map(f => (
             <div key={f.label} style={{
@@ -136,14 +138,17 @@ const s = StyleSheet.create({
     borderRadius: 20, padding: 32,
     borderWidth: 1, borderColor: Colors.border2,
   },
-  title:     { fontSize: 24, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
-  subtitle:  { fontSize: 13, color: Colors.ink3, marginBottom: 24 },
-  field:     { marginBottom: 14 },
-  label:     { fontSize: 12, color: Colors.ink3, marginBottom: 6, fontWeight: "500" },
-  input:     { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, padding: 13, fontSize: 14, color: Colors.ink },
-  btn:       { backgroundColor: Colors.violet, borderRadius: 8, padding: 14, alignItems: "center", marginTop: 4 },
-  btnText:   { color: "#fff", fontSize: 14, fontWeight: "600" },
-  footerRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  footerText:{ fontSize: 13, color: Colors.ink3 },
-  link:      { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  title:      { fontSize: 24, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  subtitle:   { fontSize: 13, color: Colors.ink3, marginBottom: 24 },
+  field:      { marginBottom: 14 },
+  label:      { fontSize: 12, color: Colors.ink3, marginBottom: 6, fontWeight: "500" },
+  input:      { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, padding: 13, fontSize: 14, color: Colors.ink },
+  btn:        { backgroundColor: Colors.violet, borderRadius: 8, padding: 14, alignItems: "center", marginTop: 4 },
+  btnText:    { color: "#fff", fontSize: 14, fontWeight: "600" },
+  footerRow:  { flexDirection: "row", justifyContent: "center", marginTop: 20 },
+  footerText: { fontSize: 13, color: Colors.ink3 },
+  link:       { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  divider:    { height: 1, backgroundColor: Colors.border, marginVertical: 20 },
+  demoBtn:    { borderRadius: 8, padding: 12, alignItems: "center", borderWidth: 1, borderColor: Colors.border2 },
+  demoBtnText:{ color: Colors.violet3, fontSize: 13, fontWeight: "500" },
 });
