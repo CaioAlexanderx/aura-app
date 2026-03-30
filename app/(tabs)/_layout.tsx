@@ -4,6 +4,7 @@ import { Slot, usePathname, useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
+import { PageTransition } from "@/components/PageTransition";
 
 const LOGO="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 const NAV=[{s:"Principal",i:[{r:"/",l:"Painel",ic:"dashboard"},{r:"/financeiro",l:"Financeiro",ic:"wallet"},{r:"/nfe",l:"NF-e",ic:"file_text"}]},{s:"Contabil",i:[{r:"/contabilidade",l:"Contabilidade",ic:"calculator"}]},{s:"Vendas",i:[{r:"/pdv",l:"PDV",ic:"cart"},{r:"/estoque",l:"Estoque",ic:"package"}]},{s:"Equipe",i:[{r:"/folha",l:"Folha de Pagamento",ic:"payroll"}]},{s:"Clientes",i:[{r:"/clientes",l:"Clientes",ic:"users"}]}];
@@ -48,8 +49,10 @@ export default function TabsLayout(){
   if(w) return (
     <div style={{display:"flex",flexDirection:"row",height:"100vh",width:"100%",background:Colors.bg} as any}>
       <Sidebar/>
-      <div style={{flex:1,minHeight:"100%",background:GRAD,overflow:"auto"} as any}><Slot/></div>
+      <div style={{flex:1,minHeight:"100%",background:GRAD,overflow:"auto"} as any}>
+        <PageTransition><Slot/></PageTransition>
+      </div>
     </div>
   );
-  return <View style={{flex:1,backgroundColor:Colors.bg}}><View style={{flex:1}}><Slot/></View><MBar/></View>;
+  return <View style={{flex:1,backgroundColor:Colors.bg}}><View style={{flex:1}}><PageTransition><Slot/></PageTransition></View><MBar/></View>;
 }
