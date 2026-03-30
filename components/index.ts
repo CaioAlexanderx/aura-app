@@ -9,3 +9,4 @@ export { PageHeader } from "./PageHeader";
 export { Icon } from "./Icon";
 export { EmptyState } from "./EmptyState";
 export { DemoTour } from "./DemoTour";
+export { PageTransition } from "./PageTransition";
