@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -35,26 +35,43 @@ const MORE_ITEMS = [
 ];
 const GRAD = `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${Colors.bg}`;
 
+// ── Inject Google Fonts via DOM (web only) ───────────────────
+function useWebFonts() {
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (document.getElementById("aura-fonts")) return;
+
+    const preconnect1 = document.createElement("link");
+    preconnect1.rel = "preconnect";
+    preconnect1.href = "https://fonts.googleapis.com";
+    document.head.appendChild(preconnect1);
+
+    const preconnect2 = document.createElement("link");
+    preconnect2.rel = "preconnect";
+    preconnect2.href = "https://fonts.gstatic.com";
+    preconnect2.crossOrigin = "";
+    document.head.appendChild(preconnect2);
+
+    const link = document.createElement("link");
+    link.id = "aura-fonts";
+    link.rel = "stylesheet";
+    link.href = GOOGLE_FONTS_CSS;
+    document.head.appendChild(link);
+
+    const style = document.createElement("style");
+    style.id = "aura-font-override";
+    style.textContent = [
+      "*, *::before, *::after { font-family: " + Fonts.body + " !important; }",
+      "[data-testid] { font-family: " + Fonts.body + " !important; }",
+      "div[dir] { font-family: " + Fonts.body + " !important; }",
+    ].join("\n");
+    document.head.appendChild(style);
+  }, []);
+}
+
 function isA(p: string, r: string) {
   if (r === "/") return p === "/" || p === "" || p.endsWith("/index") || p === "/(tabs)";
   return p.includes(r.replace("/", ""));
-}
-
-// ── Google Fonts injection (web only) ────────────────────────
-function FontsHead() {
-  if (Platform.OS !== "web") return null;
-  return (
-    <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      <link rel="stylesheet" href={GOOGLE_FONTS_CSS} />
-      <style dangerouslySetInnerHTML={{ __html: `
-        *, *::before, *::after { font-family: ${Fonts.body} !important; }
-        h1, h2, h3, .heading { font-family: ${Fonts.heading} !important; }
-        code, pre, .mono { font-family: ${Fonts.mono} !important; }
-      `}} />
-    </>
-  );
 }
 
 function SI({ l, ic, a, onP, soon }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean }) {
@@ -139,17 +156,15 @@ const mm = StyleSheet.create({ overlay: { position: "absolute" as any, bottom: 0
 const mb = StyleSheet.create({ b: { flexDirection: "row", backgroundColor: Colors.bg2, borderTopWidth: 1, borderTopColor: Colors.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 }, t: { flex: 1, alignItems: "center", gap: 3 }, iw: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, ia: { backgroundColor: Colors.violetD }, lb: { fontSize: 9, color: Colors.ink3, fontWeight: "500" }, la: { color: Colors.violet3, fontWeight: "600" } });
 
 export default function TabsLayout() {
+  useWebFonts();
   const w = Platform.OS === "web";
   if (w) return (
-    <>
-      <FontsHead />
-      <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: Colors.bg } as any}>
-        <Sidebar />
-        <div style={{ flex: 1, minHeight: "100%", background: GRAD, overflow: "auto" } as any}>
-          <PageTransition><Slot /></PageTransition>
-        </div>
+    <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: Colors.bg } as any}>
+      <Sidebar />
+      <div style={{ flex: 1, minHeight: "100%", background: GRAD, overflow: "auto" } as any}>
+        <PageTransition><Slot /></PageTransition>
       </div>
-    </>
+    </div>
   );
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
