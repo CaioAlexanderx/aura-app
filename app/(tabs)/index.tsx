@@ -6,332 +6,138 @@ import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
 
-const { width: SCREEN_W } = Dimensions.get("window");
-const IS_WIDE = SCREEN_W > 768;
+const { width: W } = Dimensions.get("window");
+const IS = W > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : fmt(n);
+function grt(){const h=new Date().getHours();return h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";}
+function gm(){return new Date().toLocaleString("pt-BR",{month:"long"}).replace(/^\w/,c=>c.toUpperCase());}
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Bom dia";
-  if (h < 18) return "Boa tarde";
-  return "Boa noite";
+const MOCK={revenue:18420,expenses:7840,net:10580,salesToday:47,avgTicket:391.91,newCustomers:12,revenueDelta:12,expensesDelta:3,netDelta:18,dasAlert:{days:14,amount:76.90},
+recentSales:[{id:"1",customer:"Maria Silva",amount:156.80,time:"14:32",method:"Pix"},{id:"2",customer:"Pedro Costa",amount:89.90,time:"13:15",method:"Cartao"},{id:"3",customer:"Ana Oliveira",amount:234.50,time:"11:47",method:"Dinheiro"},{id:"4",customer:"Joao Santos",amount:67.00,time:"10:20",method:"Pix"}],
+obligations:[{id:"1",name:"DAS-MEI",due:"20/04/2026",amount:76.90,status:"pending",category:"aura_resolve"},{id:"2",name:"DASN-SIMEI",due:"31/05/2026",amount:null,status:"future",category:"aura_facilita"},{id:"3",name:"FGTS",due:"07/04/2026",amount:320.00,status:"pending",category:"aura_resolve"},{id:"4",name:"eSocial",due:"15/04/2026",amount:null,status:"future",category:"aura_facilita"}]};
+
+function Av({name}:{name:string}){return <View style={av.c}><Text style={av.l}>{(name||"A").charAt(0).toUpperCase()}</Text></View>;}
+const av=StyleSheet.create({c:{width:42,height:42,borderRadius:21,backgroundColor:Colors.violet,alignItems:"center",justifyContent:"center"},l:{fontSize:16,fontWeight:"700",color:"#fff"}});
+
+function PB({plan}:{plan:string}){const m:Record<string,string>={expansao:"Expansao",negocio:"Negocio",essencial:"Essencial"};return <View style={pb.b}><View style={pb.d}/><Text style={pb.t}>{m[plan]||plan}</Text></View>;}
+const pb=StyleSheet.create({b:{flexDirection:"row",alignItems:"center",backgroundColor:Colors.violetD,borderRadius:20,paddingHorizontal:10,paddingVertical:4,gap:5},d:{width:6,height:6,borderRadius:3,backgroundColor:Colors.green},t:{fontSize:11,color:Colors.violet3,fontWeight:"600",letterSpacing:0.3}});
+
+function HC({children,style,highlight,onPress}:{children:React.ReactNode;style?:any;highlight?:boolean;onPress?:()=>void}){
+  const[h,sH]=useState(false);const w=Platform.OS==="web";
+  return <Pressable onPress={onPress} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[style,h&&{transform:[{translateY:-3},{scale:1.015}],borderColor:highlight?Colors.violet2:Colors.border2,shadowColor:Colors.violet,shadowOffset:{width:0,height:8},shadowOpacity:0.15,shadowRadius:20,elevation:8},w&&{transition:"all 0.25s cubic-bezier(0.4,0,0.2,1)"}as any]}>{children}</Pressable>;
 }
-function getMonthName(): string {
-  return new Date().toLocaleString("pt-BR", { month: "long" }).replace(/^\w/, c => c.toUpperCase());
+
+function KPI({icon,iconColor,label,value,delta,deltaUp,large,onPress}:{icon:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
+  return <HC style={[k.card,large&&k.large]} highlight={large} onPress={onPress}>
+    <View style={k.header}><View style={[k.ic,{backgroundColor:iconColor+"22",borderColor:iconColor+"44"}]}><Text style={[k.icT,{color:iconColor}]}>{icon}</Text></View>{large&&<View style={[k.sb,{backgroundColor:iconColor+"18"}]}><Text style={[k.st,{color:iconColor}]}>Destaque</Text></View>}</View>
+    <Text style={[k.val,large&&{fontSize:28}]}>{value}</Text><Text style={k.lb}>{label}</Text>
+    {delta&&<View style={[k.db,{backgroundColor:deltaUp?Colors.greenD:Colors.redD}]}><Text style={[k.dt,{color:deltaUp?Colors.green:Colors.red}]}>{deltaUp?"+":"-"} {delta}</Text></View>}
+  </HC>;
 }
+const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"45%",flex:2},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},icT:{fontSize:18,fontWeight:"800"},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
 
-const MOCK = {
-  revenue: 18420, expenses: 7840, net: 10580,
-  salesToday: 47, avgTicket: 391.91, newCustomers: 12,
-  revenueDelta: 12, expensesDelta: 3, netDelta: 18,
-  dasAlert: { days: 14, amount: 76.90 },
-  recentSales: [
-    { id: "1", customer: "Maria Silva", amount: 156.80, time: "14:32", method: "Pix" },
-    { id: "2", customer: "Pedro Costa", amount: 89.90, time: "13:15", method: "Cartao" },
-    { id: "3", customer: "Ana Oliveira", amount: 234.50, time: "11:47", method: "Dinheiro" },
-    { id: "4", customer: "Joao Santos", amount: 67.00, time: "10:20", method: "Pix" },
-  ],
-  obligations: [
-    { id: "1", name: "DAS-MEI", due: "20/04/2026", amount: 76.90, status: "pending", category: "aura_resolve" },
-    { id: "2", name: "DASN-SIMEI", due: "31/05/2026", amount: null, status: "future", category: "aura_facilita" },
-    { id: "3", name: "FGTS", due: "07/04/2026", amount: 320.00, status: "pending", category: "aura_resolve" },
-    { id: "4", name: "eSocial", due: "15/04/2026", amount: null, status: "future", category: "aura_facilita" },
-  ],
-};
-
-function Avatar({ name }: { name: string }) {
-  const i = (name || "A").charAt(0).toUpperCase();
-  return (<View style={av.circle}><Text style={av.letter}>{i}</Text></View>);
+function QA({icon,iconColor,label,onPress}:{icon:string;iconColor:string;label:string;onPress?:()=>void}){
+  const[h,sH]=useState(false);const w=Platform.OS==="web";
+  return <Pressable style={[qa.btn,w&&{transition:"all 0.2s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} onPress={onPress}>
+    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55",transform:[{scale:1.1},{translateY:-2}]},w&&{transition:"all 0.2s ease"}as any]}><Text style={[qa.ic,{color:iconColor}]}>{icon}</Text></View>
+    <Text style={[qa.lb,h&&{color:Colors.ink}]}>{label}</Text>
+  </Pressable>;
 }
-const av = StyleSheet.create({
-  circle: { width: 42, height: 42, borderRadius: 21, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
-  letter: { fontSize: 16, fontWeight: "700", color: "#fff" },
-});
+const qa=StyleSheet.create({btn:{alignItems:"center",gap:8,minWidth:72},iw:{width:52,height:52,borderRadius:16,backgroundColor:Colors.bg3,borderWidth:1.5,alignItems:"center",justifyContent:"center"},ic:{fontSize:20,fontWeight:"700"},lb:{fontSize:10,color:Colors.ink3,fontWeight:"600",textAlign:"center"}});
 
-function PlanBadge({ plan }: { plan: string }) {
-  const map: Record<string,string> = { expansao: "Expansao", negocio: "Negocio", essencial: "Essencial" };
-  return (<View style={pbs.badge}><View style={pbs.dot} /><Text style={pbs.text}>{map[plan] || plan}</Text></View>);
+function SR({customer,amount,time,method,onPress}:{customer:string;amount:number;time:string;method?:string;onPress?:()=>void}){
+  const[h,sH]=useState(false);const w=Platform.OS==="web";
+  return <Pressable onPress={onPress} style={[sr.row,h&&{backgroundColor:Colors.bg4},w&&{transition:"background-color 0.15s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined}>
+    <View style={sr.left}><View style={sr.av}><Text style={sr.at}>{customer.charAt(0)}</Text></View><View><Text style={sr.nm}>{customer}</Text><Text style={sr.tm}>{time}{method?(" / "+method):""}</Text></View></View>
+    <Text style={sr.am}>+{fmt(amount)}</Text>
+  </Pressable>;
 }
-const pbs = StyleSheet.create({
-  badge: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.green },
-  text: { fontSize: 11, color: Colors.violet3, fontWeight: "600", letterSpacing: 0.3 },
-});
+const sr=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:8,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},left:{flexDirection:"row",alignItems:"center",gap:12},av:{width:34,height:34,borderRadius:17,backgroundColor:Colors.bg4,alignItems:"center",justifyContent:"center"},at:{fontSize:12,fontWeight:"600",color:Colors.violet3},nm:{fontSize:13,color:Colors.ink,fontWeight:"500"},tm:{fontSize:11,color:Colors.ink3,marginTop:1},am:{fontSize:13,color:Colors.green,fontWeight:"600"}});
 
-function HoverCard({ children, style, highlight, onPress }: { children: React.ReactNode; style?: any; highlight?: boolean; onPress?: () => void }) {
-  const [h, sH] = useState(false);
-  const w = Platform.OS === "web";
+function OR({name,due,amount,status,category,onPress}:{name:string;due:string;amount:number|null;status:string;category:string;onPress?:()=>void}){
+  const[h,sH]=useState(false);const w=Platform.OS==="web";const sc=status==="pending"?Colors.amber:Colors.ink3;const cl=category==="aura_resolve"?"Aura resolve":"Aura facilita, voce resolve";const cc=category==="aura_resolve"?Colors.green:Colors.amber;
+  return <Pressable onPress={onPress} style={[ob.row,h&&{backgroundColor:Colors.bg4},w&&{transition:"background-color 0.15s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined}>
+    <View style={ob.left}><View style={[ob.dot,{backgroundColor:sc}]}/><View><Text style={ob.nm}>{name}</Text><Text style={ob.du}>Vencimento: {due}</Text></View></View>
+    <View style={ob.right}>{amount!=null&&<Text style={ob.am}>{fmt(amount)}</Text>}<View style={[ob.cb,{backgroundColor:cc+"18"}]}><Text style={[ob.ct,{color:cc}]}>{cl}</Text></View></View>
+  </Pressable>;
+}
+const ob=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:8,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},left:{flexDirection:"row",alignItems:"center",gap:10},dot:{width:8,height:8,borderRadius:4},nm:{fontSize:13,color:Colors.ink,fontWeight:"500"},du:{fontSize:11,color:Colors.ink3,marginTop:1},right:{alignItems:"flex-end",gap:4},am:{fontSize:13,color:Colors.ink,fontWeight:"600"},cb:{borderRadius:6,paddingHorizontal:8,paddingVertical:2},ct:{fontSize:9,fontWeight:"600",letterSpacing:0.3}});
+
+export default function DashboardScreen(){
+  const{user,company,token,isDemo,logout}=useAuthStore();const router=useRouter();
+  const{data}=useQuery({queryKey:["dashboard",company?.id],queryFn:()=>dashboardApi.summary(company!.id,token!),enabled:!!company?.id&&!!token&&!isDemo,retry:1});
+  const d=isDemo?MOCK:(data??MOCK);const greeting=grt();const month=gm();const year=new Date().getFullYear();const go=(p:string)=>router.push(p as any);
+
   return (
-    <Pressable onPress={onPress} onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
-      style={[style, h && { transform: [{ translateY: -3 }, { scale: 1.015 }], borderColor: highlight ? Colors.violet2 : Colors.border2, shadowColor: Colors.violet, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8 }, w && { transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)" } as any]}
-    >{children}</Pressable>
-  );
-}
-
-// POL-09: KPI with prominent icon colors
-function KpiCard({ icon, iconColor, label, value, delta, deltaUp, accent, large, onPress }: {
-  icon: string; iconColor: string; label: string; value: string; delta?: string; deltaUp?: boolean; accent?: string; large?: boolean; onPress?: () => void;
-}) {
-  return (
-    <HoverCard style={[kpi.card, large && kpi.large]} highlight={large} onPress={onPress}>
-      <View style={kpi.header}>
-        <View style={[kpi.iconCircle, { backgroundColor: iconColor + "22", borderColor: iconColor + "44" }]}>
-          <Text style={[kpi.icon, { color: iconColor }]}>{icon}</Text>
-        </View>
-        {large && <View style={[kpi.starBadge, { backgroundColor: iconColor + "18" }]}><Text style={[kpi.starText, { color: iconColor }]}>Destaque</Text></View>}
-      </View>
-      <Text style={[kpi.value, large && { fontSize: 28 }]}>{value}</Text>
-      <Text style={kpi.label}>{label}</Text>
-      {delta && (
-        <View style={[kpi.deltaBox, { backgroundColor: deltaUp ? Colors.greenD : Colors.redD }]}>
-          <Text style={[kpi.deltaText, { color: deltaUp ? Colors.green : Colors.red }]}>
-            {deltaUp ? "+" : "-"} {delta}
-          </Text>
-        </View>
-      )}
-    </HoverCard>
-  );
-}
-const kpi = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: IS_WIDE ? 160 : "45%", margin: 5 },
-  large: { borderColor: Colors.border2, backgroundColor: Colors.bg4, borderWidth: 1.5, minWidth: IS_WIDE ? 260 : "45%", flex: 2 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  iconCircle: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  icon: { fontSize: 18, fontWeight: "800" },
-  starBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  starText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.3 },
-  value: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5, marginBottom: 4 },
-  label: { fontSize: 11, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 },
-  deltaBox: { alignSelf: "flex-start", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  deltaText: { fontSize: 10, fontWeight: "600" },
-});
-
-// POL-07: Quick Actions with visible colored icons
-function QuickAction({ icon, iconColor, label, onPress }: { icon: string; iconColor: string; label: string; onPress?: () => void }) {
-  const [h, sH] = useState(false);
-  const w = Platform.OS === "web";
-  return (
-    <Pressable
-      style={[qa.btn, w && { transition: "all 0.2s ease" } as any]}
-      onHoverIn={w ? () => sH(true) : undefined}
-      onHoverOut={w ? () => sH(false) : undefined}
-      onPress={onPress}
-    >
-      <View style={[
-        qa.iconWrap,
-        { borderColor: iconColor + "33" },
-        h && { backgroundColor: iconColor + "18", borderColor: iconColor + "55", transform: [{ scale: 1.1 }, { translateY: -2 }] },
-        w && { transition: "all 0.2s ease" } as any,
-      ]}><Text style={[qa.icon, { color: iconColor }]}>{icon}</Text></View>
-      <Text style={[qa.label, h && { color: Colors.ink }]}>{label}</Text>
-    </Pressable>
-  );
-}
-const qa = StyleSheet.create({
-  btn: { alignItems: "center", gap: 8, minWidth: 72 },
-  iconWrap: { width: 52, height: 52, borderRadius: 16, backgroundColor: Colors.bg3, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  icon: { fontSize: 20, fontWeight: "700" },
-  label: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textAlign: "center" },
-});
-
-function SaleRow({ customer, amount, time, method, onPress }: { customer: string; amount: number; time: string; method?: string; onPress?: () => void }) {
-  const [h, sH] = useState(false);
-  const w = Platform.OS === "web";
-  return (
-    <Pressable onPress={onPress} style={[srs.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]} onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}>
-      <View style={srs.left}>
-        <View style={srs.avatar}><Text style={srs.avatarText}>{customer.charAt(0)}</Text></View>
-        <View><Text style={srs.name}>{customer}</Text><Text style={srs.time}>{time}{method ? (" / " + method) : ""}</Text></View>
-      </View>
-      <Text style={srs.amount}>+{fmt(amount)}</Text>
-    </Pressable>
-  );
-}
-const srs = StyleSheet.create({
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  left: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 12, fontWeight: "600", color: Colors.violet3 },
-  name: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
-  time: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  amount: { fontSize: 13, color: Colors.green, fontWeight: "600" },
-});
-
-function ObligationRow({ name, due, amount, status, category, onPress }: {
-  name: string; due: string; amount: number | null; status: string; category: string; onPress?: () => void;
-}) {
-  const [h, sH] = useState(false);
-  const w = Platform.OS === "web";
-  const sc = status === "pending" ? Colors.amber : Colors.ink3;
-  const cl = category === "aura_resolve" ? "Aura resolve" : "Aura facilita, voce resolve";
-  const cc = category === "aura_resolve" ? Colors.green : Colors.amber;
-  return (
-    <Pressable onPress={onPress} style={[obs.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]} onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}>
-      <View style={obs.left}><View style={[obs.dot, { backgroundColor: sc }]} /><View><Text style={obs.name}>{name}</Text><Text style={obs.due}>Vencimento: {due}</Text></View></View>
-      <View style={obs.right}>{amount != null && <Text style={obs.amount}>{fmt(amount)}</Text>}<View style={[obs.catBadge, { backgroundColor: cc + "18" }]}><Text style={[obs.catText, { color: cc }]}>{cl}</Text></View></View>
-    </Pressable>
-  );
-}
-const obs = StyleSheet.create({
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  left: { flexDirection: "row", alignItems: "center", gap: 10 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  name: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
-  due: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  right: { alignItems: "flex-end", gap: 4 },
-  amount: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  catBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  catText: { fontSize: 9, fontWeight: "600", letterSpacing: 0.3 },
-});
-
-export default function DashboardScreen() {
-  const { user, company, token, isDemo, logout } = useAuthStore();
-  const router = useRouter();
-  const { data } = useQuery({
-    queryKey: ["dashboard", company?.id],
-    queryFn: () => dashboardApi.summary(company!.id, token!),
-    enabled: !!company?.id && !!token && !isDemo,
-    retry: 1,
-  });
-  const d = isDemo ? MOCK : (data ?? MOCK);
-  const greeting = getGreeting();
-  const month = getMonthName();
-  const year = new Date().getFullYear();
-  const go = (path: string) => router.push(path as any);
-  const isWeb = Platform.OS === "web";
-
-  // POL-05: Gradient background wrapper for web
-  const content = (
     <ScrollView style={s.scroll} contentContainerStyle={s.content}>
       <View style={s.header}>
-        <View style={s.headerLeft}>
-          <Avatar name={user?.name ?? "A"} />
-          <View>
-            <Text style={s.greeting}>{greeting}, {user?.name?.split(" ")[0] ?? "usuario"}</Text>
-            <Text style={s.companyName}>{company?.name ?? "---"}</Text>
-          </View>
-        </View>
-        <View style={s.headerRight}>
-          <PlanBadge plan={company?.plan ?? "essencial"} />
-          <TouchableOpacity onPress={logout} style={s.logoutBtn}><Text style={s.logoutText}>Sair</Text></TouchableOpacity>
-        </View>
+        <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
+        <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><Text style={s.lt}>Sair</Text></TouchableOpacity></View>
       </View>
 
-      <HoverCard style={s.hero} onPress={() => go("/financeiro")}>
-        <View style={s.heroTop}>
-          <Text style={s.heroEye}>{month} {year}</Text>
-          <View style={s.healthBadge}><View style={s.healthDot} /><Text style={s.healthText}>Saudavel</Text></View>
-        </View>
-        <Text style={s.heroValue}>{fmt(d.net)}</Text>
-        <Text style={s.heroLabel}>Lucro liquido do mes</Text>
-        {d.dasAlert && (
-          <Pressable onPress={() => go("/contabilidade")} style={s.dasAlert}>
-            <Text style={s.dasIcon}>!</Text>
-            <Text style={s.dasText}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text>
-            <Text style={s.dasLink}>Ver</Text>
-          </Pressable>
-        )}
-      </HoverCard>
+      <HC style={s.hero} onPress={()=>go("/financeiro")}>
+        <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudavel</Text></View></View>
+        <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
+        {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Text style={s.di}>!</Text><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
+      </HC>
 
-      <Text style={s.section}>Visao geral</Text>
-      {/* POL-09: Receita and Lucro are "large" (flex:2), others flex:1 */}
+      <Text style={s.sec}>Visao geral</Text>
       <View style={s.grid}>
-        <KpiCard icon="$" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={() => go("/financeiro")} />
-        <KpiCard icon="-" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={() => go("/financeiro")} />
-        <KpiCard icon="=" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={() => go("/financeiro")} />
-        <KpiCard icon="#" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={() => go("/pdv")} />
-        <KpiCard icon="~" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={() => go("/financeiro")} />
-        <KpiCard icon="+" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={() => go("/clientes")} />
+        <KPI icon="$" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+        <KPI icon="-" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
+        <KPI icon="=" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+        <KPI icon="#" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
+        <KPI icon="~" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+        <KPI icon="+" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
       </View>
 
-      <Text style={s.section}>Acesso rapido</Text>
-      <View style={s.actions}>
-        <QuickAction icon="$" iconColor={Colors.green} label="PDV" onPress={() => go("/pdv")} />
-        <QuickAction icon="%" iconColor={Colors.violet3} label="Financeiro" onPress={() => go("/financeiro")} />
-        <QuickAction icon="#" iconColor={Colors.amber} label="Estoque" onPress={() => go("/estoque")} />
-        <QuickAction icon="N" iconColor={Colors.red} label="NF-e" onPress={() => go("/nfe")} />
-        <QuickAction icon="C" iconColor="#8b5cf6" label="Contabil" onPress={() => go("/contabilidade")} />
+      <Text style={s.sec}>Acesso rapido</Text>
+      <View style={s.acts}>
+        <QA icon="$" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
+        <QA icon="%" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
+        <QA icon="#" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
+        <QA icon="N" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
+        <QA icon="C" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
       </View>
 
-      <View style={s.sectionHeader}>
-        <Text style={s.section}>Obrigacoes contabeis</Text>
-        <View style={s.disclaimerBadge}><Text style={s.disclaimerText}>Estimativa</Text></View>
-      </View>
-      <HoverCard style={s.listCard} onPress={() => go("/contabilidade")}>
-        {(d.obligations ?? MOCK.obligations).map((obl: any) => (
-          <ObligationRow key={obl.id} name={obl.name} due={obl.due} amount={obl.amount} status={obl.status} category={obl.category} onPress={() => go("/contabilidade")} />
-        ))}
-        <View style={s.listFooter}><Text style={s.listFooterText}>Apoio contabil informativo</Text></View>
-      </HoverCard>
+      <View style={s.sh}><Text style={s.sec}>Obrigacoes contabeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
+      <HC style={s.lc} onPress={()=>go("/contabilidade")}>
+        {(d.obligations??MOCK.obligations).map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
+        <View style={s.lf}><Text style={s.lft}>Apoio contabil informativo</Text></View>
+      </HC>
 
-      <View style={s.sectionHeader}>
-        <Text style={s.section}>Ultimas vendas</Text>
-        <TouchableOpacity onPress={() => go("/financeiro")}><Text style={s.seeAll}>Ver todas</Text></TouchableOpacity>
-      </View>
-      <HoverCard style={s.listCard}>
-        {(d.recentSales ?? MOCK.recentSales).map((sale: any) => (
-          <SaleRow key={sale.id} customer={sale.customer} amount={sale.amount} time={sale.time} method={sale.method} onPress={() => go("/clientes")} />
-        ))}
-      </HoverCard>
+      <View style={s.sh}><Text style={s.sec}>Ultimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
+      <HC style={s.lc}>
+        {(d.recentSales??MOCK.recentSales).map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
+      </HC>
 
-      {isDemo && (
-        <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo - dados ilustrativos</Text></View>
-      )}
+      {isDemo&&<View style={s.dm}><Text style={s.dmt}>Modo demonstrativo - dados ilustrativos</Text></View>}
     </ScrollView>
   );
-
-  // POL-05: Web gets violet gradient background
-  if (isWeb) {
-    return (
-      <div style={{
-        flex: 1,
-        minHeight: "100%",
-        background: `radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.12) 0%, transparent 50%),
-                     radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.08) 0%, transparent 45%),
-                     radial-gradient(ellipse at 50% 50%, rgba(91,140,255,0.05) 0%, transparent 60%),
-                     ${Colors.bg}`,
-      } as any}>
-        {content}
-      </div>
-    );
-  }
-
-  return <View style={{ flex: 1, backgroundColor: Colors.bg }}>{content}</View>;
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  greeting: { fontSize: 16, color: Colors.ink, fontWeight: "600" },
-  companyName: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-  logoutBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: Colors.border },
-  logoutText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  hero: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, marginBottom: 28 },
-  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  heroEye: { fontSize: 11, color: Colors.violet3, textTransform: "uppercase", letterSpacing: 1, fontWeight: "600" },
-  healthBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.greenD, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  healthDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.green },
-  healthText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
-  heroValue: { fontSize: 36, fontWeight: "800", color: Colors.ink, letterSpacing: -1, marginBottom: 4 },
-  heroLabel: { fontSize: 13, color: Colors.ink3, marginBottom: 16 },
-  dasAlert: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12 },
-  dasIcon: { fontSize: 14, color: Colors.amber, fontWeight: "700" },
-  dasText: { fontSize: 12, color: Colors.amber, fontWeight: "500", flex: 1 },
-  dasLink: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  section: { fontSize: 15, color: Colors.ink, fontWeight: "600", marginBottom: 14 },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -5, marginBottom: 28 },
-  actions: { flexDirection: "row", gap: 16, marginBottom: 28, paddingVertical: 4 },
-  seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
-  disclaimerBadge: { backgroundColor: Colors.amberD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  disclaimerText: { fontSize: 9, color: Colors.amber, fontWeight: "600", letterSpacing: 0.3 },
-  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 24 },
-  listFooter: { paddingTop: 10, alignItems: "center" },
-  listFooterText: { fontSize: 10, color: Colors.ink3, fontStyle: "italic" },
-  demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
-  demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+const s=StyleSheet.create({
+  scroll:{flex:1},
+  content:{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"},
+  header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:24},
+  hl:{flexDirection:"row",alignItems:"center",gap:12},hr:{flexDirection:"row",alignItems:"center",gap:12},
+  gr:{fontSize:16,color:Colors.ink,fontWeight:"600"},cn:{fontSize:12,color:Colors.ink3,marginTop:2},
+  lo:{paddingHorizontal:12,paddingVertical:6,borderRadius:6,borderWidth:1,borderColor:Colors.border},lt:{fontSize:11,color:Colors.ink3,fontWeight:"500"},
+  hero:{backgroundColor:Colors.bg3,borderRadius:20,padding:24,borderWidth:1,borderColor:Colors.border2,marginBottom:28},
+  ht:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:16},
+  he:{fontSize:11,color:Colors.violet3,textTransform:"uppercase",letterSpacing:1,fontWeight:"600"},
+  hb:{flexDirection:"row",alignItems:"center",gap:5,backgroundColor:Colors.greenD,borderRadius:20,paddingHorizontal:10,paddingVertical:4},
+  hd:{width:6,height:6,borderRadius:3,backgroundColor:Colors.green},hx:{fontSize:11,color:Colors.green,fontWeight:"600"},
+  hv:{fontSize:36,fontWeight:"800",color:Colors.ink,letterSpacing:-1,marginBottom:4},hl2:{fontSize:13,color:Colors.ink3,marginBottom:16},
+  da:{flexDirection:"row",alignItems:"center",gap:8,backgroundColor:Colors.amberD,borderRadius:10,padding:12},
+  di:{fontSize:14,color:Colors.amber,fontWeight:"700"},dt:{fontSize:12,color:Colors.amber,fontWeight:"500",flex:1},dl:{fontSize:12,color:Colors.violet3,fontWeight:"600"},
+  sec:{fontSize:15,color:Colors.ink,fontWeight:"600",marginBottom:14},sh:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},
+  grid:{flexDirection:"row",flexWrap:"wrap",marginHorizontal:-5,marginBottom:28},
+  acts:{flexDirection:"row",gap:16,marginBottom:28,paddingVertical:4},
+  sa:{fontSize:12,color:Colors.violet3,fontWeight:"500"},
+  db2:{backgroundColor:Colors.amberD,borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt2:{fontSize:9,color:Colors.amber,fontWeight:"600",letterSpacing:0.3},
+  lc:{backgroundColor:Colors.bg3,borderRadius:16,padding:12,borderWidth:1,borderColor:Colors.border,marginBottom:24},
+  lf:{paddingTop:10,alignItems:"center"},lft:{fontSize:10,color:Colors.ink3,fontStyle:"italic"},
+  dm:{alignSelf:"center",backgroundColor:Colors.violetD,borderRadius:20,paddingHorizontal:16,paddingVertical:8,marginTop:8},dmt:{fontSize:11,color:Colors.violet3,fontWeight:"500"},
 });
