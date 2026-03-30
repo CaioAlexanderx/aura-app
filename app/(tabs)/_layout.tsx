@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
@@ -37,6 +38,23 @@ const GRAD = `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transpa
 function isA(p: string, r: string) {
   if (r === "/") return p === "/" || p === "" || p.endsWith("/index") || p === "/(tabs)";
   return p.includes(r.replace("/", ""));
+}
+
+// ── Google Fonts injection (web only) ────────────────────────
+function FontsHead() {
+  if (Platform.OS !== "web") return null;
+  return (
+    <>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      <link rel="stylesheet" href={GOOGLE_FONTS_CSS} />
+      <style dangerouslySetInnerHTML={{ __html: `
+        *, *::before, *::after { font-family: ${Fonts.body} !important; }
+        h1, h2, h3, .heading { font-family: ${Fonts.heading} !important; }
+        code, pre, .mono { font-family: ${Fonts.mono} !important; }
+      `}} />
+    </>
+  );
 }
 
 function SI({ l, ic, a, onP, soon }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean }) {
@@ -75,16 +93,12 @@ function Sidebar() {
 }
 const sb = StyleSheet.create({ c: { width: 240, backgroundColor: Colors.bg2, borderRightWidth: 1, borderRightColor: Colors.border, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 14, justifyContent: "flex-start" }, lw: { paddingHorizontal: 8, paddingBottom: 16, alignItems: "flex-start" }, lo: { width: 100, height: 36 }, d: { height: 1, backgroundColor: Colors.border, marginVertical: 8 }, n: { flex: 1, marginTop: 4 }, sc: { marginBottom: 16 }, sl: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }, f: { paddingTop: 8 }, ur: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, marginBottom: 10 }, av: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" }, at: { fontSize: 13, fontWeight: "700", color: "#fff" }, ui: { flex: 1 }, un: { fontSize: 12, color: Colors.ink, fontWeight: "600" }, up: { fontSize: 10, color: Colors.violet3, marginTop: 1 }, footerBtns: { gap: 6 }, cfgBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border }, logBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border }, lt: { fontSize: 11, color: Colors.ink3, fontWeight: "500" } });
 
-// ── Mobile Bar with "Mais" ───────────────────────────────────
-
 function MBar() {
   const p = usePathname(), ro = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = MORE_ITEMS.some(i => isA(p, i.r));
-
   return (
     <View>
-      {/* More menu overlay */}
       {moreOpen && (
         <View style={mm.overlay}>
           <Pressable style={mm.backdrop} onPress={() => setMoreOpen(false)} />
@@ -103,8 +117,6 @@ function MBar() {
           </View>
         </View>
       )}
-
-      {/* Bottom bar */}
       <View style={mb.b}>
         {MTABS.map(t => {
           const a = isA(p, t.r);
@@ -115,50 +127,29 @@ function MBar() {
             </Pressable>
           );
         })}
-        {/* More button */}
         <Pressable style={mb.t} onPress={() => setMoreOpen(!moreOpen)}>
-          <View style={[mb.iw, (moreOpen || moreActive) && mb.ia]}>
-            <Icon name="settings" size={18} color={(moreOpen || moreActive) ? Colors.violet3 : Colors.ink3} />
-          </View>
+          <View style={[mb.iw, (moreOpen || moreActive) && mb.ia]}><Icon name="settings" size={18} color={(moreOpen || moreActive) ? Colors.violet3 : Colors.ink3} /></View>
           <Text style={[mb.lb, (moreOpen || moreActive) && mb.la]}>Mais</Text>
         </Pressable>
       </View>
     </View>
   );
 }
-
-const mm = StyleSheet.create({
-  overlay: { position: "absolute" as any, bottom: 0, left: 0, right: 0, top: 0, zIndex: 50 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
-  menu: { backgroundColor: Colors.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: Colors.border },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.bg4, alignSelf: "center", marginBottom: 16 },
-  menuTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 14 },
-  menuItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4 },
-  menuItemActive: { backgroundColor: Colors.violetD },
-  menuIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  menuIconActive: { backgroundColor: Colors.violet },
-  menuLabel: { fontSize: 14, color: Colors.ink3, fontWeight: "500" },
-  menuLabelActive: { color: Colors.ink, fontWeight: "600" },
-});
-
-const mb = StyleSheet.create({
-  b: { flexDirection: "row", backgroundColor: Colors.bg2, borderTopWidth: 1, borderTopColor: Colors.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 },
-  t: { flex: 1, alignItems: "center", gap: 3 },
-  iw: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  ia: { backgroundColor: Colors.violetD },
-  lb: { fontSize: 9, color: Colors.ink3, fontWeight: "500" },
-  la: { color: Colors.violet3, fontWeight: "600" },
-});
+const mm = StyleSheet.create({ overlay: { position: "absolute" as any, bottom: 0, left: 0, right: 0, top: 0, zIndex: 50 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }, menu: { backgroundColor: Colors.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: Colors.border }, handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.bg4, alignSelf: "center", marginBottom: 16 }, menuTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 14 }, menuItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4 }, menuItemActive: { backgroundColor: Colors.violetD }, menuIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" }, menuIconActive: { backgroundColor: Colors.violet }, menuLabel: { fontSize: 14, color: Colors.ink3, fontWeight: "500" }, menuLabelActive: { color: Colors.ink, fontWeight: "600" } });
+const mb = StyleSheet.create({ b: { flexDirection: "row", backgroundColor: Colors.bg2, borderTopWidth: 1, borderTopColor: Colors.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 }, t: { flex: 1, alignItems: "center", gap: 3 }, iw: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, ia: { backgroundColor: Colors.violetD }, lb: { fontSize: 9, color: Colors.ink3, fontWeight: "500" }, la: { color: Colors.violet3, fontWeight: "600" } });
 
 export default function TabsLayout() {
   const w = Platform.OS === "web";
   if (w) return (
-    <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: Colors.bg } as any}>
-      <Sidebar />
-      <div style={{ flex: 1, minHeight: "100%", background: GRAD, overflow: "auto" } as any}>
-        <PageTransition><Slot /></PageTransition>
+    <>
+      <FontsHead />
+      <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: Colors.bg } as any}>
+        <Sidebar />
+        <div style={{ flex: 1, minHeight: "100%", background: GRAD, overflow: "auto" } as any}>
+          <PageTransition><Slot /></PageTransition>
+        </div>
       </div>
-    </div>
+    </>
   );
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
