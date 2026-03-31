@@ -32,7 +32,7 @@ const MORE_ITEMS = [
   { r: "/estoque", l: "Estoque", ic: "package" },
   { r: "/nfe", l: "NF-e", ic: "file_text" },
   { r: "/folha", l: "Folha de Pagamento", ic: "payroll" },
-  { r: "/configuracoes", l: "Configurações", ic: "settings" },
+  { r: "/configuracoes", l: "Configura\u00e7\u00f5es", ic: "settings" },
 ];
 
 function useWebFonts() {
@@ -77,7 +77,7 @@ function Sidebar() {
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   return (
     <View style={{ width: 240, backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 14, justifyContent: "flex-start" }}>
-      <Pressable onPress={() => ro.push("/")} style={{ paddingHorizontal: 8, paddingBottom: 16, alignItems: "flex-start" }}><Image source={{ uri: LOGO }} style={{ width: 140, height: 50 }} resizeMode="contain" /></Pressable>
+      <Pressable onPress={() => ro.push("/")} style={{ paddingHorizontal: 4, paddingBottom: 16, alignItems: "flex-start" }}><Image source={{ uri: LOGO }} style={{ width: 180, height: 64, borderRadius: 12 }} resizeMode="contain" /></Pressable>
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 8 }} />
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={false}>
         {NAV.map(s => <View key={s.s} style={{ marginBottom: 16 }}><Text style={{ fontSize: 10, color: C.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }}>{s.s}</Text>{s.i.map(i => <SI key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} />)}</View>)}
@@ -117,7 +117,7 @@ function MBar() {
           <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }} onPress={() => setMoreOpen(false)} />
           <View style={{ backgroundColor: C.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: C.border }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.bg4, alignSelf: "center", marginBottom: 16 }} />
-            <Text style={{ fontSize: 14, color: C.ink, fontWeight: "700", marginBottom: 14 }}>Mais opções</Text>
+            <Text style={{ fontSize: 14, color: C.ink, fontWeight: "700", marginBottom: 14 }}>Mais op\u00e7\u00f5es</Text>
             {MORE_ITEMS.map(item => {
               const a = isA(p, item.r);
               return (
