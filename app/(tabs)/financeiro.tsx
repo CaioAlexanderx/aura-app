@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useTransactions } from "@/stores/transactions";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
+import { AgentBanner } from "@/components/AgentBanner";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -538,6 +539,8 @@ export default function FinanceiroScreen() {
           </Pressable>
         </View>
         <TabBar active={activeTab} onSelect={setActiveTab} />
+
+        <AgentBanner agent="Financeiro" insight={{ title: "2 cobranças em atraso", desc: "Clientes João Santos (R$ 1.240) e Carlos Lima (R$ 430) estão com pagamento atrasado. Envie lembrete via WhatsApp.", actionLabel: "Enviar cobrança", action: "cobrar", priority: "high", icon: "alert" }} onAction={() => toast.info("Enviando cobrança via WhatsApp...")} />
 
       {activeTab === 0 && <TabLancamentos />}
       {activeTab === 1 && <TabAReceber />}

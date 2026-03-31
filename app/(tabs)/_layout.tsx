@@ -15,7 +15,7 @@ type NavSection = { s: string; i: NavItem[] };
 
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard" },{ r: "/financeiro", l: "Financeiro", ic: "wallet" },{ r: "/nfe", l: "NF-e", ic: "file_text" }]},
-  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" }]},
+  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "star" }]},
   { s: "Vendas", i: [{ r: "/pdv", l: "PDV", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha de Pagamento", ic: "payroll" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "star" },{ r: "/canal", l: "Canal Digital", ic: "bar_chart" }]},
@@ -32,7 +32,7 @@ const MORE_ITEMS = [
   { r: "/estoque", l: "Estoque", ic: "package" },
   { r: "/nfe", l: "NF-e", ic: "file_text" },
   { r: "/folha", l: "Folha de Pagamento", ic: "payroll" },
-  { r: "/configuracoes", l: "Configura\u00e7\u00f5es", ic: "settings" },
+  { r: "/configuracoes", l: "Configurações", ic: "settings" },
 ];
 
 function useWebFonts() {
@@ -126,7 +126,7 @@ function MBar() {
           <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }} onPress={() => setMoreOpen(false)} />
           <View style={{ backgroundColor: C.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: C.border }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.bg4, alignSelf: "center", marginBottom: 16 }} />
-            <Text style={{ fontSize: 14, color: C.ink, fontWeight: "700", marginBottom: 14 }}>Mais op\u00e7\u00f5es</Text>
+            <Text style={{ fontSize: 14, color: C.ink, fontWeight: "700", marginBottom: 14 }}>Mais opções</Text>
             {MORE_ITEMS.map(item => {
               const a = isA(p, item.r);
               return (

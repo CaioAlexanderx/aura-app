@@ -10,6 +10,7 @@ import { HoverRow } from "@/components/HoverRow";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { DemoBanner } from "@/components/DemoBanner";
+import { AgentBanner } from "@/components/AgentBanner";
 
 const TABS = ["Meu site", "Vitrine", "Frete", "Analytics"];
 
@@ -291,6 +292,8 @@ export default function CanalDigitalScreen() {
     <ScrollView style={g.screen} contentContainerStyle={g.content}>
       <PageHeader title="Canal Digital" />
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+
+      <AgentBanner agent="Marketing" insight={{ title: "Sugestão: post para Instagram", desc: "O combo corte+barba é seu produto com maior conversão (12%). Que tal um post destacando ele?", actionLabel: "Gerar rascunho", action: "post", priority: "medium", icon: "star" }} />
       {tab === 0 && <TabMeuSite />}
       {tab === 1 && <TabVitrine />}
       {tab === 2 && <TabFrete />}

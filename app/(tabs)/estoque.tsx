@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
+import { AgentBanner } from "@/components/AgentBanner";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -549,6 +550,8 @@ export default function EstoqueScreen() {
       )}
 
       <TabBar active={activeTab} onSelect={setActiveTab} />
+
+      <AgentBanner agent="Estoque" insight={{ title: "3 produtos com estoque baixo", desc: "Pomada modeladora (2 un.), Shampoo premium (5 un.) e Kit barba (1 un.) abaixo do mínimo.", actionLabel: "Criar pedido compra", action: "repor", priority: "high", icon: "package" }} />
 
       {activeTab === 0 && (
         <View>

@@ -6,6 +6,7 @@ import { TabBar } from "@/components/TabBar";
 import { HoverRow } from "@/components/HoverRow";
 import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
+import { AgentBanner } from "@/components/AgentBanner";
 
 const TABS = ["Checkpoints", "Guias", "Histórico"];
 type Step = { text: string; auto: boolean; media: string | null; hint: string };
@@ -320,6 +321,8 @@ export default function ContabilidadeScreen() {
       <HeroRing />
       <StreakBar />
       <TabBar tabs={TABS} active={tab} onSelect={sTab} />
+
+      <AgentBanner agent="Contábil" insight={{ title: "DAS vence em 14 dias", desc: "O DAS-MEI de abril vence em 20/04. Valor estimado: R$ 76,90. Gere o QR Code Pix.", actionLabel: "Gerar QR Code", action: "das", priority: "high", icon: "alert" }} />
 
       {tab === 0 && (
         <View style={z.grid}>
