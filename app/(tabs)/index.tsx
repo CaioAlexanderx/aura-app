@@ -34,8 +34,8 @@ function HC({children,style,highlight,onPress}:{children:React.ReactNode;style?:
   return <Pressable onPress={onPress} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[style,h&&{transform:[{translateY:-3},{scale:1.015}],borderColor:highlight?Colors.violet2:Colors.border2,shadowColor:Colors.violet,shadowOffset:{width:0,height:8},shadowOpacity:0.15,shadowRadius:20,elevation:8},w&&{transition:"all 0.25s cubic-bezier(0.4,0,0.2,1)"}as any]}>{children}</Pressable>;
 }
 
-function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress,sparkData,sparkColor}:{ic:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
-  return <HC style={[k.card,large&&k.large]} highlight={large} onPress={onPress}>
+function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress,sparkData,sparkColor,idx}:{ic:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void;idx?:number}){
+  return <HC style={[k.card,large&&k.large,Platform.OS==="web"&&{animation:"auraStagger 0.5s ease-out both",animationDelay:(idx||0)*0.08+"s"}as any]} highlight={large} onPress={onPress}>
     <View style={k.header}><View style={[k.ic,{backgroundColor:iconColor+"22",borderColor:iconColor+"44"}]}><Icon name={ic as any} size={20} color={iconColor}/></View>{large&&<View style={[k.sb,{backgroundColor:iconColor+"18"}]}><Text style={[k.st,{color:iconColor}]}>Destaque</Text></View>}</View>
     <Text style={[k.val,large&&{fontSize:28}]}>{value}</Text><Text style={k.lb}>{label}</Text>
     {delta&&<View style={[k.db,{backgroundColor:deltaUp?Colors.greenD:Colors.redD}]}><Text style={[k.dt,{color:deltaUp?Colors.green:Colors.red}]}>{deltaUp?"+":"-"} {delta}</Text></View>}
@@ -47,7 +47,7 @@ const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padd
 function QA({ic,iconColor,label,onPress}:{ic:string;iconColor:string;label:string;onPress?:()=>void}){
   const[h,sH]=useState(false);const w=Platform.OS==="web";
   return <Pressable style={[qa.btn,w&&{transition:"all 0.2s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} onPress={onPress}>
-    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55",transform:[{scale:1.1},{translateY:-2}]},w&&{transition:"all 0.2s ease"}as any]}><Icon name={ic as any} size={22} color={iconColor}/></View>
+    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55",animation:"auraBounce 0.4s ease"},w&&{transition:"all 0.2s ease"}as any]}><Icon name={ic as any} size={22} color={iconColor}/></View>
     <Text style={[qa.lb,h&&{color:Colors.ink}]}>{label}</Text>
   </Pressable>;
 }
@@ -99,12 +99,12 @@ export default function DashboardScreen(){
 
         <Text style={s.sec}>Visão geral</Text>
         <View style={s.grid}>
-          <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
-          <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
-          <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
-          <KPI ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
-          <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MÉDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
-          <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
+          <KPI idx={0} ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
+          <KPI idx={1} ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
+          <KPI idx={2} ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
+          <KPI idx={3} ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
+          <KPI idx={4} ic="receipt" iconColor={Colors.amber} label="TICKET MÉDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+          <KPI idx={5} ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
         </View>
 
         <Text style={s.sec}>Acesso rápido</Text>
