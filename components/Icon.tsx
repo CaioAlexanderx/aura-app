@@ -25,6 +25,12 @@ const PATHS: Record<string, string> = {
   payroll: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 8v4 M21 10h4",
   chevron_left: "M15 18l-6-6 6-6",
   chevron_right: "M9 18l6-6-6-6",
+  moon: "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z",
+  sun: "M12 17a5 5 0 100-10 5 5 0 000 10z M12 1v2 M12 21v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M1 12h2 M21 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42-1.42",
+  message: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
+  headset: "M3 18v-6a9 9 0 0118 0v6 M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z M3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z",
+  brain: "M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a3 3 0 01-3 3h-2a3 3 0 01-3-3v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z M9 22v-2 M15 22v-2 M12 17v5",
+  globe: "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z",
 };
 
 type IconProps = {
@@ -52,7 +58,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     dashboard:"P",wallet:"F",file_text:"N",calculator:"C",cart:"$",package:"E",users:"U",
     dollar:"$",trending_up:"+",trending_down:"-",receipt:"~",user_plus:"+",bag:"#",
     bar_chart:"B",clipboard:"D",star:"*",settings:"S",logout:"X",check:"V",alert:"!",
-    calendar:"C",payroll:"F",chevron_left:"<",chevron_right:">",
+    calendar:"C",payroll:"F",chevron_left:"<",chevron_right:">",moon:"D",sun:"S",message:"M",headset:"H",brain:"I",globe:"G",
   };
   return <Text style={{ fontSize: size * 0.6, fontWeight: "700", color, textAlign: "center" }}>{fallback[name as string] || "?"}</Text>;
 }

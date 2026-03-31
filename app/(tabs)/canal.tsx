@@ -12,7 +12,7 @@ import { toast } from "@/components/Toast";
 import { DemoBanner } from "@/components/DemoBanner";
 import { AgentBanner } from "@/components/AgentBanner";
 
-const TABS = ["Meu site", "Vitrine", "Frete", "Analytics"];
+const TABS = ["Meu Site", "Vitrine Online", "Entrega", "Resultados"];
 
 // ── Mock data ────────────────────────────────────
 const MOCK_PRODUCTS = [
@@ -291,6 +291,12 @@ export default function CanalDigitalScreen() {
   return (
     <ScrollView style={g.screen} contentContainerStyle={g.content}>
       <PageHeader title="Canal Digital" />
+      <View style={z.canalHero}>
+        <View style={z.canalHeroIcon}><Icon name="globe" size={24} color={Colors.violet3} /></View>
+        <Text style={z.canalHeroTitle}>Sua loja online em minutos</Text>
+        <Text style={z.canalHeroDesc}>Crie uma página de vendas personalizada para seu negócio. Seus clientes encontram seus produtos, fazem pedidos e você recebe tudo pelo app.</Text>
+      </View>
+
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />
 
       <AgentBanner agent="Marketing" insight={{ title: "Sugestão: post para Instagram", desc: "O combo corte+barba é seu produto com maior conversão (12%). Que tal um post destacando ele?", actionLabel: "Gerar rascunho", action: "post", priority: "medium", icon: "star" }} />
@@ -393,4 +399,10 @@ const z = StyleSheet.create({
   topRight: { alignItems: "flex-end", gap: 2 },
   topViews: { fontSize: 11, color: Colors.ink3 },
   topOrders: { fontSize: 11, color: Colors.green, fontWeight: "600" },
+
+  // Canal hero
+  canalHero: { backgroundColor: Colors.violetD, borderRadius: 16, padding: 20, marginBottom: 16, alignItems: "center", gap: 8, borderWidth: 1, borderColor: Colors.border2 },
+  canalHeroIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  canalHeroTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  canalHeroDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 400 },
 });

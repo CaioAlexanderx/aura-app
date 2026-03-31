@@ -15,11 +15,11 @@ type NavSection = { s: string; i: NavItem[] };
 
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard" },{ r: "/financeiro", l: "Financeiro", ic: "wallet" },{ r: "/nfe", l: "NF-e", ic: "file_text" }]},
-  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "star" }]},
+  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "headset" }]},
   { s: "Vendas", i: [{ r: "/pdv", l: "PDV", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "star" },{ r: "/canal", l: "Canal Digital", ic: "bar_chart" }]},
-  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "star" }]},
+  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "message" },{ r: "/canal", l: "Canal Digital", ic: "globe" }]},
+  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain" }]},
 ];
 
 function useWebFonts() {
@@ -127,7 +127,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               <View style={{ flex: 1 }}><Text style={{ fontSize: 12, color: C.ink, fontWeight: "600" }} numberOfLines={1}>{u?.name || "---"}</Text><Text style={{ fontSize: 10, color: C.violet3, marginTop: 1 }}>{pl}</Text></View>
             </View>
             <Pressable onPress={toggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
-              <Icon name={isDark ? "star" : "dashboard"} size={14} color={C.ink3} />
+              <Icon name={isDark ? "sun" : "moon"} size={14} color={C.ink3} />
               <Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>{isDark ? "Modo claro" : "Modo escuro"}</Text>
             </Pressable>
             <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
@@ -143,7 +143,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>{(u?.name || "A").charAt(0).toUpperCase()}</Text>
             </Pressable>
             <Pressable onPress={toggle} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: isDark ? "Modo claro" : "Modo escuro" } : {})}>
-              <Icon name={isDark ? "star" : "dashboard"} size={14} color={C.ink3} />
+              <Icon name={isDark ? "sun" : "moon"} size={14} color={C.ink3} />
             </Pressable>
             <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Configuracoes" } : {})}>
               <Icon name="settings" size={14} color={C.ink3} />
