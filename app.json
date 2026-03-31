@@ -8,8 +8,8 @@
     "scheme": "aura",
     "ios": { "supportsTablet": false, "bundleIdentifier": "com.getaura.app" },
     "android": { "package": "com.getaura.app" },
-    "web": { "bundler": "metro" },
+    "web": { "bundler": "metro", "output": "single" },
     "plugins": ["expo-router", "expo-secure-store"],
-    "experiments": { "typedRoutes": true }
+    "experiments": { "typedRoutes": true, "baseUrl": "/app" }
   }
 }
