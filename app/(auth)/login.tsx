@@ -17,6 +17,9 @@ const FEATURES = [
   { icon: "\u{1F310}", label: "Identidade Digital para seu negócio" },
 ];
 
+
+// W-01
+if (typeof document !== "undefined" && !document.getElementById("aura-grad")) { const _g = document.createElement("style"); _g.id = "aura-grad"; _g.textContent = "@keyframes auraGrad{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}"; document.head.appendChild(_g); }
 export default function LoginScreen() {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -80,7 +83,7 @@ export default function LoginScreen() {
   return (
     <div style={{
       display: "flex", flexDirection: "row", height: "100vh", width: "100vw",
-      background: `radial-gradient(ellipse at 15% 50%, rgba(109,40,217,0.22) 0%, transparent 55%),
+      backgroundSize: "200% 200%", animation: "auraGrad 15s ease infinite", background: `radial-gradient(ellipse at 15% 50%, rgba(109,40,217,0.22) 0%, transparent 55%),
                    radial-gradient(ellipse at 85% 15%, rgba(91,140,255,0.14) 0%, transparent 50%),
                    radial-gradient(ellipse at 55% 85%, rgba(139,92,246,0.12) 0%, transparent 45%),
                    ${Colors.bg}`,

@@ -53,6 +53,29 @@ const fd = StyleSheet.create({
   disabled: { opacity: 0.5 },
 });
 
+
+// F-04
+function ProfileCompletion({ name, cnpj, email, phone, address, logo }) {
+  var fields = [{l:"Nome",ok:!!name},{l:"CNPJ",ok:!!cnpj},{l:"E-mail",ok:!!email},{l:"Telefone",ok:!!phone},{l:"Endere\u00e7o",ok:!!address},{l:"Logo",ok:!!logo}];
+  var done = fields.filter(function(f){return f.ok}).length, pct = Math.round((done/fields.length)*100), allDone = pct===100;
+  return (
+    <View style={{backgroundColor:allDone?Colors.greenD:Colors.violetD,borderRadius:16,padding:20,borderWidth:1,borderColor:allDone?Colors.green+"33":Colors.border2,marginBottom:24}}>
+      <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+          <Icon name={allDone?"check":"star"} size={16} color={allDone?Colors.green:Colors.violet3} />
+          <Text style={{fontSize:14,color:Colors.ink,fontWeight:"700"}}>{allDone?"Perfil completo!":"Complete seu perfil"}</Text>
+        </View>
+        <Text style={{fontSize:13,color:allDone?Colors.green:Colors.violet3,fontWeight:"700"}}>{pct}%</Text>
+      </View>
+      <View style={{height:6,backgroundColor:Colors.bg4,borderRadius:3,overflow:"hidden"}}>
+        <View style={{height:6,width:pct+"%",backgroundColor:allDone?Colors.green:Colors.violet,borderRadius:3}} />
+      </View>
+      {!allDone && <View style={{flexDirection:"row",flexWrap:"wrap",gap:6,marginTop:12}}>
+        {fields.filter(function(f){return !f.ok}).map(function(f){return <View key={f.l} style={{backgroundColor:Colors.bg4,borderRadius:6,paddingHorizontal:8,paddingVertical:4}}><Text style={{fontSize:10,color:Colors.ink3,fontWeight:"500"}}>Falta: {f.l}</Text></View>})}
+      </View>}
+    </View>
+  );
+}
 export default function ConfiguracoesScreen() {
   const { user, company, companyLogo, setCompanyLogo, isDemo } = useAuthStore();
 
@@ -91,6 +114,7 @@ export default function ConfiguracoesScreen() {
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
       <PageHeader title="Configurações" />
+      <ProfileCompletion name={companyName} cnpj={cnpj} email={email} phone={phone} address={address} logo={companyLogo||""} />
 
       <Section title="Logo da empresa">
         <View style={z.logoRow}>

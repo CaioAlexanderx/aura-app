@@ -30,6 +30,9 @@ function SC({ children }: { children: React.ReactNode }) {
 }
 const sc = StyleSheet.create({ card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: IS_WIDE ? 40 : 24, borderWidth: 1, borderColor: Colors.border2, maxWidth: 560, width: "100%", alignSelf: "center" } });
 
+
+// W-07
+if (typeof document !== "undefined" && !document.getElementById("aura-confetti")) { const _c = document.createElement("style"); _c.id = "aura-confetti"; _c.textContent = "@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}"; document.head.appendChild(_c); }
 export default function OnboardingScreen() {
   const router = useRouter();
   const { user, company, completeOnboarding, setCompanyLogo } = useAuthStore();

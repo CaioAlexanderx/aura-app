@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable, Dimensions, Platform } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -70,6 +70,12 @@ function OR({name,due,amount,status,category,onPress}:{name:string;due:string;am
 }
 const ob=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:8,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},left:{flexDirection:"row",alignItems:"center",gap:10},dot:{width:8,height:8,borderRadius:4},nm:{fontSize:13,color:Colors.ink,fontWeight:"500"},du:{fontSize:11,color:Colors.ink3,marginTop:1},right:{alignItems:"flex-end",gap:4},am:{fontSize:13,color:Colors.ink,fontWeight:"600"},cb:{borderRadius:6,paddingHorizontal:8,paddingVertical:2},ct:{fontSize:9,fontWeight:"600",letterSpacing:0.3}});
 
+
+// W-02: Count-up
+function useCountUp(target, dur) { dur = dur || 1200; const [v, sv] = useState(0); const r = useRef(null); useEffect(function(){ var t0 = Date.now(); function tick(){ var p = Math.min((Date.now()-t0)/dur,1); sv(Math.floor(target*(1-Math.pow(1-p,3)))); if(p<1) r.current=requestAnimationFrame(tick); } r.current=requestAnimationFrame(tick); return function(){cancelAnimationFrame(r.current)}; },[target]); return v; }
+
+// W-03: Sparkline
+function Sparkline({ data, color, w, h }) { w=w||60; h=h||20; if(Platform.OS!=="web"||!data||data.length<2) return null; var mx=Math.max.apply(null,data),mn=Math.min.apply(null,data),r=mx-mn||1; var pts=data.map(function(v,i){return((i/(data.length-1))*w)+","+(h-((v-mn)/r)*(h-4)-2)}).join(" "); return <div style={{width:w,height:h,marginTop:4}} dangerouslySetInnerHTML={{__html:'<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></svg>'}} />; }
 export default function DashboardScreen(){
   const{user,company,token,isDemo,logout}=useAuthStore();const router=useRouter();
   const{data}=useQuery({queryKey:["dashboard",company?.id],queryFn:()=>dashboardApi.summary(company!.id,token!),enabled:!!company?.id&&!!token&&!isDemo,retry:1});
