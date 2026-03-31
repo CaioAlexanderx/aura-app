@@ -44,6 +44,7 @@ function useWebFonts() {
     const st = document.createElement("style"); st.id = "aura-font-override";
     st.textContent = "*, *::before, *::after { font-family: " + Fonts.body + " !important; }\n[data-testid] { font-family: " + Fonts.body + " !important; }\ndiv[dir] { font-family: " + Fonts.body + " !important; }\n@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
     document.head.appendChild(st);
+    if (!document.getElementById("aura-favicon")) { const fav = document.createElement("link"); fav.id = "aura-favicon"; fav.rel = "icon"; fav.type = "image/svg+xml"; fav.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/favicon.svg"; document.head.appendChild(fav); const fav2 = document.createElement("link"); fav2.rel = "icon"; fav2.type = "image/jpeg"; fav2.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg"; document.head.appendChild(fav2); }
     if (!document.getElementById("aura-wow-css")) { const wc = document.createElement("style"); wc.id = "aura-wow-css"; wc.textContent = "* { font-variant-numeric: tabular-nums; } a, button, [role=button] { cursor: pointer !important; } ::selection { background: rgba(124,58,237,0.3); color: inherit; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.4); } @keyframes auraStagger { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } @keyframes auraBounce { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }"; document.head.appendChild(wc); }
   }, []);
 }
@@ -57,6 +58,7 @@ function SI({ l, ic, a, onP, soon, C }: { l: string; ic: string; a: boolean; onP
   const [h, sH] = useState(false);
   return (
     <Pressable onPress={soon ? undefined : onP} onHoverIn={() => sH(true)} onHoverOut={() => sH(false)}
+      {...(Platform.OS === "web" ? { title: l } : {})}
       style={[{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10, marginBottom: 2 }, a && { backgroundColor: C.violetD, borderLeftWidth: 3, borderLeftColor: C.violet }, h && !a && !soon && { backgroundColor: "rgba(128,128,128,0.05)" }, soon && { opacity: 0.5 }, { transition: "all 0.15s ease" } as any]}>
       <View style={[{ width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }, a && { backgroundColor: C.violet }]}>
         <Icon name={ic as any} size={16} color={a ? "#fff" : soon ? C.ink3 + "66" : C.ink3} />

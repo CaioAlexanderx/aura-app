@@ -19,7 +19,7 @@ const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : fmt(n);
 function grt(){const h=new Date().getHours();return h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";}
 function gm(){return new Date().toLocaleString("pt-BR",{month:"long"}).replace(/^\w/,c=>c.toUpperCase());}
 
-const MOCK={revenue:18420,expenses:7840,net:10580,salesToday:47,avgTicket:391.91,newCustomers:12,revenueDelta:12,expensesDelta:3,netDelta:18,dasAlert:{days:14,amount:76.90},
+const MOCK={revenue:18420,expenses:7840,net:10580,salesToday:47,avgTicket:391.91,newCustomers:12,revenueDelta:12,expensesDelta:3,netDelta:18,dasAlert:{days:14,amount:76.90},sparkRevenue:[12400,13800,15200,14100,16800,17200,18420],sparkExpenses:[6200,6800,7100,6900,7400,7600,7840],sparkNet:[6200,7000,8100,7200,9400,9600,10580],
 recentSales:[{id:"1",customer:"Maria Silva",amount:156.80,time:"14:32",method:"Pix"},{id:"2",customer:"Pedro Costa",amount:89.90,time:"13:15",method:"Cartao"},{id:"3",customer:"Ana Oliveira",amount:234.50,time:"11:47",method:"Dinheiro"},{id:"4",customer:"Joao Santos",amount:67.00,time:"10:20",method:"Pix"}],
 obligations:[{id:"1",name:"DAS-MEI",due:"20/04/2026",amount:76.90,status:"pending",category:"aura_resolve"},{id:"2",name:"DASN-SIMEI",due:"31/05/2026",amount:null,status:"future",category:"aura_facilita"},{id:"3",name:"FGTS",due:"07/04/2026",amount:320.00,status:"pending",category:"aura_resolve"},{id:"4",name:"eSocial",due:"15/04/2026",amount:null,status:"future",category:"aura_facilita"}]};
 
@@ -34,11 +34,12 @@ function HC({children,style,highlight,onPress}:{children:React.ReactNode;style?:
   return <Pressable onPress={onPress} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[style,h&&{transform:[{translateY:-3},{scale:1.015}],borderColor:highlight?Colors.violet2:Colors.border2,shadowColor:Colors.violet,shadowOffset:{width:0,height:8},shadowOpacity:0.15,shadowRadius:20,elevation:8},w&&{transition:"all 0.25s cubic-bezier(0.4,0,0.2,1)"}as any]}>{children}</Pressable>;
 }
 
-function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress}:{ic:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
+function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress,sparkData,sparkColor}:{ic:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
   return <HC style={[k.card,large&&k.large]} highlight={large} onPress={onPress}>
     <View style={k.header}><View style={[k.ic,{backgroundColor:iconColor+"22",borderColor:iconColor+"44"}]}><Icon name={ic as any} size={20} color={iconColor}/></View>{large&&<View style={[k.sb,{backgroundColor:iconColor+"18"}]}><Text style={[k.st,{color:iconColor}]}>Destaque</Text></View>}</View>
     <Text style={[k.val,large&&{fontSize:28}]}>{value}</Text><Text style={k.lb}>{label}</Text>
     {delta&&<View style={[k.db,{backgroundColor:deltaUp?Colors.greenD:Colors.redD}]}><Text style={[k.dt,{color:deltaUp?Colors.green:Colors.red}]}>{deltaUp?"+":"-"} {delta}</Text></View>}
+    {sparkData && <Sparkline data={sparkData} color={sparkColor || Colors.violet3} />}
   </HC>;
 }
 const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"45%",flex:2},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
@@ -92,15 +93,15 @@ export default function DashboardScreen(){
 
         <HC style={s.hero} onPress={()=>go("/financeiro")}>
           <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudável</Text></View></View>
-          <Text style={s.hv}>{fmt(d.net)}</Text><Text style={s.hl2}>Lucro líquido do mês</Text>
+          <Text style={s.hv}>{fmt(useCountUp(d.net))}</Text><Text style={s.hl2}>Lucro líquido do mês</Text>
           {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.dt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
         </HC>
 
         <Text style={s.sec}>Visão geral</Text>
         <View style={s.grid}>
-          <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
-          <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")}/>
-          <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")}/>
+          <KPI ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
+          <KPI ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
+          <KPI ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
           <KPI ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={String(d.salesToday)} onPress={()=>go("/pdv")}/>
           <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MÉDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
           <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>

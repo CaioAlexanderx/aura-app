@@ -33,6 +33,19 @@ const sc = StyleSheet.create({ card: { backgroundColor: Colors.bg3, borderRadius
 
 // W-07
 if (typeof document !== "undefined" && !document.getElementById("aura-confetti")) { const _c = document.createElement("style"); _c.id = "aura-confetti"; _c.textContent = "@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}"; document.head.appendChild(_c); }
+
+// W-07: Confetti celebration component
+function ConfettiEffect() {
+  if (Platform.OS !== "web") return null;
+  const colors = ["#7c3aed","#8b5cf6","#a78bfa","#c4b5fd","#34d399","#fbbf24"];
+  const ps = Array.from({length:35},(_,i)=>({id:i,x:Math.random()*100,d:Math.random()*2,dur:2+Math.random()*2,c:colors[i%6],sz:4+Math.random()*6}));
+  return (
+    <View style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:50,overflow:"hidden"}} pointerEvents="none">
+      {ps.map(pp=><div key={pp.id} style={{position:"absolute",left:pp.x+"%",top:"-5%",width:pp.sz,height:pp.sz,borderRadius:pp.sz>7?1:99,backgroundColor:pp.c,animation:"confettiFall "+pp.dur+"s "+pp.d+"s ease-out forwards"}} />)}
+    </View>
+  );
+}
+
 export default function OnboardingScreen() {
   const router = useRouter();
   const { user, company, completeOnboarding, setCompanyLogo } = useAuthStore();
@@ -204,6 +217,7 @@ export default function OnboardingScreen() {
 
       {step === 4 && (
         <SC>
+          <ConfettiEffect />
           {logo ? <Image source={{ uri: logo }} style={z.doneLogo} resizeMode="contain" /> : <View style={z.doneCircle}><Text style={z.doneCheck}>OK</Text></View>}
           <Text style={z.title}>Tudo pronto!</Text>
           <Text style={z.sub}>Sua empresa está configurada. A Aura ja organizou suas obrigações contábeis e está pronta pra você usar.</Text>
