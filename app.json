@@ -10,6 +10,6 @@
     "android": { "package": "com.getaura.app" },
     "web": { "bundler": "metro", "output": "single" },
     "plugins": ["expo-router", "expo-secure-store"],
-    "experiments": { "typedRoutes": true, "baseUrl": "/app" }
+    "experiments": { "typedRoutes": true }
   }
 }
