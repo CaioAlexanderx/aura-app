@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 
@@ -9,45 +9,52 @@ type TourStep = {
   title: string;
   description: string;
   icon: string;
-  position: "top" | "center" | "bottom";
 };
 
 const STEPS: TourStep[] = [
   {
     title: "Bem-vindo ao modo demonstrativo!",
-    description: "Explore todas as funcionalidades da Aura com dados ilustrativos. Nada aqui e real - fique à vontade para clicar em tudo.",
+    description: "Explore todas as funcionalidades da Aura com dados ilustrativos. Nada aqui \u00e9 real \u2014 fique \u00e0 vontade para clicar em tudo.",
     icon: "star",
-    position: "center",
   },
   {
     title: "Seu painel financeiro",
-    description: "Aqui voce acompanha faturamento, despesas e lucro do mês. Clique no card para ver detalhes no Financeiro.",
+    description: "Aqui voc\u00ea acompanha faturamento, despesas e lucro do m\u00eas. Clique no card para ver detalhes no Financeiro.",
     icon: "wallet",
-    position: "top",
   },
   {
-    title: "Acesso rápido",
-    description: "PDV, Financeiro, Estoque, NF-e e Contabilidade - tudo a um clique. Use tambem a sidebar para navegar.",
+    title: "Acesso r\u00e1pido",
+    description: "PDV, Financeiro, Estoque, NF-e e Contabilidade \u2014 tudo a um clique. Use tamb\u00e9m a sidebar para navegar.",
     icon: "dashboard",
-    position: "center",
   },
   {
-    title: "Obrigações contábeis",
-    description: "A Aura organiza seus prazos e guia você passo a passo. Veja a tela de Contabilidade para mais detalhes.",
+    title: "Obriga\u00e7\u00f5es cont\u00e1beis",
+    description: "A Aura organiza seus prazos e guia voc\u00ea passo a passo. Veja a tela de Contabilidade para mais detalhes.",
     icon: "calculator",
-    position: "bottom",
   },
   {
     title: "Pronto para explorar!",
-    description: "Navegue livremente pelas telas usando a sidebar ou os atalhos. Este e o modo demonstrativo - ao adquirir a Aura, seus dados reais serão carregados aqui.",
+    description: "Navegue livremente pelas telas. Este \u00e9 o modo demonstrativo \u2014 ao adquirir a Aura, seus dados reais ser\u00e3o carregados aqui.",
     icon: "check",
-    position: "center",
   },
 ];
+
+function useScreenWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
 
 export function DemoTour({ visible }: { visible: boolean }) {
   const [step, setStep] = useState(0);
   const [show, setShow] = useState(false);
+  const screenW = useScreenWidth();
+  const isMobile = screenW <= 768;
 
   useEffect(() => {
     if (!visible) return;
@@ -77,42 +84,142 @@ export function DemoTour({ visible }: { visible: boolean }) {
     if (!isFirst) setStep(s => s - 1);
   }
 
-  const posStyle = current.position === "top" ? { justifyContent: "flex-start" as const, paddingTop: 120 }
-    : current.position === "bottom" ? { justifyContent: "flex-end" as const, paddingBottom: 120 }
-    : { justifyContent: "center" as const };
+  const overlayBg = step === 0 ? "rgba(6,8,22,0.92)" : "rgba(0,0,0,0.65)";
 
-  // F-02: Step 0 has opaque overlay (fullscreen feel), others are semi-transparent
-  const overlayBg = step === 0 ? "rgba(6,8,22,0.92)" : "rgba(0,0,0,0.35)";
+  if (Platform.OS === "web") {
+    return (
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: overlayBg, padding: isMobile ? 16 : 20,
+        overflowY: "auto",
+      } as any}>
+        <div style={{
+          background: Colors.bg3, borderRadius: 24,
+          padding: isMobile ? 20 : 32,
+          maxWidth: isMobile ? "100%" : 440, width: "100%",
+          border: "1px solid " + Colors.border2,
+          display: "flex", flexDirection: "column", alignItems: "center",
+          maxHeight: isMobile ? "90vh" : "auto",
+          overflowY: isMobile ? "auto" : "visible",
+        } as any}>
+          {/* Progress dots */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 } as any}>
+            {STEPS.map((_, i) => (
+              <div key={i} style={{
+                width: i === step ? 24 : 8, height: 8, borderRadius: 4,
+                background: i === step ? Colors.violet : i < step ? Colors.violet3 : Colors.bg4,
+                transition: "width 0.3s ease, background 0.3s ease",
+              } as any} />
+            ))}
+          </div>
 
-  return (
-    <View style={[t.overlay, posStyle, { backgroundColor: overlayBg }]}>
-      <View style={t.card}>
-        <View style={t.dots}>
-          {STEPS.map((_, i) => (
-            <View key={i} style={[t.dot, i === step && t.dotActive, i < step && t.dotDone]} />
-          ))}
-        </View>
-        <View style={t.iconWrap}>
-          <Icon name={current.icon as any} size={28} color={Colors.violet3} />
-        </View>
-        <Text style={t.title}>{current.title}</Text>
-        <Text style={t.desc}>{current.description}</Text>
-        <Text style={t.counter}>{step + 1} de {STEPS.length}</Text>
-        <View style={t.actions}>
-          {!isFirst && (
-            <Pressable onPress={prev} style={t.prevBtn}>
-              <Text style={t.prevText}>Anterior</Text>
-            </Pressable>
+          {/* Icon */}
+          <div style={{
+            width: isMobile ? 48 : 56, height: isMobile ? 48 : 56, borderRadius: 16,
+            background: Colors.violetD, display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 16, border: "1px solid " + Colors.border2,
+          } as any}>
+            <Icon name={current.icon as any} size={isMobile ? 22 : 28} color={Colors.violet3} />
+          </div>
+
+          {/* Title */}
+          <div style={{
+            fontSize: isMobile ? 16 : 18, fontWeight: 700, color: Colors.ink,
+            textAlign: "center", marginBottom: 8, lineHeight: 1.3,
+          } as any}>{current.title}</div>
+
+          {/* Description */}
+          <div style={{
+            fontSize: isMobile ? 12 : 13, color: Colors.ink3, textAlign: "center",
+            lineHeight: 1.6, marginBottom: 16, maxWidth: 360,
+          } as any}>{current.description}</div>
+
+          {/* Counter */}
+          <div style={{ fontSize: 11, color: Colors.ink3, marginBottom: 16 } as any}>
+            {step + 1} de {STEPS.length}
+          </div>
+
+          {/* Swipe hint on mobile */}
+          {isMobile && step === 0 && (
+            <div style={{
+              fontSize: 10, color: Colors.violet3, fontStyle: "italic",
+              marginBottom: 12, textAlign: "center",
+            } as any}>
+              Deslize ou use os bot\u00f5es para navegar
+            </div>
           )}
-          <View style={{ flex: 1 }} />
-          <Pressable onPress={dismiss} style={t.skipBtn}>
-            <Text style={t.skipText}>Pular tour</Text>
-          </Pressable>
-          <Pressable onPress={next} style={t.nextBtn}>
-            <Text style={t.nextText}>{isLast ? "Comecar" : "Proximo"}</Text>
-          </Pressable>
+
+          {/* Actions */}
+          <div style={{
+            display: "flex", flexDirection: isMobile ? "column" : "row",
+            alignItems: "center", width: "100%", gap: 8,
+          } as any}>
+            {/* Main action row */}
+            <div style={{
+              display: "flex", flexDirection: "row", alignItems: "center",
+              width: "100%", gap: 8, justifyContent: "space-between",
+            } as any}>
+              {!isFirst ? (
+                <button onClick={prev} style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontSize: 13, color: Colors.violet3, fontWeight: 500,
+                  padding: "10px 14px",
+                } as any}>Anterior</button>
+              ) : <div />}
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center" } as any}>
+                <button onClick={dismiss} style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontSize: 12, color: Colors.ink3, fontWeight: 500, padding: "10px 14px",
+                } as any}>Pular tour</button>
+
+                <button onClick={next} style={{
+                  background: Colors.violet, border: "none", cursor: "pointer",
+                  fontSize: 13, color: "#fff", fontWeight: 700,
+                  borderRadius: 10, padding: isMobile ? "12px 20px" : "10px 20px",
+                  minWidth: isMobile ? 120 : "auto",
+                } as any}>{isLast ? "Come\u00e7ar" : "Pr\u00f3ximo"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Native fallback
+  return (
+    <View style={[t.overlay, { backgroundColor: overlayBg }]}>
+      <ScrollView contentContainerStyle={t.scrollContent}>
+        <View style={t.card}>
+          <View style={t.dots}>
+            {STEPS.map((_, i) => (
+              <View key={i} style={[t.dot, i === step && t.dotActive, i < step && t.dotDone]} />
+            ))}
+          </View>
+          <View style={t.iconWrap}>
+            <Icon name={current.icon as any} size={28} color={Colors.violet3} />
+          </View>
+          <Text style={t.title}>{current.title}</Text>
+          <Text style={t.desc}>{current.description}</Text>
+          <Text style={t.counter}>{step + 1} de {STEPS.length}</Text>
+          <View style={t.actions}>
+            {!isFirst && (
+              <Pressable onPress={prev} style={t.prevBtn}>
+                <Text style={t.prevText}>Anterior</Text>
+              </Pressable>
+            )}
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={dismiss} style={t.skipBtn}>
+              <Text style={t.skipText}>Pular tour</Text>
+            </Pressable>
+            <Pressable onPress={next} style={t.nextBtn}>
+              <Text style={t.nextText}>{isLast ? "Comecar" : "Proximo"}</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -123,12 +230,15 @@ const t = StyleSheet.create({
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 1000,
     alignItems: "center",
-    padding: 20,
+    justifyContent: "center",
+  },
+  scrollContent: {
+    flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 20,
   },
   card: {
     backgroundColor: Colors.bg3,
     borderRadius: 24,
-    padding: 32,
+    padding: 24,
     maxWidth: 440,
     width: "100%",
     borderWidth: 1,
