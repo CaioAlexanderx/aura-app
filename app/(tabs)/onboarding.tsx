@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Alert, Image } from "react-native";
+import { useState, useRef, useEffect } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Alert, Image, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
@@ -7,7 +7,8 @@ import { useAuthStore } from "@/stores/auth";
 import { CNAE_PROFILES, detectProfileFromCnae } from "@/constants/obligations";
 import { Icon } from "@/components/Icon";
 
-const STEPS = ["Boas-vindas", "Sua empresa", "Tipo de negócio", "Funcionários", "Pronto!"];
+const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
+const STEPS = ["Boas-vindas", "Sua empresa", "Tipo de neg\u00f3cio", "Funcion\u00e1rios", "Pronto!"];
 const BIZ_TYPES = [
   { key: "barbearia_salao", label: "Barbearia / Salao", icon: "S" },
   { key: "odontologia", label: "Odontologia", icon: "D" },
@@ -26,15 +27,13 @@ function PBar({ step, total }: { step: number; total: number }) {
 const pg = StyleSheet.create({ c: { marginBottom: 24, gap: 8 }, b: { flexDirection: "row", gap: 4 }, s: { flex: 1, height: 4, borderRadius: 2, backgroundColor: Colors.bg4 }, sa: { backgroundColor: Colors.violet }, l: { fontSize: 11, color: Colors.ink3, textAlign: "center" } });
 
 function SC({ children }: { children: React.ReactNode }) {
-  return <View style={sc.card}>{children}</View>;
+  return <View style={scc.card}>{children}</View>;
 }
-const sc = StyleSheet.create({ card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: IS_WIDE ? 40 : 24, borderWidth: 1, borderColor: Colors.border2, maxWidth: 560, width: "100%", alignSelf: "center" } });
-
+const scc = StyleSheet.create({ card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: IS_WIDE ? 40 : 24, borderWidth: 1, borderColor: Colors.border2, maxWidth: 560, width: "100%", alignSelf: "center" } });
 
 // W-07
-if (typeof document !== "undefined" && !document.getElementById("aura-confetti")) { const _c = document.createElement("style"); _c.id = "aura-confetti"; _c.textContent = "@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}"; document.head.appendChild(_c); }
+if (typeof document !== "undefined" && !document.getElementById("aura-confetti")) { const _c = document.createElement("style"); _c.id = "aura-confetti"; _c.textContent = "@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}} @keyframes auraSplashFadeIn{0%{opacity:0;transform:scale(0.85)}40%{opacity:1;transform:scale(1.02)}100%{opacity:1;transform:scale(1)}} @keyframes auraSplashPulse{0%,100%{opacity:0.6}50%{opacity:1}} @keyframes auraSplashDots{0%{content:''}33%{content:'.'}66%{content:'..'}100%{content:'...'}}"; document.head.appendChild(_c); }
 
-// W-07: Confetti celebration component
 function ConfettiEffect() {
   if (Platform.OS !== "web") return null;
   const colors = ["#7c3aed","#8b5cf6","#a78bfa","#c4b5fd","#34d399","#fbbf24"];
@@ -45,6 +44,31 @@ function ConfettiEffect() {
     </View>
   );
 }
+
+// Splash loading screen
+function SplashLoading() {
+  const w = Platform.OS === "web";
+  return (
+    <View style={sp.container}>
+      <View style={[sp.content, w && { animation: "auraSplashFadeIn 0.8s ease-out" } as any]}>
+        <Image source={{ uri: LOGO_SVG }} style={sp.logo} resizeMode="contain" />
+        <Text style={sp.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text>
+        <View style={sp.spinnerWrap}>
+          <ActivityIndicator size="large" color={Colors.violet3} />
+        </View>
+        <Text style={sp.message}>Carregando a melhor solu\u00e7\u00e3o para sua empresa.</Text>
+      </View>
+    </View>
+  );
+}
+const sp = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", minHeight: 500 },
+  content: { alignItems: "center", gap: 20 },
+  logo: { width: 72, height: 72 },
+  brand: { fontSize: 32, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  spinnerWrap: { marginVertical: 8 },
+  message: { fontSize: 15, color: Colors.ink3, fontStyle: "italic", textAlign: "center", maxWidth: 320, lineHeight: 22 },
+});
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -57,6 +81,7 @@ export default function OnboardingScreen() {
   const [hasEmp, setHasEmp] = useState(false);
   const [empCount, setEmpCount] = useState("0");
   const [logo, setLogo] = useState<string | null>(null);
+  const [showSplash, setShowSplash] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   function fmtCnpj(v: string) {
@@ -100,11 +125,23 @@ export default function OnboardingScreen() {
   }
 
   function finish() {
-    completeOnboarding({ logo: logo || undefined, cnpj: cnpj || undefined, businessType: bizType });
-    router.replace("/");
+    setShowSplash(true);
+    setTimeout(() => {
+      completeOnboarding({ logo: logo || undefined, cnpj: cnpj || undefined, businessType: bizType });
+      router.replace("/");
+    }, 3000);
   }
 
   const inp = { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink };
+
+  // Show splash loading screen
+  if (showSplash) {
+    return (
+      <View style={z.scr}>
+        <SplashLoading />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
@@ -113,14 +150,14 @@ export default function OnboardingScreen() {
       {step === 0 && (
         <SC>
           <Text style={z.emoji}>*</Text>
-          <Text style={z.title}>Bem-vindo à Aura, {user?.name?.split(" ")[0] || "empreendedor"}!</Text>
+          <Text style={z.title}>Bem-vindo \u00e0 Aura, {user?.name?.split(" ")[0] || "empreendedor"}!</Text>
           <Text style={z.sub}>Vamos configurar sua empresa em poucos minutos. Depois disso, a Aura cuida de organizar tudo pra voce.</Text>
           <View style={z.features}>
-            {["Obrigações contábeis organizadas","Vendas e estoque integrados","Guias passo a passo para cada tarefa","Tudo em um so lugar"].map(f => (
+            {["Obriga\u00e7\u00f5es cont\u00e1beis organizadas","Vendas e estoque integrados","Guias passo a passo para cada tarefa","Tudo em um so lugar"].map(f => (
               <View key={f} style={z.featureRow}><View style={z.featureDot} /><Text style={z.featureText}>{f}</Text></View>
             ))}
           </View>
-          <Pressable onPress={() => setStep(1)} style={z.primaryBtn}><Text style={z.primaryBtnText}>Vamos começar</Text></Pressable>
+          <Pressable onPress={() => setStep(1)} style={z.primaryBtn}><Text style={z.primaryBtnText}>Vamos come\u00e7ar</Text></Pressable>
         </SC>
       )}
 
@@ -128,8 +165,6 @@ export default function OnboardingScreen() {
         <SC>
           <Text style={z.stepTitle}>Sua empresa</Text>
           <Text style={z.stepSub}>Adicione a logo e o CNPJ da sua empresa.</Text>
-
-          {/* Logo upload */}
           <View style={z.logoSection}>
             <Text style={z.fieldLabel}>Logo da empresa (opcional)</Text>
             <Pressable onPress={handleLogoUpload} style={z.logoUpload}>
@@ -149,10 +184,7 @@ export default function OnboardingScreen() {
               </Pressable>
             )}
           </View>
-
           <View style={z.divider} />
-
-          {/* CNPJ */}
           <View style={{ gap: 12 }}>
             <Text style={z.fieldLabel}>CNPJ</Text>
             <TextInput style={inp as any} value={cnpj} onChangeText={v => setCnpj(fmtCnpj(v))} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />
@@ -161,7 +193,7 @@ export default function OnboardingScreen() {
             </Pressable>
             <View style={z.divider} />
             <Pressable onPress={() => { setCnpjData({ razaoSocial: company?.name || "Minha Empresa", cnae: "---", regime: "MEI", uf: "SP", municipio: "---" }); setStep(2); }} style={z.skipBtn}>
-              <Text style={z.skipText}>Ainda não tenho CNPJ - configurar depois</Text>
+              <Text style={z.skipText}>Ainda n\u00e3o tenho CNPJ - configurar depois</Text>
             </Pressable>
           </View>
           <Pressable onPress={() => setStep(0)} style={z.backBtn}><Text style={z.backText}>Voltar</Text></Pressable>
@@ -170,11 +202,11 @@ export default function OnboardingScreen() {
 
       {step === 2 && (
         <SC>
-          <Text style={z.stepTitle}>Tipo de negócio</Text>
+          <Text style={z.stepTitle}>Tipo de neg\u00f3cio</Text>
           {cnpjData && cnpjData.cnae !== "---" && (
             <View style={z.detectedCard}><Text style={z.detectedLabel}>Detectado pelo CNPJ</Text><Text style={z.detectedValue}>{cnpjData.razaoSocial}</Text><Text style={z.detectedMeta}>CNAE: {cnpjData.cnae} / {cnpjData.regime} / {cnpjData.municipio}-{cnpjData.uf}</Text></View>
           )}
-          <Text style={z.stepSub}>Selecione o tipo que melhor descreve seu negócio:</Text>
+          <Text style={z.stepSub}>Selecione o tipo que melhor descreve seu neg\u00f3cio:</Text>
           <View style={z.typesGrid}>
             {BIZ_TYPES.map(t => (
               <Pressable key={t.key} onPress={() => setBizType(t.key)} style={[z.typeCard, bizType === t.key && z.typeCardActive]}>
@@ -185,29 +217,29 @@ export default function OnboardingScreen() {
           </View>
           <View style={z.navRow}>
             <Pressable onPress={() => setStep(1)} style={z.backBtn}><Text style={z.backText}>Voltar</Text></Pressable>
-            <Pressable onPress={() => { if (!bizType) { Alert.alert("Selecione um tipo de negócio"); return; } setStep(3); }} style={z.primaryBtn}><Text style={z.primaryBtnText}>Continuar</Text></Pressable>
+            <Pressable onPress={() => { if (!bizType) { Alert.alert("Selecione um tipo de neg\u00f3cio"); return; } setStep(3); }} style={z.primaryBtn}><Text style={z.primaryBtnText}>Continuar</Text></Pressable>
           </View>
         </SC>
       )}
 
       {step === 3 && (
         <SC>
-          <Text style={z.stepTitle}>Você tem funcionários?</Text>
-          <Text style={z.stepSub}>Isso define quais obrigações contábeis a Aura vai configurar pra você.</Text>
+          <Text style={z.stepTitle}>Voc\u00ea tem funcion\u00e1rios?</Text>
+          <Text style={z.stepSub}>Isso define quais obriga\u00e7\u00f5es cont\u00e1beis a Aura vai configurar pra voc\u00ea.</Text>
           <View style={z.toggleRow}>
             <Pressable onPress={() => setHasEmp(false)} style={[z.toggleCard, !hasEmp && z.toggleActive]}>
               <Text style={[z.toggleIcon, !hasEmp && { color: Colors.green }]}>-</Text>
-              <Text style={[z.toggleTitle, !hasEmp && { color: Colors.ink }]}>Não tenho</Text>
-              <Text style={z.toggleSub}>Trabalho sozinho ou com sócios</Text>
+              <Text style={[z.toggleTitle, !hasEmp && { color: Colors.ink }]}>N\u00e3o tenho</Text>
+              <Text style={z.toggleSub}>Trabalho sozinho ou com s\u00f3cios</Text>
             </Pressable>
             <Pressable onPress={() => setHasEmp(true)} style={[z.toggleCard, hasEmp && z.toggleActive]}>
               <Text style={[z.toggleIcon, hasEmp && { color: Colors.violet3 }]}>+</Text>
               <Text style={[z.toggleTitle, hasEmp && { color: Colors.ink }]}>Sim, tenho</Text>
-              <Text style={z.toggleSub}>Funcionários registrados</Text>
+              <Text style={z.toggleSub}>Funcion\u00e1rios registrados</Text>
             </Pressable>
           </View>
-          {hasEmp && <View style={{ marginTop: 16, gap: 6 }}><Text style={z.fieldLabel}>Quantos funcionários?</Text><TextInput style={inp as any} value={empCount} onChangeText={setEmpCount} keyboardType="number-pad" placeholder="1" placeholderTextColor={Colors.ink3} /></View>}
-          {hasEmp && <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Com funcionarios, a Aura vai gerenciar:</Text><View style={z.oblList}><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.green}]} /><Text style={z.oblText}>FGTS mensal (Aura resolve)</Text></View><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.amber}]} /><Text style={z.oblText}>eSocial (Aura facilita, você resolve)</Text></View></View></View>}
+          {hasEmp && <View style={{ marginTop: 16, gap: 6 }}><Text style={z.fieldLabel}>Quantos funcion\u00e1rios?</Text><TextInput style={inp as any} value={empCount} onChangeText={setEmpCount} keyboardType="number-pad" placeholder="1" placeholderTextColor={Colors.ink3} /></View>}
+          {hasEmp && <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Com funcionarios, a Aura vai gerenciar:</Text><View style={z.oblList}><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.green}]} /><Text style={z.oblText}>FGTS mensal (Aura resolve)</Text></View><View style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.amber}]} /><Text style={z.oblText}>eSocial (Aura facilita, voc\u00ea resolve)</Text></View></View></View>}
           <View style={z.navRow}>
             <Pressable onPress={() => setStep(2)} style={z.backBtn}><Text style={z.backText}>Voltar</Text></Pressable>
             <Pressable onPress={() => setStep(4)} style={z.primaryBtn}><Text style={z.primaryBtnText}>Continuar</Text></Pressable>
@@ -220,7 +252,7 @@ export default function OnboardingScreen() {
           <ConfettiEffect />
           {logo ? <Image source={{ uri: logo }} style={z.doneLogo} resizeMode="contain" /> : <View style={z.doneCircle}><Text style={z.doneCheck}>OK</Text></View>}
           <Text style={z.title}>Tudo pronto!</Text>
-          <Text style={z.sub}>Sua empresa está configurada. A Aura ja organizou suas obrigações contábeis e está pronta pra você usar.</Text>
+          <Text style={z.sub}>Sua empresa est\u00e1 configurada. A Aura ja organizou suas obriga\u00e7\u00f5es cont\u00e1beis e est\u00e1 pronta pra voc\u00ea usar.</Text>
           <View style={z.summaryCard}>
             <Text style={z.summaryTitle}>Resumo</Text>
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Empresa</Text><Text style={z.summaryValue}>{cnpjData?.razaoSocial || company?.name || "---"}</Text></View>
@@ -228,9 +260,9 @@ export default function OnboardingScreen() {
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Regime</Text><Text style={z.summaryValue}>{cnpjData?.regime || "MEI"}</Text></View>
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Tipo</Text><Text style={z.summaryValue}>{CNAE_PROFILES[bizType]?.label || bizType}</Text></View>
             <View style={z.summaryRow}><Text style={z.summaryLabel}>Funcionarios</Text><Text style={z.summaryValue}>{hasEmp ? empCount : "Nenhum"}</Text></View>
-            <View style={z.summaryRow}><Text style={z.summaryLabel}>Logo</Text><Text style={z.summaryValue}>{logo ? "Enviada" : "Não enviada"}</Text></View>
+            <View style={z.summaryRow}><Text style={z.summaryLabel}>Logo</Text><Text style={z.summaryValue}>{logo ? "Enviada" : "N\u00e3o enviada"}</Text></View>
           </View>
-          <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Obrigações configuradas:</Text><View style={z.oblList}>
+          <View style={z.oblPreview}><Text style={z.oblPreviewTitle}>Obriga\u00e7\u00f5es configuradas:</Text><View style={z.oblList}>
             {(CNAE_PROFILES[hasEmp ? bizType.replace(/_salao$/,"_salao_func").replace(/mei_(comercio|servicos)$/,"mei_com_funcionario") : bizType]?.obligations || CNAE_PROFILES[bizType]?.obligations || []).slice(0, 6).map(o => (
               <View key={o} style={z.oblItem}><View style={[z.oblDot,{backgroundColor:Colors.violet3}]} /><Text style={z.oblText}>{o.replace(/_/g, " ").replace(/^\w/,c=>c.toUpperCase())}</Text></View>
             ))}
@@ -263,7 +295,6 @@ const z = StyleSheet.create({
   backText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
   navRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 16 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
-  // Logo upload
   logoSection: { gap: 10, marginBottom: 8 },
   logoUpload: { borderWidth: 2, borderColor: Colors.border, borderStyle: "dashed" as any, borderRadius: 16, overflow: "hidden", alignItems: "center", justifyContent: "center", minHeight: 140 },
   logoPreview: { width: "100%", height: 140 },
@@ -272,12 +303,10 @@ const z = StyleSheet.create({
   logoPlaceholderHint: { fontSize: 11, color: Colors.ink3 },
   logoRemove: { alignSelf: "center", paddingVertical: 4 },
   logoRemoveText: { fontSize: 12, color: Colors.red, fontWeight: "500" },
-  // CNPJ detected
   detectedCard: { backgroundColor: Colors.greenD, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: Colors.green + "33" },
   detectedLabel: { fontSize: 10, color: Colors.green, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
   detectedValue: { fontSize: 15, color: Colors.ink, fontWeight: "700", marginBottom: 2 },
   detectedMeta: { fontSize: 11, color: Colors.ink3 },
-  // Business types
   typesGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   typeCard: { width: IS_WIDE ? "31%" : "47%", backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", gap: 8 },
   typeCardActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
@@ -286,7 +315,6 @@ const z = StyleSheet.create({
   typeIconText: { fontSize: 16, fontWeight: "700", color: Colors.ink3 },
   typeLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "500", textAlign: "center" },
   typeLabelActive: { color: Colors.violet3, fontWeight: "600" },
-  // Employees
   toggleRow: { flexDirection: "row", gap: 12, marginTop: 16 },
   toggleCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 14, padding: 20, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", gap: 6 },
   toggleActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
@@ -299,7 +327,6 @@ const z = StyleSheet.create({
   oblItem: { flexDirection: "row", alignItems: "center", gap: 8 },
   oblDot: { width: 6, height: 6, borderRadius: 3 },
   oblText: { fontSize: 12, color: Colors.ink, fontWeight: "500" },
-  // Done
   doneCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 16, borderWidth: 2, borderColor: Colors.green },
   doneCheck: { fontSize: 20, color: Colors.green, fontWeight: "800" },
   doneLogo: { width: 120, height: 60, alignSelf: "center", marginBottom: 16 },
