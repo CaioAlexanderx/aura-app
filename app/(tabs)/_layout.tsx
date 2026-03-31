@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
 import { ToastContainer } from "@/components/Toast";
+import OnboardingScreen from "@/app/(tabs)/onboarding";
 
 const LOGO="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean };
@@ -18,7 +19,7 @@ const NAV: NavSection[] = [
   { s: "Vendas", i: [{ r: "/pdv", l: "PDV", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha de Pagamento", ic: "payroll" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "star", soon: true },{ r: "/canal", l: "Canal Digital", ic: "bar_chart" }]},
-  { s: "Crescimento", i: [{ r: "/ia", l: "Assistente IA", ic: "star", soon: true }]},
+  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "star" }]},
 ];
 const MTABS = [
   { r: "/", l: "Painel", ic: "dashboard" },
@@ -154,11 +155,21 @@ export default function TabsLayout() {
   useWebFonts();
   const C = useColors();
   const { isDark } = useThemeStore();
+  const { onboardingComplete, token } = useAuthStore();
   const themeKey = isDark ? "dark" : "light";
   const w = Platform.OS === "web";
   const grad = isDark
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
+
+  if (w && token && !onboardingComplete) return (
+    <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
+      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative" } as any}>
+        <ToastContainer />
+        <OnboardingScreen />
+      </div>
+    </div>
+  );
 
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
@@ -169,6 +180,15 @@ export default function TabsLayout() {
       </div>
     </div>
   );
+  if (token && !onboardingComplete) return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View key={themeKey} style={{ flex: 1 }}>
+        <ToastContainer />
+        <OnboardingScreen />
+      </View>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View key={themeKey} style={{ flex: 1 }}>
