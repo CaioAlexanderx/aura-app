@@ -73,7 +73,7 @@ export default function LoginScreen() {
     return (
       <ScrollView contentContainerStyle={s.mobile}>
         <TouchableOpacity onPress={() => Linking.openURL("https://getaura.com.br")} style={s.mobileLogo}>
-          <img src={LOGO_URL} alt="Aura." style={{ width: 180, height: "auto" } as any} />
+          <img src={LOGO_URL} alt="Aura." style={{ width: 320, height: "auto" } as any} />
         </TouchableOpacity>
         {formCard}
       </ScrollView>
@@ -93,7 +93,7 @@ export default function LoginScreen() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 56px" } as any}>
         <a href="https://getaura.com.br" target="_blank" rel="noreferrer"
           style={{ display: "block", textDecoration: "none", marginBottom: 40 } as any}>
-          <img src={LOGO_URL} alt="Aura." style={{ width: 300, height: "auto", display: "block" } as any} />
+          <img src={LOGO_URL} alt="Aura." style={{ width: 320, height: "auto", display: "block", borderRadius: 16 } as any} />
         </a>
         <p style={{ fontSize: 16, color: Colors.ink2, lineHeight: 1.7, textAlign: "center", margin: "0 0 28px" } as any}>
           Você fez a escolha certa, hora de{" "}

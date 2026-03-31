@@ -269,13 +269,20 @@ function TabConfig() {
           <View style={z.settingRow}>
             <View style={{ flex: 1 }}>
               <Text style={z.settingLabel}>Respostas automáticas fora do horário</Text>
-              <Text style={z.settingHint}>Envia mensagem informando horário de funcionamento</Text>
+              <Text style={z.settingHint}>Envia mensagem personalizada fora do expediente</Text>
             </View>
             <Switch value={true} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
           </View>
+          <View style={z.msgPreview}>
+            <Text style={z.msgPreviewLabel}>Mensagem fora do horário:</Text>
+            <View style={z.msgPreviewBubble}>
+              <Text style={z.msgPreviewText}>Olá! Obrigado pela mensagem. Nosso horário de atendimento é de segunda a sábado, das 8h às 18h. Retornaremos assim que possível!</Text>
+            </View>
+            <Pressable onPress={() => toast.info("Editar mensagem")} style={z.editBtn}><Text style={z.editBtnText}>Editar mensagem</Text></Pressable>
+          </View>
           <View style={z.settingRow}>
             <View style={{ flex: 1 }}>
-              <Text style={z.settingLabel}>Horário</Text>
+              <Text style={z.settingLabel}>Horário de atendimento</Text>
               <Text style={z.settingHint}>Segunda a sábado, 8h às 18h</Text>
             </View>
             <Pressable onPress={() => toast.info("Editar horário")} style={z.editBtn}><Text style={z.editBtnText}>Editar</Text></Pressable>
@@ -442,4 +449,26 @@ const z = StyleSheet.create({
   // Info
   infoCard: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, marginTop: 16 },
   infoText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
+  // Support CTA
+  supportCard: { backgroundColor: Colors.violetD, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", marginTop: 16, gap: 8 },
+  supportIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  supportTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink },
+  supportDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, marginBottom: 4 },
+  supportBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24 },
+  supportBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  supportHint: { fontSize: 10, color: Colors.ink3, fontStyle: "italic" },
+  // Campaign templates
+  newCampCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, marginTop: 16, gap: 12 },
+  newCampTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink },
+  newCampDesc: { fontSize: 12, color: Colors.ink3 },
+  campTemplates: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  campTemplate: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
+  campTemplateText: { fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  newCampBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 12, alignItems: "center", borderWidth: 1, borderColor: Colors.border2 },
+  newCampBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  // Message preview
+  msgPreview: { paddingVertical: 12, paddingHorizontal: 4, gap: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  msgPreviewLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
+  msgPreviewBubble: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 14, maxWidth: "85%" },
+  msgPreviewText: { fontSize: 12, color: Colors.ink, lineHeight: 18 },
 });

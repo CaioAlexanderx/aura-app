@@ -77,7 +77,7 @@ function Sidebar() {
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   return (
     <View style={{ width: 240, backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 14, justifyContent: "flex-start" }}>
-      <Pressable onPress={() => ro.push("/")} style={{ paddingHorizontal: 8, paddingBottom: 16, alignItems: "flex-start" }}><Image source={{ uri: LOGO }} style={{ width: 120, height: 44 }} resizeMode="contain" /></Pressable>
+      <Pressable onPress={() => ro.push("/")} style={{ paddingHorizontal: 8, paddingBottom: 16, alignItems: "flex-start" }}><Image source={{ uri: LOGO }} style={{ width: 130, height: 48 }} resizeMode="contain" /></Pressable>
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 8 }} />
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={false}>
         {NAV.map(s => <View key={s.s} style={{ marginBottom: 16 }}><Text style={{ fontSize: 10, color: C.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }}>{s.s}</Text>{s.i.map(i => <SI key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} />)}</View>)}
