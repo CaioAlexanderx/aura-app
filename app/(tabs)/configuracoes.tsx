@@ -56,7 +56,7 @@ const fd = StyleSheet.create({
 
 // F-04
 function ProfileCompletion({ name, cnpj, email, phone, address, logo }) {
-  var fields = [{l:"Nome",ok:!!name},{l:"CNPJ",ok:!!cnpj},{l:"E-mail",ok:!!email},{l:"Telefone",ok:!!phone},{l:"Endere\u00e7o",ok:!!address},{l:"Logo",ok:!!logo}];
+  var fields = [{l:"Nome",ok:!!name},{l:"CNPJ",ok:!!cnpj},{l:"E-mail",ok:!!email},{l:"Telefone",ok:!!phone},{l:"Endereço",ok:!!address},{l:"Logo",ok:!!logo}];
   var done = fields.filter(function(f){return f.ok}).length, pct = Math.round((done/fields.length)*100), allDone = pct===100;
   return (
     <View style={{backgroundColor:allDone?Colors.greenD:Colors.violetD,borderRadius:16,padding:20,borderWidth:1,borderColor:allDone?Colors.green+"33":Colors.border2,marginBottom:24}}>

@@ -15,8 +15,8 @@ const TABS = ["Meu site", "Vitrine", "Frete", "Analytics"];
 
 // ── Mock data ────────────────────────────────────
 const MOCK_PRODUCTS = [
-  { id: "1", name: "Corte masculino", price: 45.00, img: null, published: true, category: "Servi\u00e7os" },
-  { id: "2", name: "Barba completa", price: 35.00, img: null, published: true, category: "Servi\u00e7os" },
+  { id: "1", name: "Corte masculino", price: 45.00, img: null, published: true, category: "Serviços" },
+  { id: "2", name: "Barba completa", price: 35.00, img: null, published: true, category: "Serviços" },
   { id: "3", name: "Pomada modeladora", price: 49.90, img: null, published: false, category: "Produtos" },
   { id: "4", name: "Shampoo premium", price: 38.00, img: null, published: true, category: "Produtos" },
   { id: "5", name: "Kit barba completo", price: 129.90, img: null, published: false, category: "Kits" },
@@ -34,22 +34,22 @@ const MOCK_ANALYTICS = {
 };
 
 const FREIGHT_OPTIONS = [
-  { id: "uber", name: "Uber Flash", desc: "Entrega r\u00e1pida via Uber Direct", icon: "cart", enabled: true, estimate: "30-60 min", cost: "A partir de R$ 12" },
-  { id: "correios", name: "Correios", desc: "PAC e SEDEX para todo Brasil", icon: "package", enabled: false, estimate: "3-8 dias \u00fateis", cost: "Calculado por CEP" },
-  { id: "transp", name: "Transportadora", desc: "Parceiro log\u00edstico local", icon: "trending_up", enabled: false, estimate: "1-3 dias \u00fateis", cost: "Sob consulta" },
-  { id: "retira", name: "Retirada no local", desc: "Cliente busca no estabelecimento", icon: "users", enabled: true, estimate: "Imediato", cost: "Gr\u00e1tis" },
+  { id: "uber", name: "Uber Flash", desc: "Entrega rápida via Uber Direct", icon: "cart", enabled: true, estimate: "30-60 min", cost: "A partir de R$ 12" },
+  { id: "correios", name: "Correios", desc: "PAC e SEDEX para todo Brasil", icon: "package", enabled: false, estimate: "3-8 dias úteis", cost: "Calculado por CEP" },
+  { id: "transp", name: "Transportadora", desc: "Parceiro logístico local", icon: "trending_up", enabled: false, estimate: "1-3 dias úteis", cost: "Sob consulta" },
+  { id: "retira", name: "Retirada no local", desc: "Cliente busca no estabelecimento", icon: "users", enabled: true, estimate: "Imediato", cost: "Grátis" },
 ];
 
 // ── Tab: Meu Site ────────────────────────────────
 function TabMeuSite() {
   const { company, companyLogo } = useAuthStore();
   const [siteName, setSiteName] = useState(company?.name || "Minha Empresa");
-  const [siteDesc, setSiteDesc] = useState("Qualidade e atendimento que voc\u00ea merece. Confira nossos produtos e servi\u00e7os.");
+  const [siteDesc, setSiteDesc] = useState("Qualidade e atendimento que você merece. Confira nossos produtos e serviços.");
   const [siteColor, setSiteColor] = useState("#7c3aed");
   const [sitePublished, setSitePublished] = useState(true);
   const [whatsapp, setWhatsapp] = useState("(12) 99999-0000");
   const [instagram, setInstagram] = useState("@meunegogio");
-  const [address, setAddress] = useState("Rua Principal, 100 - Jacare\u00ed/SP");
+  const [address, setAddress] = useState("Rua Principal, 100 - Jacareí/SP");
 
   const colors = ["#7c3aed", "#059669", "#dc2626", "#d97706", "#2563eb", "#db2777", "#0891b2"];
   const siteUrl = "getaura.com.br/loja/" + (company?.name || "minha-empresa").toLowerCase().replace(/\s+/g, "-");
@@ -66,7 +66,7 @@ function TabMeuSite() {
               <Text style={[z.previewBrand, { color: siteColor }]}>{siteName}</Text>
             )}
             <View style={z.previewNav}>
-              <Text style={z.previewNavItem}>In\u00edcio</Text>
+              <Text style={z.previewNavItem}>Início</Text>
               <Text style={z.previewNavItem}>Produtos</Text>
               <Text style={z.previewNavItem}>Contato</Text>
             </View>
@@ -90,20 +90,20 @@ function TabMeuSite() {
 
       {/* Settings */}
       <View style={z.section}>
-        <Text style={z.sectionTitle}>Configura\u00e7\u00f5es do site</Text>
+        <Text style={z.sectionTitle}>Configurações do site</Text>
         <View style={z.card}>
           <View style={z.publishRow}>
             <View style={{ flex: 1 }}>
               <Text style={z.fieldLabel}>Site publicado</Text>
-              <Text style={z.fieldHint}>{sitePublished ? "Seu site est\u00e1 vis\u00edvel para clientes" : "Site desativado"}</Text>
+              <Text style={z.fieldHint}>{sitePublished ? "Seu site está visível para clientes" : "Site desativado"}</Text>
             </View>
             <Switch value={sitePublished} onValueChange={setSitePublished} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
           </View>
-          <Field label="Nome do neg\u00f3cio" value={siteName} onChange={setSiteName} />
-          <Field label="Descri\u00e7\u00e3o" value={siteDesc} onChange={setSiteDesc} multiline />
+          <Field label="Nome do negócio" value={siteName} onChange={setSiteName} />
+          <Field label="Descrição" value={siteDesc} onChange={setSiteDesc} multiline />
           <Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(12) 99999-0000" />
           <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegogio" />
-          <Field label="Endere\u00e7o" value={address} onChange={setAddress} />
+          <Field label="Endereço" value={address} onChange={setAddress} />
 
           <Text style={[z.fieldLabel, { marginTop: 12 }]}>Cor principal</Text>
           <View style={z.colorRow}>
@@ -112,8 +112,8 @@ function TabMeuSite() {
             ))}
           </View>
 
-          <Pressable onPress={() => toast.success("Configura\u00e7\u00f5es salvas")} style={z.saveBtn}>
-            <Text style={z.saveBtnText}>Salvar configura\u00e7\u00f5es</Text>
+          <Pressable onPress={() => toast.success("Configurações salvas")} style={z.saveBtn}>
+            <Text style={z.saveBtnText}>Salvar configurações</Text>
           </Pressable>
         </View>
       </View>
@@ -188,12 +188,12 @@ function TabFrete() {
 
   function toggle(id) {
     setOptions(prev => prev.map(o => o.id === id ? { ...o, enabled: !o.enabled } : o));
-    toast.success("Op\u00e7\u00e3o de frete atualizada");
+    toast.success("Opção de frete atualizada");
   }
 
   return (
     <View>
-      <Text style={z.hint}>Configure as op\u00e7\u00f5es de entrega dispon\u00edveis no seu site. O cliente escolhe na hora da compra.</Text>
+      <Text style={z.hint}>Configure as opções de entrega disponíveis no seu site. O cliente escolhe na hora da compra.</Text>
       <View style={z.card}>
         {options.map(opt => (
           <HoverRow key={opt.id} style={z.freightRow}>
@@ -206,7 +206,7 @@ function TabFrete() {
                 <Text style={z.freightDesc}>{opt.desc}</Text>
                 <View style={z.freightMeta}>
                   <Text style={z.freightMetaText}>{opt.estimate}</Text>
-                  <Text style={z.freightMetaDot}>\u00b7</Text>
+                  <Text style={z.freightMetaDot}>·</Text>
                   <Text style={z.freightMetaText}>{opt.cost}</Text>
                 </View>
               </View>
@@ -218,7 +218,7 @@ function TabFrete() {
 
       <View style={z.infoCard}>
         <Icon name="alert" size={14} color={Colors.amber} />
-        <Text style={z.infoText}>Uber Flash requer integra\u00e7\u00e3o com Uber Direct (configurado no setup da Aura). Correios e Transportadora exigem contrato com o parceiro.</Text>
+        <Text style={z.infoText}>Uber Flash requer integração com Uber Direct (configurado no setup da Aura). Correios e Transportadora exigem contrato com o parceiro.</Text>
       </View>
     </View>
   );
@@ -233,7 +233,7 @@ function TabAnalytics() {
       <View style={g.row}>
         <SummaryKPI label="VISITAS" value={String(a.visits)} />
         <SummaryKPI label="PEDIDOS" value={String(a.orders)} color={Colors.green} />
-        <SummaryKPI label="CONVERS\u00c3O" value={a.conversion + "%"} color={Colors.violet3} />
+        <SummaryKPI label="CONVERSÃO" value={a.conversion + "%"} color={Colors.violet3} />
         <SummaryKPI label="RECEITA" value={fmt(a.revenue)} color={Colors.green} />
       </View>
 
@@ -257,7 +257,7 @@ function TabAnalytics() {
 
       <View style={z.infoCard}>
         <Icon name="star" size={14} color={Colors.violet3} />
-        <Text style={z.infoText}>Analytics em tempo real dispon\u00edvel ap\u00f3s publica\u00e7\u00e3o do site. Dados atualizados a cada 5 minutos.</Text>
+        <Text style={z.infoText}>Analytics em tempo real disponível após publicação do site. Dados atualizados a cada 5 minutos.</Text>
       </View>
     </View>
   );

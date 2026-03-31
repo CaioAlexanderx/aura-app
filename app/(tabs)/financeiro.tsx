@@ -10,7 +10,7 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-const INCOME_CATS = ["Vendas", "Servi\u00e7os", "Outros", "Investimentos"];
+const INCOME_CATS = ["Vendas", "Serviços", "Outros", "Investimentos"];
 const EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
 
 const TABS = ["Lançamentos", "A Receber", "Minha Retirada", "Resumo"];
@@ -84,19 +84,19 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
 
   function handleSaveUnit() {
     const val = parseFloat(amount.replace(/[^0-9.,]/g, "").replace(",", "."));
-    if (!val || val <= 0) { toast.error("Informe um valor v\u00e1lido"); return; }
-    if (!desc.trim()) { toast.error("Informe uma descri\u00e7\u00e3o"); return; }
+    if (!val || val <= 0) { toast.error("Informe um valor válido"); return; }
+    if (!desc.trim()) { toast.error("Informe uma descrição"); return; }
     const cat = category || cats[0];
     const today = new Date();
     const dateStr = String(today.getDate()).padStart(2,"0") + "/" + String(today.getMonth()+1).padStart(2,"0");
     add({ date: dateStr, desc: desc.trim(), type: txType, category: cat, amount: val, status: "confirmed", source: "manual" });
-    toast.success(isIncome ? "Receita lan\u00e7ada" : "Despesa lan\u00e7ada");
+    toast.success(isIncome ? "Receita lançada" : "Despesa lançada");
     reset(); onClose();
   }
 
   function handleSaveBatch() {
     const lines = batchText.trim().split("\n").filter(l => l.trim());
-    if (lines.length === 0) { toast.error("Nenhum lan\u00e7amento informado"); return; }
+    if (lines.length === 0) { toast.error("Nenhum lançamento informado"); return; }
     const today = new Date();
     const dateStr = String(today.getDate()).padStart(2,"0") + "/" + String(today.getMonth()+1).padStart(2,"0");
     const items = [];
@@ -108,9 +108,9 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
       if (!val || val <= 0) continue;
       items.push({ date: dateStr, desc: parts[0], type: txType, category: parts[2] || cats[0], amount: val, status: "confirmed" as const, source: "lote" as const });
     }
-    if (items.length === 0) { toast.error("Formato inv\u00e1lido. Use: descri\u00e7\u00e3o;valor;categoria"); return; }
+    if (items.length === 0) { toast.error("Formato inválido. Use: descrição;valor;categoria"); return; }
     addBatch(items);
-    toast.success(items.length + " lan\u00e7amentos adicionados");
+    toast.success(items.length + " lançamentos adicionados");
     reset(); onClose();
   }
 
@@ -120,8 +120,8 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
     <View style={md.overlay}>
       <View style={md.modal}>
         <View style={md.header}>
-          <Text style={md.title}>Novo lan\u00e7amento</Text>
-          <Pressable onPress={() => { reset(); onClose(); }} style={md.closeBtn}><Text style={md.closeText}>\u2715</Text></Pressable>
+          <Text style={md.title}>Novo lançamento</Text>
+          <Pressable onPress={() => { reset(); onClose(); }} style={md.closeBtn}><Text style={md.closeText}>✕</Text></Pressable>
         </View>
 
         {/* Type toggle */}
@@ -137,7 +137,7 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
         {/* Mode toggle */}
         <View style={md.modeRow}>
           <Pressable onPress={() => setMode("unit")} style={[md.modeBtn, mode === "unit" && md.modeBtnActive]}>
-            <Text style={[md.modeText, mode === "unit" && md.modeTextActive]}>Unit\u00e1rio</Text>
+            <Text style={[md.modeText, mode === "unit" && md.modeTextActive]}>Unitário</Text>
           </Pressable>
           <Pressable onPress={() => setMode("batch")} style={[md.modeBtn, mode === "batch" && md.modeBtnActive]}>
             <Text style={[md.modeText, mode === "batch" && md.modeTextActive]}>Lote</Text>
@@ -151,7 +151,7 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
               <TextInput style={md.input} value={amount} onChangeText={setAmount} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
             </View>
             <View style={md.field}>
-              <Text style={md.label}>Descri\u00e7\u00e3o</Text>
+              <Text style={md.label}>Descrição</Text>
               <TextInput style={md.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
             </View>
             <View style={md.field}>
@@ -165,14 +165,14 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
               </View>
             </View>
             <Pressable onPress={handleSaveUnit} style={[md.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}>
-              <Text style={md.saveBtnText}>{isIncome ? "Lan\u00e7ar receita" : "Lan\u00e7ar despesa"}</Text>
+              <Text style={md.saveBtnText}>{isIncome ? "Lançar receita" : "Lançar despesa"}</Text>
             </Pressable>
           </View>
         ) : (
           <View style={md.form}>
             <View style={md.field}>
-              <Text style={md.label}>Lan\u00e7amentos em lote</Text>
-              <Text style={md.hint}>Uma linha por lan\u00e7amento. Formato: descri\u00e7\u00e3o;valor;categoria</Text>
+              <Text style={md.label}>Lançamentos em lote</Text>
+              <Text style={md.hint}>Uma linha por lançamento. Formato: descrição;valor;categoria</Text>
               <TextInput
                 style={[md.input, md.textarea]}
                 value={batchText}
@@ -185,7 +185,7 @@ function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () 
               />
             </View>
             <Pressable onPress={handleSaveBatch} style={[md.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}>
-              <Text style={md.saveBtnText}>Lan\u00e7ar em lote</Text>
+              <Text style={md.saveBtnText}>Lançar em lote</Text>
             </Pressable>
           </View>
         )}
@@ -238,7 +238,6 @@ function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) =>
         );
       })}
     </ScrollView>
-    </View>
   );
 }
 const tb = StyleSheet.create({
@@ -321,7 +320,7 @@ function TabLancamentos() {
     <View>
       <View style={g.row}>
         <SummaryCard label="ENTRADAS" value={fmt(income)} color={Colors.green} />
-        <SummaryCard label="SA\u00cdDAS" value={fmt(expense)} color={Colors.red} />
+        <SummaryCard label="SAÍDAS" value={fmt(expense)} color={Colors.red} />
         <SummaryCard label="SALDO" value={fmt(balance)} color={balance >= 0 ? Colors.green : Colors.red} />
       </View>
       <View style={g.listCard}>
@@ -535,7 +534,7 @@ export default function FinanceiroScreen() {
           <Text style={g.pageTitle}>Financeiro</Text>
           <Pressable onPress={() => setShowModal(true)} style={{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violet,borderRadius:10,paddingHorizontal:16,paddingVertical:10}}>
             <Icon name="dollar" size={16} color="#fff" />
-            <Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>Novo lan\u00e7amento</Text>
+            <Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>Novo lançamento</Text>
           </Pressable>
         </View>
         <TabBar active={activeTab} onSelect={setActiveTab} />
@@ -551,6 +550,7 @@ export default function FinanceiroScreen() {
         </View>
       )}
     </ScrollView>
+    </View>
   );
 }
 

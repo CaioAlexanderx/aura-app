@@ -52,7 +52,7 @@ export default function LoginScreen() {
       <View style={s.field}>
         <Text style={s.label}>Senha</Text>
         <TextInput style={s.input} value={password} onChangeText={setPassword}
-          placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" placeholderTextColor={Colors.ink3}
+          placeholder="••••••••" placeholderTextColor={Colors.ink3}
           secureTextEntry />
       </View>
       <TouchableOpacity style={s.btn} onPress={handleLogin} disabled={isLoading}>
