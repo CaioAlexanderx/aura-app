@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
+import { useTransactions } from "@/stores/transactions";
+import { toast } from "@/components/Toast";
+import { Icon } from "@/components/Icon";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+const INCOME_CATS = ["Vendas", "Servi\u00e7os", "Outros", "Investimentos"];
+const EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
 
 const TABS = ["Lançamentos", "A Receber", "Minha Retirada", "Resumo"];
 
@@ -61,6 +67,163 @@ const MOCK_DRE = {
   marginPct: 46.6,
 };
 
+
+// ── FE-20: Transaction Entry Modal ───────────────────────────
+function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { add, addBatch } = useTransactions();
+  const [mode, setMode] = useState<"unit" | "batch">("unit");
+  const [txType, setTxType] = useState<"income" | "expense">("income");
+  const [amount, setAmount] = useState("");
+  const [desc, setDesc] = useState("");
+  const [category, setCategory] = useState("");
+  const [batchText, setBatchText] = useState("");
+  const isIncome = txType === "income";
+  const cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
+
+  function reset() { setAmount(""); setDesc(""); setCategory(""); setBatchText(""); setMode("unit"); }
+
+  function handleSaveUnit() {
+    const val = parseFloat(amount.replace(/[^0-9.,]/g, "").replace(",", "."));
+    if (!val || val <= 0) { toast.error("Informe um valor v\u00e1lido"); return; }
+    if (!desc.trim()) { toast.error("Informe uma descri\u00e7\u00e3o"); return; }
+    const cat = category || cats[0];
+    const today = new Date();
+    const dateStr = String(today.getDate()).padStart(2,"0") + "/" + String(today.getMonth()+1).padStart(2,"0");
+    add({ date: dateStr, desc: desc.trim(), type: txType, category: cat, amount: val, status: "confirmed", source: "manual" });
+    toast.success(isIncome ? "Receita lan\u00e7ada" : "Despesa lan\u00e7ada");
+    reset(); onClose();
+  }
+
+  function handleSaveBatch() {
+    const lines = batchText.trim().split("\n").filter(l => l.trim());
+    if (lines.length === 0) { toast.error("Nenhum lan\u00e7amento informado"); return; }
+    const today = new Date();
+    const dateStr = String(today.getDate()).padStart(2,"0") + "/" + String(today.getMonth()+1).padStart(2,"0");
+    const items = [];
+    for (const line of lines) {
+      // Format: descricao;valor;categoria (optional)
+      const parts = line.split(";").map(s => s.trim());
+      if (parts.length < 2) continue;
+      const val = parseFloat(parts[1].replace(/[^0-9.,]/g, "").replace(",", "."));
+      if (!val || val <= 0) continue;
+      items.push({ date: dateStr, desc: parts[0], type: txType, category: parts[2] || cats[0], amount: val, status: "confirmed" as const, source: "lote" as const });
+    }
+    if (items.length === 0) { toast.error("Formato inv\u00e1lido. Use: descri\u00e7\u00e3o;valor;categoria"); return; }
+    addBatch(items);
+    toast.success(items.length + " lan\u00e7amentos adicionados");
+    reset(); onClose();
+  }
+
+  if (!visible) return null;
+
+  return (
+    <View style={md.overlay}>
+      <View style={md.modal}>
+        <View style={md.header}>
+          <Text style={md.title}>Novo lan\u00e7amento</Text>
+          <Pressable onPress={() => { reset(); onClose(); }} style={md.closeBtn}><Text style={md.closeText}>\u2715</Text></Pressable>
+        </View>
+
+        {/* Type toggle */}
+        <View style={md.toggleRow}>
+          <Pressable onPress={() => setTxType("income")} style={[md.toggleBtn, isIncome && { backgroundColor: Colors.greenD, borderColor: Colors.green }]}>
+            <Text style={[md.toggleText, isIncome && { color: Colors.green }]}>Receita</Text>
+          </Pressable>
+          <Pressable onPress={() => setTxType("expense")} style={[md.toggleBtn, !isIncome && { backgroundColor: Colors.redD, borderColor: Colors.red }]}>
+            <Text style={[md.toggleText, !isIncome && { color: Colors.red }]}>Despesa</Text>
+          </Pressable>
+        </View>
+
+        {/* Mode toggle */}
+        <View style={md.modeRow}>
+          <Pressable onPress={() => setMode("unit")} style={[md.modeBtn, mode === "unit" && md.modeBtnActive]}>
+            <Text style={[md.modeText, mode === "unit" && md.modeTextActive]}>Unit\u00e1rio</Text>
+          </Pressable>
+          <Pressable onPress={() => setMode("batch")} style={[md.modeBtn, mode === "batch" && md.modeBtnActive]}>
+            <Text style={[md.modeText, mode === "batch" && md.modeTextActive]}>Lote</Text>
+          </Pressable>
+        </View>
+
+        {mode === "unit" ? (
+          <View style={md.form}>
+            <View style={md.field}>
+              <Text style={md.label}>Valor</Text>
+              <TextInput style={md.input} value={amount} onChangeText={setAmount} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
+            </View>
+            <View style={md.field}>
+              <Text style={md.label}>Descri\u00e7\u00e3o</Text>
+              <TextInput style={md.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
+            </View>
+            <View style={md.field}>
+              <Text style={md.label}>Categoria</Text>
+              <View style={md.catGrid}>
+                {cats.map(cat => (
+                  <Pressable key={cat} onPress={() => setCategory(cat)} style={[md.catBtn, category === cat && md.catBtnActive]}>
+                    <Text style={[md.catText, category === cat && md.catTextActive]}>{cat}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <Pressable onPress={handleSaveUnit} style={[md.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}>
+              <Text style={md.saveBtnText}>{isIncome ? "Lan\u00e7ar receita" : "Lan\u00e7ar despesa"}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={md.form}>
+            <View style={md.field}>
+              <Text style={md.label}>Lan\u00e7amentos em lote</Text>
+              <Text style={md.hint}>Uma linha por lan\u00e7amento. Formato: descri\u00e7\u00e3o;valor;categoria</Text>
+              <TextInput
+                style={[md.input, md.textarea]}
+                value={batchText}
+                onChangeText={setBatchText}
+                placeholder={"Venda cliente A;150,00;Vendas\nAluguel;1200,00;Fixas\nMaterial;45,90;Operacional"}
+                placeholderTextColor={Colors.ink3}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+              />
+            </View>
+            <Pressable onPress={handleSaveBatch} style={[md.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}>
+              <Text style={md.saveBtnText}>Lan\u00e7ar em lote</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const md = StyleSheet.create({
+  overlay: { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", zIndex: 100 },
+  modal: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 28, maxWidth: 480, width: "90%", borderWidth: 1, borderColor: Colors.border2 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  title: { fontSize: 20, color: Colors.ink, fontWeight: "700" },
+  closeBtn: { padding: 8 },
+  closeText: { fontSize: 18, color: Colors.ink3 },
+  toggleRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  toggleBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center" },
+  toggleText: { fontSize: 14, fontWeight: "600", color: Colors.ink3 },
+  modeRow: { flexDirection: "row", gap: 6, marginBottom: 20 },
+  modeBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: Colors.bg4 },
+  modeBtnActive: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet },
+  modeText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+  modeTextActive: { color: Colors.violet3 },
+  form: { gap: 14 },
+  field: { gap: 6 },
+  label: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  hint: { fontSize: 10, color: Colors.ink3, fontStyle: "italic" },
+  input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink },
+  textarea: { minHeight: 120, textAlignVertical: "top" as any, paddingTop: 12 },
+  catGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  catBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  catBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  catText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  catTextActive: { color: Colors.violet3, fontWeight: "600" },
+  saveBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 4 },
+  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+});
+
 // ── Tab Bar ──────────────────────────────────────────────────
 
 function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
@@ -75,6 +238,7 @@ function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) =>
         );
       })}
     </ScrollView>
+    </View>
   );
 }
 const tb = StyleSheet.create({
@@ -132,7 +296,7 @@ function TransactionRow({ item }: { item: typeof MOCK_TRANSACTIONS[0] }) {
         <View style={[tr.dot, { backgroundColor: isIncome ? Colors.green : Colors.red }]} />
         <View>
           <Text style={tr.desc}>{item.desc}</Text>
-          <Text style={tr.meta}>{item.date} / {item.category}{item.status === "pending" ? " / Pendente" : ""}</Text>
+          <Text style={tr.meta}>{item.date} / {item.category}{item.source && item.source !== "manual" ? " / " + (item.source === "pdv" ? "PDV" : item.source === "folha" ? "Folha" : item.source === "estoque" ? "Estoque" : item.source === "lote" ? "Lote" : "") : ""}{item.status === "pending" ? " / Pendente" : ""}</Text>
         </View>
       </View>
       <Text style={[tr.amount, { color: isIncome ? Colors.green : Colors.red }]}>
@@ -151,17 +315,17 @@ const tr = StyleSheet.create({
 });
 
 function TabLancamentos() {
-  const income = MOCK_TRANSACTIONS.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = MOCK_TRANSACTIONS.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const { transactions, totals } = useTransactions();
+  const { income, expense, balance } = totals();
   return (
     <View>
       <View style={g.row}>
         <SummaryCard label="ENTRADAS" value={fmt(income)} color={Colors.green} />
-        <SummaryCard label="SAIDAS" value={fmt(expense)} color={Colors.red} />
-        <SummaryCard label="SALDO" value={fmt(income - expense)} color={income - expense >= 0 ? Colors.green : Colors.red} />
+        <SummaryCard label="SA\u00cdDAS" value={fmt(expense)} color={Colors.red} />
+        <SummaryCard label="SALDO" value={fmt(balance)} color={balance >= 0 ? Colors.green : Colors.red} />
       </View>
       <View style={g.listCard}>
-        {MOCK_TRANSACTIONS.map(t => <TransactionRow key={t.id} item={t} />)}
+        {transactions.map(t => <TransactionRow key={t.id} item={t} />)}
       </View>
     </View>
   );
@@ -360,12 +524,21 @@ function TabResumo() {
 
 export default function FinanceiroScreen() {
   const [activeTab, setActiveTab] = useState(0);
+  const [showModal, setShowModal] = useState(false);
   const { isDemo } = useAuthStore();
 
   return (
-    <ScrollView style={g.screen} contentContainerStyle={g.content}>
-      <Text style={g.pageTitle}>Financeiro</Text>
-      <TabBar active={activeTab} onSelect={setActiveTab} />
+    <View style={{flex:1}}>
+      <TransactionModal visible={showModal} onClose={() => setShowModal(false)} />
+      <ScrollView style={g.screen} contentContainerStyle={g.content}>
+        <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <Text style={g.pageTitle}>Financeiro</Text>
+          <Pressable onPress={() => setShowModal(true)} style={{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violet,borderRadius:10,paddingHorizontal:16,paddingVertical:10}}>
+            <Icon name="dollar" size={16} color="#fff" />
+            <Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>Novo lan\u00e7amento</Text>
+          </Pressable>
+        </View>
+        <TabBar active={activeTab} onSelect={setActiveTab} />
 
       {activeTab === 0 && <TabLancamentos />}
       {activeTab === 1 && <TabAReceber />}
@@ -386,7 +559,7 @@ export default function FinanceiroScreen() {
 const g = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
+  pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
   row: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 20 },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   periodLabel: { fontSize: 11, color: Colors.violet3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16, paddingHorizontal: 10 },
