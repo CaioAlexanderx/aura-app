@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, Switch } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, Switch, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
@@ -78,7 +78,7 @@ function TabMeuSite() {
           </View>
         </View>
         <View style={z.previewFooter}>
-          <Text style={z.previewFooterText}>Loja powered by Aura.</Text>
+          <Pressable onPress={() => Linking.openURL("https://getaura.com.br")}><Text style={z.previewFooterText}>Loja powered by <Text style={{color: Colors.violet3, fontWeight: "600"}}>Aura.</Text></Text></Pressable>
         </View>
       </HoverCard>
 

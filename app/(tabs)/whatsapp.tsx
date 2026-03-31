@@ -165,10 +165,16 @@ function TabAutomacoes() {
         ))}
       </View>
 
-      <Pressable onPress={() => toast.info("Criar nova automação")} style={z.createBtn}>
-        <Icon name="star" size={16} color={Colors.violet3} />
-        <Text style={z.createBtnText}>Criar automação</Text>
-      </Pressable>
+      <View style={z.supportCard}>
+        <View style={z.supportIcon}><Icon name="star" size={22} color={Colors.violet3} /></View>
+        <Text style={z.supportTitle}>Automação personalizada</Text>
+        <Text style={z.supportDesc}>Precisa de uma automação diferente? Nosso time cria fluxos sob medida para o seu negócio.</Text>
+        <Pressable onPress={() => toast.success("Redirecionando para o suporte Aura...")} style={z.supportBtn}>
+          <Icon name="users" size={16} color="#fff" />
+          <Text style={z.supportBtnText}>Falar com meu Analista de Negócios</Text>
+        </Pressable>
+        <Text style={z.supportHint}>Resposta em até 2h úteis</Text>
+      </View>
     </View>
   );
 }
@@ -209,10 +215,31 @@ function TabCampanhas() {
         })}
       </View>
 
-      <Pressable onPress={() => toast.info("Criar nova campanha")} style={z.createBtn}>
-        <Icon name="star" size={16} color={Colors.violet3} />
-        <Text style={z.createBtnText}>Nova campanha</Text>
-      </Pressable>
+      <View style={z.newCampCard}>
+        <Text style={z.newCampTitle}>Criar nova campanha</Text>
+        <Text style={z.newCampDesc}>Envie mensagens personalizadas para grupos de clientes.</Text>
+        <View style={z.campTemplates}>
+          <Pressable onPress={() => toast.info("Template: Promoção")} style={z.campTemplate}>
+            <Icon name="cart" size={16} color={Colors.green} />
+            <Text style={z.campTemplateText}>Promoção</Text>
+          </Pressable>
+          <Pressable onPress={() => toast.info("Template: Novidade")} style={z.campTemplate}>
+            <Icon name="star" size={16} color={Colors.amber} />
+            <Text style={z.campTemplateText}>Novidade</Text>
+          </Pressable>
+          <Pressable onPress={() => toast.info("Template: Reativação")} style={z.campTemplate}>
+            <Icon name="trending_up" size={16} color={Colors.violet3} />
+            <Text style={z.campTemplateText}>Reativação</Text>
+          </Pressable>
+          <Pressable onPress={() => toast.info("Template: Evento")} style={z.campTemplate}>
+            <Icon name="users" size={16} color={Colors.red} />
+            <Text style={z.campTemplateText}>Evento</Text>
+          </Pressable>
+        </View>
+        <Pressable onPress={() => toast.info("Iniciando nova campanha...")} style={z.newCampBtn}>
+          <Text style={z.newCampBtnText}>Criar campanha em branco</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
