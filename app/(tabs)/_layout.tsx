@@ -9,7 +9,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { ToastContainer } from "@/components/Toast";
 import OnboardingScreen from "@/app/(tabs)/onboarding";
 
-const LOGO="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
+const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
@@ -45,7 +45,7 @@ function useWebFonts() {
     const st = document.createElement("style"); st.id = "aura-font-override";
     st.textContent = "*, *::before, *::after { font-family: " + Fonts.body + " !important; }\n[data-testid] { font-family: " + Fonts.body + " !important; }\ndiv[dir] { font-family: " + Fonts.body + " !important; }\n@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
     document.head.appendChild(st);
-    if (!document.getElementById("aura-favicon")) { const fav = document.createElement("link"); fav.id = "aura-favicon"; fav.rel = "icon"; fav.type = "image/svg+xml"; fav.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/favicon.svg"; document.head.appendChild(fav); const fav2 = document.createElement("link"); fav2.rel = "icon"; fav2.type = "image/jpeg"; fav2.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg"; document.head.appendChild(fav2); }
+    if (!document.getElementById("aura-favicon")) { const fav = document.createElement("link"); fav.id = "aura-favicon"; fav.rel = "icon"; fav.type = "image/svg+xml"; fav.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/favicon.svg"; document.head.appendChild(fav); }
     if (!document.getElementById("aura-wow-css")) { const wc = document.createElement("style"); wc.id = "aura-wow-css"; wc.textContent = "* { font-variant-numeric: tabular-nums; } a, button, [role=button] { cursor: pointer !important; } ::selection { background: rgba(124,58,237,0.3); color: inherit; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.4); } @keyframes auraStagger { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } @keyframes auraBounce { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }"; document.head.appendChild(wc); }
   }, []);
 }
@@ -53,6 +53,15 @@ function useWebFonts() {
 function isA(p: string, r: string) {
   if (r === "/") return p === "/" || p === "" || p.endsWith("/index") || p === "/(tabs)";
   return p.includes(r.replace("/", ""));
+}
+
+function AuraLogo({ C }: { C: ReturnType<typeof useColors> }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Image source={{ uri: LOGO_SVG }} style={{ width: 36, height: 36 }} resizeMode="contain" />
+      <Text style={{ fontSize: 22, fontWeight: "800", color: C.ink, letterSpacing: -0.5 }}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text>
+    </View>
+  );
 }
 
 function SI({ l, ic, a, onP, soon, C }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors> }) {
@@ -77,7 +86,7 @@ function Sidebar() {
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   return (
     <View style={{ width: 240, backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 14, justifyContent: "flex-start" }}>
-      <Pressable onPress={() => ro.push("/")} style={{ paddingHorizontal: 4, paddingBottom: 16, alignItems: "flex-start" }}><Image source={{ uri: LOGO }} style={{ width: 180, height: 64, borderRadius: 12 }} resizeMode="contain" /></Pressable>
+      <Pressable onPress={() => ro.push("/")} style={{ paddingHorizontal: 8, paddingBottom: 20, alignItems: "flex-start" }}><AuraLogo C={C} /></Pressable>
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 8 }} />
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={false}>
         {NAV.map(s => <View key={s.s} style={{ marginBottom: 16 }}><Text style={{ fontSize: 10, color: C.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }}>{s.s}</Text>{s.i.map(i => <SI key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} />)}</View>)}
