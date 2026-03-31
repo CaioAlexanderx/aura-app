@@ -142,11 +142,11 @@ const z = StyleSheet.create({
   heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
   heroTitle: { fontSize: 20, fontWeight: "800", color: Colors.ink, textAlign: "center" },
   heroDesc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, maxWidth: 400 },
-  heroStats: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 0 },
+  heroStats: { flexDirection: IS_WIDE ? "row" : "column", alignItems: "center", marginTop: 8, gap: IS_WIDE ? 0 : 12 },
   heroStat: { alignItems: "center", paddingHorizontal: 20, gap: 4 },
   heroStatValue: { fontSize: 16, fontWeight: "800", color: Colors.ink },
   heroStatLabel: { fontSize: 10, color: Colors.ink3 },
-  heroStatDivider: { width: 1, height: 32, backgroundColor: Colors.border },
+  heroStatDivider: { width: IS_WIDE ? 1 : "60%", height: IS_WIDE ? 32 : 1, backgroundColor: Colors.border },
   // Contact
   contactRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
   contactBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 14 },

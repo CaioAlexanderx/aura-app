@@ -50,6 +50,17 @@ function useWebFonts() {
   }, []);
 }
 
+
+function useScreenWidth() {
+  const [width, setWidth] = useState(Platform.OS === "web" ? (typeof window !== "undefined" ? window.innerWidth : 1024) : 375);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return width;
+}
 function isA(p: string, r: string) {
   if (r === "/") return p === "/" || p === "" || p.endsWith("/index") || p === "/(tabs)";
   return p.includes(r.replace("/", ""));
@@ -166,27 +177,37 @@ export default function TabsLayout() {
   const { isDark } = useThemeStore();
   const { onboardingComplete, token } = useAuthStore();
   const themeKey = isDark ? "dark" : "light";
+  const screenW = useScreenWidth();
   const w = Platform.OS === "web";
+  const isDesktop = w && screenW > 768;
   const grad = isDark
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
   if (w && token && !onboardingComplete) return (
-    <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
-      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative" } as any}>
-        <ToastContainer />
-        <OnboardingScreen />
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative", overflow: "auto" } as any}>
+      <ToastContainer />
+      <OnboardingScreen />
     </div>
   );
 
-  if (w) return (
+  if (w && isDesktop) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
       <Sidebar />
       <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative" } as any}>
         <ToastContainer />
         <PageTransition><Slot /></PageTransition>
       </div>
+    </div>
+  );
+
+  if (w && !isDesktop) return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative" } as any}>
+      <div key={themeKey} style={{ flex: 1, overflow: "auto", position: "relative" } as any}>
+        <ToastContainer />
+        <PageTransition><Slot /></PageTransition>
+      </div>
+      <MBar />
     </div>
   );
   if (token && !onboardingComplete) return (

@@ -426,7 +426,7 @@ const z = StyleSheet.create({
   campBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   campBadgeText: { fontSize: 9, fontWeight: "600" },
   campDate: { fontSize: 10, color: Colors.ink3 },
-  campStats: { flexDirection: "row", gap: 16 },
+  campStats: { flexDirection: "row", gap: IS_WIDE ? 16 : 8, flexWrap: "wrap" },
   campStat: { alignItems: "center", gap: 2 },
   campStatValue: { fontSize: 14, fontWeight: "700", color: Colors.ink },
   campStatLabel: { fontSize: 9, color: Colors.ink3 },

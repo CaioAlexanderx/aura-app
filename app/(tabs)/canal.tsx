@@ -320,7 +320,7 @@ const z = StyleSheet.create({
   previewTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   previewLogo: { width: 80, height: 32 },
   previewBrand: { fontSize: 18, fontWeight: "800" },
-  previewNav: { flexDirection: "row", gap: 16 },
+  previewNav: { flexDirection: "row", gap: IS_WIDE ? 16 : 8, flexWrap: "wrap" },
   previewNavItem: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   previewTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, marginBottom: 6 },
   previewDesc: { fontSize: 13, color: Colors.ink3, lineHeight: 20, marginBottom: 16 },
@@ -345,7 +345,7 @@ const z = StyleSheet.create({
   textarea: { minHeight: 80, textAlignVertical: "top" },
   // Color picker
   colorRow: { flexDirection: "row", gap: 10, marginTop: 6, marginBottom: 16 },
-  colorDot: { width: 32, height: 32, borderRadius: 16 },
+  colorDot: { width: IS_WIDE ? 32 : 28, height: IS_WIDE ? 32 : 28, borderRadius: IS_WIDE ? 16 : 14 },
   colorDotActive: { borderWidth: 3, borderColor: "#fff" },
   // Publish
   publishRow: { flexDirection: "row", alignItems: "center", marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },

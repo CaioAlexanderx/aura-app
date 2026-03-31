@@ -138,7 +138,7 @@ const z = StyleSheet.create({
   actBadgeText: { fontSize: 8, fontWeight: "700" },
   actAction: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   actDetail: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
-  actTime: { fontSize: 10, color: Colors.ink3, minWidth: 80, textAlign: "right" },
+  actTime: { fontSize: 10, color: Colors.ink3, minWidth: IS_WIDE ? 80 : 60, textAlign: "right" },
   // Info
   infoCard: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
   infoText: { fontSize: 11, color: Colors.violet3, flex: 1, lineHeight: 16 },
