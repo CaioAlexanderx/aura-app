@@ -87,22 +87,22 @@ export default function DashboardScreen(){
         </View>
 
         <HC style={s.hero} onPress={()=>go("/financeiro")}>
-          <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saud\u00e1vel</Text></View></View>
-          <Text style={s.hv}>{fmt(useCountUp(d.net))}</Text><Text style={s.hl2}>Lucro l\u00edquido do m\u00eas</Text>
+          <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudável</Text></View></View>
+          <Text style={s.hv}>{fmt(useCountUp(d.net))}</Text><Text style={s.hl2}>Lucro líquido do mês</Text>
           {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.daTxt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
         </HC>
 
-        <Text style={s.sec}>Vis\u00e3o geral</Text>
+        <Text style={s.sec}>Visão geral</Text>
         <View style={s.grid}>
           <KPI idx={0} ic="dollar" iconColor={Colors.green} label="RECEITA DO M\u00cAS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
           <KPI idx={1} ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
-          <KPI idx={2} ic="trending_up" iconColor={Colors.green} label="LUCRO L\u00cdQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
+          <KPI idx={2} ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
           <KPI idx={3} ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={fmt(d.salesToday)} onPress={()=>go("/pdv")}/>
-          <KPI idx={4} ic="receipt" iconColor={Colors.amber} label="TICKET M\u00c9DIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+          <KPI idx={4} ic="receipt" iconColor={Colors.amber} label="TICKET MÉDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
           <KPI idx={5} ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
         </View>
 
-        <Text style={s.sec}>Acesso r\u00e1pido</Text>
+        <Text style={s.sec}>Acesso rápido</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
           <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
           <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
@@ -112,13 +112,13 @@ export default function DashboardScreen(){
           <QA ic="users" iconColor={Colors.violet3} label="Clientes" onPress={()=>go("/clientes")}/>
         </ScrollView>
 
-        <View style={s.sh}><Text style={s.sec}>Obriga\u00e7\u00f5es cont\u00e1beis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
+        <View style={s.sh}><Text style={s.sec}>Obrigações contábeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
         <HC style={s.lc} onPress={()=>go("/contabilidade")}>
           {(d.obligations??MOCK.obligations).map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
-          <View style={s.lf}><Text style={s.lft}>Apoio cont\u00e1bil informativo</Text></View>
+          <View style={s.lf}><Text style={s.lft}>Apoio contábil informativo</Text></View>
         </HC>
 
-        <View style={s.sh}><Text style={s.sec}>\u00daltimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
+        <View style={s.sh}><Text style={s.sec}>Últimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
         <HC style={s.lc}>
           {(d.recentSales??MOCK.recentSales).map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
         </HC>
