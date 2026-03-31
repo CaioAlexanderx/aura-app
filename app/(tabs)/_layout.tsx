@@ -17,7 +17,7 @@ const NAV: NavSection[] = [
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" }]},
   { s: "Vendas", i: [{ r: "/pdv", l: "PDV", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha de Pagamento", ic: "payroll" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "star", soon: true },{ r: "/canal", l: "Canal Digital", ic: "bar_chart", soon: true }]},
+  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "star", soon: true },{ r: "/canal", l: "Canal Digital", ic: "bar_chart" }]},
   { s: "Crescimento", i: [{ r: "/ia", l: "Assistente IA", ic: "star", soon: true }]},
 ];
 const MTABS = [
