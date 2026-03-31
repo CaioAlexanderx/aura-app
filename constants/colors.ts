@@ -3,17 +3,21 @@ import { Platform } from "react-native";
 
 const THEME_KEY = "aura_theme";
 
-// ── Resolve theme at load time ───────────────────────────────
+// Resolve theme at load time
 function getInitialTheme(): boolean {
   if (Platform.OS === "web" && typeof localStorage !== "undefined") {
-    return localStorage.getItem(THEME_KEY) === "dark";
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "dark") return true;
+    if (saved === "light") return false;
+    // No preference saved - default to dark
+    return true;
   }
-  return false; // light default
+  return true; // dark default
 }
 
 const IS_DARK = getInitialTheme();
 
-// ── Dark palette ─────────────────────────────────────────────
+// Dark palette
 const Dark = {
   bg: "#060816", bg2: "#090c1a", bg3: "#0e1228", bg4: "#141830",
   ink: "#f0edff", ink2: "rgba(220,215,255,0.75)", ink3: "rgba(170,160,235,0.65)",
@@ -25,7 +29,7 @@ const Dark = {
   amber: "#fbbf24", amberD: "rgba(251,191,36,0.10)",
 } as const;
 
-// ── Light palette ────────────────────────────────────────────
+// Light palette
 const Light = {
   bg: "#f5f3ff", bg2: "#ffffff", bg3: "#ffffff", bg4: "#f0edf8",
   ink: "#1a1a2e", ink2: "#3d3660", ink3: "#6b6193",
@@ -37,34 +41,44 @@ const Light = {
   amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
 } as const;
 
-// ── Colors: resolved ONCE at load from localStorage ──────────
-// StyleSheet.create() captures these at module load — correct values from the start
+// Colors: resolved ONCE at load from localStorage
 export const Colors = IS_DARK ? { ...Dark } : { ...Light };
 
-// ── Theme store ──────────────────────────────────────────────
+// Theme store
 type ThemeState = {
   isDark: boolean;
   toggle: () => void;
 };
 
-export const useThemeStore = create<ThemeState>(() => ({
+export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: IS_DARK,
   toggle: () => {
-    if (Platform.OS === "web" && typeof localStorage !== "undefined") {
-      const next = !IS_DARK;
+    if (Platform.OS !== "web" || typeof localStorage === "undefined") return;
+    try {
+      const current = get().isDark;
+      const next = !current;
+      // Update store state first to prevent stale renders
+      set({ isDark: next });
+      // Persist to localStorage
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
-      // Reload to apply — StyleSheet.create() needs fresh module evaluation
+      // Small delay to let React settle before reload
+      setTimeout(() => {
+        window.location.reload();
+      }, 50);
+    } catch (e) {
+      console.warn("Theme toggle error:", e);
+      // Fallback: just reload
       window.location.reload();
     }
   },
 }));
 
-// ── Hook for layout components that need reactive colors ─────
+// Hook for layout components that need reactive colors
 export function useColors() {
   const isDark = useThemeStore(s => s.isDark);
   return isDark ? Dark : Light;
 }
 
-// ── Palette exports ──────────────────────────────────────────
+// Palette exports
 export const DarkPalette = Dark;
 export const LightPalette = Light;
