@@ -13,6 +13,13 @@ type EmptyStateProps = {
   onSecondary?: () => void;
 };
 
+// W-06: Inject pulse animation
+if (typeof document !== 'undefined' && !document.getElementById('aura-pulse')) {
+  const s = document.createElement('style'); s.id = 'aura-pulse';
+  s.textContent = '@keyframes auraPulse { 0%, 100% { transform: scale(1); opacity: 0.15; } 50% { transform: scale(1.05); opacity: 0.25; } }';
+  document.head.appendChild(s);
+}
+
 export function EmptyState({ icon, title, description, actionLabel, onAction, secondaryLabel, onSecondary }: EmptyStateProps) {
   const [h, sH] = Platform.OS === "web" ? [false, () => {}] : [false, () => {}];
 
