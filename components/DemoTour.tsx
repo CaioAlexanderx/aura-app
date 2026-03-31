@@ -127,7 +127,7 @@ const t = StyleSheet.create({
   overlay: {
     position: "absolute" as any,
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: step === 0 ? "rgba(6,8,22,0.95)" : "rgba(0,0,0,0.35)",
+    backgroundColor: step === 0 ? "rgba(6,8,22,0.95)" : step === 0 ? "rgba(6,8,22,0.95)" : "rgba(0,0,0,0.35)",
     zIndex: 1000,
     alignItems: "center",
     padding: 20,
