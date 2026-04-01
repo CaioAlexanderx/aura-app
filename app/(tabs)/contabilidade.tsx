@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useQuery } from "@tanstack/react-query";
+import { companiesApi } from "@/services/api";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
 import { HoverRow } from "@/components/HoverRow";

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useQuery } from "@tanstack/react-query";
+import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
@@ -120,7 +122,17 @@ function RBar({l,v,tot,col}:{l:string;v:number;tot:number;col:string}) {
 }
 
 export default function ClientesScreen() {
-  const { isDemo } = useAuthStore();
+  const { isDemo, company, token } = useAuthStore();
+
+  // CONN-15: Fetch real customers when not in demo
+  const { data: apiCustomers } = useQuery({
+    queryKey: ["customers", company?.id],
+    queryFn: () => companiesApi.customers(company!.id),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+    staleTime: 30000,
+  });
+  // TODO: replace INIT with apiCustomers?.customers when backend has data
   const [tab,sTab]=useState(0);const [q,sQ]=useState("");const [expId,sExp]=useState<string|null>(null);const [rm,sRm]=useState<"ltv"|"visits">("ltv");const [cust,sCust]=useState<Cust[]>(INIT);const [showAdd,sAdd]=useState(false);
   
   function handleExportCSV() {

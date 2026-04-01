@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useQuery } from "@tanstack/react-query";
+import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { AgentBanner } from "@/components/AgentBanner";
 
@@ -495,7 +497,17 @@ const alS = StyleSheet.create({
 // ── Main Screen ──────────────────────────────────────────────
 
 export default function EstoqueScreen() {
-  const { isDemo } = useAuthStore();
+  const { isDemo, company, token } = useAuthStore();
+
+  // CONN-13: Fetch real products when not in demo
+  const { data: apiData } = useQuery({
+    queryKey: ["products", company?.id],
+    queryFn: () => companiesApi.products(company!.id),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+    staleTime: 30000,
+  });
+  // TODO: replace INITIAL_PRODUCTS with apiData?.products when backend has data
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
@@ -505,20 +517,15 @@ export default function EstoqueScreen() {
   const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...products.map(p => p.category)]));
   const filterCategories = ["Todos", ...allCategories];
 
-  const filtered = products.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
-    const matchCat = catFilter === "Todos" || p.category === catFilter;
-    
-  function handleExportCSV() {
+    function handleExportCSV() {
     if (Platform.OS === "web") {
-      const header = "Nome,Preço,Estoque,Categoria,Código\n";
-      const rows = PRODUCTS.map(p => [p.name, p.price, p.stock ?? "", p.category, p.barcode ?? ""].join(",")).join("\n");
+      const header = "Nome,Preco,Estoque,Categoria,Codigo\n";
+      const rows = products.map(pp => [pp.name, pp.price, pp.stock ?? "", pp.category, pp.barcode ?? ""].join(",")).join("\n");
       const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = "estoque_aura_" + new Date().toISOString().slice(0,10) + ".csv";
       link.click();
-      toast.success("Estoque exportado com sucesso!");
     }
   }
 
@@ -527,15 +534,18 @@ export default function EstoqueScreen() {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".csv,.xlsx,.xls";
-      input.onchange = (e) => {
-        const file = (e.target as any)?.files?.[0];
-        if (file) { toast.success("Arquivo \"" + file.name + "\" recebido! Processando..."); }
+      input.onchange = (ev: any) => {
+        const f = ev.target?.files?.[0];
+        if (f) { alert("Arquivo " + f.name + " recebido!"); }
       };
       input.click();
     }
   }
 
-return matchSearch && matchCat;
+  const filtered = products.filter(p => {
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
+    const matchCat = catFilter === "Todos" || p.category === catFilter;
+    return matchSearch && matchCat;
   });
 
   const lowStock = products.filter(p => p.stock <= p.minStock);
