@@ -112,24 +112,77 @@ export default function OnboardingScreen() {
 
   async function lookupCnpj() {
     const nums = cnpj.replace(/\D/g, "");
-    if (nums.length !== 14) { Alert.alert("CNPJ deve ter 14 digitos"); return; }
+    if (nums.length !== 14) { Alert.alert("CNPJ deve ter 14 dígitos"); return; }
     setLookingUp(true);
-    setTimeout(() => {
-      const mockCnae = nums.startsWith("96") ? "9602-5/01" : nums.startsWith("86") ? "8630-5/04" : "6202-3/00";
-      setCnpjData({ razaoSocial: company?.name || "Empresa Demo Ltda", cnae: mockCnae, regime: mockCnae.startsWith("62") ? "Simples Nacional" : "MEI", uf: "SP", municipio: "Jacarei" });
-      const prefix = mockCnae.replace(/[^0-9]/g, "").substring(0, 4);
-      setBizType(detectProfileFromCnae(prefix, false));
+    try {
+      // Tenta via backend (com cache Redis)
+      let data;
+      try {
+        const { cnpjApi } = require("@/services/api");
+        data = await cnpjApi.lookup(nums);
+      } catch {
+        // Fallback: BrasilAPI direto
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${nums}`);
+        if (!res.ok) throw new Error("CNPJ não encontrado");
+        const rf = await res.json();
+        data = {
+          legal_name: rf.razao_social || rf.nome_fantasia || "",
+          cnae_principal: { code: String(rf.cnae_fiscal || ""), description: rf.cnae_fiscal_descricao || "" },
+          suggested_regime: rf.natureza_juridica === "2135" ? "MEI" : "Simples Nacional",
+          address_state: rf.uf || "SP",
+          address_city: rf.municipio || "",
+          suggested_vertical: null,
+        };
+      }
+      setCnpjData({
+        razaoSocial: data.legal_name || data.razao_social || "Empresa",
+        cnae: data.cnae_principal?.code ? data.cnae_principal.code + " - " + (data.cnae_principal.description || "") : "---",
+        regime: data.suggested_regime || "MEI",
+        uf: data.address_state || "SP",
+        municipio: data.address_city || "",
+      });
+      // Detect biz type from CNAE (for UI selection, NOT for vertical activation)
+      const prefix = String(data.cnae_principal?.code || "").replace(/[^0-9]/g, "").substring(0, 4);
+      if (prefix && typeof detectProfileFromCnae === "function") {
+        setBizType(detectProfileFromCnae(prefix, false));
+      }
       setLookingUp(false);
       setStep(2);
-    }, 1500);
+    } catch (err: any) {
+      setLookingUp(false);
+      Alert.alert("Erro", err?.message || "Não foi possível consultar o CNPJ");
+    }
   }
 
-  function finish() {
+  async function finish() {
     setShowSplash(true);
+    try {
+      const companyId = company?.id;
+      if (companyId && !company?.name?.includes("Demo")) {
+        const { onboardingApi } = require("@/services/api");
+        // Step 1: CNPJ (if provided)
+        if (cnpj.replace(/\D/g, "").length === 14) {
+          try { await onboardingApi.stepCnpj(companyId, cnpj.replace(/\D/g, "")); } catch {}
+        }
+        // Step 2: Regime
+        const regimeMap: Record<string, string> = { "MEI": "mei", "Simples Nacional": "simples_nacional" };
+        const regime = regimeMap[cnpjData?.regime] || "mei";
+        try { await onboardingApi.stepRegime(companyId, regime); } catch {}
+        // Step 3: Perfil (finaliza)
+        try {
+          await onboardingApi.stepPerfil(companyId, {
+            trade_name: cnpjData?.razaoSocial || company?.name,
+          });
+        } catch {}
+      }
+    } catch (err) {
+      console.warn("Onboarding API error (non-blocking):", err);
+    }
+    // Always complete locally even if API fails
     setTimeout(() => {
       completeOnboarding({ logo: logo || undefined, cnpj: cnpj || undefined, businessType: bizType });
       router.replace("/");
-    }, 3000);
+    }, 2500);
   }
 
   const inp = { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink };
