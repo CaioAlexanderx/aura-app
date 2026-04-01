@@ -2,11 +2,14 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { adminApi } from "@/services/api";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
 import { HoverCard } from "@/components/HoverCard";
 import { HoverRow } from "@/components/HoverRow";
 import { PageHeader } from "@/components/PageHeader";
+import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 
@@ -41,6 +44,17 @@ const STATUS_C: Record<string, { color: string; label: string }> = {
 };
 
 function Dashboard() {
+  // CONN-25: Fetch real admin dashboard data
+  const { token, isStaff } = useAuthStore();
+  const { data: apiDashboard } = useQuery({
+    queryKey: ["admin-dashboard"],
+    queryFn: () => adminApi.dashboard(),
+    enabled: !!token && isStaff,
+    retry: 1,
+    staleTime: 30000,
+  });
+  // TODO: replace CLIENTS mock with apiDashboard when backend returns real data
+
   const activeClients = CLIENTS.filter(c => c.status === "active");
   const totalMRR = CLIENTS.filter(c => c.status !== "cancelled").reduce((s, c) => s + c.mrr, 0);
   const avgTicket = totalMRR / activeClients.length;
@@ -121,6 +135,27 @@ const d = StyleSheet.create({
 });
 
 function ClientsTable() {
+  // CONN-25: Fetch real admin clients
+  const { token, isStaff } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { data: apiClients } = useQuery({
+    queryKey: ["admin-clients"],
+    queryFn: () => adminApi.clients(),
+    enabled: !!token && isStaff,
+    retry: 1,
+    staleTime: 30000,
+  });
+
+  // CONN-25: Toggle module mutation
+  const toggleMutation = useMutation({
+    mutationFn: ({ companyId, module, enabled }: { companyId: string; module: string; enabled: boolean }) =>
+      adminApi.toggleModule(companyId, module, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
+    },
+  });
+  // TODO: replace CLIENTS mock with apiClients?.clients when backend returns real data
+
   const [selected, setSelected] = useState<Client | null>(null);
   const [filter, setFilter] = useState("all");
 
@@ -166,7 +201,12 @@ function ClientsTable() {
                     return (
                       <View key={mod} style={ct.toggleRow}>
                         <Text style={[ct.toggleLabel, !isOn && { color: Colors.ink3 + "66" }]}>{mod}</Text>
-                        <Switch value={isOn} trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }} thumbColor={isOn ? Colors.violet : Colors.ink3} onValueChange={() => toast.success(mod + " atualizado para " + client.name)} />
+                        <Switch value={isOn} trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }} thumbColor={isOn ? Colors.violet : Colors.ink3} onValueChange={() => (() => {
+                        if (isStaff && token) {
+                          toggleMutation.mutate({ companyId: client.id, module: mod.toLowerCase().replace(/ /g, "_"), enabled: !isOn });
+                        }
+                        toast.success(mod + " atualizado para " + client.name);
+                      })()} />
                       </View>
                     );
                   })}
