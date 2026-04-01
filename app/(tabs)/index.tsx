@@ -75,7 +75,7 @@ function useCountUp(target, dur) { dur = dur || 1200; const [v, sv] = useState(0
 function Sparkline({ data, color, w, h }) { w=w||60; h=h||20; if(Platform.OS!=="web"||!data||data.length<2) return null; var mx=Math.max.apply(null,data),mn=Math.min.apply(null,data),r=mx-mn||1; var pts=data.map(function(v,i){return((i/(data.length-1))*w)+","+(h-((v-mn)/r)*(h-4)-2)}).join(" "); return <div style={{width:w,height:h,marginTop:4}} dangerouslySetInnerHTML={{__html:'<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></svg>'}} />; }
 export default function DashboardScreen(){
   const{user,company,token,isDemo,logout}=useAuthStore();const router=useRouter();
-  const{data}=useQuery({queryKey:["dashboard",company?.id],queryFn:()=>dashboardApi.summary(company!.id,token!),enabled:!!company?.id&&!!token&&!isDemo,retry:1});
+  const{data}=useQuery({queryKey:["dashboard",company?.id],queryFn: () => dashboardApi.aggregate(company!.id),enabled:!!company?.id&&!!token&&!isDemo,retry:1});
   const d=isDemo?MOCK:(data??MOCK);const greeting=grt();const month=gm();const year=new Date().getFullYear();const go=(p:string)=>router.push(p as any);
 
   return (
