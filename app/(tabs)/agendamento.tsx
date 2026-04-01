@@ -196,7 +196,7 @@ const ts = StyleSheet.create({
   dayText: { fontSize: 13, fontWeight: "600", color: Colors.ink3 },
   dayTextActive: { color: "#fff" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  slot: { width: IS_WIDE ? "15%" : "30%", backgroundColor: Colors.bg3, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 2 },
+  slot: { width: IS_WIDE ? "15%" : "28%", backgroundColor: Colors.bg3, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 2 },
   slotBusy: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   slotText: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   slotTextBusy: { color: Colors.red },

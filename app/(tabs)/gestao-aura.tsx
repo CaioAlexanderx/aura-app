@@ -251,6 +251,8 @@ const fa = StyleSheet.create({
 });
 
 export default function GestaoAuraScreen() {
+  // Admin guard — in production, check user role
+  const isAdmin = true; // TODO: check useAuthStore().user?.role === "admin"
   const [tab, setTab] = useState(0);
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>

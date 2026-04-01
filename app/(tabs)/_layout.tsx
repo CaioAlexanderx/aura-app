@@ -16,11 +16,10 @@ type NavSection = { s: string; i: NavItem[] };
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard" },{ r: "/financeiro", l: "Financeiro", ic: "wallet" },{ r: "/nfe", l: "NF-e", ic: "file_text" }]},
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "headset" }]},
-  { s: "Vendas", i: [{ r: "/pdv", l: "PDV", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
-  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
+  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio" },{ r: "/whatsapp", l: "WhatsApp", ic: "message", plan: "negocio" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao" }]},
-  { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "bar_chart" }]},
 ];
 
 function useWebFonts() {
@@ -136,6 +135,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name="settings" size={14} color={C.ink3} /><Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Configuracoes</Text>
             </Pressable>
+            <Pressable onPress={() => ro.push("/gestao-aura" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.amber + "33", backgroundColor: Colors.amberD }}>
+              <Icon name="bar_chart" size={14} color={Colors.amber} /><Text style={{ fontSize: 11, color: Colors.amber, fontWeight: "600" }}>Gestão Aura</Text>
+            </Pressable>
             <Pressable onPress={logout} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name="logout" size={14} color={C.ink3} /><Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Sair</Text>
             </Pressable>
@@ -166,8 +168,8 @@ function MBar() {
   const p = usePathname(), ro = useRouter();
   const MTABS = [
     { r: "/", l: "Painel", ic: "dashboard" },
-    { r: "/pdv", l: "PDV", ic: "cart" },
-    { r: "/financeiro", l: "Fin", ic: "wallet" },
+    { r: "/pdv", l: "Caixa", ic: "cart" },
+    { r: "/financeiro", l: "Financeiro", ic: "wallet" },
     { r: "/clientes", l: "Clientes", ic: "users" },
   ];
   return (

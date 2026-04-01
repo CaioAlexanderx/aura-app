@@ -94,7 +94,7 @@ export default function DashboardScreen(){
 
         <Text style={s.sec}>Visão geral</Text>
         <View style={s.grid}>
-          <KPI idx={0} ic="dollar" iconColor={Colors.green} label="RECEITA DO M\u00cAS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
+          <KPI idx={0} ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
           <KPI idx={1} ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
           <KPI idx={2} ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
           <KPI idx={3} ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={fmt(d.salesToday)} onPress={()=>go("/pdv")}/>
