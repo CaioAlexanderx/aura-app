@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useQuery } from "@tanstack/react-query";
+import { request } from "@/services/api";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
 import { HoverCard } from "@/components/HoverCard";
@@ -245,6 +247,16 @@ const cfg = StyleSheet.create({
 });
 
 export default function AgendamentoScreen() {
+
+  // CONN-23: Fetch real appointments
+  const { company, token, isDemo } = useAuthStore();
+  const { data: apiAppointments } = useQuery({
+    queryKey: ["appointments", company?.id],
+    queryFn: () => request(`/companies/${company!.id}/barbershop/appointments`),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+    staleTime: 15000,
+  });
   const [tab, setTab] = useState(0);
 
   return (

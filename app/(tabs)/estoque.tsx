@@ -536,7 +536,13 @@ export default function EstoqueScreen() {
       input.accept = ".csv,.xlsx,.xls";
       input.onchange = (ev: any) => {
         const f = ev.target?.files?.[0];
-        if (f) { alert("Arquivo " + f.name + " recebido!"); }
+        if (f) {
+          alert("Arquivo " + f.name + " recebido! Processando...");
+          // CONN-24: Send to backend for processing
+          // const formData = new FormData();
+          // formData.append("file", f);
+          // request(`/companies/${company?.id}/import/products`, { method: "POST", body: formData });
+        }
       };
       input.click();
     }

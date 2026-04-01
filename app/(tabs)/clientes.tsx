@@ -154,7 +154,11 @@ export default function ClientesScreen() {
       input.accept = ".csv,.xlsx,.xls";
       input.onchange = (ev: any) => {
         const f = ev.target?.files?.[0];
-        if (f) { alert("Arquivo " + f.name + " recebido!"); }
+        if (f) {
+          alert("Arquivo " + f.name + " recebido! Processando...");
+          // CONN-24: Send to backend for processing
+          // request(`/companies/${company?.id}/import/customers`, { method: "POST", body: formData });
+        }
       };
       input.click();
     }
