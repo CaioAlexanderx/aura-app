@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE, fmt } from "@/constants/helpers";
@@ -251,8 +252,36 @@ const fa = StyleSheet.create({
 });
 
 export default function GestaoAuraScreen() {
-  // Admin guard — in production, check user role
-  const isAdmin = true; // TODO: check useAuthStore().user?.role === "admin"
+  const router = useRouter();
+  const { isStaff, isDemo } = useAuthStore();
+
+  // Staff-only guard: redirect non-staff users
+  if (!isStaff && !isDemo) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 40 }}>
+        <Icon name="alert" size={32} color={Colors.red} />
+        <Text style={{ fontSize: 18, fontWeight: "700", color: Colors.ink, marginTop: 16, textAlign: "center" }}>Acesso restrito</Text>
+        <Text style={{ fontSize: 13, color: Colors.ink3, marginTop: 8, textAlign: "center" }}>Esta área é exclusiva para a equipe Aura.</Text>
+        <Pressable onPress={() => router.replace("/")} style={{ backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginTop: 20 }}>
+          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>Voltar ao painel</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // Demo mode: show message that this is admin-only
+  if (isDemo) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 40 }}>
+        <Icon name="bar_chart" size={32} color={Colors.amber} />
+        <Text style={{ fontSize: 18, fontWeight: "700", color: Colors.ink, marginTop: 16, textAlign: "center" }}>Gestão Aura</Text>
+        <Text style={{ fontSize: 13, color: Colors.ink3, marginTop: 8, textAlign: "center", lineHeight: 20 }}>Este painel é exclusivo para a equipe Aura e não está disponível no modo demonstrativo.</Text>
+        <Pressable onPress={() => router.replace("/")} style={{ backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginTop: 20 }}>
+          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>Voltar ao painel</Text>
+        </Pressable>
+      </View>
+    );
+  } // TODO: check useAuthStore().user?.role === "admin"
   const [tab, setTab] = useState(0);
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>

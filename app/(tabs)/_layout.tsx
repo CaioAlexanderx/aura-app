@@ -135,9 +135,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name="settings" size={14} color={C.ink3} /><Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Configuracoes</Text>
             </Pressable>
-            <Pressable onPress={() => ro.push("/gestao-aura" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.amber + "33", backgroundColor: Colors.amberD }}>
-              <Icon name="bar_chart" size={14} color={Colors.amber} /><Text style={{ fontSize: 11, color: Colors.amber, fontWeight: "600" }}>Gestão Aura</Text>
-            </Pressable>
+            
             <Pressable onPress={logout} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name="logout" size={14} color={C.ink3} /><Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Sair</Text>
             </Pressable>
@@ -166,23 +164,59 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 function MBar() {
   const C = useColors();
   const p = usePathname(), ro = useRouter();
+  const [showMore, setShowMore] = useState(false);
   const MTABS = [
     { r: "/", l: "Painel", ic: "dashboard" },
     { r: "/pdv", l: "Caixa", ic: "cart" },
     { r: "/financeiro", l: "Financeiro", ic: "wallet" },
     { r: "/clientes", l: "Clientes", ic: "users" },
   ];
+  const MORE_ITEMS = [
+    { r: "/estoque", l: "Estoque", ic: "package" },
+    { r: "/nfe", l: "NF-e", ic: "file_text" },
+    { r: "/contabilidade", l: "Contabilidade", ic: "calculator" },
+    { r: "/folha", l: "Folha", ic: "payroll" },
+    { r: "/whatsapp", l: "WhatsApp", ic: "message" },
+    { r: "/canal", l: "Canal Digital", ic: "globe" },
+    { r: "/agendamento", l: "Agenda", ic: "calendar" },
+    { r: "/agentes", l: "Agentes", ic: "brain" },
+    { r: "/suporte", l: "Seu Analista", ic: "headset" },
+    { r: "/configuracoes", l: "Configurações", ic: "settings" },
+  ];
   return (
-    <View style={{ flexDirection: "row", backgroundColor: C.bg2, borderTopWidth: 1, borderTopColor: C.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 }}>
-      {MTABS.map(t => {
-        const a = isA(p, t.r);
-        return (
-          <Pressable key={t.r} style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => ro.push(t.r as any)}>
-            <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, a && { backgroundColor: C.violetD }]}><Icon name={t.ic as any} size={18} color={a ? C.violet3 : C.ink3} /></View>
-            <Text style={[{ fontSize: 9, color: C.ink3, fontWeight: "500" }, a && { color: C.violet3, fontWeight: "600" }]}>{t.l}</Text>
-          </Pressable>
-        );
-      })}
+    <View style={{ position: "relative" }}>
+      {showMore && Platform.OS === "web" && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 998, background: "rgba(0,0,0,0.5)" } as any} onClick={() => setShowMore(false)}>
+          <div style={{ position: "absolute", bottom: 56, left: 8, right: 8, background: C.bg2, borderRadius: 16, border: "1px solid " + C.border, padding: 12, maxHeight: "60vh", overflowY: "auto", zIndex: 999 } as any} onClick={(e: any) => e.stopPropagation()}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 } as any}>
+              {MORE_ITEMS.map(item => {
+                const active = isA(p, item.r);
+                return (
+                  <div key={item.r} onClick={() => { ro.push(item.r as any); setShowMore(false); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 12, borderRadius: 12, cursor: "pointer", background: active ? C.violetD : "transparent", border: active ? "1px solid " + C.border2 : "1px solid transparent" } as any}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: active ? C.violet + "22" : C.bg4 } as any}><Icon name={item.ic as any} size={18} color={active ? C.violet3 : C.ink3} /></div>
+                    <span style={{ fontSize: 10, color: active ? C.violet3 : C.ink3, fontWeight: active ? "600" : "500", textAlign: "center" } as any}>{item.l}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      <View style={{ flexDirection: "row", backgroundColor: C.bg2, borderTopWidth: 1, borderTopColor: C.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 }}>
+        {MTABS.map(t => {
+          const a = isA(p, t.r);
+          return (
+            <Pressable key={t.r} style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => ro.push(t.r as any)}>
+              <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, a && { backgroundColor: C.violetD }]}><Icon name={t.ic as any} size={18} color={a ? C.violet3 : C.ink3} /></View>
+              <Text style={[{ fontSize: 9, color: C.ink3, fontWeight: "500" }, a && { color: C.violet3, fontWeight: "600" }]}>{t.l}</Text>
+            </Pressable>
+          );
+        })}
+        <Pressable style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => setShowMore(!showMore)}>
+          <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, showMore && { backgroundColor: C.violetD }]}><Icon name="settings" size={18} color={showMore ? C.violet3 : C.ink3} /></View>
+          <Text style={[{ fontSize: 9, color: C.ink3, fontWeight: "500" }, showMore && { color: C.violet3, fontWeight: "600" }]}>Mais</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

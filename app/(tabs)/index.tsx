@@ -8,8 +8,9 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { DemoTour } from "@/components/DemoTour";
 
-const { width: W } = Dimensions.get("window");
-const IS = W > 768;
+// Reactive on web via resize listener in useScreenWidth (see _layout.tsx)
+// For components, we use initial value + re-mount on significant changes
+const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : fmt(n);
 function grt(){const h=new Date().getHours();return h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";}

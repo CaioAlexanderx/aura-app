@@ -45,7 +45,8 @@ type AuthState = {
   company:    Company | null;
   isLoading:  boolean;
   isHydrated: boolean;
-  isDemo:     boolean;
+  isStaff: false,
+    isDemo:     boolean;
   onboardingComplete: boolean;
   companyLogo: string | null;
   hydrate:    () => Promise<void>;
@@ -58,7 +59,7 @@ type AuthState = {
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null, user: null, company: null, isLoading: false, isHydrated: false, isDemo: false,
+  token: null, user: null, isStaff: false, company: null, isLoading: false, isHydrated: false, isDemo: false,
   onboardingComplete: true, companyLogo: null,
 
   hydrate: async () => {
@@ -155,6 +156,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await storage.del();
     obStorage.del();
-    set({ token: null, user: null, company: null, isDemo: false, onboardingComplete: true, companyLogo: null });
+    set({ token: null, user: null, isStaff: false, company: null, isDemo: false, onboardingComplete: true, companyLogo: null });
   },
 }));

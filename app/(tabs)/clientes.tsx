@@ -3,8 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dim
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 
-const { width: W } = Dimensions.get("window");
-const IS = W > 768;
+const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const TABS = ["Clientes", "Ranking", "Retencao"];
 
