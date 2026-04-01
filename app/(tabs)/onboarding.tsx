@@ -118,7 +118,6 @@ export default function OnboardingScreen() {
       // Tenta via backend (com cache Redis)
       let data;
       try {
-        const { cnpjApi } = require("@/services/api");
         data = await cnpjApi.lookup(nums);
       } catch {
         // Fallback: BrasilAPI direto
@@ -159,7 +158,6 @@ export default function OnboardingScreen() {
     try {
       const companyId = company?.id;
       if (companyId && !company?.name?.includes("Demo")) {
-        const { onboardingApi } = require("@/services/api");
         // Step 1: CNPJ (if provided)
         if (cnpj.replace(/\D/g, "").length === 14) {
           try { await onboardingApi.stepCnpj(companyId, cnpj.replace(/\D/g, "")); } catch {}

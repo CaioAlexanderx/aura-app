@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import {
   authApi,
   setTokenGetter,
+  setOnUnauthorized,
   type LoginResponse,
   type RegisterBody,
 } from "@/services/api";
@@ -85,6 +86,15 @@ type AuthState = {
 export const useAuthStore = create<AuthState>((set, get) => {
   // Inject token getter into api.ts so all requests auto-attach JWT
   setTokenGetter(() => get().token);
+
+    // REL-03: Auto-logout when any API call returns 401
+    setOnUnauthorized(() => {
+      const state = get();
+      if (state.token && !state.isDemo) {
+        console.warn("[AUTH] Token expired, logging out");
+        state.logout();
+      }
+    });
 
   return {
     token: null,

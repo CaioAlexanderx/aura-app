@@ -25,6 +25,12 @@ export function setTokenGetter(fn: () => string | null) {
   _getToken = fn;
 }
 
+// REL-03: Global 401 handler — called when any request gets 401
+let _onUnauthorized: (() => void) | null = null;
+export function setOnUnauthorized(fn: () => void) {
+  _onUnauthorized = fn;
+}
+
 // ── Core request with retry + timeout ───────────────────────
 type RequestOpts = {
   method?: string;
@@ -62,8 +68,9 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
       // Parse response
       const data = await res.json().catch(() => ({}));
 
-      // 401: token expirado — nao faz retry
+      // 401: token expirado — nao faz retry, trigger global logout
       if (res.status === 401) {
+        if (_onUnauthorized) _onUnauthorized();
         throw new ApiError((data as any).error || "Sessao expirada", 401, data);
       }
 
