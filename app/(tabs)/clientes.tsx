@@ -123,17 +123,16 @@ function RBar({l,v,tot,col}:{l:string;v:number;tot:number;col:string}) {
 export default function ClientesScreen() {
   const { isDemo } = useAuthStore();
   const [tab,sTab]=useState(0);const [q,sQ]=useState("");const [expId,sExp]=useState<string|null>(null);const [rm,sRm]=useState<"ltv"|"visits">("ltv");const [cust,sCust]=useState<Cust[]>(INIT);const [showAdd,sAdd]=useState(false);
-  const fil=cust.filter(c=>{if(!q)
+  
   function handleExportCSV() {
     if (Platform.OS === "web") {
-      const header = "Nome,Telefone,Email,Instagram,Aniversário,LTV\n";
-      const rows = CUSTOMERS.map(c => [c.name, c.phone || "", c.email || "", c.instagram || "", c.birthday || "", c.ltv || ""].join(",")).join("\n");
+      const header = "Nome,Telefone,Email,Instagram,Aniversario,LTV\n";
+      const rows = cust.map(cc => [cc.name, cc.phone || "", cc.email || "", cc.instagram || "", cc.birthday || "", cc.totalSpent || ""].join(",")).join("\n");
       const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = "clientes_aura_" + new Date().toISOString().slice(0,10) + ".csv";
       link.click();
-      toast.success("Clientes exportados com sucesso!");
     }
   }
 
@@ -142,15 +141,15 @@ export default function ClientesScreen() {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".csv,.xlsx,.xls";
-      input.onchange = (e) => {
-        const file = (e.target as any)?.files?.[0];
-        if (file) { toast.success("Arquivo \"" + file.name + "\" recebido! Processando..."); }
+      input.onchange = (ev: any) => {
+        const f = ev.target?.files?.[0];
+        if (f) { alert("Arquivo " + f.name + " recebido!"); }
       };
       input.click();
     }
   }
 
-return true;const s=q.toLowerCase();return c.name.toLowerCase().includes(s)||c.phone.includes(s)||c.email.toLowerCase().includes(s)||c.instagram.toLowerCase().includes(s);});
+  const fil=cust.filter(c=>{if(!q)return true;
   const tot=cust.length;const ltv=cust.reduce((s,c)=>s+c.totalSpent,0);const rated=cust.filter(c=>c.rating!=null);const avg=rated.length?(rated.reduce((s,c)=>s+(c.rating||0),0)/rated.length).toFixed(1):"0";
   const ranked=[...cust].sort((a,b)=>rm==="ltv"?b.totalSpent-a.totalSpent:b.visits-a.visits);
   function addC(c:Cust){sCust(p=>[c,...p]);sAdd(false);}
