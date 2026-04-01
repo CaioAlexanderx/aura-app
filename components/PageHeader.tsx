@@ -10,7 +10,7 @@ type Props = {
 export function PageHeader({ title, actionLabel, onAction }: Props) {
   return (
     <View style={s.row}>
-      <Text style={s.title}>{title}</Text>
+      <Text accessibilityRole={"header" as any} style={s.title}>{title}</Text>
       {actionLabel && onAction && (
         <Pressable onPress={onAction} style={s.btn}>
           <Text style={s.btnText}>{actionLabel}</Text>

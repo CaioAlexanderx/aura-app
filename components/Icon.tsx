@@ -47,7 +47,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     return (
       <div
         style={{ width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center" } as any}
-        dangerouslySetInnerHTML={{
+        aria-hidden="true" dangerouslySetInnerHTML={{
           __html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path.split(" M").map((d, i) => `<path d="${i === 0 ? d : "M" + d}"/>`).join("")}</svg>`,
         }}
       />

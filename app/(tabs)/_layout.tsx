@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
-import { useColors, useThemeStore } from "@/constants/colors";
+import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
@@ -10,16 +10,17 @@ import { ToastContainer } from "@/components/Toast";
 import OnboardingScreen from "@/app/(tabs)/onboarding";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string };
 type NavSection = { s: string; i: NavItem[] };
 
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard" },{ r: "/financeiro", l: "Financeiro", ic: "wallet" },{ r: "/nfe", l: "NF-e", ic: "file_text" }]},
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "headset" }]},
   { s: "Vendas", i: [{ r: "/pdv", l: "PDV", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
-  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users" },{ r: "/whatsapp", l: "WhatsApp", ic: "message" },{ r: "/canal", l: "Canal Digital", ic: "globe" }]},
-  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain" }]},
+  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio" }]},
+  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio" },{ r: "/whatsapp", l: "WhatsApp", ic: "message", plan: "negocio" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio" }]},
+  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao" }]},
+  { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "bar_chart" }]},
 ];
 
 function useWebFonts() {
@@ -32,8 +33,9 @@ function useWebFonts() {
     const st = document.createElement("style"); st.id = "aura-font-override";
     st.textContent = "*, *::before, *::after { font-family: " + Fonts.body + " !important; }\n[data-testid] { font-family: " + Fonts.body + " !important; }\ndiv[dir] { font-family: " + Fonts.body + " !important; }\n@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
     document.head.appendChild(st);
+    document.documentElement.lang = "pt-BR";
     if (!document.getElementById("aura-favicon")) { const fav = document.createElement("link"); fav.id = "aura-favicon"; fav.rel = "icon"; fav.type = "image/svg+xml"; fav.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/favicon.svg"; document.head.appendChild(fav); }
-    if (!document.getElementById("aura-wow-css")) { const wc = document.createElement("style"); wc.id = "aura-wow-css"; wc.textContent = "* { font-variant-numeric: tabular-nums; } a, button, [role=button] { cursor: pointer !important; } ::selection { background: rgba(124,58,237,0.3); color: inherit; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.4); } @keyframes auraStagger { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } @keyframes auraBounce { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }"; document.head.appendChild(wc); }
+    if (!document.getElementById("aura-wow-css")) { const wc = document.createElement("style"); wc.id = "aura-wow-css"; wc.textContent = "* { font-variant-numeric: tabular-nums; } a, button, [role=button] { cursor: pointer !important; } ::selection { background: rgba(124,58,237,0.3); color: inherit; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.4); } @keyframes auraStagger { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .skip-nav { position: absolute; left: -9999px; top: 4px; z-index: 9999; background: #7c3aed; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; } .skip-nav:focus { left: 8px; } @keyframes auraBounce { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }"; document.head.appendChild(wc); }
   }, []);
 }
 
@@ -65,7 +67,7 @@ function AuraLogo({ C, collapsed }: { C: ReturnType<typeof useColors>; collapsed
   );
 }
 
-function SI({ l, ic, a, onP, soon, C, collapsed }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean }) {
+function SI({ l, ic, a, onP, soon, C, collapsed, pl }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string }) {
   const [h, sH] = useState(false);
   return (
     <Pressable onPress={soon ? undefined : onP} onHoverIn={() => sH(true)} onHoverOut={() => sH(false)}
@@ -76,6 +78,7 @@ function SI({ l, ic, a, onP, soon, C, collapsed }: { l: string; ic: string; a: b
       </View>
       {!collapsed && <Text style={[{ fontSize: 13, color: C.ink3, fontWeight: "500", flex: 1 }, a && { color: C.ink, fontWeight: "600" }]}>{l}</Text>}
       {!collapsed && soon && <View style={{ backgroundColor: C.bg4, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ fontSize: 8, color: C.ink3, fontWeight: "600", letterSpacing: 0.3 }}>Em breve</Text></View>}
+      {!collapsed && pl && <View style={{ backgroundColor: pl === "expansao" ? Colors.green + "18" : Colors.violet3 + "18", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ fontSize: 8, color: pl === "expansao" ? Colors.green : Colors.violet3, fontWeight: "600" }}>{pl === "negocio" ? "NEG" : "EXP"}</Text></View>}
     </Pressable>
   );
 }
@@ -112,7 +115,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           <View key={s.s} style={{ marginBottom: collapsed ? 8 : 16 }}>
             {!collapsed && <Text style={{ fontSize: 10, color: C.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }}>{s.s}</Text>}
             {collapsed && <View style={{ height: 1, backgroundColor: C.border, marginVertical: 4, marginHorizontal: 4 }} />}
-            {s.i.map(i => <SI key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} />)}
+            {s.i.map(i => <SI key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={i.plan} />)}
           </View>
         ))}
       </ScrollView>
