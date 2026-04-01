@@ -109,7 +109,15 @@ export default function RegisterScreen() {
       return;
     }
     try {
-      await register(nome.trim(), email.trim().toLowerCase(), senha, empresa.trim());
+      await register({
+        name: nome.trim(),
+        email: email.trim().toLowerCase(),
+        password: senha,
+        company_name: empresa.trim(),
+        phone: telefone.replace(/\D/g, ""),
+        cnpj: cnpj.replace(/\D/g, "") || undefined,
+        access_code: codigo.trim() || undefined,
+      });
     } catch (err) {
       Alert.alert("Erro", err instanceof ApiError ? err.message : "Erro ao criar conta.");
     }
