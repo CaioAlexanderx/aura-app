@@ -5,6 +5,7 @@ import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { HoverCard } from "@/components/HoverCard";
+import { ReferralCard } from "@/components/ReferralCard";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { CNAE_PROFILES } from "@/constants/obligations";
@@ -194,6 +195,7 @@ export default function ConfiguracoesScreen() {
         </Pressable>
       </View>
 
+      {true && <ReferralCard />
       {isDemo && (
         <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo - alterações não são persistidas</Text></View>
       )}

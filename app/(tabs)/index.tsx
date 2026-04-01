@@ -7,6 +7,7 @@ import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { DemoTour } from "@/components/DemoTour";
+import { TrialBanner } from "@/components/TrialBanner";
 
 // Reactive on web via resize listener in useScreenWidth (see _layout.tsx)
 // For components, we use initial value + re-mount on significant changes
@@ -81,6 +82,7 @@ export default function DashboardScreen(){
   return (
     <View style={{flex:1}}>
       <DemoTour visible={isDemo} />
+      <TrialBanner />
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>
         <View style={s.header}>
           <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
