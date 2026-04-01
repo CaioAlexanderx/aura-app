@@ -14,27 +14,27 @@ type TourStep = {
 const STEPS: TourStep[] = [
   {
     title: "Bem-vindo ao modo demonstrativo!",
-    description: "Explore todas as funcionalidades da Aura com dados ilustrativos. Nada aqui \u00e9 real \u2014 fique \u00e0 vontade para clicar em tudo.",
+    description: "Explore todas as funcionalidades da Aura com dados ilustrativos. Nada aqui é real \u2014 fique à vontade para clicar em tudo.",
     icon: "star",
   },
   {
     title: "Seu painel financeiro",
-    description: "Aqui voc\u00ea acompanha faturamento, despesas e lucro do m\u00eas. Clique no card para ver detalhes no Financeiro.",
+    description: "Aqui você acompanha faturamento, despesas e lucro do mês. Clique no card para ver detalhes no Financeiro.",
     icon: "wallet",
   },
   {
-    title: "Acesso r\u00e1pido",
-    description: "PDV, Financeiro, Estoque, NF-e e Contabilidade \u2014 tudo a um clique. Use tamb\u00e9m a sidebar para navegar.",
+    title: "Acesso rápido",
+    description: "PDV, Financeiro, Estoque, NF-e e Contabilidade \u2014 tudo a um clique. Use também a sidebar para navegar.",
     icon: "dashboard",
   },
   {
-    title: "Obriga\u00e7\u00f5es cont\u00e1beis",
-    description: "A Aura organiza seus prazos e guia voc\u00ea passo a passo. Veja a tela de Contabilidade para mais detalhes.",
+    title: "Obrigações contábeis",
+    description: "A Aura organiza seus prazos e guia você passo a passo. Veja a tela de Contabilidade para mais detalhes.",
     icon: "calculator",
   },
   {
     title: "Pronto para explorar!",
-    description: "Navegue livremente pelas telas. Este \u00e9 o modo demonstrativo \u2014 ao adquirir a Aura, seus dados reais ser\u00e3o carregados aqui.",
+    description: "Navegue livremente pelas telas. Este é o modo demonstrativo \u2014 ao adquirir a Aura, seus dados reais serão carregados aqui.",
     icon: "check",
   },
 ];
@@ -146,7 +146,7 @@ export function DemoTour({ visible }: { visible: boolean }) {
               fontSize: 10, color: Colors.violet3, fontStyle: "italic",
               marginBottom: 12, textAlign: "center",
             } as any}>
-              Deslize ou use os bot\u00f5es para navegar
+              Deslize ou use os botões para navegar
             </div>
           )}
 
@@ -179,7 +179,7 @@ export function DemoTour({ visible }: { visible: boolean }) {
                   fontSize: 13, color: "#fff", fontWeight: 700,
                   borderRadius: 10, padding: isMobile ? "12px 20px" : "10px 20px",
                   minWidth: isMobile ? 120 : "auto",
-                } as any}>{isLast ? "Come\u00e7ar" : "Pr\u00f3ximo"}</button>
+                } as any}>{isLast ? "Começar" : "Próximo"}</button>
               </div>
             </div>
           </div>

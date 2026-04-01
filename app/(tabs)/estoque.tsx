@@ -508,7 +508,34 @@ export default function EstoqueScreen() {
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     const matchCat = catFilter === "Todos" || p.category === catFilter;
-    return matchSearch && matchCat;
+    
+  function handleExportCSV() {
+    if (Platform.OS === "web") {
+      const header = "Nome,Preço,Estoque,Categoria,Código\n";
+      const rows = PRODUCTS.map(p => [p.name, p.price, p.stock ?? "", p.category, p.barcode ?? ""].join(",")).join("\n");
+      const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "estoque_aura_" + new Date().toISOString().slice(0,10) + ".csv";
+      link.click();
+      toast.success("Estoque exportado com sucesso!");
+    }
+  }
+
+  function handleImportCSV() {
+    if (Platform.OS === "web") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".csv,.xlsx,.xls";
+      input.onchange = (e) => {
+        const file = (e.target as any)?.files?.[0];
+        if (file) { toast.success("Arquivo \"" + file.name + "\" recebido! Processando..."); }
+      };
+      input.click();
+    }
+  }
+
+return matchSearch && matchCat;
   });
 
   const lowStock = products.filter(p => p.stock <= p.minStock);

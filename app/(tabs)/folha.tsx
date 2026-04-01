@@ -12,7 +12,7 @@ import { useAuthStore } from "@/stores/auth";
 import { BackButton } from "@/components/BackButton";
 import { toast } from "@/components/Toast";
 
-const TABS = ["Funcionários", "Resumo mensal", "Histórico"];
+const TABS = ["Funcionários", "Resumo mensal", "Histórico", "Ranking"];
 type Employee = { id: string; name: string; role: string; salary: number; admDate: string; status: "active" | "vacation" | "dismissed" };
 const EMPS: Employee[] = [
   { id: "1", name: "Ana Costa", role: "Atendente", salary: 1800, admDate: "15/03/2025", status: "active" },
@@ -25,6 +25,13 @@ function cIRRF(s:number,i:number){const b=s-i;if(b<=2259.20)return 0;if(b<=2826.
 const FR=0.08;
 function cP(e:Employee){const i=cINSS(e.salary);const r=Math.max(0,cIRRF(e.salary,i));const f=e.salary*FR;return{inss:i,irrf:r,fgts:f,liquid:e.salary-i-r};}
 const HIST=[{id:"h1",month:"Fevereiro/2026",total:5600,liquid:4612.40,paidAt:"05/03/2026",employees:3},{id:"h2",month:"Janeiro/2026",total:5600,liquid:4612.40,paidAt:"05/02/2026",employees:3},{id:"h3",month:"Dezembro/2025",total:5600,liquid:4612.40,paidAt:"05/01/2026",employees:3}];
+
+const SALES_RANKING = [
+  { empId: "2", name: "Carlos Silva", role: "Barbeiro", sales: 47, revenue: 3290, avgTicket: 70, topProduct: "Corte + Barba", trend: "up" },
+  { empId: "1", name: "Ana Costa", role: "Atendente", sales: 38, revenue: 2156, avgTicket: 56.7, topProduct: "Pomada Modeladora", trend: "up" },
+  { empId: "3", name: "Julia Santos", role: "Recepcionista", sales: 22, revenue: 1045, avgTicket: 47.5, topProduct: "Shampoo Anticaspa", trend: "down" },
+];
+
 const stMap={active:{l:"Ativo",c:Colors.green},vacation:{l:"Férias",c:Colors.amber},dismissed:{l:"Desligado",c:Colors.red}};
 
 const LOGO_CDN="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Aura.jpeg";
@@ -143,6 +150,63 @@ const ct=StyleSheet.create({sc:{backgroundColor:Colors.bg3,borderRadius:16,paddi
 function HT(){return <View>{HIST.map(h=><HoverRow key={h.id} style={hs.row}><View style={hs.left}><View style={hs.ck}><Icon name="check" size={12} color={Colors.green}/></View><View style={hs.inf}><Text style={hs.mo}>{h.month}</Text><Text style={hs.me}>{h.employees} funcionários · pago em {h.paidAt}</Text></View></View><View style={hs.right}><Text style={hs.to}>{fmt(h.total)}</Text><Text style={hs.li}>Liquido: {fmt(h.liquid)}</Text></View></HoverRow>)}</View>;}
 const hs=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,marginBottom:8,flexWrap:"wrap",gap:8},left:{flexDirection:"row",alignItems:"center",gap:12},ck:{width:28,height:28,borderRadius:8,backgroundColor:Colors.greenD,alignItems:"center",justifyContent:"center"},inf:{gap:2},mo:{fontSize:14,color:Colors.ink,fontWeight:"600"},me:{fontSize:11,color:Colors.ink3},right:{alignItems:"flex-end",gap:4,flexShrink:0},to:{fontSize:14,color:Colors.ink,fontWeight:"600"},li:{fontSize:11,color:Colors.green}});
 
+
+function RK() {
+  const medals = ["🥇", "🥈", "🥉"];
+  return <View>
+    <HoverCard style={rk.header}>
+      <Text style={rk.ht}>Ranking de vendas — Março/2026</Text>
+      <Text style={rk.hs}>Baseado nas vendas registradas no Caixa (PDV)</Text>
+    </HoverCard>
+    {SALES_RANKING.map((emp, idx) => {
+      const medal = idx < 3 ? medals[idx] : (idx + 1).toString();
+      const isTop = idx === 0;
+      return <HoverCard key={emp.empId} style={[rk.card, isTop && rk.cardTop]}>
+        <View style={rk.row}>
+          <View style={[rk.pos, isTop && rk.posTop]}><Text style={rk.posText}>{medal}</Text></View>
+          <View style={rk.info}>
+            <Text style={rk.name}>{emp.name}</Text>
+            <Text style={rk.role}>{emp.role}</Text>
+          </View>
+          <View style={rk.stats}>
+            <Text style={[rk.revenue, isTop && {color: Colors.green}]}>{fmt(emp.revenue)}</Text>
+            <Text style={rk.salesCount}>{emp.sales} vendas</Text>
+          </View>
+        </View>
+        <View style={rk.metrics}>
+          <View style={rk.metric}><Text style={rk.ml}>Ticket médio</Text><Text style={rk.mv}>{fmt(emp.avgTicket)}</Text></View>
+          <View style={rk.metric}><Text style={rk.ml}>Mais vendido</Text><Text style={rk.mv}>{emp.topProduct}</Text></View>
+          <View style={rk.metric}><Text style={rk.ml}>Tendência</Text><Text style={[rk.mv, {color: emp.trend === "up" ? Colors.green : Colors.red}]}>{emp.trend === "up" ? "↑ Subindo" : "↓ Caindo"}</Text></View>
+        </View>
+      </HoverCard>;
+    })}
+    <View style={rk.note}><Icon name="alert" size={14} color={Colors.ink3}/><Text style={rk.noteText}>Ranking atualizado automaticamente com base nas vendas do Caixa</Text></View>
+  </View>;
+}
+const rk = StyleSheet.create({
+  header: {backgroundColor:Colors.bg3,borderRadius:16,padding:20,borderWidth:1,borderColor:Colors.border2,marginBottom:16},
+  ht: {fontSize:16,color:Colors.ink,fontWeight:"700"},
+  hs: {fontSize:12,color:Colors.ink3,marginTop:4},
+  card: {backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,marginBottom:8},
+  cardTop: {borderColor:Colors.violet,borderWidth:1.5,backgroundColor:Colors.violetD},
+  row: {flexDirection:"row",alignItems:"center",gap:12,marginBottom:12},
+  pos: {width:36,height:36,borderRadius:10,backgroundColor:Colors.bg4,alignItems:"center",justifyContent:"center"},
+  posTop: {backgroundColor:Colors.violet},
+  posText: {fontSize:16,fontWeight:"800",color:Colors.ink},
+  info: {flex:1,gap:2},
+  name: {fontSize:14,color:Colors.ink,fontWeight:"600"},
+  role: {fontSize:11,color:Colors.ink3},
+  stats: {alignItems:"flex-end",gap:2},
+  revenue: {fontSize:16,fontWeight:"700",color:Colors.ink},
+  salesCount: {fontSize:11,color:Colors.ink3},
+  metrics: {flexDirection:"row",gap:12,paddingTop:10,borderTopWidth:1,borderTopColor:Colors.border,flexWrap:"wrap"},
+  metric: {flex:1,minWidth:90,gap:2},
+  ml: {fontSize:9,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5},
+  mv: {fontSize:12,color:Colors.ink,fontWeight:"600"},
+  note: {flexDirection:"row",alignItems:"center",gap:8,paddingVertical:12,paddingHorizontal:4},
+  noteText: {fontSize:11,color:Colors.ink3,fontStyle:"italic"},
+});
+
 export default function FolhaScreen(){
   const[tab,sTab]=useState(0);const[psEmp,sPsEmp]=useState<Employee|null>(null);
   if(psEmp) return <ScrollView style={z.scr} contentContainerStyle={z.cnt}><PS emp={psEmp} onBack={()=>sPsEmp(null)}/><DemoBanner/></ScrollView>;
@@ -152,7 +216,8 @@ export default function FolhaScreen(){
     <View style={z.kpis}><View style={z.kpi}><Icon name="users" size={20} color={Colors.violet3}/><Text style={z.kv}>{ac.length}</Text><Text style={z.kl}>Ativos</Text></View><View style={z.kpi}><Icon name="dollar" size={20} color={Colors.green}/><Text style={z.kv}>{fmt(tB)}</Text><Text style={z.kl}>Folha bruta</Text></View><View style={z.kpi}><Icon name="trending_up" size={20} color={Colors.amber}/><Text style={z.kv}>{fmt(tF)}</Text><Text style={z.kl}>FGTS</Text></View></View>
     <TabBar tabs={TABS} active={tab} onSelect={sTab}/>
     {tab===0&&<View>{EMPS.map(e=><EC key={e.id} emp={e} onCalc={()=>sPsEmp(e)}/>)}</View>}
-    {tab===1&&<CT/>}{tab===2&&<HT/>}<DemoBanner/>
+    {tab===1&&<CT/>}{tab===2&&<HT/>}
+    {tab===3&&<RK/>}<DemoBanner/>
   </ScrollView>;
 }
 const z=StyleSheet.create({scr:{flex:1},cnt:{padding:IS_WIDE?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"},kpis:{flexDirection:"row",flexWrap:"wrap",gap:10,marginBottom:20},kpi:{flex:1,minWidth:IS_WIDE?120:"30%",backgroundColor:Colors.bg3,borderRadius:14,padding:IS_WIDE?16:12,borderWidth:1,borderColor:Colors.border,alignItems:"center",gap:4},kv:{fontSize:IS_WIDE?18:14,fontWeight:"700",color:Colors.ink},kl:{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.5}});
