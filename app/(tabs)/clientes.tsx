@@ -149,7 +149,7 @@ export default function ClientesScreen() {
     }
   }
 
-  const fil=cust.filter(c=>{if(!q)return true;
+  const fil=cust.filter(c=>{if(!q)return true;const s=q.toLowerCase();return c.name.toLowerCase().includes(s)||c.phone.includes(s)||c.email.toLowerCase().includes(s)||c.instagram.toLowerCase().includes(s);});
   const tot=cust.length;const ltv=cust.reduce((s,c)=>s+c.totalSpent,0);const rated=cust.filter(c=>c.rating!=null);const avg=rated.length?(rated.reduce((s,c)=>s+(c.rating||0),0)/rated.length).toFixed(1):"0";
   const ranked=[...cust].sort((a,b)=>rm==="ltv"?b.totalSpent-a.totalSpent:b.visits-a.visits);
   function addC(c:Cust){sCust(p=>[c,...p]);sAdd(false);}
