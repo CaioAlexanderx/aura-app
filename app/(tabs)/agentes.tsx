@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { aiApi } from "@/services/api";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
@@ -52,9 +54,61 @@ function ActivityRow({ item }: { item: typeof ACTIVITY_LOG[0] }) {
 }
 
 export default function AgentesScreen() {
-  const { isDemo } = useAuthStore();
-  const totalActions = AGENTS_SUMMARY.reduce((s, a) => s + a.actions, 0);
-  const totalSaved = AGENTS_SUMMARY.reduce((s, a) => s + parseFloat(a.saved), 0).toFixed(1);
+  const { isDemo, company, token } = useAuthStore();
+
+  // CONN-26: Fetch real activity from API
+  const { data: apiActivity } = useQuery({
+    queryKey: ["ai-activity", company?.id],
+    queryFn: () => aiApi.activity(company!.id, 20),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+    staleTime: 30000,
+  });
+
+  // Chat state
+  const [chatMsg, setChatMsg] = useState("");
+  const [chatCtx, setChatCtx] = useState("geral");
+  const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
+  const [chatResponse, setChatResponse] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const chatMutation = useMutation({
+    mutationFn: () => aiApi.chat(company!.id, chatMsg, chatCtx, chatHistory),
+    onSuccess: (data) => {
+      setChatHistory(prev => [...prev, { role: "user", content: chatMsg }, { role: "assistant", content: data.response }]);
+      setChatResponse(data.response);
+      setChatMsg("");
+      setChatLoading(false);
+    },
+    onError: (err: any) => {
+      setChatResponse(err?.message || "Erro ao processar mensagem.");
+      setChatLoading(false);
+    },
+  });
+
+  function handleSendChat() {
+    if (!chatMsg.trim() || chatLoading) return;
+    setChatLoading(true);
+    setChatResponse("");
+    chatMutation.mutate();
+  }
+
+  // Use API data if available
+  const activityData = apiActivity?.activity?.length ? apiActivity.activity.map((a: any) => ({
+    id: a.id, agent: a.agent || "Geral",
+    action: a.action || "Acao", detail: a.detail || "",
+    time: a.time ? new Date(a.time).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "---",
+    icon: { Financeiro: "wallet", Estoque: "package", CRM: "users", Contabil: "calculator", Marketing: "bar_chart" }[a.agent] || "star",
+    status: a.status || "done",
+  })) : ACTIVITY_LOG;
+
+  const summaryData = apiActivity?.summary?.length ? apiActivity.summary.map((s: any) => ({
+    name: s.name, icon: { Financeiro: "wallet", Estoque: "package", CRM: "users", Contabil: "calculator", Marketing: "bar_chart" }[s.name] || "star",
+    actions: s.actions, saved: (s.actions * 0.25).toFixed(1) + "h",
+    color: { Financeiro: Colors.green, Estoque: Colors.amber, CRM: Colors.violet3, Contabil: Colors.red, Marketing: "#db2777" }[s.name] || Colors.violet3,
+  })) : AGENTS_SUMMARY;
+  const totalActions = summaryData.reduce((s: number, a: any) => s + (a.actions || 0), 0);
+  const totalSaved = summaryData.reduce((s: number, a: any) => s + parseFloat(a.saved || "0"), 0).toFixed(1);
 
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
@@ -80,7 +134,7 @@ export default function AgentesScreen() {
       {/* Agents grid */}
       <Text style={z.sectionTitle}>Seus agentes</Text>
       <View style={z.agentsGrid}>
-        {AGENTS_SUMMARY.map(ag => (
+        {summaryData.map((ag: any) => (
           <View key={ag.name} style={z.agentCard}>
             <View style={[z.agentIcon, { backgroundColor: ag.color + "18" }]}>
               <Icon name={ag.icon as any} size={20} color={ag.color} />
@@ -97,7 +151,44 @@ export default function AgentesScreen() {
       {/* Activity log */}
       <Text style={z.sectionTitle}>Atividade recente</Text>
       <View style={z.card}>
-        {ACTIVITY_LOG.map(item => <ActivityRow key={item.id} item={item} />)}
+        {activityData.map((item: any) => <ActivityRow key={item.id} item={item} />)}
+      </View>
+
+      {/* Chat with AI */}
+      <Text style={z.sectionTitle}>Conversar com agente</Text>
+      <View style={z.chatCard}>
+        <View style={z.chatCtxRow}>
+          {["geral", "financeiro", "estoque", "crm", "contabil", "marketing"].map(ctx => (
+            <Pressable key={ctx} onPress={() => setChatCtx(ctx)}
+              style={[z.chatCtxChip, chatCtx === ctx && z.chatCtxChipActive]}>
+              <Text style={[z.chatCtxText, chatCtx === ctx && z.chatCtxTextActive]}>
+                {ctx.charAt(0).toUpperCase() + ctx.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {chatHistory.length > 0 && (
+          <View style={z.chatHistory}>
+            {chatHistory.slice(-6).map((h, i) => (
+              <View key={i} style={[z.chatBubble, h.role === "user" ? z.chatUser : z.chatAssistant]}>
+                <Text style={[z.chatBubbleText, h.role === "user" && { color: "#fff" }]}>{h.content}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        {chatResponse && chatHistory.length === 0 && (
+          <View style={z.chatResponseBox}>
+            <Text style={z.chatResponseText}>{chatResponse}</Text>
+          </View>
+        )}
+        <View style={z.chatInputRow}>
+          <TextInput style={z.chatInput} value={chatMsg} onChangeText={setChatMsg}
+            placeholder="Pergunte algo ao agente..." placeholderTextColor={Colors.ink3}
+            onSubmitEditing={handleSendChat} editable={!chatLoading} />
+          <Pressable onPress={handleSendChat} style={[z.chatSendBtn, chatLoading && { opacity: 0.5 }]}>
+            <Text style={z.chatSendText}>{chatLoading ? "..." : "Enviar"}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={z.infoCard}>

@@ -196,4 +196,18 @@ export const adminApi = {
     request<any>(`/admin/clients/${companyId}/modules`, { method: "PUT", body: { module, enabled } }),
 };
 
+// ── AI / Agentes API ─────────────────────────────────────────
+export const aiApi = {
+  chat: (companyId: string, message: string, context?: string, history?: any[]) =>
+    request<{ response: string; context: string; model: string; usage?: any }>(
+      `/companies/${companyId}/ai/chat`,
+      { method: "POST", body: { message, context: context || "geral", history: history || [] }, timeout: 30000 }
+    ),
+
+  activity: (companyId: string, limit?: number) =>
+    request<{ activity: any[]; summary: any[]; total: number }>(
+      `/companies/${companyId}/ai/activity?limit=${limit || 20}`
+    ),
+};
+
 export { request, BASE_URL };
