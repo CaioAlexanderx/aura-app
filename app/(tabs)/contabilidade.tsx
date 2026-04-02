@@ -9,6 +9,7 @@ import { HoverRow } from "@/components/HoverRow";
 import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { AgentBanner } from "@/components/AgentBanner";
+import { useAuthStore } from "@/stores/auth";
 
 const TABS = ["Checkpoints", "Guias", "Histórico"];
 type Step = { text: string; auto: boolean; media: string | null; hint: string };
@@ -36,11 +37,12 @@ const stColor = { done: Colors.green, progress: Colors.violet3, pending: Colors.
 
 // ── Hero Ring (SVG) ──────────────────────────────────────────
 
-function HeroRing() {
-  const total = OBLS.length;
-  const done = OBLS.filter(o => o.status === "done").length;
-  const pending = OBLS.filter(o => o.status === "progress" || o.status === "pending").length;
-  const nextDue = OBLS.filter(o => o.dl > 0).sort((a, b) => a.dl - b.dl)[0];
+function HeroRing({ obls }: { obls?: Obl[] }) {
+  const data = obls || OBLS;
+  const total = data.length;
+  const done = data.filter(o => o.status === "done").length;
+  const pending = data.filter(o => o.status === "progress" || o.status === "pending").length;
+  const nextDue = data.filter(o => o.dl > 0).sort((a, b) => a.dl - b.dl)[0];
   const pct = done / total;
   const r = 38, circ = 2 * Math.PI * r;
   const offset = circ * (1 - pct);
@@ -312,15 +314,46 @@ function Hist() {
 // ── Main ─────────────────────────────────────────────────────
 
 export default function ContabilidadeScreen() {
+  const { company, token, isDemo } = useAuthStore();
+
+  // CONN-16: Fetch real obligations from backend
+  const { data: apiObligations } = useQuery({
+    queryKey: ["obligations", company?.id],
+    queryFn: () => companiesApi.obligations(company!.id),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+    staleTime: 60000,
+  });
+
+  // Map API obligations to screen format, fallback to OBLS mock
+  const obligations: Obl[] = (() => {
+    const apiArr = apiObligations?.obligations || apiObligations?.rows || apiObligations;
+    if (apiArr instanceof Array && apiArr.length > 0) {
+      return apiArr.map((o: any, i: number) => ({
+        id: o.id || String(i + 1),
+        name: o.name || o.obligation_name || "Obrigacao",
+        icon: o.icon || (o.name || "").charAt(0).toUpperCase() || "#",
+        due: o.due_date ? new Date(o.due_date).toLocaleDateString("pt-BR") : o.due || "---",
+        dl: o.days_left ?? (o.due_date ? Math.max(0, Math.ceil((new Date(o.due_date).getTime() - Date.now()) / 864e5)) : 0),
+        amt: o.estimated_amount != null ? parseFloat(o.estimated_amount) : o.amt ?? null,
+        status: (o.status === "completed" ? "done" : o.status === "in_progress" ? "progress" : o.status === "future" ? "future" : "pending") as Obl["status"],
+        cat: o.category || o.cat || "aura_resolve",
+        desc: o.description || o.desc || "",
+        steps: o.steps instanceof Array ? o.steps : (o.guide_steps instanceof Array ? o.guide_steps : []),
+      }));
+    }
+    return OBLS;
+  })();
+
   const [tab, sTab] = useState(0);
   const [gid, sGid] = useState<string | null>(null);
-  const sel = gid ? OBLS.find(o => o.id === gid) : null;
+  const sel = gid ? obligations.find(o => o.id === gid) : null;
   if (sel) return <ScrollView style={z.scr} contentContainerStyle={z.cnt}><Guide o={sel} onBack={() => sGid(null)} /><DemoBanner /></ScrollView>;
 
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
       <PageHeader title="Contabilidade" />
-      <HeroRing />
+      <HeroRing obls={obligations} />
       <StreakBar />
       <TabBar tabs={TABS} active={tab} onSelect={sTab} />
 
@@ -328,10 +361,10 @@ export default function ContabilidadeScreen() {
 
       {tab === 0 && (
         <View style={z.grid}>
-          {OBLS.map(o => <View key={o.id} style={z.gridItem}><Checkpoint o={o} onGuide={() => sGid(o.id)} /></View>)}
+          {obligations.map(o => <View key={o.id} style={z.gridItem}><Checkpoint o={o} onGuide={() => sGid(o.id)} /></View>)}
         </View>
       )}
-      {tab === 1 && <GList obls={OBLS} onSel={sGid} />}
+      {tab === 1 && <GList obls={obligations} onSel={sGid} />}
       {tab === 2 && <Hist />}
 
       <View style={{ alignItems: "center", paddingVertical: 12 }}><Text style={{ fontSize: 10, color: Colors.ink3, fontStyle: "italic" }}>Estimativas para apoio contabil informativo.</Text></View>

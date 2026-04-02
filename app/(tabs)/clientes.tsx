@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
@@ -132,7 +132,33 @@ export default function ClientesScreen() {
     retry: 1,
     staleTime: 30000,
   });
-  // TODO: replace INIT with apiCustomers?.customers when backend has data
+  // CONN-15: Sync API customers into local state
+  const qc = useQueryClient();
+  const apiCustArr = (apiCustomers?.customers || apiCustomers?.rows || apiCustomers);
+  useEffect(() => {
+    if (apiCustArr instanceof Array && apiCustArr.length > 0) {
+      const mapped = apiCustArr.map((c: any) => ({
+        id: c.id || c.customer_id || String(Math.random()),
+        name: c.name || c.customer_name || "Cliente",
+        email: c.email || "",
+        phone: c.phone || "",
+        instagram: c.instagram || c.instagram_handle || "",
+        birthday: c.birthday || c.birth_date || "",
+        lastPurchase: c.last_purchase ? new Date(c.last_purchase).toLocaleDateString("pt-BR") : "---",
+        totalSpent: parseFloat(c.total_spent ?? c.totalSpent ?? c.ltv) || 0,
+        visits: parseInt(c.visit_count ?? c.visits) || 0,
+        firstVisit: c.first_visit ? new Date(c.first_visit).toLocaleDateString("pt-BR") : c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : "---",
+        notes: c.notes || "",
+        rating: c.rating != null ? parseInt(c.rating) : null,
+      }));
+      sCust(mapped);
+    }
+  }, [apiCustArr instanceof Array ? apiCustArr.length : 0]);
+
+  const addCustomerMutation = useMutation({
+    mutationFn: (body: any) => companiesApi.createCustomer ? companiesApi.createCustomer(company!.id, body) : Promise.resolve(null),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", company?.id] }),
+  });
   const [tab,sTab]=useState(0);const [q,sQ]=useState("");const [expId,sExp]=useState<string|null>(null);const [rm,sRm]=useState<"ltv"|"visits">("ltv");const [cust,sCust]=useState<Cust[]>(INIT);const [showAdd,sAdd]=useState(false);
   
   function handleExportCSV() {

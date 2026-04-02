@@ -147,7 +147,11 @@ export const companiesApi = {
   createTransaction: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/transactions`, { method: "POST", body }),
   products: (companyId: string) => request<any>(`/companies/${companyId}/products`),
+  createProduct: (companyId: string, body: any) =>
+    request<any>(`/companies/${companyId}/products`, { method: "POST", body }),
   customers: (companyId: string) => request<any>(`/companies/${companyId}/customers`),
+  createCustomer: (companyId: string, body: any) =>
+    request<any>(`/companies/${companyId}/customers`, { method: "POST", body }),
   obligations: (companyId: string) => request<any>(`/companies/${companyId}/obligations`),
   payroll: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/payroll/calculate`, { method: "POST", body }),

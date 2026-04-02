@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { AgentBanner } from "@/components/AgentBanner";
@@ -500,6 +500,11 @@ export default function EstoqueScreen() {
   const { isDemo, company, token } = useAuthStore();
 
   // CONN-13: Fetch real products when not in demo
+  const qc = useQueryClient();
+  const addProductMutation = useMutation({
+    mutationFn: (body: any) => companiesApi.createProduct ? companiesApi.createProduct(company!.id, body) : Promise.resolve(null),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["products", company?.id] }),
+  });
   const { data: apiData } = useQuery({
     queryKey: ["products", company?.id],
     queryFn: () => companiesApi.products(company!.id),
@@ -507,7 +512,29 @@ export default function EstoqueScreen() {
     retry: 1,
     staleTime: 30000,
   });
-  // TODO: replace INITIAL_PRODUCTS with apiData?.products when backend has data
+  // CONN-13: Sync API products into local state when data arrives
+  const apiProducts = (apiData?.products || apiData?.rows || apiData);
+  useEffect(() => {
+    if (apiProducts instanceof Array && apiProducts.length > 0) {
+      const mapped = apiProducts.map((p: any) => ({
+        id: p.id || p.product_id || String(Math.random()),
+        name: p.name || p.product_name || "Produto",
+        code: p.sku || p.code || "---",
+        barcode: p.barcode || p.ean || "",
+        category: p.category || "Produtos",
+        price: parseFloat(p.price || p.sale_price) || 0,
+        cost: parseFloat(p.cost || p.cost_price) || 0,
+        stock: parseInt(p.stock_quantity ?? p.stock) || 0,
+        minStock: parseInt(p.min_stock ?? p.minStock) || 0,
+        abc: (p.abc_class || p.abc || "C") as "A" | "B" | "C",
+        sold30d: parseInt(p.sold_30d ?? p.sold30d) || 0,
+        unit: p.unit || "un",
+        brand: p.brand || "",
+        notes: p.notes || "",
+      }));
+      setProducts(mapped);
+    }
+  }, [apiProducts instanceof Array ? apiProducts.length : 0]);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
