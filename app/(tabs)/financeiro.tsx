@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { companiesApi, dashboardApi } from "@/services/api";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -70,7 +72,7 @@ const MOCK_DRE = {
 
 
 // ── FE-20: Transaction Entry Modal ───────────────────────────
-function TransactionModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function TransactionModal({ visible, onClose, createTxMutation }: { visible: boolean; onClose: () => void; createTxMutation?: any }) {
   const { add, addBatch } = useTransactions();
   const [mode, setMode] = useState<"unit" | "batch">("unit");
   const [txType, setTxType] = useState<"income" | "expense">("income");
@@ -314,9 +316,13 @@ const tr = StyleSheet.create({
   amount: { fontSize: 14, fontWeight: "600" },
 });
 
-function TabLancamentos() {
-  const { transactions, totals } = useTransactions();
-  const { income, expense, balance } = totals();
+function TabLancamentos({ apiTx }: { apiTx?: any }) {
+  const { transactions: localTx, totals } = useTransactions();
+  // Use API data if available, otherwise local store
+  const transactions = apiTx?.transactions || apiTx?.rows || localTx;
+  const income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : totals().income;
+  const expense = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : totals().expense;
+  const balance = income - expense;
   return (
     <View>
       <View style={g.row}>
@@ -432,8 +438,8 @@ const wf = StyleSheet.create({
   totalValue: { fontSize: 16, fontWeight: "800" },
 });
 
-function TabRetirada() {
-  const w = MOCK_WITHDRAWAL;
+function TabRetirada({ apiWd }: { apiWd?: any }) {
+  const w = apiWd || MOCK_WITHDRAWAL;
   return (
     <View>
       <View style={g.row}>
@@ -493,8 +499,8 @@ const dre = StyleSheet.create({
   totalAmt: { fontSize: 14, fontWeight: "800" },
 });
 
-function TabResumo() {
-  const d = MOCK_DRE;
+function TabResumo({ apiDreData }: { apiDreData?: any }) {
+  const d = apiDreData || MOCK_DRE;
   return (
     <View>
       <View style={g.row}>
@@ -525,11 +531,44 @@ function TabResumo() {
 export default function FinanceiroScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
-  const { isDemo } = useAuthStore();
+  const { company, token, isDemo } = useAuthStore();
+  const qc = useQueryClient();
+
+  // CONN-11: Fetch real data from backend
+  const { data: apiTransactions } = useQuery({
+    queryKey: ["transactions", company?.id],
+    queryFn: () => companiesApi.transactions(company!.id, "limit=50"),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+  });
+
+  const { data: apiDre } = useQuery({
+    queryKey: ["dre", company?.id],
+    queryFn: () => companiesApi.dre(company!.id),
+    enabled: !!company?.id && !!token && !isDemo && activeTab === 3,
+    retry: 1,
+  });
+
+  const { data: apiWithdrawal } = useQuery({
+    queryKey: ["withdrawal", company?.id],
+    queryFn: () => dashboardApi.summary(company!.id),
+    enabled: !!company?.id && !!token && !isDemo && activeTab === 2,
+    retry: 1,
+  });
+
+  // Mutation for creating transactions
+  const createTxMutation = useMutation({
+    mutationFn: (body: any) => companiesApi.createTransaction(company!.id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions", company?.id] });
+      qc.invalidateQueries({ queryKey: ["dashboard", company?.id] });
+      qc.invalidateQueries({ queryKey: ["dre", company?.id] });
+    },
+  });
 
   return (
     <View style={{flex:1}}>
-      <TransactionModal visible={showModal} onClose={() => setShowModal(false)} />
+      <TransactionModal visible={showModal} onClose={() => setShowModal(false)} createTxMutation={!isDemo && company?.id ? createTxMutation : undefined} />
       <ScrollView style={g.screen} contentContainerStyle={g.content}>
         <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <Text style={g.pageTitle}>Financeiro</Text>
@@ -542,10 +581,10 @@ export default function FinanceiroScreen() {
 
         <AgentBanner agent="Financeiro" insight={{ title: "2 cobranças em atraso", desc: "Clientes João Santos (R$ 1.240) e Carlos Lima (R$ 430) estão com pagamento atrasado. Envie lembrete via WhatsApp.", actionLabel: "Enviar cobrança", action: "cobrar", priority: "high", icon: "alert" }} onAction={() => toast.info("Enviando cobrança via WhatsApp...")} />
 
-      {activeTab === 0 && <TabLancamentos />}
+      {activeTab === 0 && <TabLancamentos apiTx={apiTransactions} />}
       {activeTab === 1 && <TabAReceber />}
-      {activeTab === 2 && <TabRetirada />}
-      {activeTab === 3 && <TabResumo />}
+      {activeTab === 2 && <TabRetirada apiWd={apiWithdrawal} />}
+      {activeTab === 3 && <TabResumo apiDreData={apiDre} />}
 
       {isDemo && (
         <View style={g.demoBanner}>

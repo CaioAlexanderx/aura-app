@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { companiesApi, pdvApi } from "@/services/api";
+import { toast } from "@/components/Toast";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -144,7 +147,26 @@ function SaleCompleteView({ sale, onNewSale, onEmitNfe }: { sale: SaleResult; on
 const sv = StyleSheet.create({ container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }, card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.border, maxWidth: 420, width: "100%" }, checkCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", marginBottom: 16, borderWidth: 2, borderColor: Colors.green }, checkIcon: { fontSize: 20, color: Colors.green, fontWeight: "800" }, title: { fontSize: 20, color: Colors.ink, fontWeight: "700", marginBottom: 4 }, saleId: { fontSize: 12, color: Colors.ink3, marginBottom: 20 }, summaryRow: { flexDirection: "row", justifyContent: "space-between", width: "100%", paddingVertical: 8 }, summaryLabel: { fontSize: 13, color: Colors.ink3 }, summaryValue: { fontSize: 18, color: Colors.green, fontWeight: "800" }, summaryMeta: { fontSize: 13, color: Colors.ink, fontWeight: "600" }, divider: { height: 1, backgroundColor: Colors.border, width: "100%", marginVertical: 16 }, actions: { flexDirection: "row", gap: 10, width: "100%" }, secondaryActions: { flexDirection: "row", gap: 16, marginTop: 16 }, linkBtn: { paddingVertical: 6 }, linkText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" } });
 
 export default function PdvScreen() {
-  const { isDemo } = useAuthStore();
+  const { company, token, isDemo } = useAuthStore();
+  const qc = useQueryClient();
+
+  // CONN-12: Fetch real products from backend
+  const { data: apiProducts } = useQuery({
+    queryKey: ["products", company?.id],
+    queryFn: () => companiesApi.products(company!.id),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+  });
+
+  // Mutation for creating sales
+  const saleMutation = useMutation({
+    mutationFn: (body: any) => pdvApi.createSale(company!.id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products", company?.id] });
+      qc.invalidateQueries({ queryKey: ["dashboard", company?.id] });
+      qc.invalidateQueries({ queryKey: ["transactions", company?.id] });
+    },
+  });
   const IS_WIDE = useIsWide();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -152,14 +174,25 @@ export default function PdvScreen() {
   const [category, setCategory] = useState("Todos");
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
 
-  const categories = ["Todos", ...Array.from(new Set(MOCK_PRODUCTS.map(p => p.category)))];
-  const filtered = MOCK_PRODUCTS.filter(p => {
+  // Use API products if available, fallback to mock
+  const products = (apiProducts?.products || apiProducts?.rows || apiProducts) instanceof Array
+    ? (apiProducts.products || apiProducts.rows || apiProducts).map((p: any) => ({
+        id: p.id || p.product_id,
+        name: p.name || p.product_name,
+        price: parseFloat(p.price || p.sale_price) || 0,
+        category: p.category || "Produtos",
+        stock: p.stock_quantity != null ? parseInt(p.stock_quantity) : p.stock,
+        barcode: p.barcode || p.ean || null,
+      }))
+    : MOCK_PRODUCTS;
+  const categories = ["Todos", ...Array.from(new Set(products.map((p: any) => p.category)))];
+  const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
     const matchCat = category === "Todos" || p.category === category;
     return matchSearch && matchCat;
   });
 
-  function handleScan(code: string) { const product = MOCK_PRODUCTS.find(p => p.barcode === code); if (product) addToCart(product); else setSearch(code); }
+  function handleScan(code: string) { const product = products.find((p: any) => p.barcode === code); if (product) addToCart(product); else setSearch(code); }
   function addToCart(product: typeof MOCK_PRODUCTS[0]) { setLastSale(null); setCart(prev => { const existing = prev.find(i => i.productId === product.id); if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i); return [...prev, { productId: product.id, name: product.name, price: product.price, qty: 1 }]; }); }
   function updateQty(productId: string, delta: number) { setCart(prev => prev.map(i => { if (i.productId !== productId) return i; const newQty = i.qty + delta; return newQty > 0 ? { ...i, qty: newQty } : i; })); }
   function removeItem(productId: string) { setCart(prev => prev.filter(i => i.productId !== productId)); }
