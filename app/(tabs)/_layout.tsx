@@ -8,6 +8,7 @@ import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
 import { ToastContainer } from "@/components/Toast";
 import OnboardingScreen from "@/app/(tabs)/onboarding";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string };
@@ -268,6 +269,8 @@ export default function TabsLayout() {
   );
 
   return (
+    <ErrorBoundary>
+    
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View key={themeKey} style={{ flex: 1 }}>
         <ToastContainer />
@@ -275,5 +278,6 @@ export default function TabsLayout() {
       </View>
       <MBar />
     </View>
+      </ErrorBoundary>
   );
 }
