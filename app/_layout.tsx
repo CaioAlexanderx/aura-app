@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -38,8 +39,10 @@ function AuthGuard() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthGuard />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthGuard />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
