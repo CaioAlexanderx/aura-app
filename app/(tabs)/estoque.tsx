@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { AgentBanner } from "@/components/AgentBanner";
+import { useKeyboard } from "@/hooks/useKeyboard";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -125,6 +126,8 @@ function AddProductForm({ categories, onSave, onCancel }: {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
   const [barcodeMode, setBarcodeMode] = useState<"none" | "manual" | "generate">("none");
+  const [formStep, setFormStep] = useState(0);
+  const FORM_STEPS = ["Basico", "Precos", "Estoque", "Codigo", "Notas"];
 
   function generateBarcode() {
     const prefix = "789";
@@ -169,6 +172,17 @@ function AddProductForm({ categories, onSave, onCancel }: {
         <Pressable onPress={onCancel} style={af.closeBtn}><Text style={af.closeText}>x</Text></Pressable>
       </View>
       <Text style={af.hint}>Preencha as informacoes do produto. Campos com * sao obrigatorios.</Text>
+
+      {/* UX-03: Step indicator */}
+      <View style={{ flexDirection: "row", gap: 4, marginVertical: 12, alignItems: "center" }}>
+        {FORM_STEPS.map((step, i) => (
+          <Pressable key={step} onPress={() => setFormStep(i)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <View style={{ width: i === formStep ? 24 : 8, height: 8, borderRadius: 4, backgroundColor: i <= formStep ? Colors.violet : Colors.bg4, transition: "all 0.2s ease" } as any} />
+            {i === formStep && <Text style={{ fontSize: 10, color: Colors.violet3, fontWeight: "600" }}>{step}</Text>}
+          </Pressable>
+        ))}
+        <Text style={{ fontSize: 10, color: Colors.ink3, marginLeft: "auto" }}>{formStep + 1}/{FORM_STEPS.length}</Text>
+      </View>
 
       <View style={af.divider} />
       <Text style={af.sectionTitle}>Informacoes basicas</Text>
@@ -498,6 +512,12 @@ const alS = StyleSheet.create({
 
 export default function EstoqueScreen() {
   const { isDemo, company, token } = useAuthStore();
+
+  // UX-04: Keyboard shortcuts
+  useKeyboard([
+    { key: "Escape", handler: () => setShowAddForm(false) },
+    { key: "n", ctrl: true, handler: () => { setShowAddForm(true); setActiveTab(0); } },
+  ]);
 
   // CONN-13: Fetch real products when not in demo
   const qc = useQueryClient();

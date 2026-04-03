@@ -5,6 +5,10 @@ import { toast } from "@/components/Toast";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { cacheProducts, getCachedProducts, addToQueue, getQueueLength, syncQueue, startAutoSync } from "@/services/offlineSync";
+import { useKeyboard } from "@/hooks/useKeyboard";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 

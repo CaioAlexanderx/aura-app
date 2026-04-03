@@ -1,3 +1,4 @@
+import { useEscapeKey } from "@/hooks/useKeyboard";
 import { View, Text, Pressable, Modal, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 
@@ -25,6 +26,8 @@ export function ConfirmModal({
   destructive = false,
 }: ConfirmModalProps) {
   const btnColor = confirmColor || (destructive ? Colors.red : Colors.violet);
+
+  useEscapeKey(() => { if (visible) onCancel(); }, [visible, onCancel]);
 
   if (Platform.OS === "web") {
     if (!visible) return null;
