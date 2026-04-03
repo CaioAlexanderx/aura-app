@@ -6,6 +6,7 @@ import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { startAutoSync } from "@/services/offlineSync";
 
 const queryClient = new QueryClient();
 
@@ -14,20 +15,24 @@ function AuthGuard() {
   const segments = useSegments();
   const router = useRouter();
 
-  useEffect(() => { hydrate(); }, []);
+  useEffect(() => {
+    hydrate();
+    // UX-02: Start offline sync listener
+    startAutoSync(
+      "https://aura-backend-production-f805.up.railway.app/api/v1",
+      () => useAuthStore.getState().token
+    );
+  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;
     const inAuth = segments[0] === "(auth)";
 
-    // Not logged in -> go to login
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
       return;
     }
 
-    // Logged in but in auth pages -> go to tabs
-    // The (tabs)/_layout.tsx handles onboarding display when !onboardingComplete
     if (token && inAuth) {
       router.replace("/(tabs)");
       return;
