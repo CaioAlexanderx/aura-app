@@ -1,12 +1,16 @@
 module.exports = {
-  preset: 'jest-expo/web',
+  testEnvironment: 'jsdom',
   setupFiles: ['./jest.setup.js'],
+  transform: {
+    '^.+\\.[jt]sx?$': ['babel-jest', { presets: ['babel-preset-expo'] }],
+  },
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|react-navigation|@react-navigation/.*|@tanstack|zustand)',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   collectCoverageFrom: [
     'services/**/*.{ts,tsx}',
     'stores/**/*.{ts,tsx}',

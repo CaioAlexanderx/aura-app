@@ -1,43 +1,33 @@
-// Jest setup for Aura frontend tests
+// Jest setup — Aura frontend
 
 // Mock localStorage
 const store = {};
-Object.defineProperty(global, 'localStorage', {
-  value: {
-    getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = String(value); },
-    removeItem: (key) => { delete store[key]; },
-    clear: () => { Object.keys(store).forEach(k => delete store[k]); },
-  },
-  writable: true,
-});
+const localStorageMock = {
+  getItem: (key) => (key in store ? store[key] : null),
+  setItem: (key, value) => { store[key] = String(value); },
+  removeItem: (key) => { delete store[key]; },
+  clear: () => { Object.keys(store).forEach(k => delete store[k]); },
+};
+global.localStorage = localStorageMock;
 
-// Mock navigator.onLine
-Object.defineProperty(global, 'navigator', {
-  value: { onLine: true, userAgent: 'jest' },
-  writable: true,
-});
+// Mock window.addEventListener for web hooks
+global.addEventListener = global.addEventListener || jest.fn();
+global.removeEventListener = global.removeEventListener || jest.fn();
 
-// Mock window events
-if (typeof window !== 'undefined') {
-  window.addEventListener = window.addEventListener || (() => {});
-  window.removeEventListener = window.removeEventListener || (() => {});
-}
-
-// Mock expo-router
+// Mock expo modules
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
   useSegments: () => ['(tabs)'],
-  useLocalSearchParams: () => ({}),
-  Slot: ({ children }) => children,
-  Link: ({ children }) => children,
+  Slot: 'Slot',
+  Link: 'Link',
 }));
 
-// Mock expo-haptics
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),
   selectionAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
-  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+  ImpactFeedbackStyle: { Light: 0, Medium: 1, Heavy: 2 },
+  NotificationFeedbackType: { Success: 0, Warning: 1, Error: 2 },
 }), { virtual: true });
+
+jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
