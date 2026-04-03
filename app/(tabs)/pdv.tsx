@@ -11,6 +11,9 @@ import { cacheProducts, getCachedProducts, addToQueue, getQueueLength, syncQueue
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
 import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
+import { useVerticalSections } from "@/hooks/useVerticalSections";
+import { VerticalContextBar } from "@/components/VerticalContextBar";
+import { VerticalEmptyState } from "@/components/VerticalEmptyState";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -218,6 +221,7 @@ export default function PdvScreen() {
       <ScannerBar onScan={handleScan} />
       <View style={{ marginBottom: 12 }}><TextInput style={s.searchInput} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} /></View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        <VerticalContextBar />
         <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
         {categories.map(c => (<Pressable key={c} onPress={() => setCategory(c)} style={[s.catChip, category === c && s.catChipActive]}><Text style={[s.catChipText, category === c && s.catChipTextActive]}>{c}</Text></Pressable>))}
       </ScrollView>

@@ -9,6 +9,9 @@ import { PageTransition } from "@/components/PageTransition";
 import { ToastContainer } from "@/components/Toast";
 import OnboardingScreen from "@/app/(tabs)/onboarding";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useModules } from "@/hooks/useModules";
+import { useVerticalTheme } from "@/hooks/useVerticalTheme";
+import { VerticalContextBar } from "@/components/VerticalContextBar";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string };
@@ -223,6 +226,9 @@ function MBar() {
 }
 
 export default function TabsLayout() {
+  // VER-02: Vertical modules
+  const { activeModules, hasModule, primaryModule } = useModules();
+  const verticalTheme = useVerticalTheme();
   useWebFonts();
   const C = useColors();
   const { isDark } = useThemeStore();

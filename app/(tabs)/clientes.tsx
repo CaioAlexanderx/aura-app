@@ -6,6 +6,9 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
 import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
+import { useVerticalSections } from "@/hooks/useVerticalSections";
+import { VerticalContextBar } from "@/components/VerticalContextBar";
+import { VerticalEmptyState } from "@/components/VerticalEmptyState";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -49,6 +52,7 @@ function SC({ l,v,c,sub }:{l:string;v:string;c?:string;sub?:string}) {
 }
 function TB({ a,onS }:{a:number;onS:(i:number)=>void}) {
   return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>
+        <VerticalContextBar />
         <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />{TABS.map((t,i)=><Pressable key={t} onPress={()=>onS(i)} style={[{paddingHorizontal:16,paddingVertical:9,borderRadius:10,backgroundColor:Colors.bg3,borderWidth:1,borderColor:Colors.border},a===i&&{backgroundColor:Colors.violet,borderColor:Colors.violet}]}><Text style={[{fontSize:13,color:Colors.ink3,fontWeight:"500"},a===i&&{color:"#fff",fontWeight:"600"}]}>{t}</Text></Pressable>)}</ScrollView>;
 }
 
@@ -126,6 +130,7 @@ function RBar({l,v,tot,col}:{l:string;v:number;tot:number;col:string}) {
 
 export default function ClientesScreen() {
   const { isDemo, company, token } = useAuthStore();
+  const verticalSections = useVerticalSections(); // VER-02f
 
   // UX-06: First-time tooltip
   const { activeTip, visible: tipVisible, dismiss: dismissTip } = useFirstTimeTooltip("clientes");

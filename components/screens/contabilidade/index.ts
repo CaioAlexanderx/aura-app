@@ -1,0 +1,1 @@
+export { HeroRing } from "./HeroRing";
