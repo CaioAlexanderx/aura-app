@@ -8,6 +8,8 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { DemoTour } from "@/components/DemoTour";
 import { TrialBanner } from "@/components/TrialBanner";
+import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
+import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
 
 // Reactive on web via resize listener in useScreenWidth (see _layout.tsx)
 // For components, we use initial value + re-mount on significant changes
@@ -84,6 +86,7 @@ export default function DashboardScreen(){
       <DemoTour visible={isDemo} />
       <TrialBanner />
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>
+        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
         <View style={s.header}>
           <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
           <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>

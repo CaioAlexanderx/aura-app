@@ -4,6 +4,8 @@ import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
+import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -46,7 +48,8 @@ function SC({ l,v,c,sub }:{l:string;v:string;c?:string;sub?:string}) {
   return <Pressable onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[{backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?140:"45%",margin:4},h&&{transform:[{translateY:-2}],borderColor:Colors.border2},w&&{transition:"all 0.2s ease"}as any]}><Text style={{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>{l}</Text><Text style={{fontSize:20,fontWeight:"800",color:c||Colors.ink,letterSpacing:-0.5}}>{v}</Text>{sub&&<Text style={{fontSize:10,color:Colors.ink3,marginTop:4}}>{sub}</Text>}</Pressable>;
 }
 function TB({ a,onS }:{a:number;onS:(i:number)=>void}) {
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>{TABS.map((t,i)=><Pressable key={t} onPress={()=>onS(i)} style={[{paddingHorizontal:16,paddingVertical:9,borderRadius:10,backgroundColor:Colors.bg3,borderWidth:1,borderColor:Colors.border},a===i&&{backgroundColor:Colors.violet,borderColor:Colors.violet}]}><Text style={[{fontSize:13,color:Colors.ink3,fontWeight:"500"},a===i&&{color:"#fff",fontWeight:"600"}]}>{t}</Text></Pressable>)}</ScrollView>;
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>
+        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />{TABS.map((t,i)=><Pressable key={t} onPress={()=>onS(i)} style={[{paddingHorizontal:16,paddingVertical:9,borderRadius:10,backgroundColor:Colors.bg3,borderWidth:1,borderColor:Colors.border},a===i&&{backgroundColor:Colors.violet,borderColor:Colors.violet}]}><Text style={[{fontSize:13,color:Colors.ink3,fontWeight:"500"},a===i&&{color:"#fff",fontWeight:"600"}]}>{t}</Text></Pressable>)}</ScrollView>;
 }
 
 function AddForm({ onSave,onX }:{onSave:(c:Cust)=>void;onX:()=>void}) {
@@ -123,6 +126,9 @@ function RBar({l,v,tot,col}:{l:string;v:number;tot:number;col:string}) {
 
 export default function ClientesScreen() {
   const { isDemo, company, token } = useAuthStore();
+
+  // UX-06: First-time tooltip
+  const { activeTip, visible: tipVisible, dismiss: dismissTip } = useFirstTimeTooltip("clientes");
 
   // CONN-15: Fetch real customers when not in demo
   const { data: apiCustomers } = useQuery({

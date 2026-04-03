@@ -6,6 +6,8 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { AgentBanner } from "@/components/AgentBanner";
 import { useKeyboard } from "@/hooks/useKeyboard";
+import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
+import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -64,6 +66,7 @@ const smS = StyleSheet.create({
 function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={tbS.scroll} contentContainerStyle={tbS.row}>
+        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
       {TABS.map((tab, i) => (
         <Pressable key={tab} onPress={() => onSelect(i)} style={[tbS.tab, active === i && tbS.tabActive]}>
           <Text style={[tbS.label, active === i && tbS.labelActive]}>{tab}</Text>
@@ -512,6 +515,9 @@ const alS = StyleSheet.create({
 
 export default function EstoqueScreen() {
   const { isDemo, company, token } = useAuthStore();
+
+  // UX-06: First-time tooltip
+  const { activeTip, visible: tipVisible, dismiss: dismissTip } = useFirstTimeTooltip("estoque");
 
   // UX-04: Keyboard shortcuts
   useKeyboard([
