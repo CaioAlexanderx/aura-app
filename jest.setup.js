@@ -10,7 +10,7 @@ const localStorageMock = {
 };
 global.localStorage = localStorageMock;
 
-// Mock window.addEventListener for web hooks
+// Mock window events
 global.addEventListener = global.addEventListener || jest.fn();
 global.removeEventListener = global.removeEventListener || jest.fn();
 
@@ -29,5 +29,3 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 0, Medium: 1, Heavy: 2 },
   NotificationFeedbackType: { Success: 0, Warning: 1, Error: 2 },
 }), { virtual: true });
-
-jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
