@@ -38,6 +38,56 @@ type RequestOpts = {
   timeout?: number;
 };
 
+
+// SEC-02: Refresh token interceptor
+let isRefreshing = false;
+let refreshQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
+
+async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const { useAuthStore } = await import("@/stores/auth");
+    const refreshToken = useAuthStore.getState().refreshToken;
+    if (!refreshToken) return null;
+
+    const resp = await fetch(BASE_URL + "/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!resp.ok) {
+    // SEC-02: Auto-refresh on expired access token
+    if (resp.status === 401) {
+      const errBody = await resp.clone().json().catch(() => ({}));
+      if (errBody.code === "TOKEN_EXPIRED" && !isRefreshing) {
+        isRefreshing = true;
+        const newToken = await refreshAccessToken();
+        isRefreshing = false;
+        if (newToken) {
+          // Retry original request with new token
+          const retryHeaders = { ...headers, Authorization: "Bearer " + newToken };
+          const retryResp = await fetch(url, { method: opts?.method || "GET", headers: retryHeaders, body: opts?.body ? JSON.stringify(opts.body) : undefined });
+          if (retryResp.ok) return retryResp.json();
+        }
+      }
+    }
+      // Refresh failed — force logout
+      useAuthStore.getState().logout();
+      return null;
+    }
+
+    const data = await resp.json();
+    // Update only the access token in store
+    useAuthStore.setState({ token: data.token });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("aura_token", data.token);
+    }
+    return data.token;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const { method = "GET", body, retry = 2, timeout = 10000 } = opts;
   const token = opts.token !== undefined ? opts.token : _getToken?.() || null;

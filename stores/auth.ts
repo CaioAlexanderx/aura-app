@@ -64,6 +64,7 @@ type Company = Exclude<LoginResponse["company"], null>;
 
 type AuthState = {
   token: string | null;
+  refreshToken: string | null;
   user: User | null;
   company: Company | null;
   isLoading: boolean;
@@ -98,6 +99,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
   return {
     token: null,
+    refreshToken: null,
     user: null,
     company: null,
     isLoading: false,
