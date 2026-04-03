@@ -12,8 +12,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { ContabilidadeAdmin } from "@/components/admin/ContabilidadeAdmin";
+import { EquipeAdmin } from "@/components/admin/EquipeAdmin";
+import { SuporteAdmin } from "@/components/admin/SuporteAdmin";
+import { ConfigAdmin } from "@/components/admin/ConfigAdmin";
+import { LogsAdmin } from "@/components/admin/LogsAdmin";
 
-const TABS = ["Dashboard", "Clientes", "Financeiro"];
+const TABS = ["Dashboard", "Clientes", "Financeiro", "Contabilidade", "Equipe", "Suporte", "Config", "Logs"];
 
 type Client = {
   id: string; name: string; cnpj: string; plan: "essencial" | "negocio" | "expansao";
@@ -194,6 +199,13 @@ function ClientsTable() {
                   <View style={ct.detailItem}><Text style={ct.detailLabel}>Desde</Text><Text style={ct.detailValue}>{client.createdAt}</Text></View>
                   <View style={ct.detailItem}><Text style={ct.detailLabel}>Último login</Text><Text style={ct.detailValue}>{client.lastLogin}</Text></View>
                 </View>
+                {/* VER-03f: Mini-dashboard */}
+                <View style={ct.detailGrid}>
+                  <View style={ct.detailItem}><Text style={ct.detailLabel}>MRR</Text><Text style={[ct.detailValue, { color: Colors.green }]}>R$ {client.mrr}</Text></View>
+                  <View style={ct.detailItem}><Text style={ct.detailLabel}>Saude do uso</Text><Text style={[ct.detailValue, { color: Colors.green }]}>Ativo</Text></View>
+                  <View style={ct.detailItem}><Text style={ct.detailLabel}>Obrigacoes</Text><Text style={[ct.detailValue, { color: Colors.amber }]}>2 pendentes</Text></View>
+                  <View style={ct.detailItem}><Text style={ct.detailLabel}>Tickets</Text><Text style={ct.detailValue}>0 abertos</Text></View>
+                </View>
                 <View style={ct.toggles}>
                   <Text style={ct.toggleTitle}>Módulos ativos</Text>
                   {["Financeiro", "PDV", "Estoque", "CRM", "WhatsApp", "Canal Digital", "Folha", "Agentes IA"].map(mod => {
@@ -276,6 +288,21 @@ function FinanceAdmin() {
           <Text style={fa.hint}>Baseado no MRR atual de {fmt(activeMRR)}</Text>
         </HoverCard>
       </View>
+      <View style={{ flexDirection: IS_WIDE ? "row" : "column", gap: 12 }}>
+        <HoverCard style={[fa.card, { flex: 1 }]}>
+          <Text style={fa.ct}>CAC / LTV</Text>
+          <View style={{ flexDirection: "row", gap: 16 }}>
+            <View style={{ flex: 1 }}><Text style={fa.hint}>CAC (custo aquisicao)</Text><Text style={[fa.big, { fontSize: 20, color: Colors.amber }]}>R$ 45</Text></View>
+            <View style={{ flex: 1 }}><Text style={fa.hint}>LTV (lifetime value)</Text><Text style={[fa.big, { fontSize: 20, color: Colors.green }]}>R$ 2.388</Text></View>
+            <View style={{ flex: 1 }}><Text style={fa.hint}>LTV/CAC</Text><Text style={[fa.big, { fontSize: 20, color: Colors.violet3 }]}>53x</Text></View>
+          </View>
+        </HoverCard>
+        <HoverCard style={[fa.card, { flex: 1 }]}>
+          <Text style={fa.ct}>Upgrades este mes</Text>
+          <Text style={[fa.big, { fontSize: 20, color: Colors.violet3 }]}>2</Text>
+          <Text style={fa.hint}>Essencial \u2192 Negocio: 1 | Negocio \u2192 Expansao: 1</Text>
+        </HoverCard>
+      </View>
     </View>
   );
 }
@@ -331,6 +358,11 @@ export default function GestaoAuraScreen() {
       {tab === 0 && <Dashboard />}
       {tab === 1 && <ClientsTable />}
       {tab === 2 && <FinanceAdmin />}
+      {tab === 3 && <ContabilidadeAdmin />}
+      {tab === 4 && <EquipeAdmin />}
+      {tab === 5 && <SuporteAdmin />}
+      {tab === 6 && <ConfigAdmin />}
+      {tab === 7 && <LogsAdmin />}
     </ScrollView>
   );
 }
