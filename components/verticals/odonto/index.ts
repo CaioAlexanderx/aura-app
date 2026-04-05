@@ -24,3 +24,21 @@ export { FatorRAlert } from "./FatorRAlert";
 export { CROBadge, CROSignatureBlock } from "./CROBadge";
 export { ContratoPDF } from "./ContratoPDF";
 export type { ContratoData } from "./ContratoPDF";
+// D-16: Convênios + TUSS
+export { ConvenioManager } from "./ConvenioManager";
+export type { Insurance, TussCode, InsuranceProcedure } from "./ConvenioManager";
+// D-17: Guias TISS
+export { TissGuideManager } from "./TissGuideManager";
+export type { TissGuide, TissStats } from "./TissGuideManager";
+// D-18: Fichas por especialidade
+export { FichaEspecialidade } from "./FichaEspecialidade";
+export type { SpecialtyForm } from "./FichaEspecialidade";
+// D-19: Periograma
+export { Periograma } from "./Periograma";
+export type { PerioChart } from "./Periograma";
+// D-20: Lista de espera
+export { ListaEsperaDental } from "./ListaEsperaDental";
+export type { WaitlistEntry } from "./ListaEsperaDental";
+// D-21: Check-in paciente
+export { CheckinPaciente } from "./CheckinPaciente";
+export type { Checkin, CheckinStats } from "./CheckinPaciente";
