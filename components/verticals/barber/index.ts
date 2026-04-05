@@ -25,3 +25,15 @@ export { EstoqueInterno } from "./EstoqueInterno";
 export type { ServiceMaterial } from "./EstoqueInterno";
 export { ComissaoProduto } from "./ComissaoProduto";
 export type { ProductSale } from "./ComissaoProduto";
+// B-17/18: Cota-parte Lei do Salão
+export { CotaParte } from "./CotaParte";
+export type { PartnerInvoice, InvoiceSummary } from "./CotaParte";
+// B-19: Fidelidade pontos
+export { FidelidadePontos } from "./FidelidadePontos";
+export type { LoyaltyConfig, LoyaltyEntry, LeaderboardEntry } from "./FidelidadePontos";
+// B-20: Controle dose/grama
+export { ControleDose } from "./ControleDose";
+export type { StockUsage, FractionProduct } from "./ControleDose";
+// B-21: Reserve with Google
+export { GoogleBooking } from "./GoogleBooking";
+export type { GoogleBookingConfig } from "./GoogleBooking";
