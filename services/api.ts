@@ -29,7 +29,7 @@ export function setOnUnauthorized(fn: () => void) {
   _onUnauthorized = fn;
 }
 
-// ── Core request with retry + timeout ───────────────────────
+// ── Core request with retry + timeout + auto-refresh ────────
 type RequestOpts = {
   method?: string;
   body?: unknown;
@@ -38,10 +38,8 @@ type RequestOpts = {
   timeout?: number;
 };
 
-
-// SEC-02: Refresh token interceptor
 let isRefreshing = false;
-let refreshQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
+let refreshPromise: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
@@ -56,28 +54,11 @@ async function refreshAccessToken(): Promise<string | null> {
     });
 
     if (!resp.ok) {
-    // SEC-02: Auto-refresh on expired access token
-    if (resp.status === 401) {
-      const errBody = await resp.clone().json().catch(() => ({}));
-      if (errBody.code === "TOKEN_EXPIRED" && !isRefreshing) {
-        isRefreshing = true;
-        const newToken = await refreshAccessToken();
-        isRefreshing = false;
-        if (newToken) {
-          // Retry original request with new token
-          const retryHeaders = { ...headers, Authorization: "Bearer " + newToken };
-          const retryResp = await fetch(url, { method: opts?.method || "GET", headers: retryHeaders, body: opts?.body ? JSON.stringify(opts.body) : undefined });
-          if (retryResp.ok) return retryResp.json();
-        }
-      }
-    }
-      // Refresh failed — force logout
       useAuthStore.getState().logout();
       return null;
     }
 
     const data = await resp.json();
-    // Update only the access token in store
     useAuthStore.setState({ token: data.token });
     if (typeof window !== "undefined") {
       localStorage.setItem("aura_token", data.token);
@@ -110,10 +91,44 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
       if (timer) clearTimeout(timer);
       const data = await res.json().catch(() => ({}));
 
+      // SEC-02: Auto-refresh on 401
       if (res.status === 401) {
+        // Try refresh once
+        if (!isRefreshing && !opts.token) {
+          isRefreshing = true;
+          refreshPromise = refreshAccessToken();
+          const newToken = await refreshPromise;
+          isRefreshing = false;
+          refreshPromise = null;
+
+          if (newToken) {
+            // Retry with new token
+            const retryHeaders = { ...headers, Authorization: "Bearer " + newToken };
+            const retryRes = await fetch(`${BASE_URL}${path}`, {
+              method, headers: retryHeaders,
+              body: body ? JSON.stringify(body) : undefined,
+            });
+            const retryData = await retryRes.json().catch(() => ({}));
+            if (retryRes.ok) return retryData as T;
+          }
+        } else if (isRefreshing && refreshPromise) {
+          // Another request is already refreshing, wait for it
+          const newToken = await refreshPromise;
+          if (newToken) {
+            const retryHeaders = { ...headers, Authorization: "Bearer " + newToken };
+            const retryRes = await fetch(`${BASE_URL}${path}`, {
+              method, headers: retryHeaders,
+              body: body ? JSON.stringify(body) : undefined,
+            });
+            const retryData = await retryRes.json().catch(() => ({}));
+            if (retryRes.ok) return retryData as T;
+          }
+        }
+
         if (_onUnauthorized) _onUnauthorized();
         throw new ApiError((data as any).error || "Sessao expirada", 401, data);
       }
+
       if (res.status === 429 && attempt < retry) {
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         continue;
@@ -178,13 +193,10 @@ export const authApi = {
 
 // ── Dashboard API ───────────────────────────────────────────
 export const dashboardApi = {
-  // PERF-01: Single aggregated endpoint (replaces 2-3 separate calls)
   aggregate: (companyId: string, token?: string) =>
     request<any>(`/companies/${companyId}/dashboard`, { token }),
-
   summary: (companyId: string, token?: string) =>
     request<any>(`/companies/${companyId}/withdrawal/summary`, { token }),
-
   sparkline: (companyId: string, days?: number, token?: string) =>
     request<any>(`/companies/${companyId}/dashboard/sparkline?days=${days || 7}`, { token }),
 };
@@ -196,17 +208,30 @@ export const companiesApi = {
     request<any>(`/companies/${companyId}/transactions${params ? "?" + params : ""}`),
   createTransaction: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/transactions`, { method: "POST", body }),
+  updateTransaction: (companyId: string, txId: string, body: any) =>
+    request<any>(`/companies/${companyId}/transactions/${txId}`, { method: "PATCH", body }),
+  deleteTransaction: (companyId: string, txId: string) =>
+    request<any>(`/companies/${companyId}/transactions/${txId}`, { method: "DELETE" }),
   products: (companyId: string) => request<any>(`/companies/${companyId}/products`),
   createProduct: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/products`, { method: "POST", body }),
+  updateProduct: (companyId: string, prodId: string, body: any) =>
+    request<any>(`/companies/${companyId}/products/${prodId}`, { method: "PATCH", body }),
+  deleteProduct: (companyId: string, prodId: string) =>
+    request<any>(`/companies/${companyId}/products/${prodId}`, { method: "DELETE" }),
   customers: (companyId: string) => request<any>(`/companies/${companyId}/customers`),
   createCustomer: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/customers`, { method: "POST", body }),
+  updateCustomer: (companyId: string, custId: string, body: any) =>
+    request<any>(`/companies/${companyId}/customers/${custId}`, { method: "PATCH", body }),
   obligations: (companyId: string) => request<any>(`/companies/${companyId}/obligations`),
   payroll: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/payroll/calculate`, { method: "POST", body }),
   dre: (companyId: string, params?: string) =>
     request<any>(`/companies/${companyId}/dre${params ? "?" + params : ""}`),
+  checklist: (companyId: string) => request<any>(`/companies/${companyId}/checklist`),
+  completeCheckpoint: (companyId: string, checkpointId: string) =>
+    request<any>(`/companies/${companyId}/checklist/${checkpointId}/complete`, { method: "POST" }),
 };
 
 // ── CNPJ API ────────────────────────────────────────────────
@@ -238,6 +263,33 @@ export const pdvApi = {
     request<any>(`/companies/${companyId}/pdv/sales`, { method: "POST", body }),
 };
 
+// ── Billing API (F6 — Asaas) ────────────────────────────────
+export const billingApi = {
+  status: (companyId: string) =>
+    request<{ plan: string; billing_status: string; trial_active: boolean; trial_days_left: number; next_billing_date: string | null; has_payment_method: boolean }>(
+      `/companies/${companyId}/billing/status`
+    ),
+  subscribe: (companyId: string, plan: string, billingType?: string) =>
+    request<{ subscription_id: string; plan: string; value: number; next_due_date: string; payment_link: string | null }>(
+      `/companies/${companyId}/billing/subscribe`,
+      { method: "POST", body: { plan, billing_type: billingType || "UNDEFINED" } }
+    ),
+  cancel: (companyId: string) =>
+    request<{ message: string; cancelled_at: string }>(
+      `/companies/${companyId}/billing/cancel`,
+      { method: "POST" }
+    ),
+  invoices: (companyId: string) =>
+    request<{ total: number; invoices: any[] }>(
+      `/companies/${companyId}/billing/invoices`
+    ),
+  generatePix: (companyId: string, paymentId: string) =>
+    request<{ qr_code: string; copy_paste: string; expiration: string }>(
+      `/companies/${companyId}/billing/generate-pix/${paymentId}`,
+      { method: "POST" }
+    ),
+};
+
 // ── Admin API ───────────────────────────────────────────────
 export const adminApi = {
   dashboard: () => request<any>("/admin/dashboard"),
@@ -253,7 +305,6 @@ export const aiApi = {
       `/companies/${companyId}/ai/chat`,
       { method: "POST", body: { message, context: context || "geral", history: history || [] }, timeout: 30000 }
     ),
-
   activity: (companyId: string, limit?: number) =>
     request<{ activity: any[]; summary: any[]; total: number }>(
       `/companies/${companyId}/ai/activity?limit=${limit || 20}`
