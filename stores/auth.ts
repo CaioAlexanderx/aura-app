@@ -10,6 +10,7 @@ import {
 } from "@/services/api";
 
 const KEY = "aura_token";
+const REFRESH_KEY = "aura_refresh_token";
 const OB_KEY = "aura_onboarding";
 const DEMO_TOKEN = "demo-token-aura-2026";
 
@@ -29,6 +30,22 @@ const storage = {
       : SecureStore.deleteItemAsync(KEY),
 };
 
+// FIX: persist refresh token separately
+const refreshStorage = {
+  get: (): Promise<string | null> =>
+    Platform.OS === "web"
+      ? Promise.resolve(localStorage.getItem(REFRESH_KEY))
+      : SecureStore.getItemAsync(REFRESH_KEY),
+  set: (v: string): Promise<void> =>
+    Platform.OS === "web"
+      ? (localStorage.setItem(REFRESH_KEY, v), Promise.resolve())
+      : SecureStore.setItemAsync(REFRESH_KEY, v),
+  del: (): Promise<void> =>
+    Platform.OS === "web"
+      ? (localStorage.removeItem(REFRESH_KEY), Promise.resolve())
+      : SecureStore.deleteItemAsync(REFRESH_KEY),
+};
+
 const obStorage = {
   get: (): string | null =>
     Platform.OS === "web" ? localStorage.getItem(OB_KEY) : null,
@@ -40,7 +57,7 @@ const obStorage = {
   },
 };
 
-// ── Demo data ───────────────────────────────────────────────
+// ── Demo data ───────────────────────────────────────────
 const DEMO_USER = {
   id: "demo-user",
   name: "Caio",
@@ -58,7 +75,7 @@ const DEMO_COMPANY = {
   trial_ends_at: null,
 } as const;
 
-// ── Types ───────────────────────────────────────────────────
+// ── Types ───────────────────────────────────────────
 type User = LoginResponse["user"];
 type Company = Exclude<LoginResponse["company"], null>;
 
@@ -88,14 +105,14 @@ export const useAuthStore = create<AuthState>((set, get) => {
   // Inject token getter into api.ts so all requests auto-attach JWT
   setTokenGetter(() => get().token);
 
-    // REL-03: Auto-logout when any API call returns 401
-    setOnUnauthorized(() => {
-      const state = get();
-      if (state.token && !state.isDemo) {
-        console.warn("[AUTH] Token expired, logging out");
-        state.logout();
-      }
-    });
+  // REL-03: Auto-logout when any API call returns 401
+  setOnUnauthorized(() => {
+    const state = get();
+    if (state.token && !state.isDemo) {
+      console.warn("[AUTH] Token expired, logging out");
+      state.logout();
+    }
+  });
 
   return {
     token: null,
@@ -113,6 +130,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     hydrate: async () => {
       const token = await storage.get();
+      const savedRefresh = await refreshStorage.get();
       const obDone = obStorage.get() === "complete";
 
       if (!token) {
@@ -123,6 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       if (token === DEMO_TOKEN) {
         set({
           token,
+          refreshToken: null,
           user: DEMO_USER as User,
           company: DEMO_COMPANY as Company,
           isDemo: true,
@@ -142,6 +161,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         set({
           token,
+          refreshToken: savedRefresh,
           user,
           company: company ?? null,
           isStaff: user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"),
@@ -153,6 +173,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         });
       } catch {
         await storage.del();
+        await refreshStorage.del();
         set({ isHydrated: true });
       }
     },
@@ -160,14 +181,20 @@ export const useAuthStore = create<AuthState>((set, get) => {
     login: async (email, password) => {
       set({ isLoading: true });
       try {
-        const { token, user, company } = await authApi.login(email, password);
+        const res = await authApi.login(email, password);
+        const { token, user, company } = res;
+        const refreshToken = (res as any).refresh_token || null;
+
         await storage.set(token);
+        if (refreshToken) await refreshStorage.set(refreshToken);
+
         const step = (company as any)?.onboarding_step;
         const obDone = obStorage.get() === "complete";
         const trialEnd = (company as any)?.trial_ends_at;
 
         set({
           token,
+          refreshToken,
           user,
           company: company ?? null,
           isLoading: false,
@@ -188,6 +215,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       await storage.set(DEMO_TOKEN);
       set({
         token: DEMO_TOKEN,
+        refreshToken: null,
         user: DEMO_USER as User,
         company: DEMO_COMPANY as Company,
         isLoading: false,
@@ -201,14 +229,19 @@ export const useAuthStore = create<AuthState>((set, get) => {
     register: async (body: RegisterBody) => {
       set({ isLoading: true });
       try {
-        const { token, user, company } = await authApi.register(body);
+        const res = await authApi.register(body);
+        const { token, user, company } = res;
+        const refreshToken = (res as any).refresh_token || null;
+
         await storage.set(token);
+        if (refreshToken) await refreshStorage.set(refreshToken);
         obStorage.del();
 
         const trialEnd = (company as any)?.trial_ends_at;
 
         set({
           token,
+          refreshToken,
           user,
           company: company ?? null,
           isLoading: false,
@@ -242,9 +275,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     logout: async () => {
       await storage.del();
+      await refreshStorage.del();
       obStorage.del();
       set({
         token: null,
+        refreshToken: null,
         user: null,
         company: null,
         isStaff: false,

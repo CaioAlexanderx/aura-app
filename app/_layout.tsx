@@ -11,7 +11,7 @@ import { startAutoSync } from "@/services/offlineSync";
 const queryClient = new QueryClient();
 
 function AuthGuard() {
-  const { token, isHydrated, hydrate } = useAuthStore();
+  const { token, isHydrated, isDemo, onboardingComplete, hydrate } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -27,17 +27,32 @@ function AuthGuard() {
   useEffect(() => {
     if (!isHydrated) return;
     const inAuth = segments[0] === "(auth)";
+    const inTabs = segments[0] === "(tabs)";
+    const inOnboarding = inTabs && segments[1] === "onboarding";
 
+    // Not logged in -> login
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
       return;
     }
 
+    // Logged in but on auth pages -> go to app
     if (token && inAuth) {
-      router.replace("/(tabs)");
+      // New user needs onboarding
+      if (!onboardingComplete && !isDemo) {
+        router.replace("/(tabs)/onboarding");
+      } else {
+        router.replace("/(tabs)");
+      }
       return;
     }
-  }, [token, isHydrated, segments]);
+
+    // Logged in, not demo, onboarding incomplete, not already on onboarding
+    if (token && !isDemo && !onboardingComplete && inTabs && !inOnboarding) {
+      router.replace("/(tabs)/onboarding");
+      return;
+    }
+  }, [token, isHydrated, isDemo, onboardingComplete, segments]);
 
   return <Slot />;
 }
