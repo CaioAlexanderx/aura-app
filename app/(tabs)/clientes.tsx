@@ -20,17 +20,7 @@ function getStatus(c: { visits: number; totalSpent: number; lastPurchase: string
   return t;
 }
 
-const INIT = [
-  { id:"1",name:"Maria Silva",email:"maria@email.com",phone:"(12) 99999-1111",instagram:"@mariasilva",birthday:"15/06",lastPurchase:"29/03/2026",totalSpent:2840,visits:18,firstVisit:"10/01/2025",notes:"",rating:5 },
-  { id:"2",name:"Pedro Costa",email:"pedro@email.com",phone:"(12) 99999-2222",instagram:"@pedrocosta",birthday:"22/09",lastPurchase:"28/03/2026",totalSpent:1560,visits:12,firstVisit:"15/03/2025",notes:"",rating:4 },
-  { id:"3",name:"Ana Oliveira",email:"ana@email.com",phone:"(12) 99999-3333",instagram:"",birthday:"03/12",lastPurchase:"25/03/2026",totalSpent:3200,visits:22,firstVisit:"20/08/2024",notes:"",rating:5 },
-  { id:"4",name:"Joao Santos",email:"joao@email.com",phone:"(12) 99999-4444",instagram:"@joaosantos",birthday:"08/04",lastPurchase:"20/03/2026",totalSpent:890,visits:7,firstVisit:"01/09/2025",notes:"",rating:null },
-  { id:"5",name:"Carlos Lima",email:"carlos@email.com",phone:"(12) 99999-5555",instagram:"",birthday:"30/11",lastPurchase:"10/02/2026",totalSpent:450,visits:4,firstVisit:"15/11/2025",notes:"",rating:3 },
-  { id:"6",name:"Fernanda Souza",email:"fer@email.com",phone:"(12) 99999-6666",instagram:"@fersouza",birthday:"17/07",lastPurchase:"27/03/2026",totalSpent:1980,visits:14,firstVisit:"05/05/2025",notes:"",rating:5 },
-  { id:"7",name:"Lucas Mendes",email:"lucas@email.com",phone:"(12) 99999-7777",instagram:"",birthday:"25/01",lastPurchase:"15/01/2026",totalSpent:220,visits:2,firstVisit:"10/12/2025",notes:"",rating:null },
-  { id:"8",name:"Beatriz Almeida",email:"bia@email.com",phone:"(12) 99999-8888",instagram:"@biaalmeida",birthday:"09/05",lastPurchase:"28/03/2026",totalSpent:4100,visits:30,firstVisit:"01/01/2024",notes:"Cliente desde 2024",rating:5 },
-];
-type Cust = typeof INIT[0];
+type Cust = { id:string;name:string;email:string;phone:string;instagram:string;birthday:string;lastPurchase:string;totalSpent:number;visits:number;firstVisit:string;notes:string;rating:number|null };
 const RET = { newM:3, ret:5, ina:1, avgT:391.91, avgV:13.6, bdays:[{ name:"Joao Santos", date:"08/04", days:10 }] };
 
 function Tag({ tag }: { tag: string }) {
@@ -47,19 +37,13 @@ function SC({ l,v,c,sub }:{l:string;v:string;c?:string;sub?:string}) {
   return <Pressable onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[{backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?140:"45%",margin:4},h&&{transform:[{translateY:-2}],borderColor:Colors.border2},w&&{transition:"all 0.2s ease"}as any]}><Text style={{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>{l}</Text><Text style={{fontSize:20,fontWeight:"800",color:c||Colors.ink,letterSpacing:-0.5}}>{v}</Text>{sub&&<Text style={{fontSize:10,color:Colors.ink3,marginTop:4}}>{sub}</Text>}</Pressable>;
 }
 function TB({ a,onS }:{a:number;onS:(i:number)=>void}) {
-  function handleDeleteCustomer(id: string) {
-    if (deleteCustomerMutation && company?.id && !isDemo) {
-      deleteCustomerMutation.mutate(id);
-    }
-  }
-
-    return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>
 {TABS.map((t,i)=><Pressable key={t} onPress={()=>onS(i)} style={[{paddingHorizontal:16,paddingVertical:9,borderRadius:10,backgroundColor:Colors.bg3,borderWidth:1,borderColor:Colors.border},a===i&&{backgroundColor:Colors.violet,borderColor:Colors.violet}]}><Text style={[{fontSize:13,color:Colors.ink3,fontWeight:"500"},a===i&&{color:"#fff",fontWeight:"600"}]}>{t}</Text></Pressable>)}</ScrollView>;
 }
 
 function AddForm({ onSave,onX }:{onSave:(c:Cust)=>void;onX:()=>void}) {
   const [n,sN]=useState("");const [p,sP]=useState("");const [e,sE]=useState("");const [ig,sI]=useState("");const [bd,sB]=useState("");const [nt,sNt]=useState("");
-  function save(){ if(!n.trim()){Alert.alert("Preencha o nome");return;} onSave({id:Date.now().toString(),name:n.trim(),email:e.trim(),phone:p.trim(),instagram:ig.trim(),birthday:bd.trim(),lastPurchase:"---",totalSpent:0,visits:0,firstVisit:new Date().toLocaleDateString("pt-BR"),notes:nt.trim(),rating:null}); }
+  function save(){ if(!n.trim()){toast.error("Preencha o nome");return;} onSave({id:Date.now().toString(),name:n.trim(),email:e.trim(),phone:p.trim(),instagram:ig.trim(),birthday:bd.trim(),lastPurchase:"---",totalSpent:0,visits:0,firstVisit:new Date().toLocaleDateString("pt-BR"),notes:nt.trim(),rating:null}); }
   const i={backgroundColor:Colors.bg4,borderRadius:10,borderWidth:1,borderColor:Colors.border,paddingHorizontal:14,paddingVertical:11,fontSize:13,color:Colors.ink} as any;
   return <View style={{backgroundColor:Colors.bg3,borderRadius:20,padding:24,borderWidth:1,borderColor:Colors.border2,marginBottom:24}}>
     <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><Text style={{fontSize:20,color:Colors.ink,fontWeight:"700"}}>Adicionar cliente</Text><Pressable onPress={onX} style={{width:32,height:32,borderRadius:8,backgroundColor:Colors.bg4,alignItems:"center",justifyContent:"center"}}><Text style={{fontSize:16,color:Colors.ink3,fontWeight:"600"}}>x</Text></Pressable></View>
@@ -103,9 +87,6 @@ function CRow({ c,exp,onE,onDelete }:{c:Cust;exp:boolean;onE:()=>void;onDelete?:
       <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:Colors.border,gap:6}}>
         <Text style={{fontSize:11,color:Colors.ink3,fontWeight:"600",textTransform:"uppercase",letterSpacing:0.5}}>Status</Text>
         <View style={{flexDirection:"row",gap:6}}>{tags.map(t=><Tag key={t} tag={t}/>)}</View>
-        <Text style={{fontSize:11,color:Colors.ink3,lineHeight:16}}>
-          {tags.includes("VIP")?"Gasto acima de R$ 2.000. ":""}{tags.includes("Frequente")?"10+ visitas. ":""}{tags.includes("Novo")?"Ate 3 visitas. ":""}{tags.includes("Inativo")?"Sem compras ha 30+ dias.":""}
-        </Text>
       </View>
       <View style={{flexDirection:"row",gap:8,marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:Colors.border,flexWrap:"wrap"}}>
         {["Enviar WhatsApp","Pedir avaliacao","Ver historico"].map(a=><Pressable key={a} style={{backgroundColor:Colors.bg3,borderRadius:8,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:Colors.border}}><Text style={{fontSize:11,color:Colors.violet3,fontWeight:"600"}}>{a}</Text></Pressable>)}
@@ -132,10 +113,8 @@ function RBar({l,v,tot,col}:{l:string;v:number;tot:number;col:string}) {
 
 export default function ClientesScreen() {
   const { isDemo, company, token } = useAuthStore();
+  const qc = useQueryClient();
 
-  // UX-06: First-time tooltip
-
-  // CONN-15: Fetch real customers when not in demo
   const { data: apiCustomers } = useQuery({
     queryKey: ["customers", company?.id],
     queryFn: () => companiesApi.customers(company!.id),
@@ -143,20 +122,29 @@ export default function ClientesScreen() {
     retry: 1,
     staleTime: 30000,
   });
-  // CONN-15: Sync API customers into local state
-  const qc = useQueryClient();
 
   const deleteCustomerMutation = useMutation({
     mutationFn: (custId: string) => companiesApi.deleteCustomer(company!.id, custId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["customers", company?.id] });
-      toast.success("Cliente excluido");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", company?.id] }); toast.success("Cliente excluido"); },
     onError: () => toast.error("Erro ao excluir cliente"),
   });
+
+  const addCustomerMutation = useMutation({
+    mutationFn: (body: any) => companiesApi.createCustomer(company!.id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", company?.id] }),
+  });
+
+  const [tab,sTab]=useState(0);
+  const [q,sQ]=useState("");
+  const [expId,sExp]=useState<string|null>(null);
+  const [rm,sRm]=useState<"ltv"|"visits">("ltv");
+  const [cust,sCust]=useState<Cust[]>([]);
+  const [showAdd,sAdd]=useState(false);
+
+  // Sync API data into local state
   const apiCustArr = (apiCustomers?.customers || apiCustomers?.rows || apiCustomers);
   useEffect(() => {
-    if (apiCustArr instanceof Array && apiCustArr.length > 0) {
+    if (apiCustArr instanceof Array) {
       const mapped = apiCustArr.map((c: any) => ({
         id: c.id || c.customer_id || String(Math.random()),
         name: c.name || c.customer_name || "Cliente",
@@ -175,68 +163,47 @@ export default function ClientesScreen() {
     }
   }, [apiCustArr instanceof Array ? apiCustArr.length : 0]);
 
-  const addCustomerMutation = useMutation({
-    mutationFn: (body: any) => companiesApi.createCustomer ? companiesApi.createCustomer(company!.id, body) : Promise.resolve(null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", company?.id] }),
-  });
-  const [tab,sTab]=useState(0);const [q,sQ]=useState("");const [expId,sExp]=useState<string|null>(null);const [rm,sRm]=useState<"ltv"|"visits">("ltv");const [cust,sCust]=useState<Cust[]>(INIT);const [showAdd,sAdd]=useState(false);
-  
-  function handleExportCSV() {
-    if (Platform.OS === "web") {
-      const header = "Nome,Telefone,Email,Instagram,Aniversario,LTV\n";
-      const rows = cust.map(cc => [cc.name, cc.phone || "", cc.email || "", cc.instagram || "", cc.birthday || "", cc.totalSpent || ""].join(",")).join("\n");
-      const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "clientes_aura_" + new Date().toISOString().slice(0,10) + ".csv";
-      link.click();
+  function handleDeleteCustomer(id: string) {
+    if (company?.id && !isDemo) {
+      deleteCustomerMutation.mutate(id);
     }
   }
 
-  function handleImportCSV() {
-    if (Platform.OS === "web") {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".csv,.xlsx,.xls";
-      input.onchange = (ev: any) => {
-        const f = ev.target?.files?.[0];
-        if (f) {
-          alert("Arquivo " + f.name + " recebido! Processando...");
-          // CONN-24: Send to backend for processing
-          // request(`/companies/${company?.id}/import/customers`, { method: "POST", body: formData });
-        }
-      };
-      input.click();
+  function addC(c: Cust) {
+    if (company?.id && !isDemo) {
+      addCustomerMutation.mutate({ name: c.name, email: c.email, phone: c.phone, instagram_handle: c.instagram, birth_date: c.birthday, notes: c.notes }, {
+        onSuccess: () => { toast.success("Cliente cadastrado!"); sAdd(false); },
+        onError: () => { toast.error("Erro ao salvar cliente"); },
+      });
+    } else {
+      sCust(p=>[c,...p]); sAdd(false);
     }
   }
 
   const fil=cust.filter(c=>{if(!q)return true;const s=q.toLowerCase();return c.name.toLowerCase().includes(s)||c.phone.includes(s)||c.email.toLowerCase().includes(s)||c.instagram.toLowerCase().includes(s);});
   const tot=cust.length;const ltv=cust.reduce((s,c)=>s+c.totalSpent,0);const rated=cust.filter(c=>c.rating!=null);const avg=rated.length?(rated.reduce((s,c)=>s+(c.rating||0),0)/rated.length).toFixed(1):"0";
   const ranked=[...cust].sort((a,b)=>rm==="ltv"?b.totalSpent-a.totalSpent:b.visits-a.visits);
-  function addC(c:Cust){sCust(p=>[c,...p]);sAdd(false);}
-  return <ScrollView style={{flex:1,backgroundColor: "transparent"}} contentContainerStyle={{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"}}>
+
+  return <ScrollView style={{flex:1,backgroundColor:"transparent"}} contentContainerStyle={{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"}}>
     <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <Text style={{fontSize:22,color:Colors.ink,fontWeight:"700"}}>Clientes</Text>
       <Pressable onPress={()=>{sAdd(true);sTab(0);}} style={{backgroundColor:Colors.violet,paddingHorizontal:18,paddingVertical:10,borderRadius:10}}><Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>+ Adicionar cliente</Text></Pressable>
     </View>
     <View style={{flexDirection:"row",flexWrap:"wrap",marginHorizontal:-4,marginBottom:16}}>
-      <SC l="TOTAL CLIENTES" v={String(tot)}/><SC l="FATURAMENTO TOTAL" v={fmt(ltv)} c={Colors.green}/><SC l="TICKET MÉDIO" v={fmt(RET.avgT)}/><SC l="MEDIA VISITAS" v={RET.avgV.toFixed(1)}/>
+      <SC l="TOTAL CLIENTES" v={String(tot)}/><SC l="FATURAMENTO TOTAL" v={fmt(ltv)} c={Colors.green}/>
     </View>
-    <View style={{flexDirection:"row",flexWrap:"wrap",gap:12,backgroundColor:Colors.bg3,borderRadius:12,padding:12,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>
-      <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Tag tag="VIP"/><Text style={{fontSize:11,color:Colors.ink3}}>Gasto acima de R$ 2.000</Text></View>
-      <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Tag tag="Frequente"/><Text style={{fontSize:11,color:Colors.ink3}}>10+ visitas</Text></View>
-      <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Tag tag="Novo"/><Text style={{fontSize:11,color:Colors.ink3}}>Ate 3 visitas</Text></View>
-      <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Tag tag="Inativo"/><Text style={{fontSize:11,color:Colors.ink3}}>Sem compras ha 30+ dias</Text></View>
-    </View>
+
     {showAdd&&<AddForm onSave={addC} onX={()=>sAdd(false)}/>}
     <TB a={tab} onS={sTab}/>
+
     {tab===0&&<View>
       <TextInput style={{backgroundColor:Colors.bg3,borderRadius:10,borderWidth:1,borderColor:Colors.border,paddingHorizontal:14,paddingVertical:11,fontSize:13,color:Colors.ink,marginBottom:16}} placeholder="Buscar por nome, telefone, email ou Instagram..." placeholderTextColor={Colors.ink3} value={q} onChangeText={sQ}/>
       <View style={{backgroundColor:Colors.bg3,borderRadius:16,padding:8,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>
+        {fil.length===0&&<View style={{alignItems:"center",paddingVertical:40}}><Text style={{fontSize:13,color:Colors.ink3}}>Nenhum cliente cadastrado</Text></View>}
         {fil.map(c=><CRow key={c.id} c={c} exp={expId===c.id} onE={()=>sExp(expId===c.id?null:c.id)} onDelete={handleDeleteCustomer}/>)}
-        {fil.length===0&&<View style={{alignItems:"center",paddingVertical:40}}><Text style={{fontSize:13,color:Colors.ink3}}>Nenhum cliente encontrado</Text></View>}
       </View>
     </View>}
+
     {tab===1&&<View>
       <View style={{flexDirection:"row",gap:6,marginBottom:16}}>
         <Pressable onPress={()=>sRm("ltv")} style={[{paddingHorizontal:16,paddingVertical:9,borderRadius:10,backgroundColor:Colors.bg3,borderWidth:1,borderColor:Colors.border},rm==="ltv"&&{backgroundColor:Colors.violetD,borderColor:Colors.border2}]}><Text style={[{fontSize:13,color:Colors.ink3,fontWeight:"500"},rm==="ltv"&&{color:Colors.violet3,fontWeight:"600"}]}>Por faturamento</Text></Pressable>
@@ -244,29 +211,14 @@ export default function ClientesScreen() {
       </View>
       <View style={{backgroundColor:Colors.bg3,borderRadius:16,padding:8,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>{ranked.map((c,i)=><RRow key={c.id} c={c} rank={i+1} met={rm}/>)}</View>
     </View>}
+
     {tab===2&&<View>
       <View style={{backgroundColor:Colors.bg3,borderRadius:16,padding:20,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>
         <Text style={{fontSize:15,color:Colors.ink,fontWeight:"700",marginBottom:16}}>Composicao da base</Text>
-        <View style={{gap:16}}><RBar l="Novos (este mes)" v={RET.newM} tot={tot} col={Colors.amber}/><RBar l="Retornando" v={RET.ret} tot={tot} col={Colors.green}/><RBar l="Inativos (30+ dias)" v={RET.ina} tot={tot} col={Colors.red}/></View>
-      </View>
-      {RET.bdays.length>0&&<View style={{backgroundColor:Colors.bg3,borderRadius:16,padding:16,borderWidth:1,borderColor:Colors.border2,marginBottom:20}}>
-        <Text style={{fontSize:15,color:Colors.ink,fontWeight:"700",marginBottom:12}}>Aniversarios proximos</Text>
-        {RET.bdays.map(b=><View key={b.name} style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:10}}>
-          <View style={{flexDirection:"row",alignItems:"center",gap:10}}><Text style={{fontSize:20,color:Colors.amber}}>*</Text><View><Text style={{fontSize:13,color:Colors.ink,fontWeight:"600"}}>{b.name}</Text><Text style={{fontSize:11,color:Colors.ink3,marginTop:1}}>{b.date} - em {b.days} dias</Text></View></View>
-          <Pressable style={{backgroundColor:Colors.violetD,borderRadius:8,paddingHorizontal:12,paddingVertical:7,borderWidth:1,borderColor:Colors.border2}}><Text style={{fontSize:11,color:Colors.violet3,fontWeight:"600"}}>Enviar parabens</Text></Pressable>
-        </View>)}
-      </View>}
-      <View style={{backgroundColor:Colors.bg3,borderRadius:16,padding:20,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>
-        <Text style={{fontSize:15,color:Colors.ink,fontWeight:"700",marginBottom:4}}>Avaliacoes dos clientes</Text>
-        <Text style={{fontSize:11,color:Colors.ink3,marginBottom:16,lineHeight:16}}>Enviamos o link de avaliacao para todos os clientes apos cada compra.</Text>
-        <View style={{flexDirection:"row",gap:16,marginBottom:16}}>
-          <View style={{alignItems:"center",flex:1,backgroundColor:Colors.bg4,borderRadius:10,padding:12}}><Text style={{fontSize:22,fontWeight:"800",color:Colors.ink}}>{rated.length}</Text><Text style={{fontSize:10,color:Colors.ink3,marginTop:4,textTransform:"uppercase",letterSpacing:0.5}}>Avaliacoes</Text></View>
-          <View style={{alignItems:"center",flex:1,backgroundColor:Colors.bg4,borderRadius:10,padding:12}}><Text style={{fontSize:22,fontWeight:"800",color:Colors.green}}>{avg}</Text><Text style={{fontSize:10,color:Colors.ink3,marginTop:4,textTransform:"uppercase",letterSpacing:0.5}}>Media</Text></View>
-          <View style={{alignItems:"center",flex:1,backgroundColor:Colors.bg4,borderRadius:10,padding:12}}><Text style={{fontSize:22,fontWeight:"800",color:Colors.amber}}>{cust.filter(c=>c.rating===5).length}</Text><Text style={{fontSize:10,color:Colors.ink3,marginTop:4,textTransform:"uppercase",letterSpacing:0.5}}>5 estrelas</Text></View>
-        </View>
-        <Pressable style={{backgroundColor:Colors.bg4,borderRadius:10,paddingVertical:12,alignItems:"center",borderWidth:1,borderColor:Colors.border}}><Text style={{fontSize:12,color:Colors.violet3,fontWeight:"600"}}>Ver avaliacoes no Google</Text></Pressable>
+        <Text style={{fontSize:12,color:Colors.ink3,lineHeight:18}}>As estatisticas de retencao serao calculadas automaticamente conforme voce cadastrar clientes e registrar vendas.</Text>
       </View>
     </View>}
-    {isDemo&&<View style={{alignSelf:"center",backgroundColor:Colors.violetD,borderRadius:20,paddingHorizontal:16,paddingVertical:8,marginTop:8}}><Text style={{fontSize:11,color:Colors.violet3,fontWeight:"500"}}>Modo demonstrativo - dados ilustrativos</Text></View>}
+
+    {isDemo&&<View style={{alignSelf:"center",backgroundColor:Colors.violetD,borderRadius:20,paddingHorizontal:16,paddingVertical:8,marginTop:8}}><Text style={{fontSize:11,color:Colors.violet3,fontWeight:"500"}}>Modo demonstrativo</Text></View>}
   </ScrollView>;
 }
