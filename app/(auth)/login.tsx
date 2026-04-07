@@ -89,10 +89,10 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      {/* Esqueci senha */}
-      <Pressable style={s.forgotRow}>
+      {/* Esqueci senha — S1: agora funcional */}
+      <Link href="/(auth)/forgot-password" style={s.forgotRow}>
         <Text style={s.forgotText}>Esqueci minha senha</Text>
-      </Pressable>
+      </Link>
 
       {/* Botão Entrar */}
       <Pressable
