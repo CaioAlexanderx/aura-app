@@ -8,8 +8,6 @@ import { useTransactions } from "@/stores/transactions";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { AgentBanner } from "@/components/AgentBanner";
-import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
-import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -234,7 +232,6 @@ const md = StyleSheet.create({
 function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={tb.scroll} contentContainerStyle={tb.row}>
-        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
       {TABS.map((tab, i) => {
         const isActive = active === i;
         return (
