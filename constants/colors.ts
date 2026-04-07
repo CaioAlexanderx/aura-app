@@ -3,21 +3,18 @@ import { Platform } from "react-native";
 
 const THEME_KEY = "aura_theme";
 
-// Resolve theme at load time
 function getInitialTheme(): boolean {
   if (Platform.OS === "web" && typeof localStorage !== "undefined") {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === "dark") return true;
     if (saved === "light") return false;
-    // No preference saved - default to dark
     return true;
   }
-  return true; // dark default
+  return true;
 }
 
 const IS_DARK = getInitialTheme();
 
-// Dark palette
 const Dark = {
   bg: "#060816", bg2: "#090c1a", bg3: "#0e1228", bg4: "#141830",
   ink: "#f0edff", ink2: "rgba(220,215,255,0.75)", ink3: "rgba(170,160,235,0.65)",
@@ -29,7 +26,6 @@ const Dark = {
   amber: "#fbbf24", amberD: "rgba(251,191,36,0.10)",
 } as const;
 
-// Light palette
 const Light = {
   bg: "#f5f3ff", bg2: "#ffffff", bg3: "#ffffff", bg4: "#f0edf8",
   ink: "#1a1a2e", ink2: "#3d3660", ink3: "#6b6193",
@@ -41,10 +37,8 @@ const Light = {
   amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
 } as const;
 
-// Colors: resolved ONCE at load from localStorage
 export const Colors = IS_DARK ? { ...Dark } : { ...Light };
 
-// Theme store
 type ThemeState = {
   isDark: boolean;
   toggle: () => void;
@@ -53,32 +47,30 @@ type ThemeState = {
 export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: IS_DARK,
   toggle: () => {
-    if (Platform.OS !== "web" || typeof localStorage === "undefined") return;
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
     try {
-      const current = get().isDark;
-      const next = !current;
-      // Update store state first to prevent stale renders
+      const next = !get().isDark;
       set({ isDark: next });
-      // Persist to localStorage
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
-      // Small delay to let React settle before reload
+      // B5 FIX: defer reload and wrap in try/catch to prevent crash
       setTimeout(() => {
-        window.location.reload();
-      }, 50);
+        try {
+          window.location.href = window.location.pathname + window.location.search;
+        } catch {
+          // If href assignment fails, do nothing - theme persists on next manual reload
+        }
+      }, 100);
     } catch (e) {
       console.warn("Theme toggle error:", e);
-      // Fallback: just reload
-      window.location.reload();
+      // B5 FIX: do NOT call reload in catch - it was causing infinite crash loop
     }
   },
 }));
 
-// Hook for layout components that need reactive colors
 export function useColors() {
   const isDark = useThemeStore(s => s.isDark);
   return isDark ? Dark : Light;
 }
 
-// Palette exports
 export const DarkPalette = Dark;
 export const LightPalette = Light;
