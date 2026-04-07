@@ -286,7 +286,7 @@ const sc = StyleSheet.create({
 
 // ── Tab 1: Lancamentos ───────────────────────────────────────
 
-function TransactionRow({ item }: { item: typeof MOCK_TRANSACTIONS[0] }) {
+function TransactionRow({ item, onDelete }: { item: typeof MOCK_TRANSACTIONS[0]; onDelete?: (id: string) => void }) {
   const [hovered, setHovered] = useState(false);
   const isWeb = Platform.OS === "web";
   const isIncome = item.type === "income";
@@ -310,6 +310,11 @@ function TransactionRow({ item }: { item: typeof MOCK_TRANSACTIONS[0] }) {
       <Text style={[tr.amount, { color: isIncome ? Colors.green : Colors.red }]}>
         {isIncome ? "+" : "-"}{fmt(item.amount)}
       </Text>
+      {onDelete && (
+        <Pressable onPress={() => onDelete(item.id)} style={tr.deleteBtn} hitSlop={8}>
+          <Text style={tr.deleteText}>x</Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -322,7 +327,7 @@ const tr = StyleSheet.create({
   amount: { fontSize: 14, fontWeight: "600" },
 });
 
-function TabLancamentos({ apiTx }: { apiTx?: any }) {
+function TabLancamentos({ apiTx, onDeleteTx }: { apiTx?: any; onDeleteTx?: (id: string) => void }) {
   const { transactions: localTx, totals } = useTransactions();
   // Use API data if available, otherwise local store
   const transactions = apiTx?.transactions || apiTx?.rows || (localTx.length > 0 ? localTx : []);
@@ -337,7 +342,7 @@ function TabLancamentos({ apiTx }: { apiTx?: any }) {
         <SummaryCard label="SALDO" value={fmt(balance)} color={balance >= 0 ? Colors.green : Colors.red} />
       </View>
       <View style={g.listCard}>
-        {transactions.map(t => <TransactionRow key={t.id} item={t} />)}
+        {transactions.map(t => <TransactionRow key={t.id} item={t} onDelete={onDeleteTx} />)}
       </View>
     </View>
   );
@@ -563,6 +568,17 @@ export default function FinanceiroScreen() {
     retry: 1,
   });
 
+  // Mutation for deleting transactions
+  const deleteTxMutation = useMutation({
+    mutationFn: (txId: string) => companiesApi.deleteTransaction(company!.id, txId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions", company?.id] });
+      qc.invalidateQueries({ queryKey: ["dashboard", company?.id] });
+      toast.success("Lancamento excluido");
+    },
+    onError: () => toast.error("Erro ao excluir lancamento"),
+  });
+
   // Mutation for creating transactions
   const createTxMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createTransaction(company!.id, body),
@@ -588,7 +604,7 @@ export default function FinanceiroScreen() {
 
         <AgentBanner agent="Financeiro" insight={{ title: "2 cobranças em atraso", desc: "Clientes João Santos (R$ 1.240) e Carlos Lima (R$ 430) estão com pagamento atrasado. Envie lembrete via WhatsApp.", actionLabel: "Enviar cobrança", action: "cobrar", priority: "high", icon: "alert" }} onAction={() => toast.info("Enviando cobrança via WhatsApp...")} />
 
-      {activeTab === 0 && <TabLancamentos apiTx={apiTransactions} />}
+      {activeTab === 0 && <TabLancamentos apiTx={apiTransactions} onDeleteTx={!isDemo && company?.id ? (id: string) => deleteTxMutation.mutate(id) : undefined} />}
       {activeTab === 1 && <TabAReceber />}
       {activeTab === 2 && <TabRetirada apiWd={apiWithdrawal} />}
       {activeTab === 3 && <TabResumo apiDreData={apiDre} />}

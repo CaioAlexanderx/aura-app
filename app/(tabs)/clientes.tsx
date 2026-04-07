@@ -137,6 +137,15 @@ export default function ClientesScreen() {
   });
   // CONN-15: Sync API customers into local state
   const qc = useQueryClient();
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: (custId: string) => companiesApi.deleteCustomer(company!.id, custId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers", company?.id] });
+      toast.success("Cliente excluido");
+    },
+    onError: () => toast.error("Erro ao excluir cliente"),
+  });
   const apiCustArr = (apiCustomers?.customers || apiCustomers?.rows || apiCustomers);
   useEffect(() => {
     if (apiCustArr instanceof Array && apiCustArr.length > 0) {

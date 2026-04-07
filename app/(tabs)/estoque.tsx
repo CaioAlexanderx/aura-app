@@ -519,6 +519,15 @@ export default function EstoqueScreen() {
 
   // CONN-13: Fetch real products when not in demo
   const qc = useQueryClient();
+  const deleteProductMutation = useMutation({
+    mutationFn: (prodId: string) => companiesApi.deleteProduct(company!.id, prodId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products", company?.id] });
+      toast.success("Produto excluido");
+    },
+    onError: () => toast.error("Erro ao excluir produto"),
+  });
+
   const addProductMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createProduct ? companiesApi.createProduct(company!.id, body) : Promise.resolve(null),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["products", company?.id] }),
@@ -602,6 +611,14 @@ export default function EstoqueScreen() {
   const lowStock = products.filter(p => p.stock <= p.minStock);
   const totalValue = products.reduce((s, p) => s + p.stock * p.cost, 0);
   const totalItems = products.reduce((s, p) => s + p.stock, 0);
+
+  function handleDeleteProduct(id: string) {
+    if (deleteProductMutation && company?.id && !isDemo) {
+      deleteProductMutation.mutate(id);
+    } else {
+      setProducts(prev => prev.filter(p => p.id !== id));
+    }
+  }
 
   function handleAddProduct(product: Product) {
     if (addProductMutation && company?.id && !isDemo) {

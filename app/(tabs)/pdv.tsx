@@ -188,7 +188,6 @@ export default function PdvScreen() {
         barcode: p.barcode || p.ean || null,
       }))
     : MOCK_PRODUCTS;
-  if (products.length === 0) { products = MOCK_PRODUCTS; }
   const categories = ["Todos", ...Array.from(new Set(products.map((p: any) => p.category)))];
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
