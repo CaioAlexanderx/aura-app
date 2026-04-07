@@ -97,23 +97,23 @@ const emp=StyleSheet.create({wrap:{backgroundColor:Colors.bg3,borderRadius:20,pa
 export default function DashboardScreen(){
   const{user,company,token,isDemo,logout}=useAuthStore();const router=useRouter();
 
-  // S2: real data query — only for non-demo users
   const{data,isLoading,isError}=useQuery({
     queryKey:["dashboard",company?.id],
     queryFn: () => dashboardApi.aggregate(company!.id),
     enabled:!!company?.id&&!!token&&!isDemo,
     retry:1,
-    staleTime: 60000, // 1 min cache
+    staleTime: 60000,
   });
 
-  // S2: show error toast once
   useEffect(()=>{
     if(isError && !isDemo) toast.error("Erro ao carregar dashboard. Verifique sua conexao.");
   },[isError]);
 
-  // S2: data resolution — demo=MOCK, loading=null, real=API, empty=EMPTY
   const d = isDemo ? MOCK : (data || EMPTY_DATA);
   const isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
+
+  // FIX: hook MUST be at top level (Rules of Hooks) — never inside conditional
+  const animatedNet = useCountUp(d.net);
 
   const greeting=grt();const month=gm();const year=new Date().getFullYear();
   const go=(p:string)=>router.push(p as any);
@@ -129,17 +129,14 @@ export default function DashboardScreen(){
           <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>
         </View>
 
-        {/* S2: Loading skeleton */}
         {isLoading && !isDemo && <SkeletonDashboard />}
 
-        {/* S2: Empty state for new companies */}
         {isEmpty && <EmptyDashboard name={user?.name?.split(" ")[0]??"usuario"} onPress={go} />}
 
-        {/* Main dashboard content — visible when not loading and not empty */}
         {!isLoading && !isEmpty && <>
           <HC style={s.hero} onPress={()=>go("/financeiro")}>
             <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>{d.net >= 0 ? "Saudavel" : "Atencao"}</Text></View></View>
-            <Text style={s.hv}>{fmt(useCountUp(d.net))}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
+            <Text style={s.hv}>{fmt(animatedNet)}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
             {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.daTxt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
           </HC>
 
