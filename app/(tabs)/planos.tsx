@@ -4,49 +4,86 @@ import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { billingApi } from "@/services/api";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
 
 const PLANS = [
   {
-    key: "essencial", name: "Essencial", subtitle: "Para começar",
+    key: "essencial", name: "Essencial", subtitle: "Para comecar",
     monthly: 89, features: [
-      "Financeiro básico", "PDV / Caixa", "Estoque", "NF-e (até 50/mês)",
-      "Contabilidade guiada", "Suporte chat", "1 usuário",
+      "Financeiro basico", "PDV / Caixa", "Estoque", "NF-e (ate 50/mes)",
+      "Contabilidade guiada", "Suporte chat", "1 usuario",
     ],
   },
   {
-    key: "negocio", name: "Negócio", subtitle: "Para crescer", popular: true,
+    key: "negocio", name: "Negocio", subtitle: "Para crescer", popular: true,
     monthly: 199, features: [
       "Tudo do Essencial +", "CRM completo", "WhatsApp Business",
       "Canal Digital (loja online)", "Folha de Pagamento", "AgentBanners",
-      "NF-e ilimitada", "Até 3 usuários", "Analista de Negócios",
+      "NF-e ilimitada", "Ate 3 usuarios", "Analista de Negocios",
     ],
   },
   {
-    key: "expansao", name: "Expansão", subtitle: "Para escalar",
+    key: "expansao", name: "Expansao", subtitle: "Para escalar",
     monthly: 299, features: [
-      "Tudo do Negócio +", "5 Agentes IA + chat", "FAB conversacional",
-      "Custo Avançado", "Analytics avançado", "Multi-gateway",
-      "Usuários ilimitados", "Suporte prioritário",
+      "Tudo do Negocio +", "5 Agentes IA + chat", "FAB conversacional",
+      "Custo Avancado", "Analytics avancado", "Multi-gateway",
+      "Usuarios ilimitados", "Suporte prioritario",
     ],
   },
 ];
 
 const ADDONS = [
-  { name: "Módulo Vertical", price: 69, desc: "Odonto, Salão, Food, Pet... (a partir do Negócio)" },
-  { name: "Usuário adicional", price: 19, desc: "Por usuário/mês (todos os planos)" },
-  { name: "Consultoria on-demand", price: 149, desc: "Por hora (mínimo 2h) — setup, automações, treinamento" },
+  { name: "Modulo Vertical", price: 69, desc: "Odonto, Salao, Food, Pet... (a partir do Negocio)" },
+  { name: "Usuario adicional", price: 19, desc: "Por usuario/mes (todos os planos)" },
+  { name: "Consultoria on-demand", price: 149, desc: "Por hora (minimo 2h) - setup, automacoes, treinamento" },
 ];
 
-const fmt = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
 export default function PlanosScreen() {
   const [annual, setAnnual] = useState(false);
-  const { company, isDemo } = useAuthStore();
+  const [upgrading, setUpgrading] = useState<string | null>(null);
+  const { company, token, isDemo } = useAuthStore();
   const currentPlan = (company?.plan as string) || "essencial";
   const discount = 0.15;
-  const w = Platform.OS === "web";
+
+  // S6: Fetch billing status from Asaas
+  const { data: billingStatus } = useQuery({
+    queryKey: ["billing-status", company?.id],
+    queryFn: () => billingApi.status(company!.id),
+    enabled: !!company?.id && !!token && !isDemo,
+    retry: 1,
+    staleTime: 60000,
+  });
+
+  // S6: Subscribe mutation
+  const subscribeMutation = useMutation({
+    mutationFn: ({ plan }: { plan: string }) => billingApi.subscribe(company!.id, plan),
+    onSuccess: (data) => {
+      toast.success("Assinatura criada! Plano: " + data.plan);
+      setUpgrading(null);
+      if (data.payment_link) {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.open(data.payment_link, "_blank");
+        }
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Erro ao criar assinatura");
+      setUpgrading(null);
+    },
+  });
+
+  function handleChoosePlan(planKey: string) {
+    if (planKey === currentPlan) return;
+    if (isDemo) { toast.info("Crie uma conta para assinar"); return; }
+    if (!company?.id) { toast.error("Empresa nao encontrada"); return; }
+    setUpgrading(planKey);
+    subscribeMutation.mutate({ plan: planKey });
+  }
 
   function price(monthly: number) {
     if (annual) return Math.round(monthly * (1 - discount) * 100) / 100;
@@ -57,10 +94,30 @@ export default function PlanosScreen() {
     return Math.round(monthly * discount * 12 * 100) / 100;
   }
 
+  const trialActive = billingStatus?.trial_active;
+  const trialDays = billingStatus?.trial_days_left || 0;
+
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: IS ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" }}>
       <Text style={s.title}>Planos Aura.</Text>
-      <Text style={s.subtitle}>Escolha o plano ideal para o seu negócio</Text>
+      <Text style={s.subtitle}>Escolha o plano ideal para o seu negocio</Text>
+
+      {/* Trial banner */}
+      {trialActive && (
+        <View style={s.trialBanner}>
+          <Text style={s.trialText}>Trial ativo - {trialDays} dias restantes</Text>
+        </View>
+      )}
+
+      {/* Billing status */}
+      {billingStatus && !trialActive && billingStatus.billing_status !== "inactive" && (
+        <View style={s.statusBanner}>
+          <Text style={s.statusText}>
+            Plano {billingStatus.plan} - {billingStatus.billing_status === "active" ? "Ativo" : billingStatus.billing_status}
+            {billingStatus.next_billing_date ? " - Proxima cobranca: " + billingStatus.next_billing_date : ""}
+          </Text>
+        </View>
+      )}
 
       {/* Annual toggle */}
       <View style={s.toggleWrap}>
@@ -74,13 +131,14 @@ export default function PlanosScreen() {
       </View>
 
       {annual && (
-        <Text style={s.savingsHint}>Economize até {fmt(savings(299))} por ano no plano Expansão</Text>
+        <Text style={s.savingsHint}>Economize ate {fmtR(savings(299))} por ano no plano Expansao</Text>
       )}
 
       {/* Plan cards */}
       <View style={s.plansRow}>
         {PLANS.map(plan => {
           const isCurrent = plan.key === currentPlan;
+          const isUpgrading = upgrading === plan.key;
           const mo = price(plan.monthly);
           return (
             <View key={plan.key} style={[s.planCard, plan.popular && s.planPopular, isCurrent && s.planCurrent]}>
@@ -90,9 +148,9 @@ export default function PlanosScreen() {
               <View style={s.priceRow}>
                 {annual && <Text style={s.priceOld}>R$ {plan.monthly}</Text>}
                 <Text style={s.priceValue}>R$ {mo.toFixed(2).replace(".", ",")}</Text>
-                <Text style={s.pricePeriod}>/{annual ? "mês (anual)" : "mês"}</Text>
+                <Text style={s.pricePeriod}>/{annual ? "mes (anual)" : "mes"}</Text>
               </View>
-              {annual && <Text style={s.yearlySave}>Economia de {fmt(savings(plan.monthly))}/ano</Text>}
+              {annual && <Text style={s.yearlySave}>Economia de {fmtR(savings(plan.monthly))}/ano</Text>}
               <View style={s.featuresList}>
                 {plan.features.map(f => (
                   <View key={f} style={s.featureRow}>
@@ -102,11 +160,12 @@ export default function PlanosScreen() {
                 ))}
               </View>
               <Pressable
-                style={[s.planBtn, isCurrent && s.planBtnCurrent]}
-                onPress={() => isCurrent ? null : toast.info("Upgrade será habilitado após integração Asaas")}
+                style={[s.planBtn, isCurrent && s.planBtnCurrent, isUpgrading && { opacity: 0.6 }]}
+                onPress={() => handleChoosePlan(plan.key)}
+                disabled={isUpgrading}
               >
                 <Text style={[s.planBtnText, isCurrent && s.planBtnTextCurrent]}>
-                  {isCurrent ? "Plano atual" : "Escolher plano"}
+                  {isCurrent ? "Plano atual" : isUpgrading ? "Processando..." : "Escolher plano"}
                 </Text>
               </Pressable>
             </View>
@@ -120,7 +179,7 @@ export default function PlanosScreen() {
         {ADDONS.map(a => (
           <View key={a.name} style={s.addonCard}>
             <Text style={s.addonName}>{a.name}</Text>
-            <Text style={s.addonPrice}>R$ {a.price}{a.name.includes("hora") ? "/h" : "/mês"}</Text>
+            <Text style={s.addonPrice}>R$ {a.price}{a.name.includes("hora") ? "/h" : "/mes"}</Text>
             <Text style={s.addonDesc}>{a.desc}</Text>
           </View>
         ))}
@@ -134,6 +193,10 @@ export default function PlanosScreen() {
 const s = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "800", color: Colors.ink, textAlign: "center", marginBottom: 4 },
   subtitle: { fontSize: 14, color: Colors.ink3, textAlign: "center", marginBottom: 24 },
+  trialBanner: { backgroundColor: Colors.amberD, borderRadius: 12, padding: 12, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: Colors.amber + "44" },
+  trialText: { fontSize: 13, color: Colors.amber, fontWeight: "600" },
+  statusBanner: { backgroundColor: Colors.greenD, borderRadius: 12, padding: 12, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: Colors.green + "44" },
+  statusText: { fontSize: 13, color: Colors.green, fontWeight: "600" },
   toggleWrap: { flexDirection: "row", justifyContent: "center", gap: 4, backgroundColor: Colors.bg3, borderRadius: 12, padding: 4, alignSelf: "center", marginBottom: 12 },
   toggleBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   toggleActive: { backgroundColor: Colors.violet },
