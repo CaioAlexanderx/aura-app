@@ -269,7 +269,7 @@ const gv = StyleSheet.create({
 // ── Guides List ──────────────────────────────────────────────
 
 function GList({ obls, onSel }: { obls: Obl[]; onSel: (id: string) => void }) {
-  const gs = [{ t: "Aura resolve", h: "Tudo automatico", c: Colors.green, it: obls.filter(o => o.cat === "aura_resolve") }, { t: "Aura facilita, você resolve", h: "Aura prepara, voce confirma", c: Colors.amber, it: obls.filter(o => o.cat === "aura_facilita") }];
+  const gs = [{ t: "Aura resolve", h: "Tudo automatico", c: Colors.green, it: obls.filter(o => o.cat === "aura_resolve") }, { t: "Aura facilita, você resolve", h: "Passo a passo com apoio da Aura", c: Colors.amber, it: obls.filter(o => o.cat === "aura_facilita") }];
   return (
     <View>
       <View style={{ flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 }}><Text style={{ fontSize: 14, color: Colors.violet3, fontWeight: "700" }}>i</Text><Text style={{ fontSize: 12, color: Colors.ink2, flex: 1, lineHeight: 18 }}>Guias visuais com screenshots para cada etapa. A Aura prepara os dados e te guia pelo processo.</Text></View>

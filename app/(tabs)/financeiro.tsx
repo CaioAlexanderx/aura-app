@@ -325,7 +325,7 @@ const tr = StyleSheet.create({
 function TabLancamentos({ apiTx }: { apiTx?: any }) {
   const { transactions: localTx, totals } = useTransactions();
   // Use API data if available, otherwise local store
-  const transactions = apiTx?.transactions || apiTx?.rows || localTx;
+  const transactions = apiTx?.transactions || apiTx?.rows || (localTx.length > 0 ? localTx : []);
   const income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : totals().income;
   const expense = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : totals().expense;
   const balance = income - expense;
@@ -506,7 +506,8 @@ const dre = StyleSheet.create({
 });
 
 function TabResumo({ apiDreData }: { apiDreData?: any }) {
-  const d = apiDreData || MOCK_DRE;
+  const raw = apiDreData;
+  const d = (raw && raw.totalIncome != null) ? raw : (raw && raw.income != null) ? raw : MOCK_DRE;
   return (
     <View>
       <View style={g.row}>

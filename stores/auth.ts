@@ -275,6 +275,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
     setCompanyLogo: (logo) => set({ companyLogo: logo }),
 
     logout: async () => {
+      // B9 FIX: reset theme to dark on logout
+      if (typeof window !== "undefined") {
+        try { localStorage.setItem("aura_theme", "dark"); } catch {}
+      }
       await storage.del();
       await refreshStorage.del();
       obStorage.del();
