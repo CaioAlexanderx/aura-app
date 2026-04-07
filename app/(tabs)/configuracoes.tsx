@@ -11,9 +11,9 @@ import { toast } from "@/components/Toast";
 import { CNAE_PROFILES } from "@/constants/obligations";
 
 const PLANS = [
-  { key: "essencial", label: "Essencial", price: "R$ 59/mes", desc: "Para começar" },
-  { key: "negocio", label: "Negocio", price: "R$ 200/mes", desc: "Para crescer" },
-  { key: "expansao", label: "Expansao", price: "R$ 320/mes", desc: "Para escalar" },
+  { key: "essencial", label: "Essencial", price: "R$ 89/mês", desc: "Para começar" },
+  { key: "negocio", label: "Negócio", price: "R$ 199/mês", desc: "Para crescer" },
+  { key: "expansao", label: "Expansão", price: "R$ 299/mês", desc: "Para escalar" },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -195,7 +195,7 @@ export default function ConfiguracoesScreen() {
         </Pressable>
       </View>
 
-      {true && <ReferralCard />
+      <ReferralCard />
       {isDemo && (
         <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo - alterações não são persistidas</Text></View>
       )}
