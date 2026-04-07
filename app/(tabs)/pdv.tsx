@@ -178,7 +178,7 @@ export default function PdvScreen() {
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
 
   // Use API products if available, fallback to mock
-  const products = (apiProducts?.products || apiProducts?.rows || apiProducts) instanceof Array
+  let products = (apiProducts?.products || apiProducts?.rows || apiProducts) instanceof Array
     ? (apiProducts.products || apiProducts.rows || apiProducts).map((p: any) => ({
         id: p.id || p.product_id,
         name: p.name || p.product_name,
@@ -188,6 +188,7 @@ export default function PdvScreen() {
         barcode: p.barcode || p.ean || null,
       }))
     : MOCK_PRODUCTS;
+  if (products.length === 0) { products = MOCK_PRODUCTS; }
   const categories = ["Todos", ...Array.from(new Set(products.map((p: any) => p.category)))];
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());

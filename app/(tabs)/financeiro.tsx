@@ -92,9 +92,15 @@ function TransactionModal({ visible, onClose, createTxMutation }: { visible: boo
     const cat = category || cats[0];
     const today = new Date();
     const dateStr = String(today.getDate()).padStart(2,"0") + "/" + String(today.getMonth()+1).padStart(2,"0");
+    if (createTxMutation) {
+      createTxMutation.mutate({ type: txType, amount: val, description: desc.trim(), category: cat }, {
+        onSuccess: () => { toast.success(isIncome ? "Receita lancada" : "Despesa lancada"); reset(); onClose(); },
+        onError: () => { toast.error("Erro ao salvar. Tente novamente."); },
+      });
+      return;
+    }
     add({ date: dateStr, desc: desc.trim(), type: txType, category: cat, amount: val, status: "confirmed", source: "manual" });
-    toast.success(isIncome ? "Receita lançada" : "Despesa lançada");
-    reset(); onClose();
+    if (!createTxMutation) { toast.success(isIncome ? "Receita lancada" : "Despesa lancada"); reset(); onClose(); }
   }
 
   function handleSaveBatch() {

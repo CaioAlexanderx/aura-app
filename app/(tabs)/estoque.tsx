@@ -4,6 +4,7 @@ import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/components/Toast";
 import { AgentBanner } from "@/components/AgentBanner";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -603,8 +604,25 @@ export default function EstoqueScreen() {
   const totalItems = products.reduce((s, p) => s + p.stock, 0);
 
   function handleAddProduct(product: Product) {
-    setProducts(prev => [product, ...prev]);
-    setShowAddForm(false);
+    if (addProductMutation && company?.id && !isDemo) {
+      addProductMutation.mutate({
+        name: product.name,
+        sku: product.code,
+        barcode: product.barcode,
+        category: product.category,
+        price: product.price,
+        cost_price: product.cost,
+        stock_qty: product.stock,
+        min_stock: product.minStock,
+        unit: product.unit,
+      }, {
+        onSuccess: () => { toast.success("Produto cadastrado!"); setShowAddForm(false); },
+        onError: () => { toast.error("Erro ao salvar produto"); },
+      });
+    } else {
+      setProducts(prev => [product, ...prev]);
+      setShowAddForm(false);
+    }
   }
 
   return (
