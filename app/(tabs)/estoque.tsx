@@ -366,7 +366,7 @@ const af = StyleSheet.create({
 
 // ── Product Row ──────────────────────────────────────────────
 
-function ProductRow({ product, showAbc }: { product: Product; showAbc?: boolean }) {
+function ProductRow({ product, showAbc, onDelete }: { product: Product; showAbc?: boolean; onDelete?: (id: string) => void }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isWeb = Platform.OS === "web";
@@ -412,6 +412,11 @@ function ProductRow({ product, showAbc }: { product: Product; showAbc?: boolean 
             <View style={pr.barcodeRow}><Text style={pr.barcodeLabel}>Codigo de barras:</Text><Text style={pr.barcodeValue}>{product.barcode}</Text></View>
           ) : null}
           {product.notes ? <Text style={pr.notesText}>{product.notes}</Text> : null}
+          {onDelete && (
+            <Pressable onPress={() => onDelete(product.id)} style={pr.deleteBtn}>
+              <Text style={pr.deleteBtnText}>Excluir produto</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -438,6 +443,8 @@ const pr = StyleSheet.create({
   barcodeLabel: { fontSize: 11, color: Colors.ink3 },
   barcodeValue: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   notesText: { fontSize: 11, color: Colors.ink3, marginTop: 6, fontStyle: "italic" },
+  deleteBtn: { marginTop: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "33", alignItems: "center" },
+  deleteBtnText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 });
 
 // ── ABC Summary ──────────────────────────────────────────────
@@ -686,7 +693,7 @@ export default function EstoqueScreen() {
             ))}
           </ScrollView>
           <View style={s.listCard}>
-            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc />)}
+            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={handleDeleteProduct} />)}
             {filtered.length === 0 && <View style={s.empty}><Text style={s.emptyText}>Nenhum produto encontrado</Text></View>}
           </View>
         </View>
@@ -698,7 +705,7 @@ export default function EstoqueScreen() {
           <AbcSummary products={products} />
           <View style={[s.listCard, { marginTop: 20 }]}>
             <Text style={s.listTitle}>Todos os produtos por classificacao</Text>
-            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc />)}
+            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={handleDeleteProduct} />)}
           </View>
         </View>
       )}
