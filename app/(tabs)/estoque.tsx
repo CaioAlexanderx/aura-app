@@ -6,6 +6,10 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { AgentBanner } from "@/components/AgentBanner";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ListSkeleton } from "@/components/ListSkeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -539,7 +543,7 @@ export default function EstoqueScreen() {
     mutationFn: (body: any) => companiesApi.createProduct ? companiesApi.createProduct(company!.id, body) : Promise.resolve(null),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["products", company?.id] }),
   });
-  const { data: apiData } = useQuery({
+  const { data: apiData, isLoading: isLoadingProducts } = useQuery({
     queryKey: ["products", company?.id],
     queryFn: () => companiesApi.products(company!.id),
     enabled: !!company?.id && !!token && !isDemo,
@@ -549,7 +553,8 @@ export default function EstoqueScreen() {
   // CONN-13: Sync API products into local state when data arrives
   const apiProducts = (apiData?.products || apiData?.rows || apiData);
   useEffect(() => {
-    if (apiProducts instanceof Array && apiProducts.length > 0) {
+    if (apiProducts instanceof Array) {
+      if (apiProducts.length === 0) { setProducts([]); return; }
       const mapped = apiProducts.map((p: any) => ({
         id: p.id || p.product_id || String(Math.random()),
         name: p.name || p.product_name || "Produto",
@@ -568,12 +573,13 @@ export default function EstoqueScreen() {
       }));
       setProducts(mapped);
     }
-  }, [apiProducts instanceof Array ? apiProducts.length : 0]);
+  }, [JSON.stringify(apiProducts instanceof Array ? apiProducts.map((p:any) => p.id) : [])]);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...products.map(p => p.category)]));
   const filterCategories = ["Todos", ...allCategories];
@@ -619,12 +625,18 @@ export default function EstoqueScreen() {
   const totalValue = products.reduce((s, p) => s + p.stock * p.cost, 0);
   const totalItems = products.reduce((s, p) => s + p.stock, 0);
 
-  function handleDeleteProduct(id: string) {
+  function requestDeleteProduct(id: string) {
+    setDeleteTarget(id);
+  }
+
+  function confirmDeleteProduct() {
+    if (!deleteTarget) return;
     if (deleteProductMutation && company?.id && !isDemo) {
-      deleteProductMutation.mutate(id);
+      deleteProductMutation.mutate(deleteTarget);
     } else {
-      setProducts(prev => prev.filter(p => p.id !== id));
+      setProducts(prev => prev.filter(p => p.id !== deleteTarget));
     }
+    setDeleteTarget(null);
   }
 
   function handleAddProduct(product: Product) {
@@ -651,12 +663,12 @@ export default function EstoqueScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
-      <View style={s.titleRow}>
-        <Text style={s.pageTitle}>Estoque</Text>
-        <Pressable onPress={() => { setShowAddForm(true); setActiveTab(0); }} style={s.addBtn}>
-          <Text style={s.addBtnText}>+ Adicionar produto</Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="Estoque"
+        actionLabel="+ Adicionar produto"
+        actionIcon="package"
+        onAction={() => { setShowAddForm(true); setActiveTab(0); }}
+      />
 
       <View style={s.summaryRow}>
         <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades`} />
@@ -678,11 +690,24 @@ export default function EstoqueScreen() {
         />
       )}
 
-      <TabBar active={activeTab} onSelect={setActiveTab} />
+      {isLoadingProducts && !isDemo && <ListSkeleton rows={4} showCards />}
+
+      {!isLoadingProducts && products.length === 0 && !isDemo && !showAddForm && (
+        <EmptyState
+          icon="package"
+          iconColor={Colors.amber}
+          title="Nenhum produto cadastrado"
+          subtitle="Cadastre seu primeiro produto para comecar a gerenciar seu estoque."
+          actionLabel="+ Adicionar produto"
+          onAction={() => { setShowAddForm(true); setActiveTab(0); }}
+        />
+      )}
+
+      {(products.length > 0 || isDemo) && <TabBar active={activeTab} onSelect={setActiveTab} />}
 
       <AgentBanner agent="Estoque" insight={{ title: "3 produtos com estoque baixo", desc: "Pomada modeladora (2 un.), Shampoo premium (5 un.) e Kit barba (1 un.) abaixo do mínimo.", actionLabel: "Criar pedido compra", action: "repor", priority: "high", icon: "package" }} />
 
-      {activeTab === 0 && (
+      {activeTab === 0 && products.length > 0 && (
         <View>
           <TextInput style={s.searchInput} placeholder="Buscar por nome ou codigo..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catScroll} contentContainerStyle={s.catRow}>
@@ -693,7 +718,7 @@ export default function EstoqueScreen() {
             ))}
           </ScrollView>
           <View style={s.listCard}>
-            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={handleDeleteProduct} />)}
+            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={requestDeleteProduct} />)}
             {filtered.length === 0 && <View style={s.empty}><Text style={s.emptyText}>Nenhum produto encontrado</Text></View>}
           </View>
         </View>
@@ -705,7 +730,7 @@ export default function EstoqueScreen() {
           <AbcSummary products={products} />
           <View style={[s.listCard, { marginTop: 20 }]}>
             <Text style={s.listTitle}>Todos os produtos por classificacao</Text>
-            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={handleDeleteProduct} />)}
+            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={requestDeleteProduct} />)}
           </View>
         </View>
       )}
