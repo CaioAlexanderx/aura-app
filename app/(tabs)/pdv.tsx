@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi, pdvApi } from "@/services/api";
 import { toast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -219,7 +220,15 @@ export default function PdvScreen() {
       </ScrollView>
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {filtered.map(p => (<ProductCard key={p.id} product={p} onAdd={() => addToCart(p)} isWide={IS_WIDE} />))}
-        {filtered.length === 0 && <View style={{ width: "100%", alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
+        {filtered.length === 0 && products.length === 0 && (
+          <EmptyState
+            icon="package"
+            iconColor={Colors.amber}
+            title="Nenhum produto cadastrado"
+            subtitle="Cadastre produtos no Estoque para eles aparecerem aqui no Caixa."
+          />
+        )}
+        {filtered.length === 0 && products.length > 0 && <View style={{ width: "100%", alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado para essa busca</Text></View>}
       </View>
     </View>
   );

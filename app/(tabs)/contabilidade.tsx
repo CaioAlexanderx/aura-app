@@ -348,8 +348,11 @@ export default function ContabilidadeScreen() {
   const [tab, sTab] = useState(0);
   const [gid, sGid] = useState<string | null>(null);
   const sel = gid ? obligations.find(o => o.id === gid) : null;
-  if (sel) return <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-</ScrollView>;
+  if (sel) return (
+    <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
+      <Guide o={sel} onBack={() => sGid(null)} />
+    </ScrollView>
+  );
 
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
