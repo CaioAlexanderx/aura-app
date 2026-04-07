@@ -75,8 +75,9 @@ const DEMO_COMPANY = {
 type User = LoginResponse["user"];
 type Company = Exclude<LoginResponse["company"], null>;
 
-function isObComplete(step: string | undefined, obDone: boolean, staff: boolean): boolean {
-  return obDone || staff || step === "complete" || step === "done" || step === undefined;
+// FE-BUG-08 FIX: !step catches both null and undefined
+function isObComplete(step: string | undefined | null, obDone: boolean, staff: boolean): boolean {
+  return obDone || staff || step === "complete" || step === "done" || !step;
 }
 
 type AuthState = {
