@@ -4,11 +4,6 @@ import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
-import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
-import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
-import { useVerticalSections } from "@/hooks/useVerticalSections";
-import { VerticalContextBar } from "@/components/VerticalContextBar";
-import { VerticalEmptyState } from "@/components/VerticalEmptyState";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -129,10 +124,8 @@ function RBar({l,v,tot,col}:{l:string;v:number;tot:number;col:string}) {
 
 export default function ClientesScreen() {
   const { isDemo, company, token } = useAuthStore();
-  const verticalSections = useVerticalSections(); // VER-02f
 
   // UX-06: First-time tooltip
-  const { activeTip, visible: tipVisible, dismiss: dismissTip } = useFirstTimeTooltip("clientes");
 
   // CONN-15: Fetch real customers when not in demo
   const { data: apiCustomers } = useQuery({

@@ -5,12 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { AgentBanner } from "@/components/AgentBanner";
-import { useKeyboard } from "@/hooks/useKeyboard";
-import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
-import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
-import { useVerticalSections } from "@/hooks/useVerticalSections";
-import { VerticalContextBar } from "@/components/VerticalContextBar";
-import { VerticalEmptyState } from "@/components/VerticalEmptyState";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -517,16 +511,10 @@ const alS = StyleSheet.create({
 
 export default function EstoqueScreen() {
   const { isDemo, company, token } = useAuthStore();
-  const verticalSections = useVerticalSections(); // VER-02f
 
   // UX-06: First-time tooltip
-  const { activeTip, visible: tipVisible, dismiss: dismissTip } = useFirstTimeTooltip("estoque");
 
   // UX-04: Keyboard shortcuts
-  useKeyboard([
-    { key: "Escape", handler: () => setShowAddForm(false) },
-    { key: "n", ctrl: true, handler: () => { setShowAddForm(true); setActiveTab(0); } },
-  ]);
 
   // CONN-13: Fetch real products when not in demo
   const qc = useQueryClient();

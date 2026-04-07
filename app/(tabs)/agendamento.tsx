@@ -12,9 +12,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import { useVerticalSections } from "@/hooks/useVerticalSections";
-import { VerticalContextBar } from "@/components/VerticalContextBar";
-import { VerticalEmptyState } from "@/components/VerticalEmptyState";
 
 const TABS = ["Agenda", "Horários", "Configurações"];
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -169,8 +166,7 @@ function TimeSlots() {
       <Text style={ts.title}>Horários disponíveis</Text>
       <Text style={ts.sub}>Selecione o dia para ver os horários livres</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-        <VerticalContextBar />
-        {DAYS.map((d, i) => (
+{DAYS.map((d, i) => (
           <Pressable key={d} onPress={() => setSelectedDay(i)} style={[ts.dayChip, selectedDay === i && ts.dayChipActive]}>
             <Text style={[ts.dayText, selectedDay === i && ts.dayTextActive]}>{d}</Text>
           </Pressable>

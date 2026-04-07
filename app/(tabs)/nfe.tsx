@@ -11,8 +11,6 @@ import { HoverRow } from "@/components/HoverRow";
 import { DemoBanner } from "@/components/DemoBanner";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
-import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
-import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
 
 const TABS = ["Emitidas", "Pendentes"];
 
@@ -39,7 +37,6 @@ export default function NfeScreen() {
   if (!hasData) {
     return (
       <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
         <PageHeader title="NF-e" />
         <EmptyState
           icon="file_text"
