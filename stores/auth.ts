@@ -75,7 +75,6 @@ const DEMO_COMPANY = {
 type User = LoginResponse["user"];
 type Company = Exclude<LoginResponse["company"], null>;
 
-// FE-BUG-08 FIX: !step catches both null and undefined
 function isObComplete(step: string | undefined | null, obDone: boolean, staff: boolean): boolean {
   return obDone || staff || step === "complete" || step === "done" || !step;
 }
@@ -275,8 +274,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
     setCompanyLogo: (logo) => set({ companyLogo: logo }),
 
     logout: async () => {
-      // B9 FIX: reset theme to dark on logout
-      if (typeof window !== "undefined") {
+      // P4 FIX: reset theme to dark and clear all auth data
+      if (Platform.OS === "web" && typeof window !== "undefined") {
         try { localStorage.setItem("aura_theme", "dark"); } catch {}
       }
       await storage.del();
@@ -294,6 +293,12 @@ export const useAuthStore = create<AuthState>((set, get) => {
         trialActive: false,
         trialEndsAt: null,
       });
+      // P4 FIX: force full reload to apply dark theme on login screen
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        setTimeout(() => {
+          try { window.location.href = "/"; } catch {}
+        }, 100);
+      }
     },
   };
 });
