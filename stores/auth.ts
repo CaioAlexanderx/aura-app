@@ -14,7 +14,6 @@ const REFRESH_KEY = "aura_refresh_token";
 const OB_KEY = "aura_onboarding";
 const DEMO_TOKEN = "demo-token-aura-2026";
 
-// ── Storage abstraction ─────────────────────────────────────
 const storage = {
   get: (): Promise<string | null> =>
     Platform.OS === "web"
@@ -30,7 +29,6 @@ const storage = {
       : SecureStore.deleteItemAsync(KEY),
 };
 
-// FIX: persist refresh token separately
 const refreshStorage = {
   get: (): Promise<string | null> =>
     Platform.OS === "web"
@@ -57,7 +55,6 @@ const obStorage = {
   },
 };
 
-// ── Demo data ───────────────────────────────────────────
 const DEMO_USER = {
   id: "demo-user",
   name: "Caio",
@@ -75,9 +72,12 @@ const DEMO_COMPANY = {
   trial_ends_at: null,
 } as const;
 
-// ── Types ───────────────────────────────────────────
 type User = LoginResponse["user"];
 type Company = Exclude<LoginResponse["company"], null>;
+
+function isObComplete(step: string | undefined, obDone: boolean, staff: boolean): boolean {
+  return obDone || staff || step === "complete" || step === "done" || step === undefined;
+}
 
 type AuthState = {
   token: string | null;
@@ -102,10 +102,8 @@ type AuthState = {
 };
 
 export const useAuthStore = create<AuthState>((set, get) => {
-  // Inject token getter into api.ts so all requests auto-attach JWT
   setTokenGetter(() => get().token);
 
-  // REL-03: Auto-logout when any API call returns 401
   setOnUnauthorized(() => {
     const state = get();
     if (state.token && !state.isDemo) {
@@ -158,16 +156,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const step = (company as any)?.onboarding_step;
         const trialEnd = (company as any)?.trial_ends_at;
         const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
+        const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
 
         set({
           token,
           refreshToken: savedRefresh,
           user,
           company: company ?? null,
-          isStaff: user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"),
+          isStaff: staff,
           isHydrated: true,
           isDemo: false,
-          onboardingComplete: obDone || step === "complete" || step === "done",
+          onboardingComplete: isObComplete(step, obDone, staff),
           trialActive,
           trialEndsAt: trialEnd || null,
         });
@@ -191,6 +190,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const step = (company as any)?.onboarding_step;
         const obDone = obStorage.get() === "complete";
         const trialEnd = (company as any)?.trial_ends_at;
+        const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
 
         set({
           token,
@@ -199,8 +199,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
           company: company ?? null,
           isLoading: false,
           isDemo: false,
-          isStaff: user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"),
-          onboardingComplete: obDone || step === "complete" || step === "done" || step === undefined,
+          isStaff: staff,
+          onboardingComplete: isObComplete(step, obDone, staff),
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
         });
@@ -246,8 +246,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
           company: company ?? null,
           isLoading: false,
           isDemo: false,
-          isStaff: user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"),
-          onboardingComplete: false, // New user -> onboarding
+          isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
+          onboardingComplete: false,
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
         });
