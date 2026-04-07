@@ -10,7 +10,9 @@
     "test": "node node_modules/jest/bin/jest.js",
     "test:watch": "node node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node node_modules/jest/bin/jest.js --coverage",
-    "test:components": "node node_modules/jest/bin/jest.js --testPathPatterns=__tests__/components"
+    "test:components": "node node_modules/jest/bin/jest.js --testPathPatterns=__tests__/components",
+    "deploy": "npx expo export -p web && wrangler deploy",
+    "preview": "npx expo export -p web && wrangler dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -45,6 +47,7 @@
     "jest-environment-jsdom": "^30.3.0",
     "jest-expo": "^55.0.13",
     "react-test-renderer": "^18.3.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "wrangler": "^4.81.0"
   }
 }
