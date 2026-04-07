@@ -69,8 +69,6 @@ const smS = StyleSheet.create({
 function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={tbS.scroll} contentContainerStyle={tbS.row}>
-        <VerticalContextBar />
-        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
       {TABS.map((tab, i) => (
         <Pressable key={tab} onPress={() => onSelect(i)} style={[tbS.tab, active === i && tbS.tabActive]}>
           <Text style={[tbS.label, active === i && tbS.labelActive]}>{tab}</Text>
