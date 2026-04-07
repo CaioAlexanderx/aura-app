@@ -1,17 +1,17 @@
 import { useState } from "react";
 import {
   View, Text, TextInput, Pressable, ActivityIndicator,
-  StyleSheet, Alert, Platform, ScrollView, Image,
+  StyleSheet, Platform, ScrollView, Image,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
-import { ApiError } from "@/services/api";
+import { authApi, ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { toast } from "@/components/Toast";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
 
-// Inject CSS
 if (typeof document !== "undefined" && !document.getElementById("aura-auth-css")) {
   const st = document.createElement("style");
   st.id = "aura-auth-css";
@@ -54,10 +54,12 @@ export default function RegisterScreen() {
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cnpjFound, setCnpjFound] = useState<string | null>(null);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
+  const [cnpjSkipped, setCnpjSkipped] = useState(false);
+  const [codeValid, setCodeValid] = useState<boolean | null>(null);
+  const [codeChecking, setCodeChecking] = useState(false);
   const { register, loginDemo, isLoading } = useAuthStore();
   const isWeb = Platform.OS === "web";
 
-  // CNPJ auto-fill via BrasilAPI
   async function lookupCNPJ(formatted: string) {
     const nums = formatted.replace(/\D/g, "");
     if (nums.length !== 14) return;
@@ -71,7 +73,7 @@ export default function RegisterScreen() {
       setEmpresa(data.razao_social || data.nome_fantasia || "");
       setCnpjFound(data.razao_social || data.nome_fantasia);
     } catch {
-      setCnpjError("CNPJ não encontrado — verifique os dígitos");
+      setCnpjError("CNPJ nao encontrado - verifique os digitos");
     } finally {
       setCnpjLoading(false);
     }
@@ -82,13 +84,41 @@ export default function RegisterScreen() {
     setCnpj(masked);
     setCnpjFound(null);
     setCnpjError(null);
-    // Auto-lookup when complete
+    setCnpjSkipped(false);
     if (masked.replace(/\D/g, "").length === 14) {
       lookupCNPJ(masked);
     }
   }
 
-  // Password strength
+  function handleSkipCnpj() {
+    setCnpj("");
+    setCnpjFound(null);
+    setCnpjError(null);
+    setCnpjSkipped(true);
+    toast.info("CNPJ opcional - voce pode adicionar depois no onboarding");
+  }
+
+  // Validate access code on blur
+  async function handleCodeBlur() {
+    const code = codigo.trim();
+    if (!code) { setCodeValid(null); return; }
+    setCodeChecking(true);
+    try {
+      const result = await authApi.validateCode(code);
+      setCodeValid(result.valid);
+      if (result.valid) {
+        toast.success("Codigo valido! Plano: " + (result.plan || "aplicado"));
+      } else {
+        toast.error(result.error || "Codigo invalido");
+      }
+    } catch {
+      setCodeValid(false);
+      toast.error("Codigo invalido ou expirado");
+    } finally {
+      setCodeChecking(false);
+    }
+  }
+
   const passLength = senha.length >= 8;
   const passUpper = /[A-Z]/.test(senha);
   const passNumber = /[0-9]/.test(senha);
@@ -97,15 +127,15 @@ export default function RegisterScreen() {
 
   async function handleRegister() {
     if (!nome || !email || !senha || !empresa || !telefone) {
-      Alert.alert("Campos obrigatórios", "Preencha todos os campos marcados com *");
+      toast.error("Preencha todos os campos obrigatorios");
       return;
     }
     if (!passValid) {
-      Alert.alert("Senha fraca", "A senha deve ter no mínimo 8 caracteres, 1 maiúscula e 1 número.");
+      toast.error("Senha: minimo 8 caracteres, 1 maiuscula e 1 numero");
       return;
     }
     if (!passMatch) {
-      Alert.alert("Senhas diferentes", "A confirmação de senha não confere.");
+      toast.error("As senhas nao conferem");
       return;
     }
     try {
@@ -118,8 +148,14 @@ export default function RegisterScreen() {
         cnpj: cnpj.replace(/\D/g, "") || undefined,
         access_code: codigo.trim() || undefined,
       });
+      // FIX BLOCKER: explicit redirect after successful register
+      toast.success("Conta criada com sucesso!");
+      setTimeout(() => {
+        router.replace("/(tabs)/onboarding");
+      }, 300);
     } catch (err) {
-      Alert.alert("Erro", err instanceof ApiError ? err.message : "Erro ao criar conta.");
+      const msg = err instanceof ApiError ? err.message : "Erro ao criar conta. Tente novamente.";
+      toast.error(msg);
     }
   }
 
@@ -141,9 +177,9 @@ export default function RegisterScreen() {
       </View>
 
       <Text style={s.title}>Criar sua conta</Text>
-      <Text style={s.subtitle}>Comece a organizar seu negócio em minutos</Text>
+      <Text style={s.subtitle}>Comece a organizar seu negocio em minutos</Text>
 
-      {/* Nome * */}
+      {/* Nome */}
       <View style={s.field}>
         <Text style={s.label}>Nome completo *</Text>
         <View style={s.inputWrap}>
@@ -160,19 +196,28 @@ export default function RegisterScreen() {
       <View style={s.field}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <Text style={s.label}>CNPJ</Text>
-          <Pressable onPress={() => { setCnpj(""); setCnpjFound(null); setCnpjError(null); }}>
-            <Text style={{ fontSize: 10, color: Colors.violet3, fontWeight: "500" }}>Não tenho CNPJ</Text>
+          <Pressable onPress={handleSkipCnpj}>
+            <Text style={{ fontSize: 10, color: cnpjSkipped ? Colors.green : Colors.violet3, fontWeight: "500" }}>
+              {cnpjSkipped ? "OK - CNPJ opcional" : "Nao tenho CNPJ"}
+            </Text>
           </Pressable>
         </View>
-        <View style={s.inputWrap}>
-          <Icon name="file_text" size={16} color={Colors.ink3} />
-          <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]}
-            {...(isWeb ? { className: "auth-input" } as any : {})}
-            value={cnpj} onChangeText={handleCnpjChange}
-            placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3}
-            keyboardType="number-pad" maxLength={18} />
-          {cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}
-        </View>
+        {!cnpjSkipped && (
+          <View style={s.inputWrap}>
+            <Icon name="file_text" size={16} color={Colors.ink3} />
+            <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]}
+              {...(isWeb ? { className: "auth-input" } as any : {})}
+              value={cnpj} onChangeText={handleCnpjChange}
+              placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3}
+              keyboardType="number-pad" maxLength={18} />
+            {cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+        )}
+        {cnpjSkipped && (
+          <View style={{ backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 12, color: Colors.ink3 }}>Voce pode adicionar o CNPJ depois no onboarding.</Text>
+          </View>
+        )}
         {cnpjFound && (
           <View style={s.cnpjOk}>
             <Icon name="check" size={12} color={Colors.green} />
@@ -182,7 +227,7 @@ export default function RegisterScreen() {
         {cnpjError && <Text style={s.cnpjErr}>{cnpjError}</Text>}
       </View>
 
-      {/* Telefone * */}
+      {/* Telefone */}
       <View style={s.field}>
         <Text style={s.label}>Telefone / WhatsApp *</Text>
         <View style={s.inputWrap}>
@@ -196,7 +241,7 @@ export default function RegisterScreen() {
         </View>
       </View>
 
-      {/* Nome da empresa * */}
+      {/* Nome da empresa */}
       <View style={s.field}>
         <Text style={s.label}>Nome da empresa *</Text>
         <View style={s.inputWrap}>
@@ -210,7 +255,7 @@ export default function RegisterScreen() {
         {cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido automaticamente pelo CNPJ</Text>}
       </View>
 
-      {/* E-mail * */}
+      {/* E-mail */}
       <View style={s.field}>
         <Text style={s.label}>E-mail *</Text>
         <View style={s.inputWrap}>
@@ -224,7 +269,7 @@ export default function RegisterScreen() {
         </View>
       </View>
 
-      {/* Senha * */}
+      {/* Senha */}
       <View style={s.field}>
         <Text style={s.label}>Senha *</Text>
         <View style={s.inputWrap}>
@@ -232,7 +277,7 @@ export default function RegisterScreen() {
           <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]}
             {...(isWeb ? { className: "auth-input" } as any : {})}
             value={senha} onChangeText={setSenha}
-            placeholder="Mínimo 8 caracteres" placeholderTextColor={Colors.ink3}
+            placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3}
             secureTextEntry={!showPass}
             autoComplete="new-password" />
           <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}>
@@ -242,13 +287,13 @@ export default function RegisterScreen() {
         {senha.length > 0 && (
           <View style={s.passReqs}>
             <Req ok={passLength} text="8+ caracteres" />
-            <Req ok={passUpper} text="1 letra maiúscula" />
-            <Req ok={passNumber} text="1 número" />
+            <Req ok={passUpper} text="1 letra maiuscula" />
+            <Req ok={passNumber} text="1 numero" />
           </View>
         )}
       </View>
 
-      {/* Confirmar senha * */}
+      {/* Confirmar senha */}
       <View style={s.field}>
         <Text style={s.label}>Confirmar senha *</Text>
         <View style={s.inputWrap}>
@@ -261,30 +306,33 @@ export default function RegisterScreen() {
             autoComplete="new-password" />
         </View>
         {confirmarSenha.length > 0 && !passMatch && (
-          <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas não conferem</Text>
+          <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas nao conferem</Text>
         )}
       </View>
 
-      {/* Código de acesso */}
+      {/* Codigo de acesso */}
       <View style={s.field}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <Text style={s.label}>Código de acesso</Text>
-          <Text style={{ fontSize: 10, color: Colors.ink3 }}>Trial, pagamento ou indicação</Text>
+          <Text style={s.label}>Codigo de acesso</Text>
+          {codeChecking && <ActivityIndicator size="small" color={Colors.violet3} />}
+          {codeValid === true && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}
+          {codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Invalido</Text>}
         </View>
-        <View style={s.inputWrap}>
-          <Icon name="star" size={16} color={Colors.ink3} />
+        <View style={[s.inputWrap, codeValid === true && { borderColor: Colors.green }, codeValid === false && { borderColor: Colors.red }]}>
+          <Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} />
           <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]}
             {...(isWeb ? { className: "auth-input" } as any : {})}
-            value={codigo} onChangeText={v => setCodigo(v.toUpperCase())}
-            placeholder="TRIAL-XXXX ou REF-NOME" placeholderTextColor={Colors.ink3}
+            value={codigo} onChangeText={v => { setCodigo(v.toUpperCase()); setCodeValid(null); }}
+            onBlur={handleCodeBlur}
+            placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3}
             autoCapitalize="characters" maxLength={20} />
         </View>
         <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>
-          Recebeu um código de indicação ou trial? Insira aqui.
+          Recebeu um codigo por e-mail? Insira aqui para ativar seu plano.
         </Text>
       </View>
 
-      {/* Botão Criar */}
+      {/* Botao Criar */}
       <Pressable
         style={[s.btn, isLoading && { opacity: 0.7 }]}
         {...(isWeb ? { className: "auth-btn" } as any : {})}
@@ -295,7 +343,7 @@ export default function RegisterScreen() {
 
       {/* Footer */}
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Já tem conta? </Text>
+        <Text style={s.footerText}>Ja tem conta? </Text>
         <Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link>
       </View>
 
@@ -310,14 +358,14 @@ export default function RegisterScreen() {
         <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
       </Pressable>
 
-      <Text style={s.footer}>Aura. · Tecnologia para Negócios</Text>
+      <Text style={s.footer}>Aura. - Tecnologia para Negocios</Text>
     </View>
   );
 
   if (isWeb) {
     return (
       <div style={{
-        minHeight: "100vh", width: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start",
+        minHeight: "100vh", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
         background: `radial-gradient(ellipse at 30% 20%, rgba(124,58,237,0.15) 0%, transparent 50%),
                      radial-gradient(ellipse at 70% 80%, rgba(139,92,246,0.08) 0%, transparent 40%),
                      ${Colors.bg}`,
