@@ -1,23 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   View, Text, TextInput, Pressable, ActivityIndicator,
-  StyleSheet, Alert, Platform, ScrollView, Image,
+  StyleSheet, Platform, ScrollView, Image,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { toast } from "@/components/Toast";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
 
-// Inject gradient animation
 if (typeof document !== "undefined" && !document.getElementById("aura-auth-css")) {
   const st = document.createElement("style");
   st.id = "aura-auth-css";
   st.textContent = `
     @keyframes authFadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes authGlow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.7; } }
     .auth-card { animation: authFadeIn 0.6s ease-out; }
     .auth-input:focus { border-color: #7c3aed !important; box-shadow: 0 0 0 3px rgba(124,58,237,0.15); outline: none; }
     .auth-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.3); }
@@ -34,11 +33,19 @@ export default function LoginScreen() {
   const isWeb = Platform.OS === "web";
 
   async function handleLogin() {
-    if (!email || !password) { Alert.alert("Preencha e-mail e senha"); return; }
+    if (!email || !password) { toast.error("Preencha e-mail e senha"); return; }
     try {
       await login(email.trim().toLowerCase(), password);
+      // FIX: explicit redirect after successful login
+      const state = useAuthStore.getState();
+      if (state.onboardingComplete) {
+        router.replace("/(tabs)");
+      } else {
+        router.replace("/(tabs)/onboarding");
+      }
     } catch (err) {
-      Alert.alert("Erro", err instanceof ApiError ? err.message : "Erro ao entrar.");
+      const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";
+      toast.error(msg);
     }
   }
 
@@ -50,9 +57,8 @@ export default function LoginScreen() {
         <Text style={s.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text>
       </View>
 
-      {/* Header */}
       <Text style={s.title}>Entrar na sua conta</Text>
-      <Text style={s.subtitle}>Gerencie seu negócio de qualquer lugar</Text>
+      <Text style={s.subtitle}>Gerencie seu negocio de qualquer lugar</Text>
 
       {/* E-mail */}
       <View style={s.field}>
@@ -66,6 +72,7 @@ export default function LoginScreen() {
             placeholder="seu@email.com" placeholderTextColor={Colors.ink3}
             autoCapitalize="none" keyboardType="email-address"
             autoComplete="email"
+            onSubmitEditing={() => {}}
           />
         </View>
       </View>
@@ -79,9 +86,10 @@ export default function LoginScreen() {
             style={[s.input, isWeb && { outlineWidth: 0 } as any]}
             {...(isWeb ? { className: "auth-input" } as any : {})}
             value={password} onChangeText={setPassword}
-            placeholder="••••••••" placeholderTextColor={Colors.ink3}
+            placeholder="********" placeholderTextColor={Colors.ink3}
             secureTextEntry={!showPass}
             autoComplete="current-password"
+            onSubmitEditing={handleLogin}
           />
           <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}>
             <Text style={s.eyeText}>{showPass ? "Ocultar" : "Ver"}</Text>
@@ -89,12 +97,12 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      {/* Esqueci senha — S1: agora funcional */}
+      {/* Esqueci senha */}
       <Link href="/(auth)/forgot-password" style={s.forgotRow}>
         <Text style={s.forgotText}>Esqueci minha senha</Text>
       </Link>
 
-      {/* Botão Entrar */}
+      {/* Botao Entrar */}
       <Pressable
         style={[s.btn, isLoading && { opacity: 0.7 }]}
         {...(isWeb ? { className: "auth-btn" } as any : {})}
@@ -103,27 +111,23 @@ export default function LoginScreen() {
         {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Entrar</Text>}
       </Pressable>
 
-      {/* Divider */}
       <View style={s.dividerRow}>
         <View style={s.dividerLine} />
         <Text style={s.dividerText}>ou</Text>
         <View style={s.dividerLine} />
       </View>
 
-      {/* Criar conta */}
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Não tem conta? </Text>
-        <Link href="/(auth)/register"><Text style={s.link}>Criar conta grátis</Text></Link>
+        <Text style={s.footerText}>Nao tem conta? </Text>
+        <Link href="/(auth)/register"><Text style={s.link}>Criar conta gratis</Text></Link>
       </View>
 
-      {/* Demo */}
       <Pressable style={s.demoBtn} onPress={loginDemo} disabled={isLoading}>
         <Icon name="dashboard" size={14} color={Colors.violet3} />
         <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
       </Pressable>
 
-      {/* Footer */}
-      <Text style={s.footer}>Aura. · Tecnologia para Negócios</Text>
+      <Text style={s.footer}>Aura. - Tecnologia para Negocios</Text>
     </View>
   );
 
