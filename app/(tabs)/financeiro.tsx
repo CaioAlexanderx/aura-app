@@ -8,6 +8,10 @@ import { useTransactions } from "@/stores/transactions";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { AgentBanner } from "@/components/AgentBanner";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ListSkeleton } from "@/components/ListSkeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const IS_WIDE = SCREEN_W > 768;
@@ -20,55 +24,15 @@ const TABS = ["Lançamentos", "A Receber", "Minha Retirada", "Resumo"];
 
 // ── Mock Data ────────────────────────────────────────────────
 
-const MOCK_TRANSACTIONS = [
-  { id: "1", date: "29/03", desc: "Venda PDV #0047", type: "income" as const, category: "Vendas", amount: 156.80, status: "confirmed" },
-  { id: "2", date: "29/03", desc: "Fornecedor - Distribuidora ABC", type: "expense" as const, category: "Fornecedores", amount: 420.00, status: "confirmed" },
-  { id: "3", date: "28/03", desc: "Venda PDV #0046", type: "income" as const, category: "Vendas", amount: 89.90, status: "confirmed" },
-  { id: "4", date: "28/03", desc: "Aluguel sala comercial", type: "expense" as const, category: "Fixas", amount: 1200.00, status: "confirmed" },
-  { id: "5", date: "27/03", desc: "Venda PDV #0045", type: "income" as const, category: "Vendas", amount: 234.50, status: "confirmed" },
-  { id: "6", date: "27/03", desc: "Energia CPFL", type: "expense" as const, category: "Fixas", amount: 187.30, status: "pending" },
-  { id: "7", date: "26/03", desc: "Venda PDV #0044", type: "income" as const, category: "Vendas", amount: 67.00, status: "confirmed" },
-  { id: "8", date: "26/03", desc: "Material de limpeza", type: "expense" as const, category: "Operacional", amount: 45.90, status: "confirmed" },
-];
+// MOCK_TRANSACTIONS removed
 
-const MOCK_RECEIVABLES = [
-  { id: "1", customer: "Maria Silva", amount: 320.00, due: "05/04/2026", days: 7, status: "pending" },
-  { id: "2", customer: "Pedro Costa", amount: 890.00, due: "10/04/2026", days: 12, status: "pending" },
-  { id: "3", customer: "Ana Oliveira", amount: 156.50, due: "15/04/2026", days: 17, status: "pending" },
-  { id: "4", customer: "Joao Santos", amount: 1240.00, due: "01/04/2026", days: 3, status: "overdue" },
-  { id: "5", customer: "Carlos Lima", amount: 430.00, due: "25/03/2026", days: -4, status: "overdue" },
-];
+// MOCK_RECEIVABLES removed — A Receber shows empty state until API connected
 
-const MOCK_WITHDRAWAL = {
-  grossRevenue: 18420.00,
-  taxes: 1105.20,
-  fixedCosts: 3200.00,
-  variableCosts: 4640.00,
-  operationalProfit: 9474.80,
-  proLabore: 2800.00,
-  netProfit: 6674.80,
-  fatorR: 15.2,
-  suggestedWithdrawal: 4500.00,
-};
 
-const MOCK_DRE = {
-  period: "Marco 2026",
-  income: [
-    { category: "Vendas PDV", amount: 14200.00 },
-    { category: "Servicos", amount: 3800.00 },
-    { category: "Outros", amount: 420.00 },
-  ],
-  expenses: [
-    { category: "Fornecedores", amount: 4640.00 },
-    { category: "Custos Fixos", amount: 3200.00 },
-    { category: "Impostos (DAS)", amount: 1105.20 },
-    { category: "Operacional", amount: 894.80 },
-  ],
-  totalIncome: 18420.00,
-  totalExpenses: 9840.00,
-  netProfit: 8580.00,
-  marginPct: 46.6,
-};
+// MOCK_WITHDRAWAL removed — Retirada shows empty state until API connected
+
+
+// MOCK_DRE removed — Resumo shows empty state until API connected
 
 
 // ── FE-20: Transaction Entry Modal ───────────────────────────
@@ -396,19 +360,13 @@ const rv = StyleSheet.create({
 });
 
 function TabAReceber() {
-  const total = MOCK_RECEIVABLES.reduce((s, r) => s + r.amount, 0);
-  const overdue = MOCK_RECEIVABLES.filter(r => r.status === "overdue").reduce((s, r) => s + r.amount, 0);
   return (
-    <View>
-      <View style={g.row}>
-        <SummaryCard label="TOTAL A RECEBER" value={fmt(total)} />
-        <SummaryCard label="EM ATRASO" value={fmt(overdue)} color={Colors.red} />
-        <SummaryCard label="CLIENTES" value={String(MOCK_RECEIVABLES.length)} />
-      </View>
-      <View style={g.listCard}>
-        {MOCK_RECEIVABLES.map(r => <ReceivableRow key={r.id} item={r} />)}
-      </View>
-    </View>
+    <EmptyState
+      icon="wallet"
+      iconColor={Colors.amber}
+      title="Contas a receber"
+      subtitle="As contas a receber serao listadas aqui conforme voce registrar vendas a prazo e parcelas pendentes."
+    />
   );
 }
 
@@ -450,7 +408,8 @@ const wf = StyleSheet.create({
 });
 
 function TabRetirada({ apiWd }: { apiWd?: any }) {
-  const w = apiWd || MOCK_WITHDRAWAL;
+  const w = apiWd;
+  if (!w || !w.grossRevenue) return <EmptyState icon="trending_up" iconColor={Colors.green} title="Minha Retirada" subtitle="A analise de retirada sera calculada automaticamente com base nas suas receitas, despesas e impostos." />;
   return (
     <View>
       <View style={g.row}>
@@ -512,7 +471,18 @@ const dre = StyleSheet.create({
 
 function TabResumo({ apiDreData }: { apiDreData?: any }) {
   const raw = apiDreData;
-  const d = (raw && raw.totalIncome != null) ? raw : (raw && raw.income != null) ? raw : MOCK_DRE;
+  if (!raw || (!raw.totalIncome && !raw.income)) {
+    return <EmptyState icon="receipt" iconColor={Colors.violet3} title="Resumo financeiro (DRE)" subtitle="O resumo sera gerado automaticamente conforme voce registrar receitas e despesas." />;
+  }
+  const d = {
+    period: raw.period || new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+    income: Array.isArray(raw.income) ? raw.income : [],
+    expenses: Array.isArray(raw.expenses) ? raw.expenses : [],
+    totalIncome: parseFloat(raw.totalIncome || raw.total_income) || 0,
+    totalExpenses: parseFloat(raw.totalExpenses || raw.total_expenses) || 0,
+    netProfit: parseFloat(raw.netProfit || raw.net_profit) || 0,
+    marginPct: parseFloat(raw.marginPct || raw.margin_pct) || 0,
+  };
   return (
     <View>
       <View style={g.row}>
@@ -543,11 +513,12 @@ function TabResumo({ apiDreData }: { apiDreData?: any }) {
 export default function FinanceiroScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const { company, token, isDemo } = useAuthStore();
   const qc = useQueryClient();
 
   // CONN-11: Fetch real data from backend
-  const { data: apiTransactions } = useQuery({
+  const { data: apiTransactions, isLoading: isLoadingTx } = useQuery({
     queryKey: ["transactions", company?.id],
     queryFn: () => companiesApi.transactions(company!.id, "limit=50"),
     enabled: !!company?.id && !!token && !isDemo,
@@ -593,18 +564,41 @@ export default function FinanceiroScreen() {
     <View style={{flex:1}}>
       <TransactionModal visible={showModal} onClose={() => setShowModal(false)} createTxMutation={!isDemo && company?.id ? createTxMutation : undefined} />
       <ScrollView style={g.screen} contentContainerStyle={g.content}>
-        <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <Text style={g.pageTitle}>Financeiro</Text>
-          <Pressable onPress={() => setShowModal(true)} style={{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:Colors.violet,borderRadius:10,paddingHorizontal:16,paddingVertical:10}}>
-            <Icon name="dollar" size={16} color="#fff" />
-            <Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>Novo lançamento</Text>
-          </Pressable>
-        </View>
+        <ScreenHeader
+          title="Financeiro"
+          actionLabel="Novo lancamento"
+          actionIcon="dollar"
+          onAction={() => setShowModal(true)}
+        />
         <TabBar active={activeTab} onSelect={setActiveTab} />
+
+        {isLoadingTx && !isDemo && <ListSkeleton rows={4} showCards />}
+
+        {!isLoadingTx && (!apiTransactions || !(apiTransactions.transactions || apiTransactions.rows || []).length) && !isDemo && activeTab === 0 && (
+          <EmptyState
+            icon="dollar"
+            iconColor={Colors.green}
+            title="Nenhum lancamento"
+            subtitle="Lance sua primeira receita ou despesa para comecar a acompanhar suas financas."
+            actionLabel="Novo lancamento"
+            onAction={() => setShowModal(true)}
+          />
+        )}
+
+        <ConfirmDialog
+          visible={!!deleteTarget}
+          title="Excluir lancamento?"
+          message="Esta acao nao pode ser desfeita. O lancamento sera removido permanentemente."
+          confirmLabel="Excluir"
+          cancelLabel="Cancelar"
+          destructive
+          onConfirm={() => { if (deleteTarget) { deleteTxMutation.mutate(deleteTarget); setDeleteTarget(null); } }}
+          onCancel={() => setDeleteTarget(null)}
+        />
 
         <AgentBanner agent="Financeiro" insight={{ title: "2 cobranças em atraso", desc: "Clientes João Santos (R$ 1.240) e Carlos Lima (R$ 430) estão com pagamento atrasado. Envie lembrete via WhatsApp.", actionLabel: "Enviar cobrança", action: "cobrar", priority: "high", icon: "alert" }} onAction={() => toast.info("Enviando cobrança via WhatsApp...")} />
 
-      {activeTab === 0 && <TabLancamentos apiTx={apiTransactions} onDeleteTx={!isDemo && company?.id ? (id: string) => deleteTxMutation.mutate(id) : undefined} />}
+      {activeTab === 0 && <TabLancamentos apiTx={apiTransactions} onDeleteTx={!isDemo && company?.id ? (id: string) => setDeleteTarget(id) : undefined} />}
       {activeTab === 1 && <TabAReceber />}
       {activeTab === 2 && <TabRetirada apiWd={apiWithdrawal} />}
       {activeTab === 3 && <TabResumo apiDreData={apiDre} />}
