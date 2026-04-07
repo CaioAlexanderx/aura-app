@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dim
 import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
+import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
@@ -46,7 +47,13 @@ function SC({ l,v,c,sub }:{l:string;v:string;c?:string;sub?:string}) {
   return <Pressable onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[{backgroundColor:Colors.bg3,borderRadius:14,padding:16,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?140:"45%",margin:4},h&&{transform:[{translateY:-2}],borderColor:Colors.border2},w&&{transition:"all 0.2s ease"}as any]}><Text style={{fontSize:10,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>{l}</Text><Text style={{fontSize:20,fontWeight:"800",color:c||Colors.ink,letterSpacing:-0.5}}>{v}</Text>{sub&&<Text style={{fontSize:10,color:Colors.ink3,marginTop:4}}>{sub}</Text>}</Pressable>;
 }
 function TB({ a,onS }:{a:number;onS:(i:number)=>void}) {
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>
+  function handleDeleteCustomer(id: string) {
+    if (deleteCustomerMutation && company?.id && !isDemo) {
+      deleteCustomerMutation.mutate(id);
+    }
+  }
+
+    return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexGrow:0,marginBottom:20}} contentContainerStyle={{flexDirection:"row",gap:6}}>
 {TABS.map((t,i)=><Pressable key={t} onPress={()=>onS(i)} style={[{paddingHorizontal:16,paddingVertical:9,borderRadius:10,backgroundColor:Colors.bg3,borderWidth:1,borderColor:Colors.border},a===i&&{backgroundColor:Colors.violet,borderColor:Colors.violet}]}><Text style={[{fontSize:13,color:Colors.ink3,fontWeight:"500"},a===i&&{color:"#fff",fontWeight:"600"}]}>{t}</Text></Pressable>)}</ScrollView>;
 }
 
@@ -77,7 +84,7 @@ function AddForm({ onSave,onX }:{onSave:(c:Cust)=>void;onX:()=>void}) {
   </View>;
 }
 
-function CRow({ c,exp,onE }:{c:Cust;exp:boolean;onE:()=>void}) {
+function CRow({ c,exp,onE,onDelete }:{c:Cust;exp:boolean;onE:()=>void;onDelete?:(id:string)=>void}) {
   const [h,sH]=useState(false);const w=Platform.OS==="web";const tags=getStatus(c);
   return <View>
     <Pressable onPress={onE} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} style={[{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:12,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},h&&{backgroundColor:Colors.bg4},w&&{transition:"background-color 0.15s ease"}as any]}>
@@ -102,6 +109,7 @@ function CRow({ c,exp,onE }:{c:Cust;exp:boolean;onE:()=>void}) {
       </View>
       <View style={{flexDirection:"row",gap:8,marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:Colors.border,flexWrap:"wrap"}}>
         {["Enviar WhatsApp","Pedir avaliacao","Ver historico"].map(a=><Pressable key={a} style={{backgroundColor:Colors.bg3,borderRadius:8,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:Colors.border}}><Text style={{fontSize:11,color:Colors.violet3,fontWeight:"600"}}>{a}</Text></Pressable>)}
+        {onDelete&&<Pressable onPress={()=>onDelete(c.id)} style={{backgroundColor:Colors.redD,borderRadius:8,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:Colors.red+"33"}}><Text style={{fontSize:11,color:Colors.red,fontWeight:"600"}}>Excluir cliente</Text></Pressable>}
       </View>
     </View>}
   </View>;
@@ -225,7 +233,7 @@ export default function ClientesScreen() {
     {tab===0&&<View>
       <TextInput style={{backgroundColor:Colors.bg3,borderRadius:10,borderWidth:1,borderColor:Colors.border,paddingHorizontal:14,paddingVertical:11,fontSize:13,color:Colors.ink,marginBottom:16}} placeholder="Buscar por nome, telefone, email ou Instagram..." placeholderTextColor={Colors.ink3} value={q} onChangeText={sQ}/>
       <View style={{backgroundColor:Colors.bg3,borderRadius:16,padding:8,borderWidth:1,borderColor:Colors.border,marginBottom:20}}>
-        {fil.map(c=><CRow key={c.id} c={c} exp={expId===c.id} onE={()=>sExp(expId===c.id?null:c.id)}/>)}
+        {fil.map(c=><CRow key={c.id} c={c} exp={expId===c.id} onE={()=>sExp(expId===c.id?null:c.id)} onDelete={handleDeleteCustomer}/>)}
         {fil.length===0&&<View style={{alignItems:"center",paddingVertical:40}}><Text style={{fontSize:13,color:Colors.ink3}}>Nenhum cliente encontrado</Text></View>}
       </View>
     </View>}
