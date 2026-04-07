@@ -1,135 +1,65 @@
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { IS_WIDE } from "@/constants/helpers";
 
-type EmptyStateProps = {
+type Props = {
   icon: string;
+  iconColor?: string;
   title: string;
-  description: string;
+  subtitle: string;
   actionLabel?: string;
   onAction?: () => void;
-  secondaryLabel?: string;
-  onSecondary?: () => void;
 };
 
-// W-06: Inject pulse animation
-if (typeof document !== 'undefined' && !document.getElementById('aura-pulse')) {
-  const s = document.createElement('style'); s.id = 'aura-pulse';
-  s.textContent = '@keyframes auraPulse { 0%, 100% { transform: scale(1); opacity: 0.15; } 50% { transform: scale(1.05); opacity: 0.25; } }';
-  document.head.appendChild(s);
-}
-
-export function EmptyState({ icon, title, description, actionLabel, onAction, secondaryLabel, onSecondary }: EmptyStateProps) {
-  const [h, sH] = Platform.OS === "web" ? [false, () => {}] : [false, () => {}];
-
+export function EmptyState({ icon, iconColor, title, subtitle, actionLabel, onAction }: Props) {
+  const color = iconColor || Colors.violet3;
   return (
     <View style={s.container}>
-      <View style={s.card}>
-        {/* Decorative circles */}
-        <View style={s.circles}>
-          <View style={s.circleOuter}>
-            <View style={s.circleInner}>
-              <Icon name={icon as any} size={32} color={Colors.violet3} />
-            </View>
-          </View>
-        </View>
-
-        <Text style={s.title}>{title}</Text>
-        <Text style={s.desc}>{description}</Text>
-
-        {actionLabel && onAction && (
-          <Pressable onPress={onAction} style={s.actionBtn}>
-            <Text style={s.actionText}>{actionLabel}</Text>
-          </Pressable>
-        )}
-
-        {secondaryLabel && onSecondary && (
-          <Pressable onPress={onSecondary} style={s.secondaryBtn}>
-            <Text style={s.secondaryText}>{secondaryLabel}</Text>
-          </Pressable>
-        )}
+      <View style={[s.iconWrap, { borderColor: color + "33" }]}>
+        <Icon name={icon as any} size={32} color={color} />
       </View>
+      <Text style={s.title}>{title}</Text>
+      <Text style={s.subtitle}>{subtitle}</Text>
+      {actionLabel && onAction && (
+        <Pressable onPress={onAction} style={s.btn}>
+          <Text style={s.btnText}>{actionLabel}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: {
-    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
     paddingVertical: 48,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
+    gap: 8,
   },
-  card: {
-    alignItems: "center",
-    maxWidth: 380,
-    width: "100%",
-    backgroundColor: Colors.bg3,
-    borderRadius: 24,
-    padding: 40,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  circles: {
-    marginBottom: 24,
-  },
-  circleOuter: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+  iconWrap: {
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: Colors.violetD,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.border2,
-  },
-  circleInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.bg4,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: Colors.ink,
-    textAlign: "center",
+    borderWidth: 1.5,
+    alignItems: "center", justifyContent: "center",
     marginBottom: 8,
   },
-  desc: {
-    fontSize: 13,
-    color: Colors.ink3,
+  title: {
+    fontSize: 18, fontWeight: "700", color: Colors.ink,
     textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 24,
   },
-  actionBtn: {
+  subtitle: {
+    fontSize: 13, color: Colors.ink3,
+    textAlign: "center", lineHeight: 20,
+    maxWidth: 320,
+  },
+  btn: {
+    marginTop: 12,
     backgroundColor: Colors.violet,
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    marginBottom: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 13,
   },
-  actionText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  secondaryBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  secondaryText: {
-    color: Colors.violet3,
-    fontSize: 12,
-    fontWeight: "500",
-  },
+  btnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
 
 export default EmptyState;
