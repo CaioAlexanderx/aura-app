@@ -1,1 +1,3 @@
-# SPA routing handled by Cloudflare Workers asset config
+# SPA fallback — serve index.html for all routes
+# Fixes F5/reload navigation on Cloudflare Pages
+/* /index.html 200

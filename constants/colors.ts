@@ -48,22 +48,16 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: IS_DARK,
   toggle: () => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const next = !get().isDark;
+    set({ isDark: next });
     try {
-      const next = !get().isDark;
-      set({ isDark: next });
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
-      // B5 FIX: defer reload and wrap in try/catch to prevent crash
-      setTimeout(() => {
-        try {
-          window.location.href = window.location.pathname + window.location.search;
-        } catch {
-          // If href assignment fails, do nothing - theme persists on next manual reload
-        }
-      }, 100);
-    } catch (e) {
-      console.warn("Theme toggle error:", e);
-      // B5 FIX: do NOT call reload in catch - it was causing infinite crash loop
-    }
+    } catch {}
+    // P3 FIX: use window.location.reload() with delay
+    // Colors are frozen at import time, so full reload is required
+    setTimeout(() => {
+      try { window.location.reload(); } catch {}
+    }, 150);
   },
 }));
 
