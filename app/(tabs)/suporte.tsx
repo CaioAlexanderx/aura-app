@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
@@ -12,18 +12,18 @@ const AURA_EMAIL = "suporte@getaura.com.br";
 const AURA_WHATSAPP = "5512999990000";
 
 const MOCK_MESSAGES = [
-  { id: "1", from: "analyst", name: "Equipe Aura", text: "Olá! Sou seu Analista de Negócios na Aura. Estou aqui para ajudar com configurações, dúvidas, leitura de dados e acompanhamento de prazos. Como posso te ajudar hoje?", time: "09:00" },
-  { id: "2", from: "user", text: "Oi! Preciso de ajuda para entender meu DRE deste mês.", time: "09:15" },
-  { id: "3", from: "analyst", name: "Equipe Aura", text: "Claro! Analisando seus dados de março: sua margem líquida está em 46,6%, que é excelente para o segmento. As despesas fixas representam 17% do faturamento. Quer que eu detalhe alguma categoria específica?", time: "09:18" },
+  { id: "1", from: "analyst", name: "Equipe Aura", text: "Ola! Sou seu Analista de Negocios na Aura. Estou aqui para ajudar com configuracoes, duvidas, leitura de dados e acompanhamento de prazos. Como posso te ajudar hoje?", time: "09:00" },
+  { id: "2", from: "user", text: "Oi! Preciso de ajuda para entender meu DRE deste mes.", time: "09:15" },
+  { id: "3", from: "analyst", name: "Equipe Aura", text: "Claro! Analisando seus dados de marco: sua margem liquida esta em 46,6%, que e excelente para o segmento. As despesas fixas representam 17% do faturamento. Quer que eu detalhe alguma categoria especifica?", time: "09:18" },
   { id: "4", from: "user", text: "Sim, quero entender melhor as despesas operacionais.", time: "09:20" },
-  { id: "5", from: "analyst", name: "Equipe Aura", text: "Suas despesas operacionais somam R$ 894,80 este mês. Os principais itens são: material de limpeza (R$ 45,90), insumos (R$ 320,00) e manutenção (R$ 528,90). Comparando com fevereiro, houve aumento de 8% - principalmente pela manutenção. Posso ajudar a identificar oportunidades de redução?", time: "09:22" },
+  { id: "5", from: "analyst", name: "Equipe Aura", text: "Suas despesas operacionais somam R$ 894,80 este mes. Os principais itens sao: material de limpeza (R$ 45,90), insumos (R$ 320,00) e manutencao (R$ 528,90). Comparando com fevereiro, houve aumento de 8% - principalmente pela manutencao.", time: "09:22" },
 ];
 
 const QUICK_ACTIONS = [
-  { label: "Ajuda com configuração", icon: "settings" },
-  { label: "Entender meus dados", icon: "bar_chart" },
-  { label: "Dúvida sobre obrigações", icon: "calculator" },
-  { label: "Suporte técnico", icon: "alert" },
+  { label: "Configuracao", icon: "settings" },
+  { label: "Entender dados", icon: "bar_chart" },
+  { label: "Obrigacoes", icon: "calculator" },
+  { label: "Suporte", icon: "alert" },
 ];
 
 function ChatBubble({ msg }: { msg: typeof MOCK_MESSAGES[0] }) {
@@ -52,11 +52,10 @@ export default function SuporteScreen() {
     const newMsg = { id: Date.now().toString(), from: "user", text: message.trim(), time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
     setMessages(prev => [...prev, newMsg]);
     setMessage("");
-    // Simulate analyst response
     setTimeout(() => {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(), from: "analyst", name: "Equipe Aura",
-        text: "Recebi sua mensagem! Um analista vai responder em breve. Tempo médio de resposta: 2h úteis.",
+        text: "Recebi sua mensagem! Um analista vai responder em breve. Tempo medio de resposta: 2h uteis.",
         time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
       }]);
     }, 1500);
@@ -64,15 +63,15 @@ export default function SuporteScreen() {
 
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
-      <PageHeader title="Seu Analista de Negócios" />
+      <PageHeader title="Seu Analista de Negocios" />
 
-      {/* Hero card */}
+      {/* Hero card — R7 FIX: overflow hidden + responsive padding */}
       <View style={z.heroCard}>
         <View style={z.heroIcon}>
           <Icon name="star" size={28} color={Colors.violet3} />
         </View>
         <Text style={z.heroTitle}>Um membro extra na sua equipe</Text>
-        <Text style={z.heroDesc}>Seu Analista de Negócios está disponível para configuração, leitura de dados, acompanhamento de prazos, dúvidas e suporte técnico.</Text>
+        <Text style={z.heroDesc}>Seu Analista de Negocios esta disponivel para configuracao, leitura de dados, acompanhamento de prazos, duvidas e suporte tecnico.</Text>
         <View style={z.heroStats}>
           <View style={z.heroStat}>
             <Text style={z.heroStatValue}>2h</Text>
@@ -80,13 +79,13 @@ export default function SuporteScreen() {
           </View>
           <View style={z.heroStatDivider} />
           <View style={z.heroStat}>
-            <Text style={z.heroStatValue}>Seg-Sáb</Text>
-            <Text style={z.heroStatLabel}>8h às 18h</Text>
+            <Text style={z.heroStatValue}>Seg-Sab</Text>
+            <Text style={z.heroStatLabel}>8h as 18h</Text>
           </View>
           <View style={z.heroStatDivider} />
           <View style={z.heroStat}>
             <Text style={[z.heroStatValue, { color: Colors.green }]}>Incluso</Text>
-            <Text style={z.heroStatLabel}>No seu plano</Text>
+            <Text style={z.heroStatLabel}>No plano</Text>
           </View>
         </View>
       </View>
@@ -136,20 +135,20 @@ export default function SuporteScreen() {
 
 const z = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
-  // Hero
-  heroCard: { backgroundColor: Colors.violetD, borderRadius: 20, padding: 28, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", marginBottom: 20, gap: 10 },
+  content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
+  // Hero — R7 FIX: overflow hidden, responsive padding, flexWrap stats
+  heroCard: { backgroundColor: Colors.violetD, borderRadius: 20, padding: IS_WIDE ? 28 : 20, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", marginBottom: 20, gap: 10, overflow: "hidden" as any },
   heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
-  heroTitle: { fontSize: 20, fontWeight: "800", color: Colors.ink, textAlign: "center" },
+  heroTitle: { fontSize: IS_WIDE ? 20 : 18, fontWeight: "800", color: Colors.ink, textAlign: "center" },
   heroDesc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, maxWidth: 400 },
-  heroStats: { flexDirection: IS_WIDE ? "row" : "column", alignItems: "center", marginTop: 8, gap: IS_WIDE ? 0 : 12 },
-  heroStat: { alignItems: "center", paddingHorizontal: 20, gap: 4 },
-  heroStatValue: { fontSize: 16, fontWeight: "800", color: Colors.ink },
+  heroStats: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center", marginTop: 8, gap: IS_WIDE ? 0 : 8 },
+  heroStat: { alignItems: "center", paddingHorizontal: IS_WIDE ? 20 : 12, paddingVertical: IS_WIDE ? 0 : 6, gap: 2 },
+  heroStatValue: { fontSize: IS_WIDE ? 16 : 14, fontWeight: "800", color: Colors.ink },
   heroStatLabel: { fontSize: 10, color: Colors.ink3 },
-  heroStatDivider: { width: IS_WIDE ? 1 : "60%", height: IS_WIDE ? 32 : 1, backgroundColor: Colors.border },
+  heroStatDivider: { width: IS_WIDE ? 1 : 0, height: IS_WIDE ? 32 : 0 , backgroundColor: Colors.border },
   // Contact
   contactRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
-  contactBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 14 },
+  contactBtn: { flex: 1, minWidth: 140, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 14 },
   contactBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   // Section
   sectionTitle: { fontSize: 15, fontWeight: "600", color: Colors.ink, marginBottom: 12 },
@@ -158,7 +157,7 @@ const z = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.border },
   quickText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   // Chat
-  chatCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 12 },
+  chatCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: IS_WIDE ? 16 : 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 12 },
   bubble: { maxWidth: "80%", borderRadius: 16, padding: 14, gap: 4 },
   bubbleAnalyst: { alignSelf: "flex-start", backgroundColor: Colors.bg4 },
   bubbleUser: { alignSelf: "flex-end", backgroundColor: Colors.violet },
