@@ -136,7 +136,7 @@ export default function SuporteScreen() {
 
 const z = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
   // Hero
   heroCard: { backgroundColor: Colors.violetD, borderRadius: 20, padding: 28, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", marginBottom: 20, gap: 10 },
   heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
@@ -148,7 +148,7 @@ const z = StyleSheet.create({
   heroStatLabel: { fontSize: 10, color: Colors.ink3 },
   heroStatDivider: { width: IS_WIDE ? 1 : "60%", height: IS_WIDE ? 32 : 1, backgroundColor: Colors.border },
   // Contact
-  contactRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
+  contactRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
   contactBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 14 },
   contactBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   // Section

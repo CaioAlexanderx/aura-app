@@ -85,7 +85,7 @@ function HeroRing({ obls }: { obls?: Obl[] }) {
   );
 }
 const hr = StyleSheet.create({
-  card: { flexDirection: IS_WIDE ? "row" : "column", gap: 18, alignItems: IS_WIDE ? "center" : "flex-start", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 18, marginBottom: 14 },
+  card: { flexDirection: IS_WIDE ? "row" : "column", flexWrap: "wrap" as any, gap: 18, alignItems: IS_WIDE ? "center" : "flex-start", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 18, marginBottom: 14 },
   ringWrap: { flexShrink: 0 },
   fallbackRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 7, borderColor: Colors.violet, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
   fallbackText: { fontSize: 20, fontWeight: "700", color: Colors.ink },
@@ -376,7 +376,7 @@ export default function ContabilidadeScreen() {
 
 const z = StyleSheet.create({
   scr: { flex: 1, backgroundColor: "transparent" },
-  cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   gridItem: { width: IS_WIDE ? "48.5%" : "100%", flexShrink: 0 },
 });

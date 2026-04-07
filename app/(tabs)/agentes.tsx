@@ -203,10 +203,10 @@ export default function AgentesScreen() {
 
 const z = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
   subtitle: { fontSize: 13, color: Colors.ink3, marginBottom: 20, marginTop: -8 },
   // KPIs
-  kpiRow: { flexDirection: "row", gap: 8, marginBottom: 24 },
+  kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
   kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 6 },
   kpiValue: { fontSize: 28, fontWeight: "800", color: Colors.ink },
   kpiLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },

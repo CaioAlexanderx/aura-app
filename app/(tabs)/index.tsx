@@ -40,7 +40,7 @@ function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress}:{ic:string;i
     {delta&&<View style={[k.db,{backgroundColor:deltaUp?Colors.greenD:Colors.redD}]}><Text style={[k.dt,{color:deltaUp?Colors.green:Colors.red}]}>{deltaUp?"+":"-"} {delta}</Text></View>}
   </Pressable>;
 }
-const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"45%",flex:2},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
+const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"100%",flex:IS?2:undefined},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
 
 function QA({ic,iconColor,label,onPress}:{ic:string;iconColor:string;label:string;onPress?:()=>void}){
   return <Pressable style={qa.btn} onPress={onPress}>
@@ -169,8 +169,8 @@ export default function DashboardScreen(){
 
 const s=StyleSheet.create({
   scroll:{flex:1},
-  content:{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"},
-  header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:12},
+  content:{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%",overflow:"hidden"},
+  header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:12,overflow:"hidden"},
   hl:{flexDirection:"row",alignItems:"center",gap:12},hr:{flexDirection:"row",alignItems:"center",gap:12},
   gr:{fontSize:16,color:Colors.ink,fontWeight:"600"},cn:{fontSize:12,color:Colors.ink3,marginTop:2},
   lo:{paddingHorizontal:12,paddingVertical:6,borderRadius:6,borderWidth:1,borderColor:Colors.border},lt:{fontSize:11,color:Colors.ink3,fontWeight:"500"},
