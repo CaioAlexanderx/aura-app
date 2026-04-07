@@ -9,11 +9,13 @@ const BASE_URL =
 export class ApiError extends Error {
   status: number;
   data: any;
-  constructor(message: string, status: number, data?: any) {
+  isNetworkError: boolean;
+  constructor(message: string, status: number, data?: any, isNetworkError = false) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.data = data;
+    this.isNetworkError = isNetworkError;
   }
 }
 
@@ -23,11 +25,17 @@ export function setTokenGetter(fn: () => string | null) {
   _getToken = fn;
 }
 
-// REL-03: Global 401 handler
+// REL-03: Global 401 handler — only called on confirmed auth rejection
 let _onUnauthorized: (() => void) | null = null;
 export function setOnUnauthorized(fn: () => void) {
   _onUnauthorized = fn;
 }
+
+// ── AUTH-02: Refresh result types ────────────────────────────
+type RefreshResult =
+  | { status: "ok"; token: string }
+  | { status: "invalid" }      // session truly expired — logout
+  | { status: "network_error" }; // transient failure — do NOT logout
 
 // ── Core request with retry + timeout + auto-refresh ────────
 type RequestOpts = {
@@ -39,23 +47,33 @@ type RequestOpts = {
 };
 
 let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<RefreshResult> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+async function refreshAccessToken(): Promise<RefreshResult> {
   try {
     const { useAuthStore } = await import("@/stores/auth");
     const refreshToken = useAuthStore.getState().refreshToken;
-    if (!refreshToken) return null;
+    if (!refreshToken) return { status: "invalid" };
+
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
 
     const resp = await fetch(BASE_URL + "/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: controller?.signal,
     });
 
+    if (timer) clearTimeout(timer);
+
     if (!resp.ok) {
-      useAuthStore.getState().logout();
-      return null;
+      // 401/403 from refresh = session truly invalid → logout
+      if (resp.status === 401 || resp.status === 403) {
+        return { status: "invalid" };
+      }
+      // 5xx or other = server issue, not auth rejection
+      return { status: "network_error" };
     }
 
     const data = await resp.json();
@@ -63,9 +81,10 @@ async function refreshAccessToken(): Promise<string | null> {
     if (typeof window !== "undefined") {
       localStorage.setItem("aura_token", data.token);
     }
-    return data.token;
-  } catch {
-    return null;
+    return { status: "ok", token: data.token };
+  } catch (err: any) {
+    // Network timeout, offline, DNS failure — NOT a session problem
+    return { status: "network_error" };
   }
 }
 
@@ -91,42 +110,53 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
       if (timer) clearTimeout(timer);
       const data = await res.json().catch(() => ({}));
 
-      // SEC-02: Auto-refresh on 401
-      if (res.status === 401) {
-        // Try refresh once
-        if (!isRefreshing && !opts.token) {
+      // SEC-02 + AUTH-02: Smart 401 handling
+      if (res.status === 401 && !opts.token) {
+        if (!isRefreshing) {
           isRefreshing = true;
           refreshPromise = refreshAccessToken();
-          const newToken = await refreshPromise;
-          isRefreshing = false;
-          refreshPromise = null;
-
-          if (newToken) {
-            // Retry with new token
-            const retryHeaders = { ...headers, Authorization: "Bearer " + newToken };
-            const retryRes = await fetch(`${BASE_URL}${path}`, {
-              method, headers: retryHeaders,
-              body: body ? JSON.stringify(body) : undefined,
-            });
-            const retryData = await retryRes.json().catch(() => ({}));
-            if (retryRes.ok) return retryData as T;
-          }
-        } else if (isRefreshing && refreshPromise) {
-          // Another request is already refreshing, wait for it
-          const newToken = await refreshPromise;
-          if (newToken) {
-            const retryHeaders = { ...headers, Authorization: "Bearer " + newToken };
-            const retryRes = await fetch(`${BASE_URL}${path}`, {
-              method, headers: retryHeaders,
-              body: body ? JSON.stringify(body) : undefined,
-            });
-            const retryData = await retryRes.json().catch(() => ({}));
-            if (retryRes.ok) return retryData as T;
-          }
         }
 
-        if (_onUnauthorized) _onUnauthorized();
-        throw new ApiError((data as any).error || "Sessao expirada", 401, data);
+        const result = await refreshPromise!;
+        isRefreshing = false;
+        refreshPromise = null;
+
+        if (result.status === "ok") {
+          // Retry with new token
+          const retryHeaders = { ...headers, Authorization: "Bearer " + result.token };
+          const retryRes = await fetch(`${BASE_URL}${path}`, {
+            method, headers: retryHeaders,
+            body: body ? JSON.stringify(body) : undefined,
+          });
+          const retryData = await retryRes.json().catch(() => ({}));
+          if (retryRes.ok) return retryData as T;
+          // If retry also fails with 401, session is truly dead
+          if (retryRes.status === 401 && _onUnauthorized) _onUnauthorized();
+          throw new ApiError((retryData as any).error || "Sessao expirada", 401, retryData);
+        }
+
+        if (result.status === "invalid") {
+          // AUTH-02: confirmed auth rejection — safe to logout
+          if (_onUnauthorized) _onUnauthorized();
+          throw new ApiError((data as any).error || "Sessao expirada", 401, data);
+        }
+
+        // AUTH-02: network_error — do NOT logout, let retry loop handle it
+        if (attempt < retry) {
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          continue;
+        }
+        throw new ApiError(
+          "Falha de conexao. Verifique sua internet.",
+          0,
+          null,
+          true
+        );
+      }
+
+      // Explicit 401 with manual token (e.g. authApi.me) — just throw
+      if (res.status === 401) {
+        throw new ApiError((data as any).error || "Nao autorizado", 401, data);
       }
 
       if (res.status === 429 && attempt < retry) {
@@ -140,13 +170,14 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     } catch (err: any) {
       lastError = err;
       if (err instanceof ApiError) throw err;
+      // AUTH-02: network errors retry silently, never trigger logout
       if (attempt < retry) {
         await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
         continue;
       }
     }
   }
-  throw lastError || new Error("Erro de rede desconhecido");
+  throw lastError || new ApiError("Erro de conexao. Verifique sua internet.", 0, null, true);
 }
 
 // ── Types ───────────────────────────────────────────────────
