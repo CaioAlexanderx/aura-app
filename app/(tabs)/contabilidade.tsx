@@ -10,8 +10,6 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { AgentBanner } from "@/components/AgentBanner";
 import { useAuthStore } from "@/stores/auth";
-import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
-import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
 
 const TABS = ["Checkpoints", "Guias", "Histórico"];
 type Step = { text: string; auto: boolean; media: string | null; hint: string };
@@ -351,7 +349,7 @@ export default function ContabilidadeScreen() {
   const [gid, sGid] = useState<string | null>(null);
   const sel = gid ? obligations.find(o => o.id === gid) : null;
   if (sel) return <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} /><Guide o={sel} onBack={() => sGid(null)} /><DemoBanner /></ScrollView>;
+</ScrollView>;
 
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
