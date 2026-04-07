@@ -8,11 +8,9 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { DemoTour } from "@/components/DemoTour";
 import { TrialBanner } from "@/components/TrialBanner";
-import { useFirstTimeTooltip, TooltipBanner } from "@/components/TooltipBanner";
-import { hapticLight, hapticSuccess, withHaptic } from "@/hooks/useHaptics";
+import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
+import { toast } from "@/components/Toast";
 
-// Reactive on web via resize listener in useScreenWidth (see _layout.tsx)
-// For components, we use initial value + re-mount on significant changes
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : fmt(n);
@@ -22,6 +20,8 @@ function gm(){return new Date().toLocaleString("pt-BR",{month:"long"}).replace(/
 const MOCK={revenue:18420,expenses:7840,net:10580,salesToday:1250,avgTicket:391.91,newCustomers:12,revenueDelta:12,expensesDelta:3,netDelta:18,dasAlert:{days:14,amount:76.90},sparkRevenue:[12400,13800,15200,14100,16800,17200,18420],sparkExpenses:[6200,6800,7100,6900,7400,7600,7840],sparkNet:[6200,7000,8100,7200,9400,9600,10580],
 recentSales:[{id:"1",customer:"Maria Silva",amount:156.80,time:"14:32",method:"Pix"},{id:"2",customer:"Pedro Costa",amount:89.90,time:"13:15",method:"Cartao"},{id:"3",customer:"Ana Oliveira",amount:234.50,time:"11:47",method:"Dinheiro"},{id:"4",customer:"Joao Santos",amount:67.00,time:"10:20",method:"Pix"}],
 obligations:[{id:"1",name:"DAS-MEI",due:"20/04/2026",amount:76.90,status:"pending",category:"aura_resolve"},{id:"2",name:"DASN-SIMEI",due:"31/05/2026",amount:null,status:"future",category:"aura_facilita"},{id:"3",name:"FGTS",due:"07/04/2026",amount:320.00,status:"pending",category:"aura_resolve"},{id:"4",name:"eSocial",due:"15/04/2026",amount:null,status:"future",category:"aura_facilita"}]};
+
+const EMPTY_DATA={revenue:0,expenses:0,net:0,salesToday:0,avgTicket:0,newCustomers:0,revenueDelta:0,expensesDelta:0,netDelta:0,sparkRevenue:[],sparkExpenses:[],sparkNet:[],recentSales:[],obligations:[]};
 
 function Av({name}:{name:string}){return <View style={av.c}><Text style={av.l}>{(name||"A").charAt(0).toUpperCase()}</Text></View>;}
 const av=StyleSheet.create({c:{width:42,height:42,borderRadius:21,backgroundColor:Colors.violet,alignItems:"center",justifyContent:"center"},l:{fontSize:16,fontWeight:"700",color:"#fff"}});
@@ -39,7 +39,7 @@ function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress,sparkData,spa
     <View style={k.header}><View style={[k.ic,{backgroundColor:iconColor+"22",borderColor:iconColor+"44"}]}><Icon name={ic as any} size={20} color={iconColor}/></View>{large&&<View style={[k.sb,{backgroundColor:iconColor+"18"}]}><Text style={[k.st,{color:iconColor}]}>Destaque</Text></View>}</View>
     <Text style={[k.val,large&&{fontSize:28}]}>{value}</Text><Text style={k.lb}>{label}</Text>
     {delta&&<View style={[k.db,{backgroundColor:deltaUp?Colors.greenD:Colors.redD}]}><Text style={[k.dt,{color:deltaUp?Colors.green:Colors.red}]}>{deltaUp?"+":"-"} {delta}</Text></View>}
-    {sparkData && <Sparkline data={sparkData} color={sparkColor || Colors.violet3} />}
+    {sparkData && sparkData.length > 1 && <Sparkline data={sparkData} color={sparkColor || Colors.violet3} />}
   </HC>;
 }
 const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padding:18,borderWidth:1,borderColor:Colors.border,flex:1,minWidth:IS?160:"45%",margin:5},large:{borderColor:Colors.border2,backgroundColor:Colors.bg4,borderWidth:1.5,minWidth:IS?260:"45%",flex:2},header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:14},ic:{width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1},sb:{borderRadius:6,paddingHorizontal:8,paddingVertical:3},st:{fontSize:9,fontWeight:"700",letterSpacing:0.3},val:{fontSize:22,fontWeight:"800",color:Colors.ink,letterSpacing:-0.5,marginBottom:4},lb:{fontSize:11,color:Colors.ink3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10},db:{alignSelf:"flex-start",borderRadius:6,paddingHorizontal:8,paddingVertical:3},dt:{fontSize:10,fontWeight:"600"}});
@@ -47,7 +47,7 @@ const k=StyleSheet.create({card:{backgroundColor:Colors.bg3,borderRadius:16,padd
 function QA({ic,iconColor,label,onPress}:{ic:string;iconColor:string;label:string;onPress?:()=>void}){
   const[h,sH]=useState(false);const w=Platform.OS==="web";
   return <Pressable style={[qa.btn,w&&{transition:"all 0.2s ease"}as any]} onHoverIn={w?()=>sH(true):undefined} onHoverOut={w?()=>sH(false):undefined} onPress={onPress}>
-    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55",animation:"auraBounce 0.4s ease"},w&&{transition:"all 0.2s ease"}as any]}><Icon name={ic as any} size={22} color={iconColor}/></View>
+    <View style={[qa.iw,{borderColor:iconColor+"33"},h&&{backgroundColor:iconColor+"18",borderColor:iconColor+"55"},w&&{transition:"all 0.2s ease"}as any]}><Icon name={ic as any} size={22} color={iconColor}/></View>
     <Text style={[qa.lb,h&&{color:Colors.ink}]}>{label}</Text>
   </Pressable>;
 }
@@ -76,58 +76,108 @@ function useCountUp(target, dur) { dur = dur || 1200; const [v, sv] = useState(0
 
 // W-03: Sparkline
 function Sparkline({ data, color, w, h }) { w=w||60; h=h||20; if(Platform.OS!=="web"||!data||data.length<2) return null; var mx=Math.max.apply(null,data),mn=Math.min.apply(null,data),r=mx-mn||1; var pts=data.map(function(v,i){return((i/(data.length-1))*w)+","+(h-((v-mn)/r)*(h-4)-2)}).join(" "); return <div style={{width:w,height:h,marginTop:4}} dangerouslySetInnerHTML={{__html:'<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/></svg>'}} />; }
+
+// S2: Empty state for new companies
+function EmptyDashboard({name,onPress}:{name:string;onPress:(p:string)=>void}){
+  return (
+    <View style={emp.wrap}>
+      <View style={emp.iconWrap}><Icon name="star" size={32} color={Colors.violet3} /></View>
+      <Text style={emp.title}>Bem-vindo, {name}!</Text>
+      <Text style={emp.sub}>Seu dashboard vai ganhar vida conforme voce usar a Aura. Comece por uma dessas acoes:</Text>
+      <View style={emp.actions}>
+        <Pressable style={emp.action} onPress={()=>onPress("/financeiro")}><Icon name="dollar" size={18} color={Colors.green} /><Text style={emp.actionText}>Lancar receita</Text></Pressable>
+        <Pressable style={emp.action} onPress={()=>onPress("/estoque")}><Icon name="package" size={18} color={Colors.amber} /><Text style={emp.actionText}>Cadastrar produto</Text></Pressable>
+        <Pressable style={emp.action} onPress={()=>onPress("/clientes")}><Icon name="user_plus" size={18} color={Colors.violet3} /><Text style={emp.actionText}>Adicionar cliente</Text></Pressable>
+      </View>
+    </View>
+  );
+}
+const emp=StyleSheet.create({wrap:{backgroundColor:Colors.bg3,borderRadius:20,padding:28,borderWidth:1,borderColor:Colors.border2,alignItems:"center",marginBottom:28},iconWrap:{width:64,height:64,borderRadius:32,backgroundColor:Colors.violetD,alignItems:"center",justifyContent:"center",marginBottom:16},title:{fontSize:20,fontWeight:"700",color:Colors.ink,marginBottom:8},sub:{fontSize:13,color:Colors.ink3,textAlign:"center",lineHeight:20,marginBottom:24,maxWidth:360},actions:{flexDirection:IS?"row":"column",gap:10,width:"100%"},action:{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:Colors.bg4,borderRadius:12,padding:14,borderWidth:1,borderColor:Colors.border,flex:1},actionText:{fontSize:13,color:Colors.ink,fontWeight:"500"}});
+
 export default function DashboardScreen(){
   const{user,company,token,isDemo,logout}=useAuthStore();const router=useRouter();
-  const{data}=useQuery({queryKey:["dashboard",company?.id],queryFn: () => dashboardApi.aggregate(company!.id),enabled:!!company?.id&&!!token&&!isDemo,retry:1});
-  const d=isDemo?MOCK:(data??MOCK);const greeting=grt();const month=gm();const year=new Date().getFullYear();const go=(p:string)=>router.push(p as any);
+
+  // S2: real data query — only for non-demo users
+  const{data,isLoading,isError}=useQuery({
+    queryKey:["dashboard",company?.id],
+    queryFn: () => dashboardApi.aggregate(company!.id),
+    enabled:!!company?.id&&!!token&&!isDemo,
+    retry:1,
+    staleTime: 60000, // 1 min cache
+  });
+
+  // S2: show error toast once
+  useEffect(()=>{
+    if(isError && !isDemo) toast.error("Erro ao carregar dashboard. Verifique sua conexao.");
+  },[isError]);
+
+  // S2: data resolution — demo=MOCK, loading=null, real=API, empty=EMPTY
+  const d = isDemo ? MOCK : (data || EMPTY_DATA);
+  const isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
+
+  const greeting=grt();const month=gm();const year=new Date().getFullYear();
+  const go=(p:string)=>router.push(p as any);
 
   return (
     <View style={{flex:1}}>
       <DemoTour visible={isDemo} />
       <TrialBanner />
+      <SkeletonStyle />
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>
-        <TooltipBanner tip={activeTip} visible={tipVisible} onDismiss={dismissTip} />
         <View style={s.header}>
           <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
           <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>
         </View>
 
-        <HC style={s.hero} onPress={()=>go("/financeiro")}>
-          <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>Saudável</Text></View></View>
-          <Text style={s.hv}>{fmt(useCountUp(d.net))}</Text><Text style={s.hl2}>Lucro líquido do mês</Text>
-          {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.daTxt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
-        </HC>
+        {/* S2: Loading skeleton */}
+        {isLoading && !isDemo && <SkeletonDashboard />}
 
-        <Text style={s.sec}>Visão geral</Text>
-        <View style={s.grid}>
-          <KPI idx={0} ic="dollar" iconColor={Colors.green} label="RECEITA DO MÊS" value={fmtK(d.revenue)} delta={`${d.revenueDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
-          <KPI idx={1} ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={`${d.expensesDelta}% vs anterior`} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
-          <KPI idx={2} ic="trending_up" iconColor={Colors.green} label="LUCRO LÍQUIDO" value={fmtK(d.net)} delta={`${d.netDelta}% vs anterior`} deltaUp large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
-          <KPI idx={3} ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={fmt(d.salesToday)} onPress={()=>go("/pdv")}/>
-          <KPI idx={4} ic="receipt" iconColor={Colors.amber} label="TICKET MÉDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
-          <KPI idx={5} ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta="este mes" deltaUp onPress={()=>go("/clientes")}/>
-        </View>
+        {/* S2: Empty state for new companies */}
+        {isEmpty && <EmptyDashboard name={user?.name?.split(" ")[0]??"usuario"} onPress={go} />}
 
-        <Text style={s.sec}>Acesso rápido</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
-          <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
-          <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
-          <QA ic="package" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
-          <QA ic="file_text" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
-          <QA ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
-          <QA ic="users" iconColor={Colors.violet3} label="Clientes" onPress={()=>go("/clientes")}/>
-        </ScrollView>
+        {/* Main dashboard content — visible when not loading and not empty */}
+        {!isLoading && !isEmpty && <>
+          <HC style={s.hero} onPress={()=>go("/financeiro")}>
+            <View style={s.ht}><Text style={s.he}>{month} {year}</Text><View style={s.hb}><View style={s.hd}/><Text style={s.hx}>{d.net >= 0 ? "Saudavel" : "Atencao"}</Text></View></View>
+            <Text style={s.hv}>{fmt(useCountUp(d.net))}</Text><Text style={s.hl2}>Lucro liquido do mes</Text>
+            {d.dasAlert&&<Pressable onPress={()=>go("/contabilidade")} style={s.da}><Icon name="alert" size={16} color={Colors.amber}/><Text style={s.daTxt}>DAS vence em {d.dasAlert.days} dias - estimativa {fmt(d.dasAlert.amount)}</Text><Text style={s.dl}>Ver</Text></Pressable>}
+          </HC>
 
-        <View style={s.sh}><Text style={s.sec}>Obrigações contábeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
-        <HC style={s.lc} onPress={()=>go("/contabilidade")}>
-          {(d.obligations??MOCK.obligations).map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
-          <View style={s.lf}><Text style={s.lft}>Apoio contábil informativo</Text></View>
-        </HC>
+          <Text style={s.sec}>Visao geral</Text>
+          <View style={s.grid}>
+            <KPI idx={0} ic="dollar" iconColor={Colors.green} label="RECEITA DO MES" value={fmtK(d.revenue)} delta={d.revenueDelta ? `${d.revenueDelta}% vs anterior` : undefined} deltaUp={d.revenueDelta > 0} large onPress={()=>go("/financeiro")} sparkData={d.sparkRevenue} sparkColor={Colors.green}/>
+            <KPI idx={1} ic="trending_down" iconColor={Colors.red} label="DESPESAS" value={fmtK(d.expenses)} delta={d.expensesDelta ? `${d.expensesDelta}% vs anterior` : undefined} deltaUp={false} onPress={()=>go("/financeiro")} sparkData={d.sparkExpenses} sparkColor={Colors.red}/>
+            <KPI idx={2} ic="trending_up" iconColor={Colors.green} label="LUCRO LIQUIDO" value={fmtK(d.net)} delta={d.netDelta ? `${d.netDelta}% vs anterior` : undefined} deltaUp={d.netDelta > 0} large onPress={()=>go("/financeiro")} sparkData={d.sparkNet} sparkColor={Colors.green}/>
+            <KPI idx={3} ic="bag" iconColor={Colors.violet3} label="VENDAS HOJE" value={fmt(d.salesToday)} onPress={()=>go("/pdv")}/>
+            <KPI idx={4} ic="receipt" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
+            <KPI idx={5} ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} delta={d.newCustomers > 0 ? "este mes" : undefined} deltaUp onPress={()=>go("/clientes")}/>
+          </View>
 
-        <View style={s.sh}><Text style={s.sec}>Últimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
-        <HC style={s.lc}>
-          {(d.recentSales??MOCK.recentSales).map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
-        </HC>
+          <Text style={s.sec}>Acesso rapido</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
+            <QA ic="cart" iconColor={Colors.green} label="PDV" onPress={()=>go("/pdv")}/>
+            <QA ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={()=>go("/financeiro")}/>
+            <QA ic="package" iconColor={Colors.amber} label="Estoque" onPress={()=>go("/estoque")}/>
+            <QA ic="file_text" iconColor={Colors.red} label="NF-e" onPress={()=>go("/nfe")}/>
+            <QA ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={()=>go("/contabilidade")}/>
+            <QA ic="users" iconColor={Colors.violet3} label="Clientes" onPress={()=>go("/clientes")}/>
+          </ScrollView>
+
+          {(d.obligations?.length > 0) && <>
+            <View style={s.sh}><Text style={s.sec}>Obrigacoes contabeis</Text><View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View></View>
+            <HC style={s.lc} onPress={()=>go("/contabilidade")}>
+              {d.obligations.map((o:any)=><OR key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} onPress={()=>go("/contabilidade")}/>)}
+              <View style={s.lf}><Text style={s.lft}>Apoio contabil informativo</Text></View>
+            </HC>
+          </>}
+
+          {(d.recentSales?.length > 0) && <>
+            <View style={s.sh}><Text style={s.sec}>Ultimas vendas</Text><TouchableOpacity onPress={()=>go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity></View>
+            <HC style={s.lc}>
+              {d.recentSales.map((sl:any)=><SR key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} onPress={()=>go("/clientes")}/>)}
+            </HC>
+          </>}
+        </>}
 
         {isDemo&&<View style={s.dm}><Text style={s.dmt}>Modo demonstrativo - dados ilustrativos</Text></View>}
       </ScrollView>
