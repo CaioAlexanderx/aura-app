@@ -7,7 +7,6 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
 import { ToastContainer } from "@/components/Toast";
-// Onboarding removed — register goes directly to dashboard
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
@@ -58,9 +57,7 @@ function isA(p: string, r: string) {
 }
 
 function AuraLogo({ C, collapsed }: { C: ReturnType<typeof useColors>; collapsed: boolean }) {
-  if (collapsed) {
-    return <Image source={{ uri: LOGO_SVG }} style={{ width: 32, height: 32 }} resizeMode="contain" />;
-  }
+  if (collapsed) return <Image source={{ uri: LOGO_SVG }} style={{ width: 32, height: 32 }} resizeMode="contain" />;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       <Image source={{ uri: LOGO_SVG }} style={{ width: 36, height: 36 }} resizeMode="contain" />
@@ -92,8 +89,8 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
   return (
-    <View style={[{ width: sw, backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, justifyContent: "flex-start" }, { transition: "width 0.25s ease, padding 0.25s ease" } as any]}>
-      {/* Logo + Toggle */}
+    // CRIT-01: Added height '100%' + overflow 'hidden' so ScrollView scrolls
+    <View style={[{ width: sw, height: '100%', backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, justifyContent: "flex-start", overflow: "hidden" as any }, { transition: "width 0.25s ease, padding 0.25s ease" } as any]}>
       <View style={{ flexDirection: "row", alignItems: collapsed ? "center" : "center", justifyContent: collapsed ? "center" : "space-between", paddingHorizontal: collapsed ? 0 : 8, paddingBottom: 14 }}>
         <Pressable onPress={() => ro.push("/")}><AuraLogo C={C} collapsed={collapsed} /></Pressable>
         {!collapsed && (
@@ -102,17 +99,15 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           </Pressable>
         )}
       </View>
-
-      {/* Collapse toggle when collapsed - at top */}
       {collapsed && (
         <Pressable onPress={onToggle} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
           <Icon name="chevron_right" size={14} color={C.ink3} />
         </Pressable>
       )}
-
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
 
-      <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={false}>
+      {/* CRIT-01: ScrollView with flex:1 inside height:100% container = scrollable */}
+      <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={true}>
         {NAV.map(s => (
           <View key={s.s} style={{ marginBottom: collapsed ? 8 : 16 }}>
             {!collapsed && <Text style={{ fontSize: 10, color: C.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }}>{s.s}</Text>}
@@ -123,8 +118,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       </ScrollView>
 
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
-
-      <View style={{ paddingTop: 6, gap: 4 }}>
+      <View style={{ paddingTop: 6, gap: 4, flexShrink: 0 }}>
         {!collapsed ? (
           <>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, marginBottom: 8 }}>
@@ -138,25 +132,16 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name="settings" size={14} color={C.ink3} /><Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Configuracoes</Text>
             </Pressable>
-            
             <Pressable onPress={logout} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name="logout" size={14} color={C.ink3} /><Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Sair</Text>
             </Pressable>
           </>
         ) : (
           <>
-            <Pressable onPress={() => ro.push("/")} style={{ alignSelf: "center", width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center", marginBottom: 4 }} {...(Platform.OS === "web" ? { title: u?.name || "Perfil" } : {})}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>{(u?.name || "A").charAt(0).toUpperCase()}</Text>
-            </Pressable>
-            <Pressable onPress={toggle} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: isDark ? "Modo claro" : "Modo escuro" } : {})}>
-              <Icon name={isDark ? "sun" : "moon"} size={14} color={C.ink3} />
-            </Pressable>
-            <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Configuracoes" } : {})}>
-              <Icon name="settings" size={14} color={C.ink3} />
-            </Pressable>
-            <Pressable onPress={logout} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Sair" } : {})}>
-              <Icon name="logout" size={14} color={C.ink3} />
-            </Pressable>
+            <Pressable onPress={() => ro.push("/")} style={{ alignSelf: "center", width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center", marginBottom: 4 }} {...(Platform.OS === "web" ? { title: u?.name || "Perfil" } : {})}><Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>{(u?.name || "A").charAt(0).toUpperCase()}</Text></Pressable>
+            <Pressable onPress={toggle} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: isDark ? "Modo claro" : "Modo escuro" } : {})}><Icon name={isDark ? "sun" : "moon"} size={14} color={C.ink3} /></Pressable>
+            <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Configuracoes" } : {})}><Icon name="settings" size={14} color={C.ink3} /></Pressable>
+            <Pressable onPress={logout} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Sair" } : {})}><Icon name="logout" size={14} color={C.ink3} /></Pressable>
           </>
         )}
       </View>
@@ -184,7 +169,7 @@ function MBar() {
     { r: "/agendamento", l: "Agenda", ic: "calendar" },
     { r: "/agentes", l: "Agentes", ic: "brain" },
     { r: "/suporte", l: "Seu Analista", ic: "headset" },
-    { r: "/configuracoes", l: "Configurações", ic: "settings" },
+    { r: "/configuracoes", l: "Configuracoes", ic: "settings" },
   ];
   return (
     <View style={{ position: "relative" }}>
@@ -225,7 +210,6 @@ function MBar() {
 }
 
 export default function TabsLayout() {
-  // VER-02: Vertical modules
   const { activeModules, hasModule, primaryModule } = useModules();
   const verticalTheme = useVerticalTheme();
   useWebFonts();
@@ -238,16 +222,11 @@ export default function TabsLayout() {
   const isNarrow = screenW <= 768;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isNarrow);
 
-  // Auto-collapse/expand when crossing breakpoint
-  useEffect(() => {
-    setSidebarCollapsed(isNarrow);
-  }, [isNarrow]);
+  useEffect(() => { setSidebarCollapsed(isNarrow); }, [isNarrow]);
 
   const grad = isDark
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
-
-  // Onboarding gate removed — users go directly to dashboard
 
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
@@ -259,11 +238,8 @@ export default function TabsLayout() {
     </div>
   );
 
-  // Onboarding gate removed — users go directly to dashboard
-
   return (
     <ErrorBoundary>
-    
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View key={themeKey} style={{ flex: 1 }}>
         <ToastContainer />
@@ -271,6 +247,6 @@ export default function TabsLayout() {
       </View>
       <MBar />
     </View>
-      </ErrorBoundary>
+    </ErrorBoundary>
   );
 }
