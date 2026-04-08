@@ -18,7 +18,6 @@ export function TabRetirada({ transactions }: Props) {
   const realIncome = useMemo(() => transactions.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
   const realExpenses = useMemo(() => transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
 
-  // P-03: Auto-detect regime from company data
   const regime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" ? "mei" : "simples";
   const cfg = REGIME_CONFIG[regime];
 
@@ -50,7 +49,6 @@ export function TabRetirada({ transactions }: Props) {
       <View style={s.header}>
         <Text style={s.headerTitle}>Quanto voce pode retirar?</Text>
         <Text style={s.headerDesc}>Simulacao baseada na sua receita, despesas e regime tributario.</Text>
-        {/* P-03: Show detected regime as info badge (not toggle) */}
         <View style={s.regimeInfo}>
           <View style={s.regimeBadge}><Text style={s.regimeText}>{cfg.label}</Text></View>
           <Text style={s.regimeHint}>{regime === "mei" ? "DAS fixo R$ 75,90/mes. Sem obrigacao de pro-labore." : "DAS de 6% sobre receita. Pro-labore obrigatorio (Fator R)."}</Text>
@@ -118,7 +116,8 @@ export function TabRetirada({ transactions }: Props) {
 
           {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"\u2022"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"\u2022"} Limite: R$ 81.000/ano ({fmt(81000/12)}/mes)</Text><Text style={s.meiInfoText}>{"\u2022"} Receita anual estimada: {fmt(rev * 12)} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
 
-          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Estimativas para apoio a decisao. Consulte seu contador.</Text></View>
+          {/* A7: Removed "Consulte seu contador" — replaced with "valores para referência" */}
+          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Valores para referencia e apoio a decisao. Resultados baseados nos lancamentos registrados.</Text></View>
         </View>
       )}
     </View>
