@@ -1,137 +1,228 @@
 import { useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
-import type { Transaction, DreData } from "./types";
+import type { Transaction } from "./types";
 import { fmt } from "./types";
 
-type Props = { transactions: Transaction[]; dreApi: DreData | null };
+type Props = { transactions: Transaction[]; dreApi: any };
 
-function CategoryBar({ label, amount, total, color }: { label: string; amount: number; total: number; color: string }) {
-  const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
+// ── Health Hero ──────────────────────────────────────────────
+function HealthHero({ income, expenses, balance, marginPct, txCount }: { income: number; expenses: number; balance: number; marginPct: number; txCount: number }) {
+  const status = balance > 0 && marginPct >= 20 ? "Saudavel" : balance > 0 ? "Atencao" : "Critico";
+  const statusColor = status === "Saudavel" ? Colors.green : status === "Atencao" ? Colors.amber : Colors.red;
+  const statusBg = status === "Saudavel" ? Colors.greenD : status === "Atencao" ? Colors.amberD : Colors.redD;
+
+  const message = balance <= 0
+    ? `Suas despesas superaram receitas em ${fmt(Math.abs(balance))}. Para empatar, faltam ${fmt(Math.abs(balance))} em receita ou reducao equivalente em custos.`
+    : marginPct < 15
+    ? `Margem apertada de ${marginPct}%. Seu caixa esta positivo, mas qualquer despesa extra pode inverter o resultado.`
+    : `Resultado positivo com margem de ${marginPct}%. Continue monitorando para manter a saude do negocio.`;
+
   return (
-    <View style={s.catRow}>
-      <View style={s.catInfo}>
-        <Text style={s.catLabel}>{label}</Text>
-        <Text style={[s.catAmount, { color }]}>{fmt(amount)}</Text>
+    <View style={s.hero}>
+      <View style={s.heroTop}>
+        <Text style={s.heroLabel}>Saude financeira do periodo</Text>
+        <View style={[s.statusBadge, { backgroundColor: statusBg }]}><View style={[s.statusDot, { backgroundColor: statusColor }]} /><Text style={[s.statusText, { color: statusColor }]}>{status}</Text></View>
       </View>
-      <View style={s.catBarTrack}>
-        <View style={[s.catBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+      <View style={s.heroKpis}>
+        <View style={s.heroKpi}><Text style={s.heroKpiLabel}>Receita</Text><Text style={[s.heroKpiValue, { color: Colors.green }]}>{fmt(income)}</Text></View>
+        <View style={[s.heroKpi, s.heroKpiBorder]}><Text style={s.heroKpiLabel}>Despesas</Text><Text style={[s.heroKpiValue, { color: Colors.red }]}>{fmt(expenses)}</Text></View>
+        <View style={s.heroKpi}><Text style={s.heroKpiLabel}>Resultado</Text><Text style={[s.heroKpiValue, { color: balance >= 0 ? Colors.green : Colors.red }]}>{fmt(balance)}</Text></View>
       </View>
-      <Text style={[s.catPct, { color }]}>{pct}%</Text>
+      <Text style={s.heroMessage}>{message}</Text>
+      <View style={s.heroBar}><View style={[s.heroBarFill, { width: `${Math.min(expenses > 0 && income > 0 ? (expenses/income)*100 : 0, 100)}%`, backgroundColor: statusColor }]} /></View>
     </View>
   );
 }
 
-function KpiCard({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
+// ── Alert Strip ──────────────────────────────────────────────
+function AlertStrip({ alerts }: { alerts: { text: string; color: string; icon: string }[] }) {
+  if (alerts.length === 0) return null;
   return (
-    <View style={s.kpi}>
-      <Text style={s.kpiLabel}>{label}</Text>
-      <Text style={[s.kpiValue, color ? { color } : {}]}>{value}</Text>
-      {sub && <Text style={s.kpiSub}>{sub}</Text>}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 8 }}>
+      {alerts.map((a, i) => (
+        <View key={i} style={[s.alertCard, { borderLeftColor: a.color }]}>
+          <Text style={[s.alertIcon, { color: a.color }]}>{a.icon}</Text>
+          <Text style={s.alertText}>{a.text}</Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ── Narrative Block ──────────────────────────────────────────
+function NarrativeBlock({ insights }: { insights: string[] }) {
+  if (insights.length === 0) return null;
+  return (
+    <View style={s.narrativeCard}>
+      <Text style={s.narrativeTitle}>Por que esse resultado?</Text>
+      {insights.map((ins, i) => (
+        <View key={i} style={s.narrativeRow}>
+          <Text style={s.narrativeBullet}>•</Text>
+          <Text style={s.narrativeText}>{ins}</Text>
+        </View>
+      ))}
     </View>
   );
 }
 
+// ── Category Breakdown ───────────────────────────────────────
+function CategorySection({ title, items, total, color }: { title: string; items: { category: string; amount: number }[]; total: number; color: string }) {
+  if (items.length === 0) return null;
+  return (
+    <View style={s.catSection}>
+      <Text style={s.catSectionTitle}>{title}</Text>
+      <View style={s.catCard}>
+        {items.map(item => {
+          const pct = total > 0 ? Math.round((item.amount / total) * 100) : 0;
+          return (
+            <View key={item.category} style={s.catRow}>
+              <View style={s.catInfo}>
+                <Text style={s.catLabel}>{item.category}</Text>
+                <Text style={[s.catAmount, { color }]}>{fmt(item.amount)}</Text>
+              </View>
+              <View style={s.catBarTrack}><View style={[s.catBarFill, { width: `${pct}%`, backgroundColor: color }]} /></View>
+              <Text style={[s.catPct, { color }]}>{pct}%</Text>
+            </View>
+          );
+        })}
+        <View style={s.catTotal}><Text style={s.catTotalLabel}>Total</Text><Text style={[s.catTotalValue, { color }]}>{fmt(total)}</Text></View>
+      </View>
+    </View>
+  );
+}
+
+// ── KPI Strip ────────────────────────────────────────────────
+function KpiStrip({ kpis }: { kpis: { label: string; value: string; color?: string; sub?: string }[] }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 8 }}>
+      {kpis.map(k => (
+        <View key={k.label} style={s.kpiCard}>
+          <Text style={s.kpiLabel}>{k.label}</Text>
+          <Text style={[s.kpiValue, k.color ? { color: k.color } : {}]}>{k.value}</Text>
+          {k.sub && <Text style={s.kpiSub}>{k.sub}</Text>}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────
 export function TabResumo({ transactions, dreApi }: Props) {
-  // Compute from transactions if API DRE not available
   const computed = useMemo(() => {
     if (transactions.length === 0) return null;
-
     const incomeMap: Record<string, number> = {};
     const expenseMap: Record<string, number> = {};
     let totalIncome = 0, totalExpenses = 0;
-
     transactions.forEach(t => {
-      if (t.type === "income") {
-        incomeMap[t.category] = (incomeMap[t.category] || 0) + t.amount;
-        totalIncome += t.amount;
-      } else {
-        expenseMap[t.category] = (expenseMap[t.category] || 0) + t.amount;
-        totalExpenses += t.amount;
-      }
+      if (t.type === "income") { incomeMap[t.category] = (incomeMap[t.category] || 0) + t.amount; totalIncome += t.amount; }
+      else { expenseMap[t.category] = (expenseMap[t.category] || 0) + t.amount; totalExpenses += t.amount; }
     });
-
     const incomeItems = Object.entries(incomeMap).sort((a, b) => b[1] - a[1]).map(([category, amount]) => ({ category, amount }));
     const expenseItems = Object.entries(expenseMap).sort((a, b) => b[1] - a[1]).map(([category, amount]) => ({ category, amount }));
-    const netProfit = totalIncome - totalExpenses;
-    const marginPct = totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0;
+    const balance = totalIncome - totalExpenses;
+    const marginPct = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0;
     const incomeCount = transactions.filter(t => t.type === "income").length;
+    const expenseCount = transactions.filter(t => t.type === "expense").length;
     const avgTicket = incomeCount > 0 ? totalIncome / incomeCount : 0;
 
-    return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit, marginPct, avgTicket, txCount: transactions.length, incomeCount };
+    // Alerts
+    const alerts: { text: string; color: string; icon: string }[] = [];
+    if (balance < 0) alerts.push({ text: `Resultado negativo: ${fmt(Math.abs(balance))}`, color: Colors.red, icon: "!" });
+    if (expenseItems[0] && totalExpenses > 0 && expenseItems[0].amount / totalExpenses > 0.5) alerts.push({ text: `${expenseItems[0].category}: ${Math.round(expenseItems[0].amount/totalExpenses*100)}% das despesas`, color: Colors.amber, icon: "$" });
+    if (marginPct > 0 && marginPct < 15) alerts.push({ text: `Margem de ${marginPct}% - muito apertada`, color: Colors.amber, icon: "!" });
+    if (incomeCount <= 3 && avgTicket > 500) alerts.push({ text: `Apenas ${incomeCount} vendas - risco de concentracao`, color: Colors.amber, icon: "#" });
+
+    // Narrative insights
+    const insights: string[] = [];
+    if (expenseItems.length > 0) insights.push(`${expenseItems[0].category} representou ${Math.round(expenseItems[0].amount/totalExpenses*100)}% das suas despesas totais.`);
+    if (incomeItems.length > 1) insights.push(`"${incomeItems[0].category}" foi sua principal fonte de receita com ${Math.round(incomeItems[0].amount/totalIncome*100)}% do total.`);
+    if (incomeCount > 0 && avgTicket > 0) {
+      if (incomeCount <= 3) insights.push(`Com apenas ${incomeCount} vendas, seu modelo depende de poucas transacoes com ticket alto (${fmt(avgTicket)}).`);
+      else insights.push(`${incomeCount} vendas com ticket medio de ${fmt(avgTicket)}.`);
+    }
+    if (balance < 0 && incomeCount > 0) {
+      const extraSalesNeeded = Math.ceil(Math.abs(balance) / avgTicket);
+      insights.push(`Se aumentar em ${extraSalesNeeded} vendas o volume atual, o resultado tende a virar positivo.`);
+    }
+    if (balance < 0 && totalExpenses > 0) {
+      const cutPct = Math.round((Math.abs(balance) / totalExpenses) * 100);
+      insights.push(`Uma reducao de ${cutPct}% nas despesas eliminaria o prejuizo.`);
+    }
+
+    // KPIs
+    const kpis = [
+      { label: "Margem", value: `${marginPct}%`, color: marginPct >= 20 ? Colors.green : marginPct >= 0 ? Colors.amber : Colors.red, sub: marginPct >= 20 ? "Saudavel" : marginPct >= 0 ? "Atencao" : "Critico" },
+      { label: "Ticket medio", value: fmt(avgTicket), sub: `${incomeCount} vendas` },
+      { label: "Ponto equilibrio", value: totalExpenses > 0 && marginPct > 0 ? fmt(totalExpenses / (marginPct/100)) : "---", sub: "receita necessaria" },
+      { label: "Lancamentos", value: String(transactions.length), sub: `${incomeCount} entradas / ${expenseCount} saidas` },
+    ];
+
+    return { totalIncome, totalExpenses, balance, marginPct, incomeItems, expenseItems, alerts, insights, kpis, txCount: transactions.length };
   }, [transactions]);
 
-  if (!computed) return <EmptyState icon="receipt" iconColor={Colors.violet3} title="Analise financeira" subtitle="Registre receitas e despesas para visualizar a analise completa com indicadores e comparativos." />;
-
-  const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit, marginPct, avgTicket, txCount, incomeCount } = computed;
+  if (!computed) return <EmptyState icon="receipt" iconColor={Colors.violet3} title="Analise financeira" subtitle="Registre receitas e despesas para ativar a analise com indicadores, categorias e insights automaticos." />;
 
   return (
     <View>
-      {/* KPI Row */}
-      <View style={s.kpiRow}>
-        <KpiCard label="MARGEM" value={`${marginPct}%`} color={marginPct >= 20 ? Colors.green : marginPct >= 0 ? Colors.amber : Colors.red} sub={marginPct >= 30 ? "Saudavel" : marginPct >= 10 ? "Atencao" : "Critico"} />
-        <KpiCard label="TICKET MEDIO" value={fmt(avgTicket)} sub={`${incomeCount} vendas`} />
-        <KpiCard label="RESULTADO" value={fmt(netProfit)} color={netProfit >= 0 ? Colors.green : Colors.red} sub={netProfit >= 0 ? "Lucro" : "Prejuizo"} />
-      </View>
-
-      {/* Resultado card */}
-      <View style={s.resultCard}>
-        <View style={s.resultRow}>
-          <View style={{ flex: 1 }}><Text style={s.resultLabel}>Receitas</Text><Text style={[s.resultValue, { color: Colors.green }]}>{fmt(totalIncome)}</Text></View>
-          <Text style={s.resultOp}>-</Text>
-          <View style={{ flex: 1 }}><Text style={s.resultLabel}>Despesas</Text><Text style={[s.resultValue, { color: Colors.red }]}>{fmt(totalExpenses)}</Text></View>
-          <Text style={s.resultOp}>=</Text>
-          <View style={{ flex: 1 }}><Text style={s.resultLabel}>Resultado</Text><Text style={[s.resultValue, { color: netProfit >= 0 ? Colors.green : Colors.red }]}>{fmt(netProfit)}</Text></View>
-        </View>
-      </View>
-
-      {/* Income breakdown */}
-      {incomeItems.length > 0 && (
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Receitas por categoria</Text>
-          <View style={s.sectionCard}>
-            {incomeItems.map(item => <CategoryBar key={item.category} label={item.category} amount={item.amount} total={totalIncome} color={Colors.green} />)}
-          </View>
-        </View>
-      )}
-
-      {/* Expense breakdown */}
-      {expenseItems.length > 0 && (
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Despesas por categoria</Text>
-          <View style={s.sectionCard}>
-            {expenseItems.map(item => <CategoryBar key={item.category} label={item.category} amount={item.amount} total={totalExpenses} color={Colors.red} />)}
-          </View>
-        </View>
-      )}
-
-      <View style={s.disclaimer}><Text style={s.disclaimerText}>Dados calculados a partir dos lancamentos registrados. Valores estimativos para apoio a decisao.</Text></View>
+      <HealthHero income={computed.totalIncome} expenses={computed.totalExpenses} balance={computed.balance} marginPct={computed.marginPct} txCount={computed.txCount} />
+      <AlertStrip alerts={computed.alerts} />
+      <KpiStrip kpis={computed.kpis} />
+      <NarrativeBlock insights={computed.insights} />
+      <CategorySection title="Receitas por categoria" items={computed.incomeItems} total={computed.totalIncome} color={Colors.green} />
+      <CategorySection title="Despesas por categoria" items={computed.expenseItems} total={computed.totalExpenses} color={Colors.red} />
+      <View style={s.disclaimer}><Text style={s.disclaimerText}>Valores calculados dos lancamentos registrados. Estimativas para apoio a decisao.</Text></View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  kpiRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
-  kpiLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 },
-  kpiValue: { fontSize: 20, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
-  kpiSub: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
-  resultCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
-  resultRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  resultLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4, textAlign: "center" },
-  resultValue: { fontSize: 16, fontWeight: "800", textAlign: "center" },
-  resultOp: { fontSize: 20, color: Colors.ink3, fontWeight: "300" },
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 10 },
-  sectionCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 12 },
+  // Hero
+  hero: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
+  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  heroLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8 },
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 11, fontWeight: "700" },
+  heroKpis: { flexDirection: "row", marginBottom: 16 },
+  heroKpi: { flex: 1, alignItems: "center", paddingVertical: 8 },
+  heroKpiBorder: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: Colors.border },
+  heroKpiLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
+  heroKpiValue: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
+  heroMessage: { fontSize: 13, color: Colors.ink3, lineHeight: 20, marginBottom: 16 },
+  heroBar: { height: 8, backgroundColor: Colors.bg4, borderRadius: 4, overflow: "hidden" },
+  heroBarFill: { height: 8, borderRadius: 4 },
+  // Alerts
+  alertCard: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 3, flexDirection: "row", gap: 8, alignItems: "center", minWidth: 200 },
+  alertIcon: { fontSize: 14, fontWeight: "800" },
+  alertText: { fontSize: 11, color: Colors.ink3, flex: 1 },
+  // Narrative
+  narrativeCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20, gap: 10 },
+  narrativeTitle: { fontSize: 15, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  narrativeRow: { flexDirection: "row", gap: 8 },
+  narrativeBullet: { fontSize: 14, color: Colors.violet3, fontWeight: "700", lineHeight: 20 },
+  narrativeText: { fontSize: 12, color: Colors.ink3, lineHeight: 20, flex: 1 },
+  // Categories
+  catSection: { marginBottom: 20 },
+  catSectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 10 },
+  catCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 14 },
   catRow: { gap: 6 },
-  catInfo: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  catInfo: { flexDirection: "row", justifyContent: "space-between" },
   catLabel: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
   catAmount: { fontSize: 13, fontWeight: "600" },
   catBarTrack: { height: 8, backgroundColor: Colors.bg4, borderRadius: 4, overflow: "hidden" },
   catBarFill: { height: 8, borderRadius: 4 },
   catPct: { fontSize: 11, fontWeight: "700", textAlign: "right" },
+  catTotal: { flexDirection: "row", justifyContent: "space-between", paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  catTotalLabel: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
+  catTotalValue: { fontSize: 15, fontWeight: "800" },
+  // KPIs
+  kpiCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, minWidth: 130, alignItems: "center" },
+  kpiLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
+  kpiValue: { fontSize: 18, fontWeight: "800", color: Colors.ink },
+  kpiSub: { fontSize: 9, color: Colors.ink3, marginTop: 2 },
+  // Disclaimer
   disclaimer: { padding: 12, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   disclaimerText: { fontSize: 10, color: Colors.ink3, textAlign: "center", fontStyle: "italic" },
 });
