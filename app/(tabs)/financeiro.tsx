@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi, dashboardApi } from "@/services/api";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput, Modal } from "react-native";
@@ -511,6 +511,7 @@ function TabResumo({ apiDreData }: { apiDreData?: any }) {
 // ── Main Screen ──────────────────────────────────────────────
 
 export default function FinanceiroScreen() {
+  const scrollRef = useRef<any>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -563,14 +564,14 @@ export default function FinanceiroScreen() {
   return (
     <View style={{flex:1}}>
       <TransactionModal visible={showModal} onClose={() => setShowModal(false)} createTxMutation={!isDemo && company?.id ? createTxMutation : undefined} />
-      <ScrollView style={g.screen} contentContainerStyle={g.content}>
+      <ScrollView ref={scrollRef} style={g.screen} contentContainerStyle={g.content}>
         <ScreenHeader
           title="Financeiro"
           actionLabel="Novo lancamento"
           actionIcon="dollar"
           onAction={() => setShowModal(true)}
         />
-        <TabBar active={activeTab} onSelect={setActiveTab} />
+        <TabBar active={activeTab} onSelect={(i: number) => { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} />
 
         {isLoadingTx && !isDemo && <ListSkeleton rows={4} showCards />}
 

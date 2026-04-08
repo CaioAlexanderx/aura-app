@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -134,6 +134,7 @@ export default function ClientesScreen() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["customers", company?.id] }),
   });
 
+  const scrollRef = useRef<any>(null);
   const [tab,sTab]=useState(0);
   const [q,sQ]=useState("");
   const [expId,sExp]=useState<string|null>(null);
@@ -184,7 +185,7 @@ export default function ClientesScreen() {
   const tot=cust.length;const ltv=cust.reduce((s,c)=>s+c.totalSpent,0);const rated=cust.filter(c=>c.rating!=null);const avg=rated.length?(rated.reduce((s,c)=>s+(c.rating||0),0)/rated.length).toFixed(1):"0";
   const ranked=[...cust].sort((a,b)=>rm==="ltv"?b.totalSpent-a.totalSpent:b.visits-a.visits);
 
-  return <ScrollView style={{flex:1,backgroundColor:"transparent"}} contentContainerStyle={{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"}}>
+  return <ScrollView ref={scrollRef} style={{flex:1,backgroundColor:"transparent"}} contentContainerStyle={{padding:IS?32:20,paddingBottom:48,maxWidth:960,alignSelf:"center",width:"100%"}}>
     <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <Text style={{fontSize:22,color:Colors.ink,fontWeight:"700"}}>Clientes</Text>
       <Pressable onPress={()=>{sAdd(true);sTab(0);}} style={{backgroundColor:Colors.violet,paddingHorizontal:18,paddingVertical:10,borderRadius:10}}><Text style={{color:"#fff",fontSize:13,fontWeight:"700"}}>+ Adicionar cliente</Text></Pressable>
@@ -194,7 +195,7 @@ export default function ClientesScreen() {
     </View>
 
     {showAdd&&<AddForm onSave={addC} onX={()=>sAdd(false)}/>}
-    <TB a={tab} onS={sTab}/>
+    <TB a={tab} onS={(i: number) => { sTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}/>
 
     {tab===0&&<View>
       <TextInput style={{backgroundColor:Colors.bg3,borderRadius:10,borderWidth:1,borderColor:Colors.border,paddingHorizontal:14,paddingVertical:11,fontSize:13,color:Colors.ink,marginBottom:16}} placeholder="Buscar por nome, telefone, email ou Instagram..." placeholderTextColor={Colors.ink3} value={q} onChangeText={sQ}/>

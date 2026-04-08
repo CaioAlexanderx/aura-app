@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -574,6 +574,7 @@ export default function EstoqueScreen() {
       setProducts(mapped);
     }
   }, [JSON.stringify(apiProducts instanceof Array ? apiProducts.map((p:any) => p.id) : [])]);
+  const scrollRef = useRef<any>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
@@ -662,7 +663,7 @@ export default function EstoqueScreen() {
   }
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.content}>
+    <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
       <ScreenHeader
         title="Estoque"
         actionLabel="+ Adicionar produto"
@@ -703,7 +704,7 @@ export default function EstoqueScreen() {
         />
       )}
 
-      {(products.length > 0 || isDemo) && <TabBar active={activeTab} onSelect={setActiveTab} />}
+      {(products.length > 0 || isDemo) && <TabBar active={activeTab} onSelect={(i: number) => { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} />}
 
       <AgentBanner agent="Estoque" insight={{ title: "3 produtos com estoque baixo", desc: "Pomada modeladora (2 un.), Shampoo premium (5 un.) e Kit barba (1 un.) abaixo do mínimo.", actionLabel: "Criar pedido compra", action: "repor", priority: "high", icon: "package" }} />
 

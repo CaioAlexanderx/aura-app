@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useQuery } from "@tanstack/react-query";
@@ -349,7 +349,7 @@ export default function ContabilidadeScreen() {
   const [gid, sGid] = useState<string | null>(null);
   const sel = gid ? obligations.find(o => o.id === gid) : null;
   if (sel) return (
-    <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
+    <ScrollView ref={scrollRef} style={z.scr} contentContainerStyle={z.cnt}>
       <Guide o={sel} onBack={() => sGid(null)} />
     </ScrollView>
   );
@@ -359,7 +359,7 @@ export default function ContabilidadeScreen() {
       <PageHeader title="Contabilidade" />
       <HeroRing obls={obligations} />
       <StreakBar />
-      <TabBar tabs={TABS} active={tab} onSelect={sTab} />
+      <TabBar tabs={TABS} active={tab} onSelect={(i: number) => { sTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} />
 
       <AgentBanner agent="Contábil" insight={{ title: "DAS vence em 14 dias", desc: "O DAS-MEI de abril vence em 20/04. Valor estimado: R$ 76,90. Gere o QR Code Pix.", actionLabel: "Gerar QR Code", action: "das", priority: "high", icon: "alert" }} />
 

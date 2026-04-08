@@ -188,7 +188,7 @@ export default function PdvScreen() {
         stock: p.stock_quantity != null ? parseInt(p.stock_quantity) : p.stock,
         barcode: p.barcode || p.ean || null,
       }))
-    : MOCK_PRODUCTS;
+    : [];
   const categories = ["Todos", ...Array.from(new Set(products.map((p: any) => p.category)))];
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
@@ -202,7 +202,31 @@ export default function PdvScreen() {
   function removeItem(productId: string) { setCart(prev => prev.filter(i => i.productId !== productId)); }
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
-  function finalizeSale() { if (cart.length === 0) return; const saleId = Date.now().toString(36).toUpperCase().slice(-6); setLastSale({ id: saleId, total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") }); setCart([]); }
+  function finalizeSale() {
+    if (cart.length === 0) return;
+    const saleData = {
+      items: cart.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
+      payment_method: payment,
+      total: total,
+    };
+    if (company?.id && !isDemo) {
+      saleMutation.mutate(saleData, {
+        onSuccess: (res: any) => {
+          const saleId = res?.sale_id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
+          setLastSale({ id: String(saleId), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
+          setCart([]);
+          toast.success("Venda registrada!");
+        },
+        onError: () => {
+          toast.error("Erro ao registrar venda. Tente novamente.");
+        },
+      });
+    } else {
+      const saleId = Date.now().toString(36).toUpperCase().slice(-6);
+      setLastSale({ id: saleId, total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
+      setCart([]);
+    }
+  }
   function newSale() { setLastSale(null); setCart([]); setSearch(""); }
   function emitNfe() { alert("Emissao de NF-e sera integrada com NFE.io apos CNPJ aprovado."); }
 
