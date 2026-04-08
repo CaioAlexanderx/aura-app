@@ -9,11 +9,12 @@ import { ReferralCard } from "@/components/ReferralCard";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { CNAE_PROFILES } from "@/constants/obligations";
+import { router } from "expo-router";
 
 const PLANS = [
-  { key: "essencial", label: "Essencial", price: "R$ 89/mês", desc: "Para começar" },
-  { key: "negocio", label: "Negócio", price: "R$ 199/mês", desc: "Para crescer" },
-  { key: "expansao", label: "Expansão", price: "R$ 299/mês", desc: "Para escalar" },
+  { key: "essencial", label: "Essencial", price: "R$ 89/mes", desc: "Para comecar" },
+  { key: "negocio", label: "Negocio", price: "R$ 199/mes", desc: "Para crescer" },
+  { key: "expansao", label: "Expansao", price: "R$ 299/mes", desc: "Para escalar" },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -54,10 +55,8 @@ const fd = StyleSheet.create({
   disabled: { opacity: 0.5 },
 });
 
-
-// F-04
-function ProfileCompletion({ name, cnpj, email, phone, address, logo }) {
-  var fields = [{l:"Nome",ok:!!name},{l:"CNPJ",ok:!!cnpj},{l:"E-mail",ok:!!email},{l:"Telefone",ok:!!phone},{l:"Endereço",ok:!!address},{l:"Logo",ok:!!logo}];
+function ProfileCompletion({ name, cnpj, email, phone, address, logo }: any) {
+  var fields = [{l:"Nome",ok:!!name},{l:"CNPJ",ok:!!cnpj},{l:"E-mail",ok:!!email},{l:"Telefone",ok:!!phone},{l:"Endereco",ok:!!address},{l:"Logo",ok:!!logo}];
   var done = fields.filter(function(f){return f.ok}).length, pct = Math.round((done/fields.length)*100), allDone = pct===100;
   return (
     <View style={{backgroundColor:allDone?Colors.greenD:Colors.violetD,borderRadius:16,padding:20,borderWidth:1,borderColor:allDone?Colors.green+"33":Colors.border2,marginBottom:24}}>
@@ -77,6 +76,7 @@ function ProfileCompletion({ name, cnpj, email, phone, address, logo }) {
     </View>
   );
 }
+
 export default function ConfiguracoesScreen() {
   const { user, company, companyLogo, setCompanyLogo, isDemo } = useAuthStore();
 
@@ -106,15 +106,16 @@ export default function ConfiguracoesScreen() {
 
   function handleSave() {
     setSaved(true);
-    toast.success("Alterações salvas com sucesso");
+    toast.success("Alteracoes salvas com sucesso");
     setTimeout(() => setSaved(false), 2000);
   }
 
   const currentPlan = company?.plan || "essencial";
+  const currentPlanData = PLANS.find(p => p.key === currentPlan) || PLANS[0];
 
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-      <PageHeader title="Configurações" />
+      <PageHeader title="Configuracoes" />
       <ProfileCompletion name={companyName} cnpj={cnpj} email={email} phone={phone} address={address} logo={companyLogo||""} />
 
       <Section title="Logo da empresa">
@@ -146,30 +147,30 @@ export default function ConfiguracoesScreen() {
         <Field label="CNPJ" value={cnpj} onChange={setCnpj} placeholder="00.000.000/0000-00" />
         <Field label="E-mail" value={email} onChange={setEmail} placeholder="contato@empresa.com" />
         <Field label="Telefone" value={phone} onChange={setPhone} placeholder="(12) 99999-0000" />
-        <Field label="Endereço" value={address} onChange={setAddress} placeholder="Rua, numero, cidade - UF" />
+        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua, numero, cidade - UF" />
       </Section>
 
-      <Section title="Configuração fiscal">
-        <Field label="Regime tributário" value={(company as any)?.regime || "Simples Nacional"} editable={false} />
-        <Field label="Tipo de negócio" value={CNAE_PROFILES[(company as any)?.businessType]?.label || "Configurar no onboarding"} editable={false} />
+      <Section title="Configuracao fiscal">
+        <Field label="Regime tributario" value={(company as any)?.regime || "Simples Nacional"} editable={false} />
+        <Field label="Tipo de negocio" value={CNAE_PROFILES[(company as any)?.businessType]?.label || "Configurar no onboarding"} editable={false} />
         <View style={z.fiscalNote}>
           <Icon name="alert" size={14} color={Colors.amber} />
           <Text style={z.fiscalNoteText}>Regime e tipo de negocio sao detectados automaticamente via CNPJ. Para alterar, entre em contato com o suporte.</Text>
         </View>
       </Section>
 
+      {/* B6: Meu Plano with CTA to full plans page */}
       <Section title="Meu plano">
-        <View style={z.planGrid}>
-          {PLANS.map(p => (
-            <View key={p.key} style={[z.planCard, currentPlan === p.key && z.planCardActive]}>
-              <Text style={[z.planName, currentPlan === p.key && z.planNameActive]}>{p.label}</Text>
-              <Text style={z.planPrice}>{p.price}</Text>
-              <Text style={z.planDesc}>{p.desc}</Text>
-              {currentPlan === p.key && (
-                <View style={z.planBadge}><Text style={z.planBadgeText}>Plano atual</Text></View>
-              )}
-            </View>
-          ))}
+        <View style={z.currentPlanCard}>
+          <View style={z.currentPlanInfo}>
+            <View style={z.currentPlanBadge}><Text style={z.currentPlanBadgeText}>Plano atual</Text></View>
+            <Text style={z.currentPlanName}>{currentPlanData.label}</Text>
+            <Text style={z.currentPlanPrice}>{currentPlanData.price}</Text>
+            <Text style={z.currentPlanDesc}>{currentPlanData.desc}</Text>
+          </View>
+          <Pressable onPress={() => router.push("/(tabs)/planos")} style={z.plansBtn}>
+            <Text style={z.plansBtnText}>Ver todos os planos e precos</Text>
+          </Pressable>
         </View>
       </Section>
 
@@ -190,14 +191,14 @@ export default function ConfiguracoesScreen() {
               <Text style={z.saveBtnText}>Salvo!</Text>
             </View>
           ) : (
-            <Text style={z.saveBtnText}>Salvar alterações</Text>
+            <Text style={z.saveBtnText}>Salvar alteracoes</Text>
           )}
         </Pressable>
       </View>
 
       <ReferralCard />
       {isDemo && (
-        <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo - alterações não são persistidas</Text></View>
+        <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo - alteracoes nao sao persistidas</Text></View>
       )}
     </ScrollView>
   );
@@ -217,15 +218,16 @@ const z = StyleSheet.create({
   logoRemoveText: { fontSize: 11, color: Colors.red, fontWeight: "500" },
   fiscalNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, marginTop: 4 },
   fiscalNoteText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
-  planGrid: { flexDirection: IS_WIDE ? "row" : "column", gap: 10 },
-  planCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, borderWidth: 1.5, borderColor: Colors.border, gap: 4 },
-  planCardActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
-  planName: { fontSize: 16, fontWeight: "700", color: Colors.ink },
-  planNameActive: { color: Colors.violet3 },
-  planPrice: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  planDesc: { fontSize: 11, color: Colors.ink3 },
-  planBadge: { backgroundColor: Colors.violet, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginTop: 6 },
-  planBadgeText: { fontSize: 9, color: "#fff", fontWeight: "700" },
+  // B6: Current plan + CTA
+  currentPlanCard: { gap: 16 },
+  currentPlanInfo: { gap: 4 },
+  currentPlanBadge: { backgroundColor: Colors.violet, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 4 },
+  currentPlanBadgeText: { fontSize: 9, color: "#fff", fontWeight: "700" },
+  currentPlanName: { fontSize: 20, fontWeight: "800", color: Colors.ink },
+  currentPlanPrice: { fontSize: 14, color: Colors.violet3, fontWeight: "600" },
+  currentPlanDesc: { fontSize: 12, color: Colors.ink3 },
+  plansBtn: { backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 13, alignItems: "center", borderWidth: 1, borderColor: Colors.border2 },
+  plansBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   accountNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 12, marginTop: 4, borderWidth: 1, borderColor: Colors.border2 },
   accountNoteText: { fontSize: 11, color: Colors.violet3, flex: 1, lineHeight: 16 },
   saveRow: { alignItems: "center", marginTop: 8 },
