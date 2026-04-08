@@ -18,6 +18,15 @@ function mapApiTransaction(t: any): Transaction {
   };
 }
 
+function safePeriod(raw: any): string {
+  if (!raw) return new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  if (typeof raw === "string") return raw;
+  if (raw.from && raw.to) {
+    try { return `${new Date(raw.from).toLocaleDateString("pt-BR")} - ${new Date(raw.to).toLocaleDateString("pt-BR")}`; } catch { return "Periodo atual"; }
+  }
+  return "Periodo atual";
+}
+
 export function useTransactionsApi(activeTab?: number) {
   const { company, token, isDemo } = useAuthStore();
   const qc = useQueryClient();
@@ -45,7 +54,6 @@ export function useTransactionsApi(activeTab?: number) {
     retry: 1,
   });
 
-  // useMemo — dados derivados do cache React Query
   const transactions: Transaction[] = useMemo(() => {
     if (isDemo) return [];
     const arr = apiTx?.transactions || apiTx?.rows || apiTx;
@@ -63,7 +71,7 @@ export function useTransactionsApi(activeTab?: number) {
     const raw = apiDre;
     if (!raw || (!raw.totalIncome && !raw.income && !raw.total_income)) return null;
     return {
-      period: raw.period || new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+      period: safePeriod(raw.period),
       income: Array.isArray(raw.income) ? raw.income : [],
       expenses: Array.isArray(raw.expenses) ? raw.expenses : [],
       totalIncome: parseFloat(raw.totalIncome || raw.total_income) || 0,
