@@ -1,0 +1,85 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { pdvApi } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/components/Toast";
+
+export type CartItem = { productId: string; name: string; price: number; qty: number };
+export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string };
+
+export const PAYMENTS = [
+  { key: "pix", label: "Pix" },
+  { key: "dinheiro", label: "Dinheiro" },
+  { key: "cartao", label: "Cartao" },
+  { key: "debito", label: "Debito" },
+];
+
+export function useCart() {
+  const { company, isDemo } = useAuthStore();
+  const qc = useQueryClient();
+  const companyId = company?.id;
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [payment, setPayment] = useState("pix");
+  const [lastSale, setLastSale] = useState<SaleResult | null>(null);
+
+  const saleMutation = useMutation({
+    mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products", companyId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
+      qc.invalidateQueries({ queryKey: ["transactions", companyId] });
+    },
+  });
+
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const itemCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  function addToCart(product: { id: string; name: string; price: number }) {
+    setLastSale(null);
+    setCart(prev => {
+      const existing = prev.find(i => i.productId === product.id);
+      if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { productId: product.id, name: product.name, price: product.price, qty: 1 }];
+    });
+  }
+
+  function updateQty(productId: string, delta: number) {
+    setCart(prev => prev.map(i => {
+      if (i.productId !== productId) return i;
+      const newQty = i.qty + delta;
+      return newQty > 0 ? { ...i, qty: newQty } : i;
+    }));
+  }
+
+  function removeItem(productId: string) {
+    setCart(prev => prev.filter(i => i.productId !== productId));
+  }
+
+  function finalizeSale() {
+    if (cart.length === 0) return;
+    const saleData = {
+      items: cart.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
+      payment_method: payment,
+      total,
+    };
+    if (companyId && !isDemo) {
+      saleMutation.mutate(saleData, {
+        onSuccess: (res: any) => {
+          const saleId = res?.sale_id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
+          setLastSale({ id: String(saleId), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
+          setCart([]);
+          toast.success("Venda registrada!");
+        },
+        onError: () => toast.error("Erro ao registrar venda"),
+      });
+    } else {
+      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
+      setCart([]);
+    }
+  }
+
+  function newSale() { setLastSale(null); setCart([]); }
+
+  return { cart, payment, setPayment, lastSale, total, itemCount, addToCart, updateQty, removeItem, finalizeSale, newSale };
+}
