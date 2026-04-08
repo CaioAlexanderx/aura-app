@@ -1,14 +1,29 @@
 import { useState, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useAuthStore } from "@/stores/auth";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
 
 type Props = { transactions: Transaction[] };
+type Regime = "mei" | "simples";
+
+// MEI: DAS fixo ~R$75.90 (2026), sem obrigacao pro-labore, limite R$81k/ano
+// Simples Nacional: DAS % sobre receita, pro-labore obrigatorio (Fator R)
+const REGIME_CONFIG = {
+  mei: { label: "MEI", dasFixed: 75.90, dasRate: 0, needsProLabore: false, revenueLimit: 81000, fatorRMin: 0 },
+  simples: { label: "Simples Nacional", dasFixed: 0, dasRate: 0.06, needsProLabore: true, revenueLimit: 4800000, fatorRMin: 28 },
+};
 
 export function TabRetirada({ transactions }: Props) {
+  const { company } = useAuthStore();
   const realIncome = useMemo(() => transactions.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
   const realExpenses = useMemo(() => transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
+
+  // Detect regime from company data or default to simples
+  const detectedRegime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" ? "mei" : "simples";
+  const [regime, setRegime] = useState<Regime>(detectedRegime);
+  const cfg = REGIME_CONFIG[regime];
 
   const [customRevenue, setCustomRevenue] = useState("");
   const [customExpenses, setCustomExpenses] = useState("");
@@ -16,31 +31,48 @@ export function TabRetirada({ transactions }: Props) {
   const rev = parseFloat(customRevenue.replace(/[^0-9.,]/g, "").replace(",", ".")) || realIncome;
   const exp = parseFloat(customExpenses.replace(/[^0-9.,]/g, "").replace(",", ".")) || realExpenses;
 
-  // Calculations
-  const dasRate = 0.06;
-  const das = rev * dasRate;
+  // Calculations based on regime
+  const das = regime === "mei" ? cfg.dasFixed : rev * cfg.dasRate;
   const lucroOp = rev - exp - das;
-  const proLaboreMin = rev * 0.28;
-  const proLabore = Math.max(proLaboreMin, 1412);
-  const inss = proLabore * 0.11;
-  const fatorR = rev > 0 ? Math.round((proLabore / rev) * 100) : 0;
 
-  // Three withdrawal levels
+  // Pro-labore: MEI nao obriga, SN obriga (Fator R)
+  let proLabore = 0;
+  let inss = 0;
+  let fatorR = 0;
+  if (cfg.needsProLabore) {
+    const minProLabore = rev * 0.28; // Fator R minimum
+    proLabore = Math.max(minProLabore, 1412); // Salario minimo 2026
+    inss = proLabore * 0.11;
+    fatorR = rev > 0 ? Math.round((proLabore / rev) * 100) : 0;
+  }
+
   const maxRetirada = Math.max(0, lucroOp - proLabore - inss);
   const seguraRetirada = Math.max(0, maxRetirada * 0.85);
   const idealRetirada = Math.max(0, maxRetirada * 0.70);
-
-  // Status after withdrawal
   const caixaApos = rev - exp - das - proLabore - inss - seguraRetirada;
 
   const hasData = rev > 0;
 
   return (
     <View>
-      {/* Header */}
       <View style={s.header}>
         <Text style={s.headerTitle}>Quanto voce pode retirar?</Text>
-        <Text style={s.headerDesc}>Simulacao baseada na sua receita, despesas e regras do Simples Nacional.</Text>
+        <Text style={s.headerDesc}>Simulacao baseada na sua receita, despesas e regime tributario.</Text>
+      </View>
+
+      {/* Regime selector */}
+      <View style={s.regimeCard}>
+        <Text style={s.regimeLabel}>Regime tributario</Text>
+        <View style={s.regimeRow}>
+          {(["mei", "simples"] as const).map(r => (
+            <Pressable key={r} onPress={() => setRegime(r)} style={[s.regimeBtn, regime === r && s.regimeBtnActive]}>
+              <Text style={[s.regimeBtnText, regime === r && s.regimeBtnTextActive]}>{REGIME_CONFIG[r].label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={s.regimeHint}>
+          {regime === "mei" ? "DAS fixo de R$ 75,90/mes. Sem obrigacao de pro-labore. Limite R$ 81 mil/ano." : "DAS de 6% sobre receita (Anexo III). Pro-labore obrigatorio para Fator R >= 28%."}
+        </Text>
       </View>
 
       {/* Inputs */}
@@ -59,51 +91,35 @@ export function TabRetirada({ transactions }: Props) {
 
       {hasData && (
         <View>
-          {/* Three levels hero */}
+          {/* Three levels */}
           <View style={s.levelsCard}>
             <View style={s.levelMain}>
               <Text style={s.levelMainLabel}>RETIRADA SEGURA</Text>
-              <Text style={s.levelMainValue}>{fmt(seguraRetirada)}</Text>
-              <Text style={s.levelMainSub}>sem pressionar o caixa, mantendo enquadramento fiscal</Text>
+              <Text style={[s.levelMainValue, { color: seguraRetirada > 0 ? Colors.green : Colors.red }]}>{fmt(seguraRetirada)}</Text>
+              <Text style={s.levelMainSub}>{regime === "mei" ? "sem comprometer o caixa" : "sem pressionar caixa, mantendo enquadramento fiscal"}</Text>
             </View>
             <View style={s.levelsRow}>
-              <View style={s.levelItem}>
-                <View style={[s.levelDot, { backgroundColor: Colors.green }]} />
-                <Text style={s.levelLabel}>Ideal</Text>
-                <Text style={[s.levelValue, { color: Colors.green }]}>{fmt(idealRetirada)}</Text>
-                <Text style={s.levelHint}>maximo conservadorismo</Text>
-              </View>
-              <View style={[s.levelItem, s.levelItemBorder]}>
-                <View style={[s.levelDot, { backgroundColor: Colors.amber }]} />
-                <Text style={s.levelLabel}>Segura</Text>
-                <Text style={[s.levelValue, { color: Colors.amber }]}>{fmt(seguraRetirada)}</Text>
-                <Text style={s.levelHint}>equilibrio recomendado</Text>
-              </View>
-              <View style={s.levelItem}>
-                <View style={[s.levelDot, { backgroundColor: Colors.red }]} />
-                <Text style={s.levelLabel}>Maxima</Text>
-                <Text style={[s.levelValue, { color: Colors.red }]}>{fmt(maxRetirada)}</Text>
-                <Text style={s.levelHint}>limite - sem folga</Text>
-              </View>
+              <View style={s.levelItem}><View style={[s.levelDot, { backgroundColor: Colors.green }]} /><Text style={s.levelLabel}>Ideal</Text><Text style={[s.levelValue, { color: Colors.green }]}>{fmt(idealRetirada)}</Text><Text style={s.levelHint}>conservador</Text></View>
+              <View style={[s.levelItem, s.levelItemBorder]}><View style={[s.levelDot, { backgroundColor: Colors.amber }]} /><Text style={s.levelLabel}>Segura</Text><Text style={[s.levelValue, { color: Colors.amber }]}>{fmt(seguraRetirada)}</Text><Text style={s.levelHint}>equilibrio</Text></View>
+              <View style={s.levelItem}><View style={[s.levelDot, { backgroundColor: Colors.red }]} /><Text style={s.levelLabel}>Maxima</Text><Text style={[s.levelValue, { color: Colors.red }]}>{fmt(maxRetirada)}</Text><Text style={s.levelHint}>sem folga</Text></View>
             </View>
           </View>
 
-          {/* Impact section */}
+          {/* Impact */}
           <View style={s.impactCard}>
             <Text style={s.impactTitle}>Se voce retirar o valor seguro:</Text>
             <View style={s.impactRow}><Text style={s.impactLabel}>Caixa apos retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
-            <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria (DAS)</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
-            <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(proLabore + inss)}</Text></View>
-            <View style={[s.impactRow, { borderBottomWidth: 0 }]}><Text style={s.impactLabel}>Status geral</Text><View style={[s.impactBadge, { backgroundColor: caixaApos >= 0 ? Colors.greenD : Colors.redD }]}><Text style={[s.impactBadgeText, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{caixaApos >= 0 ? "Saudavel" : "Risco"}</Text></View></View>
+            <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria ({regime === "mei" ? "DAS fixo" : "DAS 6%"})</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
+            {cfg.needsProLabore && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(proLabore + inss)}</Text></View>}
+            <View style={[s.impactRow, { borderBottomWidth: 0 }]}><Text style={s.impactLabel}>Status</Text><View style={[s.impactBadge, { backgroundColor: caixaApos >= 0 ? Colors.greenD : Colors.redD }]}><Text style={[s.impactBadgeText, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{caixaApos >= 0 ? "Saudavel" : "Risco"}</Text></View></View>
           </View>
 
-          {/* Smart message */}
+          {/* Message */}
           <View style={s.messageCard}>
             <Text style={s.messageText}>
               {seguraRetirada > 0
                 ? `Hoje voce pode retirar ${fmt(seguraRetirada)} com seguranca. Acima de ${fmt(maxRetirada)}, sua folga de caixa comeca a ficar apertada.`
-                : `Com o cenario atual, nao recomendamos retirada. Suas despesas e obrigacoes consomem toda a receita.`
-              }
+                : `Com o cenario atual, nao recomendamos retirada. Suas despesas e obrigacoes consomem toda a receita.`}
             </Text>
           </View>
 
@@ -113,40 +129,44 @@ export function TabRetirada({ transactions }: Props) {
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado do negocio</Text></View>
             <WRow label="(+) Receita bruta" value={rev} color={Colors.green} />
             {exp > 0 && <WRow label="(-) Despesas operacionais" value={exp} color={Colors.red} />}
-            <WRow label={`(-) DAS estimado (${(dasRate*100).toFixed(0)}%)`} value={das} color={Colors.red} />
+            <WRow label={regime === "mei" ? "(-) DAS fixo mensal" : `(-) DAS estimado (${(cfg.dasRate*100).toFixed(0)}%)`} value={das} color={Colors.red} />
             <WRow label="= Lucro operacional" value={lucroOp} bold />
-            <View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View>
-            <WRow label={`(-) Pro-labore (${fatorR}% da receita)`} value={proLabore} color={Colors.amber} />
-            <WRow label="(-) INSS (11%)" value={inss} color={Colors.red} />
+            {cfg.needsProLabore && (
+              <View>
+                <View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View>
+                <WRow label={`(-) Pro-labore (${fatorR}% da receita)`} value={proLabore} color={Colors.amber} />
+                <WRow label="(-) INSS (11%)" value={inss} color={Colors.red} />
+              </View>
+            )}
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado final</Text></View>
             <WRow label="Retirada segura (85%)" value={seguraRetirada} highlight color={Colors.green} />
           </View>
 
-          {/* Fator R monitor */}
-          <View style={s.fatorCard}>
-            <View style={s.fatorTop}>
-              <View>
-                <Text style={s.fatorTitle}>Monitor Fator R</Text>
-                <Text style={s.fatorValue}>{fatorR}%</Text>
+          {/* Fator R - only for Simples Nacional */}
+          {cfg.needsProLabore && (
+            <View style={s.fatorCard}>
+              <View style={s.fatorTop}>
+                <View><Text style={s.fatorTitle}>Monitor Fator R</Text><Text style={s.fatorValue}>{fatorR}%</Text></View>
+                <View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}><Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text></View>
               </View>
-              <View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}>
-                <Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text>
-              </View>
+              <View style={s.fatorBar}><View style={[s.fatorFill, { width: `${Math.min(fatorR, 100)}%`, backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} /><View style={s.fatorMark} /></View>
+              <View style={s.fatorLabels}><Text style={s.fatorLabelLeft}>0%</Text><Text style={s.fatorLabel28}>28%</Text><Text style={s.fatorLabelRight}>100%</Text></View>
+              <Text style={s.fatorHint}>{fatorR >= 28 ? `Pro-labore ${fatorR - 28} pontos acima do minimo. Folga para Anexo III.` : `Pro-labore ${28 - fatorR} pontos abaixo. Considere aumentar para evitar Anexo V.`}</Text>
             </View>
-            <View style={s.fatorBar}>
-              <View style={[s.fatorFill, { width: `${Math.min(fatorR, 100)}%`, backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} />
-              <View style={s.fatorMark} />
-            </View>
-            <View style={s.fatorLabels}><Text style={s.fatorLabelLeft}>0%</Text><Text style={s.fatorLabel28}>28%</Text><Text style={s.fatorLabelRight}>100%</Text></View>
-            <Text style={s.fatorHint}>
-              {fatorR >= 28
-                ? `Seu pro-labore esta ${fatorR - 28} pontos acima do minimo. Voce tem folga para se manter no Anexo III.`
-                : `Pro-labore ${28 - fatorR} pontos abaixo do minimo. Considere aumentar para evitar o Anexo V (aliquota maior).`
-              }
-            </Text>
-          </View>
+          )}
 
-          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Estimativas para apoio a decisao. Regras e interpretacoes contabeis podem variar. Consulte seu contador.</Text></View>
+          {/* MEI specific info */}
+          {regime === "mei" && (
+            <View style={s.meiInfo}>
+              <Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text>
+              <Text style={s.meiInfoText}>{"\u2022"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text>
+              <Text style={s.meiInfoText}>{"\u2022"} Limite de faturamento: R$ 81.000/ano ({fmt(81000/12)}/mes)</Text>
+              <Text style={s.meiInfoText}>{"\u2022"} Receita anual estimada: {fmt(rev * 12)} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text>
+              <Text style={s.meiInfoText}>{"\u2022"} Pro-labore nao obrigatorio, mas recomendado para aposentadoria</Text>
+            </View>
+          )}
+
+          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Estimativas para apoio a decisao. Regras contabeis podem variar. Consulte seu contador.</Text></View>
         </View>
       )}
     </View>
@@ -166,15 +186,22 @@ const s = StyleSheet.create({
   header: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20, gap: 8 },
   headerTitle: { fontSize: 20, color: Colors.ink, fontWeight: "800" },
   headerDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
+  regimeCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 20, gap: 10 },
+  regimeLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
+  regimeRow: { flexDirection: "row", gap: 8 },
+  regimeBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  regimeBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  regimeBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  regimeBtnTextActive: { color: Colors.violet3, fontWeight: "700" },
+  regimeHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   inputRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
   inputLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
   input: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: Colors.ink, fontWeight: "600" },
   inputHint: { fontSize: 10, color: Colors.violet3, marginTop: 4, fontStyle: "italic" },
-  // Three levels
   levelsCard: { backgroundColor: Colors.bg3, borderRadius: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20, overflow: "hidden" },
   levelMain: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
   levelMainLabel: { fontSize: 11, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
-  levelMainValue: { fontSize: 40, fontWeight: "800", color: Colors.green, letterSpacing: -1, marginBottom: 6 },
+  levelMainValue: { fontSize: 40, fontWeight: "800", letterSpacing: -1, marginBottom: 6 },
   levelMainSub: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
   levelsRow: { flexDirection: "row" },
   levelItem: { flex: 1, alignItems: "center", paddingVertical: 16, gap: 4 },
@@ -183,7 +210,6 @@ const s = StyleSheet.create({
   levelLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   levelValue: { fontSize: 16, fontWeight: "800" },
   levelHint: { fontSize: 9, color: Colors.ink3 },
-  // Impact
   impactCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   impactTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 12 },
   impactRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
@@ -191,10 +217,8 @@ const s = StyleSheet.create({
   impactValue: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   impactBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   impactBadgeText: { fontSize: 11, fontWeight: "700" },
-  // Message
   messageCard: { backgroundColor: Colors.violetD, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
   messageText: { fontSize: 13, color: Colors.ink, lineHeight: 20, fontWeight: "500" },
-  // Waterfall
   waterfall: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   wfTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 12, paddingHorizontal: 10 },
   wfSection: { paddingVertical: 6, paddingHorizontal: 10 },
@@ -207,7 +231,6 @@ const s = StyleSheet.create({
   wLabelHL: { color: Colors.ink, fontWeight: "700" },
   wValue: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   wValueBold: { fontSize: 16, fontWeight: "800" },
-  // Fator R
   fatorCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 20, gap: 12 },
   fatorTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   fatorTitle: { fontSize: 12, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
@@ -222,7 +245,9 @@ const s = StyleSheet.create({
   fatorLabel28: { fontSize: 9, color: Colors.ink, fontWeight: "700", marginLeft: "23%" },
   fatorLabelRight: { fontSize: 9, color: Colors.ink3 },
   fatorHint: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
-  // Disclaimer
+  meiInfo: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 20, gap: 6 },
+  meiInfoTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  meiInfoText: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
   disclaimer: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14 },
   disclaimerIcon: { fontSize: 14, color: Colors.amber, fontWeight: "700" },
   disclaimerText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
