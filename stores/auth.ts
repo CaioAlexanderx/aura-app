@@ -11,7 +11,6 @@ import {
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
-const OB_KEY = "aura_onboarding";
 const DEMO_TOKEN = "demo-token-aura-2026";
 
 const storage = {
@@ -44,17 +43,6 @@ const refreshStorage = {
       : SecureStore.deleteItemAsync(REFRESH_KEY),
 };
 
-const obStorage = {
-  get: (): string | null =>
-    Platform.OS === "web" ? localStorage.getItem(OB_KEY) : null,
-  set: (v: string): void => {
-    if (Platform.OS === "web") localStorage.setItem(OB_KEY, v);
-  },
-  del: (): void => {
-    if (Platform.OS === "web") localStorage.removeItem(OB_KEY);
-  },
-};
-
 const DEMO_USER = {
   id: "demo-user",
   name: "Caio",
@@ -67,17 +55,13 @@ const DEMO_COMPANY = {
   id: "demo-company",
   name: "Aura Demo",
   plan: "negocio",
-  onboarding_step: "complete",
+  onboarding_step: "done",
   trial_active: false,
   trial_ends_at: null,
 } as const;
 
 type User = LoginResponse["user"];
 type Company = Exclude<LoginResponse["company"], null>;
-
-function isObComplete(step: string | undefined | null, obDone: boolean, staff: boolean): boolean {
-  return obDone || staff || step === "complete" || step === "done" || !step;
-}
 
 type AuthState = {
   token: string | null;
@@ -88,7 +72,6 @@ type AuthState = {
   isHydrated: boolean;
   isStaff: boolean;
   isDemo: boolean;
-  onboardingComplete: boolean;
   companyLogo: string | null;
   trialActive: boolean;
   trialEndsAt: string | null;
@@ -97,7 +80,6 @@ type AuthState = {
   loginDemo: () => Promise<void>;
   register: (body: RegisterBody) => Promise<void>;
   logout: () => Promise<void>;
-  completeOnboarding: (data?: { logo?: string; cnpj?: string; businessType?: string }) => void;
   setCompanyLogo: (logo: string) => void;
 };
 
@@ -121,7 +103,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
     isHydrated: false,
     isStaff: false,
     isDemo: false,
-    onboardingComplete: true,
     companyLogo: null,
     trialActive: false,
     trialEndsAt: null,
@@ -129,7 +110,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
     hydrate: async () => {
       const token = await storage.get();
       const savedRefresh = await refreshStorage.get();
-      const obDone = obStorage.get() === "complete";
 
       if (!token) {
         set({ isHydrated: true });
@@ -145,7 +125,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
           isDemo: true,
           isStaff: false,
           isHydrated: true,
-          onboardingComplete: true,
           trialActive: false,
         });
         return;
@@ -153,7 +132,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
       try {
         const { user, company } = await authApi.me(token);
-        const step = (company as any)?.onboarding_step;
         const trialEnd = (company as any)?.trial_ends_at;
         const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
         const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
@@ -166,7 +144,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
           isStaff: staff,
           isHydrated: true,
           isDemo: false,
-          onboardingComplete: isObComplete(step, obDone, staff),
           trialActive,
           trialEndsAt: trialEnd || null,
         });
@@ -187,8 +164,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
 
-        const step = (company as any)?.onboarding_step;
-        const obDone = obStorage.get() === "complete";
         const trialEnd = (company as any)?.trial_ends_at;
         const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
 
@@ -200,7 +175,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
           isLoading: false,
           isDemo: false,
           isStaff: staff,
-          onboardingComplete: isObComplete(step, obDone, staff),
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
         });
@@ -221,7 +195,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         isLoading: false,
         isDemo: true,
         isStaff: false,
-        onboardingComplete: true,
         trialActive: false,
       });
     },
@@ -235,7 +208,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
-        obStorage.del();
 
         const trialEnd = (company as any)?.trial_ends_at;
 
@@ -247,7 +219,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
           isLoading: false,
           isDemo: false,
           isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
-          onboardingComplete: false,
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
         });
@@ -257,30 +228,14 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
     },
 
-    completeOnboarding: (data) => {
-      obStorage.set("complete");
-      const current = get().company;
-      if (current && data) {
-        set({
-          onboardingComplete: true,
-          companyLogo: data.logo || get().companyLogo,
-          company: { ...current, ...(data.cnpj ? { cnpj: data.cnpj } as any : {}) },
-        });
-      } else {
-        set({ onboardingComplete: true });
-      }
-    },
-
     setCompanyLogo: (logo) => set({ companyLogo: logo }),
 
     logout: async () => {
-      // P4 FIX: reset theme to dark and clear all auth data
       if (Platform.OS === "web" && typeof window !== "undefined") {
         try { localStorage.setItem("aura_theme", "dark"); } catch {}
       }
       await storage.del();
       await refreshStorage.del();
-      obStorage.del();
       set({
         token: null,
         refreshToken: null,
@@ -288,12 +243,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
         company: null,
         isStaff: false,
         isDemo: false,
-        onboardingComplete: true,
         companyLogo: null,
         trialActive: false,
         trialEndsAt: null,
       });
-      // P4 FIX: force full reload to apply dark theme on login screen
       if (Platform.OS === "web" && typeof window !== "undefined") {
         setTimeout(() => {
           try { window.location.href = "/"; } catch {}
