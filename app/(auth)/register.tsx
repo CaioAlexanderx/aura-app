@@ -12,6 +12,7 @@ import { toast } from "@/components/Toast";
 import { maskCNPJ, maskPhone } from "@/utils/masks";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
+const isWeb = Platform.OS === "web";
 
 if (typeof document !== "undefined" && !document.getElementById("aura-auth-css")) {
   const st = document.createElement("style");
@@ -26,8 +27,21 @@ if (typeof document !== "undefined" && !document.getElementById("aura-auth-css")
   document.head.appendChild(st);
 }
 
-// B4: Two-step form
 const STEPS = ["Sua conta", "Sua empresa"];
+
+// Password requirement indicator — stable component outside render
+function Req({ ok, text }: { ok: boolean; text: string }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ok ? Colors.green : Colors.ink3 + "44" }} />
+      <Text style={{ fontSize: 10, color: ok ? Colors.green : Colors.ink3, fontWeight: "500" }}>{text}</Text>
+    </View>
+  );
+}
+
+// Shared input props for web
+const webInputProps = isWeb ? { className: "auth-input" } as any : {};
+const inputOutline = isWeb ? { outlineWidth: 0 } as any : {};
 
 export default function RegisterScreen() {
   const [step, setStep] = useState(0);
@@ -47,7 +61,6 @@ export default function RegisterScreen() {
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
   const { register, loginDemo, isLoading } = useAuthStore();
-  const isWeb = Platform.OS === "web";
 
   async function lookupCNPJ(formatted: string) {
     const nums = formatted.replace(/\D/g, "");
@@ -97,26 +110,13 @@ export default function RegisterScreen() {
     } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
   }
 
-  function Req({ ok, text }: { ok: boolean; text: string }) {
-    return <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ok ? Colors.green : Colors.ink3 + "44" }} /><Text style={{ fontSize: 10, color: ok ? Colors.green : Colors.ink3, fontWeight: "500" }}>{text}</Text></View>;
-  }
-
-  function Input({ icon, value, onChangeText, placeholder, ...props }: any) {
-    return (
-      <View style={s.inputWrap}>
-        <Icon name={icon} size={16} color={Colors.ink3} />
-        <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]} {...(isWeb ? { className: "auth-input" } as any : {})} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={Colors.ink3} {...props} />
-      </View>
-    );
-  }
-
   const card = (
     <View style={s.card} {...(isWeb ? { className: "auth-card" } as any : {})}>
       <View style={s.logoRow}><Image source={{ uri: LOGO_SVG }} style={s.logo} resizeMode="contain" /><Text style={s.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text></View>
       <Text style={s.title}>Criar sua conta</Text>
       <Text style={s.subtitle}>Comece a organizar seu negocio em minutos</Text>
 
-      {/* B4: Step indicator */}
+      {/* Step indicator */}
       <View style={s.stepsRow}>
         {STEPS.map((label, i) => (
           <Pressable key={label} onPress={() => { if (i === 0 || step1Valid) setStep(i); }} style={[s.stepItem, step === i && s.stepItemActive]}>
@@ -131,13 +131,25 @@ export default function RegisterScreen() {
       {/* Step 1: Account */}
       {step === 0 && (
         <View>
-          <View style={s.field}><Text style={s.label}>Nome completo *</Text><Input icon="user_plus" value={nome} onChangeText={setNome} placeholder="Maria da Silva" autoComplete="name" /></View>
-          <View style={s.field}><Text style={s.label}>E-mail *</Text><Input icon="message" value={email} onChangeText={setEmail} placeholder="maria@empresa.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email" /></View>
+          <View style={s.field}>
+            <Text style={s.label}>Nome completo *</Text>
+            <View style={s.inputWrap}>
+              <Icon name="user_plus" size={16} color={Colors.ink3} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={nome} onChangeText={setNome} placeholder="Maria da Silva" placeholderTextColor={Colors.ink3} autoComplete="name" />
+            </View>
+          </View>
+          <View style={s.field}>
+            <Text style={s.label}>E-mail *</Text>
+            <View style={s.inputWrap}>
+              <Icon name="message" size={16} color={Colors.ink3} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={email} onChangeText={setEmail} placeholder="maria@empresa.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+            </View>
+          </View>
           <View style={s.field}>
             <Text style={s.label}>Senha *</Text>
             <View style={s.inputWrap}>
               <Icon name="settings" size={16} color={Colors.ink3} />
-              <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]} {...(isWeb ? { className: "auth-input" } as any : {})} value={senha} onChangeText={setSenha} placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={senha} onChangeText={setSenha} placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
               <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}><Text style={s.eyeText}>{showPass ? "Ocultar" : "Ver"}</Text></Pressable>
             </View>
             {senha.length > 0 && <View style={s.passReqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiuscula" /><Req ok={passNumber} text="1 numero" /></View>}
@@ -146,7 +158,7 @@ export default function RegisterScreen() {
             <Text style={s.label}>Confirmar senha *</Text>
             <View style={s.inputWrap}>
               <Icon name="check" size={16} color={confirmarSenha.length > 0 ? (passMatch ? Colors.green : Colors.red) : Colors.ink3} />
-              <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]} {...(isWeb ? { className: "auth-input" } as any : {})} value={confirmarSenha} onChangeText={setConfirmarSenha} placeholder="Repita a senha" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={confirmarSenha} onChangeText={setConfirmarSenha} placeholder="Repita a senha" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
             </View>
             {confirmarSenha.length > 0 && !passMatch && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas nao conferem</Text>}
           </View>
@@ -162,15 +174,30 @@ export default function RegisterScreen() {
               <Text style={s.label}>CNPJ</Text>
               <Pressable onPress={() => { setCnpj(""); setCnpjFound(null); setCnpjError(null); setCnpjSkipped(true); }}><Text style={{ fontSize: 10, color: cnpjSkipped ? Colors.green : Colors.violet3, fontWeight: "500" }}>{cnpjSkipped ? "OK - opcional" : "Nao tenho CNPJ"}</Text></Pressable>
             </View>
-            {!cnpjSkipped && <View style={s.inputWrap}><Icon name="file_text" size={16} color={Colors.ink3} /><TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]} {...(isWeb ? { className: "auth-input" } as any : {})} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />{cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}</View>}
+            {!cnpjSkipped && (
+              <View style={s.inputWrap}>
+                <Icon name="file_text" size={16} color={Colors.ink3} />
+                <TextInput style={[s.input, inputOutline]} {...webInputProps} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />
+                {cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}
+              </View>
+            )}
             {cnpjSkipped && <View style={{ backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border }}><Text style={{ fontSize: 12, color: Colors.ink3 }}>Voce pode adicionar o CNPJ depois.</Text></View>}
             {cnpjFound && <View style={s.cnpjOk}><Icon name="check" size={12} color={Colors.green} /><Text style={s.cnpjOkText}>{cnpjFound}</Text></View>}
             {cnpjError && <Text style={s.cnpjErr}>{cnpjError}</Text>}
           </View>
-          <View style={s.field}><Text style={s.label}>Telefone / WhatsApp *</Text><Input icon="message" value={telefone} onChangeText={(v: string) => setTelefone(maskPhone(v))} placeholder="(12) 99999-0000" keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View>
+          <View style={s.field}>
+            <Text style={s.label}>Telefone / WhatsApp *</Text>
+            <View style={s.inputWrap}>
+              <Icon name="message" size={16} color={Colors.ink3} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefone} onChangeText={(v: string) => setTelefone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" />
+            </View>
+          </View>
           <View style={s.field}>
             <Text style={s.label}>Nome da empresa *</Text>
-            <Input icon="bag" value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" autoComplete="organization" />
+            <View style={s.inputWrap}>
+              <Icon name="bag" size={16} color={Colors.ink3} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" placeholderTextColor={Colors.ink3} autoComplete="organization" />
+            </View>
             {cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}
           </View>
           <View style={s.field}>
@@ -182,7 +209,7 @@ export default function RegisterScreen() {
             </View>
             <View style={[s.inputWrap, codeValid === true && { borderColor: Colors.green }, codeValid === false && { borderColor: Colors.red }]}>
               <Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} />
-              <TextInput style={[s.input, isWeb && { outlineWidth: 0 } as any]} {...(isWeb ? { className: "auth-input" } as any : {})} value={codigo} onChangeText={v => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={codigo} onChangeText={v => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} />
             </View>
             <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo? Insira para ativar seu plano.</Text>
           </View>
@@ -220,7 +247,6 @@ const s = StyleSheet.create({
   brand: { fontSize: 24, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
   title: { fontSize: 20, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 4 },
   subtitle: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginBottom: 20 },
-  // Steps
   stepsRow: { flexDirection: "row", gap: 8, marginBottom: 24 },
   stepItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border },
   stepItemActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
@@ -230,7 +256,6 @@ const s = StyleSheet.create({
   stepDotText: { fontSize: 10, fontWeight: "700", color: Colors.ink3 },
   stepLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   stepLabelActive: { color: Colors.violet3, fontWeight: "600" },
-  // Fields
   field: { marginBottom: 14 },
   label: { fontSize: 11, color: Colors.ink3, marginBottom: 6, fontWeight: "600", letterSpacing: 0.3 },
   inputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14 },
@@ -241,7 +266,6 @@ const s = StyleSheet.create({
   cnpjOk: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   cnpjOkText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
   cnpjErr: { fontSize: 10, color: Colors.red, marginTop: 4 },
-  // Buttons
   btn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 15, alignItems: "center", marginBottom: 16, marginTop: 4 },
   btnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   backBtn: { backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 20, alignItems: "center", marginBottom: 16, marginTop: 4, borderWidth: 1, borderColor: Colors.border },
