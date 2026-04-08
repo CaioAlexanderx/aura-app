@@ -11,13 +11,12 @@ import { startAutoSync } from "@/services/offlineSync";
 const queryClient = new QueryClient();
 
 function AuthGuard() {
-  const { token, isHydrated, isDemo, onboardingComplete, hydrate } = useAuthStore();
+  const { token, isHydrated, hydrate } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     hydrate();
-    // UX-02: Start offline sync listener
     startAutoSync(
       "https://aura-backend-production-f805.up.railway.app/api/v1",
       () => useAuthStore.getState().token
@@ -27,8 +26,6 @@ function AuthGuard() {
   useEffect(() => {
     if (!isHydrated) return;
     const inAuth = segments[0] === "(auth)";
-    const inTabs = segments[0] === "(tabs)";
-    const inOnboarding = inTabs && segments[1] === "onboarding";
 
     // Not logged in -> login
     if (!token && !inAuth) {
@@ -36,23 +33,12 @@ function AuthGuard() {
       return;
     }
 
-    // Logged in but on auth pages -> go to app
+    // Logged in but on auth pages -> go to dashboard
     if (token && inAuth) {
-      // New user needs onboarding
-      if (!onboardingComplete && !isDemo) {
-        router.replace("/(tabs)/onboarding");
-      } else {
-        router.replace("/(tabs)");
-      }
+      router.replace("/(tabs)");
       return;
     }
-
-    // Logged in, not demo, onboarding incomplete, not already on onboarding
-    if (token && !isDemo && !onboardingComplete && inTabs && !inOnboarding) {
-      router.replace("/(tabs)/onboarding");
-      return;
-    }
-  }, [token, isHydrated, isDemo, onboardingComplete, segments]);
+  }, [token, isHydrated, segments]);
 
   return <Slot />;
 }

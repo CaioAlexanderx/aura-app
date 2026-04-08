@@ -36,13 +36,8 @@ export default function LoginScreen() {
     if (!email || !password) { toast.error("Preencha e-mail e senha"); return; }
     try {
       await login(email.trim().toLowerCase(), password);
-      // FIX: explicit redirect after successful login
-      const state = useAuthStore.getState();
-      if (state.onboardingComplete) {
-        router.replace("/(tabs)");
-      } else {
-        router.replace("/(tabs)/onboarding");
-      }
+      // Always go to dashboard — onboarding removed
+      router.replace("/(tabs)");
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";
       toast.error(msg);
@@ -51,7 +46,6 @@ export default function LoginScreen() {
 
   const card = (
     <View style={s.card} {...(isWeb ? { className: "auth-card" } as any : {})}>
-      {/* Logo */}
       <View style={s.logoRow}>
         <Image source={{ uri: LOGO_SVG }} style={s.logo} resizeMode="contain" />
         <Text style={s.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text>
@@ -60,7 +54,6 @@ export default function LoginScreen() {
       <Text style={s.title}>Entrar na sua conta</Text>
       <Text style={s.subtitle}>Gerencie seu negocio de qualquer lugar</Text>
 
-      {/* E-mail */}
       <View style={s.field}>
         <Text style={s.label}>E-mail</Text>
         <View style={s.inputWrap}>
@@ -72,12 +65,10 @@ export default function LoginScreen() {
             placeholder="seu@email.com" placeholderTextColor={Colors.ink3}
             autoCapitalize="none" keyboardType="email-address"
             autoComplete="email"
-            onSubmitEditing={() => {}}
           />
         </View>
       </View>
 
-      {/* Senha */}
       <View style={s.field}>
         <Text style={s.label}>Senha</Text>
         <View style={s.inputWrap}>
@@ -97,12 +88,10 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      {/* Esqueci senha */}
       <Link href="/(auth)/forgot-password" style={s.forgotRow}>
         <Text style={s.forgotText}>Esqueci minha senha</Text>
       </Link>
 
-      {/* Botao Entrar */}
       <Pressable
         style={[s.btn, isLoading && { opacity: 0.7 }]}
         {...(isWeb ? { className: "auth-btn" } as any : {})}
