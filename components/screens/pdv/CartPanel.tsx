@@ -38,9 +38,9 @@ function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: { item: CartItem
   );
 }
 
-export function CartPanel({ cart, payment, setPayment, total, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale }: {
+export function CartPanel({ cart, payment, setPayment, total, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing }: {
   cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; itemCount: number;
-  isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void; removeItem: (id: string) => void; finalizeSale: () => void;
+  isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void; removeItem: (id: string) => void; finalizeSale: () => void; isProcessing?: boolean;
 }) {
   return (
     <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 24, flex: isWide ? 1 : undefined }}>
@@ -62,7 +62,10 @@ export function CartPanel({ cart, payment, setPayment, total, itemCount, isWide,
             <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "600" }}>Total</Text>
             <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(total)}</Text>
           </View>
-          <Pressable onPress={finalizeSale} style={s.finalizeBtn}><Text style={s.finalizeText}>Finalizar venda</Text></Pressable>
+          {/* CRIT-02: Disable button while processing */}
+          <Pressable onPress={finalizeSale} disabled={isProcessing} style={[s.finalizeBtn, isProcessing && { opacity: 0.5 }]}>
+            <Text style={s.finalizeText}>{isProcessing ? "Processando..." : "Finalizar venda"}</Text>
+          </Pressable>
         </View>
       )}
     </View>

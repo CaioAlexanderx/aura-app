@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { companiesApi } from "@/services/api";
+import { companiesApi, ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Customer } from "@/components/screens/clientes/types";
@@ -22,7 +22,6 @@ function mapApiCustomer(c: any): Customer {
   };
 }
 
-// Converte "DD/MM" para "2000-MM-DD" (formato ISO valido para PostgreSQL)
 function parseBirthday(val: string): string | undefined {
   if (!val) return undefined;
   const parts = val.split("/");
@@ -42,7 +41,7 @@ export function useCustomers() {
   const qc = useQueryClient();
   const companyId = company?.id;
 
-  const { data: apiData, isLoading } = useQuery({
+  const { data: apiData, isLoading, error: fetchError } = useQuery({
     queryKey: ["customers", companyId],
     queryFn: () => companiesApi.customers(companyId!),
     enabled: !!companyId && !!token && !isDemo,
@@ -50,12 +49,15 @@ export function useCustomers() {
     staleTime: 30000,
   });
 
+  // CRIT-03: Detect plan gate (403) on list
+  const planBlocked = (fetchError as any)?.status === 403;
+
   const customers: Customer[] = useMemo(() => {
-    if (isDemo) return [];
+    if (isDemo || planBlocked) return [];
     const arr = apiData?.customers || apiData?.rows || apiData;
     if (!(arr instanceof Array)) return [];
     return arr.map(mapApiCustomer);
-  }, [apiData, isDemo]);
+  }, [apiData, isDemo, planBlocked]);
 
   const addMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createCustomer(companyId!, body),
@@ -63,9 +65,14 @@ export function useCustomers() {
       qc.invalidateQueries({ queryKey: ["customers", companyId] });
       toast.success("Cliente cadastrado!");
     },
-    onError: (err) => {
+    onError: (err: any) => {
       console.error("[useCustomers] addMutation ERROR", err);
-      toast.error("Erro ao salvar cliente");
+      // CRIT-03: Show specific message for plan gate
+      if (err instanceof ApiError && err.status === 403) {
+        toast.error("Clientes disponivel a partir do plano Negocio. Faca upgrade em Configuracoes > Meu plano.");
+      } else {
+        toast.error(err?.message || "Erro ao salvar cliente");
+      }
     },
   });
 
@@ -75,7 +82,13 @@ export function useCustomers() {
       qc.invalidateQueries({ queryKey: ["customers", companyId] });
       toast.success("Cliente excluido");
     },
-    onError: () => toast.error("Erro ao excluir cliente"),
+    onError: (err: any) => {
+      if (err instanceof ApiError && err.status === 403) {
+        toast.error("Funcionalidade disponivel a partir do plano Negocio.");
+      } else {
+        toast.error("Erro ao excluir cliente");
+      }
+    },
   });
 
   function addCustomer(c: Customer) {
@@ -95,5 +108,5 @@ export function useCustomers() {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
-  return { customers, isLoading: isLoading && !isDemo, isDemo, addCustomer, deleteCustomer };
+  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, addCustomer, deleteCustomer };
 }

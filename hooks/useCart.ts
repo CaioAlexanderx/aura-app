@@ -22,10 +22,11 @@ export function useCart() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState("pix");
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
+  // CRIT-02: Prevent double-click on finalize
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const saleMutation = useMutation({
     mutationFn: async (body: any) => {
-      // Try PDV sale route first, fallback to creating income transaction
       try {
         if (pdvApi?.createSale) {
           return await pdvApi.createSale(companyId!, body);
@@ -33,7 +34,6 @@ export function useCart() {
       } catch (e: any) {
         console.warn("[useCart] pdvApi.createSale failed, falling back to transaction", e?.message);
       }
-      // Fallback: create income transaction
       return await companiesApi.createTransaction(companyId!, {
         type: "income",
         amount: body.total,
@@ -80,6 +80,10 @@ export function useCart() {
 
   function finalizeSale() {
     if (cart.length === 0) return;
+    // CRIT-02: Block if already processing
+    if (isProcessing) return;
+    setIsProcessing(true);
+
     const saleData = {
       items: cart.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
       payment_method: payment,
@@ -92,16 +96,21 @@ export function useCart() {
           setLastSale({ id: String(saleId), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
           setCart([]);
           toast.success("Venda registrada!");
+          setIsProcessing(false);
         },
-        onError: () => toast.error("Erro ao registrar venda"),
+        onError: () => {
+          toast.error("Erro ao registrar venda");
+          setIsProcessing(false);
+        },
       });
     } else {
       setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
       setCart([]);
+      setIsProcessing(false);
     }
   }
 
-  function newSale() { setLastSale(null); setCart([]); }
+  function newSale() { setLastSale(null); setCart([]); setIsProcessing(false); }
 
-  return { cart, payment, setPayment, lastSale, total, itemCount, addToCart, setQty, updateQty, removeItem, finalizeSale, newSale };
+  return { cart, payment, setPayment, lastSale, total, itemCount, isProcessing, addToCart, setQty, updateQty, removeItem, finalizeSale, newSale };
 }
