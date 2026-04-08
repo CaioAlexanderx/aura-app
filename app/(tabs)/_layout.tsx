@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
 import { ToastContainer } from "@/components/Toast";
-import OnboardingScreen from "@/app/(tabs)/onboarding";
+// Onboarding removed — register goes directly to dashboard
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
@@ -231,7 +231,7 @@ export default function TabsLayout() {
   useWebFonts();
   const C = useColors();
   const { isDark } = useThemeStore();
-  const { onboardingComplete, token } = useAuthStore();
+  const { token } = useAuthStore();
   const themeKey = isDark ? "dark" : "light";
   const screenW = useScreenWidth();
   const w = Platform.OS === "web";
@@ -247,12 +247,7 @@ export default function TabsLayout() {
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
-  if (w && token && !onboardingComplete) return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative", overflow: "auto" } as any}>
-      <ToastContainer />
-      <OnboardingScreen />
-    </div>
-  );
+  // Onboarding gate removed — users go directly to dashboard
 
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
@@ -264,14 +259,7 @@ export default function TabsLayout() {
     </div>
   );
 
-  if (token && !onboardingComplete) return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View key={themeKey} style={{ flex: 1 }}>
-        <ToastContainer />
-        <OnboardingScreen />
-      </View>
-    </View>
-  );
+  // Onboarding gate removed — users go directly to dashboard
 
   return (
     <ErrorBoundary>

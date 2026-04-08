@@ -10,6 +10,7 @@ import { DemoTour } from "@/components/DemoTour";
 import { TrialBanner } from "@/components/TrialBanner";
 import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
+import { ProfileBanner } from "@/components/ProfileBanner";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${(n||0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -114,6 +115,8 @@ export default function DashboardScreen(){
           <View style={s.hl}><Av name={user?.name??"A"}/><View><Text style={s.gr}>{greeting}, {user?.name?.split(" ")[0]??"usuario"}</Text><Text style={s.cn}>{company?.name??"---"}</Text></View></View>
           <View style={s.hr}><PB plan={company?.plan??"essencial"}/><TouchableOpacity onPress={logout} style={s.lo}><View style={{flexDirection:"row",alignItems:"center",gap:5}}><Icon name="logout" size={14} color={Colors.ink3}/><Text style={s.lt}>Sair</Text></View></TouchableOpacity></View>
         </View>
+
+        <ProfileBanner />
 
         {isLoading && !isDemo && <SkeletonDashboard />}
 
