@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
@@ -10,8 +10,9 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { AgentBanner } from "@/components/AgentBanner";
 import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/components/Toast";
 
-const TABS = ["Checkpoints", "Guias", "Histórico"];
+const TABS = ["Checkpoints", "Guias", "Historico"];
 type Step = { text: string; auto: boolean; media: string | null; hint: string };
 type Obl = { id: string; name: string; icon: string; due: string; dl: number; amt: number | null; status: "done" | "progress" | "pending" | "future"; cat: string; desc: string; steps: Step[] };
 
@@ -35,8 +36,6 @@ const numFg = { done: Colors.green, progress: Colors.violet3, pending: Colors.am
 const stLabel = { done: "OK", progress: "...", pending: ">>", future: "---" };
 const stColor = { done: Colors.green, progress: Colors.violet3, pending: Colors.amber, future: Colors.ink3 };
 
-// ── Hero Ring (SVG) ──────────────────────────────────────────
-
 function HeroRing({ obls }: { obls?: Obl[] }) {
   const data = obls || OBLS;
   const total = data.length;
@@ -46,8 +45,6 @@ function HeroRing({ obls }: { obls?: Obl[] }) {
   const pct = done / total;
   const r = 38, circ = 2 * Math.PI * r;
   const offset = circ * (1 - pct);
-  const month = new Date().toLocaleString("pt-BR", { month: "long" }).replace(/^\w/, c => c.toUpperCase());
-
   return (
     <View style={hr.card}>
       <View style={hr.ringWrap}>
@@ -63,16 +60,11 @@ function HeroRing({ obls }: { obls?: Obl[] }) {
             </div>
           `}} />
         ) : (
-          <View style={hr.fallbackRing}>
-            <Text style={hr.fallbackText}>{done}/{total}</Text>
-            <Text style={hr.fallbackLabel}>ok</Text>
-          </View>
+          <View style={hr.fallbackRing}><Text style={hr.fallbackText}>{done}/{total}</Text><Text style={hr.fallbackLabel}>ok</Text></View>
         )}
       </View>
       <View style={hr.info}>
-        <View style={hr.badges}>
-          <View style={hr.regBadge}><Text style={hr.regText}>Simples Nacional</Text></View>
-        </View>
+        <View style={hr.badges}><View style={hr.regBadge}><Text style={hr.regText}>Simples Nacional</Text></View></View>
         <Text style={hr.heroTitle}>{done === total ? "Tudo em dia!" : done >= total / 2 ? "Voce esta quase la." : "Vamos resolver suas pendencias."}</Text>
         <Text style={hr.heroSub}>{pending} {pending === 1 ? "item pendente" : "itens pendentes"}. {nextDue ? `Proximo vencimento em ${nextDue.dl} dias.` : ""}</Text>
         <View style={hr.miniStats}>
@@ -102,8 +94,6 @@ const hr = StyleSheet.create({
   miniLbl: { fontSize: 10, color: Colors.ink3 },
 });
 
-// ── Streak Bar ───────────────────────────────────────────────
-
 function StreakBar() {
   return (
     <View style={sk.bar}>
@@ -121,52 +111,26 @@ const sk = StyleSheet.create({
   pts: { fontSize: 13, fontWeight: "500", color: Colors.violet3 },
 });
 
-// ── Checkpoint Card ──────────────────────────────────────────
-
 function Checkpoint({ o, onGuide }: { o: Obl; onGuide: () => void }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
   const bc = borderColors[o.status];
   const isR = o.cat === "aura_resolve";
   const locked = o.status === "future";
-
   return (
-    <Pressable
-      onPress={locked ? undefined : onGuide}
-      onHoverIn={w && !locked ? () => sH(true) : undefined}
-      onHoverOut={w ? () => sH(false) : undefined}
-      style={[
-        cp.card,
-        { borderLeftColor: bc },
-        locked && cp.locked,
-        h && { borderColor: Colors.border2, backgroundColor: Colors.bg4 },
-        w && { transition: "all 0.15s ease" } as any,
-      ]}
-    >
+    <Pressable onPress={locked ? undefined : onGuide} onHoverIn={w && !locked ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
+      style={[cp.card, { borderLeftColor: bc }, locked && cp.locked, h && { borderColor: Colors.border2, backgroundColor: Colors.bg4 }, w && { transition: "all 0.15s ease" } as any]}>
       <View style={cp.top}>
-        <View style={[cp.num, { backgroundColor: numBg[o.status] }]}>
-          <Text style={[cp.numText, { color: numFg[o.status] }]}>{o.status === "done" ? "OK" : o.icon}</Text>
-        </View>
+        <View style={[cp.num, { backgroundColor: numBg[o.status] }]}><Text style={[cp.numText, { color: numFg[o.status] }]}>{o.status === "done" ? "OK" : o.icon}</Text></View>
         <Text style={cp.name} numberOfLines={1}>{o.name}</Text>
         <Text style={[cp.st, { color: stColor[o.status] }]}>{stLabel[o.status]}</Text>
       </View>
-      <View style={cp.respRow}>
-        <View style={[cp.resp, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}>
-          <Text style={[cp.respText, { color: isR ? Colors.green : Colors.amber }]}>{isR ? "Aura resolve" : "Você confirma"}</Text>
-        </View>
-      </View>
+      <View style={cp.respRow}><View style={[cp.resp, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}><Text style={[cp.respText, { color: isR ? Colors.green : Colors.amber }]}>{isR ? "Aura resolve" : "Voce confirma"}</Text></View></View>
       <Text style={cp.desc} numberOfLines={2}>{o.desc}</Text>
       <View style={cp.bottom}>
         <Text style={cp.date}>{o.due}</Text>
-        {o.status === "progress" && o.amt != null && (
-          <Pressable style={cp.payBtn}><Text style={cp.payText}>Pagar Pix</Text></Pressable>
-        )}
-        {o.status === "pending" && (
-          <Pressable style={cp.guideBtn} onPress={onGuide}><Text style={cp.guideText}>Ver guia</Text></Pressable>
-        )}
-        {o.status === "done" && (
-          <Pressable style={cp.doneBtn}><Text style={cp.doneText}>Ver</Text></Pressable>
-        )}
+        {o.status !== "done" && <Pressable style={cp.guideBtn} onPress={onGuide}><Text style={cp.guideText}>Ver guia</Text></Pressable>}
+        {o.status === "done" && <Pressable style={cp.doneBtn} onPress={onGuide}><Text style={cp.doneText}>Ver</Text></Pressable>}
       </View>
     </Pressable>
   );
@@ -185,29 +149,39 @@ const cp = StyleSheet.create({
   desc: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 7 },
   bottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   date: { fontSize: 10, color: Colors.ink3 },
-  payBtn: { backgroundColor: Colors.green, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-  payText: { fontSize: 11, color: "#fff", fontWeight: "600" },
   guideBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: Colors.border },
   guideText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
   doneBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   doneText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
 });
 
-// ── Guide View (with media) ──────────────────────────────────
-
-function Guide({ o, onBack }: { o: Obl; onBack: () => void }) {
-  const [dn, sD] = useState<number[]>([]);
+// A5: Guide with localStorage persistence + instruction text
+function Guide({ o, onBack, onComplete }: { o: Obl; onBack: () => void; onComplete?: (id: string) => void }) {
+  const storageKey = `aura_guide_${o.id}`;
+  const [dn, sD] = useState<number[]>(() => {
+    if (typeof localStorage !== "undefined") {
+      try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s) : []; } catch { return []; }
+    }
+    return [];
+  });
   const isR = o.cat === "aura_resolve";
   const all = dn.length === o.steps.length;
   const pct = Math.round((dn.length / o.steps.length) * 100);
-  function tg(i: number) { sD(p => p.includes(i) ? p.filter(x => x !== i) : [...p, i]); }
+  function tg(i: number) {
+    sD(p => {
+      const next = p.includes(i) ? p.filter(x => x !== i) : [...p, i];
+      if (typeof localStorage !== "undefined") { try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {} }
+      if (next.length === o.steps.length && onComplete) { setTimeout(() => onComplete(o.id), 300); }
+      return next;
+    });
+  }
   return (
     <View>
       <Pressable onPress={onBack} style={{ marginBottom: 16 }}><Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{"<"} Voltar</Text></Pressable>
       <View style={gv.hero}>
         <View style={{ flex: 1, gap: 8 }}>
           <Text style={{ fontSize: 22, color: Colors.ink, fontWeight: "800" }}>{o.name}</Text>
-          <View style={[{ borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2, alignSelf: "flex-start" }, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 10, fontWeight: "600", color: isR ? Colors.green : Colors.amber }}>{isR ? "Aura resolve" : "Aura facilita, você resolve"}</Text></View>
+          <View style={[{ borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2, alignSelf: "flex-start" }, { backgroundColor: isR ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 10, fontWeight: "600", color: isR ? Colors.green : Colors.amber }}>{isR ? "Aura resolve" : "Aura facilita, voce resolve"}</Text></View>
           <Text style={{ fontSize: 13, color: Colors.ink3, lineHeight: 20 }}>{o.desc}</Text>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {o.due !== "Inicial" && o.due !== "Sempre" && o.due !== "Auto" && <View style={gv.chip}><Text style={gv.chipL}>Vencimento</Text><Text style={gv.chipV}>{o.due}</Text></View>}
@@ -216,10 +190,14 @@ function Guide({ o, onBack }: { o: Obl; onBack: () => void }) {
           </View>
         </View>
       </View>
-      {/* Progress bar */}
       <View style={{ marginBottom: 20, gap: 6 }}>
         <View style={{ height: 8, backgroundColor: Colors.bg4, borderRadius: 4, overflow: "hidden" }}><View style={{ height: 8, borderRadius: 4, width: `${pct}%`, backgroundColor: all ? Colors.green : Colors.violet }} /></View>
         <Text style={{ fontSize: 11, color: Colors.ink3 }}>{dn.length} de {o.steps.length} passos concluidos</Text>
+      </View>
+      {/* A5: Instruction text */}
+      <View style={{ flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 }}>
+        <Text style={{ fontSize: 14, color: Colors.violet3, fontWeight: "700" }}>i</Text>
+        <Text style={{ fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18 }}>Clique em cada etapa abaixo para marcar como concluida. Seu progresso e salvo automaticamente.</Text>
       </View>
       <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "700", marginBottom: 14 }}>{isR ? "A Aura cuida de tudo. Acompanhe:" : "Siga os passos abaixo:"}</Text>
       <View style={{ gap: 10, marginBottom: 20 }}>
@@ -232,13 +210,13 @@ function Guide({ o, onBack }: { o: Obl; onBack: () => void }) {
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[gv.stepT, d && gv.stepTDone]}>{st.text}</Text>
                   {st.auto && !d && <View style={{ backgroundColor: Colors.violetD, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1, alignSelf: "flex-start" }}><Text style={{ fontSize: 9, color: Colors.violet3, fontWeight: "600" }}>Automatico</Text></View>}
+                  {!st.auto && !d && <View style={{ backgroundColor: Colors.amberD, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1, alignSelf: "flex-start" }}><Text style={{ fontSize: 9, color: Colors.amber, fontWeight: "600" }}>Voce faz</Text></View>}
                 </View>
               </View>
               {st.hint && !d ? <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 8, marginLeft: 48, lineHeight: 16 }}>{st.hint}</Text> : null}
               {st.media && !d && (
                 <View style={{ marginTop: 12, marginLeft: 48, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: Colors.border }}>
                   <Image source={{ uri: st.media }} style={{ width: "100%" as any, height: 180, backgroundColor: Colors.bg4 }} resizeMode="cover" />
-                  <View style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}><Text style={{ fontSize: 9, color: "#fff", fontWeight: "600" }}>Screenshot / GIF</Text></View>
                 </View>
               )}
             </Pressable>
@@ -266,13 +244,11 @@ const gv = StyleSheet.create({
   doneCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.green, alignItems: "center", justifyContent: "center" },
 });
 
-// ── Guides List ──────────────────────────────────────────────
-
 function GList({ obls, onSel }: { obls: Obl[]; onSel: (id: string) => void }) {
-  const gs = [{ t: "Aura resolve", h: "Tudo automatico", c: Colors.green, it: obls.filter(o => o.cat === "aura_resolve") }, { t: "Aura facilita, você resolve", h: "Passo a passo com apoio da Aura", c: Colors.amber, it: obls.filter(o => o.cat === "aura_facilita") }];
+  const gs = [{ t: "Aura resolve", h: "Tudo automatico", c: Colors.green, it: obls.filter(o => o.cat === "aura_resolve") }, { t: "Aura facilita, voce resolve", h: "Passo a passo com apoio da Aura", c: Colors.amber, it: obls.filter(o => o.cat === "aura_facilita") }];
   return (
     <View>
-      <View style={{ flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 }}><Text style={{ fontSize: 14, color: Colors.violet3, fontWeight: "700" }}>i</Text><Text style={{ fontSize: 12, color: Colors.ink2, flex: 1, lineHeight: 18 }}>Guias visuais com screenshots para cada etapa. A Aura prepara os dados e te guia pelo processo.</Text></View>
+      <View style={{ flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 }}><Text style={{ fontSize: 14, color: Colors.violet3, fontWeight: "700" }}>i</Text><Text style={{ fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18 }}>Guias visuais com screenshots para cada etapa. A Aura prepara os dados e te guia pelo processo.</Text></View>
       {gs.map(g => (
         <View key={g.t} style={{ marginBottom: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: g.c }} /><View><Text style={{ fontSize: 15, color: Colors.ink, fontWeight: "700" }}>{g.t}</Text><Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 1 }}>{g.h}</Text></View></View>
@@ -288,15 +264,13 @@ function GList({ obls, onSel }: { obls: Obl[]; onSel: (id: string) => void }) {
   );
 }
 
-// ── History ──────────────────────────────────────────────────
-
 function Hist() {
   const ms = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
   return (
     <View>
       <View style={{ backgroundColor: Colors.bg3, borderRadius: 14, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 24 }}>
         <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "700", marginBottom: 16, textAlign: "center" }}>Sequencia de conformidade</Text>
-        <View style={{ flexDirection: "row", justifyContent: "center", gap: 12, marginBottom: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           {ms.map((m, i) => { const a = i < STK.cur; return <View key={m} style={{ alignItems: "center", gap: 6 }}><View style={[{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: Colors.border }, a && { backgroundColor: Colors.greenD, borderColor: Colors.green }]}><Text style={[{ fontSize: 11, fontWeight: "800", color: Colors.ink3 }, a && { color: Colors.green }]}>{a ? "OK" : "?"}</Text></View><Text style={[{ fontSize: 10, color: Colors.ink3, fontWeight: "600" }, a && { color: Colors.green }]}>{m}</Text></View>; })}
         </View>
         <View style={{ flexDirection: "row", gap: 12 }}>
@@ -311,12 +285,11 @@ function Hist() {
   );
 }
 
-// ── Main ─────────────────────────────────────────────────────
-
 export default function ContabilidadeScreen() {
   const { company, token, isDemo } = useAuthStore();
+  const qc = useQueryClient();
+  const scrollRef = useRef<any>(null);
 
-  // CONN-16: Fetch real obligations from backend
   const { data: apiObligations } = useQuery({
     queryKey: ["obligations", company?.id],
     queryFn: () => companiesApi.obligations(company!.id),
@@ -325,7 +298,6 @@ export default function ContabilidadeScreen() {
     staleTime: 60000,
   });
 
-  // Map API obligations to screen format, fallback to OBLS mock
   const obligations: Obl[] = (() => {
     const apiArr = apiObligations?.obligations || apiObligations?.rows || apiObligations;
     if (apiArr instanceof Array && apiArr.length > 0) {
@@ -345,23 +317,37 @@ export default function ContabilidadeScreen() {
     return OBLS;
   })();
 
+  function handleGuideComplete(oblId: string) {
+    if (company?.id && !isDemo) {
+      companiesApi.completeCheckpoint(company.id, oblId)
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ["obligations", company.id] });
+          toast.success("Obrigacao concluida!");
+        })
+        .catch(() => {});
+    } else {
+      toast.success("Obrigacao concluida!");
+    }
+  }
+
   const [tab, sTab] = useState(0);
   const [gid, sGid] = useState<string | null>(null);
   const sel = gid ? obligations.find(o => o.id === gid) : null;
+
   if (sel) return (
     <ScrollView ref={scrollRef} style={z.scr} contentContainerStyle={z.cnt}>
-      <Guide o={sel} onBack={() => sGid(null)} />
+      <Guide o={sel} onBack={() => sGid(null)} onComplete={handleGuideComplete} />
     </ScrollView>
   );
 
   return (
-    <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
+    <ScrollView ref={scrollRef} style={z.scr} contentContainerStyle={z.cnt}>
       <PageHeader title="Contabilidade" />
       <HeroRing obls={obligations} />
       <StreakBar />
       <TabBar tabs={TABS} active={tab} onSelect={(i: number) => { sTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} />
 
-      <AgentBanner agent="Contábil" insight={{ title: "DAS vence em 14 dias", desc: "O DAS-MEI de abril vence em 20/04. Valor estimado: R$ 76,90. Gere o QR Code Pix.", actionLabel: "Gerar QR Code", action: "das", priority: "high", icon: "alert" }} />
+      <AgentBanner agent="Contabil" insight={{ title: "DAS vence em 14 dias", desc: "O DAS-MEI de abril vence em 20/04. Valor estimado: R$ 76,90. Gere o QR Code Pix.", actionLabel: "Gerar QR Code", action: "das", priority: "high", icon: "alert" }} />
 
       {tab === 0 && (
         <View style={z.grid}>
