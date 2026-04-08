@@ -52,9 +52,9 @@ const PLANS = [
 ];
 
 const ADDONS = [
-  { name: "Modulo para sua area", price: 69, desc: "Odonto, Salao, Barbearia, Pet, Alimentacao e mais (a partir do Negocio)" },
-  { name: "Usuario adicional", price: 19, desc: "Para cada pessoa a mais na equipe, por mes" },
-  { name: "Consultoria sob medida", price: 149, desc: "Por hora (minimo 2h) - configuracao, treinamento, automacoes" },
+  { name: "Modulo para sua area", price: "R$ 69/mes", desc: "Odonto, Salao, Barbearia, Pet, Alimentacao e mais (a partir do Negocio)" },
+  { name: "Usuario adicional", price: "R$ 19/mes", desc: "Para cada pessoa a mais na equipe, por mes" },
+  { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuracao, treinamento, automacoes e integracoes personalizadas para o seu negocio", cta: true },
 ];
 
 const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -148,8 +148,13 @@ export default function PlanosScreen() {
         {ADDONS.map(a => (
           <View key={a.name} style={s.addonCard}>
             <Text style={s.addonName}>{a.name}</Text>
-            <Text style={s.addonPrice}>R$ {a.price}{a.name.includes("hora") || a.name.includes("medida") ? "/h" : "/mes"}</Text>
+            <Text style={[s.addonPrice, (a as any).cta && { color: Colors.ink }]}>{a.price}</Text>
             <Text style={s.addonDesc}>{a.desc}</Text>
+            {(a as any).cta && (
+              <Pressable onPress={() => toast.info("Redirecionando para o suporte Aura...")} style={s.addonCta}>
+                <Text style={s.addonCtaText}>Falar com a Aura</Text>
+              </Pressable>
+            )}
           </View>
         ))}
       </View>
@@ -196,10 +201,12 @@ const s = StyleSheet.create({
   planBtnTextCurrent: { color: Colors.green },
   sectionTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
   addonsRow: { flexDirection: IS ? "row" : "column", gap: 10, marginBottom: 32 },
-  addonCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  addonName: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
-  addonPrice: { fontSize: 18, fontWeight: "800", color: Colors.violet3, marginBottom: 4 },
+  addonCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 4 },
+  addonName: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+  addonPrice: { fontSize: 18, fontWeight: "800", color: Colors.violet3 },
   addonDesc: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  addonCta: { backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 8, borderWidth: 1, borderColor: Colors.border2 },
+  addonCtaText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   demo: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
