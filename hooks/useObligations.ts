@@ -4,14 +4,12 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Obligation, CalendarResponse } from "@/components/screens/contabilidade/types";
-import { MEI_OBLIGATIONS, SN_OBLIGATIONS } from "@/components/screens/contabilidade/types";
+import { getMEIObligations, getSNObligations } from "@/components/screens/contabilidade/types";
 
 export function useObligations() {
   const { company, token, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
-
-  // Local state for completed obligations (syncs Guide → cards)
   const [localCompleted, setLocalCompleted] = useState<Set<string>>(new Set());
 
   const { data: calendarData, isLoading } = useQuery<CalendarResponse>({
@@ -31,10 +29,8 @@ export function useObligations() {
     if (calendarData?.calendar?.length) {
       obligations = calendarData.calendar;
     } else {
-      obligations = (regime === "mei" ? MEI_OBLIGATIONS : SN_OBLIGATIONS).map(o => ({ ...o }));
-      if (!hasEmployee) {
-        obligations = obligations.filter(o => !['fgts', 'esocial'].includes(o.code));
-      }
+      // Generate fresh with real dates
+      obligations = regime === "mei" ? getMEIObligations() : getSNObligations(hasEmployee);
     }
 
     // Apply local completions
@@ -45,7 +41,6 @@ export function useObligations() {
       return o;
     });
 
-    // Only actionable (exclude future from counts)
     const actionable = obligations.filter(o => o.status !== "future");
     const total = actionable.length;
     const done = actionable.filter(o => o.status === "done").length;
@@ -59,10 +54,8 @@ export function useObligations() {
   }, [calendarData, company, isDemo, localCompleted]);
 
   const completeCheckpoint = useCallback((oblCode: string) => {
-    // Immediately update local state so cards reflect the change
     setLocalCompleted(prev => new Set(prev).add(oblCode));
     toast.success("Obrigacao concluida!");
-
     if (companyId && !isDemo) {
       companiesApi.completeCheckpoint?.(companyId, oblCode)
         .then(() => qc.invalidateQueries({ queryKey: ["obligations-calendar", companyId] }))
