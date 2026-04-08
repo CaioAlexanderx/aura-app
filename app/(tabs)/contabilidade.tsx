@@ -1,12 +1,10 @@
 import { useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useObligations } from "@/hooks/useObligations";
-import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { FiscalHero } from "@/components/screens/contabilidade/FiscalHero";
-import { PriorityStrip } from "@/components/screens/contabilidade/PriorityStrip";
-import { CheckpointCard } from "@/components/screens/contabilidade/CheckpointCard";
+import { ObligationTimeline } from "@/components/screens/contabilidade/ObligationTimeline";
 import { Guide } from "@/components/screens/contabilidade/Guide";
 import { GuidesList } from "@/components/screens/contabilidade/GuidesList";
 import { HistoryTab } from "@/components/screens/contabilidade/HistoryTab";
@@ -19,19 +17,24 @@ export default function ContabilidadeScreen() {
   const [guideCode, setGuideCode] = useState<string | null>(null);
   const scrollRef = useRef<any>(null);
 
-  const { obligations, regime, regimeLabel, total, done, pending, overdue, urgent, auraResolve, voceFaz, isLoading, isDemo, completeCheckpoint } = useObligations();
+  const { obligations, regimeLabel, total, done, pending, overdue, auraResolve, voceFaz, isLoading, isDemo, completeCheckpoint } = useObligations();
 
   const selectedObl = guideCode ? obligations.find(o => o.code === guideCode) : null;
 
-  function handleTabSelect(i: number) {
-    setTab(i);
-    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
-  }
+  // Exclude "future" from donut count
+  const actionable = obligations.filter(o => o.status !== "future");
+  const actionableTotal = actionable.length;
+  const actionableDone = actionable.filter(o => o.status === "done").length;
+  const actionablePending = actionable.filter(o => o.status !== "done").length;
 
-  function openGuide(code: string) {
-    setGuideCode(code);
-    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
-  }
+  // Sort for timeline: pending/overdue first by days, then done
+  const timelinePending = obligations.filter(o => o.status !== "done" && o.status !== "future").sort((a, b) => (a.days_until_due ?? 999) - (b.days_until_due ?? 999));
+  const timelineDone = obligations.filter(o => o.status === "done");
+  const timelineFuture = obligations.filter(o => o.status === "future");
+  const timeline = [...timelinePending, ...timelineDone, ...timelineFuture];
+
+  function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
+  function openGuide(code: string) { setGuideCode(code); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
   if (selectedObl) {
     return (
@@ -40,11 +43,6 @@ export default function ContabilidadeScreen() {
       </ScrollView>
     );
   }
-
-  // Sort: overdue first, then by days_until_due
-  const sortedPending = obligations
-    .filter(o => o.status !== "done" && o.status !== "future")
-    .sort((a, b) => (a.days_until_due ?? 999) - (b.days_until_due ?? 999));
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
@@ -56,43 +54,36 @@ export default function ContabilidadeScreen() {
 
       {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {/* Tab 0: Visao Geral */}
+      {/* Tab 0: Visao Geral — Timeline */}
       {tab === 0 && (
         <View>
-          <FiscalHero regime={regime} regimeLabel={regimeLabel} total={total} done={done} pending={pending} overdue={overdue} auraResolveCount={auraResolve.length} voceFazCount={voceFaz.length} />
+          <FiscalHero regimeLabel={regimeLabel} actionable={actionableTotal} done={actionableDone} pending={actionablePending} overdue={overdue} />
 
-          {urgent.length > 0 && <PriorityStrip items={urgent} onSelect={openGuide} />}
-
-          {/* Proximas obrigacoes */}
-          {sortedPending.length > 0 && (
-            <View style={{ marginBottom: 20 }}>
-              <Text style={s.sectionTitle}>Proximas obrigacoes</Text>
-              <View style={s.grid}>
-                {sortedPending.map(o => <View key={o.code} style={s.gridItem}><CheckpointCard obligation={o} onGuide={() => openGuide(o.code)} /></View>)}
-              </View>
+          {timelinePending.length > 0 && (
+            <View style={{ marginBottom: 8 }}>
+              <Text style={s.sectionTitle}>Pendentes</Text>
+              <ObligationTimeline items={timelinePending} onGuide={openGuide} />
             </View>
           )}
 
-          {/* Concluidas */}
-          {done > 0 && (
-            <View>
-              <View style={s.sectionHeader}><Text style={s.sectionTitle}>Concluidas</Text><Text style={s.sectionCount}>{done}</Text></View>
-              <View style={s.grid}>
-                {obligations.filter(o => o.status === "done").map(o => <View key={o.code} style={s.gridItem}><CheckpointCard obligation={o} onGuide={() => openGuide(o.code)} /></View>)}
-              </View>
+          {timelineDone.length > 0 && (
+            <View style={{ marginBottom: 8 }}>
+              <View style={s.sectionHeader}><Text style={s.sectionTitle}>Concluidas</Text><Text style={s.sectionCount}>{timelineDone.length}</Text></View>
+              <ObligationTimeline items={timelineDone} onGuide={openGuide} />
+            </View>
+          )}
+
+          {timelineFuture.length > 0 && (
+            <View style={{ marginBottom: 8 }}>
+              <Text style={[s.sectionTitle, { color: Colors.ink3 }]}>Futuras</Text>
+              <ObligationTimeline items={timelineFuture} onGuide={openGuide} />
             </View>
           )}
         </View>
       )}
 
       {/* Tab 1: Obrigacoes (todas) */}
-      {tab === 1 && (
-        <View>
-          <View style={s.grid}>
-            {obligations.map(o => <View key={o.code} style={s.gridItem}><CheckpointCard obligation={o} onGuide={() => openGuide(o.code)} /></View>)}
-          </View>
-        </View>
-      )}
+      {tab === 1 && <ObligationTimeline items={timeline} onGuide={openGuide} />}
 
       {/* Tab 2: Guias */}
       {tab === 2 && <GuidesList auraResolve={auraResolve} voceFaz={voceFaz} onSelect={openGuide} />}
@@ -118,8 +109,6 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 12 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   sectionCount: { fontSize: 12, color: Colors.green, fontWeight: "700", backgroundColor: Colors.greenD, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  gridItem: { width: IS_WIDE ? "48.5%" : "100%", flexShrink: 0 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });

@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Obligation } from "./types";
-import { FILTER_CONFIG } from "./types";
 
 type Props = { obligation: Obligation; onBack: () => void; onComplete: (code: string) => void };
 
 export function Guide({ obligation: o, onBack, onComplete }: Props) {
   const storageKey = `aura_guide_${o.code}`;
-  const [done, setDone] = useState<number[]>(() => {
+  const isDone = o.status === "done";
+  const [completed, setCompleted] = useState<number[]>(() => {
+    if (isDone && o.steps) return o.steps.map((_, i) => i); // All checked if done
     if (typeof localStorage !== "undefined") {
       try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s) : []; } catch { return []; }
     }
@@ -16,12 +17,13 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
   });
 
   const steps = o.steps || [];
-  const fc = FILTER_CONFIG[o.filter_label];
-  const allDone = done.length === steps.length && steps.length > 0;
-  const pct = steps.length > 0 ? Math.round((done.length / steps.length) * 100) : 0;
+  const isAutomatic = o.filter_label === "aura_resolve";
+  const allCompleted = completed.length === steps.length && steps.length > 0;
+  const pct = steps.length > 0 ? Math.round((completed.length / steps.length) * 100) : 0;
 
   function toggle(i: number) {
-    setDone(prev => {
+    if (isDone) return; // Can't toggle already-done obligations
+    setCompleted(prev => {
       const next = prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i];
       if (typeof localStorage !== "undefined") { try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {} }
       if (next.length === steps.length) setTimeout(() => onComplete(o.code), 300);
@@ -35,30 +37,36 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
 
       <View style={s.hero}>
         <Text style={s.heroTitle}>{o.name}</Text>
-        <View style={[s.badge, { backgroundColor: fc.bg }]}><Text style={[s.badgeText, { color: fc.color }]}>{o.filter_label === "aura_resolve" ? "Aura resolve" : "Aura facilita, voce resolve"}</Text></View>
+        <View style={[s.actionBadge, { backgroundColor: isAutomatic ? Colors.greenD : Colors.amberD }]}>
+          <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automatico — Aura cuida de tudo" : "Voce precisa agir — siga o passo a passo"}</Text>
+        </View>
         <Text style={s.heroDesc}>{o.aura_action}</Text>
         {o.user_action && <Text style={s.heroUserAction}>{o.user_action}</Text>}
       </View>
 
-      <View style={s.progressSection}>
-        <View style={s.progressTrack}><View style={[s.progressFill, { width: `${pct}%`, backgroundColor: allDone ? Colors.green : Colors.violet }]} /></View>
-        <Text style={s.progressText}>{done.length} de {steps.length} passos concluidos</Text>
-      </View>
+      {!isDone && (
+        <View style={s.progressSection}>
+          <View style={s.progressTrack}><View style={[s.progressFill, { width: `${pct}%`, backgroundColor: allCompleted ? Colors.green : Colors.violet }]} /></View>
+          <Text style={s.progressText}>{completed.length} de {steps.length} passos concluidos</Text>
+        </View>
+      )}
 
-      <View style={s.instruction}><Text style={s.instructionIcon}>i</Text><Text style={s.instructionText}>Clique em cada etapa para marcar como concluida. Progresso salvo automaticamente.</Text></View>
+      {isDone && <View style={s.doneBanner}><View style={s.doneCircle}><Text style={{ fontSize: 14, color: "#fff", fontWeight: "800" }}>OK</Text></View><View><Text style={{ fontSize: 16, color: Colors.green, fontWeight: "700" }}>Concluido!</Text><Text style={{ fontSize: 12, color: Colors.ink3, marginTop: 2 }}>{o.name} esta em dia.</Text></View></View>}
 
-      <Text style={s.stepsTitle}>{o.filter_label === "aura_resolve" ? "A Aura cuida de tudo:" : "Siga os passos:"}</Text>
+      {!isDone && <View style={s.instruction}><Text style={s.instructionIcon}>i</Text><Text style={s.instructionText}>Clique em cada etapa para marcar como concluida. Progresso salvo automaticamente.</Text></View>}
+
+      <Text style={s.stepsTitle}>{isDone ? "Etapas concluidas:" : isAutomatic ? "A Aura cuida de tudo:" : "Siga os passos:"}</Text>
 
       <View style={{ gap: 10, marginBottom: 20 }}>
         {steps.map((st, i) => {
-          const d = done.includes(i);
+          const d = completed.includes(i);
           return (
-            <Pressable key={i} onPress={() => toggle(i)} style={[s.step, d && s.stepDone]}>
+            <Pressable key={i} onPress={() => toggle(i)} disabled={isDone} style={[s.step, d && s.stepDone, isDone && { opacity: 0.8 }]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={[s.stepNum, d && s.stepNumDone]}><Text style={[s.stepNumText, d && { color: "#fff" }]}>{d ? "OK" : i + 1}</Text></View>
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[s.stepText, d && s.stepTextDone]}>{st.text}</Text>
-                  {!d && <View style={[s.stepBadge, { backgroundColor: st.auto ? Colors.violetD : Colors.amberD }]}><Text style={{ fontSize: 9, fontWeight: "600", color: st.auto ? Colors.violet3 : Colors.amber }}>{st.auto ? "Automatico" : "Voce faz"}</Text></View>}
+                  {!d && <View style={[s.stepBadge, { backgroundColor: st.auto ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 9, fontWeight: "600", color: st.auto ? Colors.green : Colors.amber }}>{st.auto ? "Automatico" : "Voce faz"}</Text></View>}
                 </View>
               </View>
               {st.hint && !d && <Text style={s.stepHint}>{st.hint}</Text>}
@@ -67,7 +75,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
         })}
       </View>
 
-      {allDone && <View style={s.doneBanner}><View style={s.doneCircle}><Text style={{ fontSize: 14, color: "#fff", fontWeight: "800" }}>OK</Text></View><View><Text style={{ fontSize: 16, color: Colors.green, fontWeight: "700" }}>Concluido!</Text><Text style={{ fontSize: 12, color: Colors.ink3, marginTop: 2 }}>{o.name} esta em dia.</Text></View></View>}
+      {allCompleted && !isDone && <View style={s.doneBanner}><View style={s.doneCircle}><Text style={{ fontSize: 14, color: "#fff", fontWeight: "800" }}>OK</Text></View><View><Text style={{ fontSize: 16, color: Colors.green, fontWeight: "700" }}>Concluido!</Text><Text style={{ fontSize: 12, color: Colors.ink3, marginTop: 2 }}>{o.name} esta em dia.</Text></View></View>}
 
       <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Estimativas para apoio contabil informativo. Consulte o portal oficial.</Text></View>
     </View>
@@ -77,8 +85,8 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
 const s = StyleSheet.create({
   hero: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20, gap: 8 },
   heroTitle: { fontSize: 22, color: Colors.ink, fontWeight: "800" },
-  badge: { borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2, alignSelf: "flex-start" },
-  badgeText: { fontSize: 10, fontWeight: "600" },
+  actionBadge: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start" },
+  actionText: { fontSize: 11, fontWeight: "600" },
   heroDesc: { fontSize: 13, color: Colors.ink3, lineHeight: 20 },
   heroUserAction: { fontSize: 12, color: Colors.amber, fontWeight: "500" },
   progressSection: { marginBottom: 20, gap: 6 },
