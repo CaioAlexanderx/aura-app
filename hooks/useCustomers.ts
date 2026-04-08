@@ -12,14 +12,29 @@ function mapApiCustomer(c: any): Customer {
     email: c.email || "",
     phone: c.phone || "",
     instagram: c.instagram || c.instagram_handle || "",
-    birthday: c.birthday || c.birth_date || "",
-    lastPurchase: c.last_purchase ? new Date(c.last_purchase).toLocaleDateString("pt-BR") : "---",
+    birthday: c.birthday || (c.birth_date ? new Date(c.birth_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""),
+    lastPurchase: c.last_purchase ? new Date(c.last_purchase).toLocaleDateString("pt-BR") : c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString("pt-BR") : "---",
     totalSpent: parseFloat(c.total_spent ?? c.totalSpent ?? c.ltv) || 0,
-    visits: parseInt(c.visit_count ?? c.visits) || 0,
-    firstVisit: c.first_visit ? new Date(c.first_visit).toLocaleDateString("pt-BR") : c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : "---",
+    visits: parseInt(c.visit_count ?? c.visits ?? c.total_purchases) || 0,
+    firstVisit: c.first_visit ? new Date(c.first_visit).toLocaleDateString("pt-BR") : c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString("pt-BR") : c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : "---",
     notes: c.notes || "",
     rating: c.rating != null ? parseInt(c.rating) : null,
   };
+}
+
+// Converte "DD/MM" para "2000-MM-DD" (formato ISO valido para PostgreSQL)
+function parseBirthday(val: string): string | undefined {
+  if (!val) return undefined;
+  const parts = val.split("/");
+  if (parts.length === 2) {
+    const day = parts[0].padStart(2, "0");
+    const month = parts[1].padStart(2, "0");
+    return `2000-${month}-${day}`;
+  }
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+  }
+  return undefined;
 }
 
 export function useCustomers() {
@@ -43,10 +58,7 @@ export function useCustomers() {
   }, [apiData, isDemo]);
 
   const addMutation = useMutation({
-    mutationFn: (body: any) => {
-      console.log("[useCustomers] addMutation called", { companyId, body });
-      return companiesApi.createCustomer(companyId!, body);
-    },
+    mutationFn: (body: any) => companiesApi.createCustomer(companyId!, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customers", companyId] });
       toast.success("Cliente cadastrado!");
@@ -67,7 +79,6 @@ export function useCustomers() {
   });
 
   function addCustomer(c: Customer) {
-    console.log("[useCustomers] addCustomer", { companyId, isDemo, name: c.name });
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
     addMutation.mutate({
@@ -75,7 +86,7 @@ export function useCustomers() {
       email: c.email || undefined,
       phone: c.phone || undefined,
       instagram_handle: c.instagram || undefined,
-      birth_date: c.birthday || undefined,
+      birth_date: parseBirthday(c.birthday),
       notes: c.notes || undefined,
     });
   }
