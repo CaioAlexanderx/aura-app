@@ -37,8 +37,6 @@ export function useProducts() {
     staleTime: 30000,
   });
 
-  // useMemo — computa direto do cache React Query, SEM useState/useEffect
-  // Resolve o bug "produto some ao trocar aba" (structural sharing)
   const products: Product[] = useMemo(() => {
     if (isDemo) return [];
     const arr = apiData?.products || apiData?.rows || apiData;
@@ -47,12 +45,19 @@ export function useProducts() {
   }, [apiData, isDemo]);
 
   const addMutation = useMutation({
-    mutationFn: (body: any) => companiesApi.createProduct(companyId!, body),
-    onSuccess: () => {
+    mutationFn: (body: any) => {
+      console.log("[useProducts] mutationFn called, companyId:", companyId, "body:", body);
+      return companiesApi.createProduct(companyId!, body);
+    },
+    onSuccess: (data) => {
+      console.log("[useProducts] addMutation SUCCESS:", data);
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       toast.success("Produto cadastrado!");
     },
-    onError: () => toast.error("Erro ao salvar produto"),
+    onError: (err) => {
+      console.error("[useProducts] addMutation ERROR:", err);
+      toast.error("Erro ao salvar produto");
+    },
   });
 
   const deleteMutation = useMutation({
@@ -65,20 +70,30 @@ export function useProducts() {
   });
 
   function addProduct(product: Product) {
-    if (companyId && !isDemo) {
-      addMutation.mutate({
-        name: product.name,
-        sku: product.code !== "---" ? product.code : undefined,
-        barcode: product.barcode || undefined,
-        category: product.category,
-        price: product.price,
-        cost_price: product.cost,
-        stock_qty: product.stock,
-        min_stock: product.minStock,
-        unit: product.unit,
-        description: product.notes || undefined,
-      });
+    console.log("[useProducts] addProduct called", { companyId, isDemo, product: product.name });
+    if (!companyId) {
+      console.error("[useProducts] BLOCKED: companyId is", companyId);
+      toast.error("Empresa nao identificada. Faca login novamente.");
+      return;
     }
+    if (isDemo) {
+      console.log("[useProducts] BLOCKED: demo mode");
+      return;
+    }
+    const body = {
+      name: product.name,
+      sku: product.code !== "---" ? product.code : undefined,
+      barcode: product.barcode || undefined,
+      category: product.category,
+      price: product.price,
+      cost_price: product.cost,
+      stock_qty: product.stock,
+      min_stock: product.minStock,
+      unit: product.unit,
+      description: product.notes || undefined,
+    };
+    console.log("[useProducts] calling addMutation.mutate with:", body);
+    addMutation.mutate(body);
   }
 
   function deleteProduct(id: string) {
