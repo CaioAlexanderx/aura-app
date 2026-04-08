@@ -5,10 +5,11 @@ import { useObligations } from "@/hooks/useObligations";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { FiscalHero } from "@/components/screens/contabilidade/FiscalHero";
 import { ObligationTimeline } from "@/components/screens/contabilidade/ObligationTimeline";
+import { AuraAutoSection } from "@/components/screens/contabilidade/AuraAutoSection";
 import { Guide } from "@/components/screens/contabilidade/Guide";
 import { GuidesList } from "@/components/screens/contabilidade/GuidesList";
 import { HistoryTab } from "@/components/screens/contabilidade/HistoryTab";
-import { TABS } from "@/components/screens/contabilidade/types";
+import { TABS, AURA_AUTO_FEATURES } from "@/components/screens/contabilidade/types";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -17,17 +18,11 @@ export default function ContabilidadeScreen() {
   const [guideCode, setGuideCode] = useState<string | null>(null);
   const scrollRef = useRef<any>(null);
 
-  const { obligations, regimeLabel, total, done, pending, overdue, auraResolve, voceFaz, isLoading, isDemo, completeCheckpoint } = useObligations();
+  const { obligations, regime, regimeLabel, total, done, pending, overdue, auraResolve, voceFaz, isLoading, isDemo, completeCheckpoint } = useObligations();
 
   const selectedObl = guideCode ? obligations.find(o => o.code === guideCode) : null;
+  const autoFeatures = AURA_AUTO_FEATURES[regime === "mei" ? "mei" : "simples"] || [];
 
-  // Exclude "future" from donut count
-  const actionable = obligations.filter(o => o.status !== "future");
-  const actionableTotal = actionable.length;
-  const actionableDone = actionable.filter(o => o.status === "done").length;
-  const actionablePending = actionable.filter(o => o.status !== "done").length;
-
-  // Sort for timeline: pending/overdue first by days, then done
   const timelinePending = obligations.filter(o => o.status !== "done" && o.status !== "future").sort((a, b) => (a.days_until_due ?? 999) - (b.days_until_due ?? 999));
   const timelineDone = obligations.filter(o => o.status === "done");
   const timelineFuture = obligations.filter(o => o.status === "future");
@@ -54,14 +49,14 @@ export default function ContabilidadeScreen() {
 
       {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {/* Tab 0: Visao Geral — Timeline */}
+      {/* Tab 0: Visao Geral */}
       {tab === 0 && (
         <View>
-          <FiscalHero regimeLabel={regimeLabel} actionable={actionableTotal} done={actionableDone} pending={actionablePending} overdue={overdue} />
+          <FiscalHero regimeLabel={regimeLabel} actionable={total} done={done} pending={pending} overdue={overdue} />
 
           {timelinePending.length > 0 && (
             <View style={{ marginBottom: 8 }}>
-              <Text style={s.sectionTitle}>Pendentes</Text>
+              <Text style={s.sectionTitle}>Suas obrigacoes</Text>
               <ObligationTimeline items={timelinePending} onGuide={openGuide} />
             </View>
           )}
@@ -79,20 +74,16 @@ export default function ContabilidadeScreen() {
               <ObligationTimeline items={timelineFuture} onGuide={openGuide} />
             </View>
           )}
+
+          <AuraAutoSection features={autoFeatures} />
         </View>
       )}
 
-      {/* Tab 1: Obrigacoes (todas) */}
       {tab === 1 && <ObligationTimeline items={timeline} onGuide={openGuide} />}
-
-      {/* Tab 2: Guias */}
       {tab === 2 && <GuidesList auraResolve={auraResolve} voceFaz={voceFaz} onSelect={openGuide} />}
-
-      {/* Tab 3: Historico */}
       {tab === 3 && <HistoryTab />}
 
       <View style={{ alignItems: "center", paddingVertical: 12 }}><Text style={{ fontSize: 10, color: Colors.ink3, fontStyle: "italic" }}>Estimativas para apoio contabil informativo.</Text></View>
-
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
   );
