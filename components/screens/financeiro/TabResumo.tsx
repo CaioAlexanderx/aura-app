@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import type { Transaction } from "./types";
@@ -7,7 +7,10 @@ import { fmt } from "./types";
 
 type Props = { transactions: Transaction[]; dreApi: any };
 
-// Donut chart via SVG (web only, fallback for native)
+// P-01: Higher contrast donut palette
+const INCOME_COLORS = ["#10b981", "#34d399", "#6ee7b7", "#a7f3d0"];
+const EXPENSE_COLORS = ["#ef4444", "#f87171", "#fb923c", "#fbbf24", "#f472b6", "#a78bfa", "#60a5fa"];
+
 function DonutChart({ items, total, colorFn }: { items: { category: string; amount: number }[]; total: number; colorFn: (i: number) => string }) {
   if (Platform.OS !== "web" || total <= 0) return null;
   const size = 160, cx = 80, cy = 80, r = 60, sw = 24;
@@ -19,16 +22,16 @@ function DonutChart({ items, total, colorFn }: { items: { category: string; amou
     const gap = circ - dash;
     const o = offset;
     offset += dash;
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colorFn(i)}" stroke-width="${sw}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-o}" />`;
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colorFn(i)}" stroke-width="${sw}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-o}" style="transition:stroke-dashoffset 0.6s ease" />`;
   }).join("");
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${Colors.bg4}" stroke-width="${sw}" />${slices}</svg>`;
   return <div style={{ width: size, height: size, position: "relative" } as any} dangerouslySetInnerHTML={{ __html: svg + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center"><div style="font-size:18px;font-weight:800;color:${Colors.ink}">${fmt(total)}</div><div style="font-size:10px;color:${Colors.ink3}">total</div></div>` }} />;
 }
 
-const INCOME_COLORS = ["#34d399", "#6ee7b7", "#a7f3d0", "#d1fae5"];
-const EXPENSE_COLORS = ["#f87171", "#fca5a5", "#fecaca", "#fee2e2", "#fda4af", "#fdba74", "#fcd34d"];
+// P-04: Reusable donut export for ABC estoque
+export { DonutChart, INCOME_COLORS, EXPENSE_COLORS };
 
-function HealthHero({ income, expenses, balance, marginPct, txCount }: { income: number; expenses: number; balance: number; marginPct: number; txCount: number }) {
+function HealthHero({ income, expenses, balance, marginPct }: { income: number; expenses: number; balance: number; marginPct: number }) {
   const status = balance > 0 && marginPct >= 20 ? "Saudavel" : balance > 0 ? "Atencao" : "Critico";
   const statusColor = status === "Saudavel" ? Colors.green : status === "Atencao" ? Colors.amber : Colors.red;
   const statusBg = status === "Saudavel" ? Colors.greenD : status === "Atencao" ? Colors.amberD : Colors.redD;
@@ -137,14 +140,8 @@ export function TabResumo({ transactions, dreApi }: Props) {
       if (incomeCount <= 3) insights.push(`Com apenas ${incomeCount} vendas, seu modelo depende de poucas transacoes com ticket alto (${fmt(avgTicket)}).`);
       else insights.push(`${incomeCount} vendas com ticket medio de ${fmt(avgTicket)}.`);
     }
-    if (balance < 0 && incomeCount > 0 && avgTicket > 0) {
-      const extra = Math.ceil(Math.abs(balance) / avgTicket);
-      insights.push(`Se aumentar em ${extra} vendas o volume atual, o resultado tende a virar positivo.`);
-    }
-    if (balance < 0 && totalExpenses > 0) {
-      const cut = Math.round((Math.abs(balance) / totalExpenses) * 100);
-      insights.push(`Uma reducao de ${cut}% nas despesas eliminaria o prejuizo.`);
-    }
+    if (balance < 0 && incomeCount > 0 && avgTicket > 0) { const extra = Math.ceil(Math.abs(balance) / avgTicket); insights.push(`Se aumentar em ${extra} vendas o volume atual, o resultado tende a virar positivo.`); }
+    if (balance < 0 && totalExpenses > 0) { const cut = Math.round((Math.abs(balance) / totalExpenses) * 100); insights.push(`Uma reducao de ${cut}% nas despesas eliminaria o prejuizo.`); }
 
     const kpis = [
       { label: "Margem", value: `${marginPct}%`, color: marginPct >= 20 ? Colors.green : marginPct >= 0 ? Colors.amber : Colors.red, sub: marginPct >= 20 ? "Saudavel" : marginPct >= 0 ? "Atencao" : "Critico" },
@@ -160,7 +157,7 @@ export function TabResumo({ transactions, dreApi }: Props) {
 
   return (
     <View>
-      <HealthHero income={computed.totalIncome} expenses={computed.totalExpenses} balance={computed.balance} marginPct={computed.marginPct} txCount={computed.txCount} />
+      <HealthHero income={computed.totalIncome} expenses={computed.totalExpenses} balance={computed.balance} marginPct={computed.marginPct} />
       <AlertStrip alerts={computed.alerts} />
       <KpiStrip kpis={computed.kpis} />
       <NarrativeBlock insights={computed.insights} />

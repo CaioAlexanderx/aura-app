@@ -1,6 +1,10 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Product } from "./types";
+import { DonutChart } from "@/components/screens/financeiro/TabResumo";
+
+const ABC_COLORS = ["#10b981", "#fbbf24", "#6b7280"];
+const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
   const colors = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
@@ -15,8 +19,34 @@ export function AbcSummary({ products }: { products: Product[] }) {
   const clrs = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
   const labels = { A: "Alta rotatividade", B: "Rotatividade media", C: "Baixa rotatividade" };
 
+  // P-04: Donut chart data
+  const donutItems = (["A", "B", "C"] as const)
+    .map(g => ({ category: `Curva ${g}`, amount: groups[g].reduce((s, p) => s + p.price * p.sold30d, 0) }))
+    .filter(d => d.amount > 0);
+
   return (
     <View style={{ gap: 16 }}>
+      {/* P-04: Donut overview */}
+      {donutItems.length > 0 && totalRevenue > 0 && (
+        <View style={s.donutCard}>
+          <Text style={s.donutTitle}>Distribuicao por curva</Text>
+          <View style={s.donutRow}>
+            <DonutChart items={donutItems} total={totalRevenue} colorFn={(i) => ABC_COLORS[i % ABC_COLORS.length]} />
+            <View style={s.donutLegend}>
+              {donutItems.map((d, i) => {
+                const pct = totalRevenue > 0 ? Math.round((d.amount / totalRevenue) * 100) : 0;
+                return (
+                  <View key={d.category} style={s.legendItem}>
+                    <View style={[s.legendDot, { backgroundColor: ABC_COLORS[i] }]} />
+                    <View style={{ flex: 1 }}><Text style={s.legendLabel}>{d.category}</Text><Text style={s.legendValue}>{fmt(d.amount)} ({pct}%)</Text></View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      )}
+
       {(["A", "B", "C"] as const).map(grade => {
         const items = groups[grade];
         const sold = items.reduce((s, p) => s + p.sold30d, 0);
@@ -50,6 +80,14 @@ const s = StyleSheet.create({
   track: { flex: 1, height: 8, backgroundColor: Colors.bg4, borderRadius: 4, overflow: "hidden" },
   fill: { height: 8, borderRadius: 4 },
   pct: { fontSize: 11, fontWeight: "700", width: 36, textAlign: "right" },
+  donutCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border },
+  donutTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 14 },
+  donutRow: { flexDirection: "row", alignItems: "center", gap: 24 },
+  donutLegend: { flex: 1, gap: 10 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 10 },
+  legendDot: { width: 12, height: 12, borderRadius: 6 },
+  legendLabel: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  legendValue: { fontSize: 11, color: Colors.ink3 },
 });
 
 export default AbcSummary;
