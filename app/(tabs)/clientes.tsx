@@ -162,7 +162,7 @@ export default function ClientesScreen() {
       }));
       sCust(mapped);
     }
-  }, [apiCustArr instanceof Array ? apiCustArr.length : 0]);
+  }, [apiCustomers]);
 
   function handleDeleteCustomer(id: string) {
     if (company?.id && !isDemo) {

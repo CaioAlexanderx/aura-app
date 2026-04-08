@@ -554,7 +554,6 @@ export default function EstoqueScreen() {
   const apiProducts = (apiData?.products || apiData?.rows || apiData);
   useEffect(() => {
     if (apiProducts instanceof Array) {
-      if (apiProducts.length === 0) { setProducts([]); return; }
       const mapped = apiProducts.map((p: any) => ({
         id: p.id || p.product_id || String(Math.random()),
         name: p.name || p.product_name || "Produto",
@@ -573,7 +572,7 @@ export default function EstoqueScreen() {
       }));
       setProducts(mapped);
     }
-  }, [JSON.stringify(apiProducts instanceof Array ? apiProducts.map((p:any) => p.id) : [])]);
+  }, [apiData]);
   const scrollRef = useRef<any>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
