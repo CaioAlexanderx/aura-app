@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";

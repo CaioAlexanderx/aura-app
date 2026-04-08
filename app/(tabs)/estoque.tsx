@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
@@ -147,8 +147,8 @@ function AddProductForm({ categories, onSave, onCancel }: {
   }
 
   function handleSave() {
-    if (!name.trim()) { Alert.alert("Preencha o nome do produto"); return; }
-    if (!price.trim()) { Alert.alert("Preencha o preco de venda"); return; }
+    if (!name.trim()) { toast.error("Preencha o nome do produto"); return; }
+    if (!price.trim()) { toast.error("Preencha o preco de venda"); return; }
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
     const product: Product = {
       id: Date.now().toString(),
@@ -540,7 +540,7 @@ export default function EstoqueScreen() {
   });
 
   const addProductMutation = useMutation({
-    mutationFn: (body: any) => companiesApi.createProduct ? companiesApi.createProduct(company!.id, body) : Promise.resolve(null),
+    mutationFn: (body: any) => companiesApi.createProduct(company!.id, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["products", company?.id] }),
   });
   const { data: apiData, isLoading: isLoadingProducts } = useQuery({
