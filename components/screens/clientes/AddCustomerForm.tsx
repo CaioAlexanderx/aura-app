@@ -3,8 +3,16 @@ import { View, Text, StyleSheet, Pressable, TextInput, Dimensions } from "react-
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import type { Customer } from "./types";
+import { maskPhone, maskDate } from "@/utils/masks";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+
+// A6: Auto-prepend @ to instagram handle
+function formatInstagram(v: string): string {
+  const cleaned = v.replace(/\s/g, "");
+  if (cleaned && !cleaned.startsWith("@")) return "@" + cleaned;
+  return cleaned;
+}
 
 export function AddCustomerForm({ onSave, onCancel }: { onSave: (c: Customer) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
@@ -37,13 +45,32 @@ export function AddCustomerForm({ onSave, onCancel }: { onSave: (c: Customer) =>
       <View style={{ height: 16 }} />
 
       <View style={s.row2}>
-        <View style={{ flex: 1 }}><Text style={s.label}>Telefone / WhatsApp</Text><TextInput style={s.input} value={phone} onChangeText={setPhone} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" /><View style={{ height: 16 }} /></View>
-        <View style={{ flex: 1 }}><Text style={s.label}>E-mail</Text><TextInput style={s.input} value={email} onChangeText={setEmail} placeholder="email@email.com" placeholderTextColor={Colors.ink3} keyboardType="email-address" autoCapitalize="none" /><View style={{ height: 16 }} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>Telefone / WhatsApp</Text>
+          {/* A6: Phone mask */}
+          <TextInput style={s.input} value={phone} onChangeText={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
+          <View style={{ height: 16 }} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>E-mail</Text>
+          <TextInput style={s.input} value={email} onChangeText={setEmail} placeholder="email@email.com" placeholderTextColor={Colors.ink3} keyboardType="email-address" autoCapitalize="none" />
+          <View style={{ height: 16 }} />
+        </View>
       </View>
 
       <View style={s.row2}>
-        <View style={{ flex: 1 }}><Text style={s.label}>Instagram</Text><TextInput style={s.input} value={instagram} onChangeText={setInstagram} placeholder="@usuario" placeholderTextColor={Colors.ink3} autoCapitalize="none" /><View style={{ height: 16 }} /></View>
-        <View style={{ flex: 1 }}><Text style={s.label}>Aniversario (dia/mes)</Text><TextInput style={s.input} value={birthday} onChangeText={setBirthday} placeholder="15/06" placeholderTextColor={Colors.ink3} /><View style={{ height: 16 }} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>Instagram</Text>
+          {/* A6: Auto-prepend @ */}
+          <TextInput style={s.input} value={instagram} onChangeText={v => setInstagram(formatInstagram(v))} placeholder="@usuario" placeholderTextColor={Colors.ink3} autoCapitalize="none" />
+          <View style={{ height: 16 }} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>Aniversario (DD/MM ou DD/MM/AAAA)</Text>
+          {/* A6: Date mask */}
+          <TextInput style={s.input} value={birthday} onChangeText={v => setBirthday(maskDate(v))} placeholder="15/06" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
+          <View style={{ height: 16 }} />
+        </View>
       </View>
 
       <Text style={s.label}>Observacoes</Text>

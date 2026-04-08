@@ -44,20 +44,29 @@ export function useProducts() {
     return arr.map(mapApiProduct);
   }, [apiData, isDemo]);
 
+  // A4: Derive categories from existing products (no defaults if empty)
+  const categories: string[] = useMemo(() => {
+    const cats = new Set(products.map(p => p.category).filter(Boolean));
+    return [...cats].sort();
+  }, [products]);
+
   const addMutation = useMutation({
-    mutationFn: (body: any) => {
-      console.log("[useProducts] mutationFn called, companyId:", companyId, "body:", body);
-      return companiesApi.createProduct(companyId!, body);
-    },
-    onSuccess: (data) => {
-      console.log("[useProducts] addMutation SUCCESS:", data);
+    mutationFn: (body: any) => companiesApi.createProduct(companyId!, body),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       toast.success("Produto cadastrado!");
     },
-    onError: (err) => {
-      console.error("[useProducts] addMutation ERROR:", err);
-      toast.error("Erro ao salvar produto");
+    onError: () => toast.error("Erro ao salvar produto"),
+  });
+
+  // A3: Update product mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ prodId, body }: { prodId: string; body: any }) => companiesApi.updateProduct(companyId!, prodId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products", companyId] });
+      toast.success("Produto atualizado!");
     },
+    onError: () => toast.error("Erro ao atualizar produto"),
   });
 
   const deleteMutation = useMutation({
@@ -70,45 +79,43 @@ export function useProducts() {
   });
 
   function addProduct(product: Product) {
-    console.log("[useProducts] addProduct called", { companyId, isDemo, product: product.name });
-    if (!companyId) {
-      console.error("[useProducts] BLOCKED: companyId is", companyId);
-      toast.error("Empresa nao identificada. Faca login novamente.");
-      return;
-    }
-    if (isDemo) {
-      console.log("[useProducts] BLOCKED: demo mode");
-      return;
-    }
-    const body = {
-      name: product.name,
-      sku: product.code !== "---" ? product.code : undefined,
-      barcode: product.barcode || undefined,
-      category: product.category,
-      price: product.price,
-      cost_price: product.cost,
-      stock_qty: product.stock,
-      min_stock: product.minStock,
-      unit: product.unit,
-      description: product.notes || undefined,
-    };
-    console.log("[useProducts] calling addMutation.mutate with:", body);
-    addMutation.mutate(body);
+    if (!companyId) { toast.error("Empresa nao identificada"); return; }
+    if (isDemo) return;
+    addMutation.mutate({
+      name: product.name, sku: product.code !== "---" ? product.code : undefined,
+      barcode: product.barcode || undefined, category: product.category,
+      price: product.price, cost_price: product.cost, stock_qty: product.stock,
+      min_stock: product.minStock, unit: product.unit, description: product.notes || undefined,
+    });
+  }
+
+  // A3: Update existing product
+  function updateProduct(product: Product) {
+    if (!companyId || isDemo) return;
+    updateMutation.mutate({ prodId: product.id, body: {
+      name: product.name, sku: product.code !== "---" ? product.code : undefined,
+      barcode: product.barcode || undefined, category: product.category,
+      price: product.price, cost_price: product.cost, stock_qty: product.stock,
+      min_stock: product.minStock, unit: product.unit, description: product.notes || undefined,
+    }});
+  }
+
+  // A5: Decrement stock after sale (called from useCart)
+  function decrementStock(productId: string, qty: number) {
+    if (!companyId || isDemo) return;
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const newStock = Math.max(0, product.stock - qty);
+    updateMutation.mutate({ prodId: productId, body: { stock_qty: newStock } });
   }
 
   function deleteProduct(id: string) {
-    if (companyId && !isDemo) {
-      deleteMutation.mutate(id);
-    }
+    if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
   return {
-    products,
-    isLoading: isLoading && !isDemo,
-    isDemo,
-    addProduct,
-    deleteProduct,
-    isAdding: addMutation.isPending,
-    isDeleting: deleteMutation.isPending,
+    products, categories, isLoading: isLoading && !isDemo, isDemo,
+    addProduct, updateProduct, decrementStock, deleteProduct,
+    isAdding: addMutation.isPending, isUpdating: updateMutation.isPending, isDeleting: deleteMutation.isPending,
   };
 }

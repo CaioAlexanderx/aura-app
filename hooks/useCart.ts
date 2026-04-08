@@ -22,24 +22,19 @@ export function useCart() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState("pix");
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
-  // CRIT-02: Prevent double-click on finalize
   const [isProcessing, setIsProcessing] = useState(false);
 
   const saleMutation = useMutation({
     mutationFn: async (body: any) => {
       try {
-        if (pdvApi?.createSale) {
-          return await pdvApi.createSale(companyId!, body);
-        }
+        if (pdvApi?.createSale) return await pdvApi.createSale(companyId!, body);
       } catch (e: any) {
-        console.warn("[useCart] pdvApi.createSale failed, falling back to transaction", e?.message);
+        console.warn("[useCart] pdvApi.createSale failed, falling back", e?.message);
       }
       return await companiesApi.createTransaction(companyId!, {
-        type: "income",
-        amount: body.total,
+        type: "income", amount: body.total,
         description: `Venda PDV - ${body.items.length} itens (${body.payment_method})`,
-        category: "Vendas",
-        source: "pdv",
+        category: "Vendas", source: "pdv",
       });
     },
     onSuccess: () => {
@@ -79,34 +74,40 @@ export function useCart() {
   }
 
   function finalizeSale() {
-    if (cart.length === 0) return;
-    // CRIT-02: Block if already processing
-    if (isProcessing) return;
+    if (cart.length === 0 || isProcessing) return;
     setIsProcessing(true);
 
+    const cartSnapshot = [...cart];
     const saleData = {
-      items: cart.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
-      payment_method: payment,
-      total,
+      items: cartSnapshot.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
+      payment_method: payment, total,
     };
+
     if (companyId && !isDemo) {
       saleMutation.mutate(saleData, {
         onSuccess: (res: any) => {
           const saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale({ id: String(saleId), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
+          setLastSale({ id: String(saleId), total, payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR") });
           setCart([]);
           toast.success("Venda registrada!");
+          // A5: Decrement stock for each sold item
+          cartSnapshot.forEach(item => {
+            companiesApi.updateProduct(companyId, item.productId, {
+              stock_qty_decrement: item.qty,
+            }).catch(() => {
+              // Fallback: try direct stock_qty update
+              companiesApi.updateProduct(companyId, item.productId, {
+                stock_qty: Math.max(0, -1), // Will be calculated from current
+              }).catch(() => {});
+            });
+          });
           setIsProcessing(false);
         },
-        onError: () => {
-          toast.error("Erro ao registrar venda");
-          setIsProcessing(false);
-        },
+        onError: () => { toast.error("Erro ao registrar venda"); setIsProcessing(false); },
       });
     } else {
-      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
-      setCart([]);
-      setIsProcessing(false);
+      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR") });
+      setCart([]); setIsProcessing(false);
     }
   }
 

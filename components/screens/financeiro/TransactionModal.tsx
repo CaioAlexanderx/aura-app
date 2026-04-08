@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { INCOME_CATS, EXPENSE_CATS } from "./types";
+import { maskCurrency, unmaskNumber } from "@/utils/masks";
 
 export function TransactionModal({ visible, onClose, onSave }: {
   visible: boolean; onClose: () => void;
@@ -19,8 +20,14 @@ export function TransactionModal({ visible, onClose, onSave }: {
 
   function reset() { setAmount(""); setDesc(""); setCategory(""); setBatchText(""); setMode("unit"); }
 
+  // A1: Parse masked currency value
+  function parseAmount(masked: string): number {
+    const nums = unmaskNumber(masked);
+    return nums ? parseInt(nums) / 100 : 0;
+  }
+
   function handleSaveUnit() {
-    const val = parseFloat(amount.replace(/[^0-9.,]/g, "").replace(",", "."));
+    const val = parseAmount(amount);
     if (!val || val <= 0) { toast.error("Informe um valor valido"); return; }
     if (!desc.trim()) { toast.error("Informe uma descricao"); return; }
     onSave({ type: txType, amount: val, description: desc.trim(), category: category || cats[0] });
@@ -55,44 +62,35 @@ export function TransactionModal({ visible, onClose, onSave }: {
         </View>
 
         <View style={s.toggleRow}>
-          <Pressable onPress={() => setTxType("income")} style={[s.toggleBtn, isIncome && { backgroundColor: Colors.greenD, borderColor: Colors.green }]}>
-            <Text style={[s.toggleText, isIncome && { color: Colors.green }]}>Receita</Text>
-          </Pressable>
-          <Pressable onPress={() => setTxType("expense")} style={[s.toggleBtn, !isIncome && { backgroundColor: Colors.redD, borderColor: Colors.red }]}>
-            <Text style={[s.toggleText, !isIncome && { color: Colors.red }]}>Despesa</Text>
-          </Pressable>
+          <Pressable onPress={() => setTxType("income")} style={[s.toggleBtn, isIncome && { backgroundColor: Colors.greenD, borderColor: Colors.green }]}><Text style={[s.toggleText, isIncome && { color: Colors.green }]}>Receita</Text></Pressable>
+          <Pressable onPress={() => setTxType("expense")} style={[s.toggleBtn, !isIncome && { backgroundColor: Colors.redD, borderColor: Colors.red }]}><Text style={[s.toggleText, !isIncome && { color: Colors.red }]}>Despesa</Text></Pressable>
         </View>
 
         <View style={s.modeRow}>
           {(["unit", "batch"] as const).map(m => (
-            <Pressable key={m} onPress={() => setMode(m)} style={[s.modeBtn, mode === m && s.modeBtnActive]}>
-              <Text style={[s.modeText, mode === m && s.modeTextActive]}>{m === "unit" ? "Unitario" : "Lote"}</Text>
-            </Pressable>
+            <Pressable key={m} onPress={() => setMode(m)} style={[s.modeBtn, mode === m && s.modeBtnActive]}><Text style={[s.modeText, mode === m && s.modeTextActive]}>{m === "unit" ? "Unitario" : "Lote"}</Text></Pressable>
           ))}
         </View>
 
         {mode === "unit" ? (
           <View style={s.form}>
-            <Text style={s.label}>Valor</Text>
-            <TextInput style={s.input} value={amount} onChangeText={setAmount} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
+            <Text style={s.label}>Valor (R$)</Text>
+            {/* A1: Currency mask — only numbers allowed */}
+            <TextInput style={s.input} value={amount} onChangeText={v => setAmount(maskCurrency(v))} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" />
             <Text style={s.label}>Descricao</Text>
             <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
             <Text style={s.label}>Categoria</Text>
             <View style={s.catGrid}>
               {cats.map(cat => <Pressable key={cat} onPress={() => setCategory(cat)} style={[s.catBtn, category === cat && s.catBtnActive]}><Text style={[s.catText, category === cat && s.catTextActive]}>{cat}</Text></Pressable>)}
             </View>
-            <Pressable onPress={handleSaveUnit} style={[s.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}>
-              <Text style={s.saveBtnText}>{isIncome ? "Lancar receita" : "Lancar despesa"}</Text>
-            </Pressable>
+            <Pressable onPress={handleSaveUnit} style={[s.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}><Text style={s.saveBtnText}>{isIncome ? "Lancar receita" : "Lancar despesa"}</Text></Pressable>
           </View>
         ) : (
           <View style={s.form}>
             <Text style={s.label}>Lancamentos em lote</Text>
             <Text style={s.hint}>Uma linha por lancamento: descricao;valor;categoria</Text>
             <TextInput style={[s.input, { minHeight: 120, textAlignVertical: "top" }]} value={batchText} onChangeText={setBatchText} placeholder={"Venda A;150,00;Vendas\nAluguel;1200,00;Fixas"} placeholderTextColor={Colors.ink3} multiline numberOfLines={6} />
-            <Pressable onPress={handleSaveBatch} style={[s.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}>
-              <Text style={s.saveBtnText}>Lancar em lote</Text>
-            </Pressable>
+            <Pressable onPress={handleSaveBatch} style={[s.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}><Text style={s.saveBtnText}>Lancar em lote</Text></Pressable>
           </View>
         )}
       </View>

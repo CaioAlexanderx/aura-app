@@ -11,17 +11,21 @@ function FormField({ label, required, children }: { label: string; required?: bo
   return <View style={{ marginBottom: 16 }}><Text style={s.label}>{label}{required && <Text style={{ color: Colors.red }}> *</Text>}</Text>{children}</View>;
 }
 
-export function AddProductForm({ categories, onSave, onCancel }: { categories: string[]; onSave: (p: Product) => void; onCancel: () => void }) {
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState(categories[0] || "Produtos");
-  const [price, setPrice] = useState("");
-  const [cost, setCost] = useState("");
-  const [stock, setStock] = useState("");
-  const [minStock, setMinStock] = useState("");
-  const [unit, setUnit] = useState("un");
-  const [notes, setNotes] = useState("");
+// A3: Accepts optional editProduct for edit mode
+export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
+  categories: string[]; onSave: (p: Product) => void; onCancel: () => void; editProduct?: Product | null;
+}) {
+  const isEdit = !!editProduct;
+  const [name, setName] = useState(editProduct?.name || "");
+  const [code, setCode] = useState(editProduct?.code || "");
+  const [barcode, setBarcode] = useState(editProduct?.barcode || "");
+  const [category, setCategory] = useState(editProduct?.category || categories[0] || "");
+  const [price, setPrice] = useState(editProduct ? String(editProduct.price) : "");
+  const [cost, setCost] = useState(editProduct ? String(editProduct.cost) : "");
+  const [stock, setStock] = useState(editProduct ? String(editProduct.stock) : "");
+  const [minStock, setMinStock] = useState(editProduct ? String(editProduct.minStock) : "");
+  const [unit, setUnit] = useState(editProduct?.unit || "un");
+  const [notes, setNotes] = useState(editProduct?.notes || "");
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
 
@@ -35,16 +39,17 @@ export function AddProductForm({ categories, onSave, onCancel }: { categories: s
     if (!price.trim()) { toast.error("Preencha o preco de venda"); return; }
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
     onSave({
-      id: Date.now().toString(), name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
-      category: finalCategory, price: parseFloat(price.replace(",", ".")) || 0, cost: parseFloat(cost.replace(",", ".")) || 0,
-      stock: parseInt(stock) || 0, minStock: parseInt(minStock) || 0, abc: "C", sold30d: 0, unit, brand: "", notes: notes.trim(),
+      id: editProduct?.id || Date.now().toString(), name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
+      category: finalCategory || "Produtos", price: parseFloat(price.replace(",", ".")) || 0, cost: parseFloat(cost.replace(",", ".")) || 0,
+      stock: parseInt(stock) || 0, minStock: parseInt(minStock) || 0,
+      abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0, unit, brand: editProduct?.brand || "", notes: notes.trim(),
     });
   }
 
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Text style={s.title}>Adicionar produto</Text>
+        <Text style={s.title}>{isEdit ? "Editar produto" : "Adicionar produto"}</Text>
         <Pressable onPress={onCancel} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
       </View>
       <Text style={s.hint}>Campos com * sao obrigatorios.</Text>
@@ -67,12 +72,14 @@ export function AddProductForm({ categories, onSave, onCancel }: { categories: s
         </FormField></View>
       </View>
 
+      {/* A4: Categories from existing products + create new */}
       <FormField label="Categoria">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {categories.map(c => <Pressable key={c} onPress={() => { setCategory(c); setShowNewCat(false); }} style={[s.chip, category === c && !showNewCat && s.chipActive]}><Text style={[s.chipText, category === c && !showNewCat && s.chipTextActive]}>{c}</Text></Pressable>)}
-          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}><Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text></Pressable>
+          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}><Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova categoria</Text></Pressable>
         </ScrollView>
-        {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} />}
+        {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
+        {categories.length === 0 && !showNewCat && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" }}>Nenhuma categoria ainda. Clique em "+ Nova categoria" para criar.</Text>}
       </FormField>
 
       <View style={s.divider} />
@@ -96,7 +103,7 @@ export function AddProductForm({ categories, onSave, onCancel }: { categories: s
 
       <View style={s.footer}>
         <Pressable onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelText}>Cancelar</Text></Pressable>
-        <Pressable onPress={handleSave} style={s.saveBtn}><Text style={s.saveText}>Salvar produto</Text></Pressable>
+        <Pressable onPress={handleSave} style={s.saveBtn}><Text style={s.saveText}>{isEdit ? "Atualizar produto" : "Salvar produto"}</Text></Pressable>
       </View>
     </View>
   );
