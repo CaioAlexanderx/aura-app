@@ -43,35 +43,20 @@ export default function FinanceiroScreen() {
 
         {isLoading && <ListSkeleton rows={4} showCards />}
 
-        {/* Tab 0: Visao Geral — Dashboard Financeiro */}
+        {/* Tab 0: Visao Geral */}
         {activeTab === 0 && (
           <View>
             {transactions.length === 0 && !isLoading && !isDemo ? (
               <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} />
             ) : (
               <View>
-                <SmartBalance
-                  income={summary.income}
-                  expenses={summary.expenses}
-                  balance={summary.balance}
-                  txCount={transactions.length}
-                  period={periodLabel}
-                />
-
-                <QuickInsights
-                  transactions={transactions}
-                  income={summary.income}
-                  expenses={summary.expenses}
-                />
-
-                {/* Recent transactions */}
+                <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={periodLabel} />
+                <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
                 {transactions.length > 0 && (
                   <View>
                     <View style={s.sectionHeader}>
                       <Text style={s.sectionTitle}>Ultimos lancamentos</Text>
-                      <Pressable onPress={() => handleTabSelect(1)}>
-                        <Text style={s.seeAll}>Ver todos</Text>
-                      </Pressable>
+                      <Pressable onPress={() => handleTabSelect(1)}><Text style={s.seeAll}>Ver todos</Text></Pressable>
                     </View>
                     <View style={s.listCard}>
                       {transactions.slice(0, 8).map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}
@@ -83,7 +68,7 @@ export default function FinanceiroScreen() {
           </View>
         )}
 
-        {/* Tab 1: Lancamentos (todos) */}
+        {/* Tab 1: Lancamentos */}
         {activeTab === 1 && (
           <View>
             {transactions.length === 0 && !isLoading && <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle="Lance sua primeira receita ou despesa." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} />}
@@ -95,11 +80,11 @@ export default function FinanceiroScreen() {
           </View>
         )}
 
-        {/* Tab 2: Analise (DRE) */}
-        {activeTab === 2 && <TabResumo data={dreData} />}
+        {/* Tab 2: Analise */}
+        {activeTab === 2 && <TabResumo transactions={transactions} dreApi={dreData} />}
 
-        {/* Tab 3: Retirada */}
-        {activeTab === 3 && <TabRetirada data={withdrawalData} />}
+        {/* Tab 3: Retirada (Simulador) */}
+        {activeTab === 3 && <TabRetirada transactions={transactions} />}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
 
