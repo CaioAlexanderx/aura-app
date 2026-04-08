@@ -23,7 +23,7 @@ function useIsWide() {
 
 export default function PdvScreen() {
   const { products, isDemo } = useProducts();
-  const { cart, payment, setPayment, lastSale, total, itemCount, addToCart, updateQty, removeItem, finalizeSale, newSale } = useCart();
+  const { cart, payment, setPayment, lastSale, total, itemCount, addToCart, setQty, updateQty, removeItem, finalizeSale, newSale } = useCart();
   const IS_WIDE = useIsWide();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
@@ -63,7 +63,7 @@ export default function PdvScreen() {
     </View>
   );
 
-  const cartPanel = <CartPanel cart={cart} payment={payment} setPayment={setPayment} total={total} itemCount={itemCount} isWide={IS_WIDE} updateQty={updateQty} removeItem={removeItem} finalizeSale={finalizeSale} />;
+  const cartPanel = <CartPanel cart={cart} payment={payment} setPayment={setPayment} total={total} itemCount={itemCount} isWide={IS_WIDE} setQty={setQty} updateQty={updateQty} removeItem={removeItem} finalizeSale={finalizeSale} />;
 
   if (IS_WIDE) return (
     <View style={s.webRoot}>

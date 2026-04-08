@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { pdvApi } from "@/services/api";
+import { pdvApi, companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -24,7 +24,24 @@ export function useCart() {
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
 
   const saleMutation = useMutation({
-    mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
+    mutationFn: async (body: any) => {
+      // Try PDV sale route first, fallback to creating income transaction
+      try {
+        if (pdvApi?.createSale) {
+          return await pdvApi.createSale(companyId!, body);
+        }
+      } catch (e: any) {
+        console.warn("[useCart] pdvApi.createSale failed, falling back to transaction", e?.message);
+      }
+      // Fallback: create income transaction
+      return await companiesApi.createTransaction(companyId!, {
+        type: "income",
+        amount: body.total,
+        description: `Venda PDV - ${body.items.length} itens (${body.payment_method})`,
+        category: "Vendas",
+        source: "pdv",
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
@@ -42,6 +59,11 @@ export function useCart() {
       if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { productId: product.id, name: product.name, price: product.price, qty: 1 }];
     });
+  }
+
+  function setQty(productId: string, qty: number) {
+    if (qty <= 0) { setCart(prev => prev.filter(i => i.productId !== productId)); return; }
+    setCart(prev => prev.map(i => i.productId === productId ? { ...i, qty } : i));
   }
 
   function updateQty(productId: string, delta: number) {
@@ -66,7 +88,7 @@ export function useCart() {
     if (companyId && !isDemo) {
       saleMutation.mutate(saleData, {
         onSuccess: (res: any) => {
-          const saleId = res?.sale_id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
+          const saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
           setLastSale({ id: String(saleId), total, payment, items: [...cart], date: new Date().toLocaleString("pt-BR") });
           setCart([]);
           toast.success("Venda registrada!");
@@ -81,5 +103,5 @@ export function useCart() {
 
   function newSale() { setLastSale(null); setCart([]); }
 
-  return { cart, payment, setPayment, lastSale, total, itemCount, addToCart, updateQty, removeItem, finalizeSale, newSale };
+  return { cart, payment, setPayment, lastSale, total, itemCount, addToCart, setQty, updateQty, removeItem, finalizeSale, newSale };
 }
