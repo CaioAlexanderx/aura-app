@@ -17,6 +17,15 @@ export function ObligationTimeline({ items, onGuide }: Props) {
   );
 }
 
+function formatDue(o: Obligation): string | null {
+  if (o.due_date) {
+    try { return new Date(o.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }); } catch { return null; }
+  }
+  if (o.frequency === "mensal") return "Todo mes";
+  if (o.frequency === "anual") return "Anual";
+  return null;
+}
+
 function TimelineItem({ obligation: o, onGuide, isLast }: { obligation: Obligation; onGuide: () => void; isLast: boolean }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
@@ -24,10 +33,10 @@ function TimelineItem({ obligation: o, onGuide, isLast }: { obligation: Obligati
   const isDone = o.status === "done";
   const isFuture = o.status === "future";
   const isAutomatic = o.filter_label === "aura_resolve";
+  const dueLabel = formatDue(o);
 
   return (
     <View style={s.itemWrap}>
-      {/* Timeline line + dot */}
       <View style={s.lineCol}>
         <View style={[s.dot, { backgroundColor: isDone ? Colors.green : bc }]}>
           {isDone && <Text style={s.dotCheck}>OK</Text>}
@@ -35,7 +44,6 @@ function TimelineItem({ obligation: o, onGuide, isLast }: { obligation: Obligati
         {!isLast && <View style={[s.line, { backgroundColor: isDone ? Colors.green + "44" : Colors.border }]} />}
       </View>
 
-      {/* Content */}
       <Pressable onPress={isFuture ? undefined : onGuide} onHoverIn={w && !isFuture ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
         style={[s.card, isDone && s.cardDone, isFuture && s.cardFuture, h && s.cardHover, w && { transition: "all 0.15s ease" } as any]}>
 
@@ -48,18 +56,19 @@ function TimelineItem({ obligation: o, onGuide, isLast }: { obligation: Obligati
             : null}
         </View>
 
-        {/* Clear action tag */}
-        <View style={[s.actionBadge, { backgroundColor: isAutomatic ? Colors.greenD : Colors.amberD }]}>
-          <Text style={[s.actionIcon, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "A" : "!"}</Text>
-          <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automatico — nao precisa fazer nada" : "Voce precisa agir — guia passo a passo"}</Text>
+        {/* Date + action row */}
+        <View style={s.metaRow}>
+          {dueLabel && <View style={s.dateBadge}><Text style={s.dateText}>{dueLabel}</Text></View>}
+          <View style={[s.actionBadge, { backgroundColor: isAutomatic ? Colors.greenD : Colors.amberD }]}>
+            <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automatico" : "Voce precisa agir"}</Text>
+          </View>
         </View>
 
         <Text style={s.desc} numberOfLines={2}>{o.aura_action}</Text>
 
         {!isDone && !isFuture && (
           <View style={s.cardBottom}>
-            <Text style={s.freq}>{o.frequency}</Text>
-            <Pressable style={s.guideBtn} onPress={onGuide}><Text style={s.guideBtnText}>{isAutomatic ? "Acompanhar" : "Ver guia"}</Text></Pressable>
+            <Pressable style={s.guideBtn} onPress={onGuide}><Text style={s.guideBtnText}>{isAutomatic ? "Acompanhar" : "Ver guia passo a passo"}</Text></Pressable>
           </View>
         )}
       </Pressable>
@@ -83,13 +92,14 @@ const s = StyleSheet.create({
   nameDone: { textDecorationLine: "line-through", color: Colors.ink3 },
   okTag: { fontSize: 10, fontWeight: "700", color: Colors.green },
   daysTag: { fontSize: 11, fontWeight: "700" },
-  actionBadge: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start" },
-  actionIcon: { fontSize: 12, fontWeight: "800" },
-  actionText: { fontSize: 11, fontWeight: "500" },
+  metaRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  dateBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  dateText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  actionBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  actionText: { fontSize: 11, fontWeight: "600" },
   desc: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
-  cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 },
-  freq: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  guideBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
+  cardBottom: { marginTop: 2 },
+  guideBtn: { backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border, alignSelf: "flex-start" },
   guideBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
 });
 

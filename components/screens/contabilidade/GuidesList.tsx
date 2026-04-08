@@ -1,28 +1,28 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Obligation } from "./types";
-import { FILTER_CONFIG } from "./types";
 
 type Props = { auraResolve: Obligation[]; voceFaz: Obligation[]; onSelect: (code: string) => void };
 
+const GROUPS = [
+  { key: "aura", label: "Automatico", desc: "A Aura cuida de tudo", color: Colors.green, bg: Colors.greenD },
+  { key: "voce", label: "Voce precisa agir", desc: "Passo a passo com apoio da Aura", color: Colors.amber, bg: Colors.amberD },
+];
+
 export function GuidesList({ auraResolve, voceFaz, onSelect }: Props) {
-  const groups = [
-    { items: auraResolve, key: "aura_resolve" as const },
-    { items: voceFaz, key: "voce_faz" as const },
-  ];
+  const data = [{ ...GROUPS[0], items: auraResolve }, { ...GROUPS[1], items: voceFaz }];
   return (
     <View>
       <View style={s.instruction}><Text style={s.iIcon}>i</Text><Text style={s.iText}>Guias visuais para cada obrigacao. A Aura prepara os dados e te guia pelo processo.</Text></View>
-      {groups.map(g => {
-        const fc = FILTER_CONFIG[g.key];
+      {data.map(g => {
         if (g.items.length === 0) return null;
         return (
           <View key={g.key} style={{ marginBottom: 20 }}>
-            <View style={s.groupHeader}><View style={[s.groupDot, { backgroundColor: fc.color }]} /><View><Text style={s.groupTitle}>{fc.label}</Text><Text style={s.groupSub}>{fc.desc}</Text></View></View>
+            <View style={s.groupHeader}><View style={[s.groupDot, { backgroundColor: g.color }]} /><View><Text style={s.groupTitle}>{g.label}</Text><Text style={s.groupSub}>{g.desc}</Text></View></View>
             {g.items.map(o => (
               <Pressable key={o.code} onPress={() => onSelect(o.code)} style={s.row}>
-                <View style={[s.rowIcon, { backgroundColor: fc.color + "18" }]}><Text style={[s.rowIconText, { color: fc.color }]}>{(o.steps?.length || 0)}</Text></View>
-                <View style={{ flex: 1 }}><Text style={s.rowName}>{o.name}</Text><Text style={s.rowSub}>{(o.steps?.length || 0)} passos</Text></View>
+                <View style={[s.rowIcon, { backgroundColor: g.color + "18" }]}><Text style={[s.rowIconText, { color: g.color }]}>{(o.steps?.length || 0)}</Text></View>
+                <View style={{ flex: 1 }}><Text style={s.rowName}>{o.name}</Text><Text style={s.rowSub}>{(o.steps?.length || 0)} passos • {o.frequency}</Text></View>
                 <Text style={s.rowArrow}>{'>'}</Text>
               </Pressable>
             ))}
