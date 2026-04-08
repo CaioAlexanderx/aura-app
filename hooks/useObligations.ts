@@ -6,11 +6,25 @@ import { toast } from "@/components/Toast";
 import type { Obligation, CalendarResponse } from "@/components/screens/contabilidade/types";
 import { getMEIObligations, getSNObligations } from "@/components/screens/contabilidade/types";
 
+const STORAGE_KEY = "aura_obl_completed";
+
+function loadCompleted(): Set<string> {
+  if (typeof localStorage === "undefined") return new Set();
+  try { const s = localStorage.getItem(STORAGE_KEY); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
+}
+
+function saveCompleted(set: Set<string>) {
+  if (typeof localStorage === "undefined") return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...set])); } catch {}
+}
+
 export function useObligations() {
   const { company, token, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
-  const [localCompleted, setLocalCompleted] = useState<Set<string>>(new Set());
+
+  // Persist completed obligations to localStorage
+  const [localCompleted, setLocalCompleted] = useState<Set<string>>(loadCompleted);
 
   const { data: calendarData, isLoading } = useQuery<CalendarResponse>({
     queryKey: ["obligations-calendar", companyId],
@@ -29,11 +43,10 @@ export function useObligations() {
     if (calendarData?.calendar?.length) {
       obligations = calendarData.calendar;
     } else {
-      // Generate fresh with real dates
       obligations = regime === "mei" ? getMEIObligations() : getSNObligations(hasEmployee);
     }
 
-    // Apply local completions
+    // Apply persisted completions
     obligations = obligations.map(o => {
       if (localCompleted.has(o.code) && o.status !== "done") {
         return { ...o, status: "done" as const, checkpoint_done: o.checkpoint_total };
@@ -54,7 +67,11 @@ export function useObligations() {
   }, [calendarData, company, isDemo, localCompleted]);
 
   const completeCheckpoint = useCallback((oblCode: string) => {
-    setLocalCompleted(prev => new Set(prev).add(oblCode));
+    setLocalCompleted(prev => {
+      const next = new Set(prev).add(oblCode);
+      saveCompleted(next);
+      return next;
+    });
     toast.success("Obrigacao concluida!");
     if (companyId && !isDemo) {
       companiesApi.completeCheckpoint?.(companyId, oblCode)
