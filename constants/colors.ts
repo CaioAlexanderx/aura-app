@@ -3,12 +3,21 @@ import { Platform } from "react-native";
 
 const THEME_KEY = "aura_theme";
 
+// B1 FIX: Safe theme initialization with try-catch
 function getInitialTheme(): boolean {
-  if (Platform.OS === "web" && typeof localStorage !== "undefined") {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "dark") return true;
-    if (saved === "light") return false;
-    return true;
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "light") return false;
+      // First visit or "dark" → dark mode (default)
+      if (!saved) {
+        // Set default explicitly to prevent crash on first toggle
+        try { localStorage.setItem(THEME_KEY, "dark"); } catch {}
+      }
+      return true;
+    }
+  } catch {
+    // localStorage not available (SSR, private browsing) → default dark
   }
   return true;
 }
@@ -53,11 +62,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     try {
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
     } catch {}
-    // P3 FIX: use window.location.reload() with delay
-    // Colors are frozen at import time, so full reload is required
+    // Colors are frozen at import → full reload required
+    // B1 FIX: longer delay to ensure localStorage is persisted
     setTimeout(() => {
       try { window.location.reload(); } catch {}
-    }, 150);
+    }, 250);
   },
 }));
 
