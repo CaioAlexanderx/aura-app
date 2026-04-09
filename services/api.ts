@@ -34,8 +34,8 @@ export function setOnUnauthorized(fn: () => void) {
 // ── AUTH-02: Refresh result types ────────────────────────────
 type RefreshResult =
   | { status: "ok"; token: string }
-  | { status: "invalid" }      // session truly expired — logout
-  | { status: "network_error" }; // transient failure — do NOT logout
+  | { status: "invalid" }
+  | { status: "network_error" };
 
 // ── Core request with retry + timeout + auto-refresh ────────
 type RequestOpts = {
@@ -68,22 +68,15 @@ async function refreshAccessToken(): Promise<RefreshResult> {
     if (timer) clearTimeout(timer);
 
     if (!resp.ok) {
-      // 401/403 from refresh = session truly invalid → logout
-      if (resp.status === 401 || resp.status === 403) {
-        return { status: "invalid" };
-      }
-      // 5xx or other = server issue, not auth rejection
+      if (resp.status === 401 || resp.status === 403) return { status: "invalid" };
       return { status: "network_error" };
     }
 
     const data = await resp.json();
     useAuthStore.setState({ token: data.token });
-    if (typeof window !== "undefined") {
-      localStorage.setItem("aura_token", data.token);
-    }
+    if (typeof window !== "undefined") localStorage.setItem("aura_token", data.token);
     return { status: "ok", token: data.token };
   } catch (err: any) {
-    // Network timeout, offline, DNS failure — NOT a session problem
     return { status: "network_error" };
   }
 }
@@ -110,7 +103,6 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
       if (timer) clearTimeout(timer);
       const data = await res.json().catch(() => ({}));
 
-      // SEC-02 + AUTH-02: Smart 401 handling
       if (res.status === 401 && !opts.token) {
         if (!isRefreshing) {
           isRefreshing = true;
@@ -122,7 +114,6 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
         refreshPromise = null;
 
         if (result.status === "ok") {
-          // Retry with new token
           const retryHeaders = { ...headers, Authorization: "Bearer " + result.token };
           const retryRes = await fetch(`${BASE_URL}${path}`, {
             method, headers: retryHeaders,
@@ -130,31 +121,22 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
           });
           const retryData = await retryRes.json().catch(() => ({}));
           if (retryRes.ok) return retryData as T;
-          // If retry also fails with 401, session is truly dead
           if (retryRes.status === 401 && _onUnauthorized) _onUnauthorized();
           throw new ApiError((retryData as any).error || "Sessao expirada", 401, retryData);
         }
 
         if (result.status === "invalid") {
-          // AUTH-02: confirmed auth rejection — safe to logout
           if (_onUnauthorized) _onUnauthorized();
           throw new ApiError((data as any).error || "Sessao expirada", 401, data);
         }
 
-        // AUTH-02: network_error — do NOT logout, let retry loop handle it
         if (attempt < retry) {
           await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
           continue;
         }
-        throw new ApiError(
-          "Falha de conexao. Verifique sua internet.",
-          0,
-          null,
-          true
-        );
+        throw new ApiError("Falha de conexao. Verifique sua internet.", 0, null, true);
       }
 
-      // Explicit 401 with manual token (e.g. authApi.me) — just throw
       if (res.status === 401) {
         throw new ApiError((data as any).error || "Nao autorizado", 401, data);
       }
@@ -170,7 +152,6 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     } catch (err: any) {
       lastError = err;
       if (err instanceof ApiError) throw err;
-      // AUTH-02: network errors retry silently, never trigger logout
       if (attempt < retry) {
         await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
         continue;
@@ -235,6 +216,14 @@ export const dashboardApi = {
 // ── Companies API ───────────────────────────────────────────
 export const companiesApi = {
   get: (companyId: string) => request<any>(`/companies/${companyId}`),
+
+  // INT-COMPANY-01: Profile GET + PUT
+  getProfile: (companyId: string) =>
+    request<any>(`/companies/${companyId}/profile`),
+  updateProfile: (companyId: string, body: { trade_name?: string; cnpj?: string; phone?: string; email?: string; address?: string; logo_url?: string; tax_regime?: string; business_type?: string }) =>
+    request<any>(`/companies/${companyId}/profile`, { method: "PUT", body }),
+
+  // Transactions
   transactions: (companyId: string, params?: string) =>
     request<any>(`/companies/${companyId}/transactions${params ? "?" + params : ""}`),
   createTransaction: (companyId: string, body: any) =>
@@ -243,6 +232,8 @@ export const companiesApi = {
     request<any>(`/companies/${companyId}/transactions/${txId}`, { method: "PATCH", body }),
   deleteTransaction: (companyId: string, txId: string) =>
     request<any>(`/companies/${companyId}/transactions/${txId}`, { method: "DELETE" }),
+
+  // Products
   products: (companyId: string) => request<any>(`/companies/${companyId}/products`),
   createProduct: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/products`, { method: "POST", body }),
@@ -250,6 +241,8 @@ export const companiesApi = {
     request<any>(`/companies/${companyId}/products/${prodId}`, { method: "PATCH", body }),
   deleteProduct: (companyId: string, prodId: string) =>
     request<any>(`/companies/${companyId}/products/${prodId}`, { method: "DELETE" }),
+
+  // Customers
   customers: (companyId: string) => request<any>(`/companies/${companyId}/customers`),
   createCustomer: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/customers`, { method: "POST", body }),
@@ -257,6 +250,8 @@ export const companiesApi = {
     request<any>(`/companies/${companyId}/customers/${custId}`, { method: "PATCH", body }),
   deleteCustomer: (companyId: string, custId: string) =>
     request<any>(`/companies/${companyId}/customers/${custId}`, { method: "DELETE" }),
+
+  // Other
   obligations: (companyId: string) => request<any>(`/companies/${companyId}/obligations`),
   payroll: (companyId: string, body: any) =>
     request<any>(`/companies/${companyId}/payroll/calculate`, { method: "POST", body }),
@@ -302,10 +297,10 @@ export const billingApi = {
     request<{ plan: string; billing_status: string; trial_active: boolean; trial_days_left: number; next_billing_date: string | null; has_payment_method: boolean }>(
       `/companies/${companyId}/billing/status`
     ),
-  subscribe: (companyId: string, plan: string, billingType?: string) =>
+  subscribe: (companyId: string, plan: string, billingType?: string, creditCardToken?: string) =>
     request<{ subscription_id: string; plan: string; value: number; next_due_date: string; payment_link: string | null }>(
       `/companies/${companyId}/billing/subscribe`,
-      { method: "POST", body: { plan, billing_type: billingType || "UNDEFINED" } }
+      { method: "POST", body: { plan, billing_type: billingType || "UNDEFINED", credit_card_token: creditCardToken } }
     ),
   cancel: (companyId: string) =>
     request<{ message: string; cancelled_at: string }>(
