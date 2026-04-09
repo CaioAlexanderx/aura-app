@@ -6,6 +6,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ImportExportBar } from "@/components/ImportExportBar";
 import { SmartBalance } from "@/components/screens/financeiro/SmartBalance";
 import { QuickInsights } from "@/components/screens/financeiro/QuickInsights";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
@@ -13,6 +14,8 @@ import { TransactionRow } from "@/components/screens/financeiro/TransactionRow";
 import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TABS, fmt } from "@/components/screens/financeiro/types";
+import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS, mapImportedTransaction } from "@/utils/csv";
+import { toast } from "@/components/Toast";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -26,9 +29,25 @@ export default function FinanceiroScreen() {
 
   const periodLabel = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
-  function handleTabSelect(i: number) {
-    setActiveTab(i);
-    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+  function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
+
+  function handleExport() {
+    if (transactions.length === 0) { toast.error("Nenhum lancamento para exportar"); return; }
+    const csv = arrayToCSV(transactions, TRANSACTION_COLUMNS);
+    downloadCSV(csv, `aura_lancamentos_${new Date().toISOString().slice(0,10)}.csv`);
+  }
+
+  async function handleImport() {
+    try {
+      const rows = await pickFileAndParse();
+      let imported = 0, skipped = 0;
+      for (const row of rows) {
+        const mapped = mapImportedTransaction(row);
+        if (mapped) { createTransaction(mapped); imported++; }
+        else { skipped++; }
+      }
+      toast.success(`${imported} lancamentos importados${skipped > 0 ? ` (${skipped} ignorados)` : ""}`);
+    } catch {}
   }
 
   return (
@@ -37,30 +56,27 @@ export default function FinanceiroScreen() {
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
         <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={() => setShowModal(true)} />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {TABS.map((tab, i) => <Pressable key={tab} onPress={() => handleTabSelect(i)} style={[s.tab, activeTab === i && s.tabActive]}><Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text></Pressable>)}
         </ScrollView>
 
+        {/* Import/Export bar on Lancamentos tab */}
+        {activeTab === 1 && transactions.length > 0 && <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={transactions.length} />}
+
         {isLoading && <ListSkeleton rows={4} showCards />}
 
-        {/* Tab 0: Visao Geral */}
         {activeTab === 0 && (
           <View>
             {transactions.length === 0 && !isLoading && !isDemo ? (
-              <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} />
+              <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} secondaryLabel="Importar de planilha" onSecondary={handleImport} />
             ) : (
               <View>
                 <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={periodLabel} />
                 <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
                 {transactions.length > 0 && (
                   <View>
-                    <View style={s.sectionHeader}>
-                      <Text style={s.sectionTitle}>Ultimos lancamentos</Text>
-                      <Pressable onPress={() => handleTabSelect(1)}><Text style={s.seeAll}>Ver todos</Text></Pressable>
-                    </View>
-                    <View style={s.listCard}>
-                      {transactions.slice(0, 8).map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}
-                    </View>
+                    <View style={s.sectionHeader}><Text style={s.sectionTitle}>Ultimos lancamentos</Text><Pressable onPress={() => handleTabSelect(1)}><Text style={s.seeAll}>Ver todos</Text></Pressable></View>
+                    <View style={s.listCard}>{transactions.slice(0, 8).map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}</View>
                   </View>
                 )}
               </View>
@@ -68,26 +84,17 @@ export default function FinanceiroScreen() {
           </View>
         )}
 
-        {/* Tab 1: Lancamentos */}
         {activeTab === 1 && (
           <View>
-            {transactions.length === 0 && !isLoading && <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle="Lance sua primeira receita ou despesa." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} />}
-            {transactions.length > 0 && (
-              <View style={s.listCard}>
-                {transactions.map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}
-              </View>
-            )}
+            {transactions.length === 0 && !isLoading && <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle="Lance sua primeira receita ou despesa, ou importe de uma planilha." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} secondaryLabel="Importar CSV" onSecondary={handleImport} />}
+            {transactions.length > 0 && <View style={s.listCard}>{transactions.map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}</View>}
           </View>
         )}
 
-        {/* Tab 2: Analise */}
         {activeTab === 2 && <TabResumo transactions={transactions} dreApi={dreData} />}
-
-        {/* Tab 3: Retirada (Simulador) */}
         {activeTab === 3 && <TabRetirada transactions={transactions} />}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
-
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
     </View>

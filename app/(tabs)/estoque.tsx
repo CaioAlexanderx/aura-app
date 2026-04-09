@@ -6,6 +6,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ImportExportBar } from "@/components/ImportExportBar";
 import { AgentBanner } from "@/components/AgentBanner";
 import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
@@ -13,32 +14,27 @@ import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
+import { arrayToCSV, downloadCSV, pickFileAndParse, PRODUCT_COLUMNS, mapImportedProduct } from "@/utils/csv";
+import { toast } from "@/components/Toast";
+import { companiesApi } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { useQueryClient } from "@tanstack/react-query";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
 function SummaryCard({ label, value, color, sub, onPress }: { label: string; value: string; color?: string; sub?: string; onPress?: () => void }) {
-  const [h, sH] = useState(false);
-  const w = Platform.OS === "web";
-  return (
-    <Pressable onPress={onPress} onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
-      style={[s.card, h && { transform: [{ translateY: -2 }], borderColor: Colors.border2 }, w && { transition: "all 0.2s ease", cursor: onPress ? "pointer" : "default" } as any]}>
-      <Text style={s.cardLabel}>{label}</Text>
-      <Text style={[s.cardValue, color ? { color } : {}]}>{value}</Text>
-      {sub && <Text style={s.cardSub}>{sub}</Text>}
-    </Pressable>
-  );
+  const [h, sH] = useState(false); const w = Platform.OS === "web";
+  return <Pressable onPress={onPress} onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined} style={[s.card, h && { transform: [{ translateY: -2 }], borderColor: Colors.border2 }, w && { transition: "all 0.2s ease", cursor: onPress ? "pointer" : "default" } as any]}><Text style={s.cardLabel}>{label}</Text><Text style={[s.cardValue, color ? { color } : {}]}>{value}</Text>{sub && <Text style={s.cardSub}>{sub}</Text>}</Pressable>;
 }
 
 function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-      {TABS.map((tab, i) => <Pressable key={tab} onPress={() => onSelect(i)} style={[s.tab, active === i && s.tabActive]}><Text style={[s.tabText, active === i && s.tabTextActive]}>{tab}</Text></Pressable>)}
-    </ScrollView>
-  );
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>{TABS.map((tab, i) => <Pressable key={tab} onPress={() => onSelect(i)} style={[s.tab, active === i && s.tabActive]}><Text style={[s.tabText, active === i && s.tabTextActive]}>{tab}</Text></Pressable>)}</ScrollView>;
 }
 
 export default function EstoqueScreen() {
-  const { products, isLoading, isDemo, addProduct, deleteProduct } = useProducts();
+  const { products, categories, isLoading, isDemo, addProduct, deleteProduct } = useProducts();
+  const { company } = useAuthStore();
+  const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
@@ -46,8 +42,8 @@ export default function EstoqueScreen() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...products.map(p => p.category)]));
-  const filterCategories = ["Todos", ...allCategories];
+  const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...categories, ...products.map(p => p.category)]));
+  const filterCategories = ["Todos", ...allCategories.filter(Boolean)];
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     const matchCat = catFilter === "Todos" || p.category === catFilter;
@@ -57,14 +53,31 @@ export default function EstoqueScreen() {
   const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
 
-  function handleAdd(product: Product) {
-    addProduct(product);
-    setShowAddForm(false);
+  function handleAdd(product: Product) { addProduct(product); setShowAddForm(false); }
+  function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
+
+  function handleExport() {
+    if (products.length === 0) { toast.error("Nenhum produto para exportar"); return; }
+    const csv = arrayToCSV(products, PRODUCT_COLUMNS);
+    downloadCSV(csv, `aura_estoque_${new Date().toISOString().slice(0,10)}.csv`);
   }
 
-  function handleTabSelect(i: number) {
-    setActiveTab(i);
-    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+  async function handleImport() {
+    try {
+      const rows = await pickFileAndParse();
+      let imported = 0, skipped = 0;
+      for (const row of rows) {
+        const mapped = mapImportedProduct(row);
+        if (mapped && company?.id) {
+          try { await companiesApi.createProduct(company.id, mapped); imported++; }
+          catch { skipped++; }
+        } else { skipped++; }
+      }
+      if (imported > 0) {
+        qc.invalidateQueries({ queryKey: ["products", company?.id] });
+        toast.success(`${imported} produtos importados${skipped > 0 ? ` (${skipped} ignorados)` : ""}`);
+      } else { toast.error("Nenhum produto valido encontrado. Verifique as colunas: Nome, Preco venda, Estoque"); }
+    } catch {}
   }
 
   return (
@@ -82,10 +95,11 @@ export default function EstoqueScreen() {
       {isLoading && <ListSkeleton rows={4} showCards />}
 
       {!isLoading && products.length === 0 && !isDemo && !showAddForm && (
-        <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto para comecar a gerenciar seu estoque." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
+        <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} secondaryLabel="Importar CSV" onSecondary={handleImport} />
       )}
 
       {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
+      {products.length > 0 && activeTab === 0 && <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={products.length} />}
 
       {activeTab === 0 && products.length > 0 && (
         <View>
@@ -100,21 +114,11 @@ export default function EstoqueScreen() {
         </View>
       )}
 
-      {activeTab === 1 && (
-        <View>
-          <View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View>
-          <AbcSummary products={products} />
-          <View style={[s.listCard, { marginTop: 20 }]}>
-            <Text style={s.listTitle}>Todos por classificacao</Text>
-            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} />)}
-          </View>
-        </View>
-      )}
+      {activeTab === 1 && <View><View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View><AbcSummary products={products} /><View style={[s.listCard, { marginTop: 20 }]}><Text style={s.listTitle}>Todos por classificacao</Text>{[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} />)}</View></View>}
 
       {activeTab === 2 && <AlertsList products={products} />}
 
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
-
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
   );
