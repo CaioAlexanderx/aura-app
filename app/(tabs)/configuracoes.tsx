@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, Linking } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, Linking, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
@@ -39,13 +39,16 @@ const sec = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border },
 });
 
-function Field({ label, value, onChange, placeholder, editable = true }: {
-  label: string; value: string; onChange?: (v: string) => void; placeholder?: string; editable?: boolean;
+function Field({ label, value, onChange, placeholder, editable = true, suffix }: {
+  label: string; value: string; onChange?: (v: string) => void; placeholder?: string; editable?: boolean; suffix?: React.ReactNode;
 }) {
   return (
     <View style={fd.wrap}>
       <Text style={fd.label}>{label}</Text>
-      <TextInput style={[fd.input, !editable && fd.disabled] as any} value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={Colors.ink3} editable={editable} />
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <TextInput style={[fd.input, !editable && fd.disabled, suffix && { flex: 1 }] as any} value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={Colors.ink3} editable={editable} />
+        {suffix}
+      </View>
     </View>
   );
 }
@@ -84,8 +87,11 @@ export default function ConfiguracoesScreen() {
   const [address, setAddress] = useState(cached.address || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [cnpjFound, setCnpjFound] = useState<string | null>(null);
+  const [cnpjError, setCnpjError] = useState<string | null>(null);
 
-  // INT-COMPANY-02: Hydrate from backend on mount
+  // Hydrate from backend on mount
   useEffect(() => {
     if (!company?.id || isDemo) return;
     companiesApi.getProfile(company.id).then((p: any) => {
@@ -100,6 +106,46 @@ export default function ConfiguracoesScreen() {
   useEffect(() => {
     saveConfig({ companyName, cnpj, email, phone, address });
   }, [companyName, cnpj, email, phone, address]);
+
+  // CNPJ lookup — auto-fill legal data
+  async function lookupCNPJ(formatted: string) {
+    const nums = formatted.replace(/\D/g, "");
+    if (nums.length !== 14) return;
+    setCnpjLoading(true); setCnpjFound(null); setCnpjError(null);
+    try {
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${nums}`, { signal: controller?.signal });
+      if (timer) clearTimeout(timer);
+      if (res.status === 404) { setCnpjError("CNPJ nao encontrado"); return; }
+      if (res.status === 429) { setCnpjError("Muitas consultas, tente em 1 min"); return; }
+      if (!res.ok) { setCnpjError("Erro na consulta"); return; }
+      const data = await res.json();
+      const razao = data.razao_social || data.nome_fantasia || "";
+      setCnpjFound(razao);
+
+      // Auto-fill fields from BrasilAPI
+      if (razao && !companyName) setCompanyName(razao);
+      if (data.ddd_telefone_1 && !phone) {
+        setPhone(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`));
+      }
+      if (data.email && !email) setEmail(data.email.toLowerCase());
+      if (data.logradouro && !address) {
+        const parts = [data.logradouro, data.numero, data.bairro, data.municipio, data.uf].filter(Boolean);
+        setAddress(parts.join(", "));
+      }
+      toast.success(`CNPJ validado: ${razao}`);
+    } catch (err: any) {
+      if (err?.name === "AbortError") setCnpjError("Timeout - tente novamente");
+      else setCnpjError("Erro de conexao");
+    } finally { setCnpjLoading(false); }
+  }
+
+  function handleCnpjChange(v: string) {
+    const masked = maskCNPJ(v);
+    setCnpj(masked); setCnpjFound(null); setCnpjError(null);
+    if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked);
+  }
 
   function handleLogoUpload() {
     if (Platform.OS === "web") {
@@ -117,26 +163,17 @@ export default function ConfiguracoesScreen() {
     }
   }
 
-  // INT-COMPANY-01: Save to backend + localStorage
   async function handleSave() {
     saveConfig({ companyName, cnpj, email, phone, address });
-
     if (company?.id && !isDemo) {
       setSaving(true);
       try {
-        await companiesApi.updateProfile(company.id, {
-          trade_name: companyName,
-          cnpj, email, phone, address,
-        });
+        await companiesApi.updateProfile(company.id, { trade_name: companyName, cnpj, email, phone, address });
         toast.success("Perfil salvo no servidor");
       } catch (err: any) {
         toast.error(err.message || "Erro ao salvar — salvo localmente");
-      } finally {
-        setSaving(false);
-      }
-    } else {
-      toast.success("Alteracoes salvas localmente");
-    }
+      } finally { setSaving(false); }
+    } else { toast.success("Alteracoes salvas localmente"); }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -163,8 +200,19 @@ export default function ConfiguracoesScreen() {
       </Section>
 
       <Section title="Dados da empresa">
+        <View style={fd.wrap}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <Text style={fd.label}>CNPJ</Text>
+            {cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}
+            {cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}
+            {cnpjError && <Pressable onPress={() => lookupCNPJ(cnpj)}><Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Tentar novamente</Text></Pressable>}
+          </View>
+          <TextInput style={[fd.input, cnpjFound && { borderColor: Colors.green }, cnpjError && { borderColor: Colors.red }] as any} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} />
+          {cnpjFound && <View style={z.cnpjOk}><Icon name="check" size={12} color={Colors.green} /><Text style={z.cnpjOkText}>{cnpjFound}</Text></View>}
+          {cnpjError && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>{cnpjError}</Text>}
+          {!cnpjFound && !cnpjError && !cnpjLoading && cnpj.length < 18 && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serao preenchidos automaticamente.</Text>}
+        </View>
         <Field label="Nome da empresa" value={companyName} onChange={setCompanyName} placeholder="Minha Empresa Ltda" />
-        <Field label="CNPJ" value={cnpj} onChange={v => setCnpj(maskCNPJ(v))} placeholder="00.000.000/0000-00" />
         <Field label="E-mail" value={email} onChange={setEmail} placeholder="contato@empresa.com" />
         <Field label="Telefone" value={phone} onChange={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" />
         <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua, numero, cidade - UF" />
@@ -194,7 +242,6 @@ export default function ConfiguracoesScreen() {
         <View style={z.accountNote}><Icon name="alert" size={14} color={Colors.violet3} /><Text style={z.accountNoteText}>Para alterar nome ou e-mail de acesso, entre em contato com o suporte.</Text></View>
       </Section>
 
-      {/* FE-CTA-01: Support CTAs */}
       <Section title="Precisa de ajuda?">
         <View style={z.ctaRow}>
           <Pressable onPress={() => Linking.openURL(AURA_WHATSAPP)} style={z.ctaBtn}><Icon name="message" size={16} color={Colors.green} /><Text style={z.ctaBtnText}>Falar no WhatsApp</Text></Pressable>
@@ -228,6 +275,8 @@ const z = StyleSheet.create({
   logoRemoveText: { fontSize: 11, color: Colors.red, fontWeight: "500" },
   fiscalNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, marginTop: 4 },
   fiscalNoteText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
+  cnpjOk: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  cnpjOkText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
   currentPlanCard: { gap: 16 },
   currentPlanInfo: { gap: 4 },
   currentPlanBadge: { backgroundColor: Colors.violet, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 4 },
