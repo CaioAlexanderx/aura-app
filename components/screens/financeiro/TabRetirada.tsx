@@ -13,17 +13,27 @@ const REGIME_CONFIG = {
   simples: { label: "Simples Nacional", dasFixed: 0, dasRate: 0.06, needsProLabore: true, revenueLimit: 4800000 },
 };
 
+// M7: Read detected regime from localStorage (set during CNPJ lookup in register)
+function getDetectedRegime(): string | null {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const cfg = JSON.parse(localStorage.getItem("aura_config") || "{}");
+    return cfg.detectedRegime || null;
+  } catch { return null; }
+}
+
 export function TabRetirada({ transactions }: Props) {
   const { company } = useAuthStore();
   const realIncome = useMemo(() => transactions.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
   const realExpenses = useMemo(() => transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
 
-  const regime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" ? "mei" : "simples";
+  // M7: Check company data first, then localStorage fallback from CNPJ lookup
+  const detectedRegime = getDetectedRegime();
+  const regime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" || detectedRegime === "mei" ? "mei" : "simples";
   const cfg = REGIME_CONFIG[regime];
 
   const [customRevenue, setCustomRevenue] = useState("");
   const [customExpenses, setCustomExpenses] = useState("");
-  // M4: Toggle pro-labore (optional for some SN companies)
   const [proLaboreEnabled, setProLaboreEnabled] = useState(cfg.needsProLabore);
 
   const rev = parseFloat(customRevenue.replace(/[^0-9.,]/g, "").replace(",", ".")) || realIncome;
@@ -33,7 +43,6 @@ export function TabRetirada({ transactions }: Props) {
   const lucroOp = rev - exp - das;
 
   let proLabore = 0, inss = 0, fatorR = 0;
-  // M4: Only calculate if enabled
   if (proLaboreEnabled && regime === "simples") {
     const minProLabore = rev * 0.28;
     proLabore = Math.max(minProLabore, 1412);
@@ -56,12 +65,11 @@ export function TabRetirada({ transactions }: Props) {
           <View style={s.regimeBadge}><Text style={s.regimeText}>{cfg.label}</Text></View>
           <Text style={s.regimeHint}>{regime === "mei" ? "DAS fixo R$ 75,90/mes. Sem obrigacao de pro-labore." : "DAS de 6% sobre receita."}</Text>
         </View>
-        {/* M4: Pro-labore toggle for SN */}
         {regime === "simples" && (
           <View style={s.proLaboreToggle}>
             <View style={{ flex: 1 }}>
               <Text style={s.proLaboreLabel}>Pro-labore no contrato social</Text>
-              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Fator R sera calculado na simulacao" : "Sem pro-labore — retirada como distribuicao de lucro"}</Text>
+              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Fator R sera calculado na simulacao" : "Sem pro-labore \u2014 retirada como distribuicao de lucro"}</Text>
             </View>
             <Switch value={proLaboreEnabled} onValueChange={setProLaboreEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
           </View>
@@ -69,26 +77,14 @@ export function TabRetirada({ transactions }: Props) {
       </View>
 
       <View style={s.inputRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.inputLabel}>Receita bruta</Text>
-          <TextInput style={s.input} value={customRevenue} onChangeText={setCustomRevenue} placeholder={realIncome > 0 ? fmt(realIncome) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
-          {realIncome > 0 && !customRevenue && <Text style={s.inputHint}>Valor dos lancamentos</Text>}
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.inputLabel}>Despesas operacionais</Text>
-          <TextInput style={s.input} value={customExpenses} onChangeText={setCustomExpenses} placeholder={realExpenses > 0 ? fmt(realExpenses) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
-          {realExpenses > 0 && !customExpenses && <Text style={s.inputHint}>Valor dos lancamentos</Text>}
-        </View>
+        <View style={{ flex: 1 }}><Text style={s.inputLabel}>Receita bruta</Text><TextInput style={s.input} value={customRevenue} onChangeText={setCustomRevenue} placeholder={realIncome > 0 ? fmt(realIncome) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />{realIncome > 0 && !customRevenue && <Text style={s.inputHint}>Valor dos lancamentos</Text>}</View>
+        <View style={{ flex: 1 }}><Text style={s.inputLabel}>Despesas operacionais</Text><TextInput style={s.input} value={customExpenses} onChangeText={setCustomExpenses} placeholder={realExpenses > 0 ? fmt(realExpenses) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />{realExpenses > 0 && !customExpenses && <Text style={s.inputHint}>Valor dos lancamentos</Text>}</View>
       </View>
 
       {hasData && (
         <View>
           <View style={s.levelsCard}>
-            <View style={s.levelMain}>
-              <Text style={s.levelMainLabel}>RETIRADA SEGURA</Text>
-              <Text style={[s.levelMainValue, { color: seguraRetirada > 0 ? Colors.green : Colors.red }]}>{fmt(seguraRetirada)}</Text>
-              <Text style={s.levelMainSub}>{regime === "mei" ? "sem comprometer o caixa" : proLaboreEnabled ? "sem pressionar caixa, mantendo enquadramento fiscal" : "sem comprometer o caixa"}</Text>
-            </View>
+            <View style={s.levelMain}><Text style={s.levelMainLabel}>RETIRADA SEGURA</Text><Text style={[s.levelMainValue, { color: seguraRetirada > 0 ? Colors.green : Colors.red }]}>{fmt(seguraRetirada)}</Text><Text style={s.levelMainSub}>{regime === "mei" ? "sem comprometer o caixa" : proLaboreEnabled ? "sem pressionar caixa, mantendo enquadramento fiscal" : "sem comprometer o caixa"}</Text></View>
             <View style={s.levelsRow}>
               <View style={s.levelItem}><View style={[s.levelDot, { backgroundColor: Colors.green }]} /><Text style={s.levelLabel}>Ideal</Text><Text style={[s.levelValue, { color: Colors.green }]}>{fmt(idealRetirada)}</Text><Text style={s.levelHint}>conservador</Text></View>
               <View style={[s.levelItem, s.levelItemBorder]}><View style={[s.levelDot, { backgroundColor: Colors.amber }]} /><Text style={s.levelLabel}>Segura</Text><Text style={[s.levelValue, { color: Colors.amber }]}>{fmt(seguraRetirada)}</Text><Text style={s.levelHint}>equilibrio</Text></View>
@@ -96,8 +92,7 @@ export function TabRetirada({ transactions }: Props) {
             </View>
           </View>
 
-          <View style={s.impactCard}>
-            <Text style={s.impactTitle}>Se voce retirar o valor seguro:</Text>
+          <View style={s.impactCard}><Text style={s.impactTitle}>Se voce retirar o valor seguro:</Text>
             <View style={s.impactRow}><Text style={s.impactLabel}>Caixa apos retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
             <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria ({regime === "mei" ? "DAS fixo" : "DAS 6%"})</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
             {proLaboreEnabled && regime === "simples" && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(proLabore + inss)}</Text></View>}
@@ -106,8 +101,7 @@ export function TabRetirada({ transactions }: Props) {
 
           <View style={s.messageCard}><Text style={s.messageText}>{seguraRetirada > 0 ? `Hoje voce pode retirar ${fmt(seguraRetirada)} com seguranca. Acima de ${fmt(maxRetirada)}, sua folga de caixa comeca a ficar apertada.` : `Com o cenario atual, nao recomendamos retirada. Suas despesas e obrigacoes consomem toda a receita.`}</Text></View>
 
-          <View style={s.waterfall}>
-            <Text style={s.wfTitle}>Como calculamos</Text>
+          <View style={s.waterfall}><Text style={s.wfTitle}>Como calculamos</Text>
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado do negocio</Text></View>
             <WRow label="(+) Receita bruta" value={rev} color={Colors.green} />
             {exp > 0 && <WRow label="(-) Despesas operacionais" value={exp} color={Colors.red} />}
@@ -119,8 +113,7 @@ export function TabRetirada({ transactions }: Props) {
           </View>
 
           {proLaboreEnabled && regime === "simples" && (
-            <View style={s.fatorCard}>
-              <View style={s.fatorTop}><View><Text style={s.fatorTitle}>Monitor Fator R</Text><Text style={s.fatorValue}>{fatorR}%</Text></View><View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}><Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text></View></View>
+            <View style={s.fatorCard}><View style={s.fatorTop}><View><Text style={s.fatorTitle}>Monitor Fator R</Text><Text style={s.fatorValue}>{fatorR}%</Text></View><View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}><Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text></View></View>
               <View style={s.fatorBar}><View style={[s.fatorFill, { width: `${Math.min(fatorR, 100)}%`, backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} /><View style={s.fatorMark} /></View>
               <View style={s.fatorLabels}><Text style={s.fatorLabelLeft}>0%</Text><Text style={s.fatorLabel28}>28%</Text><Text style={s.fatorLabelRight}>100%</Text></View>
               <Text style={s.fatorHint}>{fatorR >= 28 ? `Pro-labore ${fatorR - 28} pontos acima do minimo. Folga para Anexo III.` : `Pro-labore ${28 - fatorR} pontos abaixo. Considere aumentar para evitar Anexo V.`}</Text>
@@ -149,7 +142,6 @@ const s = StyleSheet.create({
   regimeBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   regimeText: { fontSize: 11, fontWeight: "600", color: Colors.violet3 },
   regimeHint: { fontSize: 11, color: Colors.ink3, flex: 1 },
-  // M4: Pro-labore toggle
   proLaboreToggle: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.border },
   proLaboreLabel: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   proLaboreHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
