@@ -87,24 +87,16 @@ export default function RegisterScreen() {
       if (res.status === 429) { setCnpjError("Muitas consultas. Aguarde alguns segundos e tente novamente."); return; }
       if (!res.ok) { setCnpjError(`Erro na consulta (${res.status}). Tente novamente.`); return; }
       const data = await res.json();
-
       setEmpresa(data.razao_social || data.nome_fantasia || "");
       setCnpjFound(data.razao_social || data.nome_fantasia);
-
-      // Auto-fill telefone da empresa (do CNPJ)
-      if (data.ddd_telefone_1) {
-        setTelefoneEmpresa(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`));
-      }
-
+      if (data.ddd_telefone_1) { setTelefoneEmpresa(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`)); }
       saveCnpjData(data);
-
       const natCode = String(data.natureza_juridica || "").replace(/\D/g, "");
       if (natCode === "2135") { saveDetectedRegime("mei"); }
       else {
         const porte = (data.porte || data.descricao_porte || "").toLowerCase();
-        if (porte.includes("mei") || porte.includes("micro empreendedor individual")) {
-          saveDetectedRegime("mei");
-        } else { saveDetectedRegime("simples"); }
+        if (porte.includes("mei") || porte.includes("micro empreendedor individual")) { saveDetectedRegime("mei"); }
+        else { saveDetectedRegime("simples"); }
       }
     } catch (err: any) {
       if (err?.name === "AbortError") { setCnpjError("Consulta demorou demais. Verifique sua conexao e tente novamente."); }
@@ -155,7 +147,9 @@ export default function RegisterScreen() {
         access_code: codigo.trim() || undefined,
       });
       toast.success("Conta criada com sucesso!");
-      setTimeout(() => { router.replace("/(tabs)/onboarding"); }, 300);
+      // Redirect: trial code validated → onboarding, no code → checkout
+      const hasTrialCode = codigo.trim() && codeValid === true;
+      setTimeout(() => { router.replace(hasTrialCode ? "/(tabs)/onboarding" : "/(tabs)/checkout"); }, 300);
     } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
   }
 
@@ -186,7 +180,6 @@ export default function RegisterScreen() {
 
       {step === 1 && (
         <View>
-          {/* CNPJ */}
           <View style={s.field}>
             <Text style={s.label}>CNPJ *</Text>
             <View style={[s.inputWrap, cnpjFound && { borderColor: Colors.green }, cnpjError && { borderColor: Colors.red }]}><Icon name="file_text" size={16} color={cnpjFound ? Colors.green : cnpjError ? Colors.red : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />{cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}</View>
@@ -194,37 +187,22 @@ export default function RegisterScreen() {
             {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
             {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados da empresa serao preenchidos automaticamente.</Text>}
           </View>
-
-          {/* Nome da empresa */}
           <View style={s.field}><Text style={s.label}>Nome da empresa *</Text><View style={s.inputWrap}><Icon name="bag" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
-
-          {/* Telefone da empresa (auto-fill do CNPJ) */}
           <View style={s.field}>
             <Text style={s.label}>Telefone da empresa</Text>
-            <View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}>
-              <Icon name="bag" size={16} color={Colors.ink3} />
-              <TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
-            </View>
+            <View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="bag" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>
             {telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}
           </View>
-
-          {/* Telefone para contato (obrigatorio, digitado pelo cliente) */}
           <View style={s.field}>
             <Text style={s.label}>Seu telefone para contato *</Text>
-            <View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}>
-              <Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} />
-              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" />
-            </View>
+            <View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}><Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View>
             <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>WhatsApp ou celular para a Aura entrar em contato com voce.</Text>
           </View>
-
-          {/* Codigo de acesso */}
           <View style={s.field}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><Text style={s.label}>Codigo de acesso</Text>{codeChecking && <ActivityIndicator size="small" color={Colors.violet3} />}{codeValid === true && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}{codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Invalido</Text>}</View>
             <View style={[s.inputWrap, codeValid === true && { borderColor: Colors.green }, codeValid === false && { borderColor: Colors.red }]}><Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={codigo} onChangeText={v => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} /></View>
             <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo? Insira para ativar seu plano.</Text>
           </View>
-
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable style={s.backBtn} onPress={() => setStep(0)}><Text style={s.backBtnText}>Voltar</Text></Pressable>
             <Pressable style={[s.btn, { flex: 1 }, (isLoading || !step2Valid) && { opacity: 0.6 }]} {...(isWeb ? { className: "auth-btn" } as any : {})} onPress={handleRegister} disabled={isLoading || !step2Valid}>{isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta</Text>}</Pressable>
