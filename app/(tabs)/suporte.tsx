@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Linking } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
@@ -11,41 +11,17 @@ import { toast } from "@/components/Toast";
 const AURA_EMAIL = "suporte@getaura.com.br";
 const AURA_WHATSAPP = "5511956305269";
 
-const MOCK_MESSAGES = [
-  { id: "1", from: "analyst", name: "Equipe Aura", text: "Ola! Sou seu Analista de Negocios na Aura. Estou aqui para ajudar com configuracoes, duvidas, leitura de dados e acompanhamento de prazos. Como posso te ajudar hoje?", time: "09:00" },
-  { id: "2", from: "user", text: "Oi! Preciso de ajuda para entender meu DRE deste mes.", time: "09:15" },
-  { id: "3", from: "analyst", name: "Equipe Aura", text: "Claro! Analisando seus dados de marco: sua margem liquida esta em 46,6%, que e excelente para o segmento. As despesas fixas representam 17% do faturamento. Quer que eu detalhe alguma categoria especifica?", time: "09:18" },
-  { id: "4", from: "user", text: "Sim, quero entender melhor as despesas operacionais.", time: "09:20" },
-  { id: "5", from: "analyst", name: "Equipe Aura", text: "Suas despesas operacionais somam R$ 894,80 este mes. Os principais itens sao: material de limpeza (R$ 45,90), insumos (R$ 320,00) e manutencao (R$ 528,90). Comparando com fevereiro, houve aumento de 8% - principalmente pela manutencao.", time: "09:22" },
-];
-
 const QUICK_ACTIONS = [
   { label: "Configuracao", icon: "settings" },
   { label: "Entender dados", icon: "bar_chart" },
   { label: "Obrigacoes", icon: "calculator" },
-  { label: "Suporte", icon: "alert" },
+  { label: "Suporte tecnico", icon: "alert" },
 ];
-
-function ChatBubble({ msg }: { msg: typeof MOCK_MESSAGES[0] }) {
-  const isAnalyst = msg.from === "analyst";
-  return (
-    <View style={[z.bubble, isAnalyst ? z.bubbleAnalyst : z.bubbleUser]}>
-      {isAnalyst && (
-        <View style={z.analystHeader}>
-          <View style={z.analystAvatar}><Icon name="star" size={12} color={Colors.violet3} /></View>
-          <Text style={z.analystName}>{msg.name}</Text>
-        </View>
-      )}
-      <Text style={z.bubbleText}>{msg.text}</Text>
-      <Text style={z.bubbleTime}>{msg.time}</Text>
-    </View>
-  );
-}
 
 export default function SuporteScreen() {
   const { user, isDemo } = useAuthStore();
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<{ id: string; from: string; name?: string; text: string; time: string }[]>([]);
 
   function sendMessage() {
     if (!message.trim()) return;
@@ -70,6 +46,7 @@ export default function SuporteScreen() {
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
       <PageHeader title="Seu Analista de Negocios" />
 
+      {/* Hero card */}
       <View style={z.heroCard}>
         <View style={z.heroIcon}>
           <Icon name="star" size={28} color={Colors.violet3} />
@@ -94,6 +71,7 @@ export default function SuporteScreen() {
         </View>
       </View>
 
+      {/* Contact buttons */}
       <View style={z.contactRow}>
         <Pressable onPress={openWhatsApp} style={[z.contactBtn, { backgroundColor: "#25D366" }]}>
           <Icon name="message" size={18} color="#fff" />
@@ -105,8 +83,10 @@ export default function SuporteScreen() {
         </Pressable>
       </View>
 
+      {/* Chat section */}
       <Text style={z.sectionTitle}>Chat com seu analista</Text>
 
+      {/* Quick actions */}
       <View style={z.quickRow}>
         {QUICK_ACTIONS.map(qa => (
           <Pressable key={qa.label} onPress={() => setMessage(qa.label)} style={z.quickBtn}>
@@ -116,10 +96,33 @@ export default function SuporteScreen() {
         ))}
       </View>
 
+      {/* Messages — starts empty */}
       <View style={z.chatCard}>
-        {messages.map(msg => <ChatBubble key={msg.id} msg={msg} />)}
+        {messages.length === 0 && (
+          <View style={z.chatEmpty}>
+            <Icon name="message" size={24} color={Colors.ink3 + "44"} />
+            <Text style={z.chatEmptyText}>Nenhuma mensagem ainda.</Text>
+            <Text style={z.chatEmptyHint}>Envie uma mensagem ou use os atalhos acima para iniciar uma conversa com seu analista.</Text>
+          </View>
+        )}
+        {messages.map(msg => {
+          const isAnalyst = msg.from === "analyst";
+          return (
+            <View key={msg.id} style={[z.bubble, isAnalyst ? z.bubbleAnalyst : z.bubbleUser]}>
+              {isAnalyst && (
+                <View style={z.analystHeader}>
+                  <View style={z.analystAvatar}><Icon name="star" size={12} color={Colors.violet3} /></View>
+                  <Text style={z.analystName}>{msg.name}</Text>
+                </View>
+              )}
+              <Text style={z.bubbleText}>{msg.text}</Text>
+              <Text style={z.bubbleTime}>{msg.time}</Text>
+            </View>
+          );
+        })}
       </View>
 
+      {/* Reply bar */}
       <View style={z.replyBar}>
         <TextInput style={z.replyInput} value={message} onChangeText={setMessage} placeholder="Digite sua mensagem..." placeholderTextColor={Colors.ink3} onSubmitEditing={sendMessage} />
         <Pressable onPress={sendMessage} style={z.sendBtn}>
@@ -151,7 +154,10 @@ const z = StyleSheet.create({
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 16 },
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.border },
   quickText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  chatCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: IS_WIDE ? 16 : 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 12 },
+  chatCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: IS_WIDE ? 16 : 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 12, minHeight: 120 },
+  chatEmpty: { alignItems: "center", justifyContent: "center", paddingVertical: 24, gap: 6 },
+  chatEmptyText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
+  chatEmptyHint: { fontSize: 11, color: Colors.ink3 + "88", textAlign: "center", maxWidth: 280 },
   bubble: { maxWidth: "80%", borderRadius: 16, padding: 14, gap: 4 },
   bubbleAnalyst: { alignSelf: "flex-start", backgroundColor: Colors.bg4 },
   bubbleUser: { alignSelf: "flex-end", backgroundColor: Colors.violet },
