@@ -10,7 +10,7 @@ function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
   return <View style={[s.badge, { backgroundColor: bgs[abc] }]}><Text style={[s.badgeText, { color: colors[abc] }]}>{abc}</Text></View>;
 }
 
-export function ProductRow({ product, showAbc, onDelete }: { product: Product; showAbc?: boolean; onDelete?: (id: string) => void }) {
+export function ProductRow({ product, showAbc, onDelete, onEdit }: { product: Product; showAbc?: boolean; onDelete?: (id: string) => void; onEdit?: (product: Product) => void }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isWeb = Platform.OS === "web";
@@ -47,7 +47,10 @@ export function ProductRow({ product, showAbc, onDelete }: { product: Product; s
           {product.brand ? <Text style={s.brandText}>Marca: {product.brand}</Text> : null}
           {product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Codigo de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
           {product.notes ? <Text style={s.notesText}>{product.notes}</Text> : null}
-          {onDelete && <Pressable onPress={() => onDelete(product.id)} style={s.deleteBtn}><Text style={s.deleteBtnText}>Excluir produto</Text></Pressable>}
+          <View style={s.actionsRow}>
+            {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>Editar produto</Text></Pressable>}
+            {onDelete && <Pressable onPress={() => onDelete(product.id)} style={s.deleteBtn}><Text style={s.deleteBtnText}>Excluir</Text></Pressable>}
+          </View>
         </View>
       )}
     </View>
@@ -77,7 +80,10 @@ const s = StyleSheet.create({
   barcodeLabel: { fontSize: 11, color: Colors.ink3 },
   barcodeValue: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   notesText: { fontSize: 11, color: Colors.ink3, marginTop: 6, fontStyle: "italic" },
-  deleteBtn: { marginTop: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "33", alignItems: "center" },
+  actionsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  editBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center" },
+  editBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  deleteBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "33", alignItems: "center" },
   deleteBtnText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 });
 
