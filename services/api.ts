@@ -139,6 +139,10 @@ export const companiesApi = {
   createCustomer: (companyId: string, body: any) => request<any>(`/companies/${companyId}/customers`, { method: "POST", body }),
   updateCustomer: (companyId: string, custId: string, body: any) => request<any>(`/companies/${companyId}/customers/${custId}`, { method: "PATCH", body }),
   deleteCustomer: (companyId: string, custId: string) => request<any>(`/companies/${companyId}/customers/${custId}`, { method: "DELETE" }),
+  // Fase 5: Retention + Reviews
+  retention: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/customers/retention?period=${period || 'month'}`),
+  reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? '?rating=' + rating : ''}`),
+  requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
   // Accounting
   obligations: (companyId: string) => request<any>(`/companies/${companyId}/obligations`),
   payroll: (companyId: string, body: any) => request<any>(`/companies/${companyId}/payroll/calculate`, { method: "POST", body }),
