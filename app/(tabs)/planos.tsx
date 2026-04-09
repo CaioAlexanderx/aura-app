@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { View, Text, ScrollView, Pressable, Platform, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, Platform, StyleSheet, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { billingApi } from "@/services/api";
+import { router } from "expo-router";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
+const AURA_WHATSAPP = "https://wa.me/5512991234567?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20a%20consultoria%20Aura";
 
 const PLANS = [
   {
@@ -61,7 +63,6 @@ const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionD
 
 export default function PlanosScreen() {
   const [annual, setAnnual] = useState(false);
-  const [upgrading, setUpgrading] = useState<string | null>(null);
   const { company, token, isDemo } = useAuthStore();
   const currentPlan = (company?.plan as string) || "essencial";
   const discount = 0.15;
@@ -73,21 +74,11 @@ export default function PlanosScreen() {
     retry: 1, staleTime: 60000,
   });
 
-  const subscribeMutation = useMutation({
-    mutationFn: ({ plan }: { plan: string }) => billingApi.subscribe(company!.id, plan),
-    onSuccess: (data) => {
-      toast.success("Assinatura criada!"); setUpgrading(null);
-      if (data.payment_link && Platform.OS === "web") window.open(data.payment_link, "_blank");
-    },
-    onError: (err: any) => { toast.error(err?.message || "Erro ao criar assinatura"); setUpgrading(null); },
-  });
-
   function handleChoosePlan(planKey: string) {
     if (planKey === currentPlan) return;
     if (isDemo) { toast.info("Crie uma conta para assinar"); return; }
-    if (!company?.id) { toast.error("Empresa nao encontrada"); return; }
-    setUpgrading(planKey);
-    subscribeMutation.mutate({ plan: planKey });
+    // Redirect to checkout with plan pre-selected
+    router.push(`/(tabs)/checkout?plan=${planKey}`);
   }
 
   function price(monthly: number) { return annual ? Math.round(monthly * (1 - discount) * 100) / 100 : monthly; }
@@ -118,7 +109,6 @@ export default function PlanosScreen() {
       <View style={s.plansRow}>
         {PLANS.map(plan => {
           const isCurrent = plan.key === currentPlan;
-          const isUpgrading = upgrading === plan.key;
           const mo = price(plan.monthly);
           const yr = annualTotal(plan.monthly);
           return (
@@ -129,9 +119,8 @@ export default function PlanosScreen() {
               <View style={s.priceRow}>
                 {annual && <Text style={s.priceOld}>R$ {plan.monthly}</Text>}
                 <Text style={s.priceValue}>R$ {mo.toFixed(2).replace(".", ",")}</Text>
-                <Text style={s.pricePeriod}>/{annual ? "mes" : "mes"}</Text>
+                <Text style={s.pricePeriod}>/mes</Text>
               </View>
-              {/* M2: Show annual total commitment */}
               {annual && <Text style={s.yearlyTotal}>Total anual: {fmtR(yr)}</Text>}
               {annual && <Text style={s.yearlySave}>Economia de {fmtR(savings(plan.monthly))}/ano</Text>}
               <View style={s.featuresList}>
@@ -139,8 +128,8 @@ export default function PlanosScreen() {
                   <View key={f} style={s.featureRow}><Icon name="check" size={12} color={Colors.green} /><Text style={s.featureText}>{f}</Text></View>
                 ))}
               </View>
-              <Pressable style={[s.planBtn, isCurrent && s.planBtnCurrent, isUpgrading && { opacity: 0.6 }]} onPress={() => handleChoosePlan(plan.key)} disabled={isUpgrading}>
-                <Text style={[s.planBtnText, isCurrent && s.planBtnTextCurrent]}>{isCurrent ? "Plano atual" : isUpgrading ? "Processando..." : "Escolher plano"}</Text>
+              <Pressable style={[s.planBtn, isCurrent && s.planBtnCurrent]} onPress={() => handleChoosePlan(plan.key)}>
+                <Text style={[s.planBtnText, isCurrent && s.planBtnTextCurrent]}>{isCurrent ? "Plano atual" : "Escolher plano"}</Text>
               </Pressable>
             </View>
           );
@@ -155,7 +144,7 @@ export default function PlanosScreen() {
             <Text style={[s.addonPrice, (a as any).cta && { color: Colors.ink }]}>{a.price}</Text>
             <Text style={s.addonDesc}>{a.desc}</Text>
             {(a as any).cta && (
-              <Pressable onPress={() => toast.info("Redirecionando para o suporte Aura...")} style={s.addonCta}>
+              <Pressable onPress={() => Linking.openURL(AURA_WHATSAPP)} style={s.addonCta}>
                 <Text style={s.addonCtaText}>Falar com a Aura</Text>
               </Pressable>
             )}
@@ -195,7 +184,6 @@ const s = StyleSheet.create({
   priceOld: { fontSize: 14, color: Colors.ink3, textDecorationLine: "line-through" },
   priceValue: { fontSize: 28, fontWeight: "800", color: Colors.ink },
   pricePeriod: { fontSize: 12, color: Colors.ink3 },
-  // M2: Annual total
   yearlyTotal: { fontSize: 13, color: Colors.ink, fontWeight: "600", marginBottom: 2 },
   yearlySave: { fontSize: 11, color: Colors.green, fontWeight: "500", marginBottom: 16 },
   featuresList: { gap: 8, marginBottom: 20, marginTop: 8 },
