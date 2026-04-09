@@ -12,6 +12,7 @@ import { toast } from "@/components/Toast";
 import { maskCNPJ, maskPhone } from "@/utils/masks";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
+const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
 const isWeb = Platform.OS === "web";
 
 if (typeof document !== "undefined" && !document.getElementById("aura-auth-css")) {
@@ -43,14 +44,14 @@ function saveCnpjData(data: any) {
   try {
     if (typeof localStorage === "undefined") return;
     const cfg = JSON.parse(localStorage.getItem("aura_config") || "{}");
-    if (data.razao_social) cfg.companyName = data.razao_social;
-    if (data.nome_fantasia) cfg.tradeName = data.nome_fantasia;
-    if (data.logradouro) {
-      const parts = [data.logradouro, data.numero, data.bairro, data.municipio, data.uf].filter(Boolean);
+    if (data.legal_name) cfg.companyName = data.legal_name;
+    if (data.trade_name) cfg.tradeName = data.trade_name;
+    if (data.address_street) {
+      const parts = [data.address_street, data.address_number, data.address_district, data.address_city, data.address_state].filter(Boolean);
       cfg.address = parts.join(", ");
     }
     if (data.email) cfg.email = data.email.toLowerCase();
-    if (data.ddd_telefone_1) cfg.phone = `(${data.ddd_telefone_1}) ${data.telefone_1 || ""}`.trim();
+    if (data.phone) cfg.phone = data.phone;
     localStorage.setItem("aura_config", JSON.stringify(cfg));
   } catch {}
 }
@@ -80,24 +81,31 @@ export default function RegisterScreen() {
     setCnpjLoading(true); setCnpjFound(null); setCnpjError(null);
     try {
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${nums}`, { signal: controller?.signal });
+      const timer = controller ? setTimeout(() => controller.abort(), 10000) : null;
+      // Route through Aura backend (avoids CSP blocking direct BrasilAPI calls)
+      const res = await fetch(`${API_BASE}/onboarding/cnpj-lookup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cnpj: nums }),
+        signal: controller?.signal,
+      });
       if (timer) clearTimeout(timer);
       if (res.status === 404) { setCnpjError("CNPJ nao encontrado na Receita Federal. Verifique os digitos."); return; }
       if (res.status === 429) { setCnpjError("Muitas consultas. Aguarde alguns segundos e tente novamente."); return; }
-      if (!res.ok) { setCnpjError(`Erro na consulta (${res.status}). Tente novamente.`); return; }
+      if (res.status === 422) { const err = await res.json().catch(() => ({})); setCnpjError(err.error || "CNPJ com situacao irregular na Receita Federal."); return; }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); setCnpjError(err.error || `Erro na consulta (${res.status}). Tente novamente.`); return; }
       const data = await res.json();
-      setEmpresa(data.razao_social || data.nome_fantasia || "");
-      setCnpjFound(data.razao_social || data.nome_fantasia);
-      if (data.ddd_telefone_1) { setTelefoneEmpresa(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`)); }
+      const companyName = data.legal_name || data.trade_name || data.razao_social || data.nome_fantasia || "";
+      setEmpresa(companyName);
+      setCnpjFound(companyName);
+      // Phone: backend may return phone field or ddd+telefone
+      if (data.phone) { setTelefoneEmpresa(maskPhone(data.phone)); }
+      else if (data.ddd_telefone_1) { setTelefoneEmpresa(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`)); }
       saveCnpjData(data);
-      const natCode = String(data.natureza_juridica || "").replace(/\D/g, "");
-      if (natCode === "2135") { saveDetectedRegime("mei"); }
-      else {
-        const porte = (data.porte || data.descricao_porte || "").toLowerCase();
-        if (porte.includes("mei") || porte.includes("micro empreendedor individual")) { saveDetectedRegime("mei"); }
-        else { saveDetectedRegime("simples"); }
-      }
+      // Detect regime
+      if (data.is_mei) { saveDetectedRegime("mei"); }
+      else if (data.suggested_regime === "mei") { saveDetectedRegime("mei"); }
+      else { saveDetectedRegime(data.suggested_regime || "simples"); }
     } catch (err: any) {
       if (err?.name === "AbortError") { setCnpjError("Consulta demorou demais. Verifique sua conexao e tente novamente."); }
       else { setCnpjError("Erro de conexao ao consultar CNPJ. Verifique sua internet."); }
@@ -147,7 +155,6 @@ export default function RegisterScreen() {
         access_code: codigo.trim() || undefined,
       });
       toast.success("Conta criada com sucesso!");
-      // Redirect: trial code validated → onboarding, no code → checkout
       const hasTrialCode = codigo.trim() && codeValid === true;
       setTimeout(() => { router.replace(hasTrialCode ? "/(tabs)/onboarding" : "/(tabs)/checkout"); }, 300);
     } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
