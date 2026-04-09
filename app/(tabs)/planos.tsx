@@ -91,6 +91,7 @@ export default function PlanosScreen() {
   }
 
   function price(monthly: number) { return annual ? Math.round(monthly * (1 - discount) * 100) / 100 : monthly; }
+  function annualTotal(monthly: number) { return Math.round(monthly * (1 - discount) * 12 * 100) / 100; }
   function savings(monthly: number) { return Math.round(monthly * discount * 12 * 100) / 100; }
 
   const trialActive = billingStatus?.trial_active;
@@ -119,6 +120,7 @@ export default function PlanosScreen() {
           const isCurrent = plan.key === currentPlan;
           const isUpgrading = upgrading === plan.key;
           const mo = price(plan.monthly);
+          const yr = annualTotal(plan.monthly);
           return (
             <View key={plan.key} style={[s.planCard, (plan as any).popular && s.planPopular, isCurrent && s.planCurrent]}>
               {(plan as any).popular && <View style={s.popularBadge}><Text style={s.popularText}>Mais popular</Text></View>}
@@ -127,8 +129,10 @@ export default function PlanosScreen() {
               <View style={s.priceRow}>
                 {annual && <Text style={s.priceOld}>R$ {plan.monthly}</Text>}
                 <Text style={s.priceValue}>R$ {mo.toFixed(2).replace(".", ",")}</Text>
-                <Text style={s.pricePeriod}>/{annual ? "mes (anual)" : "mes"}</Text>
+                <Text style={s.pricePeriod}>/{annual ? "mes" : "mes"}</Text>
               </View>
+              {/* M2: Show annual total commitment */}
+              {annual && <Text style={s.yearlyTotal}>Total anual: {fmtR(yr)}</Text>}
               {annual && <Text style={s.yearlySave}>Economia de {fmtR(savings(plan.monthly))}/ano</Text>}
               <View style={s.featuresList}>
                 {plan.features.map(f => (
@@ -187,10 +191,12 @@ const s = StyleSheet.create({
   popularText: { fontSize: 10, color: "#fff", fontWeight: "700" },
   planName: { fontSize: 20, fontWeight: "800", color: Colors.ink, marginBottom: 2 },
   planSub: { fontSize: 12, color: Colors.ink3, marginBottom: 16 },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: 4 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: 2 },
   priceOld: { fontSize: 14, color: Colors.ink3, textDecorationLine: "line-through" },
   priceValue: { fontSize: 28, fontWeight: "800", color: Colors.ink },
   pricePeriod: { fontSize: 12, color: Colors.ink3 },
+  // M2: Annual total
+  yearlyTotal: { fontSize: 13, color: Colors.ink, fontWeight: "600", marginBottom: 2 },
   yearlySave: { fontSize: 11, color: Colors.green, fontWeight: "500", marginBottom: 16 },
   featuresList: { gap: 8, marginBottom: 20, marginTop: 8 },
   featureRow: { flexDirection: "row", alignItems: "center", gap: 8 },
