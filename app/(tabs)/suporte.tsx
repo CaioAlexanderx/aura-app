@@ -9,7 +9,7 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { toast } from "@/components/Toast";
 
 const AURA_EMAIL = "suporte@getaura.com.br";
-const AURA_WHATSAPP = "5512999990000";
+const AURA_WHATSAPP = "5512991234567";
 
 const MOCK_MESSAGES = [
   { id: "1", from: "analyst", name: "Equipe Aura", text: "Ola! Sou seu Analista de Negocios na Aura. Estou aqui para ajudar com configuracoes, duvidas, leitura de dados e acompanhamento de prazos. Como posso te ajudar hoje?", time: "09:00" },
@@ -61,11 +61,15 @@ export default function SuporteScreen() {
     }, 1500);
   }
 
+  function openWhatsApp() {
+    const text = encodeURIComponent("Ola, preciso de ajuda com minha conta na Aura.");
+    Linking.openURL(`https://wa.me/${AURA_WHATSAPP}?text=${text}`);
+  }
+
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
       <PageHeader title="Seu Analista de Negocios" />
 
-      {/* Hero card — R7 FIX: overflow hidden + responsive padding */}
       <View style={z.heroCard}>
         <View style={z.heroIcon}>
           <Icon name="star" size={28} color={Colors.violet3} />
@@ -90,22 +94,19 @@ export default function SuporteScreen() {
         </View>
       </View>
 
-      {/* Contact buttons */}
       <View style={z.contactRow}>
-        <Pressable onPress={() => { Linking.openURL("https://wa.me/" + AURA_WHATSAPP); toast.success("Abrindo WhatsApp..."); }} style={[z.contactBtn, { backgroundColor: "#25D366" }]}>
-          <Icon name="star" size={18} color="#fff" />
-          <Text style={z.contactBtnText}>WhatsApp</Text>
+        <Pressable onPress={openWhatsApp} style={[z.contactBtn, { backgroundColor: "#25D366" }]}>
+          <Icon name="message" size={18} color="#fff" />
+          <Text style={z.contactBtnText}>Falar com Analista</Text>
         </Pressable>
-        <Pressable onPress={() => { Linking.openURL("mailto:" + AURA_EMAIL); toast.success("Abrindo e-mail..."); }} style={[z.contactBtn, { backgroundColor: Colors.violet }]}>
-          <Icon name="file_text" size={18} color="#fff" />
-          <Text style={z.contactBtnText}>E-mail</Text>
+        <Pressable onPress={() => Linking.openURL("mailto:" + AURA_EMAIL)} style={[z.contactBtn, { backgroundColor: Colors.violet }]}>
+          <Icon name="globe" size={18} color="#fff" />
+          <Text style={z.contactBtnText}>Enviar e-mail</Text>
         </Pressable>
       </View>
 
-      {/* Chat section */}
       <Text style={z.sectionTitle}>Chat com seu analista</Text>
 
-      {/* Quick actions */}
       <View style={z.quickRow}>
         {QUICK_ACTIONS.map(qa => (
           <Pressable key={qa.label} onPress={() => setMessage(qa.label)} style={z.quickBtn}>
@@ -115,12 +116,10 @@ export default function SuporteScreen() {
         ))}
       </View>
 
-      {/* Messages */}
       <View style={z.chatCard}>
         {messages.map(msg => <ChatBubble key={msg.id} msg={msg} />)}
       </View>
 
-      {/* Reply bar */}
       <View style={z.replyBar}>
         <TextInput style={z.replyInput} value={message} onChangeText={setMessage} placeholder="Digite sua mensagem..." placeholderTextColor={Colors.ink3} onSubmitEditing={sendMessage} />
         <Pressable onPress={sendMessage} style={z.sendBtn}>
@@ -136,7 +135,6 @@ export default function SuporteScreen() {
 const z = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
-  // Hero — R7 FIX: overflow hidden, responsive padding, flexWrap stats
   heroCard: { backgroundColor: Colors.violetD, borderRadius: 20, padding: IS_WIDE ? 28 : 20, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", marginBottom: 20, gap: 10, overflow: "hidden" as any },
   heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
   heroTitle: { fontSize: IS_WIDE ? 20 : 18, fontWeight: "800", color: Colors.ink, textAlign: "center" },
@@ -145,18 +143,14 @@ const z = StyleSheet.create({
   heroStat: { alignItems: "center", paddingHorizontal: IS_WIDE ? 20 : 12, paddingVertical: IS_WIDE ? 0 : 6, gap: 2 },
   heroStatValue: { fontSize: IS_WIDE ? 16 : 14, fontWeight: "800", color: Colors.ink },
   heroStatLabel: { fontSize: 10, color: Colors.ink3 },
-  heroStatDivider: { width: IS_WIDE ? 1 : 0, height: IS_WIDE ? 32 : 0 , backgroundColor: Colors.border },
-  // Contact
+  heroStatDivider: { width: IS_WIDE ? 1 : 0, height: IS_WIDE ? 32 : 0, backgroundColor: Colors.border },
   contactRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
   contactBtn: { flex: 1, minWidth: 140, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 14 },
   contactBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  // Section
   sectionTitle: { fontSize: 15, fontWeight: "600", color: Colors.ink, marginBottom: 12 },
-  // Quick actions
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 16 },
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.border },
   quickText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  // Chat
   chatCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: IS_WIDE ? 16 : 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 12 },
   bubble: { maxWidth: "80%", borderRadius: 16, padding: 14, gap: 4 },
   bubbleAnalyst: { alignSelf: "flex-start", backgroundColor: Colors.bg4 },
@@ -166,7 +160,6 @@ const z = StyleSheet.create({
   analystName: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
   bubbleText: { fontSize: 13, color: Colors.ink, lineHeight: 19 },
   bubbleTime: { fontSize: 9, color: Colors.ink3, alignSelf: "flex-end" },
-  // Reply
   replyBar: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
   replyInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 20, paddingHorizontal: 18, paddingVertical: 12, fontSize: 13, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
