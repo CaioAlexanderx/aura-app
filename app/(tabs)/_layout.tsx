@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
@@ -12,17 +12,46 @@ import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string };
 type NavSection = { s: string; i: NavItem[] };
 
+// mod = module key used for plan gating + admin overrides
 const NAV: NavSection[] = [
-  { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard" },{ r: "/financeiro", l: "Financeiro", ic: "wallet" },{ r: "/nfe", l: "NF-e", ic: "file_text" }]},
-  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "headset" }]},
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
-  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio" }]},
-  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao" }]},
+  { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
+  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio", mod: "agendamento" }]},
+  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio", mod: "canal" }]},
+  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},
 ];
+
+// ── Module visibility (mirrors backend modules.js) ──────────
+const MODULE_PLAN_MAP: Record<string, string> = {
+  painel: 'essencial', financeiro: 'essencial', nfe: 'essencial',
+  contabilidade: 'essencial', suporte: 'essencial', pdv: 'essencial',
+  estoque: 'essencial', configuracoes: 'essencial',
+  folha: 'negocio', agendamento: 'negocio', clientes: 'negocio',
+  canal: 'negocio', whatsapp: 'negocio',
+  agentes: 'expansao',
+};
+const PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
+
+function useVisibleModules(): Set<string> {
+  const { company } = useAuthStore();
+  return useMemo(() => {
+    const plan = company?.plan || 'essencial';
+    const overrides = (company as any)?.module_overrides || {};
+    const level = PLAN_LEVEL[plan] ?? 0;
+    const visible = new Set<string>();
+    for (const [mod, minPlan] of Object.entries(MODULE_PLAN_MAP)) {
+      const minLevel = PLAN_LEVEL[minPlan] ?? 0;
+      const ov = overrides[mod];
+      if (ov === false) continue;
+      if (ov === true || level >= minLevel) visible.add(mod);
+    }
+    return visible;
+  }, [company?.plan, (company as any)?.module_overrides]);
+}
 
 function useWebFonts() {
   useEffect(() => {
@@ -86,8 +115,19 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const C = useColors();
   const { isDark, toggle } = useThemeStore();
   const p = usePathname(), ro = useRouter(), { user: u, company: co, logout } = useAuthStore();
+  const visibleMods = useVisibleModules();
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
+
+  // Filter NAV by visible modules
+  const filteredNav = useMemo(() =>
+    NAV.map(section => ({
+      ...section,
+      i: section.i.filter(item => !item.mod || visibleMods.has(item.mod)),
+    })).filter(section => section.i.length > 0),
+    [visibleMods]
+  );
+
   return (
     <View style={[{ width: sw, height: '100%', backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, justifyContent: "flex-start", overflow: "hidden" as any }, { transition: "width 0.25s ease, padding 0.25s ease" } as any]}>
       <View style={{ flexDirection: "row", alignItems: collapsed ? "center" : "center", justifyContent: collapsed ? "center" : "space-between", paddingHorizontal: collapsed ? 0 : 8, paddingBottom: 14 }}>
@@ -106,7 +146,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
 
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={true}>
-        {NAV.map(s => (
+        {filteredNav.map(s => (
           <View key={s.s} style={{ marginBottom: collapsed ? 8 : 16 }}>
             {!collapsed && <Text style={{ fontSize: 10, color: C.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1.2, paddingHorizontal: 12, marginBottom: 6 }}>{s.s}</Text>}
             {collapsed && <View style={{ height: 1, backgroundColor: C.border, marginVertical: 4, marginHorizontal: 4 }} />}
@@ -150,31 +190,37 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 function MBar() {
   const C = useColors();
   const p = usePathname(), ro = useRouter();
+  const visibleMods = useVisibleModules();
   const [showMore, setShowMore] = useState(false);
   const MTABS = [
-    { r: "/", l: "Painel", ic: "dashboard" },
-    { r: "/pdv", l: "Caixa", ic: "cart" },
-    { r: "/financeiro", l: "Financeiro", ic: "wallet" },
-    { r: "/clientes", l: "Clientes", ic: "users" },
+    { r: "/", l: "Painel", ic: "dashboard", mod: "painel" },
+    { r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },
+    { r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },
+    { r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },
   ];
-  const MORE_ITEMS = [
-    { r: "/estoque", l: "Estoque", ic: "package" },
-    { r: "/nfe", l: "NF-e", ic: "file_text" },
-    { r: "/contabilidade", l: "Contabilidade", ic: "calculator" },
-    { r: "/folha", l: "Folha", ic: "payroll" },
-    { r: "/canal", l: "Canal Digital", ic: "globe" },
-    { r: "/agendamento", l: "Agenda", ic: "calendar" },
-    { r: "/agentes", l: "Agentes", ic: "brain" },
-    { r: "/suporte", l: "Seu Analista", ic: "headset" },
-    { r: "/configuracoes", l: "Configuracoes", ic: "settings" },
+  const ALL_MORE = [
+    { r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },
+    { r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" },
+    { r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },
+    { r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },
+    { r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" },
+    { r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" },
+    { r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" },
+    { r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" },
+    { r: "/configuracoes", l: "Configuracoes", ic: "settings", mod: "configuracoes" },
   ];
+
+  // Filter by visible modules
+  const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
+  const filteredMore = ALL_MORE.filter(t => visibleMods.has(t.mod));
+
   return (
     <View style={{ position: "relative" }}>
       {showMore && Platform.OS === "web" && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 998, background: "rgba(0,0,0,0.5)" } as any} onClick={() => setShowMore(false)}>
           <div style={{ position: "absolute", bottom: 56, left: 8, right: 8, background: C.bg2, borderRadius: 16, border: "1px solid " + C.border, padding: 12, maxHeight: "60vh", overflowY: "auto", zIndex: 999 } as any} onClick={(e: any) => e.stopPropagation()}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 } as any}>
-              {MORE_ITEMS.map(item => {
+              {filteredMore.map(item => {
                 const active = isA(p, item.r);
                 return (
                   <div key={item.r} onClick={() => { ro.push(item.r as any); setShowMore(false); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 12, borderRadius: 12, cursor: "pointer", background: active ? C.violetD : "transparent", border: active ? "1px solid " + C.border2 : "1px solid transparent" } as any}>
@@ -188,7 +234,7 @@ function MBar() {
         </div>
       )}
       <View style={{ flexDirection: "row", backgroundColor: C.bg2, borderTopWidth: 1, borderTopColor: C.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 }}>
-        {MTABS.map(t => {
+        {filteredTabs.map(t => {
           const a = isA(p, t.r);
           return (
             <Pressable key={t.r} style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => ro.push(t.r as any)}>
