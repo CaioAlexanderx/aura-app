@@ -1,83 +1,98 @@
 # Aura — Tasks de Integracao e API
 ## Roadmap para App 100% Funcional
-**Atualizado:** 09/04/2026 | **Status:** Backlog UAT 21/21 completo + CSV Import/Export pronto
+**Atualizado:** 09/04/2026 (sessao 2) | **Status:** Sprint 1 + Sprint 2 COMPLETOS
 
 ---
 
-## BLOCO 1 — Backend: Persistencia de Dados (Pre-requisito)
+## COMPLETO — Sprint 1 (09/04 sessao 2)
 
-### INT-COMPANY-01: Endpoint PUT /companies/:id (update perfil)
-- Repo: aura-backend | Esforco: 2h
-- Criar: PUT /companies/:id aceita name, cnpj, phone, address, logo_url, tax_regime
-- Frontend: configuracoes.tsx chama API no handleSave()
+### ~~INT-COMPANY-01: Company Profile GET + PUT~~ COMPLETO
+- Backend: src/routes/company.js (GET + PUT /companies/:id/profile)
+- Valida CNPJ, tax_regime enum
+- Frontend: configuracoes.tsx hydrate do backend + save via API
 
-### INT-COMPANY-02: Salvar tax_regime no registro/onboarding
-- Repo: aura-backend | Esforco: 1h
-- Backend: POST /auth/register deve persistir tax_regime na tabela companies
+### ~~INT-COMPANY-02: Frontend wiring perfil~~ COMPLETO
+- api.ts: getProfile() + updateProfile() adicionados ao companiesApi
+- configuracoes.tsx: hydrate on mount + handleSave() chama PUT /profile
 
-### INT-STOCK-01: stock_qty_decrement no PATCH /products/:pid
-- Repo: aura-backend | Esforco: 1h
-- SQL: UPDATE products SET stock_qty = GREATEST(0, stock_qty - $1)
+### ~~INT-STOCK-01: stock_qty_decrement atomico~~ COMPLETO
+- Backend: PATCH /products/:pid com GREATEST(0, stock_qty - $1)
+- Separado do update regular (early return)
+
+### ~~FE-EDIT-PRODUCT-01: Botao editar produto~~ COMPLETO
+- ProductRow.tsx: onEdit prop + "Editar produto" button
+- estoque.tsx: editProduct state, abre AddProductForm pre-preenchido
+
+### ~~FE-CTA-01: CTAs WhatsApp/email~~ COMPLETO
+- configuracoes.tsx: secao "Precisa de ajuda?" com WhatsApp + email
+
+### ~~FE-CNPJ-01: CNPJ lookup no cadastro e configuracoes~~ COMPLETO
+- register.tsx: CNPJ obrigatorio, auto-fill empresa/telefone/endereco
+- register.tsx: 2 campos telefone (empresa do CNPJ + contato pessoal)
+- register.tsx: sem opcao "Nao tenho CNPJ", sem modo demo
+- configuracoes.tsx: CNPJ lookup ao digitar 14 digitos, auto-fill campos vazios
+
+---
+
+## COMPLETO — Sprint 2 (09/04 sessao 2)
+
+### ~~INT-ASAAS-01: Checkout hibrido Pix + Cartao~~ COMPLETO
+- Backend billing.js REESCRITO com:
+  - ensureAsaasCustomer() (cria customer Asaas silenciosamente)
+  - getPlanValue() (calcula preco por plano + ciclo + metodo)
+  - POST /billing/subscribe: aceita PIX ou CREDIT_CARD + cycle monthly/annual
+  - Pix: retorna QR code + copia-e-cola inline
+  - Card: aceita creditCardToken (tokenizacao client-side)
+  - GET /billing/plans: endpoint publico para site
+  - Planos anuais: cartao 15% off mensal, Pix a vista 20% off total
+- Migration 036: billing_cycle + webhook_logs table
+- Frontend checkout.tsx: tela completa com:
+  - Seletor de plano (3 cards) + toggle mensal/anual
+  - Abas Cartao/Pix, cartao como default
+  - Form cartao: numero, validade, CVV, nome, CPF + tokenizacao
+  - Pix: QR inline + copia-e-cola + polling 3s
+  - Tela sucesso com redirect ao dashboard
+  - Aceita ?plan= como parametro URL (para CTAs do site)
+- api.ts: billingApi.subscribe atualizado com cycle/holderName/holderCpf
+- register.tsx: redirect condicional (trial → onboarding, sem trial → checkout)
+
+**Precificacao implementada:**
+| Plano | Mensal | Anual Cartao/mes | Anual Pix (1x) |
+|-------|--------|------------------|-----------------|
+| Essencial | R$ 89 | R$ 75,65 | R$ 854,40 |
+| Negocio | R$ 199 | R$ 169,15 | R$ 1.912,40 |
+| Expansao | R$ 299 | R$ 254,15 | R$ 2.870,40 |
+
+---
+
+## PENDENTE — Sprint 3: Integracao Funcionarios + Folha
 
 ### INT-EMPLOYEES-01: CRUD Funcionarios
 - Repo: aura-backend | Esforco: 4h
 - Criar tabela employees + rotas GET/POST/PATCH/DELETE
 - Frontend: hooks/useEmployees.ts + remover dummy data da Folha
 
----
-
-## BLOCO 2 — Billing: Checkout Hibrido Pix + Cartao (PRIORIDADE)
-
-### INT-ASAAS-01: Checkout inline Pix + Cartao recorrente
-- Esforco: 8h | Bloqueia: Monetizacao
-- Modelo: Cliente nunca sai do app, nunca ve o Asaas
-
-**Fluxo Cartao (default — recorrencia automatica):**
-1. Frontend carrega SDK tokenizacao Asaas (script JS)
-2. Cliente preenche cartao no app → dados tokenizados no browser
-3. Frontend envia creditCardToken para POST /billing/subscribe
-4. Backend cria customer Asaas silencioso (POST /v3/customers com dados do cadastro)
-5. Backend cria assinatura (POST /v3/subscriptions billingType:CREDIT_CARD cycle:MONTHLY)
-6. Asaas cobra automaticamente todo mes + retry se cartao recusar
-7. Webhook PAYMENT_RECEIVED → UPDATE companies SET plan, billing_status
-
-**Fluxo Pix (alternativa):**
-1. Backend cria assinatura Asaas (POST /v3/subscriptions billingType:PIX cycle:MONTHLY)
-2. Backend busca QR (GET /v3/payments/{id}/pixQrCode) → retorna base64 + copia-e-cola
-3. Frontend exibe QR inline + timer 30min + polling a cada 3s
-4. Asaas gera cobranca Pix automatica mensal + lembrete email/SMS
-5. Webhook confirma → plano ativa
-
-**UX (3 passos):** Escolher plano → Pagar (cartao ou pix no app) → Acesso liberado
-
-**Seguranca:**
-- Dados cartao NUNCA tocam servidor Aura (tokenizacao client-side)
-- Webhook sempre HMAC-SHA256
-- asaas_customer_id salvo em companies (criado uma vez, reutilizado)
-
-**Implementacao backend (billing.js):**
-- Trocar POST /v3/payments (avulso) por POST /v3/subscriptions (recorrente)
-- Aceitar creditCardToken ou billingType:PIX no body
-- Novo endpoint: POST /billing/pix-qrcode/:paymentId → retorna QR
-
-**Implementacao frontend (planos.tsx):**
-- Aba Cartao/Pix (cartao pre-selecionado)
-- Form cartao: numero, validade, CVV, nome → tokeniza via SDK Asaas
-- Aba Pix: QR code inline + copia-e-cola + timer
-- Polling billingApi.status() a cada 3s ate confirmar
+### FE-FOLHA-01: Remover dummy data da Folha
+- Esforco: 2h | Depende: INT-EMPLOYEES-01
+- Conectar folha.tsx ao backend real via useEmployees
 
 ---
 
-## BLOCO 3 — Integracoes Externas
+## PENDENTE — Sprint 4: NF-e
 
-### INT-NFE-01: NF-e via provedor (Focus NFe / PlugNotas)
+### INT-NFE-01: NF-e via provedor fiscal
 - Esforco: 12h | Bloqueia: Emissao de nota fiscal
 - Fase 1: NFS-e (80% clientes servico)
 - Fase 2: NFC-e (95% clientes varejo)
 - Requisitos por cliente: CNPJ + certificado A1 + inscricao municipal
 - Arquitetura: Aura backend chama API com CNPJ do cliente como emitente
 - XMLs no Cloudflare R2 (5 anos retencao fiscal)
-- Cancelamento: app envia → provedor transmite evento → SEFAZ/prefeitura
+- Cancelamento: app → provedor → SEFAZ/prefeitura
+- PENDENTE: Caio escolhendo provedor (Focus NFe, PlugNotas, Nota Gateway, Notaas)
+
+---
+
+## PENDENTE — Sprint 5: WhatsApp Business API
 
 ### INT-WA-01: WhatsApp Business API
 - Esforco: 8h | Bloqueia: Automacoes WhatsApp
@@ -87,48 +102,51 @@
 - Templates: boas-vindas, aniversario, cobranca, pos-venda, lembrete, fora de horario
 - Aprovacao Meta: 24-72h por template
 - Cron job: verifica triggers (aniversarios, vencimentos, pos-venda)
-- Webhook: delivery status (sent → delivered → read)
 - Automacoes custom = servico consultoria Aura (nao self-service)
 
 ---
 
-## BLOCO 4 — Frontend Wiring
+## PENDENTE — Sprint 6: Deploy + Go-Live
 
-### FE-EDIT-PRODUCT-01: Botao editar no ProductRow (1h)
-### FE-CTA-01: Wiring CTAs WhatsApp/email (30min)
-### FE-FOLHA-01: Remover dummy data da Folha (2h, depende INT-EMPLOYEES-01)
-### ~~FE-IMPORT-01: Import/Export CSV~~ COMPLETO (09/04)
-
----
-
-## BLOCO 5 — Deploy Checklist
-
-- [ ] Variaveis Railway (ASAAS_API_KEY, NFE_PROVIDER_KEY, WHATSAPP_TOKEN, R2)
+### Deploy Checklist
+- [ ] Aplicar migration 036 no Supabase (billing_cycle + webhook_logs)
+- [ ] Variaveis Railway conferir (ASAAS_API_KEY, NFE_PROVIDER_KEY, WHATSAPP_TOKEN)
+- [ ] Testar checkout Asaas no sandbox (Pix + Cartao)
+- [ ] Asaas sandbox → producao
 - [ ] api.getaura.com.br → Railway CNAME
-- [ ] Alinhar precos site vs app (R$59/89, R$200/199, R$320/299)
+- [ ] Alinhar precos site vs app (site: R$59/200/320 vs app: R$89/199/299)
+- [ ] CTAs do site apontar para app.getaura.com.br/checkout?plan=negocio
 - [ ] Sentry source maps + alert rules
-- [ ] Asaas sandbox → producao (apos CNPJ ativo)
 - [ ] Certificado A1 de teste para NF-e sandbox
+- [ ] Error boundary global + responsividade final
+- [ ] LGPD consent banner
+- [ ] 16 testes criticos UAT end-to-end
+- [ ] Convidar 3-5 MEIs beta
 
 ---
 
-## Ordem de Execucao
+## PENDENTE — Pos-Lancamento
 
-**Sprint 1 (proxima sessao):** INT-COMPANY-01/02, INT-STOCK-01, FE-CTA-01, FE-EDIT-PRODUCT-01
-**Sprint 2:** INT-ASAAS-01 (checkout hibrido Pix+Cartao), INT-EMPLOYEES-01, FE-FOLHA-01
-**Sprint 3:** INT-NFE-01, INT-WA-01, Deploy
-**Sprint 4 (pos-lancamento):** NFC-e fase 2, Open Banking, Verticais
+- NFC-e fase 2 (varejo)
+- Open Banking (Inter PJ)
+- Verticais ativar por cliente (odonto, barber, food)
+- Multi-gateway add-on (MP, InfinitePay, Stripe)
+- FE-BUG-06: icones dashboard por tipo lancamento
+- FE-BUG-07: sparklines/graficos com dados reais
 
 ---
 
-## Sessao 09/04 — Resumo do que foi feito
+## Historico de Sessoes
 
-Backlog UAT completo:
-- 5 Criticos (sidebar scroll, PDV duplo clique, cliente 403, config persist, theme wipe)
-- 7 Altos (currency mask, edit product, categories, stock decrement, client masks, contador)
-- 9 Medios (pendente status, planos anual, completude sync, pro-labore toggle, WA persist, donut contrast, regime detect, CNPJ lookup, optimistic delete)
-
-Features novas:
-- CSV Import/Export em Financeiro, Estoque, Clientes (com separator detection PT-BR)
+### Sessao 09/04 (madrugada) — UAT + CSV + Fluxos
+- 21/21 UAT items resolvidos (5 crit + 7 alto + 9 medio)
+- CSV Import/Export em 3 telas (separator detection PT-BR)
 - Fluxos desenhados: Pagamento, WhatsApp, NF-e
-- Checkout redesenhado: hibrido Pix inline + Cartao recorrente (Asaas invisivel)
+- Checkout redesenhado: hibrido Pix + Cartao
+
+### Sessao 09/04 (tarde) — Sprint 1 + Sprint 2
+- Sprint 1: company profile, stock decrement, edit product, CTAs, CNPJ lookup
+- Sprint 2: billing.js reescrito, checkout.tsx, redirect condicional
+- Decisao: plano anual = assinatura mensal com desconto (nao parcelamento)
+- Decisao: CNPJ obrigatorio no cadastro, 2 campos telefone
+- Decisao: cadastro sem trial → checkout, com trial → onboarding
