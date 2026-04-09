@@ -32,7 +32,7 @@ function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) =>
 }
 
 export default function EstoqueScreen() {
-  const { products, categories, isLoading, isDemo, addProduct, deleteProduct } = useProducts();
+  const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct } = useProducts();
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
@@ -40,6 +40,7 @@ export default function EstoqueScreen() {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...categories, ...products.map(p => p.category)]));
@@ -53,7 +54,31 @@ export default function EstoqueScreen() {
   const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
 
-  function handleAdd(product: Product) { addProduct(product); setShowAddForm(false); }
+  // FE-EDIT-PRODUCT-01: Handle add vs edit
+  function handleSaveProduct(product: Product) {
+    if (editProduct) {
+      updateProduct(product);
+      setEditProduct(null);
+      toast.success("Produto atualizado");
+    } else {
+      addProduct(product);
+      toast.success("Produto adicionado");
+    }
+    setShowAddForm(false);
+  }
+
+  function handleEdit(product: Product) {
+    setEditProduct(product);
+    setShowAddForm(true);
+    setActiveTab(0);
+    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+  }
+
+  function handleCancelForm() {
+    setShowAddForm(false);
+    setEditProduct(null);
+  }
+
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
   function handleExport() {
@@ -82,7 +107,7 @@ export default function EstoqueScreen() {
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      <ScreenHeader title="Estoque" actionLabel="+ Adicionar produto" actionIcon="package" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
+      <ScreenHeader title="Estoque" actionLabel="+ Adicionar produto" actionIcon="package" onAction={() => { setEditProduct(null); setShowAddForm(true); setActiveTab(0); }} />
 
       <View style={s.summaryRow}>
         <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades`} />
@@ -90,7 +115,7 @@ export default function EstoqueScreen() {
         <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
       </View>
 
-      {showAddForm && <AddProductForm categories={allCategories} onSave={handleAdd} onCancel={() => setShowAddForm(false)} />}
+      {showAddForm && <AddProductForm categories={allCategories} onSave={handleSaveProduct} onCancel={handleCancelForm} editProduct={editProduct} />}
 
       {isLoading && <ListSkeleton rows={4} showCards />}
 
@@ -108,13 +133,13 @@ export default function EstoqueScreen() {
             {filterCategories.map(c => <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.catChip, catFilter === c && s.catChipActive]}><Text style={[s.catChipText, catFilter === c && s.catChipTextActive]}>{c}</Text></Pressable>)}
           </ScrollView>
           <View style={s.listCard}>
-            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} />)}
+            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} onEdit={!isDemo ? handleEdit : undefined} />)}
             {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
           </View>
         </View>
       )}
 
-      {activeTab === 1 && <View><View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View><AbcSummary products={products} /><View style={[s.listCard, { marginTop: 20 }]}><Text style={s.listTitle}>Todos por classificacao</Text>{[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} />)}</View></View>}
+      {activeTab === 1 && <View><View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View><AbcSummary products={products} /><View style={[s.listCard, { marginTop: 20 }]}><Text style={s.listTitle}>Todos por classificacao</Text>{[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} onEdit={!isDemo ? handleEdit : undefined} />)}</View></View>}
 
       {activeTab === 2 && <AlertsList products={products} />}
 
