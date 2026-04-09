@@ -23,7 +23,7 @@ export function arrayToCSV(rows: Record<string, any>[], columns: { key: string; 
 
 export function downloadCSV(csv: string, filename: string) {
   if (Platform.OS !== "web") { toast.info("Export disponivel apenas na versao web"); return; }
-  const BOM = "\uFEFF"; // UTF-8 BOM for Excel compatibility
+  const BOM = "\uFEFF";
   const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -34,7 +34,14 @@ export function downloadCSV(csv: string, filename: string) {
 
 // ── Import ───────────────────────────────────────────────────
 
-function parseCSVLine(line: string): string[] {
+// Detect separator from header line: if more ; than , → semicolon file (Excel BR)
+function detectSeparator(headerLine: string): string {
+  const semicolons = (headerLine.match(/;/g) || []).length;
+  const commas = (headerLine.match(/,/g) || []).length;
+  return semicolons > commas ? ";" : ",";
+}
+
+function parseCSVLine(line: string, sep: string): string[] {
   const result: string[] = [];
   let current = ""; let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
@@ -45,7 +52,7 @@ function parseCSVLine(line: string): string[] {
       else { current += c; }
     } else {
       if (c === '"') { inQuotes = true; }
-      else if (c === "," || c === ";") { result.push(current.trim()); current = ""; }
+      else if (c === sep) { result.push(current.trim()); current = ""; }
       else { current += c; }
     }
   }
@@ -56,11 +63,11 @@ function parseCSVLine(line: string): string[] {
 export function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter(l => l.trim());
   if (lines.length < 2) return [];
-  // Remove BOM if present
   const headerLine = lines[0].replace(/^\uFEFF/, "");
-  const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
+  const sep = detectSeparator(headerLine);
+  const headers = parseCSVLine(headerLine, sep).map(h => h.toLowerCase().trim());
   return lines.slice(1).map(line => {
-    const vals = parseCSVLine(line);
+    const vals = parseCSVLine(line, sep);
     const obj: Record<string, string> = {};
     headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
     return obj;
