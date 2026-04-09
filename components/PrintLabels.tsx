@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { generatePrintHTML } from "@/utils/codeGen";
+import { generatePrintHTML, LABEL_PRESETS, getSavedPreset, savePreset } from "@/utils/codeGen";
 import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -14,7 +14,14 @@ type Props = {
 
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   const [labelType, setLabelType] = useState<'barcode' | 'qr'>('barcode');
+  const [presetId, setPresetId] = useState(getSavedPreset());
   const isWeb = Platform.OS === 'web';
+
+  function handlePresetChange(id: string) {
+    setPresetId(id);
+    savePreset(id);
+    toast.success('Preset salvo: ' + (LABEL_PRESETS.find(p => p.id === id)?.name || id));
+  }
 
   function toggleSelect(id: string) {
     onSelectionChange(
@@ -35,18 +42,39 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       .filter(p => selectedIds.includes(p.id) && (p.barcode || p.code))
       .map(p => ({ name: p.name, code: p.barcode || p.code, price: p.price, type: labelType }));
     if (selected.length === 0) { toast.error('Produtos selecionados nao possuem codigo'); return; }
-    const html = generatePrintHTML(selected);
+    const html = generatePrintHTML(selected, presetId);
     const w = window.open('', '_blank');
     if (w) { w.document.write(html); w.document.close(); }
     toast.success(`${selected.length} etiqueta(s) enviada(s) para impressao`);
   }
 
   const productsWithCode = products.filter(p => p.barcode || p.code);
+  const currentPreset = LABEL_PRESETS.find(p => p.id === presetId);
 
   return (
     <View style={s.container}>
+      {/* Preset selector */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>Tamanho da etiqueta</Text>
+        <Text style={s.sectionHint}>Escolha o preset compativel com sua impressora. A configuracao fica salva.</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingVertical: 4 }}>
+          {LABEL_PRESETS.map(p => (
+            <Pressable key={p.id} onPress={() => handlePresetChange(p.id)} style={[s.presetChip, presetId === p.id && s.presetChipActive]}>
+              <Text style={[s.presetSize, presetId === p.id && s.presetSizeActive]}>{p.id === 'a4' ? 'A4' : `${p.width}x${p.height}`}</Text>
+              <Text style={[s.presetName, presetId === p.id && s.presetNameActive]} numberOfLines={1}>{p.name.split('(')[1]?.replace(')', '') || p.name}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {currentPreset && (
+          <View style={s.presetInfo}>
+            <Text style={s.presetInfoText}>Configurado: {currentPreset.name} — {currentPreset.columns} colunas por linha</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Type + header */}
       <View style={s.header}>
-        <Text style={s.title}>Imprimir etiquetas</Text>
+        <Text style={s.title}>Selecionar produtos</Text>
         <View style={s.typeToggle}>
           <Pressable onPress={() => setLabelType('barcode')} style={[s.typeBtn, labelType === 'barcode' && s.typeBtnActive]}>
             <Text style={[s.typeText, labelType === 'barcode' && s.typeTextActive]}>Codigo de barras</Text>
@@ -94,17 +122,28 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 }
 
 const s = StyleSheet.create({
-  container: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  container: { gap: 16 },
+  section: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.ink, marginBottom: 4 },
+  sectionHint: { fontSize: 11, color: Colors.ink3, marginBottom: 10 },
+  presetChip: { backgroundColor: Colors.bg4, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', minWidth: 90 },
+  presetChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  presetSize: { fontSize: 14, fontWeight: '800', color: Colors.ink3, marginBottom: 2 },
+  presetSizeActive: { color: Colors.violet3 },
+  presetName: { fontSize: 9, color: Colors.ink3, fontWeight: '500' },
+  presetNameActive: { color: Colors.violet3 },
+  presetInfo: { backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginTop: 8, borderWidth: 1, borderColor: Colors.border2 },
+  presetInfoText: { fontSize: 10, color: Colors.violet3, fontWeight: '500' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
   title: { fontSize: 15, fontWeight: '700', color: Colors.ink },
   typeToggle: { flexDirection: 'row', gap: 4, backgroundColor: Colors.bg, borderRadius: 8, padding: 3 },
   typeBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
   typeBtnActive: { backgroundColor: Colors.violet },
   typeText: { fontSize: 11, color: Colors.ink3, fontWeight: '500' },
   typeTextActive: { color: '#fff', fontWeight: '600' },
-  selectAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginBottom: 8 },
+  selectAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 4 },
   selectAllText: { fontSize: 12, color: Colors.ink3, fontWeight: '500' },
-  list: { gap: 4, marginBottom: 12 },
+  list: { gap: 4, backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: Colors.bg },
   itemSelected: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
