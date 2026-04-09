@@ -95,7 +95,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 export type LoginResponse = {
   token: string;
   user: { id: string; name: string; email: string; role: string; is_staff?: boolean };
-  company: { id: string; name: string; plan: string; onboarding_step: string; trial_active?: boolean; trial_ends_at?: string } | null;
+  company: { id: string; name: string; plan: string; onboarding_step: string; module_overrides?: Record<string, boolean>; trial_active?: boolean; trial_ends_at?: string } | null;
   code_applied?: { type: string; plan: string; discount_pct: number; trial_days: number } | null;
 };
 
@@ -113,6 +113,10 @@ export const authApi = {
   register: (body: RegisterBody) => request<LoginResponse>("/auth/register", { method: "POST", body, retry: 1 }),
   me: (token: string) => request<Omit<LoginResponse, "token">>("/auth/me", { method: "POST", token, retry: 1 }),
   validateCode: (code: string) => request<CodeValidation>("/auth/validate-code", { method: "POST", body: { code }, retry: 0 }),
+  // Fase 1: Password reset
+  forgotPassword: (email: string) => request<{ message: string }>("/auth/forgot-password", { method: "POST", body: { email }, retry: 0 }),
+  resetPassword: (token: string, password: string) => request<{ message: string }>("/auth/reset-password", { method: "POST", body: { token, password }, retry: 0 }),
+  // Fase 1: Email/phone verification
   sendEmailVerification: () => request<VerificationResponse>("/auth/send-verification", { method: "POST", retry: 0 }),
   verifyEmail: (code: string) => request<VerificationResponse>("/auth/verify-email", { method: "POST", body: { code }, retry: 0 }),
   sendPhoneVerification: () => request<VerificationResponse>("/auth/send-phone-verification", { method: "POST", retry: 0 }),
@@ -149,6 +153,13 @@ export const companiesApi = {
   dre: (companyId: string, params?: string) => request<any>(`/companies/${companyId}/dre${params ? "?" + params : ""}`),
   checklist: (companyId: string) => request<any>(`/companies/${companyId}/checklist`),
   completeCheckpoint: (companyId: string, checkpointId: string) => request<any>(`/companies/${companyId}/checklist/${checkpointId}/complete`, { method: "POST" }),
+  // Fase 2: Sales analytics + Products ranking
+  salesAnalytics: (companyId: string, period?: string, groupBy?: string) =>
+    request<any>(`/companies/${companyId}/sales/analytics?period=${period || 'month'}&group_by=${groupBy || 'day'}`),
+  productsRanking: (companyId: string, period?: string) =>
+    request<any>(`/companies/${companyId}/products/ranking?period=${period || 'month'}`),
+  productsCategories: (companyId: string, period?: string) =>
+    request<any>(`/companies/${companyId}/products/categories?period=${period || 'month'}`),
 };
 
 // ── CNPJ API ────────────────────────────────────────────────
@@ -175,7 +186,7 @@ export const pdvApi = {
   createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sales`, { method: "POST", body }),
 };
 
-// ── Employees API (Sprint 3 — CRUD Funcionarios) ────────────
+// ── Employees API ───────────────────────────────────────────
 export const employeesApi = {
   list: (companyId: string, includeInactive?: boolean) =>
     request<{ total: number; employees: any[] }>(`/companies/${companyId}/employees${includeInactive ? "?include_inactive=true" : ""}`),
@@ -187,18 +198,11 @@ export const employeesApi = {
     request<any>(`/companies/${companyId}/employees/${eid}`, { method: "DELETE" }),
 };
 
-// ── Billing API (F6 — Asaas Hybrid Checkout) ────────────────
+// ── Billing API ─────────────────────────────────────────────
 export type SubscribeResponse = {
-  subscription_id?: string;
-  payment_id?: string;
-  plan: string;
-  cycle: string;
-  value: number;
-  billing_type: string;
-  next_due_date?: string;
-  pix_qr_code?: string | null;
-  pix_copy_paste?: string | null;
-  pix_expiration?: string | null;
+  subscription_id?: string; payment_id?: string; plan: string; cycle: string;
+  value: number; billing_type: string; next_due_date?: string;
+  pix_qr_code?: string | null; pix_copy_paste?: string | null; pix_expiration?: string | null;
 };
 
 export const billingApi = {
@@ -229,8 +233,9 @@ export const billingApi = {
 export const adminApi = {
   dashboard: () => request<any>("/admin/dashboard"),
   clients: () => request<any>("/admin/clients"),
-  toggleModule: (companyId: string, module: string, enabled: boolean) =>
-    request<any>(`/admin/clients/${companyId}/modules`, { method: "PUT", body: { module, enabled } }),
+  clientModules: (companyId: string) => request<any>(`/admin/clients/${companyId}/modules`),
+  updateModules: (companyId: string, overrides: Record<string, boolean>) =>
+    request<any>(`/admin/clients/${companyId}/modules`, { method: "PUT", body: { overrides } }),
 };
 
 // ── AI / Agentes API ─────────────────────────────────────────
