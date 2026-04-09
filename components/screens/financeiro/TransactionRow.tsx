@@ -4,6 +4,8 @@ import { Colors } from "@/constants/colors";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
 
+// M1: Removed "Pendente" status display — confuses users since all new
+// transactions default to pending. Only show source label if relevant.
 export function TransactionRow({ item, onDelete }: { item: Transaction; onDelete?: (id: string) => void }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
@@ -17,7 +19,7 @@ export function TransactionRow({ item, onDelete }: { item: Transaction; onDelete
         <View style={[s.dot, { backgroundColor: isIncome ? Colors.green : Colors.red }]} />
         <View>
           <Text style={s.desc}>{item.desc}</Text>
-          <Text style={s.meta}>{item.date} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}{item.status === "pending" ? " / Pendente" : ""}</Text>
+          <Text style={s.meta}>{item.date} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}</Text>
         </View>
       </View>
       <View style={s.right}>

@@ -1,15 +1,36 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, Switch, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Automation } from "./types";
 import { toast } from "@/components/Toast";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+const STORAGE_KEY = "aura_wa_automations";
+
+// M5: Persist automation toggle state to localStorage
+function loadAutoState(): Record<string, boolean> {
+  try { const s = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null; return s ? JSON.parse(s) : {}; } catch { return {}; }
+}
+function saveAutoState(state: Record<string, boolean>) {
+  try { if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+}
 
 type Props = { automations: Automation[]; activeCount: number; totalSent: number; onToggle: (id: string) => void };
 
 export function TabAutomacoes({ automations, activeCount, totalSent, onToggle }: Props) {
-  const [localAutos, setLocalAutos] = useState(automations);
+  // M5: Hydrate from localStorage
+  const [localAutos, setLocalAutos] = useState(() => {
+    const saved = loadAutoState();
+    if (Object.keys(saved).length === 0) return automations;
+    return automations.map(a => ({ ...a, enabled: saved[a.id] !== undefined ? saved[a.id] : a.enabled }));
+  });
+
+  // M5: Save to localStorage on every change
+  useEffect(() => {
+    const state: Record<string, boolean> = {};
+    localAutos.forEach(a => { state[a.id] = a.enabled; });
+    saveAutoState(state);
+  }, [localAutos]);
 
   function handleToggle(id: string) {
     setLocalAutos(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
