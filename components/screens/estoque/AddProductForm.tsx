@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
+import { BarcodeQRSection } from "@/components/BarcodeQRSection";
 import type { Product } from "./types";
 import { UNITS } from "./types";
 
@@ -11,7 +12,6 @@ function FormField({ label, required, children }: { label: string; required?: bo
   return <View style={{ marginBottom: 16 }}><Text style={s.label}>{label}{required && <Text style={{ color: Colors.red }}> *</Text>}</Text>{children}</View>;
 }
 
-// A3: Accepts optional editProduct for edit mode
 export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   categories: string[]; onSave: (p: Product) => void; onCancel: () => void; editProduct?: Product | null;
 }) {
@@ -72,7 +72,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </FormField></View>
       </View>
 
-      {/* A4: Categories from existing products + create new */}
       <FormField label="Categoria">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {categories.map(c => <Pressable key={c} onPress={() => { setCategory(c); setShowNewCat(false); }} style={[s.chip, category === c && !showNewCat && s.chipActive]}><Text style={[s.chipText, category === c && !showNewCat && s.chipTextActive]}>{c}</Text></Pressable>)}
@@ -93,9 +92,13 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
       </View>
 
-      <FormField label="Codigo de barras (opcional)">
-        <TextInput style={s.input} value={barcode} onChangeText={setBarcode} placeholder="EAN: 7891000315507" placeholderTextColor={Colors.ink3} keyboardType="number-pad" />
-      </FormField>
+      {/* Barcode / QR Code section with preview + print */}
+      <BarcodeQRSection
+        code={barcode}
+        productName={name}
+        price={parseFloat(price.replace(",", ".")) || 0}
+        onCodeChange={setBarcode}
+      />
 
       <FormField label="Observacoes (opcional)">
         <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes, variantes..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
