@@ -9,7 +9,7 @@ import { billingApi } from "@/services/api";
 import { router } from "expo-router";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
-const AURA_WHATSAPP = "https://wa.me/5512991234567?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20a%20consultoria%20Aura";
+const AURA_WHATSAPP = "https://wa.me/5511956305269?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20a%20consultoria%20Aura";
 
 const PLANS = [
   {
@@ -77,7 +77,6 @@ export default function PlanosScreen() {
   function handleChoosePlan(planKey: string) {
     if (planKey === currentPlan) return;
     if (isDemo) { toast.info("Crie uma conta para assinar"); return; }
-    // Redirect to checkout with plan pre-selected
     router.push(`/(tabs)/checkout?plan=${planKey}`);
   }
 
