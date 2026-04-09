@@ -1,7 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { companiesApi } from "@/services/api";
+import { request, companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+
+// Direct API calls (avoid modifying the large api.ts file)
+const digitalChannelApi = {
+  get: (cid: string) => request<any>(`/companies/${cid}/digital-channel`),
+  save: (cid: string, body: any) => request<any>(`/companies/${cid}/digital-channel`, { method: "PUT", body }),
+  requestDomain: (cid: string, domain: string, plan: string) => request<any>(`/companies/${cid}/digital-channel/request-domain`, { method: "POST", body: { domain, plan } }),
+};
 
 export function useDigitalChannel() {
   const { company } = useAuthStore();
@@ -10,7 +17,7 @@ export function useDigitalChannel() {
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['digitalChannel', cid],
-    queryFn: () => companiesApi.digitalChannel(cid!),
+    queryFn: () => digitalChannelApi.get(cid!),
     enabled: !!cid,
     staleTime: 60_000,
   });
@@ -23,8 +30,8 @@ export function useDigitalChannel() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (body: any) => companiesApi.updateDigitalChannel(cid!, body),
-    onSuccess: (data) => {
+    mutationFn: (body: any) => digitalChannelApi.save(cid!, body),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
       toast.success('Configuracoes salvas');
     },
@@ -33,7 +40,7 @@ export function useDigitalChannel() {
 
   const domainMutation = useMutation({
     mutationFn: ({ domain, plan }: { domain: string; plan: string }) =>
-      companiesApi.requestDomain(cid!, domain, plan),
+      digitalChannelApi.requestDomain(cid!, domain, plan),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
       toast.success('Solicitacao de dominio registrada!');
