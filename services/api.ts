@@ -175,6 +175,18 @@ export const pdvApi = {
   createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sales`, { method: "POST", body }),
 };
 
+// ── Employees API (Sprint 3 — CRUD Funcionarios) ────────────
+export const employeesApi = {
+  list: (companyId: string, includeInactive?: boolean) =>
+    request<{ total: number; employees: any[] }>(`/companies/${companyId}/employees${includeInactive ? "?include_inactive=true" : ""}`),
+  create: (companyId: string, body: any) =>
+    request<any>(`/companies/${companyId}/employees`, { method: "POST", body }),
+  update: (companyId: string, eid: string, body: any) =>
+    request<any>(`/companies/${companyId}/employees/${eid}`, { method: "PATCH", body }),
+  remove: (companyId: string, eid: string) =>
+    request<any>(`/companies/${companyId}/employees/${eid}`, { method: "DELETE" }),
+};
+
 // ── Billing API (F6 — Asaas Hybrid Checkout) ────────────────
 export type SubscribeResponse = {
   subscription_id?: string;
@@ -194,29 +206,22 @@ export const billingApi = {
     request<{ plan: string; billing_status: string; billing_cycle: string; trial_active: boolean; trial_days_left: number; next_billing_date: string | null; has_payment_method: boolean }>(
       `/companies/${companyId}/billing/status`
     ),
-
   subscribe: (companyId: string, plan: string, billingType?: string, creditCardToken?: string, cycle?: string, holderName?: string, holderCpf?: string) =>
     request<SubscribeResponse>(
       `/companies/${companyId}/billing/subscribe`,
       { method: "POST", body: {
-        plan,
-        billing_type: billingType || "PIX",
-        cycle: cycle || "monthly",
+        plan, billing_type: billingType || "PIX", cycle: cycle || "monthly",
         credit_card_token: creditCardToken || undefined,
         credit_card_holder_name: holderName || undefined,
         credit_card_holder_cpf: holderCpf || undefined,
       }}
     ),
-
   cancel: (companyId: string) =>
     request<{ message: string; cancelled_at: string }>(`/companies/${companyId}/billing/cancel`, { method: "POST" }),
-
   invoices: (companyId: string) =>
     request<{ total: number; invoices: any[] }>(`/companies/${companyId}/billing/invoices`),
-
   generatePix: (companyId: string, paymentId: string) =>
     request<{ qr_code: string; copy_paste: string; expiration: string }>(`/companies/${companyId}/billing/generate-pix/${paymentId}`, { method: "POST" }),
-
   plans: () => request<{ plans: any[] }>(`/billing/plans`),
 };
 
