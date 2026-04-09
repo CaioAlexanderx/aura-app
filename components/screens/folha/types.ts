@@ -6,13 +6,13 @@ export type Employee = {
   role: string;
   salary: number;
   admDate: string;
-  status: "active" | "vacation" | "dismissed";
+  status: "active" | "vacation" | "dismissed" | "license";
 };
 
 export type PayrollCalc = { inss: number; irrf: number; fgts: number; liquid: number };
+export type PayslipType = "mensal" | "ferias" | "decimo_terceiro";
 
 export type HistoryItem = { id: string; month: string; total: number; liquid: number; paidAt: string; employees: number };
-
 export type RankingItem = { empId: string; name: string; role: string; sales: number; revenue: number; avgTicket: number; topProduct: string; trend: "up" | "down" };
 
 export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Ranking"];
@@ -21,6 +21,7 @@ export const STATUS_MAP: Record<Employee["status"], { l: string; c: string }> = 
   active: { l: "Ativo", c: Colors.green },
   vacation: { l: "Ferias", c: Colors.amber },
   dismissed: { l: "Desligado", c: Colors.red },
+  license: { l: "Licenca", c: Colors.blue || "#3b82f6" },
 };
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -62,6 +63,28 @@ export function calcPayroll(emp: Employee): PayrollCalc {
   const fgts = emp.salary * FGTS_RATE;
   const liquid = emp.salary - inss - irrf;
   return { inss, irrf, fgts, liquid };
+}
+
+// Ferias: salario + 1/3 constitucional
+export function calcFerias(emp: Employee) {
+  const terco = emp.salary / 3;
+  const bruto = emp.salary + terco;
+  const inss = calcINSS(bruto);
+  const irrf = Math.max(0, calcIRRF(bruto, inss));
+  const fgts = bruto * FGTS_RATE;
+  const liquid = bruto - inss - irrf;
+  return { salary: emp.salary, terco, bruto, inss, irrf, fgts, liquid };
+}
+
+// 13o salario: integral ou proporcional
+export function calc13(emp: Employee, mesesTrabalhados: number = 12) {
+  const proporcional = Math.min(mesesTrabalhados, 12);
+  const bruto = (emp.salary / 12) * proporcional;
+  const inss = calcINSS(bruto);
+  const irrf = Math.max(0, calcIRRF(bruto, inss));
+  const fgts = bruto * FGTS_RATE;
+  const liquid = bruto - inss - irrf;
+  return { bruto, proporcional, inss, irrf, fgts, liquid };
 }
 
 // Mock data (fallback when API not available)

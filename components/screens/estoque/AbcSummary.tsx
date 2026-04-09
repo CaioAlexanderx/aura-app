@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Product } from "./types";
 import { DonutChart } from "@/components/screens/financeiro/TabResumo";
@@ -16,25 +16,40 @@ export function AbcSummary({ products }: { products: Product[] }) {
   const groups = { A: products.filter(p => p.abc === "A"), B: products.filter(p => p.abc === "B"), C: products.filter(p => p.abc === "C") };
   const total30d = products.reduce((s, p) => s + p.sold30d, 0);
   const totalRevenue = products.reduce((s, p) => s + p.price * p.sold30d, 0);
+  const totalStockValue = products.reduce((s, p) => s + p.stock * p.cost, 0);
   const clrs = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
   const labels = { A: "Alta rotatividade", B: "Rotatividade media", C: "Baixa rotatividade" };
 
-  // P-04: Donut chart data
+  // Use sales revenue if available, otherwise fall back to stock value
+  const hasSalesData = totalRevenue > 0;
+  const donutMetric = hasSalesData ? "vendas" : "estoque";
+  const donutTotal = hasSalesData ? totalRevenue : totalStockValue;
+
   const donutItems = (["A", "B", "C"] as const)
-    .map(g => ({ category: `Curva ${g}`, amount: groups[g].reduce((s, p) => s + p.price * p.sold30d, 0) }))
+    .map(g => ({
+      category: `Curva ${g}`,
+      amount: hasSalesData
+        ? groups[g].reduce((s, p) => s + p.price * p.sold30d, 0)
+        : groups[g].reduce((s, p) => s + p.stock * p.cost, 0),
+    }))
     .filter(d => d.amount > 0);
 
   return (
     <View style={{ gap: 16 }}>
-      {/* P-04: Donut overview */}
-      {donutItems.length > 0 && totalRevenue > 0 && (
+      {/* Donut overview */}
+      {donutItems.length > 0 && donutTotal > 0 && (
         <View style={s.donutCard}>
-          <Text style={s.donutTitle}>Distribuicao por curva</Text>
+          <Text style={s.donutTitle}>
+            Distribuicao por curva {hasSalesData ? "(receita 30d)" : "(valor em estoque)"}
+          </Text>
+          {!hasSalesData && (
+            <Text style={s.donutHint}>Sem dados de vendas ainda. Mostrando valor do estoque por curva ABC.</Text>
+          )}
           <View style={s.donutRow}>
-            <DonutChart items={donutItems} total={totalRevenue} colorFn={(i) => ABC_COLORS[i % ABC_COLORS.length]} />
+            <DonutChart items={donutItems} total={donutTotal} colorFn={(i) => ABC_COLORS[i % ABC_COLORS.length]} />
             <View style={s.donutLegend}>
               {donutItems.map((d, i) => {
-                const pct = totalRevenue > 0 ? Math.round((d.amount / totalRevenue) * 100) : 0;
+                const pct = donutTotal > 0 ? Math.round((d.amount / donutTotal) * 100) : 0;
                 return (
                   <View key={d.category} style={s.legendItem}>
                     <View style={[s.legendDot, { backgroundColor: ABC_COLORS[i] }]} />
@@ -51,13 +66,20 @@ export function AbcSummary({ products }: { products: Product[] }) {
         const items = groups[grade];
         const sold = items.reduce((s, p) => s + p.sold30d, 0);
         const rev = items.reduce((s, p) => s + p.price * p.sold30d, 0);
+        const stockVal = items.reduce((s, p) => s + p.stock * p.cost, 0);
         const pctSold = total30d > 0 ? (sold / total30d * 100).toFixed(0) : "0";
         const pctRev = totalRevenue > 0 ? (rev / totalRevenue * 100).toFixed(0) : "0";
+        const pctStock = totalStockValue > 0 ? (stockVal / totalStockValue * 100).toFixed(0) : "0";
+
+        const bars = hasSalesData
+          ? [{ l: "Vendas", p: pctSold }, { l: "Receita", p: pctRev }]
+          : [{ l: "Valor estoque", p: pctStock }];
+
         return (
           <View key={grade} style={s.group}>
             <View style={s.header}><AbcBadge abc={grade} /><View style={{ flex: 1 }}><Text style={s.title}>Curva {grade} - {items.length} produtos</Text><Text style={s.hint}>{labels[grade]}</Text></View></View>
             <View style={{ gap: 8 }}>
-              {[{ l: "Vendas", p: pctSold }, { l: "Receita", p: pctRev }].map(b => (
+              {bars.map(b => (
                 <View key={b.l} style={s.barRow}><Text style={s.barLabel}>{b.l}</Text><View style={s.track}><View style={[s.fill, { width: `${b.p}%`, backgroundColor: clrs[grade] }]} /></View><Text style={[s.pct, { color: clrs[grade] }]}>{b.p}%</Text></View>
               ))}
             </View>
@@ -76,13 +98,14 @@ const s = StyleSheet.create({
   title: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   hint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  barLabel: { fontSize: 10, color: Colors.ink3, width: 50 },
+  barLabel: { fontSize: 10, color: Colors.ink3, width: 70 },
   track: { flex: 1, height: 8, backgroundColor: Colors.bg4, borderRadius: 4, overflow: "hidden" },
   fill: { height: 8, borderRadius: 4 },
   pct: { fontSize: 11, fontWeight: "700", width: 36, textAlign: "right" },
   donutCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border },
-  donutTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 14 },
-  donutRow: { flexDirection: "row", alignItems: "center", gap: 24 },
+  donutTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  donutHint: { fontSize: 11, color: Colors.ink3, marginBottom: 12, fontStyle: "italic" },
+  donutRow: { flexDirection: "row", alignItems: "center", gap: 24, marginTop: 8 },
   donutLegend: { flex: 1, gap: 10 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 10 },
   legendDot: { width: 12, height: 12, borderRadius: 6 },

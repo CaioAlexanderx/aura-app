@@ -3,35 +3,22 @@ import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import type { Employee } from "./types";
-import { STATUS_MAP, fmt, calcPayroll, calcINSS } from "./types";
+import type { Employee, PayslipType } from "./types";
+import { STATUS_MAP, fmt, calcPayroll, calcINSS, calcFerias, calc13 } from "./types";
 
 type CoInfo = { name: string; cnpj?: string; logo?: string; address?: string };
 
-function genPayslipHTML(emp: Employee, co: CoInfo) {
-  const p = calcPayroll(emp);
-  const f2 = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // Client branding in header — Aura only in footer
-  const logoHtml = co.logo
-    ? `<img src="${co.logo}" alt="${co.name}" style="max-height:56px;max-width:200px;object-fit:contain"/>`
-    : `<div style="font-size:22px;font-weight:800;color:#1a1a2e">${co.name}</div>`;
-  const cnpjHtml = co.cnpj ? `<div style="font-size:11px;color:#64748b;margin-top:4px">CNPJ: ${co.cnpj}</div>` : "";
-  const addrHtml = co.address ? `<div style="font-size:11px;color:#64748b">${co.address}</div>` : "";
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}body{background:#fff;padding:40px;max-width:720px;margin:0 auto;color:#1a1a2e}.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a1a2e;padding-bottom:18px;margin-bottom:24px}.dt{text-align:right}.dt h2{font-size:14px;color:#1a1a2e;text-transform:uppercase;letter-spacing:1.5px}.dt p{font-size:11px;color:#64748b;margin-top:3px}.ei{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:24px}.ei .lb{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px}.ei .vl{font-size:13px;font-weight:600;color:#1a1a2e;margin-top:2px}.st{font-size:10px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;margin-top:20px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th{background:#1a1a2e;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:10px 14px;text-align:left}th:last-child{text-align:right}td{padding:10px 14px;font-size:12px;border-bottom:1px solid #e2e8f0;color:#334155}td:last-child{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}td.pos{color:#059669}td.neg{color:#dc2626}.sr td{background:#f8fafc;font-weight:600;font-size:12px;border-top:1px solid #e2e8f0}.sr td:last-child{color:#1a1a2e}.ts{background:#f0fdf4;border:2px solid #059669;border-radius:10px;padding:16px;margin-top:20px;display:flex;justify-content:space-between;align-items:center}.tl{font-size:14px;font-weight:600;color:#334155}.tv{font-size:22px;font-weight:800;color:#059669}.ft{margin-top:32px;padding-top:14px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8}.ft-aura{display:flex;align-items:center;gap:6px}.ft-logo{font-size:12px;font-weight:700;color:#6d28d9}@media print{body{padding:20px}button{display:none!important}}</style></head><body>
-<div class="hdr"><div>${logoHtml}<div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-top:6px">${co.name}</div>${cnpjHtml}${addrHtml}</div>
-<div class="dt"><h2>Holerite</h2><p>Competencia: ${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p><p>Emissao: ${new Date().toLocaleDateString("pt-BR")}</p></div></div>
-<div class="ei"><div><div class="lb">Funcionario</div><div class="vl">${emp.name}</div></div><div><div class="lb">Cargo</div><div class="vl">${emp.role}</div></div><div><div class="lb">Admissao</div><div class="vl">${emp.admDate}</div></div><div><div class="lb">Status</div><div class="vl">${STATUS_MAP[emp.status].l}</div></div></div>
-<div class="st">Proventos</div><table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody><tr><td>Salario base</td><td>30 dias</td><td class="pos">${f2(emp.salary)}</td></tr></tbody><tfoot><tr class="sr"><td colspan="2">Total proventos</td><td>${f2(emp.salary)}</td></tr></tfoot></table>
-<div class="st">Descontos</div><table><thead><tr><th>Descricao</th><th>Referencia</th><th>Valor (R$)</th></tr></thead><tbody><tr><td>INSS</td><td>${(calcINSS(emp.salary)/emp.salary*100).toFixed(1)}%</td><td class="neg">-${f2(p.inss)}</td></tr><tr><td>IRRF</td><td>${p.irrf > 0 ? (p.irrf/emp.salary*100).toFixed(1)+"%" : "Isento"}</td><td${p.irrf > 0 ? ' class="neg"' : ""}>${p.irrf > 0 ? "-"+f2(p.irrf) : "Isento"}</td></tr></tbody><tfoot><tr class="sr"><td colspan="2">Total descontos</td><td>-${f2(p.inss+p.irrf)}</td></tr></tfoot></table>
-<div class="ts"><div class="tl">Salario liquido a receber</div><div class="tv">R$ ${f2(p.liquid)}</div></div>
-<div class="ft"><div class="ft-aura"><span class="ft-logo">aura.</span><span>Tecnologia para Negocios</span></div><div>getaura.com.br &middot; ${new Date().toLocaleDateString("pt-BR")}</div></div>
-</body></html>`;
-}
+const PAYSLIP_TYPES: { key: PayslipType; label: string }[] = [
+  { key: "mensal", label: "Mensal" },
+  { key: "ferias", label: "Ferias" },
+  { key: "decimo_terceiro", label: "13o Salario" },
+];
 
 export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) {
   const { company } = useAuthStore();
   const [showSend, setShowSend] = useState(false);
-  const p = calcPayroll(emp);
+  const [payslipType, setPayslipType] = useState<PayslipType>("mensal");
+
   const coInfo: CoInfo = {
     name: company?.name || "Minha Empresa",
     cnpj: (company as any)?.cnpj,
@@ -39,9 +26,11 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
     address: (company as any)?.address,
   };
 
-  function handlePreview() {
-    if (Platform.OS === "web") { const w = window.open("", "_blank"); if (w) { w.document.write(genPayslipHTML(emp, coInfo)); w.document.close(); } }
-  }
+  // Calculate based on type
+  const mensal = calcPayroll(emp);
+  const ferias = calcFerias(emp);
+  const decimo = calc13(emp);
+
   function handleSend(via: string) { toast.success(`Holerite enviado via ${via} para ${emp.name}`); setShowSend(false); }
 
   return (
@@ -49,11 +38,11 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
       <Pressable onPress={onBack} style={{ marginBottom: 16 }}><Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{'<'} Voltar</Text></Pressable>
       <View style={s.card}>
         <View style={s.hdr}>
-          <View><Text style={s.title}>Holerite - {emp.name}</Text><Text style={s.sub}>{emp.role} / Competencia: {new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</Text></View>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable onPress={handlePreview} style={s.previewBtn}><Text style={s.previewText}>Visualizar</Text></Pressable>
-            <Pressable onPress={() => setShowSend(!showSend)} style={s.sendBtn}><Text style={s.sendText}>Enviar</Text></Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Holerite - {emp.name}</Text>
+            <Text style={s.sub}>{emp.role} / {STATUS_MAP[emp.status]?.l || emp.status} / {new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</Text>
           </View>
+          <Pressable onPress={() => setShowSend(!showSend)} style={s.sendBtn}><Text style={s.sendText}>Enviar</Text></Pressable>
         </View>
 
         {showSend && (
@@ -63,18 +52,65 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
           </View>
         )}
 
-        <View style={s.sec}><Text style={s.secT}>Proventos</Text>
-          <View style={s.row}><Text style={s.rl}>Salario base</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(emp.salary)}</Text></View>
-          <View style={[s.row, s.totalRow]}><Text style={[s.rl, { fontWeight: "600", color: Colors.ink }]}>Total proventos</Text><Text style={[s.rv, { fontWeight: "700" }]}>{fmt(emp.salary)}</Text></View>
+        {/* Type selector */}
+        <View style={s.typeRow}>
+          {PAYSLIP_TYPES.map(t => (
+            <Pressable key={t.key} onPress={() => setPayslipType(t.key)} style={[s.typeBtn, payslipType === t.key && s.typeBtnActive]}>
+              <Text style={[s.typeText, payslipType === t.key && s.typeTextActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
         </View>
 
-        <View style={s.sec}><Text style={s.secT}>Descontos</Text>
-          <View style={s.row}><Text style={s.rl}>INSS ({(calcINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[s.rv, { color: Colors.red }]}>-{fmt(p.inss)}</Text></View>
-          <View style={s.row}><Text style={s.rl}>IRRF</Text><Text style={[s.rv, { color: p.irrf > 0 ? Colors.red : Colors.ink3 }]}>{p.irrf > 0 ? "-"+fmt(p.irrf) : "Isento"}</Text></View>
-          <View style={[s.row, s.totalRow]}><Text style={[s.rl, { fontWeight: "600", color: Colors.ink }]}>Total descontos</Text><Text style={[s.rv, { fontWeight: "700", color: Colors.red }]}>-{fmt(p.inss + p.irrf)}</Text></View>
-        </View>
+        {/* MENSAL */}
+        {payslipType === "mensal" && (
+          <>
+            <View style={s.sec}><Text style={s.secT}>Proventos</Text>
+              <View style={s.row}><Text style={s.rl}>Salario base</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(emp.salary)}</Text></View>
+              <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total proventos</Text><Text style={[s.rv, s.bold]}>{fmt(emp.salary)}</Text></View>
+            </View>
+            <View style={s.sec}><Text style={s.secT}>Descontos</Text>
+              <View style={s.row}><Text style={s.rl}>INSS ({(calcINSS(emp.salary)/emp.salary*100).toFixed(1)}%)</Text><Text style={[s.rv, { color: Colors.red }]}>-{fmt(mensal.inss)}</Text></View>
+              <View style={s.row}><Text style={s.rl}>IRRF</Text><Text style={[s.rv, { color: mensal.irrf > 0 ? Colors.red : Colors.ink3 }]}>{mensal.irrf > 0 ? "-"+fmt(mensal.irrf) : "Isento"}</Text></View>
+              <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total descontos</Text><Text style={[s.rv, s.bold, { color: Colors.red }]}>-{fmt(mensal.inss + mensal.irrf)}</Text></View>
+            </View>
+            <View style={s.totalCard}><Text style={s.totalLabel}>Salario liquido</Text><Text style={s.totalValue}>{fmt(mensal.liquid)}</Text></View>
+          </>
+        )}
 
-        <View style={s.totalCard}><Text style={s.totalLabel}>Salario liquido a receber</Text><Text style={s.totalValue}>{fmt(p.liquid)}</Text></View>
+        {/* FERIAS */}
+        {payslipType === "ferias" && (
+          <>
+            <View style={s.sec}><Text style={s.secT}>Proventos</Text>
+              <View style={s.row}><Text style={s.rl}>Salario base (30 dias)</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(ferias.salary)}</Text></View>
+              <View style={s.row}><Text style={s.rl}>1/3 constitucional</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(ferias.terco)}</Text></View>
+              <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total proventos</Text><Text style={[s.rv, s.bold]}>{fmt(ferias.bruto)}</Text></View>
+            </View>
+            <View style={s.sec}><Text style={s.secT}>Descontos</Text>
+              <View style={s.row}><Text style={s.rl}>INSS</Text><Text style={[s.rv, { color: Colors.red }]}>-{fmt(ferias.inss)}</Text></View>
+              <View style={s.row}><Text style={s.rl}>IRRF</Text><Text style={[s.rv, { color: ferias.irrf > 0 ? Colors.red : Colors.ink3 }]}>{ferias.irrf > 0 ? "-"+fmt(ferias.irrf) : "Isento"}</Text></View>
+              <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total descontos</Text><Text style={[s.rv, s.bold, { color: Colors.red }]}>-{fmt(ferias.inss + ferias.irrf)}</Text></View>
+            </View>
+            <View style={s.infoCard}><Text style={s.infoText}>FGTS sobre ferias: {fmt(ferias.fgts)}</Text></View>
+            <View style={s.totalCard}><Text style={s.totalLabel}>Liquido ferias</Text><Text style={s.totalValue}>{fmt(ferias.liquid)}</Text></View>
+          </>
+        )}
+
+        {/* 13o SALARIO */}
+        {payslipType === "decimo_terceiro" && (
+          <>
+            <View style={s.sec}><Text style={s.secT}>Proventos</Text>
+              <View style={s.row}><Text style={s.rl}>13o salario ({decimo.proporcional}/12 avos)</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(decimo.bruto)}</Text></View>
+              <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total proventos</Text><Text style={[s.rv, s.bold]}>{fmt(decimo.bruto)}</Text></View>
+            </View>
+            <View style={s.sec}><Text style={s.secT}>Descontos</Text>
+              <View style={s.row}><Text style={s.rl}>INSS</Text><Text style={[s.rv, { color: Colors.red }]}>-{fmt(decimo.inss)}</Text></View>
+              <View style={s.row}><Text style={s.rl}>IRRF</Text><Text style={[s.rv, { color: decimo.irrf > 0 ? Colors.red : Colors.ink3 }]}>{decimo.irrf > 0 ? "-"+fmt(decimo.irrf) : "Isento"}</Text></View>
+              <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total descontos</Text><Text style={[s.rv, s.bold, { color: Colors.red }]}>-{fmt(decimo.inss + decimo.irrf)}</Text></View>
+            </View>
+            <View style={s.infoCard}><Text style={s.infoText}>FGTS sobre 13o: {fmt(decimo.fgts)}</Text></View>
+            <View style={s.totalCard}><Text style={s.totalLabel}>Liquido 13o salario</Text><Text style={s.totalValue}>{fmt(decimo.liquid)}</Text></View>
+          </>
+        )}
       </View>
     </View>
   );
@@ -82,22 +118,30 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
 
 const s = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2 },
-  hdr: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 },
+  hdr: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 },
   title: { fontSize: 20, color: Colors.ink, fontWeight: "700" },
   sub: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-  previewBtn: { backgroundColor: Colors.bg4, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border },
-  previewText: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   sendBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   sendText: { fontSize: 13, color: "#fff", fontWeight: "600" },
   sendOptions: { flexDirection: "row", gap: 8, marginBottom: 16 },
   sendOpt: { borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   sendOptText: { fontSize: 12, color: "#fff", fontWeight: "600" },
+  // Type selector
+  typeRow: { flexDirection: "row", gap: 6, marginBottom: 20, backgroundColor: Colors.bg, borderRadius: 12, padding: 4 },
+  typeBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center" },
+  typeBtnActive: { backgroundColor: Colors.violet },
+  typeText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  typeTextActive: { color: "#fff", fontWeight: "600" },
+  // Sections
   sec: { marginBottom: 16 },
   secT: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
   totalRow: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4, paddingTop: 8 },
   rl: { fontSize: 13, color: Colors.ink3 },
   rv: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
+  bold: { fontWeight: "700", color: Colors.ink },
+  infoCard: { backgroundColor: Colors.violetD, borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border2 },
+  infoText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
   totalCard: { backgroundColor: Colors.violetD, borderRadius: 14, padding: 18, marginTop: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: Colors.border2 },
   totalLabel: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   totalValue: { fontSize: 22, color: Colors.green, fontWeight: "800" },
