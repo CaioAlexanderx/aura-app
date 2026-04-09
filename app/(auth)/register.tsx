@@ -30,12 +30,28 @@ function Req({ ok, text }: { ok: boolean; text: string }) {
 const webInputProps = isWeb ? { className: "auth-input" } as any : {};
 const inputOutline = isWeb ? { outlineWidth: 0 } as any : {};
 
-// M7: Save detected regime to localStorage for TabRetirada
 function saveDetectedRegime(regime: string) {
   try {
     if (typeof localStorage === "undefined") return;
     const cfg = JSON.parse(localStorage.getItem("aura_config") || "{}");
     cfg.detectedRegime = regime;
+    localStorage.setItem("aura_config", JSON.stringify(cfg));
+  } catch {}
+}
+
+// Save CNPJ data to localStorage for configuracoes hydration
+function saveCnpjData(data: any) {
+  try {
+    if (typeof localStorage === "undefined") return;
+    const cfg = JSON.parse(localStorage.getItem("aura_config") || "{}");
+    if (data.razao_social) cfg.companyName = data.razao_social;
+    if (data.nome_fantasia) cfg.tradeName = data.nome_fantasia;
+    if (data.logradouro) {
+      const parts = [data.logradouro, data.numero, data.bairro, data.municipio, data.uf].filter(Boolean);
+      cfg.address = parts.join(", ");
+    }
+    if (data.email) cfg.email = data.email.toLowerCase();
+    if (data.ddd_telefone_1) cfg.phone = `(${data.ddd_telefone_1}) ${data.telefone_1 || ""}`.trim();
     localStorage.setItem("aura_config", JSON.stringify(cfg));
   } catch {}
 }
@@ -54,12 +70,10 @@ export default function RegisterScreen() {
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cnpjFound, setCnpjFound] = useState<string | null>(null);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
-  const [cnpjSkipped, setCnpjSkipped] = useState(false);
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
-  const { register, loginDemo, isLoading } = useAuthStore();
+  const { register, isLoading } = useAuthStore();
 
-  // M8: Improved CNPJ lookup with better error handling + M7: detect regime
   async function lookupCNPJ(formatted: string) {
     const nums = formatted.replace(/\D/g, "");
     if (nums.length !== 14) return;
@@ -73,14 +87,27 @@ export default function RegisterScreen() {
       if (res.status === 429) { setCnpjError("Muitas consultas. Aguarde alguns segundos e tente novamente."); return; }
       if (!res.ok) { setCnpjError(`Erro na consulta (${res.status}). Tente novamente.`); return; }
       const data = await res.json();
+
+      // Auto-fill empresa
       setEmpresa(data.razao_social || data.nome_fantasia || "");
       setCnpjFound(data.razao_social || data.nome_fantasia);
-      // M7: Detect regime from porte
-      const porte = (data.porte || data.descricao_porte || "").toLowerCase();
-      if (porte.includes("mei") || porte.includes("micro empreendedor individual")) {
-        saveDetectedRegime("mei");
-      } else {
-        saveDetectedRegime("simples");
+
+      // Auto-fill telefone (if empty)
+      if (!telefone && data.ddd_telefone_1) {
+        setTelefone(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`));
+      }
+
+      // Save all data for configuracoes
+      saveCnpjData(data);
+
+      // Detect regime from porte/natureza
+      const natCode = String(data.natureza_juridica || "").replace(/\D/g, "");
+      if (natCode === "2135") { saveDetectedRegime("mei"); }
+      else {
+        const porte = (data.porte || data.descricao_porte || "").toLowerCase();
+        if (porte.includes("mei") || porte.includes("micro empreendedor individual")) {
+          saveDetectedRegime("mei");
+        } else { saveDetectedRegime("simples"); }
       }
     } catch (err: any) {
       if (err?.name === "AbortError") { setCnpjError("Consulta demorou demais. Verifique sua conexao e tente novamente."); }
@@ -89,7 +116,7 @@ export default function RegisterScreen() {
   }
 
   function handleCnpjChange(v: string) {
-    const masked = maskCNPJ(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); setCnpjSkipped(false);
+    const masked = maskCNPJ(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null);
     if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked);
   }
 
@@ -107,6 +134,8 @@ export default function RegisterScreen() {
   const passMatch = senha === confirmarSenha && confirmarSenha.length > 0;
   const passValid = passLength && passUpper && passNumber;
   const step1Valid = nome.length > 0 && email.includes("@") && passValid && passMatch;
+  const cnpjValid = cnpj.replace(/\D/g, "").length === 14 && !!cnpjFound && !cnpjError;
+  const step2Valid = empresa.length > 0 && telefone.length > 0 && cnpjValid;
 
   function nextStep() {
     if (!step1Valid) { toast.error("Preencha todos os campos corretamente"); return; }
@@ -114,9 +143,10 @@ export default function RegisterScreen() {
   }
 
   async function handleRegister() {
+    if (!cnpjValid) { toast.error("CNPJ obrigatorio. Insira um CNPJ valido."); return; }
     if (!empresa || !telefone) { toast.error("Preencha empresa e telefone"); return; }
     try {
-      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefone.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, "") || undefined, access_code: codigo.trim() || undefined });
+      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefone.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, ""), access_code: codigo.trim() || undefined });
       toast.success("Conta criada com sucesso!");
       setTimeout(() => { router.replace("/(tabs)/onboarding"); }, 300);
     } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
@@ -150,17 +180,13 @@ export default function RegisterScreen() {
       {step === 1 && (
         <View>
           <View style={s.field}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <Text style={s.label}>CNPJ</Text>
-              <Pressable onPress={() => { setCnpj(""); setCnpjFound(null); setCnpjError(null); setCnpjSkipped(true); }}><Text style={{ fontSize: 10, color: cnpjSkipped ? Colors.green : Colors.violet3, fontWeight: "500" }}>{cnpjSkipped ? "OK - opcional" : "Nao tenho CNPJ"}</Text></Pressable>
-            </View>
-            {!cnpjSkipped && <View style={s.inputWrap}><Icon name="file_text" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />{cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}</View>}
-            {cnpjSkipped && <View style={{ backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border }}><Text style={{ fontSize: 12, color: Colors.ink3 }}>Voce pode adicionar o CNPJ depois.</Text></View>}
+            <Text style={s.label}>CNPJ *</Text>
+            <View style={[s.inputWrap, cnpjFound && { borderColor: Colors.green }, cnpjError && { borderColor: Colors.red }]}><Icon name="file_text" size={16} color={cnpjFound ? Colors.green : cnpjError ? Colors.red : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />{cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}</View>
             {cnpjFound && <View style={s.cnpjOk}><Icon name="check" size={12} color={Colors.green} /><Text style={s.cnpjOkText}>{cnpjFound}</Text></View>}
-            {/* M8: Better error messages with retry hint */}
             {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
+            {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados da empresa serao preenchidos automaticamente.</Text>}
           </View>
-          <View style={s.field}><Text style={s.label}>Telefone / WhatsApp *</Text><View style={s.inputWrap}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefone} onChangeText={(v: string) => setTelefone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View></View>
+          <View style={s.field}><Text style={s.label}>Telefone / WhatsApp *</Text><View style={s.inputWrap}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefone} onChangeText={(v: string) => setTelefone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View>{cnpjFound && telefone && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}><Text style={s.label}>Nome da empresa *</Text><View style={s.inputWrap}><Icon name="bag" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><Text style={s.label}>Codigo de acesso</Text>{codeChecking && <ActivityIndicator size="small" color={Colors.violet3} />}{codeValid === true && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}{codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Invalido</Text>}</View>
@@ -169,14 +195,13 @@ export default function RegisterScreen() {
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable style={s.backBtn} onPress={() => setStep(0)}><Text style={s.backBtnText}>Voltar</Text></Pressable>
-            <Pressable style={[s.btn, { flex: 1 }, isLoading && { opacity: 0.7 }]} {...(isWeb ? { className: "auth-btn" } as any : {})} onPress={handleRegister} disabled={isLoading}>{isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta</Text>}</Pressable>
+            <Pressable style={[s.btn, { flex: 1 }, (isLoading || !step2Valid) && { opacity: 0.6 }]} {...(isWeb ? { className: "auth-btn" } as any : {})} onPress={handleRegister} disabled={isLoading || !step2Valid}>{isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta</Text>}</Pressable>
           </View>
+          {!step2Valid && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validacao do CNPJ para liberar o cadastro.</Text>}
         </View>
       )}
 
       <View style={s.footerRow}><Text style={s.footerText}>Ja tem conta? </Text><Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link></View>
-      <View style={s.dividerRow}><View style={s.dividerLine} /><Text style={s.dividerText}>ou</Text><View style={s.dividerLine} /></View>
-      <Pressable style={s.demoBtn} onPress={loginDemo} disabled={isLoading}><Icon name="dashboard" size={14} color={Colors.violet3} /><Text style={s.demoBtnText}>Explorar modo demonstrativo</Text></Pressable>
       <Text style={s.footer}>Aura. - Tecnologia para Negocios</Text>
     </View>
   );
@@ -211,7 +236,6 @@ const s = StyleSheet.create({
   passReqs: { flexDirection: "row", gap: 12, marginTop: 6, flexWrap: "wrap" },
   cnpjOk: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   cnpjOkText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
-  // M8: Error with retry
   cnpjErrWrap: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, backgroundColor: Colors.redD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   cnpjErr: { fontSize: 10, color: Colors.red, flex: 1 },
   cnpjRetry: { fontSize: 10, color: Colors.violet3, fontWeight: "600", marginLeft: 8 },
@@ -219,13 +243,8 @@ const s = StyleSheet.create({
   btnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   backBtn: { backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 20, alignItems: "center", marginBottom: 16, marginTop: 4, borderWidth: 1, borderColor: Colors.border },
   backBtnText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: 11, color: Colors.ink3 },
   footerRow: { flexDirection: "row", justifyContent: "center", marginBottom: 16 },
   footerText: { fontSize: 13, color: Colors.ink3 },
   link: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  demoBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 13, borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
-  demoBtnText: { color: Colors.violet3, fontSize: 13, fontWeight: "600" },
   footer: { fontSize: 11, color: Colors.ink3, textAlign: "center", opacity: 0.5 },
 });
