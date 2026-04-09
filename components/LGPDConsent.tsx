@@ -3,7 +3,6 @@ import { View, Text, Pressable, StyleSheet, Platform, Linking } from "react-nati
 import { Colors } from "@/constants/colors";
 
 const CONSENT_KEY = "aura_lgpd_consent";
-const isWeb = Platform.OS === "web";
 
 function getConsent(): boolean {
   try { return typeof localStorage !== "undefined" && localStorage.getItem(CONSENT_KEY) === "true"; } catch { return false; }
@@ -40,3 +39,30 @@ export function LGPDConsent() {
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  bar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.bg3,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    padding: 16,
+    zIndex: 9999,
+  },
+  inner: {
+    maxWidth: 960,
+    alignSelf: "center",
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    flexWrap: "wrap",
+  },
+  text: { flex: 1, fontSize: 12, color: Colors.ink3, lineHeight: 18, minWidth: 200 },
+  link: { color: Colors.violet3, textDecorationLine: "underline" },
+  btn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 24 },
+  btnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+});
