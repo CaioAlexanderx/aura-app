@@ -66,53 +66,37 @@ function OR({name,due,amount,status,category}:{name:string;due:string;amount:num
 }
 const ob=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:8,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},left:{flexDirection:"row",alignItems:"center",gap:10},dot:{width:8,height:8,borderRadius:4},nm:{fontSize:13,color:Colors.ink,fontWeight:"500"},du:{fontSize:11,color:Colors.ink3,marginTop:1},right:{alignItems:"flex-end",gap:4,flexShrink:0},am:{fontSize:13,color:Colors.ink,fontWeight:"600"},cb:{borderRadius:6,paddingHorizontal:8,paddingVertical:2},ct:{fontSize:8,fontWeight:"600",letterSpacing:0.3}});
 
-// ── Sales Analytics Section ──────────────────────────────────
 function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
   const { data, isLoading } = useSalesAnalytics('month', 'day');
   const { data: ranking } = useProductsRanking('month');
-
   if (isLoading || !data) return null;
   if (data.total_sales === 0 && !ranking?.products?.length) return null;
-
   const topProducts = ranking?.products?.slice(0, 3) || [];
   const growth = data.comparison?.growth_pct;
-
   return (
     <View>
       <View style={s.sh}><Text style={s.sec}>Desempenho de vendas</Text><TouchableOpacity onPress={onPress}><Text style={s.sa}>Ver detalhes</Text></TouchableOpacity></View>
-      <View style={sa.card}>
-        <View style={sa.row}>
-          <View style={sa.metric}>
-            <Text style={sa.metricValue}>{data.total_sales}</Text>
-            <Text style={sa.metricLabel}>Vendas no mes</Text>
-          </View>
-          <View style={sa.divider} />
-          <View style={sa.metric}>
-            <Text style={sa.metricValue}>{fmtK(data.total_revenue)}</Text>
-            <Text style={sa.metricLabel}>Faturamento</Text>
-          </View>
-          <View style={sa.divider} />
-          <View style={sa.metric}>
-            <Text style={sa.metricValue}>{fmt(data.avg_ticket)}</Text>
-            <Text style={sa.metricLabel}>Ticket medio</Text>
-          </View>
+      <View style={sac.card}>
+        <View style={sac.row}>
+          <View style={sac.metric}><Text style={sac.metricValue}>{data.total_sales}</Text><Text style={sac.metricLabel}>Vendas no mes</Text></View>
+          <View style={sac.divider} />
+          <View style={sac.metric}><Text style={sac.metricValue}>{fmtK(data.total_revenue)}</Text><Text style={sac.metricLabel}>Faturamento</Text></View>
+          <View style={sac.divider} />
+          <View style={sac.metric}><Text style={sac.metricValue}>{fmt(data.avg_ticket)}</Text><Text style={sac.metricLabel}>Ticket medio</Text></View>
         </View>
         {growth !== undefined && growth !== null && (
-          <View style={[sa.growthBadge, { backgroundColor: growth >= 0 ? Colors.greenD : Colors.redD }]}>
-            <Text style={[sa.growthText, { color: growth >= 0 ? Colors.green : Colors.red }]}>
-              {growth >= 0 ? "+" : ""}{growth.toFixed(1)}% vs mes anterior
-            </Text>
+          <View style={[sac.growthBadge, { backgroundColor: growth >= 0 ? Colors.greenD : Colors.redD }]}>
+            <Text style={[sac.growthText, { color: growth >= 0 ? Colors.green : Colors.red }]}>{growth >= 0 ? "+" : ""}{growth.toFixed(1)}% vs mes anterior</Text>
           </View>
         )}
         {topProducts.length > 0 && (
-          <View style={sa.topSection}>
-            <Text style={sa.topTitle}>Mais vendidos</Text>
+          <View style={sac.topSection}><Text style={sac.topTitle}>Mais vendidos</Text>
             {topProducts.map((p: any, i: number) => (
-              <View key={p.id || i} style={sa.topRow}>
-                <View style={sa.topRank}><Text style={sa.topRankText}>{i + 1}</Text></View>
-                <Text style={sa.topName} numberOfLines={1}>{p.name}</Text>
-                <Text style={sa.topQty}>{p.qty_sold} un</Text>
-                <Text style={sa.topRev}>{fmtK(p.revenue)}</Text>
+              <View key={p.id || i} style={sac.topRow}>
+                <View style={sac.topRank}><Text style={sac.topRankText}>{i + 1}</Text></View>
+                <Text style={sac.topName} numberOfLines={1}>{p.name}</Text>
+                <Text style={sac.topQty}>{p.qty_sold} un</Text>
+                <Text style={sac.topRev}>{fmtK(p.revenue)}</Text>
               </View>
             ))}
           </View>
@@ -121,7 +105,7 @@ function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
     </View>
   );
 }
-const sa = StyleSheet.create({
+const sac = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 24 },
   row: { flexDirection: "row", justifyContent: "space-around", marginBottom: 12 },
   metric: { alignItems: "center", flex: 1 },
@@ -159,7 +143,9 @@ const emp=StyleSheet.create({wrap:{backgroundColor:Colors.bg3,borderRadius:20,pa
 export default function DashboardScreen(){
   const{user,company,token,isDemo,logout}=useAuthStore();
   const router=useRouter();
-  const [emailVerified, setEmailVerified] = useState(true); // assume true until proven false
+
+  // BUGFIX: read email_verified from user data (defaults to false = show banner)
+  const [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
 
   const{data,isLoading,isError}=useQuery({
     queryKey:["dashboard",company?.id],
@@ -172,6 +158,11 @@ export default function DashboardScreen(){
   useEffect(()=>{
     if(isError && !isDemo) toast.error("Erro ao carregar dashboard. Verifique sua conexao.");
   },[isError]);
+
+  // Sync emailVerified when user data changes
+  useEffect(() => {
+    if ((user as any)?.email_verified !== undefined) setEmailVerified((user as any).email_verified);
+  }, [(user as any)?.email_verified]);
 
   const d = isDemo ? MOCK : (data || EMPTY_DATA);
   const isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
@@ -190,12 +181,9 @@ export default function DashboardScreen(){
         </View>
 
         <ProfileBanner />
-
-        {/* Fase 1: Email verification banner */}
         {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={() => setEmailVerified(true)} />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
-
         {isEmpty && <EmptyDashboard name={user?.name?.split(" ")[0]??"usuario"} onPress={go} />}
 
         {!isLoading && !isEmpty && <>
@@ -214,7 +202,6 @@ export default function DashboardScreen(){
             <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} onPress={()=>go("/clientes")}/>
           </View>
 
-          {/* Fase 2: Sales analytics + top products */}
           {!isDemo && <SalesAnalyticsCard onPress={() => go("/pdv")} />}
 
           <Text style={s.sec}>Acesso rapido</Text>
