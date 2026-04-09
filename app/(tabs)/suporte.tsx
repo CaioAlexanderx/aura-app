@@ -9,7 +9,7 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { toast } from "@/components/Toast";
 
 const AURA_EMAIL = "suporte@getaura.com.br";
-const AURA_WHATSAPP = "5512991234567";
+const AURA_WHATSAPP = "5511956305269";
 
 const MOCK_MESSAGES = [
   { id: "1", from: "analyst", name: "Equipe Aura", text: "Ola! Sou seu Analista de Negocios na Aura. Estou aqui para ajudar com configuracoes, duvidas, leitura de dados e acompanhamento de prazos. Como posso te ajudar hoje?", time: "09:00" },
