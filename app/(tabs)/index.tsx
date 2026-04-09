@@ -11,6 +11,8 @@ import { TrialBanner } from "@/components/TrialBanner";
 import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 import { ProfileBanner } from "@/components/ProfileBanner";
+import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
+import { useSalesAnalytics, useProductsRanking } from "@/hooks/useSalesAnalytics";
 
 const IS = typeof window !== 'undefined' ? window.innerWidth > 768 : Dimensions.get('window').width > 768;
 const fmt = (n: number) => `R$ ${(n||0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -29,10 +31,6 @@ const av=StyleSheet.create({c:{width:42,height:42,borderRadius:21,backgroundColo
 
 function PB({plan}:{plan:string}){const m:Record<string,string>={expansao:"Expansao",negocio:"Negocio",essencial:"Essencial"};return <View style={pb.b}><View style={pb.d}/><Text style={pb.t}>{m[plan]||plan}</Text></View>;}
 const pb=StyleSheet.create({b:{flexDirection:"row",alignItems:"center",backgroundColor:Colors.violetD,borderRadius:20,paddingHorizontal:10,paddingVertical:4,gap:5},d:{width:6,height:6,borderRadius:3,backgroundColor:Colors.green},t:{fontSize:11,color:Colors.violet3,fontWeight:"600",letterSpacing:0.3}});
-
-function HC({children,style,onPress}:{children:React.ReactNode;style?:any;onPress?:()=>void}){
-  return <Pressable onPress={onPress} style={style}>{children}</Pressable>;
-}
 
 function KPI({ic,iconColor,label,value,delta,deltaUp,large,onPress}:{ic:string;iconColor:string;label:string;value:string;delta?:string;deltaUp?:boolean;large?:boolean;onPress?:()=>void}){
   return <Pressable style={[k.card,large&&k.large]} onPress={onPress}>
@@ -68,6 +66,80 @@ function OR({name,due,amount,status,category}:{name:string;due:string;amount:num
 }
 const ob=StyleSheet.create({row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:12,paddingHorizontal:8,borderRadius:10,borderBottomWidth:1,borderBottomColor:Colors.border},left:{flexDirection:"row",alignItems:"center",gap:10},dot:{width:8,height:8,borderRadius:4},nm:{fontSize:13,color:Colors.ink,fontWeight:"500"},du:{fontSize:11,color:Colors.ink3,marginTop:1},right:{alignItems:"flex-end",gap:4,flexShrink:0},am:{fontSize:13,color:Colors.ink,fontWeight:"600"},cb:{borderRadius:6,paddingHorizontal:8,paddingVertical:2},ct:{fontSize:8,fontWeight:"600",letterSpacing:0.3}});
 
+// ── Sales Analytics Section ──────────────────────────────────
+function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
+  const { data, isLoading } = useSalesAnalytics('month', 'day');
+  const { data: ranking } = useProductsRanking('month');
+
+  if (isLoading || !data) return null;
+  if (data.total_sales === 0 && !ranking?.products?.length) return null;
+
+  const topProducts = ranking?.products?.slice(0, 3) || [];
+  const growth = data.comparison?.growth_pct;
+
+  return (
+    <View>
+      <View style={s.sh}><Text style={s.sec}>Desempenho de vendas</Text><TouchableOpacity onPress={onPress}><Text style={s.sa}>Ver detalhes</Text></TouchableOpacity></View>
+      <View style={sa.card}>
+        <View style={sa.row}>
+          <View style={sa.metric}>
+            <Text style={sa.metricValue}>{data.total_sales}</Text>
+            <Text style={sa.metricLabel}>Vendas no mes</Text>
+          </View>
+          <View style={sa.divider} />
+          <View style={sa.metric}>
+            <Text style={sa.metricValue}>{fmtK(data.total_revenue)}</Text>
+            <Text style={sa.metricLabel}>Faturamento</Text>
+          </View>
+          <View style={sa.divider} />
+          <View style={sa.metric}>
+            <Text style={sa.metricValue}>{fmt(data.avg_ticket)}</Text>
+            <Text style={sa.metricLabel}>Ticket medio</Text>
+          </View>
+        </View>
+        {growth !== undefined && growth !== null && (
+          <View style={[sa.growthBadge, { backgroundColor: growth >= 0 ? Colors.greenD : Colors.redD }]}>
+            <Text style={[sa.growthText, { color: growth >= 0 ? Colors.green : Colors.red }]}>
+              {growth >= 0 ? "+" : ""}{growth.toFixed(1)}% vs mes anterior
+            </Text>
+          </View>
+        )}
+        {topProducts.length > 0 && (
+          <View style={sa.topSection}>
+            <Text style={sa.topTitle}>Mais vendidos</Text>
+            {topProducts.map((p: any, i: number) => (
+              <View key={p.id || i} style={sa.topRow}>
+                <View style={sa.topRank}><Text style={sa.topRankText}>{i + 1}</Text></View>
+                <Text style={sa.topName} numberOfLines={1}>{p.name}</Text>
+                <Text style={sa.topQty}>{p.qty_sold} un</Text>
+                <Text style={sa.topRev}>{fmtK(p.revenue)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+const sa = StyleSheet.create({
+  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 24 },
+  row: { flexDirection: "row", justifyContent: "space-around", marginBottom: 12 },
+  metric: { alignItems: "center", flex: 1 },
+  metricValue: { fontSize: 18, fontWeight: "800", color: Colors.ink, marginBottom: 2 },
+  metricLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
+  divider: { width: 1, backgroundColor: Colors.border, marginHorizontal: 8 },
+  growthBadge: { alignSelf: "center", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5, marginBottom: 12 },
+  growthText: { fontSize: 11, fontWeight: "600" },
+  topSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12 },
+  topTitle: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
+  topRank: { width: 22, height: 22, borderRadius: 6, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" },
+  topRankText: { fontSize: 10, fontWeight: "700", color: Colors.violet3 },
+  topName: { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  topQty: { fontSize: 11, color: Colors.ink3 },
+  topRev: { fontSize: 12, color: Colors.green, fontWeight: "600", minWidth: 70, textAlign: "right" },
+});
+
 function EmptyDashboard({name,onPress}:{name:string;onPress:(p:string)=>void}){
   return (
     <View style={emp.wrap}>
@@ -87,6 +159,7 @@ const emp=StyleSheet.create({wrap:{backgroundColor:Colors.bg3,borderRadius:20,pa
 export default function DashboardScreen(){
   const{user,company,token,isDemo,logout}=useAuthStore();
   const router=useRouter();
+  const [emailVerified, setEmailVerified] = useState(true); // assume true until proven false
 
   const{data,isLoading,isError}=useQuery({
     queryKey:["dashboard",company?.id],
@@ -118,6 +191,9 @@ export default function DashboardScreen(){
 
         <ProfileBanner />
 
+        {/* Fase 1: Email verification banner */}
+        {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={() => setEmailVerified(true)} />}
+
         {isLoading && !isDemo && <SkeletonDashboard />}
 
         {isEmpty && <EmptyDashboard name={user?.name?.split(" ")[0]??"usuario"} onPress={go} />}
@@ -137,6 +213,9 @@ export default function DashboardScreen(){
             <KPI ic="receipt" iconColor={Colors.amber} label="TICKET MEDIO" value={fmt(d.avgTicket)} onPress={()=>go("/financeiro")}/>
             <KPI ic="user_plus" iconColor={Colors.violet3} label="CLIENTES NOVOS" value={String(d.newCustomers)} onPress={()=>go("/clientes")}/>
           </View>
+
+          {/* Fase 2: Sales analytics + top products */}
+          {!isDemo && <SalesAnalyticsCard onPress={() => go("/pdv")} />}
 
           <Text style={s.sec}>Acesso rapido</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
