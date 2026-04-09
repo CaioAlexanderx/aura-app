@@ -20,7 +20,7 @@ const NAV: NavSection[] = [
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator" },{ r: "/suporte", l: "Seu Analista", ic: "headset" }]},
   { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart" },{ r: "/estoque", l: "Estoque", ic: "package" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio" },{ r: "/whatsapp", l: "WhatsApp", ic: "message", plan: "negocio" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio" }]},
+  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao" }]},
 ];
 
@@ -89,7 +89,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
   return (
-    // CRIT-01: Added height '100%' + overflow 'hidden' so ScrollView scrolls
     <View style={[{ width: sw, height: '100%', backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, justifyContent: "flex-start", overflow: "hidden" as any }, { transition: "width 0.25s ease, padding 0.25s ease" } as any]}>
       <View style={{ flexDirection: "row", alignItems: collapsed ? "center" : "center", justifyContent: collapsed ? "center" : "space-between", paddingHorizontal: collapsed ? 0 : 8, paddingBottom: 14 }}>
         <Pressable onPress={() => ro.push("/")}><AuraLogo C={C} collapsed={collapsed} /></Pressable>
@@ -106,7 +105,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       )}
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
 
-      {/* CRIT-01: ScrollView with flex:1 inside height:100% container = scrollable */}
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={true}>
         {NAV.map(s => (
           <View key={s.s} style={{ marginBottom: collapsed ? 8 : 16 }}>
@@ -164,7 +162,6 @@ function MBar() {
     { r: "/nfe", l: "NF-e", ic: "file_text" },
     { r: "/contabilidade", l: "Contabilidade", ic: "calculator" },
     { r: "/folha", l: "Folha", ic: "payroll" },
-    { r: "/whatsapp", l: "WhatsApp", ic: "message" },
     { r: "/canal", l: "Canal Digital", ic: "globe" },
     { r: "/agendamento", l: "Agenda", ic: "calendar" },
     { r: "/agentes", l: "Agentes", ic: "brain" },
