@@ -11,15 +11,39 @@ type Props = {
   onComplete?: (result: { imported: number; skipped: number; errors: string[] }) => void;
 };
 
+// Simple CSV parser (handles quoted fields, BOM, semicolons)
+function parseCSV(text: string): Record<string, string>[] {
+  const clean = text.replace(/^\uFEFF/, ''); // remove BOM
+  const lines = clean.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const headers = lines[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim());
+
+  return lines.slice(1).map(line => {
+    const values = line.split(sep).map(v => v.replace(/^"|"$/g, '').trim());
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { if (h) row[h] = values[i] || ''; });
+    return row;
+  }).filter(row => Object.values(row).some(v => v));
+}
+
+// Correct URL paths matching backend importData.js routes
+const ROUTE_MAP: Record<string, string> = {
+  products: 'products/import',
+  customers: 'customers/import',
+  transactions: 'transactions/import',
+};
+
 export function ServerImport({ entity, onComplete }: Props) {
   const { company, token } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const isWeb = Platform.OS === 'web';
 
   const labels: Record<string, string> = {
-    products: 'Importar produtos (CSV/Excel)',
-    customers: 'Importar clientes (CSV/Excel)',
-    transactions: 'Importar lancamentos (OFX/CSV)',
+    products: 'Importar produtos (CSV)',
+    customers: 'Importar clientes (CSV)',
+    transactions: 'Importar lancamentos (CSV)',
   };
 
   async function handleImport() {
@@ -27,19 +51,32 @@ export function ServerImport({ entity, onComplete }: Props) {
 
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = entity === 'transactions' ? '.csv,.ofx,.xlsx,.xls' : '.csv,.xlsx,.xls';
+    input.accept = '.csv,.tsv,.txt';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { toast.error('Arquivo muito grande (max 5MB)'); return; }
+
       setLoading(true);
       try {
-        const formData = new FormData();
-        formData.append('file', file);
+        // Read file as text and parse CSV client-side
+        const text = await file.text();
+        const rows = parseCSV(text);
 
-        const res = await fetch(`${BASE_URL}/companies/${company.id}/import/${entity}`, {
+        if (rows.length === 0) {
+          toast.error('Arquivo vazio ou formato invalido. Use CSV com cabecalho.');
+          return;
+        }
+
+        // Send parsed rows as JSON to backend
+        const route = ROUTE_MAP[entity] || `${entity}/import`;
+        const res = await fetch(`${BASE_URL}/companies/${company.id}/${route}`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ rows }),
         });
 
         if (!res.ok) {
@@ -48,9 +85,10 @@ export function ServerImport({ entity, onComplete }: Props) {
         }
 
         const data = await res.json();
-        const imported = data.imported || data.created || 0;
-        const skipped = data.skipped || data.errors?.length || 0;
-        toast.success(`${imported} registros importados${skipped > 0 ? ` (${skipped} ignorados)` : ''}`);
+        const imported = data.saved || data.imported || data.created || 0;
+        const skipped = data.duplicates_skipped || 0;
+        const errorCount = data.error_count || 0;
+        toast.success(`${imported} importados${skipped > 0 ? `, ${skipped} duplicados` : ''}${errorCount > 0 ? `, ${errorCount} com erro` : ''}`);
         onComplete?.({ imported, skipped, errors: data.errors || [] });
       } catch (err: any) {
         toast.error(err?.message || 'Erro ao importar arquivo');
