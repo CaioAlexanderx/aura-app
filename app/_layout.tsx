@@ -6,6 +6,7 @@ import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthGuard />
+        <LGPDConsent />
       </QueryClientProvider>
     </ErrorBoundary>
   );
