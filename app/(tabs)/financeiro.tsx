@@ -16,6 +16,7 @@ import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TABS, fmt } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS, mapImportedTransaction } from "@/utils/csv";
 import { toast } from "@/components/Toast";
+import { FinanceiroToolbar } from "@/components/FinanceiroToolbar";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -28,6 +29,9 @@ export default function FinanceiroScreen() {
   const { transactions, summary, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab);
 
   const periodLabel = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+  // Fase 3: uncategorized descriptions for AI categorization
+  const uncategorized = transactions.filter((t: any) => !t.category || t.category === 'outros').map((t: any) => t.description).filter(Boolean);
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
@@ -60,7 +64,11 @@ export default function FinanceiroScreen() {
           {TABS.map((tab, i) => <Pressable key={tab} onPress={() => handleTabSelect(i)} style={[s.tab, activeTab === i && s.tabActive]}><Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text></Pressable>)}
         </ScrollView>
 
-        {/* Import/Export bar on Lancamentos tab */}
+        {/* Fase 3: Export DRE/Sales + AI Categorize */}
+        {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && (
+          <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />
+        )}
+
         {activeTab === 1 && transactions.length > 0 && <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={transactions.length} />}
 
         {isLoading && <ListSkeleton rows={4} showCards />}

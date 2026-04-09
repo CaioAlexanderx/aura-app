@@ -15,6 +15,9 @@ import { toast } from "@/components/Toast";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { RetentionCard } from "@/components/RetentionCard";
+import { ReviewsList } from "@/components/ReviewsList";
+import { ServerImport } from "@/components/ServerImport";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -77,13 +80,21 @@ export default function ClientesScreen() {
         <View style={s.card}><Text style={s.cardLabel}>FATURAMENTO TOTAL</Text><Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text></View>
       </View>
 
+      {/* Fase 5: Retention card on overview */}
+      {tab === 0 && !planBlocked && !isDemo && <RetentionCard />}
+
       {showAdd && <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
         {TABS.map((t, i) => <Pressable key={t} onPress={() => handleTabSelect(i)} style={[s.tab, tab === i && s.tabActive]}><Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text></Pressable>)}
       </ScrollView>
 
-      {tab === 0 && !planBlocked && <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={customers.length} />}
+      {tab === 0 && !planBlocked && (
+        <View style={s.importRow}>
+          <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={customers.length} />
+          <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers", company?.id] })} />
+        </View>
+      )}
 
       {tab === 0 && (
         <View>
@@ -97,6 +108,8 @@ export default function ClientesScreen() {
 
       {tab === 1 && <RankingTab customers={customers} />}
       {tab === 2 && <RetentionTab />}
+      {/* Fase 5: Reviews tab */}
+      {tab === 3 && <ReviewsList />}
 
       <ConfirmDialog visible={!!deleteTarget} title="Excluir cliente?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
@@ -121,6 +134,7 @@ const s = StyleSheet.create({
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   tabTextActive: { color: "#fff", fontWeight: "600" },
+  importRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 16 },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },

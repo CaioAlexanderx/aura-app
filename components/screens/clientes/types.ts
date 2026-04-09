@@ -13,7 +13,7 @@ export type Customer = {
   rating: number | null;
 };
 
-export const TABS = ["Clientes", "Ranking", "Retencao"];
+export const TABS = ["Clientes", "Ranking", "Retencao", "Avaliacoes"];
 
 export const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
