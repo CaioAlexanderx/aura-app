@@ -12,6 +12,7 @@ import { CNAE_PROFILES } from "@/constants/obligations";
 import { router } from "expo-router";
 import { maskCNPJ, maskPhone } from "@/utils/masks";
 import { companiesApi } from "@/services/api";
+import { MembersSection } from "@/components/MembersSection";
 
 const PLANS = [
   { key: "essencial", label: "Essencial", price: "R$ 89/mes", desc: "Para comecar" },
@@ -91,7 +92,6 @@ export default function ConfiguracoesScreen() {
   const [cnpjFound, setCnpjFound] = useState<string | null>(null);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
 
-  // Hydrate from backend on mount
   useEffect(() => {
     if (!company?.id || isDemo) return;
     companiesApi.getProfile(company.id).then((p: any) => {
@@ -103,11 +103,8 @@ export default function ConfiguracoesScreen() {
     }).catch(() => {});
   }, [company?.id]);
 
-  useEffect(() => {
-    saveConfig({ companyName, cnpj, email, phone, address });
-  }, [companyName, cnpj, email, phone, address]);
+  useEffect(() => { saveConfig({ companyName, cnpj, email, phone, address }); }, [companyName, cnpj, email, phone, address]);
 
-  // CNPJ lookup — auto-fill legal data
   async function lookupCNPJ(formatted: string) {
     const nums = formatted.replace(/\D/g, "");
     if (nums.length !== 14) return;
@@ -123,17 +120,10 @@ export default function ConfiguracoesScreen() {
       const data = await res.json();
       const razao = data.razao_social || data.nome_fantasia || "";
       setCnpjFound(razao);
-
-      // Auto-fill fields from BrasilAPI
       if (razao && !companyName) setCompanyName(razao);
-      if (data.ddd_telefone_1 && !phone) {
-        setPhone(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`));
-      }
+      if (data.ddd_telefone_1 && !phone) setPhone(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`));
       if (data.email && !email) setEmail(data.email.toLowerCase());
-      if (data.logradouro && !address) {
-        const parts = [data.logradouro, data.numero, data.bairro, data.municipio, data.uf].filter(Boolean);
-        setAddress(parts.join(", "));
-      }
+      if (data.logradouro && !address) { const parts = [data.logradouro, data.numero, data.bairro, data.municipio, data.uf].filter(Boolean); setAddress(parts.join(", ")); }
       toast.success(`CNPJ validado: ${razao}`);
     } catch (err: any) {
       if (err?.name === "AbortError") setCnpjError("Timeout - tente novamente");
@@ -141,24 +131,12 @@ export default function ConfiguracoesScreen() {
     } finally { setCnpjLoading(false); }
   }
 
-  function handleCnpjChange(v: string) {
-    const masked = maskCNPJ(v);
-    setCnpj(masked); setCnpjFound(null); setCnpjError(null);
-    if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked);
-  }
+  function handleCnpjChange(v: string) { const masked = maskCNPJ(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked); }
 
   function handleLogoUpload() {
     if (Platform.OS === "web") {
-      const input = document.createElement("input");
-      input.type = "file"; input.accept = "image/png,image/jpeg,image/webp";
-      input.onchange = (e: any) => {
-        const file = e.target?.files?.[0];
-        if (!file) return;
-        if (file.size > 2 * 1024 * 1024) { toast.error("Arquivo muito grande - max 2MB"); return; }
-        const reader = new FileReader();
-        reader.onload = () => { setCompanyLogo(reader.result as string); toast.success("Logo atualizada"); };
-        reader.readAsDataURL(file);
-      };
+      const input = document.createElement("input"); input.type = "file"; input.accept = "image/png,image/jpeg,image/webp";
+      input.onchange = (e: any) => { const file = e.target?.files?.[0]; if (!file) return; if (file.size > 2 * 1024 * 1024) { toast.error("Arquivo muito grande - max 2MB"); return; } const reader = new FileReader(); reader.onload = () => { setCompanyLogo(reader.result as string); toast.success("Logo atualizada"); }; reader.readAsDataURL(file); };
       input.click();
     }
   }
@@ -167,15 +145,11 @@ export default function ConfiguracoesScreen() {
     saveConfig({ companyName, cnpj, email, phone, address });
     if (company?.id && !isDemo) {
       setSaving(true);
-      try {
-        await companiesApi.updateProfile(company.id, { trade_name: companyName, cnpj, email, phone, address });
-        toast.success("Perfil salvo no servidor");
-      } catch (err: any) {
-        toast.error(err.message || "Erro ao salvar — salvo localmente");
-      } finally { setSaving(false); }
+      try { await companiesApi.updateProfile(company.id, { trade_name: companyName, cnpj, email, phone, address }); toast.success("Perfil salvo no servidor"); }
+      catch (err: any) { toast.error(err.message || "Erro ao salvar — salvo localmente"); }
+      finally { setSaving(false); }
     } else { toast.success("Alteracoes salvas localmente"); }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
   const currentPlan = company?.plan || "essencial";
@@ -191,11 +165,7 @@ export default function ConfiguracoesScreen() {
           <Pressable onPress={handleLogoUpload} style={z.logoUpload}>
             {companyLogo ? <Image source={{ uri: companyLogo }} style={z.logoImg} resizeMode="contain" /> : <View style={z.logoPlaceholder}><Icon name="user_plus" size={24} color={Colors.ink3} /><Text style={z.logoPlaceholderText}>Enviar logo</Text></View>}
           </Pressable>
-          <View style={z.logoInfo}>
-            <Text style={z.logoHint}>PNG, JPG ou WebP. Max 2MB.</Text>
-            <Text style={z.logoHint}>Usada no dashboard, sidebar e holerite.</Text>
-            {companyLogo && <Pressable onPress={() => { setCompanyLogo(""); toast.info("Logo removida"); }} style={z.logoRemove}><Text style={z.logoRemoveText}>Remover logo</Text></Pressable>}
-          </View>
+          <View style={z.logoInfo}><Text style={z.logoHint}>PNG, JPG ou WebP. Max 2MB.</Text><Text style={z.logoHint}>Usada no dashboard, sidebar e holerite.</Text>{companyLogo && <Pressable onPress={() => { setCompanyLogo(""); toast.info("Logo removida"); }} style={z.logoRemove}><Text style={z.logoRemoveText}>Remover logo</Text></Pressable>}</View>
         </View>
       </Section>
 
@@ -235,6 +205,12 @@ export default function ConfiguracoesScreen() {
           <Pressable onPress={() => router.push("/(tabs)/planos")} style={z.plansBtn}><Text style={z.plansBtnText}>Ver todos os planos e precos</Text></Pressable>
         </View>
       </Section>
+
+      {/* Fase 6: Members / Equipe */}
+      <View style={{ marginBottom: 24 }}>
+        <Text style={sec.title}>Equipe</Text>
+        <MembersSection />
+      </View>
 
       <Section title="Conta">
         <Field label="Nome" value={user?.name || ""} editable={false} />
