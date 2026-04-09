@@ -12,6 +12,7 @@ import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
+import { PrintLabels } from "@/components/PrintLabels";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, PRODUCT_COLUMNS, mapImportedProduct } from "@/utils/csv";
@@ -42,6 +43,7 @@ export default function EstoqueScreen() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [labelSelection, setLabelSelection] = useState<string[]>([]);
 
   const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...categories, ...products.map(p => p.category)]));
   const filterCategories = ["Todos", ...allCategories.filter(Boolean)];
@@ -54,7 +56,6 @@ export default function EstoqueScreen() {
   const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
 
-  // FE-EDIT-PRODUCT-01: Handle add vs edit
   function handleSaveProduct(product: Product) {
     if (editProduct) {
       updateProduct(product);
@@ -142,6 +143,8 @@ export default function EstoqueScreen() {
       {activeTab === 1 && <View><View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View><AbcSummary products={products} /><View style={[s.listCard, { marginTop: 20 }]}><Text style={s.listTitle}>Todos por classificacao</Text>{[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} onEdit={!isDemo ? handleEdit : undefined} />)}</View></View>}
 
       {activeTab === 2 && <AlertsList products={products} />}
+
+      {activeTab === 3 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
