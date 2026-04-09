@@ -16,8 +16,7 @@ export type Product = {
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];
-// A4: No default categories — user creates their own
 export const DEFAULT_CATEGORIES: string[] = [];
-export const TABS = ["Produtos", "Curva ABC", "Alertas"];
+export const TABS = ["Produtos", "Curva ABC", "Alertas", "Etiquetas"];
 
 export const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
