@@ -77,7 +77,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   throw lastError || new ApiError("Erro de conexao. Verifique sua internet.", 0, null, true);
 }
 
-// ── Types ───────────────────────────────────────────────────
+// Types
 export type LoginResponse = {
   token: string;
   user: { id: string; name: string; email: string; role: string; is_staff?: boolean; email_verified?: boolean };
@@ -88,7 +88,7 @@ export type RegisterBody = { name: string; email: string; password: string; comp
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string };
 
-// ── Auth API ────────────────────────────────────────────────
+// Auth API
 export const authApi = {
   login: (email: string, password: string) => request<LoginResponse>("/auth/login", { method: "POST", body: { email, password }, retry: 1 }),
   register: (body: RegisterBody) => request<LoginResponse>("/auth/register", { method: "POST", body, retry: 1 }),
@@ -102,34 +102,30 @@ export const authApi = {
   verifyPhone: (code: string) => request<VerificationResponse>("/auth/verify-phone", { method: "POST", body: { code }, retry: 0 }),
 };
 
-// ── Invite API (publica — sem company ID) ────────────────────
+// Invite API (publica - sem company ID)
 export type InviteDetails = {
-  company_name: string;
-  role: string;
-  email: string;        // email completo (para pre-fill no cadastro)
+  company_name: string; role: string;
+  email: string;        // email completo para pre-fill
   masked_email: string; // ex: jo***@empresa.com
   status: string;
 };
 export const inviteApi = {
-  // Endpoint publico: nao envia token de auth
   validate: (inviteToken: string) =>
     request<InviteDetails>(`/invite/${inviteToken}`, { token: null, retry: 1 }),
-  // Aceitar convite: requer auth, mas NAO requer company access
   accept: (inviteToken: string) =>
     request<{ accepted: boolean; company_id: string; role: string; message: string }>(
-      `/invite/${inviteToken}/accept`,
-      { method: "POST", retry: 0 }
+      `/invite/${inviteToken}/accept`, { method: "POST", retry: 0 }
     ),
 };
 
-// ── Dashboard API ───────────────────────────────────────────
+// Dashboard API
 export const dashboardApi = {
   aggregate: (companyId: string, token?: string) => request<any>(`/companies/${companyId}/dashboard`, { token }),
   summary: (companyId: string, token?: string) => request<any>(`/companies/${companyId}/withdrawal/summary`, { token }),
   sparkline: (companyId: string, days?: number, token?: string) => request<any>(`/companies/${companyId}/dashboard/sparkline?days=${days || 7}`, { token }),
 };
 
-// ── Companies API ───────────────────────────────────────────
+// Companies API
 export const companiesApi = {
   get: (companyId: string) => request<any>(`/companies/${companyId}`),
   getProfile: (companyId: string) => request<any>(`/companies/${companyId}/profile`),
@@ -156,7 +152,12 @@ export const companiesApi = {
   reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? "?rating=" + rating : ""}`),
   requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
   members: (companyId: string) => request<any>(`/companies/${companyId}/members`),
-  inviteMember: (companyId: string, body: { email: string; role_label?: string }) => request<any>(`/companies/${companyId}/members/invite`, { method: "POST", body }),
+  // FIX: frontend usa { email }, backend espera { invite_email } — remapeia aqui
+  inviteMember: (companyId: string, body: { email: string; role_label?: string }) =>
+    request<any>(`/companies/${companyId}/members/invite`, {
+      method: "POST",
+      body: { invite_email: body.email, role_label: body.role_label },
+    }),
   updateMember: (companyId: string, mid: string, body: any) => request<any>(`/companies/${companyId}/members/${mid}`, { method: "PATCH", body }),
   removeMember: (companyId: string, mid: string) => request<any>(`/companies/${companyId}/members/${mid}`, { method: "DELETE" }),
   membersBilling: (companyId: string) => request<any>(`/companies/${companyId}/members/billing`),
@@ -174,10 +175,10 @@ export const companiesApi = {
   productsCategories: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/products/categories?period=${period || "month"}`),
 };
 
-// ── CNPJ API ────────────────────────────────────────────────
+// CNPJ API
 export const cnpjApi = { lookup: (cnpj: string) => request<any>("/onboarding/cnpj-lookup", { method: "POST", body: { cnpj }, retry: 1 }) };
 
-// ── Onboarding API ──────────────────────────────────────────
+// Onboarding API
 export const onboardingApi = {
   get: (companyId: string) => request<any>(`/companies/${companyId}/onboarding`),
   stepCnpj: (companyId: string, cnpj: string) => request<any>(`/companies/${companyId}/onboarding/step/cnpj`, { method: "POST", body: { cnpj } }),
@@ -185,16 +186,16 @@ export const onboardingApi = {
   stepPerfil: (companyId: string, body: any) => request<any>(`/companies/${companyId}/onboarding/step/perfil`, { method: "POST", body }),
 };
 
-// ── Referrals API ───────────────────────────────────────────
+// Referrals API
 export const referralsApi = {
   generate: () => request<{ code: string; existing: boolean }>("/referrals/generate", { method: "POST" }),
   mine: () => request<any>("/referrals/mine"),
 };
 
-// ── PDV / Sales API ─────────────────────────────────────────
+// PDV / Sales API
 export const pdvApi = { createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sales`, { method: "POST", body }) };
 
-// ── Employees API ───────────────────────────────────────────
+// Employees API
 export const employeesApi = {
   list: (companyId: string, includeInactive?: boolean) => request<{ total: number; employees: any[] }>(`/companies/${companyId}/employees${includeInactive ? "?include_inactive=true" : ""}`),
   create: (companyId: string, body: any) => request<any>(`/companies/${companyId}/employees`, { method: "POST", body }),
@@ -202,7 +203,7 @@ export const employeesApi = {
   remove: (companyId: string, eid: string) => request<any>(`/companies/${companyId}/employees/${eid}`, { method: "DELETE" }),
 };
 
-// ── Billing API ─────────────────────────────────────────────
+// Billing API
 export type SubscribeResponse = { subscription_id?: string; payment_id?: string; plan: string; cycle: string; value: number; billing_type: string; next_due_date?: string; pix_qr_code?: string | null; pix_copy_paste?: string | null; pix_expiration?: string | null };
 export const billingApi = {
   status: (companyId: string) => request<any>(`/companies/${companyId}/billing/status`),
@@ -214,7 +215,7 @@ export const billingApi = {
   plans: () => request<any>(`/billing/plans`),
 };
 
-// ── Admin API ───────────────────────────────────────────────
+// Admin API
 export const adminApi = {
   dashboard: () => request<any>("/admin/dashboard"),
   clients: () => request<any>("/admin/clients"),
@@ -222,7 +223,7 @@ export const adminApi = {
   updateModules: (companyId: string, overrides: Record<string, boolean>) => request<any>(`/admin/clients/${companyId}/modules`, { method: "PUT", body: { overrides } }),
 };
 
-// ── AI / Agentes API ─────────────────────────────────────────
+// AI / Agentes API
 export const aiApi = {
   chat: (companyId: string, message: string, context?: string, history?: any[]) =>
     request<any>(`/companies/${companyId}/ai/chat`, { method: "POST", body: { message, context: context || "geral", history: history || [] }, timeout: 30000 }),
