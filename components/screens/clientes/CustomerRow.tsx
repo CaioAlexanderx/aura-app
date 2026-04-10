@@ -20,12 +20,15 @@ function Stars({ r }: { r: number | null }) {
 
 export function CustomerRow({
   c, expanded, onToggle, onDelete, onEdit,
+  isSelected, onSelect,
 }: {
   c: Customer;
   expanded: boolean;
   onToggle: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (c: Customer) => void;
+  isSelected?: boolean;
+  onSelect?: (id: string) => void;
 }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
@@ -33,18 +36,33 @@ export function CustomerRow({
 
   return (
     <View>
-      <Pressable onPress={onToggle} onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
-        style={[s.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]}>
+      <Pressable
+        onPress={() => onSelect ? onSelect(c.id) : onToggle()}
+        onHoverIn={w ? () => sH(true) : undefined}
+        onHoverOut={w ? () => sH(false) : undefined}
+        style={[s.row, h && { backgroundColor: Colors.bg4 }, isSelected && { backgroundColor: Colors.violetD }, w && { transition: "background-color 0.15s ease" } as any]}
+      >
+        {/* Checkbox bulk select */}
+        {onSelect && (
+          <View style={[s.checkbox, isSelected && s.checkboxSelected]}>
+            {isSelected && <Text style={s.checkmark}>✓</Text>}
+          </View>
+        )}
         <View style={s.left}>
           <View style={s.avatar}><Text style={s.avatarText}>{c.name.charAt(0)}</Text></View>
-          <View style={{ flex: 1 }}><Text style={s.name}>{c.name}</Text><Text style={s.meta}>{c.phone}{c.instagram ? " / " + c.instagram : ""}</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.name}>{c.name}</Text>
+            <Text style={s.meta}>{c.phone}{c.instagram ? " / " + c.instagram : ""}</Text>
+          </View>
         </View>
-        <View style={{ alignItems: "flex-end", gap: 4 }}>
-          <Text style={s.spent}>{fmt(c.totalSpent)}</Text>
-          <View style={{ flexDirection: "row", gap: 4 }}>{tags.slice(0, 2).map(t => <Tag key={t} tag={t} />)}</View>
-        </View>
+        {!onSelect && (
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <Text style={s.spent}>{fmt(c.totalSpent)}</Text>
+            <View style={{ flexDirection: "row", gap: 4 }}>{tags.slice(0, 2).map(t => <Tag key={t} tag={t} />)}</View>
+          </View>
+        )}
       </Pressable>
-      {expanded && (
+      {expanded && !onSelect && (
         <View style={s.detail}>
           <View style={s.detailGrid}>
             {[["E-mail", c.email], ["Telefone", c.phone], ["Aniversario", c.birthday], ["Instagram", c.instagram || "---"], ["Primeira visita", c.firstVisit], ["Ultima compra", c.lastPurchase], ["Total gasto", fmt(c.totalSpent)], ["Visitas", String(c.visits)]].map(([l, v]) =>
@@ -58,16 +76,8 @@ export function CustomerRow({
             {["Enviar WhatsApp", "Pedir avaliacao", "Ver historico"].map(a =>
               <Pressable key={a} style={s.actionBtn}><Text style={s.actionText}>{a}</Text></Pressable>
             )}
-            {onEdit && (
-              <Pressable onPress={() => onEdit(c)} style={s.editBtn}>
-                <Text style={s.editText}>Editar cliente</Text>
-              </Pressable>
-            )}
-            {onDelete && (
-              <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}>
-                <Text style={s.deleteText}>Excluir cliente</Text>
-              </Pressable>
-            )}
+            {onEdit && <Pressable onPress={() => onEdit(c)} style={s.editBtn}><Text style={s.editText}>Editar cliente</Text></Pressable>}
+            {onDelete && <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}><Text style={s.deleteText}>Excluir cliente</Text></Pressable>}
           </View>
         </View>
       )}
@@ -76,6 +86,9 @@ export function CustomerRow({
 }
 
 const s = StyleSheet.create({
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, marginRight: 8, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4 },
+  checkboxSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  checkmark: { fontSize: 13, color: "#fff", fontWeight: "700", lineHeight: 16 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
   left: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
