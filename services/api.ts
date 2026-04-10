@@ -152,8 +152,8 @@ export const companiesApi = {
   reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? "?rating=" + rating : ""}`),
   requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
   members: (companyId: string) => request<any>(`/companies/${companyId}/members`),
-   // API de convite pode variar entre ambientes (email vs invite_email, role vs role_label).
-  // Mantem fallback para evitar erro 400 quando o backend usa um contrato diferente.
+  // API de convite pode variar entre ambientes (email vs invite_email, role vs role_label)
+  // e alguns backends validam rigidamente chaves extras/valores de role.
   inviteMember: async (companyId: string, body: { email: string; role_label?: string }) => {
     const normalizedRole = (body.role_label || "")
       .normalize("NFD")
@@ -162,8 +162,12 @@ export const companiesApi = {
       .toLowerCase();
 
     const payloads = [
-      { invite_email: body.email, role_label: body.role_label, role: normalizedRole },
-      { email: body.email, role_label: body.role_label, role: normalizedRole },
+      // Tentativas minimalistas primeiro (evita 400 por role inválida)
+      { invite_email: body.email },
+      { email: body.email },
+      // Em seguida, variações com role normalizada
+      { invite_email: body.email, role_label: normalizedRole },
+      { email: body.email, role_label: normalizedRole },
       { invite_email: body.email, role: normalizedRole },
       { email: body.email, role: normalizedRole },
     ];
