@@ -102,6 +102,26 @@ export const authApi = {
   verifyPhone: (code: string) => request<VerificationResponse>("/auth/verify-phone", { method: "POST", body: { code }, retry: 0 }),
 };
 
+// ── Invite API (publica — sem company ID) ────────────────────
+export type InviteDetails = {
+  company_name: string;
+  role: string;
+  email: string;        // email completo (para pre-fill no cadastro)
+  masked_email: string; // ex: jo***@empresa.com
+  status: string;
+};
+export const inviteApi = {
+  // Endpoint publico: nao envia token de auth
+  validate: (inviteToken: string) =>
+    request<InviteDetails>(`/invite/${inviteToken}`, { token: null, retry: 1 }),
+  // Aceitar convite: requer auth, mas NAO requer company access
+  accept: (inviteToken: string) =>
+    request<{ accepted: boolean; company_id: string; role: string; message: string }>(
+      `/invite/${inviteToken}/accept`,
+      { method: "POST", retry: 0 }
+    ),
+};
+
 // ── Dashboard API ───────────────────────────────────────────
 export const dashboardApi = {
   aggregate: (companyId: string, token?: string) => request<any>(`/companies/${companyId}/dashboard`, { token }),
@@ -114,14 +134,12 @@ export const companiesApi = {
   get: (companyId: string) => request<any>(`/companies/${companyId}`),
   getProfile: (companyId: string) => request<any>(`/companies/${companyId}/profile`),
   updateProfile: (companyId: string, body: any) => request<any>(`/companies/${companyId}/profile`, { method: "PUT", body }),
-  // Transactions
   transactions: (companyId: string, params?: string) => request<any>(`/companies/${companyId}/transactions${params ? "?" + params : ""}`),
   createTransaction: (companyId: string, body: any) => request<any>(`/companies/${companyId}/transactions`, { method: "POST", body }),
   updateTransaction: (companyId: string, txId: string, body: any) => request<any>(`/companies/${companyId}/transactions/${txId}`, { method: "PATCH", body }),
   deleteTransaction: (companyId: string, txId: string) => request<any>(`/companies/${companyId}/transactions/${txId}`, { method: "DELETE" }),
   categorize: (companyId: string, descriptions: string[]) => request<any>(`/companies/${companyId}/transactions/categorize`, { method: "POST", body: { descriptions }, timeout: 15000 }),
   categorizeTransaction: (companyId: string, txId: string, apply = false) => request<any>(`/companies/${companyId}/transactions/${txId}/categorize`, { method: "POST", body: { apply }, timeout: 15000 }),
-  // Products
   products: (companyId: string) => request<any>(`/companies/${companyId}/products`),
   createProduct: (companyId: string, body: any) => request<any>(`/companies/${companyId}/products`, { method: "POST", body }),
   updateProduct: (companyId: string, prodId: string, body: any) => request<any>(`/companies/${companyId}/products/${prodId}`, { method: "PATCH", body }),
@@ -130,35 +148,30 @@ export const companiesApi = {
   createVariant: (companyId: string, productId: string, body: any) => request<any>(`/companies/${companyId}/products/${productId}/variants`, { method: "POST", body }),
   updateVariant: (companyId: string, productId: string, variantId: string, body: any) => request<any>(`/companies/${companyId}/products/${productId}/variants/${variantId}`, { method: "PATCH", body }),
   deleteVariant: (companyId: string, productId: string, variantId: string) => request<any>(`/companies/${companyId}/products/${productId}/variants/${variantId}`, { method: "DELETE" }),
-  // Customers
   customers: (companyId: string) => request<any>(`/companies/${companyId}/customers`),
   createCustomer: (companyId: string, body: any) => request<any>(`/companies/${companyId}/customers`, { method: "POST", body }),
   updateCustomer: (companyId: string, custId: string, body: any) => request<any>(`/companies/${companyId}/customers/${custId}`, { method: "PATCH", body }),
   deleteCustomer: (companyId: string, custId: string) => request<any>(`/companies/${companyId}/customers/${custId}`, { method: "DELETE" }),
-  retention: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/customers/retention?period=${period || 'month'}`),
-  reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? '?rating=' + rating : ''}`),
+  retention: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/customers/retention?period=${period || "month"}`),
+  reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? "?rating=" + rating : ""}`),
   requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
-  // Fase 6: Members
   members: (companyId: string) => request<any>(`/companies/${companyId}/members`),
   inviteMember: (companyId: string, body: { email: string; role_label?: string }) => request<any>(`/companies/${companyId}/members/invite`, { method: "POST", body }),
   updateMember: (companyId: string, mid: string, body: any) => request<any>(`/companies/${companyId}/members/${mid}`, { method: "PATCH", body }),
   removeMember: (companyId: string, mid: string) => request<any>(`/companies/${companyId}/members/${mid}`, { method: "DELETE" }),
   membersBilling: (companyId: string) => request<any>(`/companies/${companyId}/members/billing`),
-  // Fase 6: Appointments
-  appointments: (companyId: string, start?: string, end?: string) => request<any>(`/companies/${companyId}/appointments?start=${start || ''}&end=${end || ''}`),
+  appointments: (companyId: string, start?: string, end?: string) => request<any>(`/companies/${companyId}/appointments?start=${start || ""}&end=${end || ""}`),
   createAppointment: (companyId: string, body: any) => request<any>(`/companies/${companyId}/appointments`, { method: "POST", body }),
   updateAppointment: (companyId: string, aid: string, body: any) => request<any>(`/companies/${companyId}/appointments/${aid}`, { method: "PATCH", body }),
   cancelAppointment: (companyId: string, aid: string) => request<any>(`/companies/${companyId}/appointments/${aid}`, { method: "DELETE" }),
-  // Accounting
   obligations: (companyId: string) => request<any>(`/companies/${companyId}/obligations`),
   payroll: (companyId: string, body: any) => request<any>(`/companies/${companyId}/payroll/calculate`, { method: "POST", body }),
   dre: (companyId: string, params?: string) => request<any>(`/companies/${companyId}/dre${params ? "?" + params : ""}`),
   checklist: (companyId: string) => request<any>(`/companies/${companyId}/checklist`),
   completeCheckpoint: (companyId: string, checkpointId: string) => request<any>(`/companies/${companyId}/checklist/${checkpointId}/complete`, { method: "POST" }),
-  // Analytics
-  salesAnalytics: (companyId: string, period?: string, groupBy?: string) => request<any>(`/companies/${companyId}/sales/analytics?period=${period || 'month'}&group_by=${groupBy || 'day'}`),
-  productsRanking: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/products/ranking?period=${period || 'month'}`),
-  productsCategories: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/products/categories?period=${period || 'month'}`),
+  salesAnalytics: (companyId: string, period?: string, groupBy?: string) => request<any>(`/companies/${companyId}/sales/analytics?period=${period || "month"}&group_by=${groupBy || "day"}`),
+  productsRanking: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/products/ranking?period=${period || "month"}`),
+  productsCategories: (companyId: string, period?: string) => request<any>(`/companies/${companyId}/products/categories?period=${period || "month"}`),
 };
 
 // ── CNPJ API ────────────────────────────────────────────────
