@@ -4,7 +4,7 @@ import { Icon } from "@/components/Icon";
 
 type Props = {
   onExport: () => void;
-  onImport: () => void;
+  onImport?: () => void;
   exportLabel?: string;
   importLabel?: string;
   itemCount?: number;
@@ -18,10 +18,12 @@ export function ImportExportBar({ onExport, onImport, exportLabel, importLabel, 
         <Icon name="trending_up" size={14} color={Colors.green} />
         <Text style={s.exportText}>{exportLabel || "Exportar CSV"}{itemCount != null ? ` (${itemCount})` : ""}</Text>
       </Pressable>
-      <Pressable onPress={onImport} style={[s.btn, s.importBtn]}>
-        <Icon name="trending_down" size={14} color={Colors.violet3} />
-        <Text style={s.importText}>{importLabel || "Importar CSV"}</Text>
-      </Pressable>
+      {onImport && (
+        <Pressable onPress={onImport} style={[s.btn, s.importBtn]}>
+          <Icon name="trending_down" size={14} color={Colors.violet3} />
+          <Text style={s.importText}>{importLabel || "Importar CSV"}</Text>
+        </Pressable>
+      )}
       {!isWeb && <Text style={s.hint}>Disponivel na versao web</Text>}
     </View>
   );

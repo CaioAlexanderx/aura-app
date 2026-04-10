@@ -10,9 +10,8 @@ import { RankingTab } from "@/components/screens/clientes/RankingTab";
 import { RetentionTab } from "@/components/screens/clientes/RetentionTab";
 import { TABS, fmt } from "@/components/screens/clientes/types";
 import type { Customer } from "@/components/screens/clientes/types";
-import { arrayToCSV, downloadCSV, pickFileAndParse, CUSTOMER_COLUMNS, mapImportedCustomer } from "@/utils/csv";
+import { arrayToCSV, downloadCSV, CUSTOMER_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
-import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { RetentionCard } from "@/components/RetentionCard";
@@ -22,7 +21,7 @@ import { ServerImport } from "@/components/ServerImport";
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
 export default function ClientesScreen() {
-  const { customers, isLoading, isDemo, planBlocked, addCustomer, deleteCustomer } = useCustomers();
+  const { customers, isLoading, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer } = useCustomers();
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
@@ -30,6 +29,7 @@ export default function ClientesScreen() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editTarget, setEditTarget] = useState<Customer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const filtered = customers.filter(c => {
@@ -40,79 +40,118 @@ export default function ClientesScreen() {
   const totalLtv = customers.reduce((s, c) => s + c.totalSpent, 0);
 
   function handleAdd(c: Customer) { addCustomer(c); setShowAdd(false); }
+
+  function handleEdit(c: Customer) {
+    updateCustomer(c.id, c);
+    setEditTarget(null);
+  }
+
   function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
   function handleExport() {
     if (customers.length === 0) { toast.error("Nenhum cliente para exportar"); return; }
     const csv = arrayToCSV(customers, CUSTOMER_COLUMNS);
-    downloadCSV(csv, `aura_clientes_${new Date().toISOString().slice(0,10)}.csv`);
-  }
-
-  async function handleImport() {
-    try {
-      const rows = await pickFileAndParse();
-      let imported = 0, skipped = 0;
-      for (const row of rows) {
-        const mapped = mapImportedCustomer(row);
-        if (mapped && company?.id) {
-          try { await companiesApi.createCustomer(company.id, mapped); imported++; }
-          catch { skipped++; }
-        } else { skipped++; }
-      }
-      if (imported > 0) {
-        qc.invalidateQueries({ queryKey: ["customers", company?.id] });
-        toast.success(`${imported} clientes importados${skipped > 0 ? ` (${skipped} ignorados)` : ""}`);
-      } else { toast.error("Nenhum cliente valido encontrado. Verifique a coluna: Nome"); }
-    } catch {}
+    downloadCSV(csv, `aura_clientes_${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
       <View style={s.headerRow}>
         <Text style={s.pageTitle}>Clientes</Text>
-        <Pressable onPress={() => { setShowAdd(true); setTab(0); }} style={s.addBtn}><Text style={s.addBtnText}>+ Adicionar cliente</Text></Pressable>
+        <Pressable onPress={() => { setShowAdd(true); setEditTarget(null); setTab(0); }} style={s.addBtn}>
+          <Text style={s.addBtnText}>+ Adicionar cliente</Text>
+        </Pressable>
       </View>
 
-      {planBlocked && <View style={s.planBlock}><Text style={s.planBlockText}>Clientes disponivel a partir do plano Negocio. Faca upgrade em Configuracoes {'>'} Meu plano.</Text></View>}
+      {planBlocked && (
+        <View style={s.planBlock}>
+          <Text style={s.planBlockText}>Clientes disponivel a partir do plano Negocio. Faca upgrade em Configuracoes {'>'} Meu plano.</Text>
+        </View>
+      )}
 
       <View style={s.summaryRow}>
         <View style={s.card}><Text style={s.cardLabel}>TOTAL CLIENTES</Text><Text style={s.cardValue}>{customers.length}</Text></View>
         <View style={s.card}><Text style={s.cardLabel}>FATURAMENTO TOTAL</Text><Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text></View>
       </View>
 
-      {/* Fase 5: Retention card on overview */}
       {tab === 0 && !planBlocked && !isDemo && <RetentionCard />}
 
-      {showAdd && <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />}
+      {/* Formulario de adicionar (showAdd) */}
+      {showAdd && !editTarget && (
+        <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />
+      )}
+
+      {/* Formulario de editar (editTarget) */}
+      {editTarget && (
+        <AddCustomerForm
+          initialData={editTarget}
+          onSave={handleEdit}
+          onCancel={() => setEditTarget(null)}
+        />
+      )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-        {TABS.map((t, i) => <Pressable key={t} onPress={() => handleTabSelect(i)} style={[s.tab, tab === i && s.tabActive]}><Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text></Pressable>)}
+        {TABS.map((t, i) => (
+          <Pressable key={t} onPress={() => handleTabSelect(i)} style={[s.tab, tab === i && s.tabActive]}>
+            <Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text>
+          </Pressable>
+        ))}
       </ScrollView>
 
       {tab === 0 && !planBlocked && (
         <View style={s.importRow}>
-          <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={customers.length} />
+          {/* Export only — import e feito via ServerImport abaixo */}
+          <ImportExportBar onExport={handleExport} itemCount={customers.length} />
           <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers", company?.id] })} />
         </View>
       )}
 
       {tab === 0 && (
         <View>
-          <TextInput style={s.searchInput} placeholder="Buscar por nome, telefone, email ou Instagram..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Buscar por nome, telefone, email ou Instagram..."
+            placeholderTextColor={Colors.ink3}
+            value={search}
+            onChangeText={setSearch}
+          />
           <View style={s.listCard}>
-            {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum cliente cadastrado</Text>{!planBlocked && <Pressable onPress={handleImport}><Text style={{ fontSize: 12, color: Colors.violet3, fontWeight: "600" }}>Importar de planilha</Text></Pressable>}</View>}
-            {filtered.map(c => <CustomerRow key={c.id} c={c} expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)} onDelete={(id) => setDeleteTarget(id)} />)}
+            {filtered.length === 0 && (
+              <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
+                <Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum cliente cadastrado</Text>
+              </View>
+            )}
+            {filtered.map(c => (
+              <CustomerRow
+                key={c.id}
+                c={c}
+                expanded={expandedId === c.id}
+                onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                onEdit={(customer) => { setEditTarget(customer); setShowAdd(false); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+                onDelete={(id) => setDeleteTarget(id)}
+              />
+            ))}
           </View>
         </View>
       )}
 
       {tab === 1 && <RankingTab customers={customers} />}
       {tab === 2 && <RetentionTab />}
-      {/* Fase 5: Reviews tab */}
       {tab === 3 && <ReviewsList />}
 
-      <ConfirmDialog visible={!!deleteTarget} title="Excluir cliente?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
-      {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
+      <ConfirmDialog
+        visible={!!deleteTarget}
+        title="Excluir cliente?"
+        message="Esta acao nao pode ser desfeita."
+        confirmLabel="Excluir"
+        destructive
+        onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {isDemo && (
+        <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>
+      )}
     </ScrollView>
   );
 }

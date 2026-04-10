@@ -15,8 +15,10 @@ type Props = {
 export function ConfirmDialog({ visible, title, message, confirmLabel = "Confirmar", cancelLabel = "Cancelar", destructive = true, onConfirm, onCancel }: Props) {
   if (!visible) return null;
   const isWeb = Platform.OS === "web";
+  // Use fixed on web so the dialog stays in the viewport regardless of scroll position
+  const overlayPosition = isWeb ? "fixed" : "absolute";
   return (
-    <View style={s.overlay}>
+    <View style={[s.overlay, { position: overlayPosition as any }]}>
       <Pressable style={s.backdrop} onPress={onCancel} />
       <View style={[s.dialog, isWeb && { boxShadow: "0 16px 48px rgba(0,0,0,0.4)" } as any]}>
         <View style={s.iconWrap}>
@@ -39,10 +41,9 @@ export function ConfirmDialog({ visible, title, message, confirmLabel = "Confirm
 
 const s = StyleSheet.create({
   overlay: {
-    position: "absolute" as any,
     top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: "center", alignItems: "center",
-    zIndex: 200,
+    zIndex: 9999,
   },
   backdrop: {
     position: "absolute" as any,
@@ -58,7 +59,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border2,
     alignItems: "center",
-    zIndex: 201,
+    zIndex: 10000,
   },
   iconWrap: {
     width: 48, height: 48, borderRadius: 24,

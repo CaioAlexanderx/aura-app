@@ -7,35 +7,49 @@ import { maskPhone, maskDate } from "@/utils/masks";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-// A6: Auto-prepend @ to instagram handle
 function formatInstagram(v: string): string {
   const cleaned = v.replace(/\s/g, "");
   if (cleaned && !cleaned.startsWith("@")) return "@" + cleaned;
   return cleaned;
 }
 
-export function AddCustomerForm({ onSave, onCancel }: { onSave: (c: Customer) => void; onCancel: () => void }) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [instagram, setInstagram] = useState("");
-  const [birthday, setBirthday] = useState("");
-  const [notes, setNotes] = useState("");
+type Props = {
+  onSave: (c: Customer) => void;
+  onCancel: () => void;
+  initialData?: Customer;
+};
+
+export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
+  const isEdit = !!initialData;
+  const [name, setName] = useState(initialData?.name || "");
+  const [phone, setPhone] = useState(initialData?.phone || "");
+  const [email, setEmail] = useState(initialData?.email || "");
+  const [instagram, setInstagram] = useState(initialData?.instagram || "");
+  const [birthday, setBirthday] = useState(initialData?.birthday || "");
+  const [notes, setNotes] = useState(initialData?.notes || "");
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome"); return; }
     onSave({
-      id: Date.now().toString(), name: name.trim(), email: email.trim(), phone: phone.trim(),
-      instagram: instagram.trim(), birthday: birthday.trim(), lastPurchase: "---",
-      totalSpent: 0, visits: 0, firstVisit: new Date().toLocaleDateString("pt-BR"),
-      notes: notes.trim(), rating: null,
+      id: initialData?.id || Date.now().toString(),
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      instagram: instagram.trim(),
+      birthday: birthday.trim(),
+      lastPurchase: initialData?.lastPurchase || "---",
+      totalSpent: initialData?.totalSpent || 0,
+      visits: initialData?.visits || 0,
+      firstVisit: initialData?.firstVisit || new Date().toLocaleDateString("pt-BR"),
+      notes: notes.trim(),
+      rating: initialData?.rating || null,
     });
   }
 
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Text style={s.title}>Adicionar cliente</Text>
+        <Text style={s.title}>{isEdit ? "Editar cliente" : "Adicionar cliente"}</Text>
         <Pressable onPress={onCancel} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
       </View>
       <Text style={s.hint}>Campos com * sao obrigatorios.</Text>
@@ -47,7 +61,6 @@ export function AddCustomerForm({ onSave, onCancel }: { onSave: (c: Customer) =>
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Telefone / WhatsApp</Text>
-          {/* A6: Phone mask */}
           <TextInput style={s.input} value={phone} onChangeText={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
           <View style={{ height: 16 }} />
         </View>
@@ -61,13 +74,11 @@ export function AddCustomerForm({ onSave, onCancel }: { onSave: (c: Customer) =>
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Instagram</Text>
-          {/* A6: Auto-prepend @ */}
           <TextInput style={s.input} value={instagram} onChangeText={v => setInstagram(formatInstagram(v))} placeholder="@usuario" placeholderTextColor={Colors.ink3} autoCapitalize="none" />
           <View style={{ height: 16 }} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Aniversario (DD/MM ou DD/MM/AAAA)</Text>
-          {/* A6: Date mask */}
           <TextInput style={s.input} value={birthday} onChangeText={v => setBirthday(maskDate(v))} placeholder="15/06" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
           <View style={{ height: 16 }} />
         </View>
@@ -78,7 +89,9 @@ export function AddCustomerForm({ onSave, onCancel }: { onSave: (c: Customer) =>
 
       <View style={s.footer}>
         <Pressable onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelText}>Cancelar</Text></Pressable>
-        <Pressable onPress={handleSave} style={s.saveBtn}><Text style={s.saveText}>Salvar cliente</Text></Pressable>
+        <Pressable onPress={handleSave} style={s.saveBtn}>
+          <Text style={s.saveText}>{isEdit ? "Salvar alteracoes" : "Salvar cliente"}</Text>
+        </Pressable>
       </View>
     </View>
   );

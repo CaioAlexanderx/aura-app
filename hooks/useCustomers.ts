@@ -49,7 +49,6 @@ export function useCustomers() {
     staleTime: 30000,
   });
 
-  // CRIT-03: Detect plan gate (403) on list
   const planBlocked = (fetchError as any)?.status === 403;
 
   const customers: Customer[] = useMemo(() => {
@@ -66,13 +65,22 @@ export function useCustomers() {
       toast.success("Cliente cadastrado!");
     },
     onError: (err: any) => {
-      console.error("[useCustomers] addMutation ERROR", err);
-      // CRIT-03: Show specific message for plan gate
       if (err instanceof ApiError && err.status === 403) {
         toast.error("Clientes disponivel a partir do plano Negocio. Faca upgrade em Configuracoes > Meu plano.");
       } else {
         toast.error(err?.message || "Erro ao salvar cliente");
       }
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) => companiesApi.updateCustomer(companyId!, id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers", companyId] });
+      toast.success("Cliente atualizado!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Erro ao atualizar cliente");
     },
   });
 
@@ -104,9 +112,24 @@ export function useCustomers() {
     });
   }
 
+  function updateCustomer(id: string, c: Partial<Customer>) {
+    if (!companyId || isDemo) return;
+    updateMutation.mutate({
+      id,
+      body: {
+        name: c.name,
+        email: c.email || undefined,
+        phone: c.phone || undefined,
+        instagram_handle: c.instagram || undefined,
+        birth_date: c.birthday ? parseBirthday(c.birthday) : undefined,
+        notes: c.notes || undefined,
+      },
+    });
+  }
+
   function deleteCustomer(id: string) {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
-  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, addCustomer, deleteCustomer };
+  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer };
 }

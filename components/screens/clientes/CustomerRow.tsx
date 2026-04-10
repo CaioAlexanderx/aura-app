@@ -18,7 +18,15 @@ function Stars({ r }: { r: number | null }) {
   return <View style={{ flexDirection: "row", gap: 2 }}>{[1, 2, 3, 4, 5].map(i => <Text key={i} style={{ fontSize: 12, color: i <= r ? Colors.amber : Colors.ink3 }}>*</Text>)}</View>;
 }
 
-export function CustomerRow({ c, expanded, onToggle, onDelete }: { c: Customer; expanded: boolean; onToggle: () => void; onDelete?: (id: string) => void }) {
+export function CustomerRow({
+  c, expanded, onToggle, onDelete, onEdit,
+}: {
+  c: Customer;
+  expanded: boolean;
+  onToggle: () => void;
+  onDelete?: (id: string) => void;
+  onEdit?: (c: Customer) => void;
+}) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
   const tags = getStatus(c);
@@ -50,7 +58,16 @@ export function CustomerRow({ c, expanded, onToggle, onDelete }: { c: Customer; 
             {["Enviar WhatsApp", "Pedir avaliacao", "Ver historico"].map(a =>
               <Pressable key={a} style={s.actionBtn}><Text style={s.actionText}>{a}</Text></Pressable>
             )}
-            {onDelete && <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}><Text style={s.deleteText}>Excluir cliente</Text></Pressable>}
+            {onEdit && (
+              <Pressable onPress={() => onEdit(c)} style={s.editBtn}>
+                <Text style={s.editText}>Editar cliente</Text>
+              </Pressable>
+            )}
+            {onDelete && (
+              <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}>
+                <Text style={s.deleteText}>Excluir cliente</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       )}
@@ -77,6 +94,8 @@ const s = StyleSheet.create({
   actions: { flexDirection: "row", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border, flexWrap: "wrap" },
   actionBtn: { backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
   actionText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  editBtn: { backgroundColor: Colors.amberD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.amber + "33" },
+  editText: { fontSize: 11, color: Colors.amber, fontWeight: "600" },
   deleteBtn: { backgroundColor: Colors.redD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.red + "33" },
   deleteText: { fontSize: 11, color: Colors.red, fontWeight: "600" },
 });
