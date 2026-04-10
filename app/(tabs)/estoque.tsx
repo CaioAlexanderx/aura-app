@@ -21,6 +21,7 @@ import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { Icon } from "@/components/Icon";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const PAGE_SIZE = 20;
@@ -55,7 +56,6 @@ export default function EstoqueScreen() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [labelSelection, setLabelSelection] = useState<string[]>([]);
 
-  // Bulk select
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
@@ -88,7 +88,11 @@ export default function EstoqueScreen() {
 
   function handleExport() {
     if (products.length === 0) { toast.error("Nenhum produto para exportar"); return; }
-    downloadCSV(arrayToCSV(products, PRODUCT_COLUMNS), `aura_estoque_${new Date().toISOString().slice(0,10)}.csv`);
+    downloadCSV(arrayToCSV(products, PRODUCT_COLUMNS), `aura_estoque_${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  function handleImportComplete() {
+    qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
   function toggleBulkSelect(id: string) {
@@ -113,30 +117,70 @@ export default function EstoqueScreen() {
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      <ScreenHeader title="Estoque" actionLabel="+ Adicionar produto" actionIcon="package" onAction={() => { setEditProduct(null); setShowAddForm(true); setActiveTab(0); }} />
+      <ScreenHeader
+        title="Estoque"
+        actionLabel="+ Adicionar produto"
+        actionIcon="package"
+        onAction={() => { setEditProduct(null); setShowAddForm(true); setActiveTab(0); }}
+      />
 
-      <View style={s.summaryRow}>
-        <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades`} />
-        <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
-        <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
-      </View>
+      {/* KPIs — so exibe se tem produtos */}
+      {products.length > 0 && (
+        <View style={s.summaryRow}>
+          <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades`} />
+          <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
+          <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
+        </View>
+      )}
 
-      {showAddForm && <AddProductForm categories={allCategories} onSave={handleSaveProduct} onCancel={() => { setShowAddForm(false); setEditProduct(null); }} editProduct={editProduct} />}
+      {showAddForm && (
+        <AddProductForm
+          categories={allCategories}
+          onSave={handleSaveProduct}
+          onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
+          editProduct={editProduct}
+        />
+      )}
+
       {isLoading && <ListSkeleton rows={4} showCards />}
 
+      {/* Empty state: mostra botoes de adicionar E importar */}
       {!isLoading && products.length === 0 && !isDemo && !showAddForm && (
-        <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
+        <View>
+          <EmptyState
+            icon="package"
+            iconColor={Colors.amber}
+            title="Nenhum produto cadastrado"
+            subtitle="Cadastre seu primeiro produto ou importe de uma planilha."
+            actionLabel="+ Adicionar produto"
+            onAction={() => { setShowAddForm(true); setActiveTab(0); }}
+          />
+          {/* Importar CSV mesmo com estoque vazio */}
+          <View style={s.emptyImport}>
+            <View style={s.emptyImportIcon}>
+              <Icon name="upload" size={18} color={Colors.violet3} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.emptyImportTitle}>Importar planilha</Text>
+              <Text style={s.emptyImportDesc}>Cadastre varios produtos de uma vez via CSV</Text>
+            </View>
+            <ServerImport
+              entity="products"
+              onComplete={handleImportComplete}
+            />
+          </View>
+        </View>
       )}
 
       {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
 
+      {/* Toolbar: exportar + importar + selecionar — SO quando tem produtos */}
       {products.length > 0 && activeTab === 0 && (
         <View style={s.toolbar}>
           <ImportExportBar onExport={handleExport} itemCount={products.length} />
-          {/* P3: ServerImport para importacao via backend (CSV → JSON → Railway) */}
           <ServerImport
             entity="products"
-            onComplete={() => qc.invalidateQueries({ queryKey: ["products", company?.id] })}
+            onComplete={handleImportComplete}
           />
           {!bulkMode ? (
             <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}>
@@ -165,9 +209,19 @@ export default function EstoqueScreen() {
 
       {activeTab === 0 && products.length > 0 && (
         <View>
-          <TextInput style={s.searchInput} placeholder="Buscar por nome ou codigo..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Buscar por nome ou codigo..."
+            placeholderTextColor={Colors.ink3}
+            value={search}
+            onChangeText={setSearch}
+          />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-            {filterCategories.map(c => <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.catChip, catFilter === c && s.catChipActive]}><Text style={[s.catChipText, catFilter === c && s.catChipTextActive]}>{c}</Text></Pressable>)}
+            {filterCategories.map(c => (
+              <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.catChip, catFilter === c && s.catChipActive]}>
+                <Text style={[s.catChipText, catFilter === c && s.catChipTextActive]}>{c}</Text>
+              </Pressable>
+            ))}
           </ScrollView>
           <View style={s.listCard}>
             {paginated.map(p => (
@@ -181,27 +235,56 @@ export default function EstoqueScreen() {
                 onSelect={bulkMode ? toggleBulkSelect : undefined}
               />
             ))}
-            {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
+            {filtered.length === 0 && (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text>
+              </View>
+            )}
           </View>
           <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
         </View>
       )}
 
-      {activeTab === 1 && <View><View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View><AbcSummary products={products} /><View style={[s.listCard, { marginTop: 20 }]}>{[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} onEdit={!isDemo ? handleEdit : undefined} />)}</View></View>}
+      {activeTab === 1 && (
+        <View>
+          <View style={s.abcInfo}>
+            <Text style={s.abcInfoIcon}>i</Text>
+            <Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text>
+          </View>
+          <AbcSummary products={products} />
+          <View style={[s.listCard, { marginTop: 20 }]}>
+            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => (
+              <ProductRow key={p.id} product={p} showAbc
+                onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
+                onEdit={!isDemo ? handleEdit : undefined}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
       {activeTab === 2 && <AlertsList products={products} />}
       {activeTab === 3 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 
-      <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive
+      <ConfirmDialog
+        visible={!!deleteTarget}
+        title="Excluir produto?"
+        message="Esta acao nao pode ser desfeita."
+        confirmLabel="Excluir"
+        destructive
         onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); } }}
-        onCancel={() => setDeleteTarget(null)} />
+        onCancel={() => setDeleteTarget(null)}
+      />
 
-      <ConfirmDialog visible={showBulkConfirm}
+      <ConfirmDialog
+        visible={showBulkConfirm}
         title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`}
         message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente."
         confirmLabel="Excluir todos"
         destructive
         onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }}
-        onCancel={() => setShowBulkConfirm(false)} />
+        onCancel={() => setShowBulkConfirm(false)}
+      />
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
@@ -209,34 +292,47 @@ export default function EstoqueScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "transparent" },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  screen:   { flex: 1, backgroundColor: "transparent" },
+  content:  { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 20 },
   card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: IS_WIDE ? 140 : "45%", margin: 4 },
   cardLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
   cardValue: { fontSize: 20, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
-  cardSub: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  cardSub:   { fontSize: 10, color: Colors.ink3, marginTop: 4 },
+  tab:       { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  tabText:   { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   tabTextActive: { color: "#fff", fontWeight: "600" },
-  toolbar: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
-  bulkBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
+  toolbar:   { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
+  bulkBtn:   { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   bulkBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  bulkBar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
+  bulkBar:   { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
   bulkCount: { fontSize: 13, color: Colors.violet3, fontWeight: "700", flex: 1 },
   bulkAction: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   bulkDeleteAction: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   bulkActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 12 },
-  catChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  catChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   catChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  catChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+  catChipText:   { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   catChipTextActive: { color: Colors.violet3, fontWeight: "600" },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  abcInfo: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
+  abcInfo:     { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
   abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
   abcInfoText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18 },
+  // Card de importar no empty state
+  emptyImport: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.bg3, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: Colors.border, marginTop: 12,
+  },
+  emptyImportIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+  },
+  emptyImportTitle: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  emptyImportDesc:  { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
