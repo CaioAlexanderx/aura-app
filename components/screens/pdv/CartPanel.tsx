@@ -23,7 +23,10 @@ function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: {
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
       style={[s.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]}>
-      <View style={s.info}><Text style={s.name} numberOfLines={1}>{item.name}</Text><Text style={s.unit}>{fmt(item.price)} / un</Text></View>
+      <View style={s.info}>
+        <Text style={s.name} numberOfLines={1}>{item.name}</Text>
+        <Text style={s.unit}>{fmt(item.price)} / un</Text>
+      </View>
       <View style={s.controls}>
         <Pressable onPress={onMinus} style={s.btn}><Text style={s.btnText}>-</Text></Pressable>
         {editing ? (
@@ -65,13 +68,23 @@ export function CartPanel({
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
 
   return (
-    <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 24, flex: isWide ? 1 : undefined }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "700" }}>Caixa</Text>
-        {itemCount > 0 && <View style={s.badge}><Text style={s.badgeText}>{itemCount}</Text></View>}
-      </View>
+    <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 8, flex: isWide ? 1 : undefined }}>
 
-      {cart.length === 0 && (
+      {/* N3 fix: Desktop mostra "Caixa", mobile mostra "Carrinho" so quando tem itens */}
+      {isWide ? (
+        <View style={s.header}>
+          <Text style={s.headerTitle}>Caixa</Text>
+          {itemCount > 0 && <View style={s.badge}><Text style={s.badgeText}>{itemCount}</Text></View>}
+        </View>
+      ) : itemCount > 0 ? (
+        <View style={[s.header, s.mobileHeader]}>
+          <Text style={s.mobileHeaderTitle}>Carrinho</Text>
+          <View style={s.badge}><Text style={s.badgeText}>{itemCount} {itemCount === 1 ? "item" : "itens"}</Text></View>
+        </View>
+      ) : null}
+
+      {/* Estado vazio — so mostra no desktop para nao poluir mobile */}
+      {cart.length === 0 && isWide && (
         <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
           <Text style={{ fontSize: 32, color: Colors.ink3 }}>$</Text>
           <Text style={{ fontSize: 12, color: Colors.ink3, textAlign: "center" }}>Toque em um produto ou escaneie um codigo</Text>
@@ -137,8 +150,17 @@ export function CartPanel({
               <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
                 {employees.map(e => (
-                  <Pressable key={e.id} onPress={() => selectEmployee(selectedEmployeeId === e.id ? null : e.id, selectedEmployeeId === e.id ? null : e.name)} style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}>
-                    <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>{e.name.split(" ")[0]}</Text>
+                  <Pressable
+                    key={e.id}
+                    onPress={() => selectEmployee(
+                      selectedEmployeeId === e.id ? null : e.id,
+                      selectedEmployeeId === e.id ? null : e.name
+                    )}
+                    style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}
+                  >
+                    <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>
+                      {e.name.split(" ")[0]}
+                    </Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -169,6 +191,10 @@ export function CartPanel({
 }
 
 const s = StyleSheet.create({
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
+  headerTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700" },
+  mobileHeader: { paddingTop: 16, paddingBottom: 4, borderTopWidth: 1, borderTopColor: Colors.border, marginBottom: 12 },
+  mobileHeaderTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   row: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 8 },
   info: { flex: 1 }, name: { fontSize: 13, color: Colors.ink, fontWeight: "500" }, unit: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
   controls: { flexDirection: "row", alignItems: "center", gap: 6 },
