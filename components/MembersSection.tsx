@@ -46,11 +46,10 @@ function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving
   onUpdate: (perms: Record<string, boolean>, role: string) => void;
   onRemove: () => void; isUpdating: boolean; isRemoving: boolean;
 }) {
-  const [expanded,     setExpanded]     = useState(false);
-  const [perms,        setPerms]        = useState<Record<string, boolean>>(member.permissions || {});
-  const [role,         setRole]         = useState(member.role_label);
+  const [expanded, setExpanded]       = useState(false);
+  const [perms, setPerms]             = useState<Record<string, boolean>>(member.permissions || {});
+  const [role, setRole]               = useState(member.role_label);
   const [confirmRemove, setConfirmRemove] = useState(false);
-
   const canEdit      = !isOwner && member.status !== "suspended";
   const isOwnerLabel = member.role_label === "owner";
 
@@ -63,14 +62,13 @@ function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving
         <View style={{ flex: 1 }}>
           <Text style={s.memberName}>{member.name}</Text>
           <Text style={s.memberEmail} numberOfLines={1}>
-            {member.status === "pending" ? (member.invite_email || member.email) : member.email}
+            {member.status === "pending" ? (member.invite_email || member.email || "Link enviado") : member.email}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {isOwnerLabel
             ? <View style={[badge.wrap, { backgroundColor: Colors.violetD }]}><Text style={[badge.text, { color: Colors.violet3 }]}>Titular</Text></View>
-            : <StatusBadge status={member.status} />
-          }
+            : <StatusBadge status={member.status} />}
           {canEdit && <Icon name={expanded ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />}
         </View>
       </Pressable>
@@ -112,30 +110,28 @@ function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving
   );
 }
 
+// Card exibido apos convite criado
 function InviteSuccessCard({ inviteUrl, email, role, companyName, onClose }: {
   inviteUrl: string; email: string; role: string; companyName: string; onClose: () => void;
 }) {
   function copyLink() {
-    if (Platform.OS === "web" && typeof navigator !== "undefined") {
-      navigator.clipboard?.writeText(inviteUrl);
-    }
+    if (Platform.OS === "web" && typeof navigator !== "undefined") navigator.clipboard?.writeText(inviteUrl);
     toast.success("Link copiado!");
   }
   function shareWhatsApp() {
-    const msg = `Ola! Voce foi convidado para a equipe de ${companyName} no app Aura como ${role}.\n\nCrie sua conta e aceite o convite pelo link:\n${inviteUrl}`;
+    const msg = `Voce foi convidado para a equipe de ${companyName} no app Aura como ${role}.\n\nAcesse o link para entrar:\n${inviteUrl}`;
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
   }
-
   return (
     <View style={s.inviteSuccess}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <Icon name="check" size={14} color={Colors.green} />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.green }}>Convite criado!</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.green }}>Link de acesso gerado!</Text>
           </View>
           <Text style={{ fontSize: 11, color: Colors.ink3, marginBottom: 12 }}>
-            Compartilhe o link com {email} para que crie a conta e entre na equipe.
+            {email ? `Compartilhe com ${email} para` : "Compartilhe o link para que a pessoa"} crie a conta e entre na equipe.
           </Text>
         </View>
         <Pressable onPress={onClose} style={s.successClose}>
@@ -152,11 +148,11 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, onClose }: {
         </Pressable>
         <Pressable onPress={shareWhatsApp} style={s.whatsappBtn}>
           <Icon name="message" size={13} color={Colors.green} />
-          <Text style={s.whatsappBtnText}>Enviar no WhatsApp</Text>
+          <Text style={s.whatsappBtnText}>WhatsApp</Text>
         </Pressable>
       </View>
       <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 8 }}>
-        O link e valido por 7 dias. Cada link e de uso unico.
+        Link valido por 7 dias. Uso unico.
       </Text>
     </View>
   );
@@ -172,26 +168,50 @@ export function MembersSection() {
     removeMember, isRemoving,
   } = useMembers();
 
-  const [showForm,    setShowForm]    = useState(false);
+  // Modo de convite: "link" (sem email, direto) ou "email" (com email)
+  const [inviteMode,  setInviteMode]  = useState<"none" | "link" | "email">("none");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole,  setInviteRole]  = useState("Colaborador");
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(inviteEmail.trim());
 
-  // FIX: try/catch para que unhandled rejection nao silencie o botao
-  async function handleInvite() {
-    if (!emailValid) { toast.error("Informe um e-mail valido"); return; }
+  async function handleInviteLink() {
+    // Gera link direto sem email
     try {
-      await inviteMember({ email: inviteEmail.trim().toLowerCase(), role_label: inviteRole });
-      // onSuccess em useMembers seta lastInvite — aqui so limpa o form
-      setShowForm(false);
-      setInviteEmail("");
+      await inviteMember({ email: "", role_label: inviteRole });
+      setInviteMode("none");
+      setInviteRole("Colaborador");
     } catch {
-      // onError em useMembers ja exibe o toast — aqui apenas evita unhandled rejection
+      // onError no hook ja exibe toast
     }
   }
 
-  function cancelInvite() { setShowForm(false); setInviteEmail(""); }
+  async function handleInviteEmail() {
+    if (!emailValid) { toast.error("Informe um e-mail valido"); return; }
+    try {
+      await inviteMember({ email: inviteEmail.trim().toLowerCase(), role_label: inviteRole });
+      setInviteMode("none");
+      setInviteEmail("");
+      setInviteRole("Colaborador");
+    } catch {
+      // onError no hook ja exibe toast
+    }
+  }
+
+  function cancelInvite() { setInviteMode("none"); setInviteEmail(""); setInviteRole("Colaborador"); }
+
+  const RoleSelector = () => (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={[s.formLabel, { marginBottom: 8 }]}>Funcao</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        {ROLE_OPTIONS.map(r => (
+          <Pressable key={r} onPress={() => setInviteRole(r)} style={[s.roleChip, inviteRole === r && s.roleChipActive]}>
+            <Text style={[s.roleChipText, inviteRole === r && { color: Colors.violet3 }]}>{r}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
 
   return (
     <View style={s.container}>
@@ -205,27 +225,69 @@ export function MembersSection() {
             {monthlyCost > 0 ? ` / +R$${monthlyCost}/mes` : ""}
           </Text>
         </View>
-        {!showForm && !lastInvite && (
-          <Pressable onPress={() => setShowForm(true)} style={s.inviteBtn}>
-            <Icon name="user_plus" size={14} color="#fff" />
-            <Text style={s.inviteBtnText}>Convidar</Text>
-          </Pressable>
+        {inviteMode === "none" && !lastInvite && (
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {/* Botao principal: gera link direto, sem precisar de email */}
+            <Pressable
+              onPress={() => setInviteMode("link")}
+              style={s.inviteBtn}
+              disabled={isInviting}
+            >
+              {isInviting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <>
+                    <Icon name="link" size={13} color="#fff" />
+                    <Text style={s.inviteBtnText}>Gerar link</Text>
+                  </>}
+            </Pressable>
+            {/* Botao secundario: convite por email */}
+            <Pressable onPress={() => setInviteMode("email")} style={s.inviteBtnSecondary}>
+              <Icon name="mail" size={13} color={Colors.violet3} />
+            </Pressable>
+          </View>
         )}
       </View>
 
-      {/* Card de sucesso do convite */}
+      {/* Card de sucesso */}
       {lastInvite && (
         <InviteSuccessCard
-          inviteUrl={lastInvite.url} email={lastInvite.email}
-          role={lastInvite.role} companyName={company?.name || "Aura"}
+          inviteUrl={lastInvite.url}
+          email={lastInvite.email}
+          role={lastInvite.role}
+          companyName={company?.name || "Aura"}
           onClose={clearLastInvite}
         />
       )}
 
-      {/* Formulario de convite */}
-      {showForm && (
+      {/* Formulario: link direto (sem email) */}
+      {inviteMode === "link" && (
         <View style={s.inviteForm}>
-          <Text style={s.formTitle}>Convidar colaborador</Text>
+          <Text style={s.formTitle}>Gerar link de acesso</Text>
+          <Text style={{ fontSize: 12, color: Colors.ink3, marginBottom: 14, lineHeight: 18 }}>
+            Um link unico sera gerado. Qualquer pessoa com o link pode criar uma conta e entrar na sua equipe.
+          </Text>
+          <RoleSelector />
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable onPress={cancelInvite} style={s.cancelBtn}>
+              <Text style={s.cancelBtnText}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleInviteLink}
+              disabled={isInviting}
+              style={[s.sendBtn, isInviting && { opacity: 0.5 }]}
+            >
+              {isInviting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={s.sendBtnText}>Gerar link agora</Text>}
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* Formulario: convite por email */}
+      {inviteMode === "email" && (
+        <View style={s.inviteForm}>
+          <Text style={s.formTitle}>Convidar por e-mail</Text>
           <Text style={s.formLabel}>E-mail do colaborador</Text>
           <TextInput
             style={[s.input, inviteEmail && !emailValid && s.inputError]}
@@ -234,28 +296,19 @@ export function MembersSection() {
             autoCapitalize="none" keyboardType="email-address"
           />
           {inviteEmail && !emailValid && <Text style={s.fieldError}>E-mail invalido</Text>}
-
-          <Text style={[s.formLabel, { marginTop: 14 }]}>Funcao</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6, marginBottom: 16 }}>
-            {ROLE_OPTIONS.map(r => (
-              <Pressable key={r} onPress={() => setInviteRole(r)} style={[s.roleChip, inviteRole === r && s.roleChipActive]}>
-                <Text style={[s.roleChipText, inviteRole === r && { color: Colors.violet3 }]}>{r}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-
+          <View style={{ marginTop: 14 }}><RoleSelector /></View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable onPress={cancelInvite} style={s.cancelBtn}>
               <Text style={s.cancelBtnText}>Cancelar</Text>
             </Pressable>
             <Pressable
-              onPress={handleInvite}
+              onPress={handleInviteEmail}
               disabled={isInviting || !emailValid}
               style={[s.sendBtn, (isInviting || !emailValid) && { opacity: 0.5 }]}
             >
               {isInviting
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={s.sendBtnText}>Gerar link de acesso</Text>}
+                : <Text style={s.sendBtnText}>Enviar convite</Text>}
             </Pressable>
           </View>
         </View>
@@ -281,7 +334,7 @@ export function MembersSection() {
 
       {members.length > 0 && (
         <View style={s.billingNote}>
-          <Text style={s.billingText}>O titular nao e cobrado. Cada membro adicional: R$19/mes.</Text>
+          <Text style={s.billingText}>Titular nao cobrado. Cada membro adicional: R$19/mes.</Text>
         </View>
       )}
     </View>
@@ -289,51 +342,52 @@ export function MembersSection() {
 }
 
 const s = StyleSheet.create({
-  container:       { backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
-  header:          { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  title:           { fontSize: 15, fontWeight: "700", color: Colors.ink },
-  subtitle:        { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  inviteBtn:       { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14 },
-  inviteBtnText:   { fontSize: 12, color: "#fff", fontWeight: "600" },
-  inviteSuccess:   { margin: 12, backgroundColor: Colors.greenD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.green + "33" },
-  successClose:    { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  inviteLinkBox:   { backgroundColor: Colors.bg4, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: Colors.border },
-  inviteLinkText:  { fontSize: 11, color: Colors.violet3, fontFamily: "monospace" as any, lineHeight: 16 },
-  copyBtn:         { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
-  copyBtnText:     { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
-  whatsappBtn:     { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.green + "44" },
+  container:    { backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
+  header:       { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  title:        { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  subtitle:     { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  inviteBtn:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  inviteBtnText:{ fontSize: 12, color: "#fff", fontWeight: "600" },
+  inviteBtnSecondary: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  inviteSuccess:{ margin: 12, backgroundColor: Colors.greenD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.green + "33" },
+  successClose: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
+  inviteLinkBox:{ backgroundColor: Colors.bg4, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: Colors.border },
+  inviteLinkText:{ fontSize: 11, color: Colors.violet3, fontFamily: "monospace" as any, lineHeight: 16 },
+  copyBtn:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
+  copyBtnText:  { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  whatsappBtn:  { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.green + "44" },
   whatsappBtnText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
-  inviteForm:      { margin: 12, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
-  formTitle:       { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
-  formLabel:       { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
-  input:           { backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
-  inputError:      { borderColor: Colors.red },
-  fieldError:      { fontSize: 11, color: Colors.red, marginTop: 4 },
-  roleChip:        { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  roleChipActive:  { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  roleChipText:    { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
-  cancelBtn:       { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
-  cancelBtnText:   { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
-  sendBtn:         { flex: 2, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center" },
-  sendBtnText:     { fontSize: 12, color: "#fff", fontWeight: "600" },
-  memberRow:       { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  avatar:          { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
-  avatarText:      { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
-  memberName:      { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  memberEmail:     { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  permEditor:      { backgroundColor: Colors.bg4, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  permSectionLabel:{ fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
-  permRow:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  permLabel:       { fontSize: 13, color: Colors.ink, fontWeight: "500" },
-  permActions:     { flexDirection: "row", gap: 8, marginTop: 16 },
-  savePermBtn:     { flex: 2, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center" },
+  inviteForm:   { margin: 12, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
+  formTitle:    { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
+  formLabel:    { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
+  input:        { backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
+  inputError:   { borderColor: Colors.red },
+  fieldError:   { fontSize: 11, color: Colors.red, marginTop: 4 },
+  roleChip:     { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  roleChipActive:{ backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  roleChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+  cancelBtn:    { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  cancelBtnText:{ fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+  sendBtn:      { flex: 2, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center" },
+  sendBtnText:  { fontSize: 12, color: "#fff", fontWeight: "600" },
+  memberRow:    { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  avatar:       { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
+  avatarText:   { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
+  memberName:   { fontSize: 13, fontWeight: "600", color: Colors.ink },
+  memberEmail:  { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  permEditor:   { backgroundColor: Colors.bg4, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  permSectionLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
+  permRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  permLabel:    { fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  permActions:  { flexDirection: "row", gap: 8, marginTop: 16 },
+  savePermBtn:  { flex: 2, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center" },
   savePermBtnText: { fontSize: 12, color: "#fff", fontWeight: "600" },
-  removeBtn:       { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", borderWidth: 1, borderColor: Colors.red + "33" },
-  removeBtnText:   { fontSize: 12, color: Colors.red, fontWeight: "600" },
-  empty:           { alignItems: "center", paddingVertical: 24 },
-  emptyText:       { fontSize: 12, color: Colors.ink3 },
-  billingNote:     { borderTopWidth: 1, borderTopColor: Colors.border, padding: 12 },
-  billingText:     { fontSize: 10, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
+  removeBtn:    { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", borderWidth: 1, borderColor: Colors.red + "33" },
+  removeBtnText:{ fontSize: 12, color: Colors.red, fontWeight: "600" },
+  empty:        { alignItems: "center", paddingVertical: 24 },
+  emptyText:    { fontSize: 12, color: Colors.ink3 },
+  billingNote:  { borderTopWidth: 1, borderTopColor: Colors.border, padding: 12 },
+  billingText:  { fontSize: 10, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
 });
 
 export default MembersSection;
