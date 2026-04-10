@@ -15,7 +15,6 @@ const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string };
 type NavSection = { s: string; i: NavItem[] };
 
-// mod = module key used for plan gating + admin overrides
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
@@ -25,7 +24,6 @@ const NAV: NavSection[] = [
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},
 ];
 
-// ── Module visibility (mirrors backend modules.js) ──────────
 const MODULE_PLAN_MAP: Record<string, string> = {
   painel: 'essencial', financeiro: 'essencial', nfe: 'essencial',
   contabilidade: 'essencial', suporte: 'essencial', pdv: 'essencial',
@@ -119,7 +117,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
 
-  // Filter NAV by visible modules
   const filteredNav = useMemo(() =>
     NAV.map(section => ({
       ...section,
@@ -196,10 +193,10 @@ function MBar() {
     { r: "/", l: "Painel", ic: "dashboard", mod: "painel" },
     { r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },
     { r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },
-    { r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },
+    { r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },
   ];
   const ALL_MORE = [
-    { r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },
+    { r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },
     { r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" },
     { r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },
     { r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },
@@ -207,10 +204,10 @@ function MBar() {
     { r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" },
     { r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" },
     { r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" },
+    // N5: Configuracoes sempre acessivel no menu mobile
     { r: "/configuracoes", l: "Configuracoes", ic: "settings", mod: "configuracoes" },
   ];
 
-  // Filter by visible modules
   const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
   const filteredMore = ALL_MORE.filter(t => visibleMods.has(t.mod));
 
@@ -243,8 +240,11 @@ function MBar() {
             </Pressable>
           );
         })}
+        {/* N5: Botao Mais sempre acessivel com icone correto */}
         <Pressable style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => setShowMore(!showMore)}>
-          <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, showMore && { backgroundColor: C.violetD }]}><Icon name="settings" size={18} color={showMore ? C.violet3 : C.ink3} /></View>
+          <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, showMore && { backgroundColor: C.violetD }]}>
+            <Icon name="grid" size={18} color={showMore ? C.violet3 : C.ink3} />
+          </View>
           <Text style={[{ fontSize: 9, color: C.ink3, fontWeight: "500" }, showMore && { color: C.violet3, fontWeight: "600" }]}>Mais</Text>
         </Pressable>
       </View>
@@ -271,6 +271,18 @@ export default function TabsLayout() {
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
+  // N5: Mobile web usa bottom nav (igual ao native) — sem sidebar
+  if (w && isNarrow) return (
+    <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative" } as any}>
+      <ToastContainer />
+      <div style={{ flex: 1, overflow: "auto", position: "relative" } as any}>
+        <PageTransition><Slot /></PageTransition>
+      </div>
+      <MBar />
+    </div>
+  );
+
+  // Wide web: sidebar layout
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
@@ -281,15 +293,16 @@ export default function TabsLayout() {
     </div>
   );
 
+  // Native: bottom nav
   return (
     <ErrorBoundary>
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View key={themeKey} style={{ flex: 1 }}>
-        <ToastContainer />
-        <PageTransition><Slot /></PageTransition>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <View key={themeKey} style={{ flex: 1 }}>
+          <ToastContainer />
+          <PageTransition><Slot /></PageTransition>
+        </View>
+        <MBar />
       </View>
-      <MBar />
-    </View>
     </ErrorBoundary>
   );
 }
