@@ -7,6 +7,7 @@ export type LabelPreset = {
 };
 
 export const LABEL_PRESETS: LabelPreset[] = [
+  { id: '33x21', name: '33 x 21 mm (A4 – 65 por folha)', width: 33, height: 21, columns: 3, gap: 1 },
   { id: '30x25', name: '30 x 25 mm (Argox, Elgin)', width: 30, height: 25, columns: 3, gap: 2 },
   { id: '40x25', name: '40 x 25 mm (Zebra GC420)', width: 40, height: 25, columns: 2, gap: 3 },
   { id: '40x40', name: '40 x 40 mm (QR Code)', width: 40, height: 40, columns: 2, gap: 3 },
@@ -23,7 +24,7 @@ export function savePreset(id: string) {
   try { if (typeof localStorage === 'undefined') return; localStorage.setItem('aura_label_preset', id); } catch {}
 }
 export function getPreset(id: string): LabelPreset {
-  return LABEL_PRESETS.find(p => p.id === id) || LABEL_PRESETS[1];
+  return LABEL_PRESETS.find(p => p.id === id) || LABEL_PRESETS[2];
 }
 
 // CODE-128 Barcode Generator
@@ -79,12 +80,25 @@ export function generatePrintHTML(
   const preset = getPreset(presetId || getSavedPreset());
   const { width, height, columns, gap } = preset;
   const isQR = products[0]?.type === 'qr';
-  const codeH = isQR ? Math.min(height - 12, width - 4) : Math.min(height - 14, 20);
+
+  // Calcula alturas internas com base no tamanho real da etiqueta
+  // Reserva espaco para nome (2.8mm) + preco (3mm) + padding vertical (2mm)
+  const reservedMm = isQR ? 7 : 9; // barcode precisa de mais espaço para texto do codigo
+  const codeHmm = Math.max(4, height - reservedMm);
+  const codeHpx = Math.round(codeHmm * 3.78); // 1mm ~= 3.78px
+
+  // Tamanho da fonte proporcional ao tamanho da etiqueta
+  const nameFontPx = Math.max(6, Math.min(10, Math.round(width / 5)));
+  const priceFontPx = Math.max(7, Math.min(13, Math.round(width / 4)));
+  const codeFontPx = Math.max(5, Math.min(9, Math.round(width / 5.5)));
+
+  // Padding interno minimo para nao cortar nas bordas
+  const padMm = Math.max(0.8, gap * 0.4);
 
   const labels = products.map(p => {
     const visual = p.type === 'barcode'
-      ? generateBarcodeSVG(p.code, width * 3, codeH * 3)
-      : `<img src="${generateQRSVGUrl(p.code, codeH * 3)}" width="${codeH}mm" height="${codeH}mm" style="display:block;margin:0 auto"/>`;
+      ? generateBarcodeSVG(p.code, width * 3.78, codeHpx)
+      : `<img src="${generateQRSVGUrl(p.code, codeHpx * 2)}" style="display:block;margin:0 auto;width:${codeHmm}mm;height:${codeHmm}mm;max-width:100%"/>`;
     return `<div class="label">${visual}<div class="name">${p.name}</div><div class="price">R$ ${p.price.toFixed(2).replace('.',',')}</div></div>`;
   }).join('');
 
@@ -93,12 +107,56 @@ export function generatePrintHTML(
 @page{size:auto;margin:${gap}mm}
 body{font-family:system-ui,-apple-system,sans-serif;padding:0}
 .preset-info{padding:4mm;font-size:9px;color:#888;text-align:center;border-bottom:1px solid #eee;margin-bottom:${gap}mm}
-.grid{display:grid;grid-template-columns:repeat(${columns},${width}mm);gap:${gap}mm;justify-content:center}
-.label{width:${width}mm;height:${height}mm;border:0.3pt solid #ccc;border-radius:1mm;padding:1.5mm;text-align:center;overflow:hidden;display:flex;flex-direction:column;justify-content:center;page-break-inside:avoid}
-.label svg{width:100%;height:auto;max-height:${codeH}mm}
-.name{font-size:${Math.min(9, width / 5)}px;font-weight:600;margin-top:1mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
-.price{font-size:${Math.min(11, width / 4)}px;font-weight:800;margin-top:0.5mm;line-height:1.2}
-@media print{.preset-info{display:none}.label{border:0.2pt solid #999}}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(${columns},${width}mm);
+  gap:${gap}mm;
+  justify-content:center;
+  align-items:start
+}
+.label{
+  width:${width}mm;
+  height:${height}mm;
+  border:0.3pt solid #ccc;
+  border-radius:1mm;
+  padding:${padMm}mm;
+  text-align:center;
+  overflow:visible;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  page-break-inside:avoid;
+  break-inside:avoid
+}
+.label svg{
+  width:100%;
+  height:${codeHmm}mm;
+  max-height:${codeHmm}mm;
+  display:block
+}
+.name{
+  font-size:${nameFontPx}px;
+  font-weight:600;
+  margin-top:0.5mm;
+  width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  line-height:1.2;
+  text-align:center
+}
+.price{
+  font-size:${priceFontPx}px;
+  font-weight:800;
+  margin-top:0.3mm;
+  line-height:1.2;
+  text-align:center
+}
+@media print{
+  .preset-info{display:none}
+  .label{border:0.2pt solid #999;overflow:visible}
+}
 </style></head><body>
 <div class="preset-info">Preset: ${preset.name} | ${products.length} etiqueta(s) | Aura.</div>
 <div class="grid">${labels}</div>
