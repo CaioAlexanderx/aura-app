@@ -1,408 +1,723 @@
-import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, Switch, Linking } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, ScrollView, StyleSheet, Pressable,
+  TextInput, Platform, Switch, Linking, Dimensions,
+} from "react-native";
 import { Colors } from "@/constants/colors";
-import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
+import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { PageHeader } from "@/components/PageHeader";
 import { TabBar } from "@/components/TabBar";
-import { HoverCard } from "@/components/HoverCard";
 import { HoverRow } from "@/components/HoverRow";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { DemoBanner } from "@/components/DemoBanner";
-import { AgentBanner } from "@/components/AgentBanner";
+import { ListSkeleton } from "@/components/ListSkeleton";
 
-const TABS = ["Meu Site", "Vitrine Online", "Entrega", "Resultados"];
+const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+const TABS = ["Meu Site", "Vitrine", "Entrega"];
 
-// ── Mock data ────────────────────────────────────
-const MOCK_PRODUCTS = [
-  { id: "1", name: "Corte masculino", price: 45.00, img: null, published: true, category: "Serviços" },
-  { id: "2", name: "Barba completa", price: 35.00, img: null, published: true, category: "Serviços" },
-  { id: "3", name: "Pomada modeladora", price: 49.90, img: null, published: false, category: "Produtos" },
-  { id: "4", name: "Shampoo premium", price: 38.00, img: null, published: true, category: "Produtos" },
-  { id: "5", name: "Kit barba completo", price: 129.90, img: null, published: false, category: "Kits" },
-  { id: "6", name: "Corte + barba combo", price: 70.00, img: null, published: true, category: "Combos" },
+// Presets de cores da marca
+const COLOR_PRESETS = [
+  "#7c3aed", "#059669", "#dc2626", "#d97706",
+  "#2563eb", "#db2777", "#0891b2", "#374151",
 ];
 
-const MOCK_ANALYTICS = {
-  visits: 234, orders: 18, conversion: 7.7, revenue: 1420.00,
-  topProducts: [
-    { name: "Corte masculino", views: 89, orders: 8 },
-    { name: "Corte + barba combo", views: 67, orders: 5 },
-    { name: "Shampoo premium", views: 45, orders: 3 },
-  ],
-  visitsByDay: [28, 32, 41, 35, 38, 30, 30],
-};
+// ── Componentes reutilizaveis ─────────────────────────────────
+function Field({ label, value, onChange, placeholder, multiline }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; multiline?: boolean;
+}) {
+  return (
+    <View style={s.field}>
+      <Text style={s.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[s.input, multiline && s.textarea]}
+        value={value} onChangeText={onChange}
+        placeholder={placeholder} placeholderTextColor={Colors.ink3}
+        multiline={multiline} numberOfLines={multiline ? 3 : 1}
+      />
+    </View>
+  );
+}
 
-const FREIGHT_OPTIONS = [
-  { id: "uber", name: "Uber Flash", desc: "Entrega rápida via Uber Direct", icon: "cart", enabled: true, estimate: "30-60 min", cost: "A partir de R$ 12" },
-  { id: "correios", name: "Correios", desc: "PAC e SEDEX para todo Brasil", icon: "package", enabled: false, estimate: "3-8 dias úteis", cost: "Calculado por CEP" },
-  { id: "transp", name: "Transportadora", desc: "Parceiro logístico local", icon: "trending_up", enabled: false, estimate: "1-3 dias úteis", cost: "Sob consulta" },
-  { id: "retira", name: "Retirada no local", desc: "Cliente busca no estabelecimento", icon: "users", enabled: true, estimate: "Imediato", cost: "Grátis" },
-];
+function SectionTitle({ title }: { title: string }) {
+  return <Text style={s.sectionTitle}>{title}</Text>;
+}
 
-// ── Tab: Meu Site ────────────────────────────────
-function TabMeuSite() {
-  const { company, companyLogo } = useAuthStore();
-  const [siteName, setSiteName] = useState(company?.name || "Minha Empresa");
-  const [siteDesc, setSiteDesc] = useState("Qualidade e atendimento que você merece. Confira nossos produtos e serviços.");
-  const [siteColor, setSiteColor] = useState("#7c3aed");
-  const [sitePublished, setSitePublished] = useState(true);
-  const [whatsapp, setWhatsapp] = useState("(12) 99999-0000");
-  const [instagram, setInstagram] = useState("@meunegogio");
-  const [address, setAddress] = useState("Rua Principal, 100 - Jacareí/SP");
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    active:      { label: "Ativo",         bg: Colors.greenD,  color: Colors.green },
+    pending_dns: { label: "Aguardando DNS", bg: Colors.amberD, color: Colors.amber },
+    none:        { label: "Sem dominio",    bg: Colors.bg4,    color: Colors.ink3 },
+  };
+  const st = map[status] || map.none;
+  return (
+    <View style={[s.badge, { backgroundColor: st.bg }]}>
+      <Text style={[s.badgeText, { color: st.color }]}>{st.label}</Text>
+    </View>
+  );
+}
 
-  const colors = ["#7c3aed", "#059669", "#dc2626", "#d97706", "#2563eb", "#db2777", "#0891b2"];
-  const siteUrl = "getaura.com.br/loja/" + (company?.name || "minha-empresa").toLowerCase().replace(/\s+/g, "-");
+// ── Tab: Meu Site ─────────────────────────────────────────────
+function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain }: any) {
+  const { company } = useAuthStore();
+
+  const [siteName,    setSiteName]    = useState(config.site_name || company?.name || "");
+  const [tagline,     setTagline]     = useState(config.tagline    || "");
+  const [description, setDescription] = useState(config.description || "");
+  const [phone,       setPhone]       = useState(config.phone     || "");
+  const [whatsapp,    setWhatsapp]    = useState(config.whatsapp   || "");
+  const [instagram,   setInstagram]   = useState(config.instagram  || "");
+  const [address,     setAddress]     = useState(config.address    || "");
+  const [color,       setColor]       = useState(config.primary_color || "#7c3aed");
+  const [published,   setPublished]   = useState(config.is_published ?? false);
+
+  const [domainInput, setDomainInput] = useState("");
+  const [domainPlan,  setDomainPlan]  = useState<"1year" | "2years">("1year");
+
+  // Sync when config loads
+  useEffect(() => {
+    if (!config.exists) return;
+    setSiteName(config.site_name || "");
+    setTagline(config.tagline || "");
+    setDescription(config.description || "");
+    setPhone(config.phone || "");
+    setWhatsapp(config.whatsapp || "");
+    setInstagram(config.instagram || "");
+    setAddress(config.address || "");
+    setColor(config.primary_color || "#7c3aed");
+    setPublished(config.is_published ?? false);
+  }, [config.exists]);
+
+  function openColorPicker() {
+    if (Platform.OS !== "web") return;
+    try {
+      const input = document.createElement("input");
+      input.type = "color";
+      input.value = color;
+      input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
+      document.body.appendChild(input);
+      input.addEventListener("change", (e: any) => {
+        setColor(e.target.value);
+        try { document.body.removeChild(input); } catch {}
+      });
+      input.addEventListener("blur", () => { try { document.body.removeChild(input); } catch {} });
+      input.click();
+    } catch {}
+  }
+
+  async function handleSave() {
+    await saveConfig({
+      site_name: siteName.trim() || null,
+      tagline: tagline.trim() || null,
+      description: description.trim() || null,
+      phone: phone.trim() || null,
+      whatsapp: whatsapp.trim() || null,
+      instagram: instagram.trim() || null,
+      address: address.trim() || null,
+      primary_color: color,
+      is_published: published,
+    });
+  }
+
+  async function handleRequestDomain() {
+    const d = domainInput.trim().toLowerCase();
+    if (!d || !d.includes(".")) {
+      toast.error("Informe um dominio valido (ex: meunegocio.com.br)");
+      return;
+    }
+    await requestDomain({ domain: d, plan: domainPlan });
+    setDomainInput("");
+  }
+
+  const storefrontUrl = config.storefront_url || `https://getaura.com.br/loja/${(siteName || "minha-loja").toLowerCase().replace(/\s+/g, "-").slice(0, 40)}`;
+  const hasDomain = config.custom_domain && config.custom_domain_status !== "none";
 
   return (
     <View>
       {/* Preview card */}
-      <HoverCard style={z.previewCard}>
-        <View style={[z.previewHeader, { backgroundColor: siteColor + "15" }]}>
-          <View style={z.previewTopBar}>
-            {companyLogo ? (
-              <Image source={{ uri: companyLogo }} style={z.previewLogo} resizeMode="contain" />
-            ) : (
-              <Text style={[z.previewBrand, { color: siteColor }]}>{siteName}</Text>
-            )}
-            <View style={z.previewNav}>
-              <Text style={z.previewNavItem}>Início</Text>
-              <Text style={z.previewNavItem}>Produtos</Text>
-              <Text style={z.previewNavItem}>Contato</Text>
+      <View style={[s.previewCard, { borderTopWidth: 4, borderTopColor: color }]}>
+        <View style={s.previewHeader}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={[s.previewBrand, { color }]}>{siteName || "Meu Negocio"}</Text>
+            <View style={[s.publishedBadge, { backgroundColor: published ? Colors.greenD : Colors.bg4 }]}>
+              <View style={[s.publishedDot, { backgroundColor: published ? Colors.green : Colors.ink3 }]} />
+              <Text style={[s.publishedLabel, { color: published ? Colors.green : Colors.ink3 }]}>
+                {published ? "Publicado" : "Rascunho"}
+              </Text>
             </View>
           </View>
-          <Text style={z.previewTitle}>{siteName}</Text>
-          <Text style={z.previewDesc}>{siteDesc}</Text>
-          <View style={[z.previewBtn, { backgroundColor: siteColor }]}>
-            <Text style={z.previewBtnText}>Ver produtos</Text>
-          </View>
+          <Text style={s.previewTagline}>{tagline || description || "Bem-vindo ao nosso site"}</Text>
         </View>
-        <View style={z.previewFooter}>
-          <Pressable onPress={() => Linking.openURL("https://getaura.com.br")}><Text style={z.previewFooterText}>Loja powered by <Text style={{color: Colors.violet3, fontWeight: "600"}}>Aura.</Text></Text></Pressable>
+        <View style={s.urlRow}>
+          <Icon name="globe" size={12} color={Colors.violet3} />
+          <Text style={s.urlText} numberOfLines={1}>{storefrontUrl}</Text>
+          <Pressable onPress={() => {
+            if (Platform.OS === "web" && typeof navigator !== "undefined") {
+              navigator.clipboard?.writeText(storefrontUrl);
+            }
+            toast.info("Link copiado!");
+          }} style={s.urlCopy}>
+            <Text style={s.urlCopyText}>Copiar</Text>
+          </Pressable>
+          {Platform.OS === "web" && (
+            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={[s.urlCopy, { backgroundColor: Colors.violetD }]}>
+              <Text style={s.urlCopyText}>Abrir</Text>
+            </Pressable>
+          )}
         </View>
-      </HoverCard>
-
-      <View style={z.urlRow}>
-        <Icon name="bar_chart" size={14} color={Colors.violet3} />
-        <Text style={z.urlText}>{siteUrl}</Text>
-        <Pressable onPress={() => toast.info("Link copiado!")} style={z.urlCopy}><Text style={z.urlCopyText}>Copiar</Text></Pressable>
       </View>
 
       {/* Settings */}
-      <View style={z.section}>
-        <Text style={z.sectionTitle}>Configurações do site</Text>
-        <View style={z.card}>
-          <View style={z.publishRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={z.fieldLabel}>Site publicado</Text>
-              <Text style={z.fieldHint}>{sitePublished ? "Seu site está visível para clientes" : "Site desativado"}</Text>
-            </View>
-            <Switch value={sitePublished} onValueChange={setSitePublished} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
+      <SectionTitle title="Informacoes do negocio" />
+      <View style={s.card}>
+        {/* Publicado switch */}
+        <View style={s.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.switchLabel}>Site publicado</Text>
+            <Text style={s.switchHint}>{published ? "Visivelpassel para clientes" : "Site oculto — somente voce ve"}</Text>
           </View>
-          <Field label="Nome do negócio" value={siteName} onChange={setSiteName} />
-          <Field label="Descrição" value={siteDesc} onChange={setSiteDesc} multiline />
-          <Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(12) 99999-0000" />
-          <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegogio" />
-          <Field label="Endereço" value={address} onChange={setAddress} />
-
-          <Text style={[z.fieldLabel, { marginTop: 12 }]}>Cor principal</Text>
-          <View style={z.colorRow}>
-            {colors.map(c => (
-              <Pressable key={c} onPress={() => setSiteColor(c)} style={[z.colorDot, { backgroundColor: c }, siteColor === c && z.colorDotActive]} />
-            ))}
-          </View>
-
-          <Pressable onPress={() => toast.success("Configurações salvas")} style={z.saveBtn}>
-            <Text style={z.saveBtnText}>Salvar configurações</Text>
-          </Pressable>
+          <Switch
+            value={published}
+            onValueChange={setPublished}
+            trackColor={{ true: Colors.green, false: Colors.bg4 }}
+            thumbColor={"#fff"}
+          />
         </View>
-      </View>
-    </View>
-  );
-}
+        <View style={s.divider} />
 
-// ── Tab: Vitrine ─────────────────────────────────
-function TabVitrine() {
-  const [products, setProducts] = useState(MOCK_PRODUCTS);
-  const [filter, setFilter] = useState("all");
-  const cats = ["all", ...new Set(MOCK_PRODUCTS.map(p => p.category))];
-  const filtered = filter === "all" ? products : products.filter(p => p.category === filter);
-  const published = products.filter(p => p.published).length;
+        <Field label="Nome do negocio" value={siteName} onChange={setSiteName} placeholder="Ex: Barbearia do Caio" />
+        <Field label="Slogan (opcional)" value={tagline} onChange={setTagline} placeholder="Qualidade que fala por si" />
+        <Field label="Descricao" value={description} onChange={setDescription} placeholder="Conte um pouco sobre seu negocio..." multiline />
+        <Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(12) 99999-0000" />
+        <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegogio" />
+        <Field label="Telefone" value={phone} onChange={setPhone} placeholder="(12) 3333-0000" />
+        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacareí/SP" />
 
-  function togglePublish(id) {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, published: !p.published } : p));
-    toast.success("Produto atualizado na vitrine");
-  }
-
-  return (
-    <View>
-      <View style={g.row}>
-        <SummaryKPI label="PRODUTOS" value={String(products.length)} />
-        <SummaryKPI label="PUBLICADOS" value={String(published)} color={Colors.green} />
-        <SummaryKPI label="OCULTOS" value={String(products.length - published)} color={Colors.ink3} />
-      </View>
-
-      <View style={z.filterRow}>
-        {cats.map(c => (
-          <Pressable key={c} onPress={() => setFilter(c)} style={[z.filterBtn, filter === c && z.filterBtnActive]}>
-            <Text style={[z.filterText, filter === c && z.filterTextActive]}>{c === "all" ? "Todos" : c}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={z.hint}>Selecione quais produtos do estoque aparecem na vitrine do seu site.</Text>
-
-      <View style={z.card}>
-        {filtered.map(prod => (
-          <HoverRow key={prod.id} style={z.prodRow}>
-            <View style={z.prodLeft}>
-              <View style={[z.prodImg, { backgroundColor: prod.published ? Colors.violetD : Colors.bg4 }]}>
-                <Icon name="package" size={18} color={prod.published ? Colors.violet3 : Colors.ink3} />
-              </View>
-              <View style={z.prodInfo}>
-                <Text style={z.prodName}>{prod.name}</Text>
-                <Text style={z.prodMeta}>R$ {prod.price.toFixed(2)} / {prod.category}</Text>
-              </View>
-            </View>
-            <View style={z.prodRight}>
-              <View style={[z.prodBadge, { backgroundColor: prod.published ? Colors.greenD : Colors.bg4 }]}>
-                <Text style={[z.prodBadgeText, { color: prod.published ? Colors.green : Colors.ink3 }]}>{prod.published ? "Publicado" : "Oculto"}</Text>
-              </View>
-              <Switch value={prod.published} onValueChange={() => togglePublish(prod.id)} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
-            </View>
-          </HoverRow>
-        ))}
-      </View>
-
-      <Pressable onPress={() => toast.info("Importar produtos do estoque")} style={z.importBtn}>
-        <Icon name="package" size={16} color={Colors.violet3} />
-        <Text style={z.importBtnText}>Importar do estoque</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-// ── Tab: Frete ───────────────────────────────────
-function TabFrete() {
-  const [options, setOptions] = useState(FREIGHT_OPTIONS);
-
-  function toggle(id) {
-    setOptions(prev => prev.map(o => o.id === id ? { ...o, enabled: !o.enabled } : o));
-    toast.success("Opção de frete atualizada");
-  }
-
-  return (
-    <View>
-      <Text style={z.hint}>Configure as opções de entrega disponíveis no seu site. O cliente escolhe na hora da compra.</Text>
-      <View style={z.card}>
-        {options.map(opt => (
-          <HoverRow key={opt.id} style={z.freightRow}>
-            <View style={z.freightLeft}>
-              <View style={[z.freightIcon, { backgroundColor: opt.enabled ? Colors.violetD : Colors.bg4 }]}>
-                <Icon name={opt.icon} size={20} color={opt.enabled ? Colors.violet3 : Colors.ink3} />
-              </View>
-              <View style={z.freightInfo}>
-                <Text style={z.freightName}>{opt.name}</Text>
-                <Text style={z.freightDesc}>{opt.desc}</Text>
-                <View style={z.freightMeta}>
-                  <Text style={z.freightMetaText}>{opt.estimate}</Text>
-                  <Text style={z.freightMetaDot}>·</Text>
-                  <Text style={z.freightMetaText}>{opt.cost}</Text>
-                </View>
-              </View>
-            </View>
-            <Switch value={opt.enabled} onValueChange={() => toggle(opt.id)} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
-          </HoverRow>
-        ))}
-      </View>
-
-      <View style={z.infoCard}>
-        <Icon name="alert" size={14} color={Colors.amber} />
-        <Text style={z.infoText}>Uber Flash requer integração com Uber Direct (configurado no setup da Aura). Correios e Transportadora exigem contrato com o parceiro.</Text>
-      </View>
-    </View>
-  );
-}
-
-// ── Tab: Analytics ────────────────────────────────
-function TabAnalytics() {
-  const a = MOCK_ANALYTICS;
-  const fmt = (n) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-  return (
-    <View>
-      <View style={g.row}>
-        <SummaryKPI label="VISITAS" value={String(a.visits)} />
-        <SummaryKPI label="PEDIDOS" value={String(a.orders)} color={Colors.green} />
-        <SummaryKPI label="CONVERSÃO" value={a.conversion + "%"} color={Colors.violet3} />
-        <SummaryKPI label="RECEITA" value={fmt(a.revenue)} color={Colors.green} />
-      </View>
-
-      <View style={z.section}>
-        <Text style={z.sectionTitle}>Produtos mais vistos</Text>
-        <View style={z.card}>
-          {a.topProducts.map((p, i) => (
-            <HoverRow key={p.name} style={z.topRow}>
-              <View style={z.topLeft}>
-                <View style={z.topRank}><Text style={z.topRankText}>{i + 1}</Text></View>
-                <Text style={z.topName}>{p.name}</Text>
-              </View>
-              <View style={z.topRight}>
-                <Text style={z.topViews}>{p.views} visitas</Text>
-                <Text style={z.topOrders}>{p.orders} pedidos</Text>
-              </View>
-            </HoverRow>
+        {/* Cor principal */}
+        <Text style={s.fieldLabel}>Cor principal</Text>
+        <View style={s.colorRow}>
+          {COLOR_PRESETS.map(c => (
+            <Pressable
+              key={c}
+              onPress={() => setColor(c)}
+              style={[s.colorDot, { backgroundColor: c }, color === c && s.colorDotActive]}
+            />
           ))}
+          {Platform.OS === "web" && (
+            <Pressable onPress={openColorPicker} style={[s.colorDot, { backgroundColor: color, borderWidth: 2, borderColor: Colors.border2 }]} />
+          )}
+        </View>
+
+        <Pressable
+          onPress={handleSave}
+          disabled={isSaving}
+          style={[s.saveBtn, isSaving && { opacity: 0.6 }]}
+        >
+          <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes"}</Text>
+        </Pressable>
+      </View>
+
+      {/* Dominio personalizado */}
+      <SectionTitle title="Dominio personalizado" />
+      <View style={s.card}>
+        {hasDomain ? (
+          <View>
+            <View style={s.domainRow}>
+              <Icon name="globe" size={16} color={Colors.violet3} />
+              <Text style={s.domainName}>{config.custom_domain}</Text>
+              <StatusBadge status={config.custom_domain_status} />
+            </View>
+            {config.custom_domain_status === "pending_dns" && (
+              <View style={s.infoCard}>
+                <Icon name="alert" size={13} color={Colors.amber} />
+                <Text style={s.infoText}>
+                  Configuracao DNS em andamento. A equipe Aura ira registrar e configurar seu dominio em ate 48h uteis. Voce sera notificado quando estiver ativo.
+                </Text>
+              </View>
+            )}
+            {config.custom_domain_status === "active" && (
+              <Text style={s.domainHint}>Seu dominio esta ativo. Acesse via {config.custom_domain}</Text>
+            )}
+          </View>
+        ) : (
+          <View>
+            <Text style={s.domainDesc}>
+              Registre um dominio .com.br exclusivo para o seu negocio. O dominio e registrado e configurado pela equipe Aura.
+            </Text>
+
+            {/* Plano de dominio */}
+            <Text style={s.fieldLabel}>Duracao</Text>
+            <View style={s.planRow}>
+              <Pressable
+                onPress={() => setDomainPlan("1year")}
+                style={[s.planBtn, domainPlan === "1year" && s.planBtnActive]}
+              >
+                <Text style={[s.planBtnLabel, domainPlan === "1year" && s.planBtnLabelActive]}>1 ano</Text>
+                <Text style={[s.planBtnPrice, domainPlan === "1year" && s.planBtnLabelActive]}>R$ 80</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setDomainPlan("2years")}
+                style={[s.planBtn, domainPlan === "2years" && s.planBtnActive]}
+              >
+                <Text style={[s.planBtnLabel, domainPlan === "2years" && s.planBtnLabelActive]}>2 anos</Text>
+                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>
+                  R$ 152 <Text style={{ fontSize: 10, color: Colors.green }}>(-5%)</Text>
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={[s.fieldLabel, { marginTop: 12 }]}>Dominio desejado</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={domainInput}
+                onChangeText={setDomainInput}
+                placeholder="meunegocio.com.br"
+                placeholderTextColor={Colors.ink3}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Pressable
+                onPress={handleRequestDomain}
+                disabled={isRequestingDomain}
+                style={[s.domainBtn, isRequestingDomain && { opacity: 0.6 }]}
+              >
+                <Text style={s.domainBtnText}>{isRequestingDomain ? "..." : "Solicitar"}</Text>
+              </Pressable>
+            </View>
+
+            <View style={s.infoCard}>
+              <Icon name="alert" size={13} color={Colors.violet3} />
+              <Text style={s.infoText}>
+                A disponibilidade do dominio e verificada junto ao Registro.br. Apos solicitar, a equipe Aura confirma disponibilidade e efetua o registro em ate 48h uteis.
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ── Tab: Vitrine ──────────────────────────────────────────────
+function TabVitrine({ config, products, saveConfig, isSaving }: any) {
+  const featuredInit: Set<string> = new Set(config.featured_product_ids || []);
+  const [featured, setFeatured] = useState<Set<string>>(featuredInit);
+  const [showPrices, setShowPrices]   = useState(config.show_prices ?? true);
+  const [showStock,  setShowStock]    = useState(config.show_stock  ?? false);
+  const [catFilter,  setCatFilter]    = useState("Todos");
+  const [changed,    setChanged]      = useState(false);
+
+  useEffect(() => {
+    setFeatured(new Set(config.featured_product_ids || []));
+    setShowPrices(config.show_prices ?? true);
+    setShowStock(config.show_stock ?? false);
+    setChanged(false);
+  }, [config.featured_product_ids?.join(",")]);
+
+  function toggleProduct(id: string) {
+    setFeatured(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setChanged(true);
+  }
+
+  async function handleSave() {
+    await saveConfig({
+      featured_product_ids: Array.from(featured),
+      show_prices: showPrices,
+      show_stock: showStock,
+    });
+    setChanged(false);
+  }
+
+  const cats = ["Todos", ...Array.from(new Set((products as any[]).map((p: any) => p.category).filter(Boolean)))];
+  const filtered = catFilter === "Todos" ? products : (products as any[]).filter((p: any) => p.category === catFilter);
+  const publishedCount = featured.size;
+
+  return (
+    <View>
+      {/* KPIs */}
+      <View style={s.kpiRow}>
+        <View style={s.kpi}>
+          <Text style={s.kpiLabel}>TOTAL</Text>
+          <Text style={s.kpiValue}>{(products as any[]).length}</Text>
+        </View>
+        <View style={s.kpi}>
+          <Text style={s.kpiLabel}>NA VITRINE</Text>
+          <Text style={[s.kpiValue, { color: Colors.green }]}>{publishedCount}</Text>
+        </View>
+        <View style={s.kpi}>
+          <Text style={s.kpiLabel}>OCULTOS</Text>
+          <Text style={[s.kpiValue, { color: Colors.ink3 }]}>{(products as any[]).length - publishedCount}</Text>
         </View>
       </View>
 
-      <View style={z.infoCard}>
-        <Icon name="star" size={14} color={Colors.violet3} />
-        <Text style={z.infoText}>Analytics em tempo real disponível após publicação do site. Dados atualizados a cada 5 minutos.</Text>
+      {/* Opcoes de exibicao */}
+      <View style={s.card}>
+        <View style={s.switchRow}>
+          <Text style={s.switchLabel}>Mostrar precos</Text>
+          <Switch value={showPrices} onValueChange={(v) => { setShowPrices(v); setChanged(true); }}
+            trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+        </View>
+        <View style={[s.switchRow, { borderBottomWidth: 0 }]}>
+          <Text style={s.switchLabel}>Mostrar estoque disponivel</Text>
+          <Switch value={showStock} onValueChange={(v) => { setShowStock(v); setChanged(true); }}
+            trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+        </View>
       </View>
+
+      <Text style={s.hint}>Selecione os produtos do estoque que aparecem na vitrine do seu site.</Text>
+
+      {/* Filtro por categoria */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }}
+        contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        {cats.map(c => (
+          <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.filterChip, catFilter === c && s.filterChipActive]}>
+            <Text style={[s.filterText, catFilter === c && s.filterTextActive]}>{c}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* Lista de produtos */}
+      {(products as any[]).length === 0 ? (
+        <View style={s.emptyBox}>
+          <Icon name="package" size={28} color={Colors.ink3} />
+          <Text style={s.emptyText}>Nenhum produto cadastrado no estoque</Text>
+          <Text style={s.emptyHint}>Cadastre produtos no modulo Estoque para exibi-los na vitrine.</Text>
+        </View>
+      ) : (
+        <View style={s.card}>
+          {(filtered as any[]).map((prod: any) => {
+            const isFeatured = featured.has(prod.id || prod.product_id);
+            const id = prod.id || prod.product_id;
+            return (
+              <HoverRow key={id} style={s.prodRow}>
+                <View style={s.prodLeft}>
+                  {prod.color ? (
+                    <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: prod.color, borderWidth: 1, borderColor: Colors.border }} />
+                  ) : (
+                    <View style={[s.prodIcon, { backgroundColor: isFeatured ? Colors.violetD : Colors.bg4 }]}>
+                      <Icon name="package" size={18} color={isFeatured ? Colors.violet3 : Colors.ink3} />
+                    </View>
+                  )}
+                  <View style={s.prodInfo}>
+                    <Text style={s.prodName}>{prod.name}</Text>
+                    <Text style={s.prodMeta}>
+                      {showPrices ? `R$ ${(parseFloat(prod.price) || 0).toFixed(2)}` : ""}
+                      {prod.category ? ` · ${prod.category}` : ""}
+                      {prod.size ? ` · ${prod.size}` : ""}
+                    </Text>
+                  </View>
+                </View>
+                <View style={s.prodRight}>
+                  <View style={[s.featBadge, { backgroundColor: isFeatured ? Colors.greenD : Colors.bg4 }]}>
+                    <Text style={[s.featBadgeText, { color: isFeatured ? Colors.green : Colors.ink3 }]}>
+                      {isFeatured ? "Visivel" : "Oculto"}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isFeatured}
+                    onValueChange={() => toggleProduct(id)}
+                    trackColor={{ true: Colors.green, false: Colors.bg4 }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </HoverRow>
+            );
+          })}
+        </View>
+      )}
+
+      {changed && (
+        <Pressable onPress={handleSave} disabled={isSaving} style={[s.saveBtn, isSaving && { opacity: 0.6 }]}>
+          <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar vitrine"}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
-// ── Shared components ────────────────────────────
-function Field({ label, value, onChange, placeholder, multiline }) {
+// ── Tab: Entrega ──────────────────────────────────────────────
+function TabEntrega({ config, saveConfig, isSaving }: any) {
+  const [pickup,   setPickup]   = useState(config.pickup_enabled   ?? true);
+  const [delivery, setDelivery] = useState(config.delivery_enabled ?? false);
+  const [fee,      setFee]      = useState(String(config.delivery_fee || "0"));
+  const [changed,  setChanged]  = useState(false);
+
+  useEffect(() => {
+    setPickup(config.pickup_enabled ?? true);
+    setDelivery(config.delivery_enabled ?? false);
+    setFee(String(config.delivery_fee || "0"));
+    setChanged(false);
+  }, [config.pickup_enabled, config.delivery_enabled, config.delivery_fee]);
+
+  async function handleSave() {
+    await saveConfig({
+      pickup_enabled:   pickup,
+      delivery_enabled: delivery,
+      delivery_fee:     parseFloat(fee.replace(",", ".")) || 0,
+    });
+    setChanged(false);
+  }
+
   return (
-    <View style={z.field}>
-      <Text style={z.fieldLabel}>{label}</Text>
-      <TextInput style={[z.input, multiline && z.textarea]} value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={Colors.ink3} multiline={multiline} />
+    <View>
+      <Text style={s.hint}>
+        Configure como o cliente recebe seu pedido. As integracoes com transportadoras sao configuradas pela equipe Aura.
+      </Text>
+
+      <View style={s.card}>
+        {/* Retirada */}
+        <View style={s.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.switchLabel}>Retirada no local</Text>
+            <Text style={s.switchHint}>Cliente busca no estabelecimento (gratis)</Text>
+          </View>
+          <Switch
+            value={pickup}
+            onValueChange={(v) => { setPickup(v); setChanged(true); }}
+            trackColor={{ true: Colors.green, false: Colors.bg4 }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {/* Entrega */}
+        <View style={s.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.switchLabel}>Entrega a domicilio</Text>
+            <Text style={s.switchHint}>Disponibilize entrega para os clientes</Text>
+          </View>
+          <Switch
+            value={delivery}
+            onValueChange={(v) => { setDelivery(v); setChanged(true); }}
+            trackColor={{ true: Colors.green, false: Colors.bg4 }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {/* Taxa de entrega (so aparece se delivery ativado) */}
+        {delivery && (
+          <View style={[s.field, { marginTop: 8 }]}>
+            <Text style={s.fieldLabel}>Taxa de entrega (R$)</Text>
+            <TextInput
+              style={s.input}
+              value={fee}
+              onChangeText={(v) => { setFee(v); setChanged(true); }}
+              placeholder="0,00"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        )}
+      </View>
+
+      {/* Info */}
+      <View style={s.infoCard}>
+        <Icon name="alert" size={13} color={Colors.violet3} />
+        <Text style={s.infoText}>
+          Integracoes avancadas (Uber Flash, Correios, transportadoras) sao configuradas pela equipe Aura como servico adicional. Entre em contato pelo Suporte.
+        </Text>
+      </View>
+
+      {changed && (
+        <Pressable onPress={handleSave} disabled={isSaving} style={[s.saveBtn, isSaving && { opacity: 0.6 }, { marginTop: 16 }]}>
+          <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes de entrega"}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
-function SummaryKPI({ label, value, color }) {
-  return (
-    <View style={g.kpi}>
-      <Text style={g.kpiLabel}>{label}</Text>
-      <Text style={[g.kpiValue, color && { color }]}>{value}</Text>
-    </View>
-  );
-}
-
-// ── Main Screen ──────────────────────────────────
+// ── Tela principal ────────────────────────────────────────────
 export default function CanalDigitalScreen() {
   const [tab, setTab] = useState(0);
-  const { isDemo } = useAuthStore();
+  const { company } = useAuthStore();
+  const { config, products, isLoading, saveConfig, isSaving, requestDomain, isRequestingDomain } = useDigitalChannel();
+
+  // Plan gate: canal digital e Negocio+
+  const plan = company?.plan || "essencial";
+  const planLevels: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
+  const hasAccess = (planLevels[plan] ?? 0) >= 1;
+
+  if (!hasAccess) {
+    return (
+      <ScrollView style={g.screen} contentContainerStyle={g.content}>
+        <PageHeader title="Canal Digital" />
+        <View style={s.lockBox}>
+          <Icon name="globe" size={36} color={Colors.ink3} />
+          <Text style={s.lockTitle}>Canal Digital</Text>
+          <Text style={s.lockDesc}>
+            Crie sua loja online em minutos. Vitrine de produtos, dominio personalizado, horarios de funcionamento e muito mais.
+          </Text>
+          <View style={s.lockBadge}><Text style={s.lockBadgeText}>Disponivel no plano Negocio</Text></View>
+          <Pressable style={s.upgradeBtn}>
+            <Text style={s.upgradeBtnText}>Ver planos</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={g.screen} contentContainerStyle={g.content}>
       <PageHeader title="Canal Digital" />
-      <View style={z.canalHero}>
-        <View style={z.canalHeroIcon}><Icon name="globe" size={24} color={Colors.violet3} /></View>
-        <Text style={z.canalHeroTitle}>Sua loja online em minutos</Text>
-        <Text style={z.canalHeroDesc}>Crie uma página de vendas personalizada para seu negócio. Seus clientes encontram seus produtos, fazem pedidos e você recebe tudo pelo app.</Text>
+
+      {/* Hero informativo */}
+      <View style={s.hero}>
+        <View style={s.heroIcon}><Icon name="globe" size={22} color={Colors.violet3} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.heroTitle}>Sua loja online em minutos</Text>
+          <Text style={s.heroDesc}>
+            Configure sua vitrine, personalize as cores e compartilhe o link com clientes.
+          </Text>
+        </View>
+        {config.is_published && (
+          <Pressable
+            onPress={() => config.storefront_url && Linking.openURL(config.storefront_url)}
+            style={s.viewSiteBtn}
+          >
+            <Icon name="globe" size={13} color={Colors.violet3} />
+            <Text style={s.viewSiteBtnText}>Ver site</Text>
+          </Pressable>
+        )}
       </View>
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />
 
-      <AgentBanner agent="Marketing" insight={{ title: "Sugestão: post para Instagram", desc: "O combo corte+barba é seu produto com maior conversão (12%). Que tal um post destacando ele?", actionLabel: "Gerar rascunho", action: "post", priority: "medium", icon: "star" }} />
-      {tab === 0 && <TabMeuSite />}
-      {tab === 1 && <TabVitrine />}
-      {tab === 2 && <TabFrete />}
-      {tab === 3 && <TabAnalytics />}
-      <DemoBanner />
+      {isLoading ? (
+        <ListSkeleton rows={4} />
+      ) : (
+        <>
+          {tab === 0 && (
+            <TabMeuSite
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+              requestDomain={requestDomain}
+              isRequestingDomain={isRequestingDomain}
+            />
+          )}
+          {tab === 1 && (
+            <TabVitrine
+              config={config}
+              products={products}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+            />
+          )}
+          {tab === 2 && (
+            <TabEntrega
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+            />
+          )}
+        </>
+      )}
     </ScrollView>
   );
 }
 
-// ── Styles ────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────
 const g = StyleSheet.create({
-  screen: { flex: 1 },
+  screen:  { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
-  kpi: { flex: 1, minWidth: IS_WIDE ? 120 : "45%", backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 6 },
-  kpiLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8 },
-  kpiValue: { fontSize: 20, fontWeight: "800", color: Colors.ink },
 });
 
-const z = StyleSheet.create({
-  // Preview
-  previewCard: { backgroundColor: Colors.bg3, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
-  previewHeader: { padding: 24 },
-  previewTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  previewLogo: { width: 80, height: 32 },
-  previewBrand: { fontSize: 18, fontWeight: "800" },
-  previewNav: { flexDirection: "row", gap: IS_WIDE ? 16 : 8, flexWrap: "wrap" },
-  previewNavItem: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  previewTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, marginBottom: 6 },
-  previewDesc: { fontSize: 13, color: Colors.ink3, lineHeight: 20, marginBottom: 16 },
-  previewBtn: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10 },
-  previewBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  previewFooter: { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 10, alignItems: "center" },
-  previewFooterText: { fontSize: 9, color: Colors.ink3, fontStyle: "italic" },
-  // URL
-  urlRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
-  urlText: { flex: 1, fontSize: 12, color: Colors.violet3, fontWeight: "500" },
-  urlCopy: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+const s = StyleSheet.create({
+  // Hero
+  hero: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.violetD, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
+  heroIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, flexShrink: 0 },
+  heroTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+  heroDesc:  { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 16 },
+  viewSiteBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: Colors.border2, flexShrink: 0 },
+  viewSiteBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  // Preview card
+  previewCard: { backgroundColor: Colors.bg3, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
+  previewHeader: { padding: 20 },
+  previewBrand: { fontSize: 20, fontWeight: "800" },
+  previewTagline: { fontSize: 13, color: Colors.ink3, marginTop: 4, lineHeight: 18 },
+  publishedBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  publishedDot: { width: 6, height: 6, borderRadius: 3 },
+  publishedLabel: { fontSize: 10, fontWeight: "700" },
+  // URL row
+  urlRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 16, paddingVertical: 10 },
+  urlText: { flex: 1, fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+  urlCopy: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
   urlCopyText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
   // Section
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
-  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border },
+  sectionTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700", marginTop: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
+  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
   // Fields
   field: { marginBottom: 14 },
   fieldLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
-  fieldHint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink },
+  input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   textarea: { minHeight: 80, textAlignVertical: "top" },
   // Color picker
-  colorRow: { flexDirection: "row", gap: 10, marginTop: 6, marginBottom: 16 },
-  colorDot: { width: IS_WIDE ? 32 : 28, height: IS_WIDE ? 32 : 28, borderRadius: IS_WIDE ? 16 : 14 },
-  colorDotActive: { borderWidth: 3, borderColor: "#fff" },
-  // Publish
-  publishRow: { flexDirection: "row", alignItems: "center", marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  // Save
-  saveBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 4 },
-  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  // Hint
-  hint: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
-  // Vitrine
-  filterRow: { flexDirection: "row", gap: 6, marginBottom: 16, flexWrap: "wrap" },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  filterBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  colorRow: { flexDirection: "row", gap: 10, marginTop: 6, marginBottom: 16, flexWrap: "wrap" },
+  colorDot: { width: 30, height: 30, borderRadius: 15 },
+  colorDotActive: { borderWidth: 3, borderColor: "#fff", transform: [{ scale: 1.15 }] },
+  // Switch rows
+  switchRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  switchLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  switchHint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  // Save button
+  saveBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 },
+  saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  // Dominio
+  domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
+  domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },
+  domainHint: { fontSize: 11, color: Colors.ink3, marginTop: 8 },
+  domainBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, flexShrink: 0 },
+  domainBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 10, fontWeight: "700" },
+  planRow: { flexDirection: "row", gap: 10, marginTop: 6 },
+  planBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 2, borderColor: Colors.border, alignItems: "center", gap: 4 },
+  planBtnActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  planBtnLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
+  planBtnPrice: { fontSize: 18, color: Colors.ink3, fontWeight: "800" },
+  planBtnLabelActive: { color: Colors.violet3 },
+  // Info card
+  infoCard: { flexDirection: "row", gap: 8, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: Colors.border },
+  infoText: { fontSize: 11, color: Colors.ink3, flex: 1, lineHeight: 16 },
+  hint: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 12 },
+  // KPIs
+  kpiRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  kpiLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 },
+  kpiValue: { fontSize: 22, fontWeight: "800", color: Colors.ink },
+  // Filter chips
+  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  filterChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   filterText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   filterTextActive: { color: Colors.violet3, fontWeight: "600" },
-  prodRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  // Product rows
+  prodRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   prodLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  prodImg: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  prodInfo: { flex: 1, gap: 2 },
-  prodName: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  prodMeta: { fontSize: 11, color: Colors.ink3 },
-  prodRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  prodBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  prodBadgeText: { fontSize: 9, fontWeight: "600" },
-  importBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 14, marginTop: 16, borderWidth: 1, borderColor: Colors.border2 },
-  importBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-  // Freight
-  freightRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  freightLeft: { flexDirection: "row", gap: 12, flex: 1 },
-  freightIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  freightInfo: { flex: 1, gap: 2 },
-  freightName: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
-  freightDesc: { fontSize: 11, color: Colors.ink3 },
-  freightMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
-  freightMetaText: { fontSize: 10, color: Colors.violet3, fontWeight: "500" },
-  freightMetaDot: { fontSize: 10, color: Colors.ink3 },
-  // Info card
-  infoCard: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, marginTop: 16 },
-  infoText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
-  // Analytics
-  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  topLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  topRank: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" },
-  topRankText: { fontSize: 12, fontWeight: "700", color: Colors.violet3 },
-  topName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  topRight: { alignItems: "flex-end", gap: 2 },
-  topViews: { fontSize: 11, color: Colors.ink3 },
-  topOrders: { fontSize: 11, color: Colors.green, fontWeight: "600" },
-
-  // Canal hero
-  canalHero: { backgroundColor: Colors.violetD, borderRadius: 16, padding: 20, marginBottom: 16, alignItems: "center", gap: 8, borderWidth: 1, borderColor: Colors.border2 },
-  canalHeroIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
-  canalHeroTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink, textAlign: "center" },
-  canalHeroDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 400 },
+  prodIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  prodInfo: { flex: 1 },
+  prodName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  prodMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  prodRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  featBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  featBadgeText: { fontSize: 9, fontWeight: "600" },
+  // Empty
+  emptyBox: { alignItems: "center", paddingVertical: 40, gap: 8, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border },
+  emptyText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
+  emptyHint: { fontSize: 12, color: Colors.ink3, textAlign: "center", maxWidth: 280 },
+  // Lock (plan gate)
+  lockBox: { alignItems: "center", paddingVertical: 48, gap: 12, backgroundColor: Colors.bg3, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 32 },
+  lockTitle: { fontSize: 22, color: Colors.ink, fontWeight: "800" },
+  lockDesc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, maxWidth: 320 },
+  lockBadge: { backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border2 },
+  lockBadgeText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  upgradeBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 14 },
+  upgradeBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
