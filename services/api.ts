@@ -152,12 +152,37 @@ export const companiesApi = {
   reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? "?rating=" + rating : ""}`),
   requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
   members: (companyId: string) => request<any>(`/companies/${companyId}/members`),
-  // FIX: frontend usa { email }, backend espera { invite_email } — remapeia aqui
-  inviteMember: (companyId: string, body: { email: string; role_label?: string }) =>
-    request<any>(`/companies/${companyId}/members/invite`, {
-      method: "POST",
-      body: { invite_email: body.email, role_label: body.role_label },
-    }),
+   // API de convite pode variar entre ambientes (email vs invite_email, role vs role_label).
+  // Mantem fallback para evitar erro 400 quando o backend usa um contrato diferente.
+  inviteMember: async (companyId: string, body: { email: string; role_label?: string }) => {
+    const normalizedRole = (body.role_label || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+    const payloads = [
+      { invite_email: body.email, role_label: body.role_label, role: normalizedRole },
+      { email: body.email, role_label: body.role_label, role: normalizedRole },
+      { invite_email: body.email, role: normalizedRole },
+      { email: body.email, role: normalizedRole },
+    ];
+
+    let lastErr: unknown;
+    for (const payload of payloads) {
+      try {
+        return await request<any>(`/companies/${companyId}/members/invite`, {
+          method: "POST",
+          body: payload,
+          retry: 0,
+        });
+      } catch (err) {
+        lastErr = err;
+        if (!(err instanceof ApiError) || err.status !== 400) throw err;
+      }
+    }
+    throw lastErr;
+  },
   updateMember: (companyId: string, mid: string, body: any) => request<any>(`/companies/${companyId}/members/${mid}`, { method: "PATCH", body }),
   removeMember: (companyId: string, mid: string) => request<any>(`/companies/${companyId}/members/${mid}`, { method: "DELETE" }),
   membersBilling: (companyId: string) => request<any>(`/companies/${companyId}/members/billing`),
