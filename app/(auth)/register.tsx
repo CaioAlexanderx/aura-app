@@ -3,9 +3,9 @@ import {
   View, Text, TextInput, Pressable, ActivityIndicator,
   StyleSheet, Platform, ScrollView, Image,
 } from "react-native";
-import { Link, router } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
-import { authApi, ApiError } from "@/services/api";
+import { authApi, inviteApi, ApiError } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -57,9 +57,13 @@ function saveCnpjData(data: any) {
 }
 
 export default function RegisterScreen() {
+  // Params de convite — preenchidos quando o usuario vem de /invite/[token]
+  const { invite_token, invite_email } = useLocalSearchParams<{ invite_token?: string; invite_email?: string }>();
+  const isInviteFlow = !!invite_token;
+
   const [step, setStep] = useState(0);
   const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invite_email || ""); // pre-preenche com email do convite
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -82,7 +86,6 @@ export default function RegisterScreen() {
     try {
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
       const timer = controller ? setTimeout(() => controller.abort(), 10000) : null;
-      // Route through Aura backend (avoids CSP blocking direct BrasilAPI calls)
       const res = await fetch(`${API_BASE}/onboarding/cnpj-lookup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -98,11 +101,9 @@ export default function RegisterScreen() {
       const companyName = data.legal_name || data.trade_name || data.razao_social || data.nome_fantasia || "";
       setEmpresa(companyName);
       setCnpjFound(companyName);
-      // Phone: backend may return phone field or ddd+telefone
       if (data.phone) { setTelefoneEmpresa(maskPhone(data.phone)); }
       else if (data.ddd_telefone_1) { setTelefoneEmpresa(maskPhone(`${data.ddd_telefone_1}${data.telefone_1 || ""}`)); }
       saveCnpjData(data);
-      // Detect regime
       if (data.is_mei) { saveDetectedRegime("mei"); }
       else if (data.suggested_regime === "mei") { saveDetectedRegime("mei"); }
       else { saveDetectedRegime(data.suggested_regime || "simples"); }
@@ -154,6 +155,23 @@ export default function RegisterScreen() {
         cnpj: cnpj.replace(/\D/g, ""),
         access_code: codigo.trim() || undefined,
       });
+
+      // Se veio de um convite, aceita automaticamente antes de redirecionar
+      if (isInviteFlow && invite_token) {
+        try {
+          await inviteApi.accept(invite_token);
+          toast.success("Conta criada e convite aceito! Bem-vindo a equipe.");
+          setTimeout(() => router.replace("/(tabs)/"), 400);
+          return;
+        } catch (inviteErr: any) {
+          // Nao bloqueia o cadastro se o aceite falhar — usuario ja esta cadastrado
+          toast.warning?.("Conta criada, mas houve um problema ao aceitar o convite. Tente novamente pelo link.");
+          if (!toast.warning) toast.error("Conta criada! Abra o link do convite novamente para aceitar.");
+          setTimeout(() => router.replace("/(tabs)/"), 400);
+          return;
+        }
+      }
+
       toast.success("Conta criada com sucesso!");
       const hasTrialCode = codigo.trim() && codeValid === true;
       setTimeout(() => { router.replace(hasTrialCode ? "/(tabs)/onboarding" : "/(tabs)/checkout"); }, 300);
@@ -163,8 +181,19 @@ export default function RegisterScreen() {
   const card = (
     <View style={s.card} {...(isWeb ? { className: "auth-card" } as any : {})}>
       <View style={s.logoRow}><Image source={{ uri: LOGO_SVG }} style={s.logo} resizeMode="contain" /><Text style={s.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text></View>
-      <Text style={s.title}>Criar sua conta</Text>
-      <Text style={s.subtitle}>Comece a organizar seu negocio em minutos</Text>
+
+      {/* Banner de contexto de convite */}
+      {isInviteFlow && (
+        <View style={s.inviteBanner}>
+          <Icon name="users" size={14} color={Colors.violet3} />
+          <Text style={s.inviteBannerText}>
+            Crie sua conta com <Text style={{ fontWeight: "700" }}>{invite_email}</Text> para entrar na equipe
+          </Text>
+        </View>
+      )}
+
+      <Text style={s.title}>{isInviteFlow ? "Criar conta para aceitar convite" : "Criar sua conta"}</Text>
+      <Text style={s.subtitle}>{isInviteFlow ? "Use o e-mail do convite para criar sua conta" : "Comece a organizar seu negocio em minutos"}</Text>
 
       <View style={s.stepsRow}>
         {STEPS.map((label, i) => (
@@ -178,7 +207,26 @@ export default function RegisterScreen() {
       {step === 0 && (
         <View>
           <View style={s.field}><Text style={s.label}>Nome completo *</Text><View style={s.inputWrap}><Icon name="user_plus" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={nome} onChangeText={setNome} placeholder="Maria da Silva" placeholderTextColor={Colors.ink3} autoComplete="name" /></View></View>
-          <View style={s.field}><Text style={s.label}>E-mail *</Text><View style={s.inputWrap}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={email} onChangeText={setEmail} placeholder="maria@empresa.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" autoComplete="email" /></View></View>
+          <View style={s.field}>
+            <Text style={s.label}>E-mail *</Text>
+            <View style={[s.inputWrap, isInviteFlow && { borderColor: Colors.violet + "66" }]}>
+              <Icon name="message" size={16} color={isInviteFlow ? Colors.violet3 : Colors.ink3} />
+              <TextInput
+                style={[s.input, inputOutline]}
+                {...webInputProps}
+                value={email}
+                onChangeText={isInviteFlow ? undefined : setEmail} // nao deixa editar se veio do convite
+                editable={!isInviteFlow}
+                placeholder="maria@empresa.com"
+                placeholderTextColor={Colors.ink3}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+              />
+              {isInviteFlow && <Icon name="lock" size={13} color={Colors.ink3} />}
+            </View>
+            {isInviteFlow && <Text style={{ fontSize: 10, color: Colors.violet3, marginTop: 4 }}>E-mail definido pelo convite — nao pode ser alterado</Text>}
+          </View>
           <View style={s.field}><Text style={s.label}>Senha *</Text><View style={s.inputWrap}><Icon name="settings" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={senha} onChangeText={setSenha} placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" /><Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}><Text style={s.eyeText}>{showPass ? "Ocultar" : "Ver"}</Text></Pressable></View>{senha.length > 0 && <View style={s.passReqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiuscula" /><Req ok={passNumber} text="1 numero" /></View>}</View>
           <View style={s.field}><Text style={s.label}>Confirmar senha *</Text><View style={s.inputWrap}><Icon name="check" size={16} color={confirmarSenha.length > 0 ? (passMatch ? Colors.green : Colors.red) : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={confirmarSenha} onChangeText={setConfirmarSenha} placeholder="Repita a senha" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" /></View>{confirmarSenha.length > 0 && !passMatch && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas nao conferem</Text>}</View>
           <Pressable style={s.btn} {...(isWeb ? { className: "auth-btn" } as any : {})} onPress={nextStep}><Text style={s.btnText}>Continuar</Text></Pressable>
@@ -205,14 +253,17 @@ export default function RegisterScreen() {
             <View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}><Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View>
             <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>WhatsApp ou celular para a Aura entrar em contato com voce.</Text>
           </View>
-          <View style={s.field}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><Text style={s.label}>Codigo de acesso</Text>{codeChecking && <ActivityIndicator size="small" color={Colors.violet3} />}{codeValid === true && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}{codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Invalido</Text>}</View>
-            <View style={[s.inputWrap, codeValid === true && { borderColor: Colors.green }, codeValid === false && { borderColor: Colors.red }]}><Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={codigo} onChangeText={v => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} /></View>
-            <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo? Insira para ativar seu plano.</Text>
-          </View>
+          {/* Codigo de acesso: esconde no fluxo de convite (o convite ja e o codigo de acesso) */}
+          {!isInviteFlow && (
+            <View style={s.field}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><Text style={s.label}>Codigo de acesso</Text>{codeChecking && <ActivityIndicator size="small" color={Colors.violet3} />}{codeValid === true && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}{codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Invalido</Text>}</View>
+              <View style={[s.inputWrap, codeValid === true && { borderColor: Colors.green }, codeValid === false && { borderColor: Colors.red }]}><Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={codigo} onChangeText={v => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} /></View>
+              <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo? Insira para ativar seu plano.</Text>
+            </View>
+          )}
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable style={s.backBtn} onPress={() => setStep(0)}><Text style={s.backBtnText}>Voltar</Text></Pressable>
-            <Pressable style={[s.btn, { flex: 1 }, (isLoading || !step2Valid) && { opacity: 0.6 }]} {...(isWeb ? { className: "auth-btn" } as any : {})} onPress={handleRegister} disabled={isLoading || !step2Valid}>{isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta</Text>}</Pressable>
+            <Pressable style={[s.btn, { flex: 1 }, (isLoading || !step2Valid) && { opacity: 0.6 }]} {...(isWeb ? { className: "auth-btn" } as any : {})} onPress={handleRegister} disabled={isLoading || !step2Valid}>{isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{isInviteFlow ? "Criar conta e aceitar convite" : "Criar conta"}</Text>}</Pressable>
           </View>
           {!step2Valid && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validacao do CNPJ para liberar o cadastro.</Text>}
         </View>
@@ -233,6 +284,8 @@ const s = StyleSheet.create({
   logoRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 },
   logo: { width: 36, height: 36 },
   brand: { fontSize: 24, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  inviteBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
+  inviteBannerText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18 },
   title: { fontSize: 20, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 4 },
   subtitle: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginBottom: 20 },
   stepsRow: { flexDirection: "row", gap: 8, marginBottom: 24 },
