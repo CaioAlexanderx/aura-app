@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useCustomers } from "@/hooks/useCustomers";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -24,7 +24,10 @@ const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.
 const PAGE_SIZE = 20;
 
 export default function ClientesScreen() {
-  const { customers, isLoading, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers } = useCustomers();
+  const {
+    customers, isLoading, isDemo, planBlocked, bulkDeleting,
+    addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers,
+  } = useCustomers();
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
@@ -49,6 +52,10 @@ export default function ClientesScreen() {
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search);
   const totalLtv = customers.reduce((s, c) => s + c.totalSpent, 0);
 
+  // Quantos da pagina atual estao selecionados
+  const pageIds        = paginated.map(c => c.id);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every(id => bulkSelected.has(id));
+
   function handleAdd(c: Customer) { addCustomer(c); setShowAdd(false); }
   function handleEdit(c: Customer) { updateCustomer(c.id, c); setEditTarget(null); }
   function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
@@ -66,9 +73,21 @@ export default function ClientesScreen() {
     });
   }
 
-  function handleSelectAll() {
-    if (bulkSelected.size === filtered.length) setBulkSelected(new Set());
-    else setBulkSelected(new Set(filtered.map(c => c.id)));
+  // Seleciona/desmarca apenas a pagina atual (max 20 itens por vez)
+  function handleSelectPage() {
+    if (pageAllSelected) {
+      setBulkSelected(prev => {
+        const next = new Set(prev);
+        pageIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setBulkSelected(prev => {
+        const next = new Set(prev);
+        pageIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
   }
 
   function exitBulkMode() { setBulkMode(false); setBulkSelected(new Set()); }
@@ -77,6 +96,10 @@ export default function ClientesScreen() {
     await bulkDeleteCustomers(Array.from(bulkSelected));
     exitBulkMode();
   }
+
+  const bulkConfirmMessage = bulkSelected.size > 50
+    ? `Voce selecionou ${bulkSelected.size} clientes. Esta acao nao pode ser desfeita e pode levar alguns segundos.`
+    : "Esta acao nao pode ser desfeita. Os clientes selecionados serao removidos permanentemente.";
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
@@ -126,15 +149,34 @@ export default function ClientesScreen() {
       )}
 
       {/* Bulk action bar */}
-      {bulkMode && bulkSelected.size > 0 && (
+      {bulkMode && (
         <View style={s.bulkBar}>
-          <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size > 1 ? "s" : ""}</Text>
-          <Pressable onPress={handleSelectAll} style={s.bulkAction}>
-            <Text style={s.bulkActionText}>{bulkSelected.size === filtered.length ? "Desmarcar todos" : "Selecionar todos"}</Text>
+          {/* Selecionar pagina atual */}
+          <Pressable onPress={handleSelectPage} style={s.bulkAction}>
+            <Text style={s.bulkActionText}>
+              {pageAllSelected ? "Desmarcar pagina" : "Pag. atual"}
+            </Text>
           </Pressable>
-          <Pressable onPress={() => setShowBulkConfirm(true)} style={[s.bulkAction, s.bulkDeleteAction]}>
-            <Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text>
-          </Pressable>
+
+          {bulkSelected.size > 0 ? (
+            <>
+              <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size !== 1 ? "s" : ""}</Text>
+              <Pressable
+                onPress={() => setShowBulkConfirm(true)}
+                disabled={bulkDeleting}
+                style={[s.bulkAction, s.bulkDeleteAction, bulkDeleting && { opacity: 0.5 }]}
+              >
+                {bulkDeleting
+                  ? <ActivityIndicator size="small" color={Colors.red} />
+                  : <Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text>
+                }
+              </Pressable>
+            </>
+          ) : (
+            <Text style={[s.bulkCount, { color: Colors.ink3, fontWeight: "400" }]}>
+              Toque nos clientes para selecionar
+            </Text>
+          )}
         </View>
       )}
 
@@ -172,13 +214,15 @@ export default function ClientesScreen() {
         onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }}
         onCancel={() => setDeleteTarget(null)} />
 
-      <ConfirmDialog visible={showBulkConfirm}
-        title={`Excluir ${bulkSelected.size} cliente${bulkSelected.size > 1 ? "s" : ""}`}
-        message="Esta acao nao pode ser desfeita. Todos os clientes selecionados serao removidos permanentemente."
-        confirmLabel="Excluir todos"
+      <ConfirmDialog
+        visible={showBulkConfirm}
+        title={`Excluir ${bulkSelected.size} cliente${bulkSelected.size !== 1 ? "s" : ""}`}
+        message={bulkConfirmMessage}
+        confirmLabel="Confirmar exclusao"
         destructive
         onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }}
-        onCancel={() => setShowBulkConfirm(false)} />
+        onCancel={() => setShowBulkConfirm(false)}
+      />
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
@@ -186,32 +230,32 @@ export default function ClientesScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "transparent" },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 },
-  pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
-  addBtn: { backgroundColor: Colors.violet, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
-  addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  planBlock: { backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: Colors.amber + "44" },
-  planBlockText: { fontSize: 12, color: Colors.amber, fontWeight: "500" },
-  summaryRow: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 16 },
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: IS_WIDE ? 140 : "45%", margin: 4 },
-  cardLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
-  cardValue: { fontSize: 20, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextActive: { color: "#fff", fontWeight: "600" },
-  importRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
-  bulkBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
-  bulkBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  bulkBar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
-  bulkCount: { fontSize: 13, color: Colors.violet3, fontWeight: "700", flex: 1 },
-  bulkAction: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  screen:           { flex: 1, backgroundColor: "transparent" },
+  content:          { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  headerRow:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 },
+  pageTitle:        { fontSize: 22, color: Colors.ink, fontWeight: "700" },
+  addBtn:           { backgroundColor: Colors.violet, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
+  addBtnText:       { color: "#fff", fontSize: 13, fontWeight: "700" },
+  planBlock:        { backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: Colors.amber + "44" },
+  planBlockText:    { fontSize: 12, color: Colors.amber, fontWeight: "500" },
+  summaryRow:       { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 16 },
+  card:             { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: IS_WIDE ? 140 : "45%", margin: 4 },
+  cardLabel:        { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
+  cardValue:        { fontSize: 20, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  tab:              { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  tabActive:        { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  tabText:          { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  tabTextActive:    { color: "#fff", fontWeight: "600" },
+  importRow:        { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
+  bulkBtn:          { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
+  bulkBtnText:      { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  bulkBar:          { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
+  bulkCount:        { fontSize: 13, color: Colors.violet3, fontWeight: "700", flex: 1 },
+  bulkAction:       { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   bulkDeleteAction: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
-  bulkActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 16 },
-  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
-  demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+  bulkActionText:   { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  searchInput:      { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 16 },
+  listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
+  demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
+  demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
