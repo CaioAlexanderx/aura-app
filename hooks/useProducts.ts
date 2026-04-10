@@ -1,9 +1,26 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
+
+// Processa deletes em lotes para nao sobrecarregar o servidor
+async function deleteBatched(
+  ids: string[],
+  deleteFn: (id: string) => Promise<any>,
+  batchSize = 10
+): Promise<{ succeeded: number; failed: number }> {
+  let succeeded = 0;
+  let failed = 0;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const results = await Promise.allSettled(batch.map(id => deleteFn(id)));
+    succeeded += results.filter(r => r.status === "fulfilled").length;
+    failed    += results.filter(r => r.status === "rejected").length;
+  }
+  return { succeeded, failed };
+}
 
 function mapApiProduct(p: any): Product {
   return {
@@ -30,6 +47,7 @@ export function useProducts() {
   const { company, token, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { data: apiData, isLoading } = useQuery({
     queryKey: ["products", companyId],
@@ -108,19 +126,32 @@ export function useProducts() {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
+  // Bulk delete em lotes de 10 — nao sobrecarrega o servidor
   async function bulkDeleteProducts(ids: string[]) {
     if (!companyId || isDemo || ids.length === 0) return;
+    setBulkDeleting(true);
+    if (ids.length > 20) toast.info(`Excluindo ${ids.length} produtos...`);
     try {
-      await Promise.all(ids.map(id => companiesApi.deleteProduct(companyId!, id)));
+      const { succeeded, failed } = await deleteBatched(
+        ids,
+        (id) => companiesApi.deleteProduct(companyId!, id),
+        10
+      );
       qc.invalidateQueries({ queryKey: ["products", companyId] });
-      toast.success(`${ids.length} produto${ids.length > 1 ? "s" : ""} excluido${ids.length > 1 ? "s" : ""}`);
-    } catch {
-      toast.error("Erro ao excluir produtos selecionados");
+      if (failed === 0) {
+        toast.success(`${succeeded} produto${succeeded !== 1 ? "s" : ""} excluido${succeeded !== 1 ? "s" : ""}`);
+      } else {
+        toast.error(`${succeeded} excluidos, ${failed} com erro`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao excluir produtos selecionados");
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
   return {
-    products, categories, isLoading: isLoading && !isDemo, isDemo,
+    products, categories, isLoading: isLoading && !isDemo, isDemo, bulkDeleting,
     addProduct, updateProduct, decrementStock, deleteProduct, bulkDeleteProducts,
     isAdding: addMutation.isPending, isUpdating: updateMutation.isPending, isDeleting: deleteMutation.isPending,
   };

@@ -1,9 +1,28 @@
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi, ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Customer } from "@/components/screens/clientes/types";
+
+// Processa deletes em lotes para nao sobrecarregar o servidor
+async function deleteBatched(
+  ids: string[],
+  deleteFn: (id: string) => Promise<any>,
+  batchSize = 10,
+  onProgress?: (done: number, total: number) => void
+): Promise<{ succeeded: number; failed: number }> {
+  let succeeded = 0;
+  let failed = 0;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const results = await Promise.allSettled(batch.map(id => deleteFn(id)));
+    succeeded += results.filter(r => r.status === "fulfilled").length;
+    failed    += results.filter(r => r.status === "rejected").length;
+    onProgress?.(Math.min(i + batchSize, ids.length), ids.length);
+  }
+  return { succeeded, failed };
+}
 
 function mapApiCustomer(c: any): Customer {
   return {
@@ -34,6 +53,7 @@ export function useCustomers() {
   const { company, token, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { data: apiData, isLoading, error: fetchError } = useQuery({
     queryKey: ["customers", companyId],
@@ -91,16 +111,31 @@ export function useCustomers() {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
+  // Bulk delete em lotes de 10 — nao sobrecarrega o servidor
   async function bulkDeleteCustomers(ids: string[]) {
     if (!companyId || isDemo || ids.length === 0) return;
+    setBulkDeleting(true);
+    // Feedback imediato para volumes grandes
+    if (ids.length > 20) toast.info(`Excluindo ${ids.length} clientes...`);
     try {
-      await Promise.all(ids.map(id => companiesApi.deleteCustomer(companyId!, id)));
+      const { succeeded, failed } = await deleteBatched(
+        ids,
+        (id) => companiesApi.deleteCustomer(companyId!, id),
+        10 // 10 por vez
+      );
       qc.invalidateQueries({ queryKey: ["customers", companyId] });
-      toast.success(`${ids.length} cliente${ids.length > 1 ? "s" : ""} excluido${ids.length > 1 ? "s" : ""}`);
-    } catch {
-      toast.error("Erro ao excluir clientes selecionados");
+      if (failed === 0) {
+        toast.success(`${succeeded} cliente${succeeded !== 1 ? "s" : ""} excluido${succeeded !== 1 ? "s" : ""}`);
+      } else {
+        toast.warning?.(`${succeeded} excluidos, ${failed} com erro`);
+        if (!toast.warning) toast.error(`${failed} cliente${failed !== 1 ? "s" : ""} com erro ao excluir`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao excluir clientes selecionados");
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
-  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers };
+  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, bulkDeleting, addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers };
 }
