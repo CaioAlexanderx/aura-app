@@ -13,6 +13,8 @@ import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { PrintLabels } from "@/components/PrintLabels";
+import { Pagination } from "@/components/Pagination";
+import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, PRODUCT_COLUMNS, mapImportedProduct } from "@/utils/csv";
@@ -22,6 +24,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+const PAGE_SIZE = 20;
 
 function SummaryCard({ label, value, color, sub, onPress }: { label: string; value: string; color?: string; sub?: string; onPress?: () => void }) {
   const [h, sH] = useState(false); const w = Platform.OS === "web";
@@ -52,34 +55,26 @@ export default function EstoqueScreen() {
     const matchCat = catFilter === "Todos" || p.category === catFilter;
     return matchSearch && matchCat;
   });
+
+  // P1-6: Paginacao estoque
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search + catFilter);
+
   const lowStock = products.filter(p => p.stock <= p.minStock);
   const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
 
   function handleSaveProduct(product: Product) {
-    if (editProduct) {
-      updateProduct(product);
-      setEditProduct(null);
-      toast.success("Produto atualizado");
-    } else {
-      addProduct(product);
-      toast.success("Produto adicionado");
-    }
+    if (editProduct) { updateProduct(product); setEditProduct(null); }
+    else addProduct(product);
     setShowAddForm(false);
   }
 
   function handleEdit(product: Product) {
-    setEditProduct(product);
-    setShowAddForm(true);
-    setActiveTab(0);
+    setEditProduct(product); setShowAddForm(true); setActiveTab(0);
     scrollRef.current?.scrollTo?.({ y: 0, animated: true });
   }
 
-  function handleCancelForm() {
-    setShowAddForm(false);
-    setEditProduct(null);
-  }
-
+  function handleCancelForm() { setShowAddForm(false); setEditProduct(null); }
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
   function handleExport() {
@@ -102,7 +97,7 @@ export default function EstoqueScreen() {
       if (imported > 0) {
         qc.invalidateQueries({ queryKey: ["products", company?.id] });
         toast.success(`${imported} produtos importados${skipped > 0 ? ` (${skipped} ignorados)` : ""}`);
-      } else { toast.error("Nenhum produto valido encontrado. Verifique as colunas: Nome, Preco venda, Estoque"); }
+      } else { toast.error("Nenhum produto valido encontrado."); }
     } catch {}
   }
 
@@ -134,16 +129,16 @@ export default function EstoqueScreen() {
             {filterCategories.map(c => <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.catChip, catFilter === c && s.catChipActive]}><Text style={[s.catChipText, catFilter === c && s.catChipTextActive]}>{c}</Text></Pressable>)}
           </ScrollView>
           <View style={s.listCard}>
-            {filtered.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} onEdit={!isDemo ? handleEdit : undefined} />)}
+            {paginated.map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} onEdit={!isDemo ? handleEdit : undefined} />)}
             {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
           </View>
+          <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
         </View>
       )}
 
       {activeTab === 1 && <View><View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View><AbcSummary products={products} /><View style={[s.listCard, { marginTop: 20 }]}><Text style={s.listTitle}>Todos por classificacao</Text>{[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => <ProductRow key={p.id} product={p} showAbc onDelete={(id) => setDeleteTarget(id)} onEdit={!isDemo ? handleEdit : undefined} />)}</View></View>}
 
       {activeTab === 2 && <AlertsList products={products} />}
-
       {activeTab === 3 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
@@ -169,7 +164,7 @@ const s = StyleSheet.create({
   catChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   catChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   catChipTextActive: { color: Colors.violet3, fontWeight: "600" },
-  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
+  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   listTitle: { fontSize: 13, color: Colors.ink3, fontWeight: "600", paddingHorizontal: 12, paddingVertical: 10, textTransform: "uppercase", letterSpacing: 0.5 },
   abcInfo: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
   abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },

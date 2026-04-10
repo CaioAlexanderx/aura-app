@@ -12,6 +12,8 @@ function FormField({ label, required, children }: { label: string; required?: bo
   return <View style={{ marginBottom: 16 }}><Text style={s.label}>{label}{required && <Text style={{ color: Colors.red }}> *</Text>}</Text>{children}</View>;
 }
 
+function isValidHex(v: string) { return /^#[0-9A-Fa-f]{6}$/.test(v); }
+
 export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   categories: string[]; onSave: (p: Product) => void; onCancel: () => void; editProduct?: Product | null;
 }) {
@@ -26,8 +28,15 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [minStock, setMinStock] = useState(editProduct ? String(editProduct.minStock) : "");
   const [unit, setUnit] = useState(editProduct?.unit || "un");
   const [notes, setNotes] = useState(editProduct?.notes || "");
+  const [color, setColor] = useState(editProduct?.color || "");
+  const [size, setSize] = useState(editProduct?.size || "");
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
+
+  function handleColorChange(v: string) {
+    const val = v.startsWith("#") ? v : "#" + v;
+    setColor(val.slice(0, 7));
+  }
 
   function generateCode() {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
@@ -39,10 +48,16 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     if (!price.trim()) { toast.error("Preencha o preco de venda"); return; }
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
     onSave({
-      id: editProduct?.id || Date.now().toString(), name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
-      category: finalCategory || "Produtos", price: parseFloat(price.replace(",", ".")) || 0, cost: parseFloat(cost.replace(",", ".")) || 0,
+      id: editProduct?.id || Date.now().toString(),
+      name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
+      category: finalCategory || "Produtos",
+      price: parseFloat(price.replace(",", ".")) || 0,
+      cost: parseFloat(cost.replace(",", ".")) || 0,
       stock: parseInt(stock) || 0, minStock: parseInt(minStock) || 0,
-      abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0, unit, brand: editProduct?.brand || "", notes: notes.trim(),
+      abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0,
+      unit, brand: editProduct?.brand || "", notes: notes.trim(),
+      color: isValidHex(color) ? color : "",
+      size: size.trim(),
     });
   }
 
@@ -59,17 +74,21 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       </FormField>
 
       <View style={s.row2}>
-        <View style={{ flex: 1 }}><FormField label="Codigo interno">
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            <TextInput style={[s.input, { flex: 1 }]} value={code} onChangeText={setCode} placeholder="POM-001" placeholderTextColor={Colors.ink3} />
-            <Pressable onPress={generateCode} style={s.miniBtn}><Text style={s.miniBtnText}>Gerar</Text></Pressable>
-          </View>
-        </FormField></View>
-        <View style={{ flex: 1 }}><FormField label="Unidade">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 4 }}>
-            {UNITS.map(u => <Pressable key={u} onPress={() => setUnit(u)} style={[s.chip, unit === u && s.chipActive]}><Text style={[s.chipText, unit === u && s.chipTextActive]}>{u}</Text></Pressable>)}
-          </ScrollView>
-        </FormField></View>
+        <View style={{ flex: 1 }}>
+          <FormField label="Codigo interno">
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <TextInput style={[s.input, { flex: 1 }]} value={code} onChangeText={setCode} placeholder="POM-001" placeholderTextColor={Colors.ink3} />
+              <Pressable onPress={generateCode} style={s.miniBtn}><Text style={s.miniBtnText}>Gerar</Text></Pressable>
+            </View>
+          </FormField>
+        </View>
+        <View style={{ flex: 1 }}>
+          <FormField label="Unidade">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 4 }}>
+              {UNITS.map(u => <Pressable key={u} onPress={() => setUnit(u)} style={[s.chip, unit === u && s.chipActive]}><Text style={[s.chipText, unit === u && s.chipTextActive]}>{u}</Text></Pressable>)}
+            </ScrollView>
+          </FormField>
+        </View>
       </View>
 
       <FormField label="Categoria">
@@ -78,10 +97,10 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}><Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova categoria</Text></Pressable>
         </ScrollView>
         {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
-        {categories.length === 0 && !showNewCat && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" }}>Nenhuma categoria ainda. Clique em "+ Nova categoria" para criar.</Text>}
       </FormField>
 
       <View style={s.divider} />
+
       <View style={s.row2}>
         <View style={{ flex: 1 }}><FormField label="Preco de venda" required><TextInput style={s.input} value={price} onChangeText={setPrice} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></FormField></View>
         <View style={{ flex: 1 }}><FormField label="Custo"><TextInput style={s.input} value={cost} onChangeText={setCost} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></FormField></View>
@@ -92,7 +111,39 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
       </View>
 
-      {/* Barcode / QR Code section with preview + print */}
+      <View style={s.divider} />
+
+      {/* P1-8: Cor e Tamanho */}
+      <View style={s.row2}>
+        <View style={{ flex: 1 }}>
+          <FormField label="Cor (hexadecimal)">
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={color}
+                onChangeText={handleColorChange}
+                placeholder="#FFFFFF"
+                placeholderTextColor={Colors.ink3}
+                maxLength={7}
+                autoCapitalize="none"
+              />
+              {isValidHex(color) ? (
+                <View style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: color, borderWidth: 1, borderColor: Colors.border }} />
+              ) : (
+                <View style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 10, color: Colors.ink3 }}>Cor</Text>
+                </View>
+              )}
+            </View>
+          </FormField>
+        </View>
+        <View style={{ flex: 1 }}>
+          <FormField label="Tamanho">
+            <TextInput style={s.input} value={size} onChangeText={setSize} placeholder="P, M, G, 500ml..." placeholderTextColor={Colors.ink3} />
+          </FormField>
+        </View>
+      </View>
+
       <BarcodeQRSection
         code={barcode}
         productName={name}
@@ -100,8 +151,8 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         onCodeChange={setBarcode}
       />
 
-      <FormField label="Observacoes (opcional)">
-        <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes, variantes..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
+      <FormField label="Descricao (opcional)">
+        <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes do produto, composicao, instrucoes..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
       </FormField>
 
       <View style={s.footer}>

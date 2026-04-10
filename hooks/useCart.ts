@@ -5,7 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 export type CartItem = { productId: string; name: string; price: number; qty: number };
-export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string };
+export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string };
 
 export const PAYMENTS = [
   { key: "pix", label: "Pix" },
@@ -24,6 +24,12 @@ export function useCart() {
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // P1-7: Cliente e Vendedor(a) vinculados a venda
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
+
   const saleMutation = useMutation({
     mutationFn: async (body: any) => {
       try {
@@ -33,7 +39,7 @@ export function useCart() {
       }
       return await companiesApi.createTransaction(companyId!, {
         type: "income", amount: body.total,
-        description: `Venda PDV - ${body.items.length} itens (${body.payment_method})`,
+        description: `Venda PDV - ${body.items.length} itens (${body.payment_method})${body.customer_id ? " - " + (selectedCustomerName || "") : ""}`,
         category: "Vendas", source: "pdv",
       });
     },
@@ -73,6 +79,16 @@ export function useCart() {
     setCart(prev => prev.filter(i => i.productId !== productId));
   }
 
+  function selectCustomer(id: string | null, name: string | null) {
+    setSelectedCustomerId(id);
+    setSelectedCustomerName(name);
+  }
+
+  function selectEmployee(id: string | null, name: string | null) {
+    setSelectedEmployeeId(id);
+    setSelectedEmployeeName(name);
+  }
+
   function finalizeSale() {
     if (cart.length === 0 || isProcessing) return;
     setIsProcessing(true);
@@ -80,38 +96,56 @@ export function useCart() {
     const cartSnapshot = [...cart];
     const saleData = {
       items: cartSnapshot.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
-      payment_method: payment, total,
+      payment_method: payment,
+      total,
+      customer_id: selectedCustomerId || undefined,
+      employee_id: selectedEmployeeId || undefined,
     };
 
     if (companyId && !isDemo) {
       saleMutation.mutate(saleData, {
         onSuccess: (res: any) => {
           const saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale({ id: String(saleId), total, payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR") });
+          setLastSale({
+            id: String(saleId), total, payment, items: cartSnapshot,
+            date: new Date().toLocaleString("pt-BR"),
+            customerName: selectedCustomerName || undefined,
+            employeeName: selectedEmployeeName || undefined,
+          });
           setCart([]);
           toast.success("Venda registrada!");
-          // A5: Decrement stock for each sold item
           cartSnapshot.forEach(item => {
-            companiesApi.updateProduct(companyId, item.productId, {
-              stock_qty_decrement: item.qty,
-            }).catch(() => {
-              // Fallback: try direct stock_qty update
-              companiesApi.updateProduct(companyId, item.productId, {
-                stock_qty: Math.max(0, -1), // Will be calculated from current
-              }).catch(() => {});
-            });
+            companiesApi.updateProduct(companyId, item.productId, { stock_qty_decrement: item.qty }).catch(() => {});
           });
           setIsProcessing(false);
         },
         onError: () => { toast.error("Erro ao registrar venda"); setIsProcessing(false); },
       });
     } else {
-      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR") });
+      setLastSale({
+        id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: cartSnapshot,
+        date: new Date().toLocaleString("pt-BR"),
+        customerName: selectedCustomerName || undefined,
+        employeeName: selectedEmployeeName || undefined,
+      });
       setCart([]); setIsProcessing(false);
     }
   }
 
-  function newSale() { setLastSale(null); setCart([]); setIsProcessing(false); }
+  function newSale() {
+    setLastSale(null);
+    setCart([]);
+    setIsProcessing(false);
+    setSelectedCustomerId(null);
+    setSelectedCustomerName(null);
+    setSelectedEmployeeId(null);
+    setSelectedEmployeeName(null);
+  }
 
-  return { cart, payment, setPayment, lastSale, total, itemCount, isProcessing, addToCart, setQty, updateQty, removeItem, finalizeSale, newSale };
+  return {
+    cart, payment, setPayment, lastSale, total, itemCount, isProcessing,
+    addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
+    selectedCustomerId, selectedCustomerName, selectCustomer,
+    selectedEmployeeId, selectedEmployeeName, selectEmployee,
+  };
 }

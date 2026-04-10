@@ -21,6 +21,8 @@ function mapApiProduct(p: any): Product {
     unit: p.unit || "un",
     brand: p.brand || "",
     notes: p.notes || p.description || "",
+    color: p.color || "",
+    size: p.size || "",
   };
 }
 
@@ -44,11 +46,27 @@ export function useProducts() {
     return arr.map(mapApiProduct);
   }, [apiData, isDemo]);
 
-  // A4: Derive categories from existing products (no defaults if empty)
   const categories: string[] = useMemo(() => {
     const cats = new Set(products.map(p => p.category).filter(Boolean));
     return [...cats].sort();
   }, [products]);
+
+  function buildBody(product: Product) {
+    return {
+      name: product.name,
+      sku: product.code !== "---" ? product.code : undefined,
+      barcode: product.barcode || undefined,
+      category: product.category,
+      price: product.price,
+      cost_price: product.cost,
+      stock_qty: product.stock,
+      min_stock: product.minStock,
+      unit: product.unit,
+      description: product.notes || undefined,
+      color: product.color || undefined,
+      size: product.size || undefined,
+    };
+  }
 
   const addMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createProduct(companyId!, body),
@@ -56,10 +74,9 @@ export function useProducts() {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       toast.success("Produto cadastrado!");
     },
-    onError: () => toast.error("Erro ao salvar produto"),
+    onError: (err: any) => toast.error(err?.message || "Erro ao salvar produto"),
   });
 
-  // A3: Update product mutation
   const updateMutation = useMutation({
     mutationFn: ({ prodId, body }: { prodId: string; body: any }) => companiesApi.updateProduct(companyId!, prodId, body),
     onSuccess: () => {
@@ -81,26 +98,14 @@ export function useProducts() {
   function addProduct(product: Product) {
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
-    addMutation.mutate({
-      name: product.name, sku: product.code !== "---" ? product.code : undefined,
-      barcode: product.barcode || undefined, category: product.category,
-      price: product.price, cost_price: product.cost, stock_qty: product.stock,
-      min_stock: product.minStock, unit: product.unit, description: product.notes || undefined,
-    });
+    addMutation.mutate(buildBody(product));
   }
 
-  // A3: Update existing product
   function updateProduct(product: Product) {
     if (!companyId || isDemo) return;
-    updateMutation.mutate({ prodId: product.id, body: {
-      name: product.name, sku: product.code !== "---" ? product.code : undefined,
-      barcode: product.barcode || undefined, category: product.category,
-      price: product.price, cost_price: product.cost, stock_qty: product.stock,
-      min_stock: product.minStock, unit: product.unit, description: product.notes || undefined,
-    }});
+    updateMutation.mutate({ prodId: product.id, body: buildBody(product) });
   }
 
-  // A5: Decrement stock after sale (called from useCart)
   function decrementStock(productId: string, qty: number) {
     if (!companyId || isDemo) return;
     const product = products.find(p => p.id === productId);

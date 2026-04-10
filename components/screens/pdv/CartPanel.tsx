@@ -6,18 +6,19 @@ import { PAYMENTS } from "@/hooks/useCart";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: { item: CartItem; onPlus: () => void; onMinus: () => void; onRemove: () => void; onSetQty: (qty: number) => void }) {
+export type SlimCustomer = { id: string; name: string; phone?: string };
+export type SlimEmployee = { id: string; name: string };
+
+function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: {
+  item: CartItem; onPlus: () => void; onMinus: () => void; onRemove: () => void; onSetQty: (qty: number) => void;
+}) {
   const [h, sH] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState("");
   const w = Platform.OS === "web";
 
   function startEdit() { setEditVal(String(item.qty)); setEditing(true); }
-  function confirmEdit() {
-    const v = parseInt(editVal);
-    if (v > 0) onSetQty(v);
-    setEditing(false);
-  }
+  function confirmEdit() { const v = parseInt(editVal); if (v > 0) onSetQty(v); setEditing(false); }
 
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
@@ -38,31 +39,126 @@ function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: { item: CartItem
   );
 }
 
-export function CartPanel({ cart, payment, setPayment, total, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing }: {
+export function CartPanel({
+  cart, payment, setPayment, total, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing,
+  customers, employees,
+  selectedCustomerId, selectCustomer,
+  selectedEmployeeId, selectedEmployeeName, selectEmployee,
+}: {
   cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; itemCount: number;
-  isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void; removeItem: (id: string) => void; finalizeSale: () => void; isProcessing?: boolean;
+  isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void;
+  removeItem: (id: string) => void; finalizeSale: () => void; isProcessing?: boolean;
+  customers?: SlimCustomer[];
+  employees?: SlimEmployee[];
+  selectedCustomerId?: string | null;
+  selectCustomer?: (id: string | null, name: string | null) => void;
+  selectedEmployeeId?: string | null;
+  selectedEmployeeName?: string | null;
+  selectEmployee?: (id: string | null, name: string | null) => void;
 }) {
+  const [customerSearch, setCustomerSearch] = useState("");
+
+  const matchedCustomers = customers && customerSearch.length >= 2
+    ? customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).slice(0, 5)
+    : [];
+
+  const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
+
   return (
     <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 24, flex: isWide ? 1 : undefined }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "700" }}>Caixa</Text>
         {itemCount > 0 && <View style={s.badge}><Text style={s.badgeText}>{itemCount}</Text></View>}
       </View>
-      {cart.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}><Text style={{ fontSize: 32, color: Colors.ink3 }}>$</Text><Text style={{ fontSize: 12, color: Colors.ink3, textAlign: "center" }}>Toque em um produto ou escaneie um codigo</Text></View>}
-      <ScrollView style={{ maxHeight: isWide ? 280 : undefined }} showsVerticalScrollIndicator={false}>
-        {cart.map(item => <CartRow key={item.productId} item={item} onPlus={() => updateQty(item.productId, 1)} onMinus={() => updateQty(item.productId, -1)} onRemove={() => removeItem(item.productId)} onSetQty={(qty) => setQty(item.productId, qty)} />)}
+
+      {cart.length === 0 && (
+        <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
+          <Text style={{ fontSize: 32, color: Colors.ink3 }}>$</Text>
+          <Text style={{ fontSize: 12, color: Colors.ink3, textAlign: "center" }}>Toque em um produto ou escaneie um codigo</Text>
+        </View>
+      )}
+
+      <ScrollView style={{ maxHeight: isWide ? 240 : undefined }} showsVerticalScrollIndicator={false}>
+        {cart.map(item => (
+          <CartRow key={item.productId} item={item}
+            onPlus={() => updateQty(item.productId, 1)}
+            onMinus={() => updateQty(item.productId, -1)}
+            onRemove={() => removeItem(item.productId)}
+            onSetQty={(qty) => setQty(item.productId, qty)}
+          />
+        ))}
       </ScrollView>
+
       {cart.length > 0 && (
         <View style={{ marginTop: 12 }}>
           <View style={s.divider} />
-          <Text style={s.payLabel}>Pagamento</Text>
-          <View style={s.payRow}>{PAYMENTS.map(p => <Pressable key={p.key} onPress={() => setPayment(p.key)} style={[s.payChip, payment === p.key && s.payChipActive]}><Text style={[s.payText, payment === p.key && s.payTextActive]}>{p.label}</Text></Pressable>)}</View>
+
+          {/* P1-7: Cliente */}
+          {customers && selectCustomer && (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={s.sectionLabel}>Cliente (opcional)</Text>
+              {selectedCustomer ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={{ flex: 1, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 }}>
+                    <Text style={{ fontSize: 13, color: Colors.ink, fontWeight: "600" }}>{selectedCustomer.name}</Text>
+                    {selectedCustomer.phone ? <Text style={{ fontSize: 10, color: Colors.ink3 }}>{selectedCustomer.phone}</Text> : null}
+                  </View>
+                  <Pressable onPress={() => { selectCustomer(null, null); setCustomerSearch(""); }} style={s.clearBtn}>
+                    <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View>
+                  <TextInput
+                    style={s.searchSmall}
+                    value={customerSearch}
+                    onChangeText={setCustomerSearch}
+                    placeholder="Buscar cliente..."
+                    placeholderTextColor={Colors.ink3}
+                  />
+                  {matchedCustomers.length > 0 && (
+                    <View style={s.dropdown}>
+                      {matchedCustomers.map(c => (
+                        <Pressable key={c.id} onPress={() => { selectCustomer(c.id, c.name); setCustomerSearch(""); }} style={s.dropdownItem}>
+                          <Text style={{ fontSize: 12, color: Colors.ink, fontWeight: "500" }}>{c.name}</Text>
+                          {c.phone && <Text style={{ fontSize: 10, color: Colors.ink3 }}>{c.phone}</Text>}
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* P1-7: Vendedor(a) */}
+          {employees && employees.length > 0 && selectEmployee && (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+                {employees.map(e => (
+                  <Pressable key={e.id} onPress={() => selectEmployee(selectedEmployeeId === e.id ? null : e.id, selectedEmployeeId === e.id ? null : e.name)} style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}>
+                    <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>{e.name.split(" ")[0]}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <View style={s.divider} />
+          <Text style={s.sectionLabel}>Pagamento</Text>
+          <View style={s.payRow}>
+            {PAYMENTS.map(p => (
+              <Pressable key={p.key} onPress={() => setPayment(p.key)} style={[s.payChip, payment === p.key && s.payChipActive]}>
+                <Text style={[s.payText, payment === p.key && s.payTextActive]}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </View>
           <View style={s.divider} />
           <View style={s.totalRow}>
             <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "600" }}>Total</Text>
             <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(total)}</Text>
           </View>
-          {/* CRIT-02: Disable button while processing */}
           <Pressable onPress={finalizeSale} disabled={isProcessing} style={[s.finalizeBtn, isProcessing && { opacity: 0.5 }]}>
             <Text style={s.finalizeText}>{isProcessing ? "Processando..." : "Finalizar venda"}</Text>
           </Pressable>
@@ -86,7 +182,7 @@ const s = StyleSheet.create({
   badge: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  payLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
+  sectionLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
   payRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
   payChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
   payChipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
@@ -95,6 +191,10 @@ const s = StyleSheet.create({
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   finalizeBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   finalizeText: { fontSize: 14, color: "#fff", fontWeight: "700" },
+  searchSmall: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 12, color: Colors.ink },
+  dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 150, overflow: "hidden" },
+  dropdownItem: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  clearBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
 });
 
 export default CartPanel;

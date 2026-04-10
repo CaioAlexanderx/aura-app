@@ -4,6 +4,8 @@ import { Colors } from "@/constants/colors";
 import { useCustomers } from "@/hooks/useCustomers";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
+import { Pagination } from "@/components/Pagination";
+import { usePagination } from "@/hooks/usePagination";
 import { AddCustomerForm } from "@/components/screens/clientes/AddCustomerForm";
 import { CustomerRow } from "@/components/screens/clientes/CustomerRow";
 import { RankingTab } from "@/components/screens/clientes/RankingTab";
@@ -19,6 +21,7 @@ import { ReviewsList } from "@/components/ReviewsList";
 import { ServerImport } from "@/components/ServerImport";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+const PAGE_SIZE = 20;
 
 export default function ClientesScreen() {
   const { customers, isLoading, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer } = useCustomers();
@@ -37,6 +40,10 @@ export default function ClientesScreen() {
     const s = search.toLowerCase();
     return c.name.toLowerCase().includes(s) || c.phone.includes(s) || c.email.toLowerCase().includes(s) || c.instagram.toLowerCase().includes(s);
   });
+
+  // P1-6: Paginacao clientes
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search);
+
   const totalLtv = customers.reduce((s, c) => s + c.totalSpent, 0);
 
   function handleAdd(c: Customer) { addCustomer(c); setShowAdd(false); }
@@ -76,18 +83,11 @@ export default function ClientesScreen() {
 
       {tab === 0 && !planBlocked && !isDemo && <RetentionCard />}
 
-      {/* Formulario de adicionar (showAdd) */}
       {showAdd && !editTarget && (
         <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />
       )}
-
-      {/* Formulario de editar (editTarget) */}
       {editTarget && (
-        <AddCustomerForm
-          initialData={editTarget}
-          onSave={handleEdit}
-          onCancel={() => setEditTarget(null)}
-        />
+        <AddCustomerForm initialData={editTarget} onSave={handleEdit} onCancel={() => setEditTarget(null)} />
       )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
@@ -100,7 +100,6 @@ export default function ClientesScreen() {
 
       {tab === 0 && !planBlocked && (
         <View style={s.importRow}>
-          {/* Export only — import e feito via ServerImport abaixo */}
           <ImportExportBar onExport={handleExport} itemCount={customers.length} />
           <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers", company?.id] })} />
         </View>
@@ -121,7 +120,7 @@ export default function ClientesScreen() {
                 <Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum cliente cadastrado</Text>
               </View>
             )}
-            {filtered.map(c => (
+            {paginated.map(c => (
               <CustomerRow
                 key={c.id}
                 c={c}
@@ -132,6 +131,7 @@ export default function ClientesScreen() {
               />
             ))}
           </View>
+          <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
         </View>
       )}
 
@@ -148,7 +148,6 @@ export default function ClientesScreen() {
         onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }}
         onCancel={() => setDeleteTarget(null)}
       />
-
       {isDemo && (
         <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>
       )}
@@ -175,7 +174,7 @@ const s = StyleSheet.create({
   tabTextActive: { color: "#fff", fontWeight: "600" },
   importRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 16 },
-  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
+  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
