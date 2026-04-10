@@ -3,9 +3,10 @@ import {
   View, Text, TextInput, Pressable, ActivityIndicator,
   StyleSheet, Platform, ScrollView, Image,
 } from "react-native";
-import { Link, router } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
+import { inviteApi } from "@/services/inviteApi";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -26,6 +27,9 @@ if (typeof document !== "undefined" && !document.getElementById("aura-auth-css")
 }
 
 export default function LoginScreen() {
+  const { invite_token } = useLocalSearchParams<{ invite_token?: string }>();
+  const isInviteFlow = !!invite_token;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -36,7 +40,20 @@ export default function LoginScreen() {
     if (!email || !password) { toast.error("Preencha e-mail e senha"); return; }
     try {
       await login(email.trim().toLowerCase(), password);
-      // Always go to dashboard — onboarding removed
+
+      // Se veio de um convite, aceita automaticamente apos o login
+      if (isInviteFlow && invite_token) {
+        try {
+          await inviteApi.accept(invite_token);
+          toast.success("Login efetuado e convite aceito! Bem-vindo a equipe.");
+        } catch (err: any) {
+          // Nao bloqueia o login se o accept falhar
+          toast.error(err?.message || "Nao foi possivel aceitar o convite. Tente abrir o link novamente.");
+        }
+      } else {
+        toast.success("Login efetuado!");
+      }
+
       router.replace("/(tabs)");
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";
@@ -51,7 +68,15 @@ export default function LoginScreen() {
         <Text style={s.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text>
       </View>
 
-      <Text style={s.title}>Entrar na sua conta</Text>
+      {/* Banner de convite */}
+      {isInviteFlow && (
+        <View style={s.inviteBanner}>
+          <Icon name="users" size={14} color={Colors.violet3} />
+          <Text style={s.inviteBannerText}>Faca login para aceitar o convite e entrar na equipe</Text>
+        </View>
+      )}
+
+      <Text style={s.title}>{isInviteFlow ? "Entrar para aceitar convite" : "Entrar na sua conta"}</Text>
       <Text style={s.subtitle}>Gerencie seu negocio de qualquer lugar</Text>
 
       <View style={s.field}>
@@ -97,7 +122,7 @@ export default function LoginScreen() {
         {...(isWeb ? { className: "auth-btn" } as any : {})}
         onPress={handleLogin} disabled={isLoading}
       >
-        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Entrar</Text>}
+        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{isInviteFlow ? "Entrar e aceitar convite" : "Entrar"}</Text>}
       </Pressable>
 
       <View style={s.dividerRow}>
@@ -108,13 +133,17 @@ export default function LoginScreen() {
 
       <View style={s.footerRow}>
         <Text style={s.footerText}>Nao tem conta? </Text>
-        <Link href="/(auth)/register"><Text style={s.link}>Criar conta gratis</Text></Link>
+        <Link href={isInviteFlow ? `/(auth)/register?invite_token=${invite_token}` : "/(auth)/register"}>
+          <Text style={s.link}>Criar conta gratis</Text>
+        </Link>
       </View>
 
-      <Pressable style={s.demoBtn} onPress={loginDemo} disabled={isLoading}>
-        <Icon name="dashboard" size={14} color={Colors.violet3} />
-        <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
-      </Pressable>
+      {!isInviteFlow && (
+        <Pressable style={s.demoBtn} onPress={loginDemo} disabled={isLoading}>
+          <Icon name="dashboard" size={14} color={Colors.violet3} />
+          <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
+        </Pressable>
+      )}
 
       <Text style={s.footer}>Aura. - Tecnologia para Negocios</Text>
     </View>
@@ -143,35 +172,23 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   mobileContainer: { flexGrow: 1, backgroundColor: Colors.bg, padding: 20, justifyContent: "center", alignItems: "center" },
-  card: {
-    width: "100%", maxWidth: 400,
-    backgroundColor: Colors.bg3,
-    borderRadius: 24, padding: 28,
-    borderWidth: 1, borderColor: Colors.border2,
-  },
+  card: { width: "100%", maxWidth: 400, backgroundColor: Colors.bg3, borderRadius: 24, padding: 28, borderWidth: 1, borderColor: Colors.border2 },
   logoRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 },
   logo: { width: 40, height: 40 },
   brand: { fontSize: 26, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  inviteBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
+  inviteBannerText: { fontSize: 12, color: Colors.violet3, flex: 1, lineHeight: 18 },
   title: { fontSize: 22, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 4 },
   subtitle: { fontSize: 13, color: Colors.ink3, textAlign: "center", marginBottom: 28 },
   field: { marginBottom: 16 },
   label: { fontSize: 12, color: Colors.ink3, marginBottom: 6, fontWeight: "600", letterSpacing: 0.3 },
-  inputWrap: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: Colors.bg4, borderRadius: 12,
-    borderWidth: 1.5, borderColor: Colors.border,
-    paddingHorizontal: 14, paddingVertical: 0,
-  },
+  inputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14 },
   input: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 13 },
   eyeBtn: { paddingVertical: 8, paddingHorizontal: 4 },
   eyeText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   forgotRow: { alignSelf: "flex-end", marginBottom: 20, marginTop: -4 },
   forgotText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
-  btn: {
-    backgroundColor: Colors.violet, borderRadius: 12,
-    paddingVertical: 15, alignItems: "center",
-    marginBottom: 20,
-  },
+  btn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 15, alignItems: "center", marginBottom: 20 },
   btnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
@@ -179,12 +196,7 @@ const s = StyleSheet.create({
   footerRow: { flexDirection: "row", justifyContent: "center", marginBottom: 16 },
   footerText: { fontSize: 13, color: Colors.ink3 },
   link: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  demoBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    borderRadius: 12, paddingVertical: 13,
-    borderWidth: 1, borderColor: Colors.border2,
-    marginBottom: 20,
-  },
+  demoBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 13, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
   demoBtnText: { color: Colors.violet3, fontSize: 13, fontWeight: "600" },
   footer: { fontSize: 11, color: Colors.ink3, textAlign: "center", opacity: 0.5 },
 });

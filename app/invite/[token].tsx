@@ -1,209 +1,179 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable,
-  TextInput, ActivityIndicator, Platform,
+  View, Text, Pressable, ActivityIndicator,
+  StyleSheet, Platform, Image,
 } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
-import { useAuthStore } from "@/stores/auth";
-import { authApi } from "@/services/api";
-import { inviteApi, type InviteDetails } from "@/services/inviteApi";
 import { Icon } from "@/components/Icon";
-import { toast } from "@/components/Toast";
+import { inviteApi } from "@/services/inviteApi";
+import type { InviteDetails } from "@/services/inviteApi";
 
-export default function InvitePage() {
+const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
+const isWeb = Platform.OS === "web";
+
+export default function InviteLandingScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
-  const { user, token: authToken, setAuth } = useAuthStore();
-
-  const [invite,    setInvite]    = useState<InviteDetails | null>(null);
-  const [loading,   setLoading]   = useState(true);
-  const [accepting, setAccepting] = useState(false);
-  const [accepted,  setAccepted]  = useState(false);
-  const [pageError, setPageError] = useState<string | null>(null);
-
-  const [showLogin,    setShowLogin]    = useState(false);
-  const [loginEmail,   setLoginEmail]   = useState("");
-  const [loginPass,    setLoginPass]    = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [invite, setInvite] = useState<InviteDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) { setPageError("Link invalido"); setLoading(false); return; }
-    inviteApi.validate(token as string)
-      .then(data => {
-        setInvite(data);
-        if (!authToken) setLoginEmail(data.email);
-      })
-      .catch(err => setPageError(err?.message || "Convite invalido ou expirado"))
+    if (!token) { setError("Link de convite invalido."); setLoading(false); return; }
+    inviteApi.validate(token)
+      .then(data => setInvite(data))
+      .catch(err => setError(err?.message || "Convite nao encontrado ou expirado."))
       .finally(() => setLoading(false));
   }, [token]);
 
-  async function handleAccept() {
-    if (!token || !authToken) return;
-    setAccepting(true);
-    try {
-      await inviteApi.accept(token as string);
-      setAccepted(true);
-      toast.success("Bem-vindo a equipe!");
-      setTimeout(() => router.replace("/(tabs)/"), 2200);
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao aceitar convite");
-    } finally { setAccepting(false); }
+  function goRegister() {
+    const params = new URLSearchParams({ invite_token: token });
+    if (invite?.email) params.set("invite_email", invite.email);
+    router.push(`/(auth)/register?${params.toString()}`);
   }
 
-  async function handleLogin() {
-    if (!loginEmail || !loginPass) { toast.error("Preencha email e senha"); return; }
-    setLoginLoading(true);
-    try {
-      const res = await authApi.login(loginEmail.trim().toLowerCase(), loginPass);
-      setAuth(res.token, res.user, res.company, (res as any).refresh_token);
-      toast.success("Login realizado!");
-      setShowLogin(false);
-    } catch (err: any) {
-      toast.error(err?.message || "Email ou senha incorretos");
-    } finally { setLoginLoading(false); }
+  function goLogin() {
+    router.push(`/(auth)/login?invite_token=${token}`);
   }
 
-  const isLoggedIn = !!user && !!authToken;
-  const emailMatch = isLoggedIn && invite && user.email === invite.email;
-  const wrongEmail = isLoggedIn && invite && user.email !== invite.email;
-
-  if (loading) {
-    return (
-      <View style={[s.center, { flex: 1 }]}>
-        <ActivityIndicator color={Colors.violet3} size="large" />
-        <Text style={s.loadingText}>Verificando convite...</Text>
+  const card = (
+    <View style={s.card}>
+      {/* Logo */}
+      <View style={s.logoRow}>
+        <Image source={{ uri: LOGO_SVG }} style={s.logo} resizeMode="contain" />
+        <Text style={s.brand}>Aura<Text style={{ color: "#7c3aed" }}>.</Text></Text>
       </View>
-    );
-  }
 
-  if (pageError) {
-    return (
-      <View style={[s.center, { flex: 1, padding: 32 }]}>
-        <View style={s.errorIcon}><Icon name="alert" size={28} color={Colors.red} /></View>
-        <Text style={s.errorTitle}>Convite invalido</Text>
-        <Text style={s.errorSub}>{pageError}</Text>
-        <Pressable onPress={() => router.replace("/(auth)/login")} style={s.primaryBtn}>
-          <Text style={s.primaryBtnText}>Ir para o app</Text>
-        </Pressable>
-      </View>
-    );
-  }
+      {loading && (
+        <View style={s.center}>
+          <ActivityIndicator color={Colors.violet3} size="large" />
+          <Text style={s.loadingText}>Verificando convite...</Text>
+        </View>
+      )}
 
-  if (accepted) {
+      {!loading && error && (
+        <View style={s.center}>
+          <View style={s.iconCircle}>
+            <Icon name="x" size={28} color={Colors.red} />
+          </View>
+          <Text style={s.errorTitle}>Convite invalido</Text>
+          <Text style={s.errorText}>{error}</Text>
+          <Pressable onPress={() => router.replace("/(auth)/login")} style={s.btnOutline}>
+            <Text style={s.btnOutlineText}>Ir para o login</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {!loading && invite && (
+        <View>
+          {/* Badge convidado */}
+          <View style={s.inviteBadge}>
+            <Icon name="users" size={14} color={Colors.violet3} />
+            <Text style={s.inviteBadgeText}>Convite para equipe</Text>
+          </View>
+
+          <Text style={s.title}>Voce foi convidado!</Text>
+          <Text style={s.subtitle}>
+            Junte-se a <Text style={{ fontWeight: "700", color: Colors.ink }}>{invite.company_name}</Text>
+            {invite.role ? ` como ${invite.role}` : ""}
+          </Text>
+
+          {/* Card empresa */}
+          <View style={s.companyCard}>
+            <View style={s.companyAvatar}>
+              <Text style={s.companyAvatarText}>{(invite.company_name || "E")[0].toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.companyName}>{invite.company_name}</Text>
+              <Text style={s.companyRole}>{invite.role || "Colaborador"}</Text>
+            </View>
+            <View style={s.checkBadge}>
+              <Icon name="check" size={12} color={Colors.green} />
+            </View>
+          </View>
+
+          {/* Email do convite */}
+          {invite.masked_email ? (
+            <View style={s.emailNote}>
+              <Icon name="message" size={12} color={Colors.ink3} />
+              <Text style={s.emailNoteText}>
+                Convite enviado para <Text style={{ fontWeight: "600" }}>{invite.masked_email}</Text>
+              </Text>
+            </View>
+          ) : (
+            <View style={s.emailNote}>
+              <Icon name="link" size={12} color={Colors.ink3} />
+              <Text style={s.emailNoteText}>Link de acesso direto — qualquer pessoa com este link pode entrar</Text>
+            </View>
+          )}
+
+          {/* CTAs */}
+          <View style={s.ctaGroup}>
+            <Pressable onPress={goRegister} style={s.btnPrimary}>
+              <Icon name="user_plus" size={16} color="#fff" />
+              <Text style={s.btnPrimaryText}>Criar conta e entrar</Text>
+            </Pressable>
+            <Pressable onPress={goLogin} style={s.btnOutline}>
+              <Icon name="dashboard" size={14} color={Colors.violet3} />
+              <Text style={s.btnOutlineText}>Ja tenho conta — fazer login</Text>
+            </Pressable>
+          </View>
+
+          <Text style={s.disclaimer}>
+            Link valido por 7 dias. Uso unico. Ao entrar, voce aceita os termos de uso da Aura.
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  if (isWeb) {
     return (
-      <View style={[s.center, { flex: 1, padding: 32 }]}>
-        <View style={s.successIcon}><Icon name="check" size={28} color={Colors.green} /></View>
-        <Text style={s.successTitle}>Convite aceito!</Text>
-        <Text style={s.successSub}>Redirecionando para o painel...</Text>
-        <ActivityIndicator color={Colors.violet3} style={{ marginTop: 20 }} />
-      </View>
+      <div style={{
+        minHeight: "100vh", width: "100%",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: `radial-gradient(ellipse at 30% 20%, rgba(124,58,237,0.15) 0%, transparent 50%),
+                     radial-gradient(ellipse at 70% 80%, rgba(139,92,246,0.08) 0%, transparent 40%),
+                     ${Colors.bg}`,
+        padding: "40px 20px",
+      } as any}>
+        {card}
+      </div>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={s.page}>
-      <View style={s.logoWrap}><Text style={s.logoText}>aura.</Text></View>
-
-      <View style={s.card}>
-        <Text style={s.companyLabel}>Voce foi convidado para</Text>
-        <Text style={s.companyName}>{invite?.company_name || ""}</Text>
-        <Text style={s.roleLabel}>como <Text style={s.roleValue}>{invite?.role || "Colaborador"}</Text></Text>
-        <View style={s.divider} />
-        <View style={s.emailRow}>
-          <Icon name="users" size={14} color={Colors.ink3} />
-          <Text style={s.emailHint}>Conta com o email <Text style={s.emailValue}>{invite?.masked_email}</Text></Text>
-        </View>
-      </View>
-
-      {isLoggedIn && emailMatch && (
-        <View style={s.section}>
-          <View style={s.userInfo}>
-            <View style={s.userAvatar}><Text style={s.userAvatarText}>{(user.name || user.email)[0].toUpperCase()}</Text></View>
-            <View><Text style={s.userName}>{user.name}</Text><Text style={s.userEmail}>{user.email}</Text></View>
-          </View>
-          <Pressable onPress={handleAccept} disabled={accepting} style={[s.primaryBtn, accepting && { opacity: 0.6 }]}>
-            {accepting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.primaryBtnText}>Aceitar convite e entrar</Text>}
-          </Pressable>
-        </View>
-      )}
-
-      {wrongEmail && (
-        <View style={s.section}>
-          <View style={s.warnBox}>
-            <Icon name="alert" size={14} color={Colors.amber} />
-            <Text style={s.warnText}>Voce esta logado como {user.email}, mas este convite e para {invite?.masked_email}. Saia e entre com o email correto.</Text>
-          </View>
-          <Pressable onPress={() => { useAuthStore.getState().logout?.(); }} style={[s.primaryBtn, { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border }]}>
-            <Text style={[s.primaryBtnText, { color: Colors.ink }]}>Sair e usar outro email</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {!isLoggedIn && !showLogin && (
-        <View style={s.section}>
-          <Text style={s.ctaLabel}>Para aceitar, entre com o email {invite?.masked_email} ou crie uma conta.</Text>
-          <Pressable onPress={() => setShowLogin(true)} style={s.primaryBtn}><Text style={s.primaryBtnText}>Entrar no app</Text></Pressable>
-          <Pressable onPress={() => router.push({ pathname: "/(auth)/register", params: { invite_token: token, invite_email: invite?.email || "" } } as any)} style={s.secondaryBtn}>
-            <Text style={s.secondaryBtnText}>Criar conta</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {!isLoggedIn && showLogin && (
-        <View style={s.section}>
-          <Text style={s.formTitle}>Entrar com sua conta</Text>
-          <Text style={s.fieldLabel}>E-mail</Text>
-          <TextInput style={s.input} value={loginEmail} onChangeText={setLoginEmail} autoCapitalize="none" keyboardType="email-address" placeholder="seu@email.com" placeholderTextColor={Colors.ink3} />
-          <Text style={[s.fieldLabel, { marginTop: 10 }]}>Senha</Text>
-          <TextInput style={s.input} value={loginPass} onChangeText={setLoginPass} secureTextEntry placeholder="Sua senha" placeholderTextColor={Colors.ink3} />
-          <Pressable onPress={handleLogin} disabled={loginLoading} style={[s.primaryBtn, { marginTop: 16 }, loginLoading && { opacity: 0.6 }]}>
-            {loginLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.primaryBtnText}>Entrar</Text>}
-          </Pressable>
-          <Pressable onPress={() => setShowLogin(false)} style={s.secondaryBtn}><Text style={s.secondaryBtnText}>Cancelar</Text></Pressable>
-        </View>
-      )}
-
-      <Text style={s.footer}>Este link e valido por 7 dias e pode ser usado apenas uma vez.</Text>
-    </ScrollView>
+    <View style={s.mobileContainer}>{card}</View>
   );
 }
 
 const s = StyleSheet.create({
-  page:          { flexGrow: 1, alignItems: "center", padding: 24, paddingBottom: 48, backgroundColor: Colors.bg2 },
-  center:        { alignItems: "center", justifyContent: "center", gap: 12 },
-  loadingText:   { fontSize: 13, color: Colors.ink3, marginTop: 8 },
-  logoWrap:      { marginTop: 32, marginBottom: 28 },
-  logoText:      { fontSize: 28, fontWeight: "800", color: Colors.violet3, letterSpacing: -1 },
-  card:          { width: "100%", maxWidth: 420, backgroundColor: Colors.bg3, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 24, alignItems: "center", marginBottom: 16 },
-  companyLabel:  { fontSize: 13, color: Colors.ink3, marginBottom: 6 },
-  companyName:   { fontSize: 22, fontWeight: "800", color: Colors.ink, textAlign: "center", letterSpacing: -0.5, marginBottom: 4 },
-  roleLabel:     { fontSize: 13, color: Colors.ink3 },
-  roleValue:     { color: Colors.violet3, fontWeight: "700" },
-  divider:       { width: "100%", height: 1, backgroundColor: Colors.border, marginVertical: 16 },
-  emailRow:      { flexDirection: "row", alignItems: "center", gap: 8 },
-  emailHint:     { fontSize: 12, color: Colors.ink3 },
-  emailValue:    { color: Colors.ink, fontWeight: "600" },
-  section:       { width: "100%", maxWidth: 420, gap: 10 },
-  ctaLabel:      { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, marginBottom: 4 },
-  userInfo:      { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
-  userAvatar:    { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" },
-  userAvatarText:{ fontSize: 16, fontWeight: "700", color: Colors.violet3 },
-  userName:      { fontSize: 14, fontWeight: "600", color: Colors.ink },
-  userEmail:     { fontSize: 11, color: Colors.ink3 },
-  warnBox:       { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.amber + "44" },
-  warnText:      { fontSize: 12, color: Colors.amber, flex: 1, lineHeight: 18 },
-  primaryBtn:    { width: "100%", paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.violet, alignItems: "center" },
-  primaryBtnText:{ fontSize: 15, color: "#fff", fontWeight: "700" },
-  secondaryBtn:  { width: "100%", paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.bg3, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
-  secondaryBtnText:{ fontSize: 14, color: Colors.ink3, fontWeight: "500" },
-  formTitle:     { fontSize: 15, fontWeight: "700", color: Colors.ink },
-  fieldLabel:    { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
-  input:         { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink },
-  errorIcon:     { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  errorTitle:    { fontSize: 20, fontWeight: "700", color: Colors.ink },
-  errorSub:      { fontSize: 13, color: Colors.ink3, textAlign: "center", marginBottom: 20 },
-  successIcon:   { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  successTitle:  { fontSize: 20, fontWeight: "700", color: Colors.green },
-  successSub:    { fontSize: 13, color: Colors.ink3 },
-  footer:        { marginTop: 32, fontSize: 11, color: Colors.ink3, textAlign: "center", paddingHorizontal: 24 },
+  mobileContainer: { flex: 1, backgroundColor: Colors.bg, padding: 20, justifyContent: "center", alignItems: "center" },
+  card: { width: "100%", maxWidth: 420, backgroundColor: Colors.bg3, borderRadius: 24, padding: 28, borderWidth: 1, borderColor: Colors.border2 },
+  logoRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 },
+  logo: { width: 36, height: 36 },
+  brand: { fontSize: 24, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  center: { alignItems: "center", paddingVertical: 24, gap: 12 },
+  loadingText: { fontSize: 13, color: Colors.ink3, marginTop: 8 },
+  iconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
+  errorTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink },
+  errorText: { fontSize: 13, color: Colors.ink3, textAlign: "center" },
+  inviteBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, alignSelf: "center", marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
+  inviteBadgeText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  title: { fontSize: 22, fontWeight: "700", color: Colors.ink, textAlign: "center", marginBottom: 6 },
+  subtitle: { fontSize: 14, color: Colors.ink3, textAlign: "center", marginBottom: 20, lineHeight: 20 },
+  companyCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg4, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
+  companyAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
+  companyAvatarText: { fontSize: 18, fontWeight: "700", color: Colors.violet3 },
+  companyName: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  companyRole: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  checkBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.green + "33" },
+  emailNote: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.bg4, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
+  emailNoteText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 17 },
+  ctaGroup: { gap: 10, marginBottom: 16 },
+  btnPrimary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 15 },
+  btnPrimaryText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  btnOutline: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 13, borderWidth: 1.5, borderColor: Colors.border2 },
+  btnOutlineText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  disclaimer: { fontSize: 10, color: Colors.ink3, textAlign: "center", lineHeight: 15 },
 });
