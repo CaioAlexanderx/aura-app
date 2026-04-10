@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, ActivityIndicator, Clipboard } from "react-native";
+import { useState, useEffect, useRef } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
@@ -7,9 +7,11 @@ import { useAuthStore } from "@/stores/auth";
 import { billingApi, ApiError } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { maskPhone } from "@/utils/masks";
 
 const isWeb = Platform.OS === "web";
+
+// ── Feature flag: cartao habilitado quando tokenizacao Asaas for liberada ──
+const CARD_ENABLED = false;
 
 const PLANS = [
   { key: "essencial", label: "Essencial", monthly: 89, desc: "Para comecar", features: ["1 usuario", "PDV + Estoque", "NF-e ate 50/mes", "Suporte chat"] },
@@ -17,13 +19,11 @@ const PLANS = [
   { key: "expansao", label: "Expansao", monthly: 299, desc: "Para escalar", features: ["Usuarios ilimitados", "IA 5 agentes", "Multi-gateway", "Suporte prioritario"] },
 ];
 
-const ANNUAL_CARD_DISC = 0.15;
 const ANNUAL_PIX_DISC = 0.20;
 
 function fmt(v: number) { return "R$ " + v.toFixed(2).replace(".", ","); }
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
 
-type PayMethod = "card" | "pix";
 type Cycle = "monthly" | "annual";
 
 export default function CheckoutScreen() {
@@ -31,16 +31,8 @@ export default function CheckoutScreen() {
   const { company, isDemo } = useAuthStore();
   const [selectedPlan, setSelectedPlan] = useState(params.plan || "negocio");
   const [cycle, setCycle] = useState<Cycle>("monthly");
-  const [method, setMethod] = useState<PayMethod>("card");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-
-  // Card fields
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [cardName, setCardName] = useState("");
-  const [cardCpf, setCardCpf] = useState("");
 
   // Pix state
   const [pixQr, setPixQr] = useState<string | null>(null);
@@ -52,45 +44,11 @@ export default function CheckoutScreen() {
   const plan = PLANS.find(p => p.key === selectedPlan) || PLANS[1];
 
   function getPrice() {
-    if (cycle === "annual" && method === "pix") return Math.round(plan.monthly * 12 * (1 - ANNUAL_PIX_DISC) * 100) / 100;
-    if (cycle === "annual") return Math.round(plan.monthly * (1 - ANNUAL_CARD_DISC) * 100) / 100;
+    if (cycle === "annual") return Math.round(plan.monthly * 12 * (1 - ANNUAL_PIX_DISC) * 100) / 100;
     return plan.monthly;
   }
   const price = getPrice();
-  const isAnnualPix = cycle === "annual" && method === "pix";
-
-  // Card mask
-  function maskCard(v: string) { return v.replace(/\D/g, "").replace(/(\d{4})/g, "$1 ").trim().slice(0, 19); }
-  function maskExpiry(v: string) { const n = v.replace(/\D/g, "").slice(0, 4); return n.length > 2 ? n.slice(0,2)+"/"+n.slice(2) : n; }
-
-  // Asaas tokenization (client-side, card data never reaches Aura)
-  async function tokenizeCard(): Promise<string> {
-    // In production, load Asaas SDK and use window.Asaas.tokenize()
-    // For now, call Asaas tokenize API directly from client
-    // The SDK approach is preferred — this is a placeholder for the flow
-    const nums = cardNumber.replace(/\D/g, "");
-    if (nums.length < 13) throw new Error("Numero do cartao invalido");
-    if (cardExpiry.length < 5) throw new Error("Validade invalida");
-    if (cardCvv.length < 3) throw new Error("CVV invalido");
-    if (!cardName.trim()) throw new Error("Nome no cartao obrigatorio");
-    // Return placeholder — real implementation uses Asaas JS SDK
-    return `tok_${nums.slice(-4)}_${Date.now()}`;
-  }
-
-  // Subscribe with card
-  async function handleCardSubscribe() {
-    if (!company?.id) return;
-    setLoading(true);
-    try {
-      const token = await tokenizeCard();
-      const res = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", token, cycle, cardName, cardCpf);
-      toast.success("Assinatura ativada!");
-      setSuccess(true);
-      setTimeout(() => router.replace("/(tabs)/dashboard"), 2000);
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : err.message || "Erro ao processar cartao");
-    } finally { setLoading(false); }
-  }
+  const isAnnual = cycle === "annual";
 
   // Subscribe with Pix
   async function handlePixSubscribe() {
@@ -98,7 +56,11 @@ export default function CheckoutScreen() {
     setLoading(true);
     try {
       const res = await billingApi.subscribe(company.id, selectedPlan, "PIX", undefined, cycle);
-      if (res.pix_qr_code) { setPixQr(res.pix_qr_code); setPixCopyPaste(res.pix_copy_paste || null); setPixExpiration(res.pix_expiration || null); }
+      if (res.pix_qr_code) {
+        setPixQr(res.pix_qr_code);
+        setPixCopyPaste(res.pix_copy_paste || null);
+        setPixExpiration(res.pix_expiration || null);
+      }
       startPolling();
     } catch (err: any) {
       toast.error(err instanceof ApiError ? err.message : "Erro ao gerar Pix");
@@ -116,7 +78,7 @@ export default function CheckoutScreen() {
           setPolling(false);
           setSuccess(true);
           toast.success("Pagamento confirmado!");
-          setTimeout(() => router.replace("/(tabs)/dashboard"), 2000);
+          setTimeout(() => router.replace("/(tabs)/"), 2000);
         }
       } catch {}
     }, 3000);
@@ -126,12 +88,11 @@ export default function CheckoutScreen() {
 
   function copyPix() {
     if (!pixCopyPaste) return;
-    if (isWeb && navigator.clipboard) { navigator.clipboard.writeText(pixCopyPaste); }
-    else { try { Clipboard.setString(pixCopyPaste); } catch {} }
+    if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(pixCopyPaste);
+    }
     toast.success("Codigo Pix copiado!");
   }
-
-  const cardValid = cardNumber.replace(/\D/g, "").length >= 13 && cardExpiry.length >= 5 && cardCvv.length >= 3 && cardName.trim().length > 0;
 
   if (success) {
     return (
@@ -152,65 +113,79 @@ export default function CheckoutScreen() {
 
       {/* Cycle toggle */}
       <View style={z.cycleRow}>
-        <Pressable onPress={() => setCycle("monthly")} style={[z.cycleBtn, cycle==="monthly" && z.cycleBtnActive]}><Text style={[z.cycleTxt, cycle==="monthly" && z.cycleTxtActive]}>Mensal</Text></Pressable>
-        <Pressable onPress={() => setCycle("annual")} style={[z.cycleBtn, cycle==="annual" && z.cycleBtnActive]}><Text style={[z.cycleTxt, cycle==="annual" && z.cycleTxtActive]}>Anual</Text>{cycle==="annual" && <View style={z.discBadge}><Text style={z.discText}>ate 20% off</Text></View>}</Pressable>
+        <Pressable onPress={() => setCycle("monthly")} style={[z.cycleBtn, cycle==="monthly" && z.cycleBtnActive]}>
+          <Text style={[z.cycleTxt, cycle==="monthly" && z.cycleTxtActive]}>Mensal</Text>
+        </Pressable>
+        <Pressable onPress={() => setCycle("annual")} style={[z.cycleBtn, cycle==="annual" && z.cycleBtnActive]}>
+          <Text style={[z.cycleTxt, cycle==="annual" && z.cycleTxtActive]}>Anual</Text>
+          {cycle==="annual" && <View style={z.discBadge}><Text style={z.discText}>20% off</Text></View>}
+        </Pressable>
       </View>
 
       {/* Plan cards */}
       <View style={z.plansRow}>
         {PLANS.map(p => {
           const sel = selectedPlan === p.key;
-          const mo = cycle === "annual" ? Math.round(p.monthly * (1-ANNUAL_CARD_DISC)*100)/100 : p.monthly;
           return (
             <Pressable key={p.key} onPress={() => setSelectedPlan(p.key)} style={[z.planCard, sel && z.planCardSel, p.popular && !sel && z.planCardPop]}>
               {p.popular && <View style={z.popBadge}><Text style={z.popText}>Mais popular</Text></View>}
               <Text style={[z.planName, sel && {color:"#fff"}]}>{p.label}</Text>
-              <Text style={[z.planPrice, sel && {color:"#fff"}]}>{fmtMo(mo)}</Text>
-              {cycle==="annual" && <Text style={[z.planOrig, sel && {color:"rgba(255,255,255,0.5)"}]}>de {fmtMo(p.monthly)}</Text>}
+              <Text style={[z.planPrice, sel && {color:"#fff"}]}>{fmtMo(p.monthly)}</Text>
+              {cycle==="annual" && <Text style={[z.planOrig, sel && {color:"rgba(255,255,255,0.5)"}]}>Anual: {fmt(Math.round(p.monthly * 12 * (1-ANNUAL_PIX_DISC)*100)/100)} (1x)</Text>}
               <Text style={[z.planDesc, sel && {color:"rgba(255,255,255,0.7)"}]}>{p.desc}</Text>
+              <View style={{ marginTop: 10, gap: 4 }}>
+                {p.features.map(f => (
+                  <View key={f} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Icon name="check" size={10} color={sel ? "#fff" : Colors.green} />
+                    <Text style={{ fontSize: 11, color: sel ? "rgba(255,255,255,0.8)" : Colors.ink3 }}>{f}</Text>
+                  </View>
+                ))}
+              </View>
             </Pressable>
           );
         })}
       </View>
 
-      {/* Payment method tabs */}
+      {/* Payment method */}
       <Text style={z.sectionTitle}>Forma de pagamento</Text>
       <View style={z.methodRow}>
-        <Pressable onPress={() => setMethod("card")} style={[z.methodBtn, method==="card" && z.methodBtnActive]}><Text style={[z.methodTxt, method==="card" && z.methodTxtActive]}>Cartao de credito</Text></Pressable>
-        <Pressable onPress={() => setMethod("pix")} style={[z.methodBtn, method==="pix" && z.methodBtnActive]}><Text style={[z.methodTxt, method==="pix" && z.methodTxtActive]}>Pix</Text></Pressable>
+        <View style={[z.methodBtn, z.methodBtnActive]}>
+          <Icon name="wallet" size={16} color={Colors.violet3} />
+          <Text style={[z.methodTxt, z.methodTxtActive]}>Pix</Text>
+        </View>
+        <View style={[z.methodBtn, { opacity: 0.5 }]}>
+          <Icon name="cart" size={16} color={Colors.ink3} />
+          <Text style={z.methodTxt}>Cartao</Text>
+          <View style={z.soonBadge}><Text style={z.soonText}>Em breve</Text></View>
+        </View>
       </View>
 
       {/* Summary */}
       <View style={z.summaryCard}>
-        <View style={z.summaryRow}><Text style={z.summaryLabel}>{plan.label} ({cycle==="annual"?"anual":"mensal"})</Text><Text style={z.summaryValue}>{isAnnualPix ? fmt(price)+" (1x)" : fmtMo(price)}</Text></View>
-        {cycle==="annual" && !isAnnualPix && <Text style={z.summaryHint}>Cobrado mensalmente no cartao com 15% de desconto. Compromisso de 12 meses.</Text>}
-        {isAnnualPix && <Text style={z.summaryHint}>Pagamento unico via Pix com 20% de desconto. Acesso por 12 meses.</Text>}
-        {cycle==="monthly" && <Text style={z.summaryHint}>Cobrado {method==="card"?"automaticamente no cartao":"via Pix"} todo mes. Cancele quando quiser.</Text>}
+        <View style={z.summaryRow}>
+          <Text style={z.summaryLabel}>{plan.label} ({isAnnual ? "anual" : "mensal"})</Text>
+          <Text style={z.summaryValue}>{isAnnual ? fmt(price) + " (1x)" : fmtMo(price)}</Text>
+        </View>
+        {isAnnual && <Text style={z.summaryHint}>Pagamento unico via Pix com 20% de desconto. Acesso por 12 meses.</Text>}
+        {!isAnnual && <Text style={z.summaryHint}>Cobrado via Pix todo mes. Cancele quando quiser.</Text>}
       </View>
 
-      {/* Card form */}
-      {method === "card" && !pixQr && (
+      {/* Pix action */}
+      {!pixQr && (
         <View style={z.formCard}>
-          <View style={z.field}><Text style={z.label}>Numero do cartao</Text><TextInput style={z.input} value={cardNumber} onChangeText={v=>setCardNumber(maskCard(v))} placeholder="0000 0000 0000 0000" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={19} /></View>
-          <View style={{flexDirection:"row",gap:12}}>
-            <View style={[z.field,{flex:1}]}><Text style={z.label}>Validade</Text><TextInput style={z.input} value={cardExpiry} onChangeText={v=>setCardExpiry(maskExpiry(v))} placeholder="MM/AA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={5} /></View>
-            <View style={[z.field,{flex:1}]}><Text style={z.label}>CVV</Text><TextInput style={z.input} value={cardCvv} onChangeText={v=>setCardCvv(v.replace(/\D/g,"").slice(0,4))} placeholder="000" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={4} secureTextEntry /></View>
+          <View style={z.pixInfoRow}>
+            <Icon name="wallet" size={20} color={Colors.green} />
+            <View style={{ flex: 1 }}>
+              <Text style={z.pixInfoTitle}>Pagamento instantaneo via Pix</Text>
+              <Text style={z.pixInfoDesc}>
+                {isAnnual
+                  ? "Pague uma vez e tenha acesso por 12 meses."
+                  : "Voce recebera um lembrete mensal por e-mail."}
+              </Text>
+            </View>
           </View>
-          <View style={z.field}><Text style={z.label}>Nome no cartao</Text><TextInput style={z.input} value={cardName} onChangeText={setCardName} placeholder="MARIA DA SILVA" placeholderTextColor={Colors.ink3} autoCapitalize="characters" /></View>
-          <View style={z.field}><Text style={z.label}>CPF do titular</Text><TextInput style={z.input} value={cardCpf} onChangeText={setCardCpf} placeholder="000.000.000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={14} /></View>
-          <View style={z.securityRow}><Icon name="settings" size={12} color={Colors.ink3} /><Text style={z.securityText}>Dados protegidos via tokenizacao. Seu cartao nunca passa pelo servidor da Aura.</Text></View>
-          <Pressable onPress={handleCardSubscribe} disabled={loading||!cardValid} style={[z.payBtn, (!cardValid||loading) && {opacity:0.6}]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Assinar {plan.label} {isAnnualPix?"":fmtMo(price)}</Text>}
-          </Pressable>
-        </View>
-      )}
-
-      {/* Pix */}
-      {method === "pix" && !pixQr && (
-        <View style={z.formCard}>
-          <Text style={z.pixIntro}>{isAnnualPix ? "Pague uma vez e tenha acesso por 12 meses." : "O Asaas envia lembrete mensal por email automaticamente."}</Text>
           <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && {opacity:0.6}]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar QR Code Pix {fmt(price)}</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar QR Code Pix - {fmt(price)}</Text>}
           </Pressable>
         </View>
       )}
@@ -221,14 +196,24 @@ export default function CheckoutScreen() {
           <Text style={z.pixTitle}>Escaneie o QR Code ou copie o codigo</Text>
           <Image source={{uri:"data:image/png;base64,"+pixQr}} style={z.pixQrImg} resizeMode="contain" />
           {pixCopyPaste && (
-            <Pressable onPress={copyPix} style={z.copyBtn}><Icon name="file_text" size={14} color={Colors.violet3} /><Text style={z.copyBtnText}>Copiar codigo Pix</Text></Pressable>
+            <Pressable onPress={copyPix} style={z.copyBtn}>
+              <Icon name="file_text" size={14} color={Colors.violet3} />
+              <Text style={z.copyBtnText}>Copiar codigo Pix</Text>
+            </Pressable>
           )}
           {pixExpiration && <Text style={z.pixExpiry}>Expira em 30 minutos</Text>}
-          {polling && <View style={z.pollingRow}><ActivityIndicator size="small" color={Colors.violet3} /><Text style={z.pollingText}>Aguardando pagamento...</Text></View>}
+          {polling && (
+            <View style={z.pollingRow}>
+              <ActivityIndicator size="small" color={Colors.violet3} />
+              <Text style={z.pollingText}>Aguardando pagamento...</Text>
+            </View>
+          )}
         </View>
       )}
 
-      <Pressable onPress={() => router.back()} style={z.backLink}><Text style={z.backLinkText}>Voltar</Text></Pressable>
+      <Pressable onPress={() => router.back()} style={z.backLink}>
+        <Text style={z.backLinkText}>Voltar</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -253,28 +238,27 @@ const z = StyleSheet.create({
   popText: { fontSize: 9, color: "#fff", fontWeight: "700" },
   planName: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
   planPrice: { fontSize: 20, fontWeight: "800", color: Colors.ink },
-  planOrig: { fontSize: 11, color: Colors.ink3, textDecorationLine: "line-through" as any, marginTop: 2 },
+  planOrig: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   planDesc: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 12, textTransform: "uppercase" as any, letterSpacing: 0.5 },
   methodRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  methodBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  methodBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 },
   methodBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   methodTxt: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   methodTxtActive: { color: Colors.violet3 },
+  soonBadge: { backgroundColor: Colors.bg4, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  soonText: { fontSize: 8, color: Colors.ink3, fontWeight: "600" },
   summaryCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   summaryLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   summaryValue: { fontSize: 16, color: Colors.green, fontWeight: "800" },
   summaryHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
-  field: { marginBottom: 14 },
-  label: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, letterSpacing: 0.3 },
-  input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink },
-  securityRow: { flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 16 },
-  securityText: { fontSize: 10, color: Colors.ink3, flex: 1 },
+  pixInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 20 },
+  pixInfoTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
+  pixInfoDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
   payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  pixIntro: { fontSize: 13, color: Colors.ink3, textAlign: "center", marginBottom: 20, lineHeight: 20 },
   pixCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: 20 },
   pixTitle: { fontSize: 14, color: Colors.ink, fontWeight: "600", textAlign: "center", marginBottom: 16 },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16 },
