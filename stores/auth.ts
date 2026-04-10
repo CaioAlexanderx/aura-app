@@ -81,6 +81,8 @@ type AuthState = {
   register: (body: RegisterBody) => Promise<void>;
   logout: () => Promise<void>;
   setCompanyLogo: (logo: string) => void;
+  // Atualiza campos da company no store (usado apos salvar perfil)
+  updateCompany: (partial: Partial<Company & { phone?: string; email?: string; address?: string; cnpj?: string }>) => void;
 };
 
 export const useAuthStore = create<AuthState>((set, get) => {
@@ -229,6 +231,13 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     setCompanyLogo: (logo) => set({ companyLogo: logo }),
+
+    // Atualiza company no store sem re-login (usado apos salvar perfil em Configuracoes)
+    updateCompany: (partial) => {
+      const current = get().company;
+      if (!current) return;
+      set({ company: { ...current, ...partial } });
+    },
 
     logout: async () => {
       if (Platform.OS === "web" && typeof window !== "undefined") {

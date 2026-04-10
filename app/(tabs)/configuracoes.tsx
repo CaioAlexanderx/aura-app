@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, TextInput,
   Platform, Image, Linking, ActivityIndicator, Dimensions,
@@ -6,6 +6,7 @@ import {
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { maskPhone, maskCNPJ } from "@/utils/masks";
 import { companiesApi, onboardingApi } from "@/services/api";
 import { MembersSection } from "@/components/MembersSection";
@@ -17,12 +18,13 @@ const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.
 
 const AURA_WHATSAPP = "https://wa.me/5512991234567";
 const AURA_EMAIL    = "contato@getaura.com.br";
+const CONFIG_KEY    = "aura_config"; // mesma chave que ProfileBanner le
 
 const PLANS: Record<string, { label: string; price: string }> = {
-  essencial:     { label: "Essencial",     price: "R$ 89/mes"       },
-  negocio:       { label: "Negocio",       price: "R$ 199/mes"      },
-  expansao:      { label: "Expansao",      price: "R$ 299/mes"      },
-  personalizado: { label: "Personalizado", price: "Sob consulta"    },
+  essencial:     { label: "Essencial",     price: "R$ 89/mes"    },
+  negocio:       { label: "Negocio",       price: "R$ 199/mes"   },
+  expansao:      { label: "Expansao",      price: "R$ 299/mes"   },
+  personalizado: { label: "Personalizado", price: "Sob consulta" },
 };
 
 function regimeLabel(raw: string): string {
@@ -53,7 +55,6 @@ function validatePhone(v: string): string | null {
   return null;
 }
 
-// BUGFIX #3: safe mailto handler for web
 function openEmail() {
   const mailto = "mailto:" + AURA_EMAIL;
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -61,6 +62,18 @@ function openEmail() {
   } else {
     Linking.openURL(mailto);
   }
+}
+
+// Sincroniza os dados do perfil com o localStorage para que o ProfileBanner
+// do dashboard exiba a mesma completude sem precisar chamar a API
+function syncProfileCache(data: {
+  companyName: string; cnpj: string; email: string; phone: string; address: string;
+}) {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(data));
+    }
+  } catch {}
 }
 
 function SectionTitle({ title }: { title: string }) {
@@ -99,7 +112,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function ConfiguracoesScreen() {
-  const { user, company, companyLogo, setCompanyLogo, isDemo } = useAuthStore();
+  const { user, company, companyLogo, setCompanyLogo, updateCompany, isDemo } = useAuthStore();
 
   const [companyName, setCompanyName] = useState(company?.name || "");
   const [address,     setAddress]     = useState("");
@@ -113,13 +126,14 @@ export default function ConfiguracoesScreen() {
 
   const [cnpjInput,   setCnpjInput]   = useState("");
   const [cnpjSaving,  setCnpjSaving]  = useState(false);
-  const cnpjInputNums = cnpjInput.replace(/\D/g, "");
+  const cnpjInputNums  = cnpjInput.replace(/\D/g, "");
   const cnpjInputValid = cnpjInputNums.length === 14;
 
   const emailError = email ? validateEmail(email) : null;
   const phoneError = phone ? validatePhone(phone) : null;
   const hasErrors  = !!(emailError || phoneError);
 
+  // Completude local — usa o estado atual dos campos (inclusive nao salvos ainda)
   const profileFields = [
     { label: "Nome",     ok: !!companyName },
     { label: "CNPJ",     ok: !!cnpj },
@@ -132,20 +146,41 @@ export default function ConfiguracoesScreen() {
   const completePct  = Math.round((completeDone / profileFields.length) * 100);
   const missing      = profileFields.filter(f => !f.ok).map(f => f.label);
 
-  useEffect(() => {
+  // Carrega perfil da API — usa useFocusEffect para re-carregar sempre que
+  // o usuario navega para esta tela, garantindo dados frescos e persistindo
+  // entre trocas de aba sem depender da remontagem do componente
+  const loadProfile = useCallback(() => {
     if (!company?.id || isDemo) { setLoading(false); return; }
+    setLoading(true);
     companiesApi.getProfile(company.id)
       .then((p: any) => {
-        if (p.trade_name || p.legal_name) setCompanyName(p.trade_name || p.legal_name);
-        if (p.cnpj)       setCnpj(p.cnpj);
-        if (p.email)      setEmail(p.email);
-        if (p.phone)      setPhone(p.phone);
-        if (p.address)    setAddress(p.address);
-        if (p.tax_regime) setTaxRegime(p.tax_regime);
+        const name = p.trade_name || p.legal_name || company?.name || "";
+        const em   = p.email   || user?.email || "";
+        const ph   = p.phone   || "";
+        const addr = p.address || "";
+        const cn   = p.cnpj    || "";
+        const reg  = p.tax_regime || "";
+
+        setCompanyName(name);
+        setCnpj(cn);
+        setEmail(em);
+        setPhone(ph);
+        setAddress(addr);
+        setTaxRegime(reg);
+
+        // Sincroniza com localStorage para ProfileBanner do dashboard
+        syncProfileCache({ companyName: name, cnpj: cn, email: em, phone: ph, address: addr });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [company?.id]);
+
+  // Re-carrega sempre que a tela entra em foco (troca de aba, voltar de outra rota)
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   function handleLogoUpload() {
     if (Platform.OS !== "web") return;
@@ -155,7 +190,16 @@ export default function ConfiguracoesScreen() {
       const file = e.target?.files?.[0]; if (!file) return;
       if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return; }
       const reader = new FileReader();
-      reader.onload = () => { setCompanyLogo(reader.result as string); toast.success("Logo atualizada"); };
+      reader.onload = () => {
+        setCompanyLogo(reader.result as string);
+        // Sincroniza logo no localStorage (ProfileBanner le aura_company_logo)
+        try {
+          if (typeof localStorage !== "undefined") {
+            localStorage.setItem("aura_company_logo", reader.result as string);
+          }
+        } catch {}
+        toast.success("Logo atualizada");
+      };
       reader.readAsDataURL(file);
     };
     input.click();
@@ -171,6 +215,19 @@ export default function ConfiguracoesScreen() {
         phone:      phone.trim()       || undefined,
         address:    address.trim()     || undefined,
       });
+
+      // 1. Atualiza authStore para que o header do dashboard reflita o novo nome
+      updateCompany({ name: companyName.trim() || company.name });
+
+      // 2. Sincroniza localStorage para que ProfileBanner recalcule imediatamente
+      syncProfileCache({
+        companyName: companyName.trim(),
+        cnpj,
+        email: email.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+      });
+
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
       toast.success("Perfil atualizado");
@@ -186,6 +243,8 @@ export default function ConfiguracoesScreen() {
       await onboardingApi.stepCnpj(company.id, cnpjInputNums);
       setCnpj(cnpjInputNums);
       setCnpjInput("");
+      // Sincroniza CNPJ no cache
+      syncProfileCache({ companyName, cnpj: cnpjInputNums, email, phone, address });
       toast.success("CNPJ salvo com sucesso!");
     } catch (err: any) {
       toast.error(err?.message || "CNPJ invalido ou nao encontrado na Receita Federal");
@@ -224,7 +283,11 @@ export default function ConfiguracoesScreen() {
         </View>
 
         {companyLogo && (
-          <Pressable onPress={() => { setCompanyLogo(""); toast.info("Logo removida"); }} style={s.heroAction}>
+          <Pressable onPress={() => {
+            setCompanyLogo("");
+            try { if (typeof localStorage !== "undefined") localStorage.removeItem("aura_company_logo"); } catch {}
+            toast.info("Logo removida");
+          }} style={s.heroAction}>
             <Icon name="x" size={14} color={Colors.red} />
           </Pressable>
         )}
@@ -274,7 +337,6 @@ export default function ConfiguracoesScreen() {
           {/* DADOS REGISTRAIS */}
           <SectionTitle title="Dados registrais" />
           <Card style={cnpj ? s.registraisCard : undefined}>
-
             {cnpj ? (
               <>
                 <View style={s.registraisRow}>
@@ -361,20 +423,14 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
-          {/* SUPORTE — BUGFIX #3: window.location.href for mailto */}
+          {/* SUPORTE */}
           <SectionTitle title="Suporte" />
           <View style={s.supportRow}>
-            <Pressable
-              onPress={() => Linking.openURL(AURA_WHATSAPP)}
-              style={s.supportBtn}
-            >
+            <Pressable onPress={() => Linking.openURL(AURA_WHATSAPP)} style={s.supportBtn}>
               <Icon name="message" size={16} color={Colors.green} />
               <Text style={[s.supportBtnText, { color: Colors.green }]}>WhatsApp</Text>
             </Pressable>
-            <Pressable
-              onPress={openEmail}
-              style={[s.supportBtn, s.supportBtnSecondary]}
-            >
+            <Pressable onPress={openEmail} style={[s.supportBtn, s.supportBtnSecondary]}>
               <Icon name="mail" size={16} color={Colors.violet3} />
               <Text style={[s.supportBtnText, { color: Colors.violet3 }]}>E-mail</Text>
             </Pressable>
@@ -406,7 +462,6 @@ export default function ConfiguracoesScreen() {
             </Pressable>
           </View>
 
-          {/* INDICACAO */}
           <View style={{ marginTop: 20 }}>
             <ReferralCard />
           </View>
