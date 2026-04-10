@@ -16,7 +16,6 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const TABS = ["Meu Site", "Vitrine", "Entrega"];
 
-// Presets de cores da marca
 const COLOR_PRESETS = [
   "#7c3aed", "#059669", "#dc2626", "#d97706",
   "#2563eb", "#db2777", "#0891b2", "#374151",
@@ -75,7 +74,6 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
   const [domainInput, setDomainInput] = useState("");
   const [domainPlan,  setDomainPlan]  = useState<"1year" | "2years">("1year");
 
-  // Sync when config loads
   useEffect(() => {
     if (!config.exists) return;
     setSiteName(config.site_name || "");
@@ -171,11 +169,10 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
       {/* Settings */}
       <SectionTitle title="Informacoes do negocio" />
       <View style={s.card}>
-        {/* Publicado switch */}
         <View style={s.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.switchLabel}>Site publicado</Text>
-            <Text style={s.switchHint}>{published ? "Visivelpassel para clientes" : "Site oculto — somente voce ve"}</Text>
+            <Text style={s.switchHint}>{published ? "Visivel para clientes" : "Site oculto — somente voce ve"}</Text>
           </View>
           <Switch
             value={published}
@@ -192,9 +189,8 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
         <Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(12) 99999-0000" />
         <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegogio" />
         <Field label="Telefone" value={phone} onChange={setPhone} placeholder="(12) 3333-0000" />
-        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacareí/SP" />
+        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacare\u00ed/SP" />
 
-        {/* Cor principal */}
         <Text style={s.fieldLabel}>Cor principal</Text>
         <View style={s.colorRow}>
           {COLOR_PRESETS.map(c => (
@@ -232,7 +228,7 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
               <View style={s.infoCard}>
                 <Icon name="alert" size={13} color={Colors.amber} />
                 <Text style={s.infoText}>
-                  Configuracao DNS em andamento. A equipe Aura ira registrar e configurar seu dominio em ate 48h uteis. Voce sera notificado quando estiver ativo.
+                  Configuracao em andamento. A equipe Aura vai registrar e configurar seu dominio em ate 48h uteis. Voce sera notificado quando estiver ativo.
                 </Text>
               </View>
             )}
@@ -246,7 +242,6 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
               Registre um dominio .com.br exclusivo para o seu negocio. O dominio e registrado e configurado pela equipe Aura.
             </Text>
 
-            {/* Plano de dominio */}
             <Text style={s.fieldLabel}>Duracao</Text>
             <View style={s.planRow}>
               <Pressable
@@ -290,7 +285,7 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
             <View style={s.infoCard}>
               <Icon name="alert" size={13} color={Colors.violet3} />
               <Text style={s.infoText}>
-                A disponibilidade do dominio e verificada junto ao Registro.br. Apos solicitar, a equipe Aura confirma disponibilidade e efetua o registro em ate 48h uteis.
+                Apos solicitar, a equipe Aura confirma a disponibilidade e configura seu dominio em ate 48h uteis.
               </Text>
             </View>
           </View>
@@ -340,7 +335,6 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
 
   return (
     <View>
-      {/* KPIs */}
       <View style={s.kpiRow}>
         <View style={s.kpi}>
           <Text style={s.kpiLabel}>TOTAL</Text>
@@ -356,7 +350,6 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
         </View>
       </View>
 
-      {/* Opcoes de exibicao */}
       <View style={s.card}>
         <View style={s.switchRow}>
           <Text style={s.switchLabel}>Mostrar precos</Text>
@@ -372,7 +365,6 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
 
       <Text style={s.hint}>Selecione os produtos do estoque que aparecem na vitrine do seu site.</Text>
 
-      {/* Filtro por categoria */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }}
         contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
         {cats.map(c => (
@@ -382,7 +374,6 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
         ))}
       </ScrollView>
 
-      {/* Lista de produtos */}
       {(products as any[]).length === 0 ? (
         <View style={s.emptyBox}>
           <Icon name="package" size={28} color={Colors.ink3} />
@@ -408,8 +399,8 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
                     <Text style={s.prodName}>{prod.name}</Text>
                     <Text style={s.prodMeta}>
                       {showPrices ? `R$ ${(parseFloat(prod.price) || 0).toFixed(2)}` : ""}
-                      {prod.category ? ` · ${prod.category}` : ""}
-                      {prod.size ? ` · ${prod.size}` : ""}
+                      {prod.category ? ` \u00b7 ${prod.category}` : ""}
+                      {prod.size ? ` \u00b7 ${prod.size}` : ""}
                     </Text>
                   </View>
                 </View>
@@ -471,7 +462,6 @@ function TabEntrega({ config, saveConfig, isSaving }: any) {
       </Text>
 
       <View style={s.card}>
-        {/* Retirada */}
         <View style={s.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.switchLabel}>Retirada no local</Text>
@@ -485,7 +475,6 @@ function TabEntrega({ config, saveConfig, isSaving }: any) {
           />
         </View>
 
-        {/* Entrega */}
         <View style={s.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.switchLabel}>Entrega a domicilio</Text>
@@ -499,7 +488,6 @@ function TabEntrega({ config, saveConfig, isSaving }: any) {
           />
         </View>
 
-        {/* Taxa de entrega (so aparece se delivery ativado) */}
         {delivery && (
           <View style={[s.field, { marginTop: 8 }]}>
             <Text style={s.fieldLabel}>Taxa de entrega (R$)</Text>
@@ -515,7 +503,6 @@ function TabEntrega({ config, saveConfig, isSaving }: any) {
         )}
       </View>
 
-      {/* Info */}
       <View style={s.infoCard}>
         <Icon name="alert" size={13} color={Colors.violet3} />
         <Text style={s.infoText}>
@@ -538,7 +525,6 @@ export default function CanalDigitalScreen() {
   const { company } = useAuthStore();
   const { config, products, isLoading, saveConfig, isSaving, requestDomain, isRequestingDomain } = useDigitalChannel();
 
-  // Plan gate: canal digital e Negocio+
   const plan = company?.plan || "essencial";
   const planLevels: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
   const hasAccess = (planLevels[plan] ?? 0) >= 1;
@@ -566,7 +552,6 @@ export default function CanalDigitalScreen() {
     <ScrollView style={g.screen} contentContainerStyle={g.content}>
       <PageHeader title="Canal Digital" />
 
-      {/* Hero informativo */}
       <View style={s.hero}>
         <View style={s.heroIcon}><Icon name="globe" size={22} color={Colors.violet3} /></View>
         <View style={{ flex: 1 }}>
@@ -629,14 +614,12 @@ const g = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  // Hero
   hero: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.violetD, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
   heroIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, flexShrink: 0 },
   heroTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   heroDesc:  { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 16 },
   viewSiteBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: Colors.border2, flexShrink: 0 },
   viewSiteBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
-  // Preview card
   previewCard: { backgroundColor: Colors.bg3, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
   previewHeader: { padding: 20 },
   previewBrand: { fontSize: 20, fontWeight: "800" },
@@ -644,32 +627,25 @@ const s = StyleSheet.create({
   publishedBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   publishedDot: { width: 6, height: 6, borderRadius: 3 },
   publishedLabel: { fontSize: 10, fontWeight: "700" },
-  // URL row
   urlRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 16, paddingVertical: 10 },
   urlText: { flex: 1, fontSize: 11, color: Colors.violet3, fontWeight: "500" },
   urlCopy: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
   urlCopyText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
-  // Section
   sectionTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700", marginTop: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
   card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  // Fields
   field: { marginBottom: 14 },
   fieldLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
   input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   textarea: { minHeight: 80, textAlignVertical: "top" },
-  // Color picker
   colorRow: { flexDirection: "row", gap: 10, marginTop: 6, marginBottom: 16, flexWrap: "wrap" },
   colorDot: { width: 30, height: 30, borderRadius: 15 },
   colorDotActive: { borderWidth: 3, borderColor: "#fff", transform: [{ scale: 1.15 }] },
-  // Switch rows
   switchRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
   switchLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   switchHint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  // Save button
   saveBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 },
   saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  // Dominio
   domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
   domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },
@@ -684,21 +660,17 @@ const s = StyleSheet.create({
   planBtnLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   planBtnPrice: { fontSize: 18, color: Colors.ink3, fontWeight: "800" },
   planBtnLabelActive: { color: Colors.violet3 },
-  // Info card
   infoCard: { flexDirection: "row", gap: 8, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: Colors.border },
   infoText: { fontSize: 11, color: Colors.ink3, flex: 1, lineHeight: 16 },
   hint: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 12 },
-  // KPIs
   kpiRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
   kpiLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 },
   kpiValue: { fontSize: 22, fontWeight: "800", color: Colors.ink },
-  // Filter chips
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   filterChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   filterText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   filterTextActive: { color: Colors.violet3, fontWeight: "600" },
-  // Product rows
   prodRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   prodLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   prodIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
@@ -708,11 +680,9 @@ const s = StyleSheet.create({
   prodRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   featBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   featBadgeText: { fontSize: 9, fontWeight: "600" },
-  // Empty
   emptyBox: { alignItems: "center", paddingVertical: 40, gap: 8, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border },
   emptyText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
   emptyHint: { fontSize: 12, color: Colors.ink3, textAlign: "center", maxWidth: 280 },
-  // Lock (plan gate)
   lockBox: { alignItems: "center", paddingVertical: 48, gap: 12, backgroundColor: Colors.bg3, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 32 },
   lockTitle: { fontSize: 22, color: Colors.ink, fontWeight: "800" },
   lockDesc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, maxWidth: 320 },
