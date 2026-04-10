@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { BarcodeQRSection } from "@/components/BarcodeQRSection";
+import { VariantsSection } from "@/components/VariantsSection";
+import { useAuthStore } from "@/stores/auth";
+import { companiesApi } from "@/services/api";
 import type { Product } from "./types";
 import { UNITS } from "./types";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-// Paleta de cores para native
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
   "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
@@ -31,20 +34,32 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   editProduct?: Product | null;
 }) {
   const isEdit = !!editProduct;
-  const [name, setName] = useState(editProduct?.name || "");
-  const [code, setCode] = useState(editProduct?.code || "");
-  const [barcode, setBarcode] = useState(editProduct?.barcode || "");
+  const { company } = useAuthStore();
+  const qc = useQueryClient();
+
+  const [name, setName]         = useState(editProduct?.name || "");
+  const [code, setCode]         = useState(editProduct?.code || "");
+  const [barcode, setBarcode]   = useState(editProduct?.barcode || "");
   const [category, setCategory] = useState(editProduct?.category || categories[0] || "");
-  const [price, setPrice] = useState(editProduct ? String(editProduct.price) : "");
-  const [cost, setCost] = useState(editProduct ? String(editProduct.cost) : "");
-  const [stock, setStock] = useState(editProduct ? String(editProduct.stock) : "");
+  const [price, setPrice]       = useState(editProduct ? String(editProduct.price) : "");
+  const [cost, setCost]         = useState(editProduct ? String(editProduct.cost) : "");
+  const [stock, setStock]       = useState(editProduct ? String(editProduct.stock) : "");
   const [minStock, setMinStock] = useState(editProduct ? String(editProduct.minStock) : "");
-  const [unit, setUnit] = useState(editProduct?.unit || "un");
-  const [notes, setNotes] = useState(editProduct?.notes || "");
-  const [color, setColor] = useState(editProduct?.color || "");
-  const [size, setSize] = useState(editProduct?.size || "");
+  const [unit, setUnit]         = useState(editProduct?.unit || "un");
+  const [notes, setNotes]       = useState(editProduct?.notes || "");
+  const [color, setColor]       = useState(editProduct?.color || "");
+  const [size, setSize]         = useState(editProduct?.size || "");
   const [newCategory, setNewCategory] = useState("");
-  const [showNewCat, setShowNewCat] = useState(false);
+  const [showNewCat, setShowNewCat]   = useState(false);
+
+  // P3 wiring: buscar variantes em modo edicao
+  const { data: variantsData, refetch: refetchVariants } = useQuery({
+    queryKey: ["variants", company?.id, editProduct?.id],
+    queryFn: () => companiesApi.variants(company!.id, editProduct!.id),
+    enabled: isEdit && !!editProduct?.id && !!company?.id,
+    staleTime: 30000,
+  });
+  const variants = ((variantsData as any)?.variants || variantsData || []) as any[];
 
   function generateCode() {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
@@ -63,9 +78,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         setColor(e.target.value);
         document.body.removeChild(input);
       });
-      input.addEventListener("blur", () => {
-        try { document.body.removeChild(input); } catch {}
-      });
+      input.addEventListener("blur", () => { try { document.body.removeChild(input); } catch {} });
       input.click();
     } catch {}
   }
@@ -103,13 +116,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       <Text style={s.hint}>Campos com * sao obrigatorios.</Text>
 
       <FormField label="Nome do produto" required>
-        <TextInput
-          style={s.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Ex: Pomada modeladora"
-          placeholderTextColor={Colors.ink3}
-        />
+        <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Pomada modeladora" placeholderTextColor={Colors.ink3} />
       </FormField>
 
       <View style={s.row2}>
@@ -152,7 +159,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
 
       <View style={s.divider} />
 
-      {/* Cor + Tamanho */}
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
           <FormField label="Cor">
@@ -192,6 +198,17 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         price={parseFloat(price.replace(",", ".")) || 0}
         onCodeChange={setBarcode}
       />
+
+      {/* P3: Variantes (apenas em modo de edicao — produto precisa existir no backend) */}
+      {isEdit && editProduct?.id && (
+        <VariantsSection
+          productId={editProduct.id}
+          productName={name}
+          basePrice={parseFloat(price.replace(",", ".")) || 0}
+          variants={variants}
+          onUpdate={() => refetchVariants()}
+        />
+      )}
 
       <FormField label="Descricao (opcional)">
         <TextInput

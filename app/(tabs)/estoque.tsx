@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
+import { ServerImport } from "@/components/ServerImport";
 import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
@@ -16,9 +17,8 @@ import { Pagination } from "@/components/Pagination";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
-import { arrayToCSV, downloadCSV, pickFileAndParse, PRODUCT_COLUMNS, mapImportedProduct } from "@/utils/csv";
+import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
-import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -91,20 +91,6 @@ export default function EstoqueScreen() {
     downloadCSV(arrayToCSV(products, PRODUCT_COLUMNS), `aura_estoque_${new Date().toISOString().slice(0,10)}.csv`);
   }
 
-  async function handleImport() {
-    try {
-      const rows = await pickFileAndParse();
-      let imported = 0, skipped = 0;
-      for (const row of rows) {
-        const mapped = mapImportedProduct(row);
-        if (mapped && company?.id) { try { await companiesApi.createProduct(company.id, mapped); imported++; } catch { skipped++; } }
-        else skipped++;
-      }
-      if (imported > 0) { qc.invalidateQueries({ queryKey: ["products", company?.id] }); toast.success(`${imported} produtos importados${skipped > 0 ? ` (${skipped} ignorados)` : ""}`); }
-      else toast.error("Nenhum produto valido encontrado.");
-    } catch {}
-  }
-
   function toggleBulkSelect(id: string) {
     setBulkSelected(prev => {
       const next = new Set(prev);
@@ -118,10 +104,7 @@ export default function EstoqueScreen() {
     else setBulkSelected(new Set(filtered.map(p => p.id)));
   }
 
-  function exitBulkMode() {
-    setBulkMode(false);
-    setBulkSelected(new Set());
-  }
+  function exitBulkMode() { setBulkMode(false); setBulkSelected(new Set()); }
 
   async function handleBulkDelete() {
     await bulkDeleteProducts(Array.from(bulkSelected));
@@ -142,15 +125,19 @@ export default function EstoqueScreen() {
       {isLoading && <ListSkeleton rows={4} showCards />}
 
       {!isLoading && products.length === 0 && !isDemo && !showAddForm && (
-        <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} secondaryLabel="Importar CSV" onSecondary={handleImport} />
+        <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
       )}
 
       {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
 
       {products.length > 0 && activeTab === 0 && (
         <View style={s.toolbar}>
-          <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={products.length} />
-          {/* Bulk toggle */}
+          <ImportExportBar onExport={handleExport} itemCount={products.length} />
+          {/* P3: ServerImport para importacao via backend (CSV → JSON → Railway) */}
+          <ServerImport
+            entity="products"
+            onComplete={() => qc.invalidateQueries({ queryKey: ["products", company?.id] })}
+          />
           {!bulkMode ? (
             <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}>
               <Text style={s.bulkBtnText}>Selecionar</Text>
