@@ -25,14 +25,8 @@ function mapApiCustomer(c: any): Customer {
 function parseBirthday(val: string): string | undefined {
   if (!val) return undefined;
   const parts = val.split("/");
-  if (parts.length === 2) {
-    const day = parts[0].padStart(2, "0");
-    const month = parts[1].padStart(2, "0");
-    return `2000-${month}-${day}`;
-  }
-  if (parts.length === 3) {
-    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-  }
+  if (parts.length === 2) return `2000-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+  if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
   return undefined;
 }
 
@@ -60,76 +54,53 @@ export function useCustomers() {
 
   const addMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createCustomer(companyId!, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["customers", companyId] });
-      toast.success("Cliente cadastrado!");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", companyId] }); toast.success("Cliente cadastrado!"); },
     onError: (err: any) => {
-      if (err instanceof ApiError && err.status === 403) {
-        toast.error("Clientes disponivel a partir do plano Negocio. Faca upgrade em Configuracoes > Meu plano.");
-      } else {
-        toast.error(err?.message || "Erro ao salvar cliente");
-      }
+      if (err instanceof ApiError && err.status === 403) toast.error("Clientes disponivel a partir do plano Negocio.");
+      else toast.error(err?.message || "Erro ao salvar cliente");
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: any }) => companiesApi.updateCustomer(companyId!, id, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["customers", companyId] });
-      toast.success("Cliente atualizado!");
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || "Erro ao atualizar cliente");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", companyId] }); toast.success("Cliente atualizado!"); },
+    onError: (err: any) => toast.error(err?.message || "Erro ao atualizar cliente"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (custId: string) => companiesApi.deleteCustomer(companyId!, custId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["customers", companyId] });
-      toast.success("Cliente excluido");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", companyId] }); toast.success("Cliente excluido"); },
     onError: (err: any) => {
-      if (err instanceof ApiError && err.status === 403) {
-        toast.error("Funcionalidade disponivel a partir do plano Negocio.");
-      } else {
-        toast.error("Erro ao excluir cliente");
-      }
+      if (err instanceof ApiError && err.status === 403) toast.error("Funcionalidade disponivel a partir do plano Negocio.");
+      else toast.error("Erro ao excluir cliente");
     },
   });
 
   function addCustomer(c: Customer) {
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
-    addMutation.mutate({
-      name: c.name,
-      email: c.email || undefined,
-      phone: c.phone || undefined,
-      instagram_handle: c.instagram || undefined,
-      birth_date: parseBirthday(c.birthday),
-      notes: c.notes || undefined,
-    });
+    addMutation.mutate({ name: c.name, email: c.email || undefined, phone: c.phone || undefined, instagram_handle: c.instagram || undefined, birth_date: parseBirthday(c.birthday), notes: c.notes || undefined });
   }
 
   function updateCustomer(id: string, c: Partial<Customer>) {
     if (!companyId || isDemo) return;
-    updateMutation.mutate({
-      id,
-      body: {
-        name: c.name,
-        email: c.email || undefined,
-        phone: c.phone || undefined,
-        instagram_handle: c.instagram || undefined,
-        birth_date: c.birthday ? parseBirthday(c.birthday) : undefined,
-        notes: c.notes || undefined,
-      },
-    });
+    updateMutation.mutate({ id, body: { name: c.name, email: c.email || undefined, phone: c.phone || undefined, instagram_handle: c.instagram || undefined, birth_date: c.birthday ? parseBirthday(c.birthday) : undefined, notes: c.notes || undefined } });
   }
 
   function deleteCustomer(id: string) {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
-  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer };
+  async function bulkDeleteCustomers(ids: string[]) {
+    if (!companyId || isDemo || ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => companiesApi.deleteCustomer(companyId!, id)));
+      qc.invalidateQueries({ queryKey: ["customers", companyId] });
+      toast.success(`${ids.length} cliente${ids.length > 1 ? "s" : ""} excluido${ids.length > 1 ? "s" : ""}`);
+    } catch {
+      toast.error("Erro ao excluir clientes selecionados");
+    }
+  }
+
+  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers };
 }

@@ -8,14 +8,27 @@ import { UNITS } from "./types";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
+// Paleta de cores para native
+const PRESET_COLORS = [
+  "#ef4444", "#f97316", "#eab308", "#22c55e",
+  "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
+  "#ffffff", "#1f2937", "#6b7280", "#92400e",
+];
+
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return <View style={{ marginBottom: 16 }}><Text style={s.label}>{label}{required && <Text style={{ color: Colors.red }}> *</Text>}</Text>{children}</View>;
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={s.label}>{label}{required && <Text style={{ color: Colors.red }}> *</Text>}</Text>
+      {children}
+    </View>
+  );
 }
 
-function isValidHex(v: string) { return /^#[0-9A-Fa-f]{6}$/.test(v); }
-
 export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
-  categories: string[]; onSave: (p: Product) => void; onCancel: () => void; editProduct?: Product | null;
+  categories: string[];
+  onSave: (p: Product) => void;
+  onCancel: () => void;
+  editProduct?: Product | null;
 }) {
   const isEdit = !!editProduct;
   const [name, setName] = useState(editProduct?.name || "");
@@ -33,14 +46,28 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
 
-  function handleColorChange(v: string) {
-    const val = v.startsWith("#") ? v : "#" + v;
-    setColor(val.slice(0, 7));
-  }
-
   function generateCode() {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
     setCode(prefix + "-" + String(Math.floor(Math.random() * 999) + 1).padStart(3, "0"));
+  }
+
+  function openColorPicker() {
+    if (Platform.OS !== "web") return;
+    try {
+      const input = document.createElement("input");
+      input.type = "color";
+      input.value = color || "#6d28d9";
+      input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
+      document.body.appendChild(input);
+      input.addEventListener("change", (e: any) => {
+        setColor(e.target.value);
+        document.body.removeChild(input);
+      });
+      input.addEventListener("blur", () => {
+        try { document.body.removeChild(input); } catch {}
+      });
+      input.click();
+    } catch {}
   }
 
   function handleSave() {
@@ -49,14 +76,20 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
     onSave({
       id: editProduct?.id || Date.now().toString(),
-      name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
+      name: name.trim(),
+      code: code.trim() || "---",
+      barcode: barcode.trim(),
       category: finalCategory || "Produtos",
       price: parseFloat(price.replace(",", ".")) || 0,
       cost: parseFloat(cost.replace(",", ".")) || 0,
-      stock: parseInt(stock) || 0, minStock: parseInt(minStock) || 0,
-      abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0,
-      unit, brand: editProduct?.brand || "", notes: notes.trim(),
-      color: isValidHex(color) ? color : "",
+      stock: parseInt(stock) || 0,
+      minStock: parseInt(minStock) || 0,
+      abc: editProduct?.abc || "C",
+      sold30d: editProduct?.sold30d || 0,
+      unit,
+      brand: editProduct?.brand || "",
+      notes: notes.trim(),
+      color: color || "",
       size: size.trim(),
     });
   }
@@ -70,7 +103,13 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       <Text style={s.hint}>Campos com * sao obrigatorios.</Text>
 
       <FormField label="Nome do produto" required>
-        <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Pomada modeladora" placeholderTextColor={Colors.ink3} />
+        <TextInput
+          style={s.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="Ex: Pomada modeladora"
+          placeholderTextColor={Colors.ink3}
+        />
       </FormField>
 
       <View style={s.row2}>
@@ -94,7 +133,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       <FormField label="Categoria">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {categories.map(c => <Pressable key={c} onPress={() => { setCategory(c); setShowNewCat(false); }} style={[s.chip, category === c && !showNewCat && s.chipActive]}><Text style={[s.chipText, category === c && !showNewCat && s.chipTextActive]}>{c}</Text></Pressable>)}
-          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}><Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova categoria</Text></Pressable>
+          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}><Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text></Pressable>
         </ScrollView>
         {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
       </FormField>
@@ -107,34 +146,37 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       </View>
 
       <View style={s.row2}>
-        <View style={{ flex: 1 }}><FormField label="Quantidade atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
+        <View style={{ flex: 1 }}><FormField label="Qtd. atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
         <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
       </View>
 
       <View style={s.divider} />
 
-      {/* P1-8: Cor e Tamanho */}
+      {/* Cor + Tamanho */}
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FormField label="Cor (hexadecimal)">
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <TextInput
-                style={[s.input, { flex: 1 }]}
-                value={color}
-                onChangeText={handleColorChange}
-                placeholder="#FFFFFF"
-                placeholderTextColor={Colors.ink3}
-                maxLength={7}
-                autoCapitalize="none"
-              />
-              {isValidHex(color) ? (
-                <View style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: color, borderWidth: 1, borderColor: Colors.border }} />
-              ) : (
-                <View style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 10, color: Colors.ink3 }}>Cor</Text>
+          <FormField label="Cor">
+            {Platform.OS === "web" ? (
+              <Pressable onPress={openColorPicker} style={s.colorRow}>
+                <View style={[s.colorSwatch, { backgroundColor: color || Colors.bg4, borderStyle: color ? "solid" : "dashed" }]} />
+                <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>{color || "Toque para escolher"}</Text>
+                {color && (
+                  <Pressable onPress={(e) => { e.stopPropagation?.(); setColor(""); }}>
+                    <Text style={{ fontSize: 11, color: Colors.red }}>Remover</Text>
+                  </Pressable>
+                )}
+              </Pressable>
+            ) : (
+              <View>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                  {PRESET_COLORS.map(c => (
+                    <Pressable key={c} onPress={() => setColor(color === c ? "" : c)}
+                      style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: c, borderWidth: color === c ? 3 : 1.5, borderColor: color === c ? Colors.violet : Colors.border }} />
+                  ))}
                 </View>
-              )}
-            </View>
+                {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{color}</Text>}
+              </View>
+            )}
           </FormField>
         </View>
         <View style={{ flex: 1 }}>
@@ -152,12 +194,22 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       />
 
       <FormField label="Descricao (opcional)">
-        <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes do produto, composicao, instrucoes..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
+        <TextInput
+          style={[s.input, { minHeight: 70, textAlignVertical: "top" }]}
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Detalhes do produto, composicao..."
+          placeholderTextColor={Colors.ink3}
+          multiline
+          numberOfLines={3}
+        />
       </FormField>
 
       <View style={s.footer}>
         <Pressable onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelText}>Cancelar</Text></Pressable>
-        <Pressable onPress={handleSave} style={s.saveBtn}><Text style={s.saveText}>{isEdit ? "Atualizar produto" : "Salvar produto"}</Text></Pressable>
+        <Pressable onPress={handleSave} style={s.saveBtn}>
+          <Text style={s.saveText}>{isEdit ? "Atualizar produto" : "Salvar produto"}</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -180,6 +232,9 @@ const s = StyleSheet.create({
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  colorRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10 },
+  colorSwatch: { width: 36, height: 36, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border },
+  colorText: { fontSize: 12, color: Colors.ink, fontWeight: "500", flex: 1 },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },

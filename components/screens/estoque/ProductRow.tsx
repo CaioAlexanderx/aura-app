@@ -10,7 +10,17 @@ function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
   return <View style={[s.badge, { backgroundColor: bgs[abc] }]}><Text style={[s.badgeText, { color: colors[abc] }]}>{abc}</Text></View>;
 }
 
-export function ProductRow({ product, showAbc, onDelete, onEdit }: { product: Product; showAbc?: boolean; onDelete?: (id: string) => void; onEdit?: (product: Product) => void }) {
+export function ProductRow({
+  product, showAbc, onDelete, onEdit,
+  isSelected, onSelect,
+}: {
+  product: Product;
+  showAbc?: boolean;
+  onDelete?: (id: string) => void;
+  onEdit?: (product: Product) => void;
+  isSelected?: boolean;
+  onSelect?: (id: string) => void;
+}) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isWeb = Platform.OS === "web";
@@ -19,13 +29,25 @@ export function ProductRow({ product, showAbc, onDelete, onEdit }: { product: Pr
 
   return (
     <View>
-      <Pressable onPress={() => setExpanded(!expanded)} onHoverIn={isWeb ? () => setHovered(true) : undefined} onHoverOut={isWeb ? () => setHovered(false) : undefined}
-        style={[s.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}>
+      <Pressable
+        onPress={() => onSelect ? onSelect(product.id) : setExpanded(!expanded)}
+        onHoverIn={isWeb ? () => setHovered(true) : undefined}
+        onHoverOut={isWeb ? () => setHovered(false) : undefined}
+        style={[s.row, hovered && { backgroundColor: Colors.bg4 }, isSelected && { backgroundColor: Colors.violetD }, isWeb && { transition: "background-color 0.15s ease" } as any]}
+      >
+        {/* Checkbox bulk select */}
+        {onSelect && (
+          <View style={[s.checkbox, isSelected && s.checkboxSelected]}>
+            {isSelected && <Text style={s.checkmark}>✓</Text>}
+          </View>
+        )}
         <View style={s.left}>
-          {showAbc && <AbcBadge abc={product.abc} />}
+          {showAbc && !onSelect && <AbcBadge abc={product.abc} />}
+          {/* Color swatch */}
+          {product.color ? <View style={{ width: 18, height: 18, borderRadius: 4, backgroundColor: product.color, borderWidth: 1, borderColor: Colors.border }} /> : null}
           <View style={s.info}>
             <Text style={s.name}>{product.name}</Text>
-            <Text style={s.meta}>{product.code} / {product.category}{product.barcode ? " / EAN" : ""}</Text>
+            <Text style={s.meta}>{product.code} / {product.category}{product.size ? " / " + product.size : ""}</Text>
           </View>
         </View>
         <View style={s.right}>
@@ -36,7 +58,7 @@ export function ProductRow({ product, showAbc, onDelete, onEdit }: { product: Pr
           <Text style={s.price}>{fmt(product.price)}</Text>
         </View>
       </Pressable>
-      {expanded && (
+      {expanded && !onSelect && (
         <View style={s.detail}>
           <View style={s.detailGrid}>
             {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
@@ -44,7 +66,6 @@ export function ProductRow({ product, showAbc, onDelete, onEdit }: { product: Pr
             )}
             <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
           </View>
-          {product.brand ? <Text style={s.brandText}>Marca: {product.brand}</Text> : null}
           {product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Codigo de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
           {product.notes ? <Text style={s.notesText}>{product.notes}</Text> : null}
           <View style={s.actionsRow}>
@@ -60,8 +81,11 @@ export function ProductRow({ product, showAbc, onDelete, onEdit }: { product: Pr
 const s = StyleSheet.create({
   badge: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center" },
   badgeText: { fontSize: 12, fontWeight: "800" },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, marginRight: 8, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4 },
+  checkboxSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  checkmark: { fontSize: 13, color: "#fff", fontWeight: "700", lineHeight: 16 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  left: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  left: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
   info: { flex: 1 },
   name: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   meta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
@@ -75,7 +99,6 @@ const s = StyleSheet.create({
   detailItem: { width: "30%", minWidth: 100, paddingVertical: 8, gap: 4 },
   detailLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   detailValue: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
-  brandText: { fontSize: 11, color: Colors.ink3, marginTop: 8 },
   barcodeRow: { flexDirection: "row", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   barcodeLabel: { fontSize: 11, color: Colors.ink3 },
   barcodeValue: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },

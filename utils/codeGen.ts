@@ -2,14 +2,8 @@
 // AURA. — Barcode/QR Code generation utilities (pure JS, no deps)
 // ============================================================
 
-// — Label presets (mm) ——————————————————————————————————
 export type LabelPreset = {
-  id: string;
-  name: string;
-  width: number;  // mm
-  height: number; // mm
-  columns: number;
-  gap: number;    // mm
+  id: string; name: string; width: number; height: number; columns: number; gap: number;
 };
 
 export const LABEL_PRESETS: LabelPreset[] = [
@@ -23,24 +17,16 @@ export const LABEL_PRESETS: LabelPreset[] = [
 ];
 
 export function getSavedPreset(): string {
-  try {
-    if (typeof localStorage === 'undefined') return '40x25';
-    return localStorage.getItem('aura_label_preset') || '40x25';
-  } catch { return '40x25'; }
+  try { if (typeof localStorage === 'undefined') return '40x25'; return localStorage.getItem('aura_label_preset') || '40x25'; } catch { return '40x25'; }
 }
-
 export function savePreset(id: string) {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem('aura_label_preset', id);
-  } catch {}
+  try { if (typeof localStorage === 'undefined') return; localStorage.setItem('aura_label_preset', id); } catch {}
 }
-
 export function getPreset(id: string): LabelPreset {
   return LABEL_PRESETS.find(p => p.id === id) || LABEL_PRESETS[1];
 }
 
-// — CODE-128 Barcode Generator ————————————————————————————
+// CODE-128 Barcode Generator
 const CODE128_START_B = 104;
 const CODE128_STOP = 106;
 const CODE128_PATTERNS: number[][] = [[2,1,2,2,2,2],[2,2,2,1,2,2],[2,2,2,2,2,1],[1,2,1,2,2,3],[1,2,1,3,2,2],[1,3,1,2,2,2],[1,2,2,2,1,3],[1,2,2,3,1,2],[1,3,2,2,1,2],[2,2,1,2,1,3],[2,2,1,3,1,2],[2,3,1,2,1,2],[1,1,2,2,3,2],[1,2,2,1,3,2],[1,2,2,2,3,1],[1,1,3,2,2,2],[1,2,3,1,2,2],[1,2,3,2,2,1],[2,2,3,2,1,1],[2,2,1,1,3,2],[2,2,1,2,3,1],[2,1,3,2,1,2],[2,2,3,1,1,2],[3,1,2,1,3,1],[3,1,1,2,2,2],[3,2,1,1,2,2],[3,2,1,2,2,1],[3,1,2,2,1,2],[3,2,2,1,1,2],[3,2,2,2,1,1],[2,1,2,1,2,3],[2,1,2,3,2,1],[2,3,2,1,2,1],[1,1,1,3,2,3],[1,3,1,1,2,3],[1,3,1,3,2,1],[1,1,2,3,1,3],[1,3,2,1,1,3],[1,3,2,3,1,1],[2,1,1,3,1,3],[2,3,1,1,1,3],[2,3,1,3,1,1],[1,1,2,1,3,3],[1,1,2,3,3,1],[1,3,2,1,3,1],[1,1,3,1,2,3],[1,1,3,3,2,1],[1,3,3,1,2,1],[3,1,3,1,2,1],[2,1,1,3,3,1],[2,3,1,1,3,1],[2,1,3,1,1,3],[2,1,3,3,1,1],[2,1,3,1,3,1],[3,1,1,1,2,3],[3,1,1,3,2,1],[3,3,1,1,2,1],[3,1,2,1,1,3],[3,1,2,3,1,1],[3,3,2,1,1,1],[3,1,4,1,1,1],[2,2,1,4,1,1],[4,3,1,1,1,1],[1,1,1,2,2,4],[1,1,1,4,2,2],[1,2,1,1,2,4],[1,2,1,4,2,1],[1,4,1,1,2,2],[1,4,1,2,2,1],[1,1,2,2,1,4],[1,1,2,4,1,2],[1,2,2,1,1,4],[1,2,2,4,1,1],[1,4,2,1,1,2],[1,4,2,2,1,1],[2,4,1,2,1,1],[2,2,1,1,1,4],[4,1,3,1,1,1],[2,4,1,1,1,2],[1,3,4,1,1,1],[1,1,1,2,4,2],[1,2,1,1,4,2],[1,2,1,2,4,1],[1,1,4,2,1,2],[1,2,4,1,1,2],[1,2,4,2,1,1],[4,1,1,2,1,2],[4,2,1,1,1,2],[4,2,1,2,1,1],[2,1,2,1,4,1],[2,1,4,1,2,1],[4,1,2,1,2,1],[1,1,1,1,4,3],[1,1,1,3,4,1],[1,3,1,1,4,1],[1,1,4,1,1,3],[1,1,4,3,1,1],[4,1,1,1,1,3],[4,1,1,3,1,1],[1,1,3,1,4,1],[1,1,4,1,3,1],[3,1,1,1,4,1],[4,1,1,1,3,1],[2,1,1,4,1,2],[2,1,1,2,1,4],[2,1,1,2,3,2],[2,3,3,1,1,1,2]];
@@ -71,8 +57,9 @@ export function generateBarcodeSVG(text: string, width = 280, height = 80): stri
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="#fff"/>${rects}<text x="${width/2}" y="${height - 4}" text-anchor="middle" font-family="monospace" font-size="12" fill="#000">${text}</text></svg>`;
 }
 
+// fix: usar PNG (sem format=svg) — Image component nao renderiza SVG externo
 export function generateQRSVGUrl(text: string, size = 200): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&format=svg`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&margin=4`;
 }
 
 export function generateQRDataURL(text: string, size = 200): string {
@@ -85,7 +72,6 @@ export function generateProductCode(prefix = 'AURA'): string {
   return `${prefix}-${ts}${rand}`;
 }
 
-// — Print labels HTML with preset support ——————————————————
 export function generatePrintHTML(
   products: { name: string; code: string; price: number; type: 'barcode' | 'qr' }[],
   presetId?: string

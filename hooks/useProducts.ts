@@ -70,28 +70,19 @@ export function useProducts() {
 
   const addMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createProduct(companyId!, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["products", companyId] });
-      toast.success("Produto cadastrado!");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["products", companyId] }); toast.success("Produto cadastrado!"); },
     onError: (err: any) => toast.error(err?.message || "Erro ao salvar produto"),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ prodId, body }: { prodId: string; body: any }) => companiesApi.updateProduct(companyId!, prodId, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["products", companyId] });
-      toast.success("Produto atualizado!");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["products", companyId] }); toast.success("Produto atualizado!"); },
     onError: () => toast.error("Erro ao atualizar produto"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (prodId: string) => companiesApi.deleteProduct(companyId!, prodId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["products", companyId] });
-      toast.success("Produto excluido");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["products", companyId] }); toast.success("Produto excluido"); },
     onError: () => toast.error("Erro ao excluir produto"),
   });
 
@@ -110,17 +101,27 @@ export function useProducts() {
     if (!companyId || isDemo) return;
     const product = products.find(p => p.id === productId);
     if (!product) return;
-    const newStock = Math.max(0, product.stock - qty);
-    updateMutation.mutate({ prodId: productId, body: { stock_qty: newStock } });
+    updateMutation.mutate({ prodId: productId, body: { stock_qty: Math.max(0, product.stock - qty) } });
   }
 
   function deleteProduct(id: string) {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
+  async function bulkDeleteProducts(ids: string[]) {
+    if (!companyId || isDemo || ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => companiesApi.deleteProduct(companyId!, id)));
+      qc.invalidateQueries({ queryKey: ["products", companyId] });
+      toast.success(`${ids.length} produto${ids.length > 1 ? "s" : ""} excluido${ids.length > 1 ? "s" : ""}`);
+    } catch {
+      toast.error("Erro ao excluir produtos selecionados");
+    }
+  }
+
   return {
     products, categories, isLoading: isLoading && !isDemo, isDemo,
-    addProduct, updateProduct, decrementStock, deleteProduct,
+    addProduct, updateProduct, decrementStock, deleteProduct, bulkDeleteProducts,
     isAdding: addMutation.isPending, isUpdating: updateMutation.isPending, isDeleting: deleteMutation.isPending,
   };
 }
