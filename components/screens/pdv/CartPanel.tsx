@@ -42,6 +42,9 @@ function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: {
   );
 }
 
+// Normaliza telefone para comparacao: remove tudo que nao e digito
+function normalizePhone(p: string) { return p.replace(/\D/g, ""); }
+
 export function CartPanel({
   cart, payment, setPayment, total, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing,
   customers, employees,
@@ -60,17 +63,36 @@ export function CartPanel({
   selectEmployee?: (id: string | null, name: string | null) => void;
 }) {
   const [customerSearch, setCustomerSearch] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
 
+  // Busca cliente por nome OU telefone
   const matchedCustomers = customers && customerSearch.length >= 2
-    ? customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).slice(0, 5)
+    ? customers.filter(c => {
+        const q = customerSearch.toLowerCase();
+        const matchName = c.name.toLowerCase().includes(q);
+        const matchPhone = c.phone
+          ? normalizePhone(c.phone).includes(normalizePhone(customerSearch))
+          : false;
+        return matchName || matchPhone;
+      }).slice(0, 6)
     : [];
 
+  // Busca vendedor por nome (dropdown — util quando ha muitos funcionarios)
+  const matchedEmployees = employees && employeeSearch.length >= 1
+    ? employees.filter(e => e.name.toLowerCase().includes(employeeSearch.toLowerCase())).slice(0, 5)
+    : (employees || []).slice(0, 8);
+
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
+  const selectedEmployee = employees?.find(e => e.id === selectedEmployeeId);
+
+  // Chips de vendedor: mostra chips se <= 5, dropdown se > 5
+  const manyEmployees = (employees?.length || 0) > 5;
 
   return (
     <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 8, flex: isWide ? 1 : undefined }}>
 
-      {/* N3 fix: Desktop mostra "Caixa", mobile mostra "Carrinho" so quando tem itens */}
+      {/* Header */}
       {isWide ? (
         <View style={s.header}>
           <Text style={s.headerTitle}>Caixa</Text>
@@ -83,7 +105,7 @@ export function CartPanel({
         </View>
       ) : null}
 
-      {/* Estado vazio — so mostra no desktop para nao poluir mobile */}
+      {/* Estado vazio desktop */}
       {cart.length === 0 && isWide && (
         <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
           <Text style={{ fontSize: 32, color: Colors.ink3 }}>$</Text>
@@ -106,7 +128,7 @@ export function CartPanel({
         <View style={{ marginTop: 12 }}>
           <View style={s.divider} />
 
-          {/* P1-7: Cliente */}
+          {/* ── Cliente ── */}
           {customers && selectCustomer && (
             <View style={{ marginBottom: 14 }}>
               <Text style={s.sectionLabel}>Cliente (opcional)</Text>
@@ -126,7 +148,7 @@ export function CartPanel({
                     style={s.searchSmall}
                     value={customerSearch}
                     onChangeText={setCustomerSearch}
-                    placeholder="Buscar cliente..."
+                    placeholder="Buscar por nome ou telefone..."
                     placeholderTextColor={Colors.ink3}
                   />
                   {matchedCustomers.length > 0 && (
@@ -144,26 +166,65 @@ export function CartPanel({
             </View>
           )}
 
-          {/* P1-7: Vendedor(a) */}
+          {/* ── Vendedor ── */}
           {employees && employees.length > 0 && selectEmployee && (
             <View style={{ marginBottom: 14 }}>
               <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-                {employees.map(e => (
+
+              {selectedEmployee ? (
+                // Vendedor selecionado: mostra tag com nome e botao de limpar
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={{ flex: 1, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 }}>
+                    <Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{selectedEmployee.name}</Text>
+                  </View>
                   <Pressable
-                    key={e.id}
-                    onPress={() => selectEmployee(
-                      selectedEmployeeId === e.id ? null : e.id,
-                      selectedEmployeeId === e.id ? null : e.name
-                    )}
-                    style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}
+                    onPress={() => { selectEmployee(null, null); setEmployeeSearch(""); setShowEmployeeDropdown(false); }}
+                    style={s.clearBtn}
                   >
-                    <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>
-                      {e.name.split(" ")[0]}
-                    </Text>
+                    <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
                   </Pressable>
-                ))}
-              </ScrollView>
+                </View>
+              ) : manyEmployees ? (
+                // Muitos funcionarios: campo de busca com dropdown
+                <View>
+                  <TextInput
+                    style={s.searchSmall}
+                    value={employeeSearch}
+                    onChangeText={v => { setEmployeeSearch(v); setShowEmployeeDropdown(true); }}
+                    onFocus={() => setShowEmployeeDropdown(true)}
+                    placeholder="Buscar vendedor..."
+                    placeholderTextColor={Colors.ink3}
+                  />
+                  {showEmployeeDropdown && matchedEmployees.length > 0 && (
+                    <View style={s.dropdown}>
+                      {matchedEmployees.map(e => (
+                        <Pressable
+                          key={e.id}
+                          onPress={() => { selectEmployee(e.id, e.name); setEmployeeSearch(""); setShowEmployeeDropdown(false); }}
+                          style={s.dropdownItem}
+                        >
+                          <Text style={{ fontSize: 12, color: Colors.ink, fontWeight: "500" }}>{e.name}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ) : (
+                // Poucos funcionarios: chips horizontais
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+                  {employees.map(e => (
+                    <Pressable
+                      key={e.id}
+                      onPress={() => selectEmployee(e.id, e.name)}
+                      style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}
+                    >
+                      <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>
+                        {e.name.split(" ")[0]}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
             </View>
           )}
 
@@ -218,7 +279,7 @@ const s = StyleSheet.create({
   finalizeBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   finalizeText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   searchSmall: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 12, color: Colors.ink },
-  dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 150, overflow: "hidden" },
+  dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 160, overflow: "hidden" },
   dropdownItem: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   clearBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
 });
