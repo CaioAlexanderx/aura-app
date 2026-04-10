@@ -9,14 +9,14 @@ import { router } from "expo-router";
 import { maskPhone, maskCNPJ } from "@/utils/masks";
 import { companiesApi, onboardingApi } from "@/services/api";
 import { MembersSection } from "@/components/MembersSection";
+import { ReferralCard } from "@/components/ReferralCard";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 600;
 
-// FIX #2: email correto de suporte
 const AURA_WHATSAPP = "https://wa.me/5512991234567";
-const AURA_EMAIL    = "mailto:contato@getaura.com.br";
+const AURA_EMAIL    = "contato@getaura.com.br";
 
 const PLANS: Record<string, { label: string; price: string }> = {
   essencial:     { label: "Essencial",     price: "R$ 89/mes"       },
@@ -53,6 +53,16 @@ function validatePhone(v: string): string | null {
   return null;
 }
 
+// BUGFIX #3: safe mailto handler for web
+function openEmail() {
+  const mailto = "mailto:" + AURA_EMAIL;
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.location.href = mailto;
+  } else {
+    Linking.openURL(mailto);
+  }
+}
+
 function SectionTitle({ title }: { title: string }) {
   return <Text style={s.sectionTitle}>{title}</Text>;
 }
@@ -83,7 +93,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={s.infoRow}>
       <Text style={s.infoLabel}>{label}</Text>
-      <Text style={s.infoValue}>{value || "—"}</Text>
+      <Text style={s.infoValue}>{value || "\u2014"}</Text>
     </View>
   );
 }
@@ -101,7 +111,6 @@ export default function ConfiguracoesScreen() {
   const [saving,      setSaving]      = useState(false);
   const [savedOk,     setSavedOk]     = useState(false);
 
-  // FIX #3: CNPJ editavel para contas sem CNPJ
   const [cnpjInput,   setCnpjInput]   = useState("");
   const [cnpjSaving,  setCnpjSaving]  = useState(false);
   const cnpjInputNums = cnpjInput.replace(/\D/g, "");
@@ -170,7 +179,6 @@ export default function ConfiguracoesScreen() {
     } finally { setSaving(false); }
   }
 
-  // FIX #3: salva CNPJ via endpoint de onboarding
   async function handleSaveCnpj() {
     if (!cnpjInputValid || !company?.id || isDemo) return;
     setCnpjSaving(true);
@@ -204,7 +212,7 @@ export default function ConfiguracoesScreen() {
         <View style={s.heroInfo}>
           <Text style={s.heroName} numberOfLines={1}>{companyName || "Minha Empresa"}</Text>
           {cnpj
-            ? <Text style={s.heroSub}>{fmtCNPJ(cnpj)}{taxRegime ? " · " + regimeLabel(taxRegime) : ""}</Text>
+            ? <Text style={s.heroSub}>{fmtCNPJ(cnpj)}{taxRegime ? " \u00b7 " + regimeLabel(taxRegime) : ""}</Text>
             : <Text style={[s.heroSub, { color: Colors.amber }]}>CNPJ nao informado</Text>}
           <View style={s.progressRow}>
             <View style={s.progressTrack}>
@@ -236,7 +244,7 @@ export default function ConfiguracoesScreen() {
           <Card>
             <EditField label="Nome da empresa" value={companyName} onChange={setCompanyName} placeholder="Ex: Barbearia do Caio" />
             <View style={s.fieldDivider} />
-            <EditField label="Endereco" value={address} onChange={setAddress} placeholder="Rua, numero, cidade — UF" multiline />
+            <EditField label="Endereco" value={address} onChange={setAddress} placeholder="Rua, numero, cidade \u2014 UF" multiline />
           </Card>
 
           {/* CONTATO */}
@@ -263,12 +271,11 @@ export default function ConfiguracoesScreen() {
             )}
           </Card>
 
-          {/* DADOS REGISTRAIS — FIX #3: editavel quando vazio */}
+          {/* DADOS REGISTRAIS */}
           <SectionTitle title="Dados registrais" />
           <Card style={cnpj ? s.registraisCard : undefined}>
 
             {cnpj ? (
-              // Conta com CNPJ: somente leitura
               <>
                 <View style={s.registraisRow}>
                   <View style={s.registraisItem}>
@@ -289,7 +296,6 @@ export default function ConfiguracoesScreen() {
                 </View>
               </>
             ) : (
-              // Conta sem CNPJ: campo editavel para adicionar
               <View style={s.cnpjEditWrap}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>
                   <Icon name="alert" size={14} color={Colors.amber} />
@@ -355,7 +361,7 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
-          {/* SUPORTE — FIX #2: email correto */}
+          {/* SUPORTE — BUGFIX #3: window.location.href for mailto */}
           <SectionTitle title="Suporte" />
           <View style={s.supportRow}>
             <Pressable
@@ -366,7 +372,7 @@ export default function ConfiguracoesScreen() {
               <Text style={[s.supportBtnText, { color: Colors.green }]}>WhatsApp</Text>
             </Pressable>
             <Pressable
-              onPress={() => Linking.openURL(AURA_EMAIL)}
+              onPress={openEmail}
               style={[s.supportBtn, s.supportBtnSecondary]}
             >
               <Icon name="mail" size={16} color={Colors.violet3} />
@@ -400,9 +406,14 @@ export default function ConfiguracoesScreen() {
             </Pressable>
           </View>
 
+          {/* INDICACAO */}
+          <View style={{ marginTop: 20 }}>
+            <ReferralCard />
+          </View>
+
           {isDemo && (
             <View style={s.demoBanner}>
-              <Text style={s.demoBannerText}>Modo demonstrativo — alteracoes nao sao persistidas</Text>
+              <Text style={s.demoBannerText}>Modo demonstrativo - alteracoes nao sao persistidas</Text>
             </View>
           )}
         </>
@@ -450,7 +461,6 @@ const s = StyleSheet.create({
   registraisDivider:   { width: 1, height: 36, backgroundColor: Colors.border },
   registraisNote:      { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 10 },
   registraisNoteText:  { fontSize: 11, color: Colors.ink3 },
-  // CNPJ editavel (FIX #3)
   cnpjEditWrap:   { paddingBottom: 8 },
   cnpjSaveBtn:    { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   cnpjSaveBtnText:{ fontSize: 13, color: "#fff", fontWeight: "700" },
