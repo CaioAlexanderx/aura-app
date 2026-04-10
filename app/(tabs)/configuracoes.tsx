@@ -1,131 +1,104 @@
-import { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Image, Linking, ActivityIndicator } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, ScrollView, StyleSheet, Pressable, TextInput,
+  Platform, Image, Linking, ActivityIndicator, Dimensions,
+} from "react-native";
 import { Colors } from "@/constants/colors";
-import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
-import { PageHeader } from "@/components/PageHeader";
-import { ReferralCard } from "@/components/ReferralCard";
-import { Icon } from "@/components/Icon";
-import { toast } from "@/components/Toast";
 import { router } from "expo-router";
 import { maskPhone } from "@/utils/masks";
 import { companiesApi } from "@/services/api";
 import { MembersSection } from "@/components/MembersSection";
+import { Icon } from "@/components/Icon";
+import { toast } from "@/components/Toast";
 
-const PLANS = [
-  { key: "essencial", label: "Essencial", price: "R$ 89/mes", desc: "Para comecar" },
-  { key: "negocio",   label: "Negocio",   price: "R$ 199/mes", desc: "Para crescer" },
-  { key: "expansao",  label: "Expansao",  price: "R$ 299/mes", desc: "Para escalar" },
-];
-
+const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 600;
 const AURA_WHATSAPP = "https://wa.me/5512991234567";
 const AURA_EMAIL    = "mailto:suporte@getaura.com.br";
 
-function normalizeRegimeLabel(raw: string | null | undefined): string {
-  const v = (raw || "").toLowerCase().trim();
-  if (v === "mei") return "MEI (Microempreendedor Individual)";
+const PLANS: Record<string, { label: string; price: string }> = {
+  essencial:    { label: "Essencial",    price: "R$ 89/mes" },
+  negocio:      { label: "Negocio",      price: "R$ 199/mes" },
+  expansao:     { label: "Expansao",     price: "R$ 299/mes" },
+  personalizado:{ label: "Personalizado",price: "Sob consulta" },
+};
+
+// Normaliza o regime para exibição
+function regimeLabel(raw: string): string {
+  const v = (raw || "").toLowerCase();
+  if (v === "mei") return "MEI";
   if (v === "simples" || v === "simples_nacional") return "Simples Nacional";
   if (v === "lucro_presumido") return "Lucro Presumido";
   if (v === "lucro_real") return "Lucro Real";
   return "Simples Nacional";
 }
 
-// CNPJ formatado para exibicao
-function formatCNPJ(raw: string): string {
+// Formata CNPJ
+function fmtCNPJ(raw: string): string {
   const n = (raw || "").replace(/\D/g, "");
   if (n.length === 14) return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-  return raw || "";
+  if (n.length === 11) return n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  return raw || "Nao informado";
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={sec.wrap}>
-      <Text style={sec.title}>{title}</Text>
-      <View style={sec.card}>{children}</View>
-    </View>
-  );
+// Validações inline
+function validateEmail(v: string): string | null {
+  if (!v.trim()) return "E-mail e obrigatorio";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())) return "Formato invalido (ex: nome@empresa.com)";
+  return null;
 }
-const sec = StyleSheet.create({
-  wrap: { marginBottom: 24 },
-  title: { fontSize: 14, color: Colors.ink, fontWeight: "700", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
-  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border },
-});
 
-function Field({ label, value, onChange, placeholder, editable = true }: {
-  label: string; value: string; onChange?: (v: string) => void;
-  placeholder?: string; editable?: boolean;
+function validatePhone(v: string): string | null {
+  if (!v.trim()) return null; // telefone e opcional
+  const nums = v.replace(/\D/g, "");
+  if (nums.length < 10 || nums.length > 11) return "Telefone invalido (ex: (12) 99999-0000)";
+  return null;
+}
+
+// Componente: titulo de secao
+function SectionTitle({ title }: { title: string }) {
+  return <Text style={s.sectionTitle}>{title}</Text>;
+}
+
+// Componente: card de secao
+function Card({ children, style }: { children: React.ReactNode; style?: any }) {
+  return <View style={[s.card, style]}>{children}</View>;
+}
+
+// Componente: campo editável com validação inline
+function EditField({
+  label, value, onChange, placeholder, keyboardType, error, hint, autoCapitalize, multiline,
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; keyboardType?: any; error?: string | null;
+  hint?: string; autoCapitalize?: any; multiline?: boolean;
 }) {
   return (
-    <View style={fd.wrap}>
-      <Text style={fd.label}>{label}</Text>
+    <View style={s.fieldWrap}>
+      <Text style={s.fieldLabel}>{label}</Text>
       <TextInput
-        style={[fd.input, !editable && fd.disabled]}
+        style={[s.input, error ? s.inputError : null, multiline && s.textarea]}
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={Colors.ink3}
-        editable={editable}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize || "sentences"}
+        multiline={multiline}
+        numberOfLines={multiline ? 2 : 1}
       />
+      {error && <Text style={s.fieldError}>{error}</Text>}
+      {hint && !error && <Text style={s.fieldHint}>{hint}</Text>}
     </View>
   );
 }
 
-// Campo somente leitura — sem TextInput, visual claro de bloqueado
-function ReadOnlyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
+// Componente: linha de dado somente leitura
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={fd.wrap}>
-      <Text style={fd.label}>{label}</Text>
-      <View style={ro.row}>
-        <Text style={ro.value}>{value || "Nao informado"}</Text>
-        <Icon name="lock" size={13} color={Colors.ink3} />
-      </View>
-      {hint && <Text style={ro.hint}>{hint}</Text>}
-    </View>
-  );
-}
-
-const ro = StyleSheet.create({
-  row:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12 },
-  value: { fontSize: 14, color: Colors.ink3, fontWeight: "500", fontVariant: ["tabular-nums"] as any },
-  hint:  { fontSize: 10, color: Colors.ink3, marginTop: 5, lineHeight: 14 },
-});
-
-const fd = StyleSheet.create({
-  wrap:     { marginBottom: 14 },
-  label:    { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
-  input:    { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink },
-  disabled: { opacity: 0.5 },
-});
-
-function ProfileCompletion({ name, cnpj, email, phone, address, logo }: any) {
-  const fields = [
-    { l: "Nome", ok: !!name }, { l: "CNPJ", ok: !!cnpj }, { l: "E-mail", ok: !!email },
-    { l: "Telefone", ok: !!phone }, { l: "Endereco", ok: !!address }, { l: "Logo", ok: !!logo },
-  ];
-  const done = fields.filter(f => f.ok).length;
-  const pct  = Math.round((done / fields.length) * 100);
-  const allDone = pct === 100;
-  return (
-    <View style={{ backgroundColor: allDone ? Colors.greenD : Colors.violetD, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: allDone ? Colors.green + "33" : Colors.border2, marginBottom: 24 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Icon name={allDone ? "check" : "star"} size={16} color={allDone ? Colors.green : Colors.violet3} />
-          <Text style={{ fontSize: 14, color: Colors.ink, fontWeight: "700" }}>{allDone ? "Perfil completo!" : "Complete seu perfil"}</Text>
-        </View>
-        <Text style={{ fontSize: 13, color: allDone ? Colors.green : Colors.violet3, fontWeight: "700" }}>{pct}%</Text>
-      </View>
-      <View style={{ height: 6, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" }}>
-        <View style={{ height: 6, width: pct + "%", backgroundColor: allDone ? Colors.green : Colors.violet, borderRadius: 3 }} />
-      </View>
-      {!allDone && (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
-          {fields.filter(f => !f.ok).map(f => (
-            <View key={f.l} style={{ backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 10, color: Colors.ink3, fontWeight: "500" }}>Falta: {f.l}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+    <View style={s.infoRow}>
+      <Text style={s.infoLabel}>{label}</Text>
+      <Text style={s.infoValue}>{value || "—"}</Text>
     </View>
   );
 }
@@ -133,22 +106,42 @@ function ProfileCompletion({ name, cnpj, email, phone, address, logo }: any) {
 export default function ConfiguracoesScreen() {
   const { user, company, companyLogo, setCompanyLogo, isDemo } = useAuthStore();
 
-  // Dados editaveis — populados apenas da API
+  // Estado dos campos editáveis
   const [companyName, setCompanyName] = useState(company?.name || "");
-  const [cnpj,        setCnpj]        = useState("");     // somente leitura, vem da API
+  const [address,     setAddress]     = useState("");
   const [email,       setEmail]       = useState(user?.email || "");
   const [phone,       setPhone]       = useState("");
-  const [address,     setAddress]     = useState("");
-  const [taxRegime,   setTaxRegime]   = useState("");     // somente leitura, vem da API
-  const [businessType, setBusinessType] = useState("");   // somente leitura
 
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [saved,  setSaved]    = useState(false);
+  // Dados somente leitura
+  const [cnpj,       setCnpj]       = useState("");
+  const [taxRegime,  setTaxRegime]  = useState("");
 
-  // Carrega dados reais da API — unica fonte de verdade
+  // Estado de carregamento e salvamento
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [savedOk,  setSavedOk]  = useState(false);
+
+  // Validações computadas
+  const emailError = email ? validateEmail(email) : null;
+  const phoneError = phone ? validatePhone(phone) : null;
+  const hasErrors  = !!(emailError || phoneError);
+
+  // Completude do perfil
+  const profileFields = [
+    { label: "Nome",     ok: !!companyName },
+    { label: "CNPJ",     ok: !!cnpj },
+    { label: "E-mail",   ok: !!email && !emailError },
+    { label: "Telefone", ok: !!phone && !phoneError },
+    { label: "Endereco", ok: !!address },
+    { label: "Logo",     ok: !!companyLogo },
+  ];
+  const completeDone = profileFields.filter(f => f.ok).length;
+  const completePct  = Math.round((completeDone / profileFields.length) * 100);
+  const missing      = profileFields.filter(f => !f.ok).map(f => f.label);
+
+  // Carrega perfil da API
   useEffect(() => {
-    if (!company?.id || isDemo) { setProfileLoading(false); return; }
+    if (!company?.id || isDemo) { setLoading(false); return; }
     companiesApi.getProfile(company.id)
       .then((p: any) => {
         if (p.trade_name || p.legal_name) setCompanyName(p.trade_name || p.legal_name);
@@ -157,20 +150,19 @@ export default function ConfiguracoesScreen() {
         if (p.phone)        setPhone(p.phone);
         if (p.address)      setAddress(p.address);
         if (p.tax_regime)   setTaxRegime(p.tax_regime);
-        if (p.business_type) setBusinessType(p.business_type);
       })
-      .catch(() => toast.error("Nao foi possivel carregar o perfil"))
-      .finally(() => setProfileLoading(false));
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [company?.id]);
 
+  // Upload de logo
   function handleLogoUpload() {
     if (Platform.OS !== "web") return;
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/png,image/jpeg,image/webp";
     input.onchange = (e: any) => {
-      const file = e.target?.files?.[0];
-      if (!file) return;
-      if (file.size > 2 * 1024 * 1024) { toast.error("Arquivo muito grande - max 2MB"); return; }
+      const file = e.target?.files?.[0]; if (!file) return;
+      if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return; }
       const reader = new FileReader();
       reader.onload = () => { setCompanyLogo(reader.result as string); toast.success("Logo atualizada"); };
       reader.readAsDataURL(file);
@@ -178,192 +170,359 @@ export default function ConfiguracoesScreen() {
     input.click();
   }
 
+  // Salvar
   async function handleSave() {
-    if (!company?.id || isDemo) { toast.success("Alteracoes salvas localmente"); return; }
+    if (hasErrors || !company?.id || isDemo) return;
     setSaving(true);
     try {
       await companiesApi.updateProfile(company.id, {
-        trade_name: companyName,
-        email,
-        phone,
-        address,
-        // cnpj e tax_regime NAO enviados — somente leitura
+        trade_name: companyName.trim() || undefined,
+        email:      email.trim()       || undefined,
+        phone:      phone.trim()       || undefined,
+        address:    address.trim()     || undefined,
       });
-      toast.success("Perfil salvo com sucesso");
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 2500);
+      toast.success("Perfil atualizado");
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao salvar perfil");
+      toast.error(err?.message || "Erro ao salvar");
     } finally { setSaving(false); }
   }
 
-  const currentPlan = company?.plan || "essencial";
-  const currentPlanData = PLANS.find(p => p.key === currentPlan) || PLANS[0];
+  const plan    = company?.plan || "essencial";
+  const planDat = PLANS[plan] || PLANS.essencial;
 
   return (
-    <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-      <PageHeader title="Configuracoes" />
+    <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
-      <ProfileCompletion name={companyName} cnpj={cnpj} email={email} phone={phone} address={address} logo={companyLogo || ""} />
-
-      {/* Logo */}
-      <Section title="Logo da empresa">
-        <View style={z.logoRow}>
-          <Pressable onPress={handleLogoUpload} style={z.logoUpload}>
-            {companyLogo
-              ? <Image source={{ uri: companyLogo }} style={z.logoImg} resizeMode="contain" />
-              : <View style={z.logoPlaceholder}><Icon name="user_plus" size={24} color={Colors.ink3} /><Text style={z.logoPlaceholderText}>Enviar logo</Text></View>
-            }
-          </Pressable>
-          <View style={z.logoInfo}>
-            <Text style={z.logoHint}>PNG, JPG ou WebP. Max 2MB.</Text>
-            <Text style={z.logoHint}>Usada no dashboard, sidebar e holerite.</Text>
-            {companyLogo && (
-              <Pressable onPress={() => { setCompanyLogo(""); toast.info("Logo removida"); }} style={z.logoRemove}>
-                <Text style={z.logoRemoveText}>Remover logo</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-      </Section>
-
-      {/* Dados da empresa */}
-      <Section title="Dados da empresa">
-        {profileLoading ? (
-          <View style={{ alignItems: "center", paddingVertical: 24, gap: 8 }}>
-            <ActivityIndicator color={Colors.violet3} />
-            <Text style={{ fontSize: 12, color: Colors.ink3 }}>Carregando dados...</Text>
-          </View>
-        ) : (
-          <>
-            {/* CNPJ: somente leitura — registrado no cadastro */}
-            <ReadOnlyField
-              label="CNPJ"
-              value={formatCNPJ(cnpj)}
-              hint="Registrado durante o cadastro. Para alterar, entre em contato com o suporte."
-            />
-
-            <Field label="Nome da empresa"  value={companyName} onChange={setCompanyName} placeholder="Minha Empresa Ltda" />
-            <Field label="E-mail"           value={email}       onChange={setEmail}       placeholder="contato@empresa.com" />
-            <Field label="Telefone"         value={phone}       onChange={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" />
-            <Field label="Endereco"         value={address}     onChange={setAddress}     placeholder="Rua, numero, cidade - UF" />
-          </>
-        )}
-      </Section>
-
-      {/* Configuracao fiscal: somente leitura */}
-      <Section title="Configuracao fiscal">
-        <ReadOnlyField
-          label="Regime tributario"
-          value={normalizeRegimeLabel(taxRegime)}
-          hint="Detectado via CNPJ no cadastro."
-        />
-        {businessType ? (
-          <ReadOnlyField label="Tipo de negocio" value={businessType} />
-        ) : null}
-        <View style={z.fiscalNote}>
-          <Icon name="alert" size={14} color={Colors.amber} />
-          <Text style={z.fiscalNoteText}>
-            Para alterar regime tributario ou tipo de negocio, entre em contato com o suporte da Aura.
-          </Text>
-        </View>
-      </Section>
-
-      {/* Plano */}
-      <Section title="Meu plano">
-        <View style={z.currentPlanCard}>
-          <View style={z.currentPlanInfo}>
-            <View style={z.currentPlanBadge}><Text style={z.currentPlanBadgeText}>Plano atual</Text></View>
-            <Text style={z.currentPlanName}>{currentPlanData.label}</Text>
-            <Text style={z.currentPlanPrice}>{currentPlanData.price}</Text>
-            <Text style={z.currentPlanDesc}>{currentPlanData.desc}</Text>
-          </View>
-          <Pressable onPress={() => router.push("/(tabs)/planos")} style={z.plansBtn}>
-            <Text style={z.plansBtnText}>Ver todos os planos e precos</Text>
-          </Pressable>
-        </View>
-      </Section>
-
-      {/* Equipe */}
-      <View style={{ marginBottom: 24 }}>
-        <Text style={sec.title}>Equipe</Text>
-        <MembersSection />
-      </View>
-
-      {/* Conta */}
-      <Section title="Conta">
-        <ReadOnlyField label="Nome" value={user?.name || ""} />
-        <ReadOnlyField label="E-mail de acesso" value={user?.email || ""} />
-        <View style={z.accountNote}>
-          <Icon name="alert" size={14} color={Colors.violet3} />
-          <Text style={z.accountNoteText}>Para alterar nome ou e-mail de acesso, entre em contato com o suporte.</Text>
-        </View>
-      </Section>
-
-      {/* Suporte */}
-      <Section title="Precisa de ajuda?">
-        <View style={z.ctaRow}>
-          <Pressable onPress={() => Linking.openURL(AURA_WHATSAPP)} style={z.ctaBtn}>
-            <Icon name="message" size={16} color={Colors.green} />
-            <Text style={z.ctaBtnText}>Falar no WhatsApp</Text>
-          </Pressable>
-          <Pressable onPress={() => Linking.openURL(AURA_EMAIL)} style={[z.ctaBtn, { borderColor: Colors.border2, backgroundColor: Colors.violetD }]}>
-            <Icon name="globe" size={16} color={Colors.violet3} />
-            <Text style={[z.ctaBtnText, { color: Colors.violet3 }]}>Enviar e-mail</Text>
-          </Pressable>
-        </View>
-      </Section>
-
-      {/* Botao salvar (apenas campos editaveis) */}
-      <View style={z.saveRow}>
-        <Pressable onPress={handleSave} disabled={saving || profileLoading} style={[z.saveBtn, saved && z.saveBtnDone, (saving || profileLoading) && { opacity: 0.6 }]}>
-          {saving
-            ? <Text style={z.saveBtnText}>Salvando...</Text>
-            : saved
-              ? <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}><Icon name="check" size={16} color="#fff" /><Text style={z.saveBtnText}>Salvo!</Text></View>
-              : <Text style={z.saveBtnText}>Salvar alteracoes</Text>
+      {/* ── HERO: identidade da empresa em destaque ─────────────── */}
+      <View style={s.hero}>
+        {/* Avatar / logo */}
+        <Pressable onPress={handleLogoUpload} style={s.avatar}>
+          {companyLogo
+            ? <Image source={{ uri: companyLogo }} style={s.avatarImg} resizeMode="cover" />
+            : <Text style={s.avatarInitial}>{(companyName || "E").charAt(0).toUpperCase()}</Text>
           }
+          {Platform.OS === "web" && (
+            <View style={s.avatarOverlay}>
+              <Icon name="upload" size={14} color="#fff" />
+            </View>
+          )}
         </Pressable>
+
+        {/* Dados da empresa */}
+        <View style={s.heroInfo}>
+          <Text style={s.heroName} numberOfLines={1}>{companyName || "Minha Empresa"}</Text>
+          {cnpj ? (
+            <Text style={s.heroSub}>{fmtCNPJ(cnpj)}{taxRegime ? " · " + regimeLabel(taxRegime) : ""}</Text>
+          ) : (
+            <Text style={[s.heroSub, { color: Colors.amber }]}>CNPJ nao informado</Text>
+          )}
+
+          {/* Barra de completude */}
+          <View style={s.progressRow}>
+            <View style={s.progressTrack}>
+              <View style={[s.progressFill, { width: completePct + "%" as any }]} />
+            </View>
+            <Text style={s.progressLabel}>{completePct}%</Text>
+          </View>
+          {missing.length > 0 && (
+            <Text style={s.progressMissing}>Faltam: {missing.join(", ")}</Text>
+          )}
+        </View>
+
+        {/* Ação logo */}
+        {companyLogo && (
+          <Pressable onPress={() => { setCompanyLogo(""); toast.info("Logo removida"); }} style={s.heroAction}>
+            <Icon name="x" size={14} color={Colors.red} />
+          </Pressable>
+        )}
       </View>
 
-      <ReferralCard />
-      {isDemo && <View style={z.demo}><Text style={z.demoText}>Modo demonstrativo — alteracoes nao sao persistidas</Text></View>}
+      {loading && (
+        <View style={s.loadingBox}>
+          <ActivityIndicator color={Colors.violet3} />
+          <Text style={s.loadingText}>Carregando perfil...</Text>
+        </View>
+      )}
+
+      {!loading && (
+        <>
+          {/* ── IDENTIDADE ─────────────────────────────────────────── */}
+          <SectionTitle title="Identidade" />
+          <Card>
+            <EditField
+              label="Nome da empresa"
+              value={companyName}
+              onChange={setCompanyName}
+              placeholder="Ex: Barbearia do Caio"
+            />
+            <View style={s.fieldDivider} />
+            <EditField
+              label="Endereco"
+              value={address}
+              onChange={setAddress}
+              placeholder="Rua, numero, cidade — UF"
+              multiline
+            />
+          </Card>
+
+          {/* ── CONTATO ─────────────────────────────────────────────── */}
+          <SectionTitle title="Contato" />
+          <Card>
+            <EditField
+              label="E-mail da empresa"
+              value={email}
+              onChange={setEmail}
+              placeholder="contato@empresa.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={email ? emailError : null}
+              hint={!emailError ? "Usado para comunicacoes e notas fiscais" : undefined}
+            />
+            <View style={s.fieldDivider} />
+            <EditField
+              label="Telefone"
+              value={phone}
+              onChange={(v) => setPhone(maskPhone(v))}
+              placeholder="(12) 99999-0000"
+              keyboardType="phone-pad"
+              error={phone ? phoneError : null}
+              hint={!phoneError ? "Aparece na vitrine e no canal digital" : undefined}
+            />
+            {!hasErrors && (
+              <View style={s.contactNote}>
+                <Icon name="info" size={13} color={Colors.ink3} />
+                <Text style={s.contactNoteText}>Alteracoes entram em vigor apos salvar.</Text>
+              </View>
+            )}
+          </Card>
+
+          {/* ── DADOS REGISTRAIS (somente leitura, compacto) ────────── */}
+          <SectionTitle title="Dados registrais" />
+          <Card style={s.registraisCard}>
+            <View style={s.registraisRow}>
+              <View style={s.registraisItem}>
+                <Text style={s.registraisItemLabel}>CNPJ</Text>
+                <Text style={s.registraisItemValue}>{fmtCNPJ(cnpj)}</Text>
+              </View>
+              <View style={s.registraisDivider} />
+              <View style={s.registraisItem}>
+                <Text style={s.registraisItemLabel}>Regime</Text>
+                <Text style={s.registraisItemValue}>{regimeLabel(taxRegime)}</Text>
+              </View>
+              <Icon name="lock" size={14} color={Colors.ink3} />
+            </View>
+            <View style={s.registraisNote}>
+              <Text style={s.registraisNoteText}>
+                Para alterar CNPJ ou regime, entre em contato com o suporte da Aura.
+              </Text>
+            </View>
+          </Card>
+
+          {/* ── PLANO ATUAL ──────────────────────────────────────────── */}
+          <SectionTitle title="Plano atual" />
+          <Card>
+            <View style={s.planRow}>
+              <View style={s.planBadge}>
+                <Text style={s.planBadgeText}>{planDat.label}</Text>
+              </View>
+              <Text style={s.planPrice}>{planDat.price}</Text>
+              <Pressable onPress={() => router.push("/(tabs)/planos")} style={s.planBtn}>
+                <Text style={s.planBtnText}>Ver planos</Text>
+                <Icon name="chevron_right" size={14} color={Colors.violet3} />
+              </Pressable>
+            </View>
+          </Card>
+
+          {/* ── EQUIPE ───────────────────────────────────────────────── */}
+          <SectionTitle title="Equipe" />
+          <MembersSection />
+
+          {/* ── MINHA CONTA (somente leitura) ────────────────────────── */}
+          <SectionTitle title="Minha conta" />
+          <Card>
+            <InfoRow label="Nome" value={user?.name || ""} />
+            <View style={s.fieldDivider} />
+            <InfoRow label="E-mail de acesso" value={user?.email || ""} />
+            <View style={s.accountNote}>
+              <Icon name="info" size={13} color={Colors.ink3} />
+              <Text style={s.accountNoteText}>
+                Para alterar nome ou e-mail de acesso, entre em contato com o suporte.
+              </Text>
+            </View>
+          </Card>
+
+          {/* ── SUPORTE ──────────────────────────────────────────────── */}
+          <SectionTitle title="Suporte" />
+          <View style={s.supportRow}>
+            <Pressable onPress={() => Linking.openURL(AURA_WHATSAPP)} style={s.supportBtn}>
+              <Icon name="message" size={16} color={Colors.green} />
+              <Text style={[s.supportBtnText, { color: Colors.green }]}>WhatsApp</Text>
+            </Pressable>
+            <Pressable onPress={() => Linking.openURL(AURA_EMAIL)} style={[s.supportBtn, s.supportBtnSecondary]}>
+              <Icon name="globe" size={16} color={Colors.violet3} />
+              <Text style={[s.supportBtnText, { color: Colors.violet3 }]}>E-mail</Text>
+            </Pressable>
+          </View>
+
+          {/* ── BOTÃO SALVAR ─────────────────────────────────────────── */}
+          <View style={s.saveWrap}>
+            {hasErrors && (
+              <View style={s.errorBanner}>
+                <Icon name="alert" size={14} color={Colors.red} />
+                <Text style={s.errorBannerText}>
+                  Corrija os campos marcados antes de salvar.
+                </Text>
+              </View>
+            )}
+            <Pressable
+              onPress={handleSave}
+              disabled={hasErrors || saving}
+              style={[s.saveBtn, savedOk && s.saveBtnOk, hasErrors && s.saveBtnDisabled]}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : savedOk ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Icon name="check" size={16} color="#fff" />
+                  <Text style={s.saveBtnText}>Salvo com sucesso!</Text>
+                </View>
+              ) : (
+                <Text style={s.saveBtnText}>{hasErrors ? "Corrija os erros acima" : "Salvar alteracoes"}</Text>
+              )}
+            </Pressable>
+          </View>
+
+          {isDemo && (
+            <View style={s.demoBanner}>
+              <Text style={s.demoBannerText}>Modo demonstrativo — alteracoes nao sao persistidas</Text>
+            </View>
+          )}
+        </>
+      )}
     </ScrollView>
   );
 }
 
-const z = StyleSheet.create({
-  scr: { flex: 1 },
-  cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 720, alignSelf: "center", width: "100%" },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 20 },
-  logoUpload: { width: 100, height: 100, borderRadius: 16, borderWidth: 2, borderColor: Colors.border, borderStyle: "dashed" as any, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4 },
-  logoImg: { width: 100, height: 100 },
-  logoPlaceholder: { alignItems: "center", gap: 6 },
-  logoPlaceholderText: { fontSize: 10, color: Colors.ink3, fontWeight: "500" },
-  logoInfo: { flex: 1, gap: 4 },
-  logoHint: { fontSize: 11, color: Colors.ink3 },
-  logoRemove: { marginTop: 4 },
-  logoRemoveText: { fontSize: 11, color: Colors.red, fontWeight: "500" },
-  fiscalNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, marginTop: 4 },
-  fiscalNoteText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
-  currentPlanCard: { gap: 16 },
-  currentPlanInfo: { gap: 4 },
-  currentPlanBadge: { backgroundColor: Colors.violet, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 4 },
-  currentPlanBadgeText: { fontSize: 9, color: "#fff", fontWeight: "700" },
-  currentPlanName: { fontSize: 20, fontWeight: "800", color: Colors.ink },
-  currentPlanPrice: { fontSize: 14, color: Colors.violet3, fontWeight: "600" },
-  currentPlanDesc: { fontSize: 12, color: Colors.ink3 },
-  plansBtn: { backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 13, alignItems: "center", borderWidth: 1, borderColor: Colors.border2 },
-  plansBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  accountNote: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 12, marginTop: 4, borderWidth: 1, borderColor: Colors.border2 },
-  accountNoteText: { fontSize: 11, color: Colors.violet3, flex: 1, lineHeight: 16 },
-  ctaRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  ctaBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.greenD, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: Colors.green + "33" },
-  ctaBtnText: { fontSize: 13, color: Colors.green, fontWeight: "600" },
-  saveRow: { alignItems: "center", marginTop: 8 },
-  saveBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 },
-  saveBtnDone: { backgroundColor: Colors.green },
-  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  demo: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 20 },
-  demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+const s = StyleSheet.create({
+  screen:  { flex: 1 },
+  content: {
+    padding: IS_WIDE ? 32 : 20, paddingBottom: 48,
+    maxWidth: 680, alignSelf: "center", width: "100%",
+  },
+
+  // Hero
+  hero: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: Colors.bg3, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: Colors.border, marginBottom: 4,
+  },
+  avatar: {
+    width: 60, height: 60, borderRadius: 14, backgroundColor: Colors.violetD,
+    borderWidth: 1, borderColor: Colors.border2, overflow: "hidden",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  avatarImg:     { width: 60, height: 60 },
+  avatarInitial: { fontSize: 24, fontWeight: "700", color: Colors.violet3 },
+  avatarOverlay: {
+    position: "absolute", bottom: 0, left: 0, right: 0, height: 20,
+    backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center",
+  },
+  heroInfo:      { flex: 1, minWidth: 0 },
+  heroName:      { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 2 },
+  heroSub:       { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
+  progressRow:   { flexDirection: "row", alignItems: "center", gap: 8 },
+  progressTrack: { flex: 1, height: 5, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" },
+  progressFill:  { height: 5, backgroundColor: Colors.violet, borderRadius: 3 },
+  progressLabel: { fontSize: 11, color: Colors.violet3, fontWeight: "600", minWidth: 28 },
+  progressMissing: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
+  heroAction:    {
+    width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.redD,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+
+  // Loading
+  loadingBox:  { alignItems: "center", paddingVertical: 40, gap: 10 },
+  loadingText: { fontSize: 12, color: Colors.ink3 },
+
+  // Section title
+  sectionTitle: {
+    fontSize: 11, fontWeight: "700", color: Colors.ink3,
+    textTransform: "uppercase", letterSpacing: 0.6,
+    marginTop: 24, marginBottom: 8,
+  },
+
+  // Card
+  card: {
+    backgroundColor: Colors.bg3, borderRadius: 16,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8,
+    marginBottom: 4,
+  },
+
+  // Fields
+  fieldWrap:    { marginBottom: 14 },
+  fieldLabel:   { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
+  input: {
+    backgroundColor: Colors.bg4, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: 14, paddingVertical: 11,
+    fontSize: 14, color: Colors.ink,
+  },
+  inputError:   { borderColor: Colors.red },
+  textarea:     { minHeight: 60, textAlignVertical: "top" },
+  fieldError:   { fontSize: 11, color: Colors.red, marginTop: 5 },
+  fieldHint:    { fontSize: 11, color: Colors.ink3, marginTop: 5 },
+  fieldDivider: { height: 1, backgroundColor: Colors.border, marginBottom: 14 },
+
+  // Contact note
+  contactNote:     { flexDirection: "row", gap: 8, alignItems: "flex-start", marginBottom: 8, marginTop: 2, paddingHorizontal: 2 },
+  contactNoteText: { fontSize: 11, color: Colors.ink3, flex: 1 },
+
+  // Dados registrais
+  registraisCard: { paddingTop: 0, paddingBottom: 0 },
+  registraisRow:  { flexDirection: "row", alignItems: "center", paddingVertical: 16, gap: 12 },
+  registraisItem: { flex: 1 },
+  registraisItemLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
+  registraisItemValue: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
+  registraisDivider:   { width: 1, height: 36, backgroundColor: Colors.border },
+  registraisNote:      { borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 10 },
+  registraisNoteText:  { fontSize: 11, color: Colors.ink3 },
+
+  // Plan
+  planRow:      { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 8, flexWrap: "wrap" },
+  planBadge:    { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border2 },
+  planBadgeText:{ fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  planPrice:    { fontSize: 14, color: Colors.ink, fontWeight: "600", flex: 1 },
+  planBtn:      { flexDirection: "row", alignItems: "center", gap: 4 },
+  planBtnText:  { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+
+  // Info rows (read-only)
+  infoRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 11 },
+  infoLabel: { fontSize: 13, color: Colors.ink3 },
+  infoValue: { fontSize: 13, color: Colors.ink, fontWeight: "500", textAlign: "right", flex: 1, marginLeft: 16 },
+
+  // Account note
+  accountNote:     { flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 4, marginBottom: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  accountNoteText: { fontSize: 11, color: Colors.ink3, flex: 1 },
+
+  // Support
+  supportRow:           { flexDirection: "row", gap: 10, marginBottom: 4, flexWrap: "wrap" },
+  supportBtn:           { flex: 1, minWidth: 120, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.greenD, borderRadius: 12, paddingVertical: 13, borderWidth: 1, borderColor: Colors.green + "33" },
+  supportBtnSecondary:  { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  supportBtnText:       { fontSize: 13, fontWeight: "600" },
+
+  // Save
+  saveWrap:         { marginTop: 20, gap: 10 },
+  errorBanner:      { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.redD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.red + "33" },
+  errorBannerText:  { fontSize: 12, color: Colors.red, flex: 1 },
+  saveBtn:          { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  saveBtnOk:        { backgroundColor: Colors.green },
+  saveBtnDisabled:  { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  saveBtnText:      { color: "#fff", fontSize: 15, fontWeight: "700" },
+
+  // Demo
+  demoBanner:     { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 20 },
+  demoBannerText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
