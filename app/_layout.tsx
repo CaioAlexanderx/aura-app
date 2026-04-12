@@ -12,7 +12,7 @@ import { startAutoSync } from "@/services/offlineSync";
 const queryClient = new QueryClient();
 
 function AuthGuard() {
-  const { token, isHydrated, hydrate } = useAuthStore();
+  const { token, user, isHydrated, isDemo, hydrate } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -27,6 +27,8 @@ function AuthGuard() {
   useEffect(() => {
     if (!isHydrated) return;
     const inAuth = segments[0] === "(auth)";
+    const onVerify = segments[1] === "verify-email";
+    const emailVerified = !!(user as any)?.email_verified;
 
     // Not logged in -> login
     if (!token && !inAuth) {
@@ -34,12 +36,24 @@ function AuthGuard() {
       return;
     }
 
-    // Logged in but on auth pages -> go to dashboard
-    if (token && inAuth) {
+    // Logged in, email NOT verified, not demo -> verify-email
+    if (token && !isDemo && user && !emailVerified && !onVerify) {
+      router.replace("/(auth)/verify-email");
+      return;
+    }
+
+    // Logged in, email verified (or demo), still on auth pages -> dashboard
+    if (token && (emailVerified || isDemo) && inAuth && !onVerify) {
       router.replace("/(tabs)");
       return;
     }
-  }, [token, isHydrated, segments]);
+
+    // On verify-email but already verified -> dashboard
+    if (token && emailVerified && onVerify) {
+      router.replace("/(tabs)");
+      return;
+    }
+  }, [token, user, isHydrated, isDemo, segments]);
 
   return <Slot />;
 }
