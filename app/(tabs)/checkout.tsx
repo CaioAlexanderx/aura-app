@@ -10,7 +10,7 @@ import { toast } from "@/components/Toast";
 
 const isWeb = Platform.OS === "web";
 
-// ── Feature flag: cartao habilitado quando tokenizacao Asaas for liberada ──
+// Feature flag: cartao habilitado quando tokenizacao Asaas for liberada
 const CARD_ENABLED = false;
 
 const PLANS = [
@@ -19,9 +19,12 @@ const PLANS = [
   { key: "expansao", label: "Expansao", monthly: 299, desc: "Para escalar", features: ["Usuarios ilimitados", "IA 5 agentes", "Multi-gateway", "Suporte prioritario"] },
 ];
 
-const ANNUAL_PIX_DISC = 0.20;
+const ANNUAL_DISCOUNT = 0.20;
 
-function fmt(v: number) { return "R$ " + v.toFixed(2).replace(".", ","); }
+// BUGFIX P1 #4: Format with thousands separator (pt-BR locale)
+function fmt(v: number) {
+  return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
 
 type Cycle = "monthly" | "annual";
@@ -42,13 +45,13 @@ export default function CheckoutScreen() {
   const pollRef = useRef<any>(null);
 
   const plan = PLANS.find(p => p.key === selectedPlan) || PLANS[1];
-
-  function getPrice() {
-    if (cycle === "annual") return Math.round(plan.monthly * 12 * (1 - ANNUAL_PIX_DISC) * 100) / 100;
-    return plan.monthly;
-  }
-  const price = getPrice();
   const isAnnual = cycle === "annual";
+
+  // Price calculations
+  const annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
+  const annualMonthly = Math.round(annualTotal / 12 * 100) / 100;
+  const annualSavings = plan.monthly * 12 - annualTotal;
+  const price = isAnnual ? annualTotal : plan.monthly;
 
   // Subscribe with Pix
   async function handlePixSubscribe() {
@@ -118,7 +121,7 @@ export default function CheckoutScreen() {
         </Pressable>
         <Pressable onPress={() => setCycle("annual")} style={[z.cycleBtn, cycle==="annual" && z.cycleBtnActive]}>
           <Text style={[z.cycleTxt, cycle==="annual" && z.cycleTxtActive]}>Anual</Text>
-          {cycle==="annual" && <View style={z.discBadge}><Text style={z.discText}>20% off</Text></View>}
+          <View style={z.discBadge}><Text style={z.discText}>-20%</Text></View>
         </Pressable>
       </View>
 
@@ -126,12 +129,24 @@ export default function CheckoutScreen() {
       <View style={z.plansRow}>
         {PLANS.map(p => {
           const sel = selectedPlan === p.key;
+          const pAnnualMo = Math.round(p.monthly * (1 - ANNUAL_DISCOUNT) * 100) / 100;
+          const pAnnualTotal = Math.round(p.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
+          const displayPrice = isAnnual ? pAnnualMo : p.monthly;
           return (
             <Pressable key={p.key} onPress={() => setSelectedPlan(p.key)} style={[z.planCard, sel && z.planCardSel, p.popular && !sel && z.planCardPop]}>
               {p.popular && <View style={z.popBadge}><Text style={z.popText}>Mais popular</Text></View>}
               <Text style={[z.planName, sel && {color:"#fff"}]}>{p.label}</Text>
-              <Text style={[z.planPrice, sel && {color:"#fff"}]}>{fmtMo(p.monthly)}</Text>
-              {cycle==="annual" && <Text style={[z.planOrig, sel && {color:"rgba(255,255,255,0.5)"}]}>Anual: {fmt(Math.round(p.monthly * 12 * (1-ANNUAL_PIX_DISC)*100)/100)} (1x)</Text>}
+              <Text style={[z.planPrice, sel && {color:"#fff"}]}>{fmtMo(displayPrice)}</Text>
+              {isAnnual && (
+                <View style={{ marginTop: 2, gap: 2 }}>
+                  <Text style={[z.planOrig, sel && {color:"rgba(255,255,255,0.4)"}]}>
+                    <Text style={{ textDecorationLine: "line-through" }}>{fmtMo(p.monthly)}</Text>
+                  </Text>
+                  <Text style={[z.planAnnualTotal, sel && {color:"rgba(255,255,255,0.6)"}]}>
+                    {fmt(pAnnualTotal)} no ano
+                  </Text>
+                </View>
+              )}
               <Text style={[z.planDesc, sel && {color:"rgba(255,255,255,0.7)"}]}>{p.desc}</Text>
               <View style={{ marginTop: 10, gap: 4 }}>
                 {p.features.map(f => (
@@ -164,9 +179,15 @@ export default function CheckoutScreen() {
       <View style={z.summaryCard}>
         <View style={z.summaryRow}>
           <Text style={z.summaryLabel}>{plan.label} ({isAnnual ? "anual" : "mensal"})</Text>
-          <Text style={z.summaryValue}>{isAnnual ? fmt(price) + " (1x)" : fmtMo(price)}</Text>
+          <Text style={z.summaryValue}>{isAnnual ? fmt(price) : fmtMo(price)}</Text>
         </View>
-        {isAnnual && <Text style={z.summaryHint}>Pagamento unico via Pix com 20% de desconto. Acesso por 12 meses.</Text>}
+        {isAnnual && (
+          <>
+            <Text style={z.summaryEquiv}>Equivale a {fmtMo(annualMonthly)}</Text>
+            <Text style={z.summarySaving}>Economia de {fmt(annualSavings)} por ano</Text>
+            <Text style={z.summaryHint}>Pagamento unico via Pix. Acesso por 12 meses.</Text>
+          </>
+        )}
         {!isAnnual && <Text style={z.summaryHint}>Cobrado via Pix todo mes. Cancele quando quiser.</Text>}
       </View>
 
@@ -238,7 +259,8 @@ const z = StyleSheet.create({
   popText: { fontSize: 9, color: "#fff", fontWeight: "700" },
   planName: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
   planPrice: { fontSize: 20, fontWeight: "800", color: Colors.ink },
-  planOrig: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  planOrig: { fontSize: 11, color: Colors.ink3 },
+  planAnnualTotal: { fontSize: 11, color: Colors.green, fontWeight: "600" },
   planDesc: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 12, textTransform: "uppercase" as any, letterSpacing: 0.5 },
   methodRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
@@ -252,6 +274,8 @@ const z = StyleSheet.create({
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   summaryLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   summaryValue: { fontSize: 16, color: Colors.green, fontWeight: "800" },
+  summaryEquiv: { fontSize: 12, color: Colors.violet3, fontWeight: "600", marginBottom: 2 },
+  summarySaving: { fontSize: 12, color: Colors.green, fontWeight: "600", marginBottom: 6 },
   summaryHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   pixInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 20 },
