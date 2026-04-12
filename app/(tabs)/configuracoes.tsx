@@ -34,6 +34,8 @@ export default function ConfiguracoesScreen() {
         cnpj={profile.cnpj}
         taxRegime={profile.taxRegime}
         profileFields={profile.profileFields}
+        onLogoSaved={profile.saveLogoUrl}
+        onLogoRemoved={profile.removeLogoUrl}
       />
 
       {profile.loading && (
