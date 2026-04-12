@@ -6,7 +6,17 @@ export type Employee = {
   role: string;
   salary: number;
   admDate: string;
+  admission_date?: string | null;
   status: "active" | "vacation" | "dismissed" | "license";
+  cpf?: string;
+  pis?: string;
+  phone?: string;
+  email?: string;
+  work_hours?: number;
+  commission_enabled?: boolean;
+  commission_rate?: number;
+  user_id?: string | null;
+  is_active?: boolean;
 };
 
 export type PayrollCalc = { inss: number; irrf: number; fgts: number; liquid: number };
@@ -17,7 +27,7 @@ export type RankingItem = { empId: string; name: string; role: string; sales: nu
 
 export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Ranking"];
 
-export const STATUS_MAP: Record<Employee["status"], { l: string; c: string }> = {
+export const STATUS_MAP: Record<string, { l: string; c: string }> = {
   active: { l: "Ativo", c: Colors.green },
   vacation: { l: "Ferias", c: Colors.amber },
   dismissed: { l: "Desligado", c: Colors.red },
