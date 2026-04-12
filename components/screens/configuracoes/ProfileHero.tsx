@@ -3,6 +3,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
+import { BASE_URL } from "@/services/api";
 import { fmtCNPJ, regimeLabel } from "./shared";
 import type { ProfileField } from "./shared";
 
@@ -11,25 +12,49 @@ type Props = {
   cnpj: string;
   taxRegime: string;
   profileFields: ProfileField[];
+  onLogoSaved?: (url: string) => void;
+  onLogoRemoved?: () => void;
 };
 
-export function ProfileHero({ companyName, cnpj, taxRegime, profileFields }: Props) {
-  const { companyLogo, setCompanyLogo } = useAuthStore();
+export function ProfileHero({ companyName, cnpj, taxRegime, profileFields, onLogoSaved, onLogoRemoved }: Props) {
+  const { company, token, companyLogo, setCompanyLogo } = useAuthStore();
   const completeDone = profileFields.filter(f => f.ok).length;
   const completePct  = Math.round((completeDone / profileFields.length) * 100);
   const missing      = profileFields.filter(f => !f.ok).map(f => f.label);
 
-  function handleLogoUpload() {
+  async function handleLogoUpload() {
     if (Platform.OS !== "web") return;
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/png,image/jpeg,image/webp";
-    input.onchange = (e: any) => {
+    input.onchange = async (e: any) => {
       const file = e.target?.files?.[0]; if (!file) return;
       if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return; }
       const reader = new FileReader();
-      reader.onload = () => {
-        setCompanyLogo(reader.result as string);
-        try { if (typeof localStorage !== "undefined") localStorage.setItem("aura_company_logo", reader.result as string); } catch {}
+      reader.onload = async () => {
+        const base64Full = reader.result as string;
+        // Show immediately (optimistic)
+        setCompanyLogo(base64Full);
+        try { if (typeof localStorage !== "undefined") localStorage.setItem("aura_company_logo", base64Full); } catch {}
+
+        // P1 #5: Upload to R2 and persist URL
+        if (company?.id && token) {
+          try {
+            const base64Data = base64Full.split(",")[1] || base64Full;
+            const contentType = file.type || "image/png";
+            const res = await fetch(`${BASE_URL}/companies/${company.id}/storage/upload`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+              body: JSON.stringify({ content: base64Data, filename: "logo." + (contentType.split("/")[1] || "png"), category: "branding", content_type: contentType }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.url) {
+                setCompanyLogo(data.url);
+                onLogoSaved?.(data.url);
+              }
+            }
+          } catch {}
+        }
         toast.success("Logo atualizada");
       };
       reader.readAsDataURL(file);
@@ -40,6 +65,7 @@ export function ProfileHero({ companyName, cnpj, taxRegime, profileFields }: Pro
   function handleLogoRemove() {
     setCompanyLogo("");
     try { if (typeof localStorage !== "undefined") localStorage.removeItem("aura_company_logo"); } catch {}
+    onLogoRemoved?.();
     toast.info("Logo removida");
   }
 
