@@ -105,8 +105,8 @@ export const authApi = {
 // Invite API (publica - sem company ID)
 export type InviteDetails = {
   company_name: string; role: string;
-  email: string;        // email completo para pre-fill
-  masked_email: string; // ex: jo***@empresa.com
+  email: string;
+  masked_email: string;
   status: string;
 };
 export const inviteApi = {
@@ -152,8 +152,6 @@ export const companiesApi = {
   reviews: (companyId: string, rating?: number) => request<any>(`/companies/${companyId}/reviews${rating ? "?rating=" + rating : ""}`),
   requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
   members: (companyId: string) => request<any>(`/companies/${companyId}/members`),
-  // API de convite pode variar entre ambientes (email vs invite_email, role vs role_label)
-  // e alguns backends validam rigidamente chaves extras/valores de role.
   inviteMember: async (companyId: string, body: { email: string; role_label?: string }) => {
     const normalizedRole = (body.role_label || "")
       .normalize("NFD")
@@ -162,10 +160,8 @@ export const companiesApi = {
       .toLowerCase();
 
     const payloads = [
-      // Tentativas minimalistas primeiro (evita 400 por role inválida)
       { invite_email: body.email },
       { email: body.email },
-      // Em seguida, variações com role normalizada
       { invite_email: body.email, role_label: normalizedRole },
       { email: body.email, role_label: normalizedRole },
       { invite_email: body.email, role: normalizedRole },
@@ -221,8 +217,8 @@ export const referralsApi = {
   mine: () => request<any>("/referrals/mine"),
 };
 
-// PDV / Sales API
-export const pdvApi = { createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sales`, { method: "POST", body }) };
+// PDV / Sales API — BUGFIX: /pdv/sale (singular), not /pdv/sales
+export const pdvApi = { createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sale`, { method: "POST", body }) };
 
 // Employees API
 export const employeesApi = {
