@@ -1,11 +1,43 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useAuthStore } from "@/stores/auth";
+import { BASE_URL } from "@/services/api";
+import { toast } from "@/components/Toast";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
+async function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
+  if (!token || !companyId) { toast.error("Sessao expirada"); return; }
+  if (Platform.OS !== "web" || typeof window === "undefined") {
+    toast.info("Impressao disponivel apenas na versao web");
+    return;
+  }
+  try {
+    const res = await fetch(`${BASE_URL}/companies/${companyId}/print/receipt/${saleId}/preview`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) { toast.error("Erro ao gerar cupom"); return; }
+    const html = await res.text();
+    const win = window.open("", "_blank", "width=420,height=700,scrollbars=yes");
+    if (win) { win.document.write(html); win.document.close(); }
+    else toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
+  } catch { toast.error("Erro ao gerar cupom"); }
+}
+
 export function SaleComplete({ sale, onNewSale, onEmitNfe }: { sale: SaleResult; onNewSale: () => void; onEmitNfe: () => void }) {
+  const { company, token } = useAuthStore();
+
+  function handlePrint() {
+    if (!company?.id) return;
+    openPrintReceipt(company.id, sale.id, token);
+  }
+
+  function handleWhatsApp() {
+    toast.info("Envio por WhatsApp sera integrado em breve.");
+  }
+
   return (
     <View style={s.container}>
       <View style={s.card}>
@@ -21,8 +53,8 @@ export function SaleComplete({ sale, onNewSale, onEmitNfe }: { sale: SaleResult;
           <Pressable onPress={onNewSale} style={s.primaryBtn}><Text style={s.primaryText}>Nova venda</Text></Pressable>
         </View>
         <View style={s.links}>
-          <Pressable><Text style={s.linkText}>Imprimir cupom</Text></Pressable>
-          <Pressable><Text style={s.linkText}>Enviar por WhatsApp</Text></Pressable>
+          <Pressable onPress={handlePrint}><Text style={s.linkText}>Imprimir cupom</Text></Pressable>
+          <Pressable onPress={handleWhatsApp}><Text style={s.linkText}>Enviar por WhatsApp</Text></Pressable>
         </View>
       </View>
     </View>
