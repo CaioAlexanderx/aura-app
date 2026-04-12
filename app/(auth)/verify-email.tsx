@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platform } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
@@ -8,17 +8,16 @@ import { toast } from "@/components/Toast";
 
 export default function VerifyEmailScreen() {
   const { user, logout } = useAuthStore();
-  const [code, setCode] = useState(["" ,"", "", "", "", ""]);
   const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [sent, setSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const [error, setError] = useState("");
-  const inputs = useRef<(TextInput | null)[]>([]);
 
   const maskedEmail = user?.email
     ? user.email.replace(/(.{2})(.*)(@.*)/, "$1***$3")
     : "";
+
+  // Auto-send on mount
+  useEffect(() => { handleSendLink(); }, []);
 
   // Cooldown timer
   useEffect(() => {
@@ -27,81 +26,37 @@ export default function VerifyEmailScreen() {
     return () => clearTimeout(t);
   }, [cooldown]);
 
-  async function handleSendCode() {
-    if (cooldown > 0) return;
-    setSending(true); setError("");
+  // Poll for verification (check every 5s if user verified via link)
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await authApi.me(useAuthStore.getState().token!);
+        if ((res.user as any)?.email_verified) {
+          clearInterval(interval);
+          useAuthStore.setState({ user: { ...user!, email_verified: true } as any });
+          toast.success("E-mail verificado!");
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  async function handleSendLink() {
+    if (cooldown > 0 || sending) return;
+    setSending(true);
     try {
       const res = await authApi.sendEmailVerification();
       if (res.already_verified) {
-        // Already verified — update store and redirect
-        useAuthStore.setState({
-          user: { ...user!, email_verified: true } as any,
-        });
+        useAuthStore.setState({ user: { ...user!, email_verified: true } as any });
         toast.success("E-mail ja verificado!");
         return;
       }
       setSent(true);
       setCooldown(60);
-      toast.success("Codigo enviado para " + (res.destination || maskedEmail));
     } catch (err: any) {
-      setError(err?.message || "Erro ao enviar codigo");
+      toast.error(err?.message || "Erro ao enviar email");
     } finally { setSending(false); }
-  }
-
-  function handleDigitChange(index: number, value: string) {
-    if (value.length > 1) value = value.slice(-1);
-    if (value && !/^\d$/.test(value)) return;
-    const next = [...code];
-    next[index] = value;
-    setCode(next);
-    setError("");
-    // Auto-focus next
-    if (value && index < 5) {
-      inputs.current[index + 1]?.focus();
-    }
-    // Auto-submit when all 6 filled
-    if (value && index === 5 && next.every(d => d)) {
-      submitCode(next.join(""));
-    }
-  }
-
-  function handleKeyPress(index: number, key: string) {
-    if (key === "Backspace" && !code[index] && index > 0) {
-      inputs.current[index - 1]?.focus();
-    }
-  }
-
-  // Handle paste of full code
-  function handlePaste(text: string) {
-    const digits = text.replace(/\D/g, "").slice(0, 6);
-    if (digits.length === 6) {
-      const arr = digits.split("");
-      setCode(arr);
-      submitCode(digits);
-    }
-  }
-
-  async function submitCode(fullCode: string) {
-    setVerifying(true); setError("");
-    try {
-      const res = await authApi.verifyEmail(fullCode);
-      if (res.valid || res.email_verified) {
-        // Update user in store
-        useAuthStore.setState({
-          user: { ...user!, email_verified: true } as any,
-        });
-        toast.success("E-mail verificado com sucesso!");
-        // AuthGuard will redirect to tabs
-      } else {
-        setError("Codigo invalido");
-        setCode(["", "", "", "", "", ""]);
-        inputs.current[0]?.focus();
-      }
-    } catch (err: any) {
-      setError(err?.message || "Codigo invalido ou expirado");
-      setCode(["", "", "", "", "", ""]);
-      inputs.current[0]?.focus();
-    } finally { setVerifying(false); }
   }
 
   return (
@@ -111,54 +66,43 @@ export default function VerifyEmailScreen() {
           <Icon name="mail" size={28} color={Colors.violet3} />
         </View>
         <Text style={s.title}>Verifique seu e-mail</Text>
-        <Text style={s.desc}>
-          {sent
-            ? "Enviamos um codigo de 6 digitos para " + maskedEmail + ". Verifique sua caixa de entrada e spam."
-            : "Para sua seguranca, precisamos verificar seu e-mail antes de continuar."}
-        </Text>
 
-        {!sent ? (
-          <Pressable onPress={handleSendCode} style={s.primaryBtn} disabled={sending}>
-            {sending
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={s.primaryBtnText}>Enviar codigo para {maskedEmail}</Text>}
-          </Pressable>
-        ) : (
+        {sent ? (
           <>
-            <View style={s.codeRow}>
-              {code.map((digit, i) => (
-                <TextInput
-                  key={i}
-                  ref={r => { inputs.current[i] = r; }}
-                  style={[s.codeInput, error ? s.codeInputError : null, digit ? s.codeInputFilled : null]}
-                  value={digit}
-                  onChangeText={v => {
-                    if (v.length > 1) { handlePaste(v); return; }
-                    handleDigitChange(i, v);
-                  }}
-                  onKeyPress={e => handleKeyPress(i, (e as any).nativeEvent?.key || "")}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  selectTextOnFocus
-                  autoFocus={i === 0}
-                />
-              ))}
-            </View>
-
-            {error ? <Text style={s.error}>{error}</Text> : null}
-
-            {verifying && (
-              <View style={s.verifyingRow}>
-                <ActivityIndicator color={Colors.violet3} size="small" />
-                <Text style={s.verifyingText}>Verificando...</Text>
+            <Text style={s.desc}>
+              Enviamos um link de confirmacao para{"\n"}
+              <Text style={s.emailHighlight}>{maskedEmail}</Text>
+            </Text>
+            <View style={s.stepsCard}>
+              <View style={s.step}>
+                <View style={s.stepNum}><Text style={s.stepNumText}>1</Text></View>
+                <Text style={s.stepText}>Abra seu e-mail (verifique o spam)</Text>
               </View>
-            )}
-
-            <Pressable onPress={handleSendCode} disabled={cooldown > 0 || sending} style={s.resendBtn}>
+              <View style={s.step}>
+                <View style={s.stepNum}><Text style={s.stepNumText}>2</Text></View>
+                <Text style={s.stepText}>Clique em "Confirmar meu e-mail"</Text>
+              </View>
+              <View style={s.step}>
+                <View style={[s.stepNum, { backgroundColor: Colors.greenD, borderColor: Colors.green }]}>
+                  <Text style={[s.stepNumText, { color: Colors.green }]}>3</Text>
+                </View>
+                <Text style={s.stepText}>Pronto! Voce sera redirecionado automaticamente</Text>
+              </View>
+            </View>
+            <View style={s.pollingRow}>
+              <ActivityIndicator size="small" color={Colors.violet3} />
+              <Text style={s.pollingText}>Aguardando confirmacao...</Text>
+            </View>
+            <Pressable onPress={handleSendLink} disabled={cooldown > 0 || sending} style={s.resendBtn}>
               <Text style={[s.resendText, cooldown > 0 && { opacity: 0.5 }]}>
-                {cooldown > 0 ? "Reenviar em " + cooldown + "s" : "Reenviar codigo"}
+                {cooldown > 0 ? "Reenviar em " + cooldown + "s" : "Reenviar e-mail"}
               </Text>
             </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={s.desc}>Enviando link de confirmacao para {maskedEmail}...</Text>
+            <ActivityIndicator color={Colors.violet3} style={{ marginVertical: 20 }} />
           </>
         )}
 
@@ -174,19 +118,18 @@ const s = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: Colors.bg },
   card: { backgroundColor: Colors.bg3, borderRadius: 24, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.border, maxWidth: 420, width: "100%" },
   iconWrap: { width: 56, height: 56, borderRadius: 16, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
-  title: { fontSize: 20, fontWeight: "700", color: Colors.ink, marginBottom: 8 },
-  desc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, marginBottom: 24, maxWidth: 320 },
-  primaryBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, width: "100%", alignItems: "center" },
-  primaryBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  codeRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  codeInput: { width: 44, height: 52, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bg4, textAlign: "center", fontSize: 22, fontWeight: "700", color: Colors.ink },
-  codeInputFilled: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
-  codeInputError: { borderColor: Colors.red },
-  error: { fontSize: 12, color: Colors.red, marginBottom: 12, textAlign: "center" },
-  verifyingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  verifyingText: { fontSize: 13, color: Colors.violet3 },
+  title: { fontSize: 20, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
+  desc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, marginBottom: 20, maxWidth: 320 },
+  emailHighlight: { color: Colors.violet3, fontWeight: "600" },
+  stepsCard: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, width: "100%", gap: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
+  step: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stepNum: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  stepNumText: { fontSize: 12, fontWeight: "700", color: Colors.violet3 },
+  stepText: { fontSize: 12, color: Colors.ink3, flex: 1 },
+  pollingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
+  pollingText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
   resendBtn: { paddingVertical: 10 },
   resendText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-  logoutBtn: { marginTop: 20, paddingVertical: 8 },
+  logoutBtn: { marginTop: 16, paddingVertical: 8 },
   logoutText: { fontSize: 12, color: Colors.ink3 },
 });
