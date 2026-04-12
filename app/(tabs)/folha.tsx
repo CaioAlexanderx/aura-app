@@ -19,6 +19,17 @@ const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.
 type FormData = { name: string; role: string; salary: string; admDate: string; cpf: string; phone: string; email: string };
 const emptyForm: FormData = { name: "", role: "", salary: "", admDate: "", cpf: "", phone: "", email: "" };
 
+/** Convert dd/mm/yyyy or dd-mm-yyyy to yyyy-mm-dd for PostgreSQL */
+function normalizeDate(input: string): string {
+  const trimmed = input.trim();
+  // Already ISO? yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  // Brazilian: dd/mm/yyyy or dd-mm-yyyy
+  const m = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return trimmed;
+}
+
 export default function FolhaScreen() {
   const [tab, setTab] = useState(0);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -34,7 +45,15 @@ export default function FolhaScreen() {
 
   function openCreate() { setForm(emptyForm); setEditingId(null); setShowForm(true); }
   function openEdit(emp: Employee) {
-    setForm({ name: emp.name || "", role: emp.role || "", salary: emp.salary ? String(emp.salary) : "", admDate: emp.admDate || "", cpf: (emp as any).cpf || "", phone: (emp as any).phone || "", email: (emp as any).email || "" });
+    setForm({
+      name: emp.name || "",
+      role: emp.role || "",
+      salary: emp.salary ? String(emp.salary) : "",
+      admDate: emp.admDate || "",
+      cpf: emp.cpf || "",
+      phone: emp.phone || "",
+      email: emp.email || "",
+    });
     setEditingId(emp.id); setShowForm(true);
   }
 
@@ -44,16 +63,25 @@ export default function FolhaScreen() {
     setSaving(true);
     try {
       const body: any = { name: form.name.trim(), role: form.role.trim() || "Colaborador", salary: parseFloat(form.salary), status: "active" };
-      if (form.admDate) body.admission_date = form.admDate;
+      if (form.admDate) body.admission_date = normalizeDate(form.admDate);
       if (form.cpf) body.cpf = form.cpf;
       if (form.phone) body.phone = form.phone;
       if (form.email) body.email = form.email;
-      if (editingId) { await updateEmployee(editingId, body); } else { await createEmployee(body); }
+      if (editingId) {
+        await updateEmployee(editingId, body);
+      } else {
+        await createEmployee(body);
+      }
+      // Only close form on success (createEmployee/updateEmployee throw on error)
       setShowForm(false); setForm(emptyForm); setEditingId(null);
-    } catch {} finally { setSaving(false); }
+    } catch {
+      // Error toast already shown by useEmployees hook — keep form open
+    } finally { setSaving(false); }
   }
 
-  async function handleDelete(emp: Employee) { await deleteEmployee(emp.id); }
+  async function handleDelete(emp: Employee) {
+    try { await deleteEmployee(emp.id); } catch { /* toast already shown */ }
+  }
 
   if (selectedEmp) {
     return (
@@ -69,7 +97,6 @@ export default function FolhaScreen() {
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
         <Text style={s.pageTitle}>Folha de Pagamento</Text>
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          {/* Fase 3: Export payroll */}
           {!isDemo && employees.length > 0 && <FolhaToolbar period={currentPeriod} />}
           <Pressable onPress={openCreate} style={s.addBtn}>
             <Icon name="plus" size={16} color="#fff" />
@@ -80,7 +107,7 @@ export default function FolhaScreen() {
 
       {!isLoading && employees.length === 0 && !showForm && (
         <View style={s.emptyCard}>
-          <Text style={{ fontSize: 32, marginBottom: 8 }}>👥</Text>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>&#128101;</Text>
           <Text style={s.emptyTitle}>Nenhum funcionario cadastrado</Text>
           <Text style={s.emptyDesc}>Adicione seu primeiro funcionario para calcular a folha de pagamento.</Text>
           <Pressable onPress={openCreate} style={[s.addBtn, { marginTop: 12 }]}>
@@ -99,7 +126,7 @@ export default function FolhaScreen() {
           </View>
           <View style={s.formRow}>
             <View style={s.formField}><Text style={s.formLabel}>Salario bruto (R$) *</Text><TextInput style={s.formInput} value={form.salary} onChangeText={v => setForm(f => ({ ...f, salary: v }))} placeholder="1800.00" placeholderTextColor={Colors.ink3} keyboardType="numeric" /></View>
-            <View style={s.formField}><Text style={s.formLabel}>Data admissao</Text><TextInput style={s.formInput} value={form.admDate} onChangeText={v => setForm(f => ({ ...f, admDate: v }))} placeholder="2025-03-15" placeholderTextColor={Colors.ink3} /></View>
+            <View style={s.formField}><Text style={s.formLabel}>Data admissao</Text><TextInput style={s.formInput} value={form.admDate} onChangeText={v => setForm(f => ({ ...f, admDate: v }))} placeholder="dd/mm/aaaa ou aaaa-mm-dd" placeholderTextColor={Colors.ink3} /></View>
           </View>
           <View style={s.formRow}>
             <View style={s.formField}><Text style={s.formLabel}>CPF</Text><TextInput style={s.formInput} value={form.cpf} onChangeText={v => setForm(f => ({ ...f, cpf: v }))} placeholder="000.000.000-00" placeholderTextColor={Colors.ink3} /></View>
