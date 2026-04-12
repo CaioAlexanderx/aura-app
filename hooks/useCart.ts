@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { pdvApi, companiesApi } from "@/services/api";
+import { pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -24,29 +24,22 @@ export function useCart() {
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // P1-7: Cliente e Vendedor(a) vinculados a venda
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
 
+  // BUGFIX P1 #1+#2: Use pdvApi.createSale directly (no fallback).
+  // Backend POST /pdv/sale handles: sale + items + stock decrement + customer metrics + employee metrics.
+  // No redundant stock decrement call needed.
   const saleMutation = useMutation({
-    mutationFn: async (body: any) => {
-      try {
-        if (pdvApi?.createSale) return await pdvApi.createSale(companyId!, body);
-      } catch (e: any) {
-        console.warn("[useCart] pdvApi.createSale failed, falling back", e?.message);
-      }
-      return await companiesApi.createTransaction(companyId!, {
-        type: "income", amount: body.total,
-        description: `Venda PDV - ${body.items.length} itens (${body.payment_method})${body.customer_id ? " - " + (selectedCustomerName || "") : ""}`,
-        category: "Vendas", source: "pdv",
-      });
-    },
+    mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
+      qc.invalidateQueries({ queryKey: ["customers", companyId] });
+      qc.invalidateQueries({ queryKey: ["employees", companyId] });
     },
   });
 
@@ -95,9 +88,13 @@ export function useCart() {
 
     const cartSnapshot = [...cart];
     const saleData = {
-      items: cartSnapshot.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price })),
+      items: cartSnapshot.map(i => ({
+        product_id: i.productId,
+        quantity: i.qty,
+        unit_price: i.price,
+        product_name_snapshot: i.name,
+      })),
       payment_method: payment,
-      total,
       customer_id: selectedCustomerId || undefined,
       employee_id: selectedEmployeeId || undefined,
     };
@@ -114,12 +111,14 @@ export function useCart() {
           });
           setCart([]);
           toast.success("Venda registrada!");
-          cartSnapshot.forEach(item => {
-            companiesApi.updateProduct(companyId, item.productId, { stock_qty_decrement: item.qty }).catch(() => {});
-          });
+          // Stock decrement is handled by backend inside the sale transaction.
+          // DO NOT call companiesApi.updateProduct here (would cause double decrement).
           setIsProcessing(false);
         },
-        onError: () => { toast.error("Erro ao registrar venda"); setIsProcessing(false); },
+        onError: (err: any) => {
+          toast.error(err?.message || "Erro ao registrar venda");
+          setIsProcessing(false);
+        },
       });
     } else {
       setLastSale({
