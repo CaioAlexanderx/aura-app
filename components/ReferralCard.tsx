@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, Alert } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { referralsApi } from "@/services/api";
@@ -11,6 +11,8 @@ export function ReferralCard() {
   const [code, setCode] = useState<string | null>(null);
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
   const [loading, setLoading] = useState(false);
+
+  const emailVerified = !!(user as any)?.email_verified;
 
   useEffect(() => {
     if (!token || isDemo) return;
@@ -26,13 +28,17 @@ export function ReferralCard() {
   }
 
   async function generateCode() {
+    if (!emailVerified) {
+      toast.error("Verifique seu e-mail antes de gerar um codigo de indicacao.");
+      return;
+    }
     setLoading(true);
     try {
       const data = await referralsApi.generate();
       setCode(data.code);
-      toast.success("Código de indicação gerado!");
+      toast.success("Codigo de indicacao gerado!");
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao gerar código");
+      toast.error(err?.message || "Erro ao gerar codigo");
     } finally {
       setLoading(false);
     }
@@ -42,16 +48,16 @@ export function ReferralCard() {
     if (!code) return;
     if (Platform.OS === "web" && typeof navigator !== "undefined") {
       navigator.clipboard.writeText(code);
-      toast.success("Código copiado!");
+      toast.success("Codigo copiado!");
     }
   }
 
   function shareWhatsApp() {
     if (!code) return;
     const msg = encodeURIComponent(
-      "Oi! Estou usando a Aura pra gerenciar meu negócio e está sendo incrível. " +
-      "Vou te dar 20% de desconto no primeiro mês.\n\n" +
-      "Use o código " + code + " ou acesse:\n" +
+      "Oi! Estou usando a Aura pra gerenciar meu negocio e esta sendo incrivel. " +
+      "Vou te dar 20% de desconto no primeiro mes.\n\n" +
+      "Use o codigo " + code + " ou acesse:\n" +
       "https://getaura.com.br/r/" + code
     );
     const url = "https://wa.me/?text=" + msg;
@@ -66,13 +72,13 @@ export function ReferralCard() {
           <Text style={s.title}>Indique e ganhe</Text>
         </View>
         <Text style={s.desc}>
-          Ganhe 20% de desconto indicando amigos. Quem você indicar também ganha 20% no primeiro mês.
+          Ganhe 20% de desconto indicando amigos. Quem voce indicar tambem ganha 20% no primeiro mes.
         </Text>
         <View style={s.codeBox}>
-          <Text style={s.codeLabel}>Seu código</Text>
+          <Text style={s.codeLabel}>Seu codigo</Text>
           <Text style={s.codeValue}>REF-DEMO</Text>
         </View>
-        <Text style={s.demoNote}>Disponível com conta real</Text>
+        <Text style={s.demoNote}>Disponivel com conta real</Text>
       </View>
     );
   }
@@ -84,13 +90,13 @@ export function ReferralCard() {
         <Text style={s.title}>Indique e ganhe</Text>
       </View>
       <Text style={s.desc}>
-        Ganhe 20% de desconto indicando amigos. Quem você indicar também ganha 20% no primeiro mês.
+        Ganhe 20% de desconto indicando amigos. Quem voce indicar tambem ganha 20% no primeiro mes.
       </Text>
 
       {code ? (
         <>
           <View style={s.codeBox}>
-            <Text style={s.codeLabel}>Seu código</Text>
+            <Text style={s.codeLabel}>Seu codigo</Text>
             <Text style={s.codeValue}>{code}</Text>
           </View>
           <View style={s.actions}>
@@ -105,16 +111,24 @@ export function ReferralCard() {
           </View>
           {stats.total > 0 && (
             <View style={s.statsRow}>
-              <View style={s.stat}><Text style={s.statNum}>{stats.completed}</Text><Text style={s.statLabel}>Concluídas</Text></View>
+              <View style={s.stat}><Text style={s.statNum}>{stats.completed}</Text><Text style={s.statLabel}>Concluidas</Text></View>
               <View style={s.stat}><Text style={s.statNum}>{stats.pending}</Text><Text style={s.statLabel}>Pendentes</Text></View>
               <View style={s.stat}><Text style={[s.statNum, { color: Colors.green }]}>{stats.completed}</Text><Text style={s.statLabel}>Descontos</Text></View>
             </View>
           )}
         </>
       ) : (
-        <Pressable onPress={generateCode} style={s.generateBtn} disabled={loading}>
-          <Text style={s.generateText}>{loading ? "Gerando..." : "Gerar meu código"}</Text>
-        </Pressable>
+        <>
+          {!emailVerified && (
+            <View style={s.verifyNote}>
+              <Icon name="alert" size={13} color={Colors.amber} />
+              <Text style={s.verifyNoteText}>Verifique seu e-mail para liberar as indicacoes.</Text>
+            </View>
+          )}
+          <Pressable onPress={generateCode} style={[s.generateBtn, !emailVerified && { opacity: 0.6 }]} disabled={loading}>
+            <Text style={s.generateText}>{loading ? "Gerando..." : "Gerar meu codigo"}</Text>
+          </Pressable>
+        </>
       )}
     </View>
   );
@@ -139,4 +153,6 @@ const s = StyleSheet.create({
   generateBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   generateText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   demoNote: { fontSize: 11, color: Colors.ink3, textAlign: "center", fontStyle: "italic", marginTop: 8 },
+  verifyNote: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
+  verifyNoteText: { fontSize: 12, color: Colors.amber, fontWeight: "500", flex: 1 },
 });
