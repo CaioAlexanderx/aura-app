@@ -1,25 +1,32 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
+import { companiesApi } from "@/services/api";
 import { Icon } from "@/components/Icon";
 
-const CONFIG_KEY = "aura_config";
+export function ProfileBanner() {
+  const { user, company, companyLogo, isDemo } = useAuthStore();
+  const router = useRouter();
 
-// M3: Read from BOTH auth store AND localStorage (same source as Configuracoes)
-function loadConfig(): Record<string, string> {
-  try { const s = typeof localStorage !== "undefined" ? localStorage.getItem(CONFIG_KEY) : null; return s ? JSON.parse(s) : {}; } catch { return {}; }
-}
+  // Fetch REAL profile from API (same source as Configuracoes)
+  const { data: profile } = useQuery({
+    queryKey: ["company-profile", company?.id],
+    queryFn: () => companiesApi.getProfile(company!.id),
+    enabled: !!company?.id && !isDemo,
+    staleTime: 30000,
+  });
 
-function calcCompletion(user: any, company: any): { pct: number; missing: string[] } {
-  // M3: Merge localStorage config with auth store data
-  const cached = loadConfig();
-  const companyName = cached.companyName || company?.name || "";
-  const cnpj = cached.cnpj || (company as any)?.cnpj || "";
-  const email = cached.email || user?.email || "";
-  const phone = cached.phone || (company as any)?.phone || user?.phone || "";
-  const address = cached.address || "";
-  const logo = (typeof localStorage !== "undefined" ? localStorage.getItem("aura_company_logo") : null) || "";
+  if (isDemo || !company?.id) return null;
+
+  // Calculate completion from API data (same fields as useConfigProfile)
+  const companyName = profile?.trade_name || profile?.legal_name || company?.name || "";
+  const cnpj = profile?.cnpj || "";
+  const email = profile?.email || user?.email || "";
+  const phone = profile?.phone || "";
+  const address = profile?.address || "";
+  const logo = profile?.logo_url || companyLogo || "";
 
   const checks: [boolean, string][] = [
     [!!companyName && companyName !== "Minha Empresa", "Nome da empresa"],
@@ -31,16 +38,8 @@ function calcCompletion(user: any, company: any): { pct: number; missing: string
   ];
   const done = checks.filter(([ok]) => ok).length;
   const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
-  return { pct: Math.round((done / checks.length) * 100), missing };
-}
+  const pct = Math.round((done / checks.length) * 100);
 
-export function ProfileBanner() {
-  const { user, company, isDemo } = useAuthStore();
-  const router = useRouter();
-
-  if (isDemo) return null;
-
-  const { pct, missing } = calcCompletion(user, company);
   if (pct >= 100) return null;
 
   const barColor = pct >= 70 ? Colors.green : pct >= 40 ? Colors.amber : Colors.red;
