@@ -1,10 +1,8 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
-import { Icon } from "@/components/Icon";
 import { ExportButton } from "@/components/ExportButton";
 import { CategorizeButton } from "@/components/CategorizeButton";
 
-// Toolbar for Financeiro screen — combines export + categorize
 type Props = {
   uncategorizedDescriptions?: string[];
   onCategorizeApply?: (results: any[]) => void;
@@ -27,8 +25,8 @@ export function FinanceiroToolbar({ uncategorizedDescriptions = [], onCategorize
 }
 
 const s = StyleSheet.create({
-  toolbar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 16 },
-  exports: { flexDirection: 'row', gap: 6 },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 16, zIndex: 999, overflow: 'visible' as any },
+  exports: { flexDirection: 'row', gap: 6, zIndex: 999, overflow: 'visible' as any },
 });
 
 export default FinanceiroToolbar;
