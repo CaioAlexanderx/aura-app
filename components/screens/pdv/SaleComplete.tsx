@@ -28,6 +28,8 @@ async function openPrintReceipt(companyId: string, saleId: string, token: string
 
 export function SaleComplete({ sale, onNewSale, onEmitNfe }: { sale: SaleResult; onNewSale: () => void; onEmitNfe: () => void }) {
   const { company, token } = useAuthStore();
+  const subtotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
+  const hasCoupon = !!(sale.couponCode && sale.couponDiscount && sale.couponDiscount > 0);
 
   function handlePrint() {
     if (!company?.id) return;
@@ -44,9 +46,47 @@ export function SaleComplete({ sale, onNewSale, onEmitNfe }: { sale: SaleResult;
         <View style={s.checkCircle}><Text style={s.checkIcon}>OK</Text></View>
         <Text style={s.title}>Venda registrada!</Text>
         <Text style={s.saleId}>#{sale.id}</Text>
-        <View style={s.row}><Text style={s.label}>Total</Text><Text style={s.value}>{fmt(sale.total)}</Text></View>
-        <View style={s.row}><Text style={s.label}>Pagamento</Text><Text style={s.meta}>{PAYMENTS.find(p => p.key === sale.payment)?.label}</Text></View>
-        <View style={s.row}><Text style={s.label}>Itens</Text><Text style={s.meta}>{sale.items.reduce((s, i) => s + i.qty, 0)} produtos</Text></View>
+
+        {hasCoupon && (
+          <View style={s.couponRow}>
+            <View style={s.couponBadge}>
+              <Text style={s.couponBadgeText}>{sale.couponCode}</Text>
+            </View>
+            <Text style={s.couponDiscount}>-{fmt(sale.couponDiscount!)}</Text>
+          </View>
+        )}
+
+        {hasCoupon && (
+          <View style={s.row}>
+            <Text style={s.label}>Subtotal</Text>
+            <Text style={s.metaStrike}>{fmt(subtotal)}</Text>
+          </View>
+        )}
+        <View style={s.row}>
+          <Text style={s.label}>Total</Text>
+          <Text style={s.value}>{fmt(sale.total)}</Text>
+        </View>
+        <View style={s.row}>
+          <Text style={s.label}>Pagamento</Text>
+          <Text style={s.meta}>{PAYMENTS.find(p => p.key === sale.payment)?.label}</Text>
+        </View>
+        <View style={s.row}>
+          <Text style={s.label}>Itens</Text>
+          <Text style={s.meta}>{sale.items.reduce((s, i) => s + i.qty, 0)} produtos</Text>
+        </View>
+        {sale.customerName && (
+          <View style={s.row}>
+            <Text style={s.label}>Cliente</Text>
+            <Text style={s.meta}>{sale.customerName}</Text>
+          </View>
+        )}
+        {sale.employeeName && (
+          <View style={s.row}>
+            <Text style={s.label}>Vendedor</Text>
+            <Text style={s.meta}>{sale.employeeName}</Text>
+          </View>
+        )}
+
         <View style={s.divider} />
         <View style={s.actions}>
           <Pressable onPress={onEmitNfe} style={s.secondaryBtn}><Text style={s.secondaryText}>Emitir NF-e</Text></Pressable>
@@ -72,6 +112,11 @@ const s = StyleSheet.create({
   label: { fontSize: 13, color: Colors.ink3 },
   value: { fontSize: 18, color: Colors.green, fontWeight: "800" },
   meta: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  metaStrike: { fontSize: 13, color: Colors.ink3, fontWeight: "500", textDecorationLine: "line-through" },
+  couponRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.greenD, borderRadius: 10, padding: 10, width: "100%", marginBottom: 8, borderWidth: 1, borderColor: Colors.green + "33" },
+  couponBadge: { backgroundColor: Colors.green + "22", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  couponBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "800", letterSpacing: 1 },
+  couponDiscount: { fontSize: 14, color: Colors.green, fontWeight: "700", flex: 1, textAlign: "right" },
   divider: { height: 1, backgroundColor: Colors.border, width: "100%", marginVertical: 16 },
   actions: { flexDirection: "row", gap: 10, width: "100%" },
   secondaryBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 13, alignItems: "center" },

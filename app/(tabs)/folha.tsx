@@ -19,15 +19,51 @@ const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.
 type FormData = { name: string; role: string; salary: string; admDate: string; cpf: string; phone: string; email: string };
 const emptyForm: FormData = { name: "", role: "", salary: "", admDate: "", cpf: "", phone: "", email: "" };
 
-/** Convert dd/mm/yyyy or dd-mm-yyyy to yyyy-mm-dd for PostgreSQL */
+// ── Masks ───────────────────────────────────────────────
+function maskCPF(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+}
+
+function maskDate(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
+  return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
+}
+
+function maskPhone(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+}
+
+function maskCurrency(v: string): string {
+  const clean = v.replace(/[^0-9,\.]/g, "");
+  return clean;
+}
+
 function normalizeDate(input: string): string {
   const trimmed = input.trim();
-  // Already ISO? yyyy-mm-dd
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  // Brazilian: dd/mm/yyyy or dd-mm-yyyy
   const m = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   return trimmed;
+}
+
+function FormField({ label, required, children, hint, error }: { label: string; required?: boolean; children: React.ReactNode; hint?: string; error?: string | null }) {
+  return (
+    <View style={s.formField}>
+      <Text style={s.formLabel}>{label}{required && <Text style={{ color: Colors.red }}> *</Text>}</Text>
+      {children}
+      {error && <Text style={s.fieldError}>{error}</Text>}
+      {hint && !error && <Text style={s.fieldHint}>{hint}</Text>}
+    </View>
+  );
 }
 
 export default function FolhaScreen() {
@@ -37,50 +73,62 @@ export default function FolhaScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<FormData>>({});
   const scrollRef = useRef<any>(null);
 
   const { employees, active, totalBruto, totalFgts, totals, isLoading, isDemo, createEmployee, updateEmployee, deleteEmployee } = usePayroll();
 
   const currentPeriod = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
 
-  function openCreate() { setForm(emptyForm); setEditingId(null); setShowForm(true); }
+  function openCreate() { setForm(emptyForm); setEditingId(null); setErrors({}); setShowForm(true); }
   function openEdit(emp: Employee) {
     setForm({
       name: emp.name || "",
       role: emp.role || "",
       salary: emp.salary ? String(emp.salary) : "",
       admDate: emp.admDate || "",
-      cpf: emp.cpf || "",
-      phone: emp.phone || "",
+      cpf: emp.cpf ? maskCPF(emp.cpf) : "",
+      phone: emp.phone ? maskPhone(emp.phone) : "",
       email: emp.email || "",
     });
-    setEditingId(emp.id); setShowForm(true);
+    setEditingId(emp.id); setErrors({}); setShowForm(true);
+  }
+
+  function validate(): boolean {
+    const e: Partial<FormData> = {};
+    if (!form.name.trim()) e.name = "Nome obrigatorio";
+    if (!form.salary || parseFloat(form.salary.replace(",", ".")) <= 0) e.salary = "Salario obrigatorio";
+    const cpfDigits = form.cpf.replace(/\D/g, "");
+    if (!cpfDigits || cpfDigits.length !== 11) e.cpf = "CPF deve ter 11 digitos";
+    const dateNorm = normalizeDate(form.admDate);
+    if (!form.admDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dateNorm)) e.admDate = "Data obrigatoria (dd/mm/aaaa)";
+    setErrors(e);
+    return Object.keys(e).length === 0;
   }
 
   async function handleSave() {
-    if (!form.name.trim()) { toast.error("Nome obrigatorio"); return; }
-    if (!form.salary || parseFloat(form.salary) <= 0) { toast.error("Salario obrigatorio"); return; }
+    if (!validate()) return;
     setSaving(true);
     try {
-      const body: any = { name: form.name.trim(), role: form.role.trim() || "Colaborador", salary: parseFloat(form.salary), status: "active" };
-      if (form.admDate) body.admission_date = normalizeDate(form.admDate);
-      if (form.cpf) body.cpf = form.cpf;
+      const body: any = {
+        name: form.name.trim(),
+        role: form.role.trim() || "Colaborador",
+        salary: parseFloat(form.salary.replace(",", ".")),
+        admission_date: normalizeDate(form.admDate),
+        cpf: form.cpf.replace(/\D/g, ""),
+        status: "active",
+      };
       if (form.phone) body.phone = form.phone;
       if (form.email) body.email = form.email;
-      if (editingId) {
-        await updateEmployee(editingId, body);
-      } else {
-        await createEmployee(body);
-      }
-      // Only close form on success (createEmployee/updateEmployee throw on error)
-      setShowForm(false); setForm(emptyForm); setEditingId(null);
-    } catch {
-      // Error toast already shown by useEmployees hook — keep form open
-    } finally { setSaving(false); }
+      if (editingId) { await updateEmployee(editingId, body); }
+      else { await createEmployee(body); }
+      setShowForm(false); setForm(emptyForm); setEditingId(null); setErrors({});
+    } catch { /* toast shown by hook */ }
+    finally { setSaving(false); }
   }
 
   async function handleDelete(emp: Employee) {
-    try { await deleteEmployee(emp.id); } catch { /* toast already shown */ }
+    try { await deleteEmployee(emp.id); } catch {}
   }
 
   if (selectedEmp) {
@@ -121,22 +169,36 @@ export default function FolhaScreen() {
         <View style={s.formCard}>
           <Text style={s.formTitle}>{editingId ? "Editar funcionario" : "Novo funcionario"}</Text>
           <View style={s.formRow}>
-            <View style={s.formField}><Text style={s.formLabel}>Nome *</Text><TextInput style={s.formInput} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Nome completo" placeholderTextColor={Colors.ink3} /></View>
-            <View style={s.formField}><Text style={s.formLabel}>Cargo</Text><TextInput style={s.formInput} value={form.role} onChangeText={v => setForm(f => ({ ...f, role: v }))} placeholder="Ex: Atendente" placeholderTextColor={Colors.ink3} /></View>
+            <FormField label="Nome completo" required error={errors.name}>
+              <TextInput style={[s.formInput, errors.name && s.formInputError]} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Nome completo" placeholderTextColor={Colors.ink3} />
+            </FormField>
+            <FormField label="Cargo">
+              <TextInput style={s.formInput} value={form.role} onChangeText={v => setForm(f => ({ ...f, role: v }))} placeholder="Ex: Atendente" placeholderTextColor={Colors.ink3} />
+            </FormField>
           </View>
           <View style={s.formRow}>
-            <View style={s.formField}><Text style={s.formLabel}>Salario bruto (R$) *</Text><TextInput style={s.formInput} value={form.salary} onChangeText={v => setForm(f => ({ ...f, salary: v }))} placeholder="1800.00" placeholderTextColor={Colors.ink3} keyboardType="numeric" /></View>
-            <View style={s.formField}><Text style={s.formLabel}>Data admissao</Text><TextInput style={s.formInput} value={form.admDate} onChangeText={v => setForm(f => ({ ...f, admDate: v }))} placeholder="dd/mm/aaaa ou aaaa-mm-dd" placeholderTextColor={Colors.ink3} /></View>
+            <FormField label="Salario bruto (R$)" required error={errors.salary} hint="Valor mensal bruto">
+              <TextInput style={[s.formInput, errors.salary && s.formInputError]} value={form.salary} onChangeText={v => setForm(f => ({ ...f, salary: maskCurrency(v) }))} placeholder="1800,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
+            </FormField>
+            <FormField label="Data de admissao" required error={errors.admDate} hint="Formato: dd/mm/aaaa">
+              <TextInput style={[s.formInput, errors.admDate && s.formInputError]} value={form.admDate} onChangeText={v => setForm(f => ({ ...f, admDate: maskDate(v) }))} placeholder="01/04/2026" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
+            </FormField>
           </View>
           <View style={s.formRow}>
-            <View style={s.formField}><Text style={s.formLabel}>CPF</Text><TextInput style={s.formInput} value={form.cpf} onChangeText={v => setForm(f => ({ ...f, cpf: v }))} placeholder="000.000.000-00" placeholderTextColor={Colors.ink3} /></View>
-            <View style={s.formField}><Text style={s.formLabel}>Telefone</Text><TextInput style={s.formInput} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: v }))} placeholder="(12) 99999-9999" placeholderTextColor={Colors.ink3} /></View>
+            <FormField label="CPF" required error={errors.cpf}>
+              <TextInput style={[s.formInput, errors.cpf && s.formInputError]} value={form.cpf} onChangeText={v => setForm(f => ({ ...f, cpf: maskCPF(v) }))} placeholder="000.000.000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={14} />
+            </FormField>
+            <FormField label="Telefone" hint="Opcional">
+              <TextInput style={s.formInput} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: maskPhone(v) }))} placeholder="(12) 99999-9999" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
+            </FormField>
           </View>
           <View style={s.formRow}>
-            <View style={s.formField}><Text style={s.formLabel}>E-mail</Text><TextInput style={s.formInput} value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))} placeholder="email@exemplo.com" placeholderTextColor={Colors.ink3} /></View>
+            <FormField label="E-mail" hint="Opcional">
+              <TextInput style={s.formInput} value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))} placeholder="email@exemplo.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" />
+            </FormField>
           </View>
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-            <Pressable onPress={() => { setShowForm(false); setEditingId(null); }} style={s.cancelBtn}><Text style={s.cancelBtnText}>Cancelar</Text></Pressable>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <Pressable onPress={() => { setShowForm(false); setEditingId(null); setErrors({}); }} style={s.cancelBtn}><Text style={s.cancelBtnText}>Cancelar</Text></Pressable>
             <Pressable onPress={handleSave} style={[s.addBtn, { flex: 1, opacity: saving ? 0.6 : 1 }]} disabled={saving}><Text style={s.addBtnText}>{saving ? "Salvando..." : editingId ? "Atualizar" : "Cadastrar"}</Text></Pressable>
           </View>
         </View>
@@ -178,10 +240,13 @@ const s = StyleSheet.create({
   emptyDesc: { fontSize: 13, color: Colors.ink3, textAlign: "center", maxWidth: 300 },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: IS_WIDE ? 24 : 16, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
   formTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 16 },
-  formRow: { flexDirection: IS_WIDE ? "row" : "column", gap: 10, marginBottom: 10 },
-  formField: { flex: 1 },
+  formRow: { flexDirection: IS_WIDE ? "row" : "column", gap: 10, marginBottom: 4 },
+  formField: { flex: 1, marginBottom: 8 },
   formLabel: { fontSize: 11, fontWeight: "600", color: Colors.ink3, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 },
   formInput: { backgroundColor: Colors.bg, borderRadius: 10, padding: 12, fontSize: 14, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
+  formInputError: { borderColor: Colors.red, borderWidth: 1.5 },
+  fieldError: { fontSize: 11, color: Colors.red, marginTop: 4, fontWeight: "500" },
+  fieldHint: { fontSize: 10, color: Colors.ink3, marginTop: 3 },
   cancelBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 10, paddingVertical: 10, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
   cancelBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 },
