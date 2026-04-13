@@ -18,7 +18,7 @@ export const useToast = create<ToastState>((set, get) => ({
   show: (message, type = "success") => {
     const id = Date.now().toString() + Math.random().toString(36).slice(2);
     set({ toasts: [...get().toasts, { id, message, type }] });
-    setTimeout(() => get().remove(id), 3000);
+    setTimeout(() => get().remove(id), 4000);
   },
   remove: (id) => set({ toasts: get().toasts.filter(t => t.id !== id) }),
 }));
@@ -55,7 +55,7 @@ function ToastItem({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
         Animated.timing(translateY, { toValue: -20, duration: 200, useNativeDriver: true }),
       ]).start(() => onDismiss());
-    }, 2600);
+    }, 3500);
 
     return () => clearTimeout(timer);
   }, []);
@@ -73,11 +73,39 @@ function ToastItem({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
   );
 }
 
-// ── Toast container (render once in layout) ──────────────────
+// ── Toast container — P0 #12: fixed top-center so user always sees it ──
 export function ToastContainer() {
   const { toasts, remove } = useToast();
   if (toasts.length === 0) return null;
 
+  // Web: use fixed positioning so toasts are always visible regardless of scroll
+  if (Platform.OS === "web" && typeof document !== "undefined") {
+    return (
+      <div style={{
+        position: "fixed",
+        top: 16,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 99999,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        pointerEvents: "none",
+        width: "100%",
+        maxWidth: 460,
+        padding: "0 16px",
+      } as any}>
+        {toasts.map(t => (
+          <div key={t.id} style={{ pointerEvents: "auto", width: "100%" } as any}>
+            <ToastItem item={t} onDismiss={() => remove(t.id)} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Native: absolute positioning (top of screen)
   return (
     <View style={s.container} pointerEvents="box-none">
       {toasts.map(t => (
@@ -91,10 +119,10 @@ const s = StyleSheet.create({
   container: {
     position: "absolute" as any,
     top: 16,
-    right: 16,
     left: 16,
+    right: 16,
     zIndex: 9999,
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: 8,
   },
   toast: {
@@ -109,7 +137,8 @@ const s = StyleSheet.create({
     borderColor: Colors.border2,
     maxWidth: 420,
     minWidth: 240,
-    ...(Platform.OS === "web" ? { boxShadow: "0 8px 32px rgba(0,0,0,0.25)" } as any : { elevation: 10 }),
+    width: "100%",
+    ...(Platform.OS === "web" ? { boxShadow: "0 8px 32px rgba(0,0,0,0.35)" } as any : { elevation: 10 }),
   },
   iconWrap: {
     width: 28,
