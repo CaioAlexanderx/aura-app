@@ -96,7 +96,7 @@ export default function ConfiguracoesScreen() {
 
           {/* CUPONS DE DESCONTO */}
           <SectionTitle title="Vendas" />
-          <Pressable onPress={() => router.push("/(tabs)/financeiro")} style={s.linkCard}>
+          <Pressable onPress={() => router.push("/(tabs)/cupons")} style={s.linkCard}>
             <View style={s.linkCardIcon}>
               <Icon name="star" size={18} color={Colors.violet3} />
             </View>
@@ -186,7 +186,6 @@ const s = StyleSheet.create({
   planPrice:      { fontSize: 14, color: Colors.ink, fontWeight: "600", flex: 1 },
   planBtn:        { flexDirection: "row", alignItems: "center", gap: 4 },
   planBtnText:    { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-  // Link card (cupons)
   linkCard:       { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
   linkCardIcon:   { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   linkCardTitle:  { fontSize: 14, color: Colors.ink, fontWeight: "600" },
