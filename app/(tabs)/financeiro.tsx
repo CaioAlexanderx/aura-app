@@ -13,6 +13,7 @@ import { TransactionModal } from "@/components/screens/financeiro/TransactionMod
 import { TransactionRow } from "@/components/screens/financeiro/TransactionRow";
 import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
+import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { TABS, fmt } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS, mapImportedTransaction } from "@/utils/csv";
 import { toast } from "@/components/Toast";
@@ -29,8 +30,6 @@ export default function FinanceiroScreen() {
   const { transactions, summary, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab);
 
   const periodLabel = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-
-  // Fase 3: uncategorized descriptions for AI categorization
   const uncategorized = transactions.filter((t: any) => !t.category || t.category === 'outros').map((t: any) => t.description).filter(Boolean);
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
@@ -64,14 +63,13 @@ export default function FinanceiroScreen() {
           {TABS.map((tab, i) => <Pressable key={tab} onPress={() => handleTabSelect(i)} style={[s.tab, activeTab === i && s.tabActive]}><Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text></Pressable>)}
         </ScrollView>
 
-        {/* Fase 3: Export DRE/Sales + AI Categorize */}
         {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && (
           <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />
         )}
 
         {activeTab === 1 && transactions.length > 0 && <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={transactions.length} />}
 
-        {isLoading && <ListSkeleton rows={4} showCards />}
+        {isLoading && activeTab < 4 && <ListSkeleton rows={4} showCards />}
 
         {activeTab === 0 && (
           <View>
@@ -101,6 +99,7 @@ export default function FinanceiroScreen() {
 
         {activeTab === 2 && <TabResumo transactions={transactions} dreApi={dreData} />}
         {activeTab === 3 && <TabRetirada transactions={transactions} />}
+        {activeTab === 4 && <TabCupons />}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}

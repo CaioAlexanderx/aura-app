@@ -31,7 +31,7 @@ export type WithdrawalData = {
   fatorR: number;
 };
 
-export const TABS = ["Visao Geral", "Lancamentos", "Analise", "Retirada"];
+export const TABS = ["Visao Geral", "Lancamentos", "Analise", "Retirada", "Cupons"];
 export const INCOME_CATS = ["Vendas", "Servicos", "Outros", "Investimentos"];
 export const EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
 

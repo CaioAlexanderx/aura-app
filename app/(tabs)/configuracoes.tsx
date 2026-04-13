@@ -94,6 +94,19 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
+          {/* CUPONS DE DESCONTO */}
+          <SectionTitle title="Vendas" />
+          <Pressable onPress={() => router.push("/(tabs)/financeiro")} style={s.linkCard}>
+            <View style={s.linkCardIcon}>
+              <Icon name="star" size={18} color={Colors.violet3} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.linkCardTitle}>Cupons de desconto</Text>
+              <Text style={s.linkCardDesc}>Crie e gerencie cupons para oferecer descontos no caixa</Text>
+            </View>
+            <Icon name="chevron_right" size={16} color={Colors.ink3} />
+          </Pressable>
+
           {/* EQUIPE */}
           <SectionTitle title="Equipe" />
           <MembersSection />
@@ -173,6 +186,11 @@ const s = StyleSheet.create({
   planPrice:      { fontSize: 14, color: Colors.ink, fontWeight: "600", flex: 1 },
   planBtn:        { flexDirection: "row", alignItems: "center", gap: 4 },
   planBtnText:    { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  // Link card (cupons)
+  linkCard:       { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  linkCardIcon:   { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  linkCardTitle:  { fontSize: 14, color: Colors.ink, fontWeight: "600" },
+  linkCardDesc:   { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   accountNote:    { flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 4, marginBottom: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   accountNoteText:{ fontSize: 11, color: Colors.ink3, flex: 1 },
   supportRow:     { flexDirection: "row", gap: 10, marginBottom: 4, flexWrap: "wrap" },
