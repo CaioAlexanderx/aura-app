@@ -12,6 +12,7 @@ import { HoverRow } from "@/components/HoverRow";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { BASE_URL } from "@/services/api";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const TABS = ["Meu Site", "Vitrine", "Entrega"];
@@ -21,7 +22,6 @@ const COLOR_PRESETS = [
   "#2563eb", "#db2777", "#0891b2", "#374151",
 ];
 
-// ── Componentes reutilizaveis ─────────────────────────────────
 function Field({ label, value, onChange, placeholder, multiline }: {
   label: string; value: string; onChange: (v: string) => void;
   placeholder?: string; multiline?: boolean;
@@ -57,7 +57,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── Tab: Meu Site ─────────────────────────────────────────────
 function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain }: any) {
   const { company } = useAuthStore();
 
@@ -70,35 +69,25 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
   const [address,     setAddress]     = useState(config.address    || "");
   const [color,       setColor]       = useState(config.primary_color || "#7c3aed");
   const [published,   setPublished]   = useState(config.is_published ?? false);
-
   const [domainInput, setDomainInput] = useState("");
   const [domainPlan,  setDomainPlan]  = useState<"1year" | "2years">("1year");
 
   useEffect(() => {
     if (!config.exists) return;
-    setSiteName(config.site_name || "");
-    setTagline(config.tagline || "");
-    setDescription(config.description || "");
-    setPhone(config.phone || "");
-    setWhatsapp(config.whatsapp || "");
-    setInstagram(config.instagram || "");
-    setAddress(config.address || "");
-    setColor(config.primary_color || "#7c3aed");
+    setSiteName(config.site_name || ""); setTagline(config.tagline || "");
+    setDescription(config.description || ""); setPhone(config.phone || "");
+    setWhatsapp(config.whatsapp || ""); setInstagram(config.instagram || "");
+    setAddress(config.address || ""); setColor(config.primary_color || "#7c3aed");
     setPublished(config.is_published ?? false);
   }, [config.exists]);
 
   function openColorPicker() {
     if (Platform.OS !== "web") return;
     try {
-      const input = document.createElement("input");
-      input.type = "color";
-      input.value = color;
+      const input = document.createElement("input"); input.type = "color"; input.value = color;
       input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
       document.body.appendChild(input);
-      input.addEventListener("change", (e: any) => {
-        setColor(e.target.value);
-        try { document.body.removeChild(input); } catch {}
-      });
+      input.addEventListener("change", (e: any) => { setColor(e.target.value); try { document.body.removeChild(input); } catch {} });
       input.addEventListener("blur", () => { try { document.body.removeChild(input); } catch {} });
       input.click();
     } catch {}
@@ -106,34 +95,26 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
 
   async function handleSave() {
     await saveConfig({
-      site_name: siteName.trim() || null,
-      tagline: tagline.trim() || null,
-      description: description.trim() || null,
-      phone: phone.trim() || null,
-      whatsapp: whatsapp.trim() || null,
-      instagram: instagram.trim() || null,
-      address: address.trim() || null,
-      primary_color: color,
-      is_published: published,
+      site_name: siteName.trim() || null, tagline: tagline.trim() || null,
+      description: description.trim() || null, phone: phone.trim() || null,
+      whatsapp: whatsapp.trim() || null, instagram: instagram.trim() || null,
+      address: address.trim() || null, primary_color: color, is_published: published,
     });
   }
 
   async function handleRequestDomain() {
     const d = domainInput.trim().toLowerCase();
-    if (!d || !d.includes(".")) {
-      toast.error("Informe um dominio valido (ex: meunegocio.com.br)");
-      return;
-    }
-    await requestDomain({ domain: d, plan: domainPlan });
-    setDomainInput("");
+    if (!d || !d.includes(".")) { toast.error("Informe um dominio valido (ex: meunegocio.com.br)"); return; }
+    await requestDomain({ domain: d, plan: domainPlan }); setDomainInput("");
   }
 
-  const storefrontUrl = config.storefront_url || `https://getaura.com.br/loja/${(siteName || "minha-loja").toLowerCase().replace(/\s+/g, "-").slice(0, 40)}`;
+  // URL funcional apontando pro backend HTML renderer
+  const slug = config.slug || (siteName || "minha-loja").toLowerCase().replace(/\s+/g, "-").slice(0, 40);
+  const storefrontUrl = config.storefront_url || `${BASE_URL}/storefront/${slug}/page`;
   const hasDomain = config.custom_domain && config.custom_domain_status !== "none";
 
   return (
     <View>
-      {/* Preview card */}
       <View style={[s.previewCard, { borderTopWidth: 4, borderTopColor: color }]}>
         <View style={s.previewHeader}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -151,13 +132,9 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
           <Icon name="globe" size={12} color={Colors.violet3} />
           <Text style={s.urlText} numberOfLines={1}>{storefrontUrl}</Text>
           <Pressable onPress={() => {
-            if (Platform.OS === "web" && typeof navigator !== "undefined") {
-              navigator.clipboard?.writeText(storefrontUrl);
-            }
+            if (Platform.OS === "web" && typeof navigator !== "undefined") navigator.clipboard?.writeText(storefrontUrl);
             toast.info("Link copiado!");
-          }} style={s.urlCopy}>
-            <Text style={s.urlCopyText}>Copiar</Text>
-          </Pressable>
+          }} style={s.urlCopy}><Text style={s.urlCopyText}>Copiar</Text></Pressable>
           {Platform.OS === "web" && (
             <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={[s.urlCopy, { backgroundColor: Colors.violetD }]}>
               <Text style={s.urlCopyText}>Abrir</Text>
@@ -166,55 +143,39 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
         </View>
       </View>
 
-      {/* Settings */}
       <SectionTitle title="Informacoes do negocio" />
       <View style={s.card}>
         <View style={s.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.switchLabel}>Site publicado</Text>
-            <Text style={s.switchHint}>{published ? "Visivel para clientes" : "Site oculto — somente voce ve"}</Text>
+            <Text style={s.switchHint}>{published ? "Visivel para clientes" : "Site oculto"}</Text>
           </View>
-          <Switch
-            value={published}
-            onValueChange={setPublished}
-            trackColor={{ true: Colors.green, false: Colors.bg4 }}
-            thumbColor={"#fff"}
-          />
+          <Switch value={published} onValueChange={setPublished} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor={"#fff"} />
         </View>
         <View style={s.divider} />
-
         <Field label="Nome do negocio" value={siteName} onChange={setSiteName} placeholder="Ex: Barbearia do Caio" />
         <Field label="Slogan (opcional)" value={tagline} onChange={setTagline} placeholder="Qualidade que fala por si" />
-        <Field label="Descricao" value={description} onChange={setDescription} placeholder="Conte um pouco sobre seu negocio..." multiline />
+        <Field label="Descricao" value={description} onChange={setDescription} placeholder="Conte sobre seu negocio..." multiline />
         <Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(12) 99999-0000" />
-        <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegogio" />
+        <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegocio" />
         <Field label="Telefone" value={phone} onChange={setPhone} placeholder="(12) 3333-0000" />
-        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacare\u00ed/SP" />
+        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacarei/SP" />
 
         <Text style={s.fieldLabel}>Cor principal</Text>
         <View style={s.colorRow}>
           {COLOR_PRESETS.map(c => (
-            <Pressable
-              key={c}
-              onPress={() => setColor(c)}
-              style={[s.colorDot, { backgroundColor: c }, color === c && s.colorDotActive]}
-            />
+            <Pressable key={c} onPress={() => setColor(c)} style={[s.colorDot, { backgroundColor: c }, color === c && s.colorDotActive]} />
           ))}
           {Platform.OS === "web" && (
             <Pressable onPress={openColorPicker} style={[s.colorDot, { backgroundColor: color, borderWidth: 2, borderColor: Colors.border2 }]} />
           )}
         </View>
 
-        <Pressable
-          onPress={handleSave}
-          disabled={isSaving}
-          style={[s.saveBtn, isSaving && { opacity: 0.6 }]}
-        >
+        <Pressable onPress={handleSave} disabled={isSaving} style={[s.saveBtn, isSaving && { opacity: 0.6 }]}>
           <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes"}</Text>
         </Pressable>
       </View>
 
-      {/* Dominio personalizado */}
       <SectionTitle title="Dominio personalizado" />
       <View style={s.card}>
         {hasDomain ? (
@@ -225,69 +186,32 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
               <StatusBadge status={config.custom_domain_status} />
             </View>
             {config.custom_domain_status === "pending_dns" && (
-              <View style={s.infoCard}>
-                <Icon name="alert" size={13} color={Colors.amber} />
-                <Text style={s.infoText}>
-                  Configuracao em andamento. A equipe Aura vai registrar e configurar seu dominio em ate 48h uteis. Voce sera notificado quando estiver ativo.
-                </Text>
-              </View>
-            )}
-            {config.custom_domain_status === "active" && (
-              <Text style={s.domainHint}>Seu dominio esta ativo. Acesse via {config.custom_domain}</Text>
+              <View style={s.infoCard}><Icon name="alert" size={13} color={Colors.amber} /><Text style={s.infoText}>A equipe Aura vai configurar seu dominio em ate 48h uteis.</Text></View>
             )}
           </View>
         ) : (
           <View>
-            <Text style={s.domainDesc}>
-              Registre um dominio .com.br exclusivo para o seu negocio. O dominio e registrado e configurado pela equipe Aura.
-            </Text>
-
+            <Text style={s.domainDesc}>Registre um dominio .com.br exclusivo. Configurado pela equipe Aura.</Text>
             <Text style={s.fieldLabel}>Duracao</Text>
             <View style={s.planRow}>
-              <Pressable
-                onPress={() => setDomainPlan("1year")}
-                style={[s.planBtn, domainPlan === "1year" && s.planBtnActive]}
-              >
+              <Pressable onPress={() => setDomainPlan("1year")} style={[s.planBtn, domainPlan === "1year" && s.planBtnActive]}>
                 <Text style={[s.planBtnLabel, domainPlan === "1year" && s.planBtnLabelActive]}>1 ano</Text>
                 <Text style={[s.planBtnPrice, domainPlan === "1year" && s.planBtnLabelActive]}>R$ 80</Text>
               </Pressable>
-              <Pressable
-                onPress={() => setDomainPlan("2years")}
-                style={[s.planBtn, domainPlan === "2years" && s.planBtnActive]}
-              >
+              <Pressable onPress={() => setDomainPlan("2years")} style={[s.planBtn, domainPlan === "2years" && s.planBtnActive]}>
                 <Text style={[s.planBtnLabel, domainPlan === "2years" && s.planBtnLabelActive]}>2 anos</Text>
-                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>
-                  R$ 152 <Text style={{ fontSize: 10, color: Colors.green }}>(-5%)</Text>
-                </Text>
+                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>R$ 152 <Text style={{ fontSize: 10, color: Colors.green }}>(-5%)</Text></Text>
               </Pressable>
             </View>
-
             <Text style={[s.fieldLabel, { marginTop: 12 }]}>Dominio desejado</Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <TextInput
-                style={[s.input, { flex: 1 }]}
-                value={domainInput}
-                onChangeText={setDomainInput}
-                placeholder="meunegocio.com.br"
-                placeholderTextColor={Colors.ink3}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Pressable
-                onPress={handleRequestDomain}
-                disabled={isRequestingDomain}
-                style={[s.domainBtn, isRequestingDomain && { opacity: 0.6 }]}
-              >
+              <TextInput style={[s.input, { flex: 1 }]} value={domainInput} onChangeText={setDomainInput}
+                placeholder="meunegocio.com.br" placeholderTextColor={Colors.ink3} autoCapitalize="none" autoCorrect={false} />
+              <Pressable onPress={handleRequestDomain} disabled={isRequestingDomain} style={[s.domainBtn, isRequestingDomain && { opacity: 0.6 }]}>
                 <Text style={s.domainBtnText}>{isRequestingDomain ? "..." : "Solicitar"}</Text>
               </Pressable>
             </View>
-
-            <View style={s.infoCard}>
-              <Icon name="alert" size={13} color={Colors.violet3} />
-              <Text style={s.infoText}>
-                Apos solicitar, a equipe Aura confirma a disponibilidade e configura seu dominio em ate 48h uteis.
-              </Text>
-            </View>
+            <View style={s.infoCard}><Icon name="alert" size={13} color={Colors.violet3} /><Text style={s.infoText}>Apos solicitar, a equipe Aura confirma e configura em ate 48h uteis.</Text></View>
           </View>
         )}
       </View>
@@ -295,14 +219,13 @@ function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingD
   );
 }
 
-// ── Tab: Vitrine ──────────────────────────────────────────────
 function TabVitrine({ config, products, saveConfig, isSaving }: any) {
   const featuredInit: Set<string> = new Set(config.featured_product_ids || []);
   const [featured, setFeatured] = useState<Set<string>>(featuredInit);
-  const [showPrices, setShowPrices]   = useState(config.show_prices ?? true);
-  const [showStock,  setShowStock]    = useState(config.show_stock  ?? false);
-  const [catFilter,  setCatFilter]    = useState("Todos");
-  const [changed,    setChanged]      = useState(false);
+  const [showPrices, setShowPrices] = useState(config.show_prices ?? true);
+  const [showStock, setShowStock] = useState(config.show_stock ?? false);
+  const [catFilter, setCatFilter] = useState("Todos");
+  const [changed, setChanged] = useState(false);
 
   useEffect(() => {
     setFeatured(new Set(config.featured_product_ids || []));
@@ -312,61 +235,40 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
   }, [config.featured_product_ids?.join(",")]);
 
   function toggleProduct(id: string) {
-    setFeatured(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setFeatured(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
     setChanged(true);
   }
 
   async function handleSave() {
-    await saveConfig({
-      featured_product_ids: Array.from(featured),
-      show_prices: showPrices,
-      show_stock: showStock,
-    });
+    await saveConfig({ featured_product_ids: Array.from(featured), show_prices: showPrices, show_stock: showStock });
     setChanged(false);
   }
 
   const cats = ["Todos", ...Array.from(new Set((products as any[]).map((p: any) => p.category).filter(Boolean)))];
   const filtered = catFilter === "Todos" ? products : (products as any[]).filter((p: any) => p.category === catFilter);
-  const publishedCount = featured.size;
 
   return (
     <View>
       <View style={s.kpiRow}>
-        <View style={s.kpi}>
-          <Text style={s.kpiLabel}>TOTAL</Text>
-          <Text style={s.kpiValue}>{(products as any[]).length}</Text>
-        </View>
-        <View style={s.kpi}>
-          <Text style={s.kpiLabel}>NA VITRINE</Text>
-          <Text style={[s.kpiValue, { color: Colors.green }]}>{publishedCount}</Text>
-        </View>
-        <View style={s.kpi}>
-          <Text style={s.kpiLabel}>OCULTOS</Text>
-          <Text style={[s.kpiValue, { color: Colors.ink3 }]}>{(products as any[]).length - publishedCount}</Text>
-        </View>
+        <View style={s.kpi}><Text style={s.kpiLabel}>TOTAL</Text><Text style={s.kpiValue}>{(products as any[]).length}</Text></View>
+        <View style={s.kpi}><Text style={s.kpiLabel}>NA VITRINE</Text><Text style={[s.kpiValue, { color: Colors.green }]}>{featured.size}</Text></View>
+        <View style={s.kpi}><Text style={s.kpiLabel}>OCULTOS</Text><Text style={[s.kpiValue, { color: Colors.ink3 }]}>{(products as any[]).length - featured.size}</Text></View>
       </View>
 
       <View style={s.card}>
         <View style={s.switchRow}>
           <Text style={s.switchLabel}>Mostrar precos</Text>
-          <Switch value={showPrices} onValueChange={(v) => { setShowPrices(v); setChanged(true); }}
-            trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+          <Switch value={showPrices} onValueChange={(v) => { setShowPrices(v); setChanged(true); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
         <View style={[s.switchRow, { borderBottomWidth: 0 }]}>
-          <Text style={s.switchLabel}>Mostrar estoque disponivel</Text>
-          <Switch value={showStock} onValueChange={(v) => { setShowStock(v); setChanged(true); }}
-            trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+          <Text style={s.switchLabel}>Mostrar estoque</Text>
+          <Switch value={showStock} onValueChange={(v) => { setShowStock(v); setChanged(true); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
       </View>
 
-      <Text style={s.hint}>Selecione os produtos do estoque que aparecem na vitrine do seu site.</Text>
+      <Text style={s.hint}>Selecione os produtos que aparecem na vitrine.</Text>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }}
-        contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
         {cats.map(c => (
           <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.filterChip, catFilter === c && s.filterChipActive]}>
             <Text style={[s.filterText, catFilter === c && s.filterTextActive]}>{c}</Text>
@@ -377,8 +279,8 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
       {(products as any[]).length === 0 ? (
         <View style={s.emptyBox}>
           <Icon name="package" size={28} color={Colors.ink3} />
-          <Text style={s.emptyText}>Nenhum produto cadastrado no estoque</Text>
-          <Text style={s.emptyHint}>Cadastre produtos no modulo Estoque para exibi-los na vitrine.</Text>
+          <Text style={s.emptyText}>Nenhum produto cadastrado</Text>
+          <Text style={s.emptyHint}>Cadastre produtos no Estoque para exibi-los na vitrine.</Text>
         </View>
       ) : (
         <View style={s.card}>
@@ -388,7 +290,17 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
             return (
               <HoverRow key={id} style={s.prodRow}>
                 <View style={s.prodLeft}>
-                  {prod.color ? (
+                  {prod.image_url ? (
+                    <View style={{ width: 40, height: 40, borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 }}>
+                      {Platform.OS === "web" ? (
+                        <img src={prod.image_url} alt={prod.name} style={{ width: "100%", height: "100%", objectFit: "cover" } as any} />
+                      ) : (
+                        <View style={{ width: 40, height: 40, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" }}>
+                          <Icon name="package" size={18} color={Colors.violet3} />
+                        </View>
+                      )}
+                    </View>
+                  ) : prod.color ? (
                     <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: prod.color, borderWidth: 1, borderColor: Colors.border }} />
                   ) : (
                     <View style={[s.prodIcon, { backgroundColor: isFeatured ? Colors.violetD : Colors.bg4 }]}>
@@ -400,29 +312,20 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
                     <Text style={s.prodMeta}>
                       {showPrices ? `R$ ${(parseFloat(prod.price) || 0).toFixed(2)}` : ""}
                       {prod.category ? ` \u00b7 ${prod.category}` : ""}
-                      {prod.size ? ` \u00b7 ${prod.size}` : ""}
                     </Text>
                   </View>
                 </View>
                 <View style={s.prodRight}>
                   <View style={[s.featBadge, { backgroundColor: isFeatured ? Colors.greenD : Colors.bg4 }]}>
-                    <Text style={[s.featBadgeText, { color: isFeatured ? Colors.green : Colors.ink3 }]}>
-                      {isFeatured ? "Visivel" : "Oculto"}
-                    </Text>
+                    <Text style={[s.featBadgeText, { color: isFeatured ? Colors.green : Colors.ink3 }]}>{isFeatured ? "Visivel" : "Oculto"}</Text>
                   </View>
-                  <Switch
-                    value={isFeatured}
-                    onValueChange={() => toggleProduct(id)}
-                    trackColor={{ true: Colors.green, false: Colors.bg4 }}
-                    thumbColor="#fff"
-                  />
+                  <Switch value={isFeatured} onValueChange={() => toggleProduct(id)} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
                 </View>
               </HoverRow>
             );
           })}
         </View>
       )}
-
       {changed && (
         <Pressable onPress={handleSave} disabled={isSaving} style={[s.saveBtn, isSaving && { opacity: 0.6 }]}>
           <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar vitrine"}</Text>
@@ -432,102 +335,56 @@ function TabVitrine({ config, products, saveConfig, isSaving }: any) {
   );
 }
 
-// ── Tab: Entrega ──────────────────────────────────────────────
 function TabEntrega({ config, saveConfig, isSaving }: any) {
-  const [pickup,   setPickup]   = useState(config.pickup_enabled   ?? true);
+  const [pickup, setPickup] = useState(config.pickup_enabled ?? true);
   const [delivery, setDelivery] = useState(config.delivery_enabled ?? false);
-  const [fee,      setFee]      = useState(String(config.delivery_fee || "0"));
-  const [changed,  setChanged]  = useState(false);
+  const [fee, setFee] = useState(String(config.delivery_fee || "0"));
+  const [changed, setChanged] = useState(false);
 
   useEffect(() => {
-    setPickup(config.pickup_enabled ?? true);
-    setDelivery(config.delivery_enabled ?? false);
-    setFee(String(config.delivery_fee || "0"));
-    setChanged(false);
+    setPickup(config.pickup_enabled ?? true); setDelivery(config.delivery_enabled ?? false);
+    setFee(String(config.delivery_fee || "0")); setChanged(false);
   }, [config.pickup_enabled, config.delivery_enabled, config.delivery_fee]);
 
   async function handleSave() {
-    await saveConfig({
-      pickup_enabled:   pickup,
-      delivery_enabled: delivery,
-      delivery_fee:     parseFloat(fee.replace(",", ".")) || 0,
-    });
+    await saveConfig({ pickup_enabled: pickup, delivery_enabled: delivery, delivery_fee: parseFloat(fee.replace(",", ".")) || 0 });
     setChanged(false);
   }
 
   return (
     <View>
-      <Text style={s.hint}>
-        Configure como o cliente recebe seu pedido. As integracoes com transportadoras sao configuradas pela equipe Aura.
-      </Text>
-
+      <Text style={s.hint}>Configure como o cliente recebe seu pedido.</Text>
       <View style={s.card}>
         <View style={s.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.switchLabel}>Retirada no local</Text>
-            <Text style={s.switchHint}>Cliente busca no estabelecimento (gratis)</Text>
-          </View>
-          <Switch
-            value={pickup}
-            onValueChange={(v) => { setPickup(v); setChanged(true); }}
-            trackColor={{ true: Colors.green, false: Colors.bg4 }}
-            thumbColor="#fff"
-          />
+          <View style={{ flex: 1 }}><Text style={s.switchLabel}>Retirada no local</Text><Text style={s.switchHint}>Cliente busca no estabelecimento</Text></View>
+          <Switch value={pickup} onValueChange={(v) => { setPickup(v); setChanged(true); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
-
         <View style={s.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.switchLabel}>Entrega a domicilio</Text>
-            <Text style={s.switchHint}>Disponibilize entrega para os clientes</Text>
-          </View>
-          <Switch
-            value={delivery}
-            onValueChange={(v) => { setDelivery(v); setChanged(true); }}
-            trackColor={{ true: Colors.green, false: Colors.bg4 }}
-            thumbColor="#fff"
-          />
+          <View style={{ flex: 1 }}><Text style={s.switchLabel}>Entrega a domicilio</Text><Text style={s.switchHint}>Disponibilize entrega</Text></View>
+          <Switch value={delivery} onValueChange={(v) => { setDelivery(v); setChanged(true); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
-
         {delivery && (
-          <View style={[s.field, { marginTop: 8 }]}>
-            <Text style={s.fieldLabel}>Taxa de entrega (R$)</Text>
-            <TextInput
-              style={s.input}
-              value={fee}
-              onChangeText={(v) => { setFee(v); setChanged(true); }}
-              placeholder="0,00"
-              placeholderTextColor={Colors.ink3}
-              keyboardType="decimal-pad"
-            />
+          <View style={[s.field, { marginTop: 8 }]}><Text style={s.fieldLabel}>Taxa de entrega (R$)</Text>
+            <TextInput style={s.input} value={fee} onChangeText={(v) => { setFee(v); setChanged(true); }} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
           </View>
         )}
       </View>
-
-      <View style={s.infoCard}>
-        <Icon name="alert" size={13} color={Colors.violet3} />
-        <Text style={s.infoText}>
-          Integracoes avancadas (Uber Flash, Correios, transportadoras) sao configuradas pela equipe Aura como servico adicional. Entre em contato pelo Suporte.
-        </Text>
-      </View>
-
+      <View style={s.infoCard}><Icon name="alert" size={13} color={Colors.violet3} /><Text style={s.infoText}>Integracoes avancadas (Uber Flash, Correios) sao configuradas pela equipe Aura.</Text></View>
       {changed && (
         <Pressable onPress={handleSave} disabled={isSaving} style={[s.saveBtn, isSaving && { opacity: 0.6 }, { marginTop: 16 }]}>
-          <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes de entrega"}</Text>
+          <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : "Salvar entrega"}</Text>
         </Pressable>
       )}
     </View>
   );
 }
 
-// ── Tela principal ────────────────────────────────────────────
 export default function CanalDigitalScreen() {
   const [tab, setTab] = useState(0);
   const { company } = useAuthStore();
   const { config, products, isLoading, saveConfig, isSaving, requestDomain, isRequestingDomain } = useDigitalChannel();
-
   const plan = company?.plan || "essencial";
-  const planLevels: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
-  const hasAccess = (planLevels[plan] ?? 0) >= 1;
+  const hasAccess = ({ essencial: 0, negocio: 1, expansao: 2 }[plan] ?? 0) >= 1;
 
   if (!hasAccess) {
     return (
@@ -536,13 +393,9 @@ export default function CanalDigitalScreen() {
         <View style={s.lockBox}>
           <Icon name="globe" size={36} color={Colors.ink3} />
           <Text style={s.lockTitle}>Canal Digital</Text>
-          <Text style={s.lockDesc}>
-            Crie sua loja online em minutos. Vitrine de produtos, dominio personalizado, horarios de funcionamento e muito mais.
-          </Text>
+          <Text style={s.lockDesc}>Crie sua loja online em minutos. Vitrine de produtos, dominio personalizado e mais.</Text>
           <View style={s.lockBadge}><Text style={s.lockBadgeText}>Disponivel no plano Negocio</Text></View>
-          <Pressable style={s.upgradeBtn}>
-            <Text style={s.upgradeBtnText}>Ver planos</Text>
-          </Pressable>
+          <Pressable style={s.upgradeBtn}><Text style={s.upgradeBtnText}>Ver planos</Text></Pressable>
         </View>
       </ScrollView>
     );
@@ -551,63 +404,34 @@ export default function CanalDigitalScreen() {
   return (
     <ScrollView style={g.screen} contentContainerStyle={g.content}>
       <PageHeader title="Canal Digital" />
-
       <View style={s.hero}>
         <View style={s.heroIcon}><Icon name="globe" size={22} color={Colors.violet3} /></View>
         <View style={{ flex: 1 }}>
           <Text style={s.heroTitle}>Sua loja online em minutos</Text>
-          <Text style={s.heroDesc}>
-            Configure sua vitrine, personalize as cores e compartilhe o link com clientes.
-          </Text>
+          <Text style={s.heroDesc}>Configure sua vitrine, personalize e compartilhe o link.</Text>
         </View>
         {config.is_published && (
-          <Pressable
-            onPress={() => config.storefront_url && Linking.openURL(config.storefront_url)}
-            style={s.viewSiteBtn}
-          >
+          <Pressable onPress={() => {
+            const slug = config.slug || "minha-loja";
+            Linking.openURL(`${BASE_URL}/storefront/${slug}/page`);
+          }} style={s.viewSiteBtn}>
             <Icon name="globe" size={13} color={Colors.violet3} />
             <Text style={s.viewSiteBtnText}>Ver site</Text>
           </Pressable>
         )}
       </View>
-
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />
-
-      {isLoading ? (
-        <ListSkeleton rows={4} />
-      ) : (
+      {isLoading ? <ListSkeleton rows={4} /> : (
         <>
-          {tab === 0 && (
-            <TabMeuSite
-              config={config}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-              requestDomain={requestDomain}
-              isRequestingDomain={isRequestingDomain}
-            />
-          )}
-          {tab === 1 && (
-            <TabVitrine
-              config={config}
-              products={products}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-            />
-          )}
-          {tab === 2 && (
-            <TabEntrega
-              config={config}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-            />
-          )}
+          {tab === 0 && <TabMeuSite config={config} saveConfig={saveConfig} isSaving={isSaving} requestDomain={requestDomain} isRequestingDomain={isRequestingDomain} />}
+          {tab === 1 && <TabVitrine config={config} products={products} saveConfig={saveConfig} isSaving={isSaving} />}
+          {tab === 2 && <TabEntrega config={config} saveConfig={saveConfig} isSaving={isSaving} />}
         </>
       )}
     </ScrollView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────
 const g = StyleSheet.create({
   screen:  { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
@@ -649,7 +473,6 @@ const s = StyleSheet.create({
   domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
   domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  domainHint: { fontSize: 11, color: Colors.ink3, marginTop: 8 },
   domainBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, flexShrink: 0 },
   domainBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
