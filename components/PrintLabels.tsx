@@ -2,11 +2,10 @@ import { useState, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { generatePrintHTML, LABEL_PRESETS, getSavedPreset, savePreset } from "@/utils/codeGen";
 import { toast } from "@/components/Toast";
+import { useAuthStore } from "@/stores/auth";
+import { BASE_URL } from "@/services/api";
 import type { Product } from "@/components/screens/estoque/types";
-
-const PAGE_SIZE = 50;
 
 type Props = {
   products: Product[];
@@ -14,57 +13,30 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
+/**
+ * P0 #3: Simplified label printing — single 33x21mm layout
+ * Supports barcode (JsBarcode SVG) and QR Code
+ * Opens backend /label/print endpoint for each selected product
+ */
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
-  const [labelType, setLabelType] = useState<'barcode' | 'qr'>('barcode');
-  const [presetId, setPresetId] = useState(getSavedPreset());
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const isWeb = Platform.OS === 'web';
+  const { company, token } = useAuthStore();
+  const [mode, setMode] = useState<"barcode" | "qr">("barcode");
+  const [search, setSearch] = useState("");
+  const isWeb = Platform.OS === "web";
 
-  // Produtos com código (base para tudo)
   const productsWithCode = useMemo(
     () => products.filter(p => p.barcode || p.code),
     [products]
   );
 
-  // Categorias únicas
-  const categories = useMemo(() => {
-    const cats = new Set<string>();
-    productsWithCode.forEach(p => { if (p.category) cats.add(p.category); });
-    return Array.from(cats).sort();
-  }, [productsWithCode]);
-
-  // Produtos filtrados
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return productsWithCode.filter(p => {
-      if (categoryFilter && p.category !== categoryFilter) return false;
-      if (!q) return true;
-      return (
-        p.name.toLowerCase().includes(q) ||
-        (p.barcode || p.code || '').toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q)
-      );
-    });
-  }, [productsWithCode, search, categoryFilter]);
-
-  // Página atual
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageItems = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
-
-  // Seleção
-  const pageIds = pageItems.map(p => p.id);
-  const selectedOnPage = pageIds.filter(id => selectedIds.includes(id));
-  const allPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length;
-  const allFilteredSelected = filtered.length > 0 && filtered.every(p => selectedIds.includes(p.id));
-
-  function handlePresetChange(id: string) {
-    setPresetId(id);
-    savePreset(id);
-    toast.success('Preset salvo: ' + (LABEL_PRESETS.find(p => p.id === id)?.name || id));
-  }
+    if (!q) return productsWithCode;
+    return productsWithCode.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.barcode || p.code || "").toLowerCase().includes(q)
+    );
+  }, [productsWithCode, search]);
 
   function toggleSelect(id: string) {
     onSelectionChange(
@@ -74,167 +46,147 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     );
   }
 
-  function togglePage() {
-    if (allPageSelected) {
-      onSelectionChange(selectedIds.filter(id => !pageIds.includes(id)));
+  function toggleAll() {
+    const ids = filtered.map(p => p.id);
+    if (ids.every(id => selectedIds.includes(id))) {
+      onSelectionChange(selectedIds.filter(id => !ids.includes(id)));
     } else {
-      const merged = Array.from(new Set([...selectedIds, ...pageIds]));
-      onSelectionChange(merged);
+      onSelectionChange(Array.from(new Set([...selectedIds, ...ids])));
     }
-  }
-
-  function toggleFiltered() {
-    const filteredIds = filtered.map(p => p.id);
-    if (allFilteredSelected) {
-      onSelectionChange(selectedIds.filter(id => !filteredIds.includes(id)));
-    } else {
-      const merged = Array.from(new Set([...selectedIds, ...filteredIds]));
-      onSelectionChange(merged);
-    }
-  }
-
-  function clearSelection() {
-    onSelectionChange([]);
-  }
-
-  function handleSearch(text: string) {
-    setSearch(text);
-    setPage(0);
-  }
-
-  function handleCategory(cat: string | null) {
-    setCategoryFilter(cat);
-    setPage(0);
   }
 
   function handlePrint() {
-    if (!isWeb || selectedIds.length === 0) { toast.error('Selecione pelo menos um produto'); return; }
-    const selected = products
-      .filter(p => selectedIds.includes(p.id) && (p.barcode || p.code))
-      .map(p => ({ name: p.name, code: p.barcode || p.code, price: p.price, type: labelType }));
-    if (selected.length === 0) { toast.error('Produtos selecionados nao possuem codigo'); return; }
-    const html = generatePrintHTML(selected, presetId);
-    const w = window.open('', '_blank');
+    if (!isWeb || !company?.id || !token || selectedIds.length === 0) {
+      toast.error("Selecione pelo menos um produto");
+      return;
+    }
+
+    // For single product: open backend print endpoint directly
+    if (selectedIds.length === 1) {
+      const pid = selectedIds[0];
+      const url = `${BASE_URL}/companies/${company.id}/products/${pid}/label/print?mode=${mode}&qty=1`;
+      window.open(url + `&token=${token}`, "_blank");
+      toast.success("Etiqueta aberta para impressao");
+      return;
+    }
+
+    // For multiple: generate batch HTML client-side with JsBarcode
+    const selected = products.filter(p => selectedIds.includes(p.id) && (p.barcode || p.code));
+    if (selected.length === 0) { toast.error("Produtos sem codigo"); return; }
+
+    const isQR = mode === "qr";
+    const labels = selected.map((p, i) => {
+      const code = p.barcode || p.code;
+      const priceText = `R$ ${p.price.toFixed(2).replace(".", ",")}`;
+
+      if (isQR) {
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(code)}&bgcolor=ffffff&color=000000&margin=1`;
+        return `<div class="label qr-layout">
+          <img src="${qrUrl}" class="qr" alt="QR">
+          <div class="info"><div class="name">${p.name}</div><div class="price">${priceText}</div></div>
+        </div>`;
+      }
+      return `<div class="label barcode-layout">
+        <svg class="barcode" id="bc-${i}" data-code="${code}"></svg>
+        <div class="name">${p.name}</div>
+        <div class="price">${priceText}</div>
+      </div>`;
+    });
+
+    // Detect format for first product
+    const firstCode = selected[0].barcode || selected[0].code;
+    const numOnly = /^\d+$/.test(firstCode);
+    let jsFormat = "CODE128";
+    if (numOnly && firstCode.length === 13) jsFormat = "EAN13";
+    else if (numOnly && firstCode.length === 8) jsFormat = "EAN8";
+    else if (numOnly && firstCode.length === 12) jsFormat = "UPC";
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Etiquetas Aura - ${selected.length} produtos</title>
+${!isQR ? '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>' : ''}
+<style>
+@page { margin:0; size:33mm 21mm; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f5f5f5}
+.label{width:33mm;height:21mm;background:#fff;overflow:hidden;page-break-after:always}
+.label:last-child{page-break-after:auto}
+.barcode-layout{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm 1mm;text-align:center}
+.barcode-layout .barcode{width:30mm;height:11mm;flex-shrink:0}
+.barcode-layout .name{font-size:5pt;font-weight:600;line-height:1.1;max-height:5mm;overflow:hidden;word-break:break-word;margin-top:0.3mm}
+.barcode-layout .price{font-size:7pt;font-weight:900}
+.qr-layout{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm}
+.qr-layout .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}
+.qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;overflow:hidden}
+.qr-layout .name{font-size:5.5pt;font-weight:700;line-height:1.15;max-height:10mm;overflow:hidden;word-break:break-word}
+.qr-layout .price{font-size:7.5pt;font-weight:900;white-space:nowrap}
+.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}
+.preview-bar span{color:#a78bfa;font-size:12px}
+.preview-bar b{color:#e2e8f0;font-size:13px}
+.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+.label-preview{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:20px;padding-bottom:80px}
+.label-preview .label{border:1px dashed #ccc;border-radius:2px}
+@media print{.preview-bar{display:none!important}.label-preview{padding:0;gap:0}.label-preview .label{border:none}body{background:#fff}}
+</style></head><body>
+<div class="label-preview">${labels.join("\n")}</div>
+<div class="preview-bar">
+<div><span>Etiqueta 33x21mm (${isQR ? "QR Code" : "Codigo de barras"})</span><br><b>${selected.length} produto${selected.length > 1 ? "s" : ""}</b></div>
+<button onclick="window.print()">Imprimir</button>
+</div>
+${!isQR ? `<script>
+document.querySelectorAll('.barcode').forEach(function(el){
+  var code=el.getAttribute('data-code');
+  try{JsBarcode(el,code,{format:"${jsFormat}",width:1.2,height:28,margin:0,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}
+  catch(e){try{JsBarcode(el,code,{format:"CODE128",width:1,height:28,margin:0,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}catch(e2){}}
+});
+<\/script>` : ''}
+</body></html>`;
+
+    const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); }
-    toast.success(`${selected.length} etiqueta(s) enviada(s) para impressao`);
+    toast.success(`${selected.length} etiqueta(s) abertas para impressao`);
   }
 
-  const currentPreset = LABEL_PRESETS.find(p => p.id === presetId);
+  const allSelected = filtered.length > 0 && filtered.every(p => selectedIds.includes(p.id));
 
   return (
     <View style={s.container}>
-
-      {/* ── Preset selector ── */}
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Tamanho da etiqueta</Text>
-        <Text style={s.sectionHint}>Escolha o preset compativel com sua impressora. A configuracao fica salva.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingVertical: 4 }}>
-          {LABEL_PRESETS.map(p => (
-            <Pressable key={p.id} onPress={() => handlePresetChange(p.id)} style={[s.presetChip, presetId === p.id && s.presetChipActive]}>
-              <Text style={[s.presetSize, presetId === p.id && s.presetSizeActive]}>{p.id === 'a4' ? 'A4' : `${p.width}x${p.height}`}</Text>
-              <Text style={[s.presetName, presetId === p.id && s.presetNameActive]} numberOfLines={1}>{p.name.split('(')[1]?.replace(')', '') || p.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {currentPreset && (
-          <View style={s.presetInfo}>
-            <Text style={s.presetInfoText}>Configurado: {currentPreset.name} — {currentPreset.columns} colunas por linha</Text>
-          </View>
-        )}
+      {/* Header: format 33x21mm + mode toggle */}
+      <View style={s.header}>
+        <View>
+          <Text style={s.title}>Etiquetas 33x21mm</Text>
+          <Text style={s.hint}>Selecione os produtos e clique em imprimir. Otimizado para Bematech.</Text>
+        </View>
+        <View style={s.modeToggle}>
+          <Pressable onPress={() => setMode("barcode")} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}>
+            <Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>Cod. barras</Text>
+          </Pressable>
+          <Pressable onPress={() => setMode("qr")} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}>
+            <Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text>
+          </Pressable>
+        </View>
       </View>
 
-      {/* ── Tipo + busca ── */}
-      <View style={s.section}>
-        <View style={s.row}>
-          <Text style={s.sectionTitle}>Selecionar produtos</Text>
-          <View style={s.typeToggle}>
-            <Pressable onPress={() => setLabelType('barcode')} style={[s.typeBtn, labelType === 'barcode' && s.typeBtnActive]}>
-              <Text style={[s.typeText, labelType === 'barcode' && s.typeTextActive]}>Cod. barras</Text>
-            </Pressable>
-            <Pressable onPress={() => setLabelType('qr')} style={[s.typeBtn, labelType === 'qr' && s.typeBtnActive]}>
-              <Text style={[s.typeText, labelType === 'qr' && s.typeTextActive]}>QR Code</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Search */}
+      {/* Search + select all */}
+      <View style={s.toolbar}>
         <View style={s.searchBox}>
           <Icon name="search" size={14} color={Colors.ink3} />
-          <TextInput
-            style={s.searchInput}
-            placeholder="Buscar por nome, codigo ou categoria..."
-            placeholderTextColor={Colors.ink3}
-            value={search}
-            onChangeText={handleSearch}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => handleSearch('')}>
-              <Icon name="x" size={12} color={Colors.ink3} />
-            </Pressable>
-          )}
+          <TextInput style={s.searchInput} placeholder="Buscar produto..." placeholderTextColor={Colors.ink3}
+            value={search} onChangeText={setSearch} />
+          {search.length > 0 && <Pressable onPress={() => setSearch("")}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
         </View>
-
-        {/* Category pills */}
-        {categories.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingVertical: 4, marginTop: 6 }}>
-            <Pressable
-              onPress={() => handleCategory(null)}
-              style={[s.catPill, !categoryFilter && s.catPillActive]}
-            >
-              <Text style={[s.catPillText, !categoryFilter && s.catPillTextActive]}>Todas</Text>
-            </Pressable>
-            {categories.map(cat => (
-              <Pressable
-                key={cat}
-                onPress={() => handleCategory(categoryFilter === cat ? null : cat)}
-                style={[s.catPill, categoryFilter === cat && s.catPillActive]}
-              >
-                <Text style={[s.catPillText, categoryFilter === cat && s.catPillTextActive]} numberOfLines={1}>{cat}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
+        <Pressable onPress={toggleAll} style={s.selectAllBtn}>
+          <Text style={s.selectAllText}>{allSelected ? "Desmarcar" : "Selecionar"} todos ({filtered.length})</Text>
+        </Pressable>
       </View>
 
-      {/* ── Barra de status/seleção ── */}
-      <View style={s.statusBar}>
-        <Text style={s.statusText}>
-          {filtered.length} produto{filtered.length !== 1 ? 's' : ''}
-          {search || categoryFilter ? ' encontrados' : ''}
-          {' · '}
-          <Text style={{ color: Colors.violet3, fontWeight: '700' }}>{selectedIds.length} selecionados</Text>
-        </Text>
-        <View style={s.statusActions}>
-          <Pressable onPress={togglePage} style={s.statusBtn}>
-            <Text style={s.statusBtnText}>
-              {allPageSelected ? 'Desmarcar página' : `Pg. (${pageItems.length})`}
-            </Text>
-          </Pressable>
-          {filtered.length > PAGE_SIZE && (
-            <Pressable onPress={toggleFiltered} style={s.statusBtn}>
-              <Text style={s.statusBtnText}>
-                {allFilteredSelected ? 'Desmarcar filtro' : `Todos filtrados (${filtered.length})`}
-              </Text>
-            </Pressable>
-          )}
-          {selectedIds.length > 0 && (
-            <Pressable onPress={clearSelection} style={[s.statusBtn, { borderColor: Colors.red || '#ef4444' }]}>
-              <Text style={[s.statusBtnText, { color: Colors.red || '#ef4444' }]}>Limpar</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      {/* ── Lista ── */}
+      {/* Product list */}
       <View style={s.list}>
-        {pageItems.length === 0 && (
+        {filtered.length === 0 && (
           <Text style={s.emptyText}>
-            {productsWithCode.length === 0
-              ? 'Nenhum produto com codigo cadastrado'
-              : 'Nenhum produto encontrado para esse filtro'}
+            {productsWithCode.length === 0 ? "Nenhum produto com codigo cadastrado" : "Nenhum produto encontrado"}
           </Text>
         )}
-        {pageItems.map(p => {
+        {filtered.map(p => {
           const selected = selectedIds.includes(p.id);
           return (
             <Pressable key={p.id} onPress={() => toggleSelect(p.id)} style={[s.item, selected && s.itemSelected]}>
@@ -243,145 +195,57 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
-                <Text style={s.itemMeta} numberOfLines={1}>
-                  {p.barcode || p.code}
-                  {p.category ? ` · ${p.category}` : ''}
-                  {(p as any).size ? ` · ${(p as any).size}` : ''}
-                </Text>
+                <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code}</Text>
               </View>
-              <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace('.', ',')}</Text>
+              <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      {/* ── Paginação ── */}
-      {totalPages > 1 && (
-        <View style={s.pagination}>
-          <Pressable
-            onPress={() => setPage(p => Math.max(0, p - 1))}
-            style={[s.pageBtn, safePage === 0 && s.pageBtnDisabled]}
-            disabled={safePage === 0}
-          >
-            <Icon name="chevron_left" size={14} color={safePage === 0 ? Colors.ink3 : Colors.violet3} />
-          </Pressable>
-
-          {/* Página atual e vizinhas */}
-          {Array.from({ length: totalPages }, (_, i) => i)
-            .filter(i => Math.abs(i - safePage) <= 2 || i === 0 || i === totalPages - 1)
-            .reduce<(number | '...')[]>((acc, i, idx, arr) => {
-              if (idx > 0 && (i as number) - (arr[idx - 1] as number) > 1) acc.push('...');
-              acc.push(i);
-              return acc;
-            }, [])
-            .map((item, idx) =>
-              item === '...'
-                ? <Text key={`ellipsis-${idx}`} style={s.pageEllipsis}>…</Text>
-                : (
-                  <Pressable
-                    key={item}
-                    onPress={() => setPage(item as number)}
-                    style={[s.pageNum, safePage === item && s.pageNumActive]}
-                  >
-                    <Text style={[s.pageNumText, safePage === item && s.pageNumTextActive]}>
-                      {(item as number) + 1}
-                    </Text>
-                  </Pressable>
-                )
-            )
-          }
-
-          <Pressable
-            onPress={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            style={[s.pageBtn, safePage === totalPages - 1 && s.pageBtnDisabled]}
-            disabled={safePage === totalPages - 1}
-          >
-            <Icon name="chevron_right" size={14} color={safePage === totalPages - 1 ? Colors.ink3 : Colors.violet3} />
-          </Pressable>
-
-          <Text style={s.pageInfo}>{safePage + 1}/{totalPages}</Text>
-        </View>
-      )}
-
-      {/* ── Botão imprimir ── */}
-      <Pressable
-        onPress={handlePrint}
-        style={[s.printBtn, selectedIds.length === 0 && { opacity: 0.5 }]}
-        disabled={selectedIds.length === 0}
-      >
+      {/* Print button */}
+      <Pressable onPress={handlePrint} style={[s.printBtn, selectedIds.length === 0 && { opacity: 0.5 }]} disabled={selectedIds.length === 0}>
         <Icon name="file_text" size={16} color="#fff" />
         <Text style={s.printBtnText}>Imprimir {selectedIds.length} etiqueta(s)</Text>
       </Pressable>
+
+      {/* Setup hint */}
+      <View style={s.setupHint}>
+        <Icon name="alert" size={12} color={Colors.amber} />
+        <Text style={s.setupText}>Nas configuracoes da impressora Bematech, defina o tamanho do papel como 33x21mm. No Chrome: Ctrl+P → Mais configuracoes → Margens: Nenhuma → Escala: 100%.</Text>
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { gap: 12 },
-  section: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 6 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.ink },
-  sectionHint: { fontSize: 11, color: Colors.ink3 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-
-  // Preset
-  presetChip: { backgroundColor: Colors.bg4, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', minWidth: 90 },
-  presetChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
-  presetSize: { fontSize: 14, fontWeight: '800', color: Colors.ink3, marginBottom: 2 },
-  presetSizeActive: { color: Colors.violet3 },
-  presetName: { fontSize: 9, color: Colors.ink3, fontWeight: '500' },
-  presetNameActive: { color: Colors.violet3 },
-  presetInfo: { backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: Colors.border2 },
-  presetInfoText: { fontSize: 10, color: Colors.violet3, fontWeight: '500' },
-
-  // Search
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
-  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, outlineStyle: 'none' } as any,
-
-  // Category pills
-  catPill: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
-  catPillActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
-  catPillText: { fontSize: 11, color: Colors.ink3, fontWeight: '500' },
-  catPillTextActive: { color: Colors.violet3, fontWeight: '700' },
-
-  // Toggle type
-  typeToggle: { flexDirection: 'row', gap: 4, backgroundColor: Colors.bg, borderRadius: 8, padding: 3 },
-  typeBtn: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 6 },
-  typeBtnActive: { backgroundColor: Colors.violet },
-  typeText: { fontSize: 11, color: Colors.ink3, fontWeight: '500' },
-  typeTextActive: { color: '#fff', fontWeight: '600' },
-
-  // Status bar
-  statusBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingHorizontal: 4 },
-  statusText: { fontSize: 12, color: Colors.ink3 },
-  statusActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  statusBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2 },
-  statusBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: '600' },
-
-  // List
-  list: { gap: 3, backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 10, backgroundColor: Colors.bg },
+  header: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 },
+  title: { fontSize: 16, fontWeight: "700", color: Colors.ink },
+  hint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  modeToggle: { flexDirection: "row", gap: 4, backgroundColor: Colors.bg, borderRadius: 8, padding: 3 },
+  modeBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
+  modeBtnActive: { backgroundColor: Colors.violet },
+  modeText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  modeTextActive: { color: "#fff", fontWeight: "600" },
+  toolbar: { flexDirection: "row", gap: 8, alignItems: "center" },
+  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
+  searchInput: { flex: 1, fontSize: 13, color: Colors.ink } as any,
+  selectAllBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
+  selectAllText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  list: { gap: 3, backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, maxHeight: 400 },
+  item: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: Colors.bg },
   itemSelected: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
-  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   checkboxSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  itemName: { fontSize: 13, color: Colors.ink, fontWeight: '500' },
-  itemMeta: { fontSize: 10, color: Colors.ink3, marginTop: 1, fontFamily: 'monospace' },
-  itemPrice: { fontSize: 13, color: Colors.ink, fontWeight: '700', flexShrink: 0 },
-  emptyText: { fontSize: 12, color: Colors.ink3, textAlign: 'center', paddingVertical: 16 },
-
-  // Pagination
-  pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, flexWrap: 'wrap' },
-  pageBtn: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  pageBtnDisabled: { opacity: 0.4 },
-  pageNum: { minWidth: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 4 },
-  pageNumActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  pageNumText: { fontSize: 13, color: Colors.ink3, fontWeight: '600' },
-  pageNumTextActive: { color: '#fff' },
-  pageEllipsis: { fontSize: 13, color: Colors.ink3, paddingHorizontal: 2, alignSelf: 'center' },
-  pageInfo: { fontSize: 11, color: Colors.ink3, marginLeft: 4 },
-
-  // Print button
-  printBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13 },
-  printBtnText: { fontSize: 14, color: '#fff', fontWeight: '700' },
+  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  itemCode: { fontSize: 10, color: Colors.ink3, marginTop: 1, fontFamily: "monospace" as any },
+  itemPrice: { fontSize: 13, color: Colors.green, fontWeight: "700", flexShrink: 0 },
+  emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
+  printBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14 },
+  printBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
+  setupHint: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
+  setupText: { fontSize: 10, color: Colors.amber, flex: 1, lineHeight: 16 },
 });
 
 export default PrintLabels;
