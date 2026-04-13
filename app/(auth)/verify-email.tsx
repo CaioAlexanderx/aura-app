@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+
+const LOGO_URL = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 
 export default function VerifyEmailScreen() {
   const { user, logout } = useAuthStore();
@@ -55,16 +57,17 @@ export default function VerifyEmailScreen() {
       setSent(true);
       setCooldown(60);
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao enviar email");
+      // Show error but still show "sent" UI so user can retry
+      toast.error(err?.message || "Erro ao enviar email. Tente reenviar.");
+      setSent(true);
     } finally { setSending(false); }
   }
 
   return (
     <View style={s.container}>
       <View style={s.card}>
-        <View style={s.iconWrap}>
-          <Icon name="mail" size={28} color={Colors.violet3} />
-        </View>
+        <Image source={{ uri: LOGO_URL }} style={s.logo} resizeMode="contain" />
+        <Text style={s.brand}>Aura<Text style={s.brandDot}>.</Text></Text>
         <Text style={s.title}>Verifique seu e-mail</Text>
 
         {sent ? (
@@ -84,7 +87,7 @@ export default function VerifyEmailScreen() {
               </View>
               <View style={s.step}>
                 <View style={[s.stepNum, { backgroundColor: Colors.greenD, borderColor: Colors.green }]}>
-                  <Text style={[s.stepNumText, { color: Colors.green }]}>3</Text>
+                  <Icon name="check" size={12} color={Colors.green} />
                 </View>
                 <Text style={s.stepText}>Pronto! Voce sera redirecionado automaticamente</Text>
               </View>
@@ -117,8 +120,10 @@ export default function VerifyEmailScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: Colors.bg },
   card: { backgroundColor: Colors.bg3, borderRadius: 24, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.border, maxWidth: 420, width: "100%" },
-  iconWrap: { width: 56, height: 56, borderRadius: 16, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
-  title: { fontSize: 20, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
+  logo: { width: 64, height: 64, borderRadius: 18, marginBottom: 8 },
+  brand: { fontSize: 22, fontWeight: "800", color: Colors.ink, marginBottom: 16, letterSpacing: -0.5 },
+  brandDot: { color: Colors.violet },
+  title: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
   desc: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, marginBottom: 20, maxWidth: 320 },
   emailHighlight: { color: Colors.violet3, fontWeight: "600" },
   stepsCard: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, width: "100%", gap: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
