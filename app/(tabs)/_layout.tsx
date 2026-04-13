@@ -13,7 +13,7 @@ import { useVerticalTheme } from "@/hooks/useVerticalTheme";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
 const NAV: NavSection[] = [
@@ -23,8 +23,8 @@ const NAV: NavSection[] = [
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},
+  { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestao Aura", ic: "shield", staff: true }]},
 ];
-
 
 
 function useWebFonts() {
@@ -92,13 +92,17 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const visibleMods = useVisibleModules();
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
+  const isStaff = (u as any)?.is_staff === true;
 
   const filteredNav = useMemo(() =>
     NAV.map(section => ({
       ...section,
-      i: section.i.filter(item => !item.mod || visibleMods.has(item.mod)),
+      i: section.i.filter(item => {
+        if (item.staff && !isStaff) return false;
+        return !item.mod || visibleMods.has(item.mod);
+      }),
     })).filter(section => section.i.length > 0),
-    [visibleMods]
+    [visibleMods, isStaff]
   );
 
   return (
@@ -163,15 +167,17 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 function MBar() {
   const C = useColors();
   const p = usePathname(), ro = useRouter();
+  const { user: u } = useAuthStore();
   const visibleMods = useVisibleModules();
   const [showMore, setShowMore] = useState(false);
+  const isStaff = (u as any)?.is_staff === true;
   const MTABS = [
     { r: "/", l: "Painel", ic: "dashboard", mod: "painel" },
     { r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },
     { r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },
     { r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },
   ];
-  const ALL_MORE = [
+  const ALL_MORE: (NavItem & { staff?: boolean })[] = [
     { r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },
     { r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" },
     { r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },
@@ -180,12 +186,15 @@ function MBar() {
     { r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" },
     { r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" },
     { r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" },
-    // N5: Configuracoes sempre acessivel no menu mobile
     { r: "/configuracoes", l: "Configuracoes", ic: "settings", mod: "configuracoes" },
+    { r: "/gestao-aura", l: "Gestao Aura", ic: "shield", staff: true },
   ];
 
   const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
-  const filteredMore = ALL_MORE.filter(t => visibleMods.has(t.mod));
+  const filteredMore = ALL_MORE.filter(t => {
+    if (t.staff) return isStaff;
+    return !t.mod || visibleMods.has(t.mod);
+  });
 
   return (
     <View style={{ position: "relative" }}>
@@ -216,7 +225,6 @@ function MBar() {
             </Pressable>
           );
         })}
-        {/* N5: Botao Mais sempre acessivel com icone correto */}
         <Pressable style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => setShowMore(!showMore)}>
           <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, showMore && { backgroundColor: C.violetD }]}>
             <Icon name="grid" size={18} color={showMore ? C.violet3 : C.ink3} />
@@ -247,7 +255,6 @@ export default function TabsLayout() {
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
-  // N5: Mobile web usa bottom nav (igual ao native) — sem sidebar
   if (w && isNarrow) return (
     <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative" } as any}>
       <ToastContainer />
@@ -258,7 +265,6 @@ export default function TabsLayout() {
     </div>
   );
 
-  // Wide web: sidebar layout
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
@@ -269,7 +275,6 @@ export default function TabsLayout() {
     </div>
   );
 
-  // Native: bottom nav
   return (
     <ErrorBoundary>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
