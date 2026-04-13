@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
+import { StepAction } from "./StepAction";
 import type { Obligation } from "./types";
 
 type Props = { obligation: Obligation; onBack: () => void; onComplete: (code: string) => void };
@@ -9,7 +11,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
   const storageKey = `aura_guide_${o.code}`;
   const isDone = o.status === "done";
   const [completed, setCompleted] = useState<number[]>(() => {
-    if (isDone && o.steps) return o.steps.map((_, i) => i); // All checked if done
+    if (isDone && o.steps) return o.steps.map((_, i) => i);
     if (typeof localStorage !== "undefined") {
       try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s) : []; } catch { return []; }
     }
@@ -22,13 +24,19 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
   const pct = steps.length > 0 ? Math.round((completed.length / steps.length) * 100) : 0;
 
   function toggle(i: number) {
-    if (isDone) return; // Can't toggle already-done obligations
+    if (isDone) return;
     setCompleted(prev => {
       const next = prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i];
       if (typeof localStorage !== "undefined") { try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {} }
       if (next.length === steps.length) setTimeout(() => onComplete(o.code), 300);
       return next;
     });
+  }
+
+  function openPortal() {
+    if (!o.portal_url) return;
+    if (Platform.OS === "web" && typeof window !== "undefined") window.open(o.portal_url, "_blank");
+    else Linking.openURL(o.portal_url);
   }
 
   return (
@@ -42,6 +50,13 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
         </View>
         <Text style={s.heroDesc}>{o.aura_action}</Text>
         {o.user_action && <Text style={s.heroUserAction}>{o.user_action}</Text>}
+        {o.portal_url && (
+          <Pressable onPress={openPortal} style={s.portalHeroBtn}>
+            <Icon name="globe" size={14} color={Colors.violet3} />
+            <Text style={s.portalHeroBtnText}>{o.portal_label || "Abrir portal oficial"}</Text>
+            <Text style={{ fontSize: 12, color: Colors.violet3 }}>{'\u2197'}</Text>
+          </Pressable>
+        )}
       </View>
 
       {!isDone && (
@@ -70,6 +85,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
                 </View>
               </View>
               {st.hint && !d && <Text style={s.stepHint}>{st.hint}</Text>}
+              <StepAction step={st} completed={d} />
             </Pressable>
           );
         })}
@@ -89,6 +105,8 @@ const s = StyleSheet.create({
   actionText: { fontSize: 11, fontWeight: "600" },
   heroDesc: { fontSize: 13, color: Colors.ink3, lineHeight: 20 },
   heroUserAction: { fontSize: 12, color: Colors.amber, fontWeight: "500" },
+  portalHeroBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2, alignSelf: "flex-start", marginTop: 4 },
+  portalHeroBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
   progressSection: { marginBottom: 20, gap: 6 },
   progressTrack: { height: 8, backgroundColor: Colors.bg4, borderRadius: 4, overflow: "hidden" },
   progressFill: { height: 8, borderRadius: 4 },

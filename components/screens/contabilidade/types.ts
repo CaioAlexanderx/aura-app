@@ -4,6 +4,16 @@ export type ObligationStatus = "done" | "progress" | "pending" | "overdue" | "fu
 export type FilterLabel = "aura_resolve" | "voce_faz";
 export type AlertLevel = "overdue" | "critical" | "warning" | "info" | null;
 
+export type Step = {
+  text: string;
+  auto: boolean;
+  hint: string;
+  portal_url?: string;
+  portal_label?: string;
+  doc_type?: "pdf" | "gif" | "link";
+  doc_note?: string;
+};
+
 export type Obligation = {
   code: string;
   name: string;
@@ -18,10 +28,10 @@ export type Obligation = {
   alert_level: AlertLevel;
   days_until_due: number | null;
   estimated_amount?: number | null;
+  portal_url?: string;
+  portal_label?: string;
   steps?: Step[];
 };
-
-export type Step = { text: string; auto: boolean; hint: string };
 
 export type CalendarResponse = {
   company: { id: string; name: string; tax_regime: string; has_employee: boolean; cnae_category: string };
@@ -50,69 +60,170 @@ export const STATUS_COLORS: Record<ObligationStatus, string> = {
   done: Colors.green, progress: Colors.violet, pending: Colors.amber, overdue: Colors.red, future: Colors.ink3,
 };
 
-// Helper: next day N of current or next month
 function nextDay(day: number): string {
   const now = new Date();
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
   if (thisMonth > now) return thisMonth.toISOString();
   return new Date(now.getFullYear(), now.getMonth() + 1, day).toISOString();
 }
-function daysUntil(iso: string): number {
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
-}
-function alertFor(days: number): AlertLevel {
-  if (days <= 3) return "critical";
-  if (days <= 7) return "warning";
-  if (days <= 15) return "info";
-  return null;
-}
+function daysUntil(iso: string): number { return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000)); }
+function alertFor(days: number): AlertLevel { if (days <= 3) return "critical"; if (days <= 7) return "warning"; if (days <= 15) return "info"; return null; }
+
+// ── Portal URLs oficiais ──
+const PORTALS = {
+  pgmei: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/Identificacao", label: "Portal PGMEI" },
+  dasn: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/dasnsimei.app/", label: "Portal DASN-SIMEI" },
+  pgdasd: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgdasd2018.app/", label: "Portal PGDAS-D" },
+  simples: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/", label: "Portal Simples Nacional" },
+  esocial: { url: "https://login.esocial.gov.br/", label: "Portal eSocial" },
+  ecac: { url: "https://cav.receita.fazenda.gov.br/", label: "e-CAC Receita Federal" },
+  regularize: { url: "https://www.regularize.pgfn.gov.br/", label: "Regularize PGFN" },
+};
 
 export function getMEIObligations(): Obligation[] {
-  const dasDue = nextDay(20);
-  const dasDays = daysUntil(dasDue);
-  const dasnDue = new Date(new Date().getFullYear(), 4, 31).toISOString(); // May 31
-  const dasnDays = daysUntil(dasnDue);
+  const dasDue = nextDay(20); const dasDays = daysUntil(dasDue);
+  const dasnDue = new Date(new Date().getFullYear(), 4, 31).toISOString(); const dasnDays = daysUntil(dasnDue);
   return [
-    { code: "das_mei", name: "Pagar DAS-MEI", frequency: "mensal", due_date: dasDue, filter_label: "aura_resolve", aura_action: "Aura calcula e gera QR Code Pix. Voce so precisa pagar.", user_action: "Escanear QR Code e pagar", status: "pending", checkpoint_done: 0, checkpoint_total: 3, alert_level: alertFor(dasDays), days_until_due: dasDays, estimated_amount: 75.90,
-      steps: [{ text: "Aura calcula o valor do DAS", auto: true, hint: "INSS + ISS/ICMS" }, { text: "QR Code Pix gerado", auto: true, hint: "Escaneie com app bancario" }, { text: "Confirme o pagamento", auto: false, hint: "Apos pagar, marque como concluido" }] },
-    { code: "dasn_simei", name: "DASN-SIMEI (declaracao anual)", frequency: "anual", due_date: dasnDue, filter_label: "voce_faz", aura_action: "Aura pre-preenche com seu faturamento anual.", user_action: "Transmitir no portal do Simples Nacional", status: "future", checkpoint_done: 0, checkpoint_total: 4, alert_level: null, days_until_due: dasnDays,
-      steps: [{ text: "Aura consolida faturamento anual", auto: true, hint: "Soma de todas as notas" }, { text: "Acesse portal Simples Nacional", auto: false, hint: "simplesnacional.receita.fazenda.gov.br" }, { text: "Confira valores pre-preenchidos", auto: false, hint: "Compare com Aura" }, { text: "Clique Transmitir", auto: false, hint: "Pronto!" }] },
+    {
+      code: "das_mei", name: "Pagar DAS-MEI", frequency: "mensal", due_date: dasDue,
+      filter_label: "aura_resolve",
+      aura_action: "Aura calcula o valor e direciona voce ao portal de pagamento.",
+      user_action: "Pagar via Pix, boleto ou debito automatico",
+      status: "pending", checkpoint_done: 0, checkpoint_total: 4,
+      alert_level: alertFor(dasDays), days_until_due: dasDays, estimated_amount: 75.90,
+      portal_url: PORTALS.pgmei.url, portal_label: PORTALS.pgmei.label,
+      steps: [
+        { text: "Aura calcula o valor do DAS (INSS + ISS/ICMS)", auto: true, hint: "Valor estimado com base no seu CNAE", doc_type: "pdf", doc_note: "Demonstrativo de calculo" },
+        { text: "Acesse o portal PGMEI para gerar a guia", auto: false, hint: "Informe seu CNPJ no portal", portal_url: PORTALS.pgmei.url, portal_label: "Abrir PGMEI", doc_type: "gif", doc_note: "Como acessar o PGMEI" },
+        { text: "Gere o boleto ou QR Code Pix", auto: false, hint: "Escolha a forma de pagamento", doc_type: "gif", doc_note: "Como gerar o boleto/Pix" },
+        { text: "Confirme o pagamento no app", auto: false, hint: "Marque como concluido apos pagar" },
+      ],
+    },
+    {
+      code: "dasn_simei", name: "DASN-SIMEI (declaracao anual)", frequency: "anual", due_date: dasnDue,
+      filter_label: "voce_faz",
+      aura_action: "Aura consolida seu faturamento anual. Voce confere e transmite no portal.",
+      user_action: "Transmitir no portal do Simples Nacional",
+      status: "future", checkpoint_done: 0, checkpoint_total: 5,
+      alert_level: null, days_until_due: dasnDays,
+      portal_url: PORTALS.dasn.url, portal_label: PORTALS.dasn.label,
+      steps: [
+        { text: "Aura consolida faturamento anual", auto: true, hint: "Soma de todas as notas emitidas no ano", doc_type: "pdf", doc_note: "Relatorio anual de faturamento" },
+        { text: "Acesse o portal DASN-SIMEI", auto: false, hint: "Use seu CNPJ e codigo de acesso", portal_url: PORTALS.dasn.url, portal_label: "Abrir DASN-SIMEI", doc_type: "gif", doc_note: "Como acessar a DASN" },
+        { text: "Informe CNPJ e codigo de acesso", auto: false, hint: "O codigo e obtido no portal do Simples Nacional", doc_type: "gif", doc_note: "Tela de login" },
+        { text: "Confira valores (compare com o relatorio da Aura)", auto: false, hint: "Os valores devem bater", doc_type: "gif", doc_note: "Tela de conferencia" },
+        { text: "Clique em Transmitir", auto: false, hint: "Pronto! Guarde o recibo.", doc_type: "gif", doc_note: "Botao transmitir" },
+      ],
+    },
   ];
 }
 
 export function getSNObligations(hasEmployee: boolean): Obligation[] {
-  const dasDue = nextDay(20);
-  const dasDays = daysUntil(dasDue);
-  const fgtsDue = nextDay(7);
-  const fgtsDays = daysUntil(fgtsDue);
-  const esocialDue = nextDay(15);
-  const esocialDays = daysUntil(esocialDue);
-  const defisDue = new Date(new Date().getFullYear(), 2, 31).toISOString(); // Mar 31
-  const defisDays = daysUntil(defisDue);
+  const dasDue = nextDay(20); const dasDays = daysUntil(dasDue);
+  const fgtsDue = nextDay(7); const fgtsDays = daysUntil(fgtsDue);
+  const esocialDue = nextDay(15); const esocialDays = daysUntil(esocialDue);
+  const defisDue = new Date(new Date().getFullYear(), 2, 31).toISOString(); const defisDays = daysUntil(defisDue);
 
   const obls: Obligation[] = [
-    { code: "das_sn", name: "Pagar DAS Simples", frequency: "mensal", due_date: dasDue, filter_label: "aura_resolve", aura_action: "Aura calcula o DAS com base na receita e gera a guia.", user_action: "Pagar via Pix ou boleto", status: "pending", checkpoint_done: 0, checkpoint_total: 3, alert_level: alertFor(dasDays), days_until_due: dasDays,
-      steps: [{ text: "Aura apura receita bruta do mes", auto: true, hint: "Baseado nas notas" }, { text: "Calcula DAS conforme seu anexo", auto: true, hint: "Anexo III ou V" }, { text: "Pague a guia gerada", auto: false, hint: "Pix ou boleto" }] },
-    { code: "pgdas_d", name: "PGDAS-D (transmitir)", frequency: "mensal", due_date: dasDue, filter_label: "voce_faz", aura_action: "Aura calcula o DAS estimado. Voce confere e transmite.", user_action: "Transmitir no portal PGDAS-D", status: "pending", checkpoint_done: 0, checkpoint_total: 5, alert_level: alertFor(dasDays), days_until_due: dasDays,
-      steps: [{ text: "Aura apura receita bruta", auto: true, hint: "Baseado nas notas" }, { text: "Aura calcula DAS estimado", auto: true, hint: "Conforme seu anexo" }, { text: "Acesse portal PGDAS-D", auto: false, hint: "simplesnacional.receita.fazenda.gov.br" }, { text: "Confira valores e transmita", auto: false, hint: "Compare com Aura" }, { text: "Pague o DAS gerado", auto: false, hint: "Pix ou boleto" }] },
-    { code: "prolabore", name: "Pro-labore + GPS", frequency: "mensal", due_date: dasDue, filter_label: "aura_resolve", aura_action: "Aura calcula pro-labore, INSS e gera guia GPS.", user_action: "Pagar a guia GPS", status: "pending", checkpoint_done: 0, checkpoint_total: 2, alert_level: alertFor(dasDays), days_until_due: dasDays,
-      steps: [{ text: "Aura calcula pro-labore + INSS", auto: true, hint: "Fator R considerado" }, { text: "Pague a guia GPS", auto: false, hint: "Pronta para pagar" }] },
-    { code: "defis", name: "DEFIS (declaracao anual)", frequency: "anual", due_date: defisDue, filter_label: "voce_faz", aura_action: "Aura consolida dados e pre-preenche a declaracao.", user_action: "Transmitir no portal do Simples", status: "future", checkpoint_done: 0, checkpoint_total: 4, alert_level: null, days_until_due: defisDays,
-      steps: [{ text: "Aura consolida dados do ano", auto: true, hint: "Receitas, despesas, folha" }, { text: "Acesse portal do Simples", auto: false, hint: "receita.fazenda.gov.br" }, { text: "Confira dados pre-preenchidos", auto: false, hint: "Compare com Aura" }, { text: "Transmita", auto: false, hint: "Pronto!" }] },
+    {
+      code: "das_sn", name: "Pagar DAS Simples Nacional", frequency: "mensal", due_date: dasDue,
+      filter_label: "aura_resolve",
+      aura_action: "Aura apura sua receita, calcula o DAS conforme seu anexo e gera a guia.",
+      user_action: "Pagar via Pix ou boleto",
+      status: "pending", checkpoint_done: 0, checkpoint_total: 4,
+      alert_level: alertFor(dasDays), days_until_due: dasDays,
+      portal_url: PORTALS.simples.url, portal_label: PORTALS.simples.label,
+      steps: [
+        { text: "Aura apura receita bruta do mes (notas emitidas)", auto: true, hint: "Baseado nas notas fiscais", doc_type: "pdf", doc_note: "Relatorio receita mensal" },
+        { text: "Calcula DAS conforme seu anexo (III ou V) e Fator R", auto: true, hint: "Considera pro-labore e folha", doc_type: "pdf", doc_note: "Demonstrativo calculo DAS" },
+        { text: "Gera guia DAS para pagamento", auto: true, hint: "Boleto ou Pix disponivel", doc_type: "pdf", doc_note: "Guia DAS" },
+        { text: "Pagar a guia", auto: false, hint: "Via app bancario, Pix ou boleto" },
+      ],
+    },
+    {
+      code: "pgdas_d", name: "PGDAS-D (transmitir declaracao)", frequency: "mensal", due_date: dasDue,
+      filter_label: "voce_faz",
+      aura_action: "Aura calcula o DAS estimado. Voce confere os valores e transmite no portal.",
+      user_action: "Acessar portal PGDAS-D e transmitir",
+      status: "pending", checkpoint_done: 0, checkpoint_total: 6,
+      alert_level: alertFor(dasDays), days_until_due: dasDays,
+      portal_url: PORTALS.pgdasd.url, portal_label: PORTALS.pgdasd.label,
+      steps: [
+        { text: "Aura apura receita bruta e calcula DAS estimado", auto: true, hint: "Resumo disponivel para conferencia", doc_type: "pdf", doc_note: "Resumo para conferencia" },
+        { text: "Acesse o portal PGDAS-D", auto: false, hint: "Portal da Receita Federal", portal_url: PORTALS.pgdasd.url, portal_label: "Abrir PGDAS-D", doc_type: "gif", doc_note: "Como acessar o PGDAS-D" },
+        { text: "Login com certificado digital ou codigo de acesso", auto: false, hint: "Certificado A1 ou codigo obtido no e-CAC", portal_url: PORTALS.ecac.url, portal_label: "Abrir e-CAC", doc_type: "gif", doc_note: "Tela de login" },
+        { text: "Preencha a receita bruta do periodo", auto: false, hint: "Use o valor calculado pela Aura", doc_type: "gif", doc_note: "Preenchimento receita" },
+        { text: "Confira o calculo e clique em Transmitir", auto: false, hint: "Compare com o demonstrativo da Aura", doc_type: "gif", doc_note: "Tela de transmissao" },
+        { text: "Imprima o DAS gerado e pague", auto: false, hint: "Boleto disponivel para impressao", doc_type: "gif", doc_note: "Imprimir guia" },
+      ],
+    },
+    {
+      code: "prolabore", name: "Pro-labore + GPS/DARF", frequency: "mensal", due_date: dasDue,
+      filter_label: "aura_resolve",
+      aura_action: "Aura calcula pro-labore considerando o Fator R, gera holerite e guia GPS/DARF.",
+      user_action: "Pagar a guia GPS/DARF",
+      status: "pending", checkpoint_done: 0, checkpoint_total: 3,
+      alert_level: alertFor(dasDays), days_until_due: dasDays,
+      steps: [
+        { text: "Aura calcula pro-labore minimo (Fator R)", auto: true, hint: "Pro-labore >= 28% da receita para Anexo III", doc_type: "pdf", doc_note: "Holerite socio" },
+        { text: "Calcula INSS (patronal + retido) e gera GPS/DARF", auto: true, hint: "Guia pronta para pagamento", doc_type: "pdf", doc_note: "Guia GPS/DARF" },
+        { text: "Pague a guia", auto: false, hint: "Via Pix, boleto ou debito" },
+      ],
+    },
+    {
+      code: "defis", name: "DEFIS (declaracao anual)", frequency: "anual", due_date: defisDue,
+      filter_label: "voce_faz",
+      aura_action: "Aura consolida todos os dados do ano e prepara um resumo para conferencia.",
+      user_action: "Transmitir no portal do Simples Nacional",
+      status: "future", checkpoint_done: 0, checkpoint_total: 5,
+      alert_level: null, days_until_due: defisDays,
+      portal_url: PORTALS.simples.url, portal_label: PORTALS.simples.label,
+      steps: [
+        { text: "Aura consolida dados anuais (receita, despesa, folha)", auto: true, hint: "Relatorio completo disponivel", doc_type: "pdf", doc_note: "Relatorio anual consolidado" },
+        { text: "Acesse o portal DEFIS", auto: false, hint: "Dentro do portal do Simples Nacional", portal_url: PORTALS.simples.url, portal_label: "Abrir Simples Nacional", doc_type: "gif", doc_note: "Como acessar a DEFIS" },
+        { text: "Login com certificado ou codigo de acesso", auto: false, hint: "Mesmo acesso do PGDAS-D", doc_type: "gif", doc_note: "Tela de login" },
+        { text: "Confira os dados pre-preenchidos", auto: false, hint: "Compare com o relatorio da Aura", doc_type: "gif", doc_note: "Tela de conferencia" },
+        { text: "Transmita a declaracao", auto: false, hint: "Guarde o recibo de transmissao", doc_type: "gif", doc_note: "Botao transmitir" },
+      ],
+    },
   ];
 
   if (hasEmployee) {
     obls.splice(2, 0,
-      { code: "fgts", name: "Pagar FGTS", frequency: "mensal", due_date: fgtsDue, filter_label: "aura_resolve", aura_action: "Aura calcula FGTS com base na folha e gera a guia.", user_action: "Pagar a guia", status: "pending", checkpoint_done: 0, checkpoint_total: 2, alert_level: alertFor(fgtsDays), days_until_due: fgtsDays,
-        steps: [{ text: "Aura calcula com base na folha", auto: true, hint: "8% sobre salario" }, { text: "Pague a guia gerada", auto: false, hint: "Pronta para pagar" }] },
-      { code: "esocial", name: "eSocial (enviar XML)", frequency: "mensal", due_date: esocialDue, filter_label: "voce_faz", aura_action: "Aura gera o arquivo XML. Voce envia no portal gov.br.", user_action: "Enviar XML pelo portal gov.br (5 min)", status: "pending", checkpoint_done: 0, checkpoint_total: 6, alert_level: alertFor(esocialDays), days_until_due: esocialDays,
-        steps: [{ text: "Aura prepara dados e gera XML", auto: true, hint: "Arquivo na secao Documentos" }, { text: "Acesse gov.br/esocial", auto: false, hint: "Use seu navegador" }, { text: "Faca login com Gov.br", auto: false, hint: "CPF e senha" }, { text: "Clique em Enviar arquivo", auto: false, hint: "Menu lateral" }, { text: "Selecione o XML da Aura", auto: false, hint: "Pasta Downloads" }, { text: "Confirme", auto: false, hint: "Pronto!" }] },
+      {
+        code: "fgts", name: "Pagar FGTS", frequency: "mensal", due_date: fgtsDue,
+        filter_label: "aura_resolve",
+        aura_action: "Aura calcula FGTS com base na folha de pagamento e gera a guia GRF.",
+        user_action: "Pagar a guia GRF",
+        status: "pending", checkpoint_done: 0, checkpoint_total: 2,
+        alert_level: alertFor(fgtsDays), days_until_due: fgtsDays,
+        steps: [
+          { text: "Aura calcula FGTS (8% sobre salarios da folha)", auto: true, hint: "Baseado na folha do mes", doc_type: "pdf", doc_note: "Guia GRF/FGTS" },
+          { text: "Pague a guia gerada", auto: false, hint: "Via app bancario" },
+        ],
+      },
+      {
+        code: "esocial", name: "eSocial (enviar eventos)", frequency: "mensal", due_date: esocialDue,
+        filter_label: "voce_faz",
+        aura_action: "Aura prepara os dados da folha e gera o arquivo. Voce envia pelo portal gov.br.",
+        user_action: "Enviar pelo portal eSocial (5 min)",
+        status: "pending", checkpoint_done: 0, checkpoint_total: 6,
+        alert_level: alertFor(esocialDays), days_until_due: esocialDays,
+        portal_url: PORTALS.esocial.url, portal_label: PORTALS.esocial.label,
+        steps: [
+          { text: "Aura prepara dados da folha e gera arquivo", auto: true, hint: "Arquivo disponivel na secao Documentos", doc_type: "pdf", doc_note: "Arquivo XML + guia de envio" },
+          { text: "Acesse o portal eSocial", auto: false, hint: "Portal do governo federal", portal_url: PORTALS.esocial.url, portal_label: "Abrir eSocial", doc_type: "gif", doc_note: "Pagina inicial eSocial" },
+          { text: "Faca login com Gov.br (CPF + senha)", auto: false, hint: "Use suas credenciais Gov.br", doc_type: "gif", doc_note: "Tela de login Gov.br" },
+          { text: "Navegue ate Enviar arquivo/evento", auto: false, hint: "Menu lateral do portal", doc_type: "gif", doc_note: "Navegacao no menu" },
+          { text: "Selecione o arquivo gerado pela Aura", auto: false, hint: "Na pasta Downloads do seu computador", doc_type: "gif", doc_note: "Selecao de arquivo" },
+          { text: "Confirme o envio e salve o recibo", auto: false, hint: "Guarde o numero do recibo", doc_type: "gif", doc_note: "Confirmacao de envio" },
+        ],
+      },
     );
   }
 
   return obls;
 }
 
-// Keep old exports for backward compat
 export const MEI_OBLIGATIONS = getMEIObligations();
 export const SN_OBLIGATIONS = getSNObligations(false);
