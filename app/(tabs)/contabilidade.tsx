@@ -10,6 +10,7 @@ import { Guide } from "@/components/screens/contabilidade/Guide";
 import { GuidesList } from "@/components/screens/contabilidade/GuidesList";
 import { HistoryTab } from "@/components/screens/contabilidade/HistoryTab";
 import { TABS, AURA_AUTO_FEATURES } from "@/components/screens/contabilidade/types";
+import { AgentBanner } from "@/components/AgentBanner";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -22,11 +23,9 @@ export default function ContabilidadeScreen() {
 
   const selectedObl = guideCode ? obligations.find(o => o.code === guideCode) : null;
   const autoFeatures = AURA_AUTO_FEATURES[regime === "mei" ? "mei" : "simples"] || [];
-
   const timelinePending = obligations.filter(o => o.status !== "done" && o.status !== "future").sort((a, b) => (a.days_until_due ?? 999) - (b.days_until_due ?? 999));
   const timelineDone = obligations.filter(o => o.status === "done");
   const timelineFuture = obligations.filter(o => o.status === "future");
-  const timeline = [...timelinePending, ...timelineDone, ...timelineFuture];
 
   function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
   function openGuide(code: string) { setGuideCode(code); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
@@ -43,43 +42,39 @@ export default function ContabilidadeScreen() {
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
       <Text style={s.pageTitle}>Contabilidade</Text>
 
+      <AgentBanner context="contabil" />
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
         {TABS.map((t, i) => <Pressable key={t} onPress={() => handleTabSelect(i)} style={[s.tab, tab === i && s.tabActive]}><Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text></Pressable>)}
       </ScrollView>
 
       {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {/* Tab 0: Visao Geral */}
       {tab === 0 && (
         <View>
           <FiscalHero regimeLabel={regimeLabel} actionable={total} done={done} pending={pending} overdue={overdue} />
-
           {timelinePending.length > 0 && (
             <View style={{ marginBottom: 8 }}>
               <Text style={s.sectionTitle}>Suas obrigacoes</Text>
               <ObligationTimeline items={timelinePending} onGuide={openGuide} />
             </View>
           )}
-
           {timelineDone.length > 0 && (
             <View style={{ marginBottom: 8 }}>
               <View style={s.sectionHeader}><Text style={s.sectionTitle}>Concluidas</Text><Text style={s.sectionCount}>{timelineDone.length}</Text></View>
               <ObligationTimeline items={timelineDone} onGuide={openGuide} />
             </View>
           )}
-
           {timelineFuture.length > 0 && (
             <View style={{ marginBottom: 8 }}>
               <Text style={[s.sectionTitle, { color: Colors.ink3 }]}>Futuras</Text>
               <ObligationTimeline items={timelineFuture} onGuide={openGuide} />
             </View>
           )}
-
           <AuraAutoSection features={autoFeatures} />
         </View>
       )}
-
-      {tab === 1 && <ObligationTimeline items={timeline} onGuide={openGuide} />}
+      {tab === 1 && <ObligationTimeline items={[...timelinePending, ...timelineDone, ...timelineFuture]} onGuide={openGuide} />}
       {tab === 2 && <GuidesList auraResolve={auraResolve} voceFaz={voceFaz} onSelect={openGuide} />}
       {tab === 3 && <HistoryTab />}
 
