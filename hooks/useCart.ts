@@ -5,7 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 export type CartItem = { productId: string; name: string; price: number; qty: number };
-export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string };
+export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string; couponCode?: string; couponDiscount?: number };
 
 export const PAYMENTS = [
   { key: "pix", label: "Pix" },
@@ -29,9 +29,10 @@ export function useCart() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
 
-  // BUGFIX P1 #1+#2: Use pdvApi.createSale directly (no fallback).
-  // Backend POST /pdv/sale handles: sale + items + stock decrement + customer metrics + employee metrics.
-  // No redundant stock decrement call needed.
+  // P2 #12: Coupon support
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
+
   const saleMutation = useMutation({
     mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
     onSuccess: () => {
@@ -45,6 +46,7 @@ export function useCart() {
 
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
+  const totalAfterCoupon = couponApplied ? Math.max(0, total - couponApplied.discount) : total;
 
   function addToCart(product: { id: string; name: string; price: number }) {
     setLastSale(null);
@@ -53,11 +55,14 @@ export function useCart() {
       if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { productId: product.id, name: product.name, price: product.price, qty: 1 }];
     });
+    // Reset coupon when cart changes
+    if (couponApplied) setCouponApplied(null);
   }
 
   function setQty(productId: string, qty: number) {
     if (qty <= 0) { setCart(prev => prev.filter(i => i.productId !== productId)); return; }
     setCart(prev => prev.map(i => i.productId === productId ? { ...i, qty } : i));
+    if (couponApplied) setCouponApplied(null);
   }
 
   function updateQty(productId: string, delta: number) {
@@ -66,10 +71,12 @@ export function useCart() {
       const newQty = i.qty + delta;
       return newQty > 0 ? { ...i, qty: newQty } : i;
     }));
+    if (couponApplied) setCouponApplied(null);
   }
 
   function removeItem(productId: string) {
     setCart(prev => prev.filter(i => i.productId !== productId));
+    if (couponApplied) setCouponApplied(null);
   }
 
   function selectCustomer(id: string | null, name: string | null) {
@@ -82,12 +89,17 @@ export function useCart() {
     setSelectedEmployeeName(name);
   }
 
+  function clearCoupon() {
+    setCouponCode("");
+    setCouponApplied(null);
+  }
+
   function finalizeSale() {
     if (cart.length === 0 || isProcessing) return;
     setIsProcessing(true);
 
     const cartSnapshot = [...cart];
-    const saleData = {
+    const saleData: any = {
       items: cartSnapshot.map(i => ({
         product_id: i.productId,
         quantity: i.qty,
@@ -99,21 +111,27 @@ export function useCart() {
       employee_id: selectedEmployeeId || undefined,
     };
 
+    // Include coupon if applied
+    if (couponApplied?.code) {
+      saleData.coupon_code = couponApplied.code;
+    }
+
     if (companyId && !isDemo) {
       saleMutation.mutate(saleData, {
         onSuccess: (res: any) => {
           const saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
           setLastSale({
-            id: String(saleId), total, payment, items: cartSnapshot,
+            id: String(saleId), total: totalAfterCoupon, payment, items: cartSnapshot,
             date: new Date().toLocaleString("pt-BR"),
             customerName: selectedCustomerName || undefined,
             employeeName: selectedEmployeeName || undefined,
+            couponCode: couponApplied?.code,
+            couponDiscount: couponApplied?.discount,
           });
           setCart([]);
           toast.success("Venda registrada!");
-          // Stock decrement is handled by backend inside the sale transaction.
-          // DO NOT call companiesApi.updateProduct here (would cause double decrement).
           setIsProcessing(false);
+          clearCoupon();
         },
         onError: (err: any) => {
           toast.error(err?.message || "Erro ao registrar venda");
@@ -122,7 +140,7 @@ export function useCart() {
       });
     } else {
       setLastSale({
-        id: Date.now().toString(36).toUpperCase().slice(-6), total, payment, items: cartSnapshot,
+        id: Date.now().toString(36).toUpperCase().slice(-6), total: totalAfterCoupon, payment, items: cartSnapshot,
         date: new Date().toLocaleString("pt-BR"),
         customerName: selectedCustomerName || undefined,
         employeeName: selectedEmployeeName || undefined,
@@ -139,12 +157,14 @@ export function useCart() {
     setSelectedCustomerName(null);
     setSelectedEmployeeId(null);
     setSelectedEmployeeName(null);
+    clearCoupon();
   }
 
   return {
-    cart, payment, setPayment, lastSale, total, itemCount, isProcessing,
+    cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
   };
 }
