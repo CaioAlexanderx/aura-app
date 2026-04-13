@@ -6,10 +6,12 @@ import { useCart } from "@/hooks/useCart";
 import { useCustomers } from "@/hooks/useCustomers";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/components/Toast";
+import { Icon } from "@/components/Icon";
 import { ProductCard } from "@/components/screens/pdv/ProductCard";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
 import { ScannerBar } from "@/components/screens/pdv/ScannerBar";
+import { QuickCustomerModal } from "@/components/QuickCustomerModal";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/Pagination";
 import { employeesApi } from "@/services/api";
@@ -43,6 +45,7 @@ export default function PdvScreen() {
   const IS_WIDE = useIsWide();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
 
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
@@ -69,6 +72,10 @@ export default function PdvScreen() {
 
   function emitNfe() { toast.info("Emissao de NF-e sera integrada apos configuracao do provedor."); }
 
+  function handleCustomerCreated(c: { id: string; name: string; phone: string }) {
+    selectCustomer(c.id, c.name);
+  }
+
   if (lastSale) {
     if (IS_WIDE) return <View style={s.webRoot}><View style={{ flex: 1 }}><SaleComplete sale={lastSale} onNewSale={newSale} onEmitNfe={emitNfe} /></View></View>;
     return <SaleComplete sale={lastSale} onNewSale={newSale} onEmitNfe={emitNfe} />;
@@ -77,8 +84,16 @@ export default function PdvScreen() {
   const productGrid = (
     <View>
       <ScannerBar onScan={handleScan} />
-      <TextInput style={s.searchInput} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+      <View style={s.searchRow}>
+        <TextInput style={[s.searchInput, { flex: 1 }]} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+        {/* P0 #7: Quick customer registration button */}
+        <Pressable onPress={() => setShowNewCustomer(true)} style={s.newCustomerBtn}>
+          <Icon name="user_plus" size={15} color={Colors.violet3} />
+          <Text style={s.newCustomerText}>Novo cliente</Text>
+        </Pressable>
+      </View>
+      {/* P0 #1: paddingRight ensures last category chip is fully visible */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}>
         {categories.map(c => <Pressable key={c} onPress={() => setCategory(c)} style={[s.catChip, category === c && s.catChipActive]}><Text style={[s.catChipText, category === c && s.catChipTextActive]}>{c}</Text></Pressable>)}
       </ScrollView>
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
@@ -109,6 +124,7 @@ export default function PdvScreen() {
       <View style={{ width: 380, borderLeftWidth: 1, borderLeftColor: Colors.border, backgroundColor: Colors.bg2 }}>
         <CartPanel {...cartPanelProps} />
       </View>
+      <QuickCustomerModal visible={showNewCustomer} onClose={() => setShowNewCustomer(false)} onCustomerCreated={handleCustomerCreated} />
     </View>
   );
 
@@ -118,6 +134,7 @@ export default function PdvScreen() {
       {productGrid}
       <CartPanel {...cartPanelProps} />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
+      <QuickCustomerModal visible={showNewCustomer} onClose={() => setShowNewCustomer(false)} onCustomerCreated={handleCustomerCreated} />
     </ScrollView>
   );
 }
@@ -125,7 +142,10 @@ export default function PdvScreen() {
 const s = StyleSheet.create({
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
   webRoot: { flex: 1, flexDirection: "row", backgroundColor: "transparent" },
-  searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 12 },
+  searchRow: { flexDirection: "row", gap: 8, marginBottom: 12, alignItems: "center" },
+  searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
+  newCustomerBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
+  newCustomerText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   catChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   catChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   catChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
