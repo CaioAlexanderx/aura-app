@@ -1,92 +1,105 @@
 import { useState } from "react";
-import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
+import { request } from "@/services/api";
 
-type AgentInsight = {
-  title: string;
-  desc: string;
-  action: string;
-  actionLabel: string;
-  priority: "high" | "medium" | "low";
-  icon: string;
-};
-
-type Props = {
+type Insight = {
+  id: string;
+  severity: "critical" | "warning" | "info";
   agent: string;
-  insight: AgentInsight;
-  onAction?: () => void;
+  title: string;
+  description: string;
+  action?: { type: string; target: string; label: string; params?: any };
 };
 
-export function AgentBanner({ agent, insight, onAction }: Props) {
-  const { company } = useAuthStore();
-  const [dismissed, setDismissed] = useState(false);
-  const [h, sH] = useState(false);
-  const w = Platform.OS === "web";
+const SEVERITY = {
+  critical: { bg: Colors.redD, border: Colors.red + "33", icon: "alert", iconColor: Colors.red },
+  warning:  { bg: Colors.amberD, border: Colors.amber + "33", icon: "alert", iconColor: Colors.amber },
+  info:     { bg: Colors.violetD, border: Colors.border2, icon: "star", iconColor: Colors.violet3 },
+};
 
-  // Only show for Negocio+ plans (or demo)
-  const plan = company?.plan || "essencial";
-  if (plan === "essencial") return null;
-  if (dismissed) return null;
-
-  const pc = insight.priority === "high" ? Colors.red : insight.priority === "medium" ? Colors.amber : Colors.green;
-  const pcBg = insight.priority === "high" ? Colors.redD : insight.priority === "medium" ? Colors.amberD : Colors.greenD;
-
+function InsightCard({ insight, onDismiss }: { insight: Insight; onDismiss: () => void }) {
+  const sev = SEVERITY[insight.severity] || SEVERITY.info;
   return (
-    <Pressable
-      onHoverIn={w ? () => sH(true) : undefined}
-      onHoverOut={w ? () => sH(false) : undefined}
-      style={[s.banner, h && { borderColor: Colors.border2, transform: [{ translateY: -1 }] }, w && { transition: "all 0.2s ease" } as any]}
-    >
-      <View style={s.row}>
-        <View style={[s.icon, { backgroundColor: pc + "18" }]}>
-          <Icon name={insight.icon as any} size={18} color={pc} />
-        </View>
-        <View style={s.info}>
-          <View style={s.topRow}>
-            <View style={s.agentTag}>
-              <Icon name="star" size={10} color={Colors.violet3} />
-              <Text style={s.agentLabel}>Agente {agent}</Text>
-            </View>
-            <View style={[s.priorityBadge, { backgroundColor: pcBg }]}>
-              <Text style={[s.priorityText, { color: pc }]}>{insight.priority === "high" ? "Urgente" : insight.priority === "medium" ? "Atenção" : "Info"}</Text>
-            </View>
-          </View>
-          <Text style={s.title}>{insight.title}</Text>
-          <Text style={s.desc} numberOfLines={2}>{insight.desc}</Text>
-        </View>
+    <View style={[z.card, { backgroundColor: sev.bg, borderColor: sev.border }]}>
+      <View style={z.cardIcon}>
+        <Icon name={sev.icon as any} size={16} color={sev.iconColor} />
       </View>
-      <View style={s.actions}>
-        <Pressable onPress={onAction} style={s.actionBtn}>
-          <Text style={s.actionText}>{insight.actionLabel}</Text>
-          <Icon name="chevron_right" size={14} color="#fff" />
-        </Pressable>
-        <Pressable onPress={() => setDismissed(true)} style={s.dismissBtn}>
-          <Text style={s.dismissText}>Dispensar</Text>
-        </Pressable>
+      <View style={z.cardContent}>
+        <View style={z.cardHeader}>
+          <Text style={[z.agent, { color: sev.iconColor }]}>{insight.agent}</Text>
+          <Pressable onPress={onDismiss} hitSlop={8}>
+            <Text style={z.dismiss}>x</Text>
+          </Pressable>
+        </View>
+        <Text style={z.title}>{insight.title}</Text>
+        <Text style={z.desc}>{insight.description}</Text>
+        {insight.action && (
+          <Pressable
+            onPress={() => {
+              if (insight.action?.type === "navigate" && insight.action.target) {
+                router.push(("/(tabs)" + insight.action.target) as any);
+              }
+            }}
+            style={[z.actionBtn, { borderColor: sev.iconColor + "44" }]}
+          >
+            <Text style={[z.actionText, { color: sev.iconColor }]}>{insight.action.label}</Text>
+            <Icon name="chevron_right" size={12} color={sev.iconColor} />
+          </Pressable>
+        )}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
-const s = StyleSheet.create({
-  banner: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
-  row: { flexDirection: "row", gap: 12 },
-  icon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  info: { flex: 1, gap: 4 },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
-  agentTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  agentLabel: { fontSize: 9, fontWeight: "700", color: Colors.violet3, letterSpacing: 0.3 },
-  priorityBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  priorityText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.3 },
-  title: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+export function AgentBanner({ context }: { context: string }) {
+  const { company, isDemo } = useAuthStore();
+  const plan = (company as any)?.plan || "essencial";
+  const planLevel = { essencial: 0, negocio: 1, expansao: 2 }[plan] ?? 0;
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["ai-insights", company?.id, context],
+    queryFn: () => request<{ insights: Insight[] }>(`/companies/${company!.id}/ai/insights/${context}`),
+    enabled: !!company?.id && !isDemo && planLevel >= 1,
+    staleTime: 60000,
+    retry: 1,
+  });
+
+  if (planLevel < 1 || isDemo) return null;
+
+  const insights = (data?.insights || []).filter(i => !dismissed.has(i.id));
+  if (isLoading || insights.length === 0) return null;
+
+  return (
+    <View style={z.container}>
+      {insights.map(insight => (
+        <InsightCard
+          key={insight.id}
+          insight={insight}
+          onDismiss={() => setDismissed(prev => new Set(prev).add(insight.id))}
+        />
+      ))}
+    </View>
+  );
+}
+
+const z = StyleSheet.create({
+  container: { gap: 8, marginBottom: 16 },
+  card: { flexDirection: "row", borderRadius: 14, padding: 14, borderWidth: 1, gap: 12 },
+  cardIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center", marginTop: 2 },
+  cardContent: { flex: 1, gap: 4 },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  agent: { fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
+  dismiss: { fontSize: 14, color: Colors.ink3, fontWeight: "600", paddingHorizontal: 4 },
+  title: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   desc: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
-  actions: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
-  actionText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  dismissBtn: { paddingVertical: 10, paddingHorizontal: 12 },
-  dismissText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, backgroundColor: "rgba(255,255,255,0.08)" },
+  actionText: { fontSize: 11, fontWeight: "700" },
 });
 
 export default AgentBanner;
