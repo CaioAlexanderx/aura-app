@@ -34,16 +34,16 @@ export default function PdvScreen() {
   const { company } = useAuthStore();
   const { customers } = useCustomers();
   const {
-    cart, payment, setPayment, lastSale, total, itemCount, isProcessing,
+    cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
   } = useCart();
   const IS_WIDE = useIsWide();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
 
-  // Fetch employees for vendor selection
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
     queryFn: () => employeesApi.list(company!.id),
@@ -51,7 +51,6 @@ export default function PdvScreen() {
     staleTime: 60000,
   });
   const employees = (empData?.employees || []).map((e: any) => ({ id: e.id, name: e.name || "" }));
-
   const slimCustomers = customers.map(c => ({ id: c.id, name: c.name, phone: c.phone }));
 
   const categories = ["Todos", ...Array.from(new Set(products.map(p => p.category)))];
@@ -60,8 +59,6 @@ export default function PdvScreen() {
     const matchCat = category === "Todos" || p.category === category;
     return matchSearch && matchCat;
   });
-
-  // P1-6: Paginacao produtos no caixa
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search + category);
 
   function handleScan(code: string) {
@@ -94,12 +91,12 @@ export default function PdvScreen() {
   );
 
   const cartPanelProps = {
-    cart, payment, setPayment, total, itemCount, isWide: IS_WIDE,
+    cart, payment, setPayment, total, totalAfterCoupon, itemCount, isWide: IS_WIDE,
     setQty, updateQty, removeItem, finalizeSale, isProcessing,
-    customers: slimCustomers,
-    employees,
+    customers: slimCustomers, employees,
     selectedCustomerId, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
   };
 
   if (IS_WIDE) return (

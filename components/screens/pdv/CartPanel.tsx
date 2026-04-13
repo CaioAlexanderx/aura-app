@@ -1,6 +1,10 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
+import { couponsApi } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/components/Toast";
 import type { CartItem } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 
@@ -16,10 +20,8 @@ function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: {
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState("");
   const w = Platform.OS === "web";
-
   function startEdit() { setEditVal(String(item.qty)); setEditing(true); }
   function confirmEdit() { const v = parseInt(editVal); if (v > 0) onSetQty(v); setEditing(false); }
-
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
       style={[s.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]}>
@@ -42,16 +44,16 @@ function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: {
   );
 }
 
-// Normaliza telefone para comparacao: remove tudo que nao e digito
 function normalizePhone(p: string) { return p.replace(/\D/g, ""); }
 
 export function CartPanel({
-  cart, payment, setPayment, total, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing,
+  cart, payment, setPayment, total, totalAfterCoupon, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing,
   customers, employees,
   selectedCustomerId, selectCustomer,
   selectedEmployeeId, selectedEmployeeName, selectEmployee,
+  couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
 }: {
-  cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; itemCount: number;
+  cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; totalAfterCoupon?: number; itemCount: number;
   isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void;
   removeItem: (id: string) => void; finalizeSale: () => void; isProcessing?: boolean;
   customers?: SlimCustomer[];
@@ -61,38 +63,52 @@ export function CartPanel({
   selectedEmployeeId?: string | null;
   selectedEmployeeName?: string | null;
   selectEmployee?: (id: string | null, name: string | null) => void;
+  couponCode?: string;
+  setCouponCode?: (v: string) => void;
+  couponApplied?: { code: string; discount: number } | null;
+  setCouponApplied?: (v: { code: string; discount: number } | null) => void;
+  clearCoupon?: () => void;
 }) {
+  const { company } = useAuthStore();
   const [customerSearch, setCustomerSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [couponLoading, setCouponLoading] = useState(false);
 
-  // Busca cliente por nome OU telefone
   const matchedCustomers = customers && customerSearch.length >= 2
     ? customers.filter(c => {
         const q = customerSearch.toLowerCase();
-        const matchName = c.name.toLowerCase().includes(q);
-        const matchPhone = c.phone
-          ? normalizePhone(c.phone).includes(normalizePhone(customerSearch))
-          : false;
-        return matchName || matchPhone;
+        return c.name.toLowerCase().includes(q) || (c.phone ? normalizePhone(c.phone).includes(normalizePhone(customerSearch)) : false);
       }).slice(0, 6)
     : [];
 
-  // Busca vendedor por nome (dropdown — util quando ha muitos funcionarios)
   const matchedEmployees = employees && employeeSearch.length >= 1
     ? employees.filter(e => e.name.toLowerCase().includes(employeeSearch.toLowerCase())).slice(0, 5)
     : (employees || []).slice(0, 8);
 
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedEmployee = employees?.find(e => e.id === selectedEmployeeId);
-
-  // Chips de vendedor: mostra chips se <= 5, dropdown se > 5
   const manyEmployees = (employees?.length || 0) > 5;
+  const displayTotal = totalAfterCoupon ?? total;
+
+  async function handleApplyCoupon() {
+    if (!couponCode?.trim() || !company?.id || !setCouponApplied) return;
+    setCouponLoading(true);
+    try {
+      const res = await couponsApi.validate(company.id, couponCode.trim(), total);
+      if (res.valid) {
+        setCouponApplied({ code: res.code || couponCode.trim().toUpperCase(), discount: res.discount_amount || 0 });
+        toast.success(`Cupom ${res.code} aplicado! -${fmt(res.discount_amount || 0)}`);
+      } else {
+        toast.error(res.error || "Cupom invalido");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao validar cupom");
+    } finally { setCouponLoading(false); }
+  }
 
   return (
     <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 8, flex: isWide ? 1 : undefined }}>
-
-      {/* Header */}
       {isWide ? (
         <View style={s.header}>
           <Text style={s.headerTitle}>Caixa</Text>
@@ -105,7 +121,6 @@ export function CartPanel({
         </View>
       ) : null}
 
-      {/* Estado vazio desktop */}
       {cart.length === 0 && isWide && (
         <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
           <Text style={{ fontSize: 32, color: Colors.ink3 }}>$</Text>
@@ -128,7 +143,7 @@ export function CartPanel({
         <View style={{ marginTop: 12 }}>
           <View style={s.divider} />
 
-          {/* ── Cliente ── */}
+          {/* Cliente */}
           {customers && selectCustomer && (
             <View style={{ marginBottom: 14 }}>
               <Text style={s.sectionLabel}>Cliente (opcional)</Text>
@@ -144,13 +159,7 @@ export function CartPanel({
                 </View>
               ) : (
                 <View>
-                  <TextInput
-                    style={s.searchSmall}
-                    value={customerSearch}
-                    onChangeText={setCustomerSearch}
-                    placeholder="Buscar por nome ou telefone..."
-                    placeholderTextColor={Colors.ink3}
-                  />
+                  <TextInput style={s.searchSmall} value={customerSearch} onChangeText={setCustomerSearch} placeholder="Buscar por nome ou telefone..." placeholderTextColor={Colors.ink3} />
                   {matchedCustomers.length > 0 && (
                     <View style={s.dropdown}>
                       {matchedCustomers.map(c => (
@@ -166,43 +175,26 @@ export function CartPanel({
             </View>
           )}
 
-          {/* ── Vendedor ── */}
+          {/* Vendedor */}
           {employees && employees.length > 0 && selectEmployee && (
             <View style={{ marginBottom: 14 }}>
               <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
-
               {selectedEmployee ? (
-                // Vendedor selecionado: mostra tag com nome e botao de limpar
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <View style={{ flex: 1, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 }}>
                     <Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{selectedEmployee.name}</Text>
                   </View>
-                  <Pressable
-                    onPress={() => { selectEmployee(null, null); setEmployeeSearch(""); setShowEmployeeDropdown(false); }}
-                    style={s.clearBtn}
-                  >
+                  <Pressable onPress={() => { selectEmployee(null, null); setEmployeeSearch(""); setShowEmployeeDropdown(false); }} style={s.clearBtn}>
                     <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
                   </Pressable>
                 </View>
               ) : manyEmployees ? (
-                // Muitos funcionarios: campo de busca com dropdown
                 <View>
-                  <TextInput
-                    style={s.searchSmall}
-                    value={employeeSearch}
-                    onChangeText={v => { setEmployeeSearch(v); setShowEmployeeDropdown(true); }}
-                    onFocus={() => setShowEmployeeDropdown(true)}
-                    placeholder="Buscar vendedor..."
-                    placeholderTextColor={Colors.ink3}
-                  />
+                  <TextInput style={s.searchSmall} value={employeeSearch} onChangeText={v => { setEmployeeSearch(v); setShowEmployeeDropdown(true); }} onFocus={() => setShowEmployeeDropdown(true)} placeholder="Buscar vendedor..." placeholderTextColor={Colors.ink3} />
                   {showEmployeeDropdown && matchedEmployees.length > 0 && (
                     <View style={s.dropdown}>
                       {matchedEmployees.map(e => (
-                        <Pressable
-                          key={e.id}
-                          onPress={() => { selectEmployee(e.id, e.name); setEmployeeSearch(""); setShowEmployeeDropdown(false); }}
-                          style={s.dropdownItem}
-                        >
+                        <Pressable key={e.id} onPress={() => { selectEmployee(e.id, e.name); setEmployeeSearch(""); setShowEmployeeDropdown(false); }} style={s.dropdownItem}>
                           <Text style={{ fontSize: 12, color: Colors.ink, fontWeight: "500" }}>{e.name}</Text>
                         </Pressable>
                       ))}
@@ -210,17 +202,10 @@ export function CartPanel({
                   )}
                 </View>
               ) : (
-                // Poucos funcionarios: chips horizontais
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
                   {employees.map(e => (
-                    <Pressable
-                      key={e.id}
-                      onPress={() => selectEmployee(e.id, e.name)}
-                      style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}
-                    >
-                      <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>
-                        {e.name.split(" ")[0]}
-                      </Text>
+                    <Pressable key={e.id} onPress={() => selectEmployee(e.id, e.name)} style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}>
+                      <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>{e.name.split(" ")[0]}</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -237,10 +222,54 @@ export function CartPanel({
               </Pressable>
             ))}
           </View>
+
+          {/* Cupom de desconto */}
+          {setCouponCode && (
+            <View style={{ marginTop: 14 }}>
+              <Text style={s.sectionLabel}>Cupom de desconto</Text>
+              {couponApplied ? (
+                <View style={s.couponApplied}>
+                  <Icon name="check" size={14} color={Colors.green} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.couponAppliedCode}>{couponApplied.code}</Text>
+                    <Text style={s.couponAppliedDiscount}>-{fmt(couponApplied.discount)}</Text>
+                  </View>
+                  <Pressable onPress={clearCoupon} style={s.clearBtn}>
+                    <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={s.couponRow}>
+                  <TextInput
+                    style={s.couponInput}
+                    value={couponCode}
+                    onChangeText={v => setCouponCode(v.toUpperCase())}
+                    placeholder="Codigo do cupom"
+                    placeholderTextColor={Colors.ink3}
+                    autoCapitalize="characters"
+                    onSubmitEditing={handleApplyCoupon}
+                  />
+                  <Pressable onPress={handleApplyCoupon} disabled={couponLoading || !couponCode?.trim()} style={[s.couponBtn, (!couponCode?.trim() || couponLoading) && { opacity: 0.5 }]}>
+                    {couponLoading
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={s.couponBtnText}>Aplicar</Text>}
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={s.divider} />
+
+          {/* Total */}
           <View style={s.totalRow}>
             <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "600" }}>Total</Text>
-            <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(total)}</Text>
+            <View style={{ alignItems: "flex-end" }}>
+              {couponApplied && (
+                <Text style={s.totalOriginal}>{fmt(total)}</Text>
+              )}
+              <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(displayTotal)}</Text>
+            </View>
           </View>
           <Pressable onPress={finalizeSale} disabled={isProcessing} style={[s.finalizeBtn, isProcessing && { opacity: 0.5 }]}>
             <Text style={s.finalizeText}>{isProcessing ? "Processando..." : "Finalizar venda"}</Text>
@@ -276,12 +305,20 @@ const s = StyleSheet.create({
   payText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   payTextActive: { color: "#fff", fontWeight: "600" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  totalOriginal: { fontSize: 13, color: Colors.ink3, textDecorationLine: "line-through", marginBottom: 2 },
   finalizeBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   finalizeText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   searchSmall: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 12, color: Colors.ink },
   dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 160, overflow: "hidden" },
   dropdownItem: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   clearBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
+  couponRow: { flexDirection: "row", gap: 8 },
+  couponInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13, color: Colors.ink, fontWeight: "600", letterSpacing: 1 },
+  couponBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 16, justifyContent: "center" },
+  couponBtnText: { fontSize: 12, color: "#fff", fontWeight: "700" },
+  couponApplied: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.greenD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.green + "33" },
+  couponAppliedCode: { fontSize: 13, color: Colors.green, fontWeight: "700", letterSpacing: 1 },
+  couponAppliedDiscount: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
 });
 
 export default CartPanel;
