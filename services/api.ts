@@ -102,20 +102,11 @@ export const authApi = {
   verifyPhone: (code: string) => request<VerificationResponse>("/auth/verify-phone", { method: "POST", body: { code }, retry: 0 }),
 };
 
-// Invite API (publica - sem company ID)
-export type InviteDetails = {
-  company_name: string; role: string;
-  email: string;
-  masked_email: string;
-  status: string;
-};
+// Invite API
+export type InviteDetails = { company_name: string; role: string; email: string; masked_email: string; status: string };
 export const inviteApi = {
-  validate: (inviteToken: string) =>
-    request<InviteDetails>(`/invite/${inviteToken}`, { token: null, retry: 1 }),
-  accept: (inviteToken: string) =>
-    request<{ accepted: boolean; company_id: string; role: string; message: string }>(
-      `/invite/${inviteToken}/accept`, { method: "POST", retry: 0 }
-    ),
+  validate: (inviteToken: string) => request<InviteDetails>(`/invite/${inviteToken}`, { token: null, retry: 1 }),
+  accept: (inviteToken: string) => request<{ accepted: boolean; company_id: string; role: string; message: string }>(`/invite/${inviteToken}/accept`, { method: "POST", retry: 0 }),
 };
 
 // Dashboard API
@@ -153,33 +144,16 @@ export const companiesApi = {
   requestReview: (companyId: string, saleId: string, customerId?: string) => request<any>(`/companies/${companyId}/reviews/request`, { method: "POST", body: { sale_id: saleId, customer_id: customerId } }),
   members: (companyId: string) => request<any>(`/companies/${companyId}/members`),
   inviteMember: async (companyId: string, body: { email: string; role_label?: string }) => {
-    const normalizedRole = (body.role_label || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .toLowerCase();
-
+    const normalizedRole = (body.role_label || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
     const payloads = [
-      { invite_email: body.email },
-      { email: body.email },
-      { invite_email: body.email, role_label: normalizedRole },
-      { email: body.email, role_label: normalizedRole },
-      { invite_email: body.email, role: normalizedRole },
-      { email: body.email, role: normalizedRole },
+      { invite_email: body.email }, { email: body.email },
+      { invite_email: body.email, role_label: normalizedRole }, { email: body.email, role_label: normalizedRole },
+      { invite_email: body.email, role: normalizedRole }, { email: body.email, role: normalizedRole },
     ];
-
     let lastErr: unknown;
     for (const payload of payloads) {
-      try {
-        return await request<any>(`/companies/${companyId}/members/invite`, {
-          method: "POST",
-          body: payload,
-          retry: 0,
-        });
-      } catch (err) {
-        lastErr = err;
-        if (!(err instanceof ApiError) || err.status !== 400) throw err;
-      }
+      try { return await request<any>(`/companies/${companyId}/members/invite`, { method: "POST", body: payload, retry: 0 }); }
+      catch (err) { lastErr = err; if (!(err instanceof ApiError) || err.status !== 400) throw err; }
     }
     throw lastErr;
   },
@@ -217,8 +191,18 @@ export const referralsApi = {
   mine: () => request<any>("/referrals/mine"),
 };
 
-// PDV / Sales API — BUGFIX: /pdv/sale (singular), not /pdv/sales
+// PDV / Sales API
 export const pdvApi = { createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sale`, { method: "POST", body }) };
+
+// Coupons API (P2 #12)
+export type CouponValidation = { valid: boolean; coupon_id?: string; code?: string; discount_type?: string; discount_value?: number; discount_amount?: number; final_total?: number; error?: string };
+export const couponsApi = {
+  list: (companyId: string) => request<{ total: number; coupons: any[] }>(`/companies/${companyId}/coupons`),
+  create: (companyId: string, body: any) => request<any>(`/companies/${companyId}/coupons`, { method: "POST", body }),
+  validate: (companyId: string, code: string, orderTotal: number) => request<CouponValidation>(`/companies/${companyId}/coupons/validate`, { method: "POST", body: { code, order_total: orderTotal }, retry: 0 }),
+  update: (companyId: string, couponId: string, body: any) => request<any>(`/companies/${companyId}/coupons/${couponId}`, { method: "PATCH", body }),
+  remove: (companyId: string, couponId: string) => request<any>(`/companies/${companyId}/coupons/${couponId}`, { method: "DELETE" }),
+};
 
 // Employees API
 export const employeesApi = {
