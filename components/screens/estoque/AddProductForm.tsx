@@ -5,6 +5,7 @@ import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { BarcodeQRSection } from "@/components/BarcodeQRSection";
 import { VariantsSection } from "@/components/VariantsSection";
+import { ImageUploadSection } from "@/components/ImageUploadSection";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import type { Product } from "./types";
@@ -52,7 +53,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
 
-  // P3 wiring: buscar variantes em modo edicao
   const { data: variantsData, refetch: refetchVariants } = useQuery({
     queryKey: ["variants", company?.id, editProduct?.id],
     queryFn: () => companiesApi.variants(company!.id, editProduct!.id),
@@ -74,10 +74,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       input.value = color || "#6d28d9";
       input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
       document.body.appendChild(input);
-      input.addEventListener("change", (e: any) => {
-        setColor(e.target.value);
-        document.body.removeChild(input);
-      });
+      input.addEventListener("change", (e: any) => { setColor(e.target.value); document.body.removeChild(input); });
       input.addEventListener("blur", () => { try { document.body.removeChild(input); } catch {} });
       input.click();
     } catch {}
@@ -89,21 +86,14 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
     onSave({
       id: editProduct?.id || Date.now().toString(),
-      name: name.trim(),
-      code: code.trim() || "---",
-      barcode: barcode.trim(),
+      name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
       category: finalCategory || "Produtos",
       price: parseFloat(price.replace(",", ".")) || 0,
       cost: parseFloat(cost.replace(",", ".")) || 0,
-      stock: parseInt(stock) || 0,
-      minStock: parseInt(minStock) || 0,
-      abc: editProduct?.abc || "C",
-      sold30d: editProduct?.sold30d || 0,
-      unit,
-      brand: editProduct?.brand || "",
-      notes: notes.trim(),
-      color: color || "",
-      size: size.trim(),
+      stock: parseInt(stock) || 0, minStock: parseInt(minStock) || 0,
+      abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0,
+      unit, brand: editProduct?.brand || "",
+      notes: notes.trim(), color: color || "", size: size.trim(),
     });
   }
 
@@ -118,6 +108,15 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       <FormField label="Nome do produto" required>
         <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Pomada modeladora" placeholderTextColor={Colors.ink3} />
       </FormField>
+
+      {/* P1 #1: Image upload — only in edit mode (product needs an ID for upload endpoint) */}
+      {isEdit && editProduct?.id && (
+        <ImageUploadSection
+          productId={editProduct.id}
+          currentImageUrl={(editProduct as any)?.image_url || null}
+          onImageChange={() => qc.invalidateQueries({ queryKey: ["products", company?.id] })}
+        />
+      )}
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
@@ -192,34 +191,15 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </View>
       </View>
 
-      <BarcodeQRSection
-        code={barcode}
-        productName={name}
-        price={parseFloat(price.replace(",", ".")) || 0}
-        onCodeChange={setBarcode}
-      />
+      <BarcodeQRSection code={barcode} productName={name} price={parseFloat(price.replace(",", ".")) || 0} onCodeChange={setBarcode} />
 
-      {/* P3: Variantes (apenas em modo de edicao — produto precisa existir no backend) */}
       {isEdit && editProduct?.id && (
-        <VariantsSection
-          productId={editProduct.id}
-          productName={name}
-          basePrice={parseFloat(price.replace(",", ".")) || 0}
-          variants={variants}
-          onUpdate={() => refetchVariants()}
-        />
+        <VariantsSection productId={editProduct.id} productName={name} basePrice={parseFloat(price.replace(",", ".")) || 0} variants={variants} onUpdate={() => refetchVariants()} />
       )}
 
       <FormField label="Descricao (opcional)">
-        <TextInput
-          style={[s.input, { minHeight: 70, textAlignVertical: "top" }]}
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Detalhes do produto, composicao..."
-          placeholderTextColor={Colors.ink3}
-          multiline
-          numberOfLines={3}
-        />
+        <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes}
+          placeholder="Detalhes do produto, composicao..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
       </FormField>
 
       <View style={s.footer}>
