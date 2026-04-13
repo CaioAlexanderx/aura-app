@@ -194,7 +194,7 @@ export const referralsApi = {
 // PDV / Sales API
 export const pdvApi = { createSale: (companyId: string, body: any) => request<any>(`/companies/${companyId}/pdv/sale`, { method: "POST", body }) };
 
-// Coupons API (P2 #12)
+// Coupons API
 export type CouponValidation = { valid: boolean; coupon_id?: string; code?: string; discount_type?: string; discount_value?: number; discount_amount?: number; final_total?: number; error?: string };
 export const couponsApi = {
   list: (companyId: string) => request<{ total: number; coupons: any[] }>(`/companies/${companyId}/coupons`),
@@ -202,6 +202,17 @@ export const couponsApi = {
   validate: (companyId: string, code: string, orderTotal: number) => request<CouponValidation>(`/companies/${companyId}/coupons/validate`, { method: "POST", body: { code, order_total: orderTotal }, retry: 0 }),
   update: (companyId: string, couponId: string, body: any) => request<any>(`/companies/${companyId}/coupons/${couponId}`, { method: "PATCH", body }),
   remove: (companyId: string, couponId: string) => request<any>(`/companies/${companyId}/coupons/${couponId}`, { method: "DELETE" }),
+};
+
+// NF-e API (Nuvem Fiscal)
+export const nfeApi = {
+  list: (companyId: string, type?: string, status?: string) => request<{ total: number; documents: any[] }>(`/companies/${companyId}/nfe${type || status ? "?" + [type && "type=" + type, status && "status=" + status].filter(Boolean).join("&") : ""}`),
+  get: (companyId: string, ref: string) => request<any>(`/companies/${companyId}/nfe/${ref}`),
+  setup: (companyId: string) => request<any>(`/companies/${companyId}/nfe/setup`, { method: "POST", timeout: 15000 }),
+  uploadCertificate: (companyId: string, body: { certificate: string; password: string }) => request<any>(`/companies/${companyId}/nfe/certificate`, { method: "POST", body, timeout: 15000 }),
+  emitNfse: (companyId: string, body: any) => request<any>(`/companies/${companyId}/nfe/emit/nfse`, { method: "POST", body, timeout: 20000 }),
+  emitNfce: (companyId: string, body: any) => request<any>(`/companies/${companyId}/nfe/emit/nfce`, { method: "POST", body, timeout: 20000 }),
+  cancel: (companyId: string, ref: string, justificativa?: string) => request<any>(`/companies/${companyId}/nfe/${ref}/cancel`, { method: "POST", body: { justificativa }, timeout: 15000 }),
 };
 
 // Employees API
