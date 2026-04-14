@@ -39,7 +39,6 @@ function WebImage({ src, width, height }: { src: string; width: number; height: 
         <img
           src={imgSrc}
           alt="Logo da empresa"
-          crossOrigin="anonymous"
           style={{
             maxWidth: width,
             maxHeight: height,
@@ -49,7 +48,6 @@ function WebImage({ src, width, height }: { src: string; width: number; height: 
           onLoad={function() { setLoaded(true); }}
           onError={function() {
             if (!retried) {
-              // Retry once without cache
               console.warn("[BrandBanner] Retrying image:", src);
               setRetried(true);
             } else {
