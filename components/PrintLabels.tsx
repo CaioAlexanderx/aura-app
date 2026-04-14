@@ -13,11 +13,6 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
-/**
- * P0 #3: Simplified label printing — single 33x21mm layout
- * Supports barcode (JsBarcode SVG) and QR Code
- * Opens backend /label/print endpoint for each selected product
- */
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   const { company, token } = useAuthStore();
   const [mode, setMode] = useState<"barcode" | "qr">("barcode");
@@ -61,7 +56,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       return;
     }
 
-    // For single product: open backend print endpoint directly
     if (selectedIds.length === 1) {
       const pid = selectedIds[0];
       const url = `${BASE_URL}/companies/${company.id}/products/${pid}/label/print?mode=${mode}&qty=1`;
@@ -70,7 +64,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       return;
     }
 
-    // For multiple: generate batch HTML client-side with JsBarcode
     const selected = products.filter(p => selectedIds.includes(p.id) && (p.barcode || p.code));
     if (selected.length === 0) { toast.error("Produtos sem codigo"); return; }
 
@@ -87,13 +80,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         </div>`;
       }
       return `<div class="label barcode-layout">
-        <svg class="barcode" id="bc-${i}" data-code="${code}"></svg>
+        <div class="barcode-wrap"><svg class="barcode" id="bc-${i}" data-code="${code}"></svg></div>
         <div class="name">${p.name}</div>
         <div class="price">${priceText}</div>
       </div>`;
     });
 
-    // Detect format for first product
     const firstCode = selected[0].barcode || selected[0].code;
     const numOnly = /^\d+$/.test(firstCode);
     let jsFormat = "CODE128";
@@ -101,24 +93,34 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     else if (numOnly && firstCode.length === 8) jsFormat = "EAN8";
     else if (numOnly && firstCode.length === 12) jsFormat = "UPC";
 
+    // Bar width adapts to format: EAN needs wider bars for scanner compatibility
+    const barWidth = jsFormat === "EAN13" || jsFormat === "EAN8" || jsFormat === "UPC" ? "1.0" : "0.8";
+
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Etiquetas Aura - ${selected.length} produtos</title>
-${!isQR ? '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>' : ''}
+${!isQR ? '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\\/script>' : ''}
 <style>
 @page { margin:0; size:33mm 21mm; }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#f5f5f5}
+body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5}
 .label{width:33mm;height:21mm;background:#fff;overflow:hidden;page-break-after:always}
 .label:last-child{page-break-after:auto}
-.barcode-layout{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm 1mm;text-align:center}
-.barcode-layout .barcode{width:30mm;height:11mm;flex-shrink:0}
-.barcode-layout .name{font-size:5pt;font-weight:600;line-height:1.1;max-height:5mm;overflow:hidden;word-break:break-word;margin-top:0.3mm}
-.barcode-layout .price{font-size:7pt;font-weight:900}
+
+/* BARCODE LAYOUT — quiet zones are critical for scanner readability */
+.barcode-layout{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1mm 2mm;text-align:center;height:100%}
+.barcode-wrap{width:100%;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.barcode-wrap svg{max-width:28mm;max-height:10mm;height:auto}
+.barcode-layout .name{font-size:5pt;font-weight:600;line-height:1.1;max-height:4.5mm;overflow:hidden;word-break:break-word;margin-top:0.5mm}
+.barcode-layout .price{font-size:7pt;font-weight:900;margin-top:0.2mm}
+
+/* QR LAYOUT */
 .qr-layout{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm}
 .qr-layout .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}
 .qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;overflow:hidden}
 .qr-layout .name{font-size:5.5pt;font-weight:700;line-height:1.15;max-height:10mm;overflow:hidden;word-break:break-word}
 .qr-layout .price{font-size:7.5pt;font-weight:900;white-space:nowrap}
+
+/* PREVIEW (screen only) */
 .preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}
 .preview-bar span{color:#a78bfa;font-size:12px}
 .preview-bar b{color:#e2e8f0;font-size:13px}
@@ -135,10 +137,10 @@ body{font-family:Arial,sans-serif;background:#f5f5f5}
 ${!isQR ? `<script>
 document.querySelectorAll('.barcode').forEach(function(el){
   var code=el.getAttribute('data-code');
-  try{JsBarcode(el,code,{format:"${jsFormat}",width:1.2,height:28,margin:0,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}
-  catch(e){try{JsBarcode(el,code,{format:"CODE128",width:1,height:28,margin:0,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}catch(e2){}}
+  try{JsBarcode(el,code,{format:"${jsFormat}",width:${barWidth},height:24,margin:4,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}
+  catch(e){try{JsBarcode(el,code,{format:"CODE128",width:0.8,height:24,margin:4,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}catch(e2){}}
 });
-<\/script>` : ''}
+<\\/script>` : ''}
 </body></html>`;
 
     const w = window.open("", "_blank");
@@ -150,11 +152,10 @@ document.querySelectorAll('.barcode').forEach(function(el){
 
   return (
     <View style={s.container}>
-      {/* Header: format 33x21mm + mode toggle */}
       <View style={s.header}>
         <View>
           <Text style={s.title}>Etiquetas 33x21mm</Text>
-          <Text style={s.hint}>Selecione os produtos e clique em imprimir. Otimizado para Bematech.</Text>
+          <Text style={s.hint}>Selecione os produtos e clique em imprimir. Otimizado para Bematech L42 PRO.</Text>
         </View>
         <View style={s.modeToggle}>
           <Pressable onPress={() => setMode("barcode")} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}>
@@ -166,7 +167,6 @@ document.querySelectorAll('.barcode').forEach(function(el){
         </View>
       </View>
 
-      {/* Search + select all */}
       <View style={s.toolbar}>
         <View style={s.searchBox}>
           <Icon name="search" size={14} color={Colors.ink3} />
@@ -179,7 +179,6 @@ document.querySelectorAll('.barcode').forEach(function(el){
         </Pressable>
       </View>
 
-      {/* Product list */}
       <View style={s.list}>
         {filtered.length === 0 && (
           <Text style={s.emptyText}>
@@ -203,16 +202,14 @@ document.querySelectorAll('.barcode').forEach(function(el){
         })}
       </View>
 
-      {/* Print button */}
       <Pressable onPress={handlePrint} style={[s.printBtn, selectedIds.length === 0 && { opacity: 0.5 }]} disabled={selectedIds.length === 0}>
         <Icon name="file_text" size={16} color="#fff" />
         <Text style={s.printBtnText}>Imprimir {selectedIds.length} etiqueta(s)</Text>
       </Pressable>
 
-      {/* Setup hint */}
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Nas configuracoes da impressora Bematech, defina o tamanho do papel como 33x21mm. No Chrome: Ctrl+P → Mais configuracoes → Margens: Nenhuma → Escala: 100%.</Text>
+        <Text style={s.setupText}>Bematech L42 PRO: tamanho do papel 33x21mm. Chrome: Ctrl+P, Margens: Nenhuma, Escala: 100%. Criar formulario no Windows se nao aparecer o tamanho.</Text>
       </View>
     </View>
   );
