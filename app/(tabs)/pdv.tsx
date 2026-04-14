@@ -6,6 +6,7 @@ import { useCart } from "@/hooks/useCart";
 import { useCustomers } from "@/hooks/useCustomers";
 import { EmptyState } from "@/components/EmptyState";
 import { BrandBanner } from "@/components/BrandBanner";
+import { ScrollableChips } from "@/components/ScrollableChips";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { ProductCard } from "@/components/screens/pdv/ProductCard";
@@ -93,9 +94,7 @@ export default function PdvScreen() {
           <Text style={s.newCustomerText}>Novo cliente</Text>
         </Pressable>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}>
-        {categories.map(c => <Pressable key={c} onPress={() => setCategory(c)} style={[s.catChip, category === c && s.catChipActive]}><Text style={[s.catChipText, category === c && s.catChipTextActive]}>{c}</Text></Pressable>)}
-      </ScrollView>
+      <ScrollableChips items={categories} active={category} onSelect={setCategory} />
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {paginated.map(p => <ProductCard key={p.id} product={p} onAdd={() => addToCart(p)} isWide={IS_WIDE} />)}
         {filtered.length === 0 && products.length === 0 && <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre produtos no Estoque para eles aparecerem aqui no Caixa." />}
@@ -148,10 +147,6 @@ const s = StyleSheet.create({
   searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   newCustomerBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
   newCustomerText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  catChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  catChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  catChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
-  catChipTextActive: { color: Colors.violet3, fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
