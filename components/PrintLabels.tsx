@@ -13,7 +13,6 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
-/** Escape HTML special chars to prevent broken labels */
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -61,34 +60,30 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       return;
     }
 
-    const selected = products.filter(p => selectedIds.includes(p.id) && (p.barcode || p.code));
+    var selected = products.filter(function(p) { return selectedIds.includes(p.id) && (p.barcode || p.code); });
     if (selected.length === 0) { toast.error("Produtos sem codigo"); return; }
 
-    const isQR = mode === "qr";
+    var isQR = mode === "qr";
 
-    // Detect barcode format
-    const firstCode = selected[0].barcode || selected[0].code;
-    const numOnly = /^\d+$/.test(firstCode);
-    let jsFormat = "CODE128";
+    var firstCode = selected[0].barcode || selected[0].code;
+    var numOnly = /^\d+$/.test(firstCode);
+    var jsFormat = "CODE128";
     if (numOnly && firstCode.length === 13) jsFormat = "EAN13";
     else if (numOnly && firstCode.length === 8) jsFormat = "EAN8";
     else if (numOnly && firstCode.length === 12) jsFormat = "UPC";
-    const barWidth = jsFormat === "EAN13" || jsFormat === "EAN8" || jsFormat === "UPC" ? 1.0 : 0.8;
 
-    // Build label HTML with escaped product names
-    const labelHtml = selected.map((p, i) => {
-      const code = esc(p.barcode || p.code);
-      const name = esc(p.name);
-      const price = "R$ " + p.price.toFixed(2).replace(".", ",");
+    var labelHtml = selected.map(function(p, i) {
+      var code = esc(p.barcode || p.code);
+      var name = esc(p.name);
+      var price = "R$ " + p.price.toFixed(2).replace(".", ",");
 
       if (isQR) {
-        const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(p.barcode || p.code) + "&bgcolor=ffffff&color=000000&margin=1";
+        var qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(p.barcode || p.code) + "&bgcolor=ffffff&color=000000&margin=1";
         return '<div class="label qr-layout"><img src="' + qrUrl + '" class="qr" alt="QR"><div class="info"><div class="name">' + name + '</div><div class="price">' + price + '</div></div></div>';
       }
-      return '<div class="label barcode-layout"><div class="barcode-wrap"><svg class="barcode" id="bc-' + i + '" data-code="' + code + '"></svg></div><div class="name">' + name + '</div><div class="price">' + price + '</div></div>';
+      return '<div class="label barcode-layout"><div class="bc-box"><svg id="bc-' + i + '" data-code="' + code + '"></svg></div><div class="name">' + name + '</div><div class="price">' + price + '</div></div>';
     }).join("\n");
 
-    // Build full HTML — uses string concat to avoid template literal escaping issues
     var html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
     html += '<title>Etiquetas Aura - ' + selected.length + ' produtos</title>';
     if (!isQR) {
@@ -100,16 +95,20 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5}';
     html += '.label{width:33mm;height:21mm;background:#fff;overflow:hidden;page-break-after:always}';
     html += '.label:last-child{page-break-after:auto}';
-    html += '.barcode-layout{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1mm 2mm;text-align:center;height:100%}';
-    html += '.barcode-wrap{width:100%;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}';
-    html += '.barcode-wrap svg{max-width:28mm;max-height:10mm;height:auto}';
-    html += '.barcode-layout .name{font-size:5pt;font-weight:600;line-height:1.1;max-height:4.5mm;overflow:hidden;word-break:break-word;margin-top:0.5mm}';
+
+    // BARCODE: aggressive sizing — 3mm side padding, 25mm barcode box, SVG forced to 100% width
+    html += '.barcode-layout{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1mm 3mm;text-align:center;height:100%}';
+    html += '.bc-box{width:25mm;height:10mm;overflow:hidden;display:flex;align-items:center;justify-content:center}';
+    html += '.bc-box svg{width:100%!important;height:100%!important;max-width:25mm;max-height:10mm;display:block}';
+    html += '.barcode-layout .name{font-size:5pt;font-weight:600;line-height:1.1;max-height:4mm;overflow:hidden;word-break:break-word;margin-top:0.5mm}';
     html += '.barcode-layout .price{font-size:7pt;font-weight:900;margin-top:0.2mm}';
+
     html += '.qr-layout{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm}';
     html += '.qr-layout .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
     html += '.qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;overflow:hidden}';
     html += '.qr-layout .name{font-size:5.5pt;font-weight:700;line-height:1.15;max-height:10mm;overflow:hidden;word-break:break-word}';
     html += '.qr-layout .price{font-size:7.5pt;font-weight:900;white-space:nowrap}';
+
     html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
     html += '.preview-bar span{color:#a78bfa;font-size:12px}';
     html += '.preview-bar b{color:#e2e8f0;font-size:13px}';
@@ -121,24 +120,27 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += '<div class="label-preview">' + labelHtml + '</div>';
     html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm (' + (isQR ? "QR Code" : "Codigo de barras") + ')</span><br><b>' + selected.length + ' produto' + (selected.length > 1 ? 's' : '') + '</b></div>';
     html += '<button onclick="window.print()">Imprimir</button></div>';
+
     if (!isQR) {
       html += '<script>';
-      html += 'document.querySelectorAll(".barcode").forEach(function(el){';
+      // After JsBarcode renders, force each SVG to fit its container via viewBox
+      html += 'document.querySelectorAll("[data-code]").forEach(function(el){';
       html += 'var code=el.getAttribute("data-code");';
-      html += 'try{JsBarcode(el,code,{format:"' + jsFormat + '",width:' + barWidth + ',height:24,margin:4,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}';
-      html += 'catch(e){try{JsBarcode(el,code,{format:"CODE128",width:0.8,height:24,margin:4,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}catch(e2){}}';
+      html += 'try{JsBarcode(el,code,{format:"' + jsFormat + '",width:1,height:28,margin:6,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}';
+      html += 'catch(e){try{JsBarcode(el,code,{format:"CODE128",width:1,height:28,margin:6,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}catch(e2){}}';
+      // Force SVG to scale via viewBox instead of fixed pixel width
+      html += 'var w=el.getAttribute("width");var h=el.getAttribute("height");';
+      html += 'if(w&&h){el.setAttribute("viewBox","0 0 "+w+" "+h);el.removeAttribute("width");el.removeAttribute("height");}';
       html += '});';
       html += '</scr' + 'ipt>';
     }
     html += '</body></html>';
 
-    // Use Blob URL instead of document.write — does NOT inherit CSP from opener
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
       if (!w) {
-        // Fallback: try document.write if popup was blocked
         var w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
         else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
@@ -150,7 +152,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     }
   }
 
-  const allSelected = filtered.length > 0 && filtered.every(p => selectedIds.includes(p.id));
+  var allSelected = filtered.length > 0 && filtered.every(function(p) { return selectedIds.includes(p.id); });
 
   return (
     <View style={s.container}>
@@ -188,11 +190,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           </Text>
         )}
         {filtered.map(p => {
-          const selected = selectedIds.includes(p.id);
+          const sel = selectedIds.includes(p.id);
           return (
-            <Pressable key={p.id} onPress={() => toggleSelect(p.id)} style={[s.item, selected && s.itemSelected]}>
-              <View style={[s.checkbox, selected && s.checkboxSelected]}>
-                {selected && <Icon name="check" size={10} color="#fff" />}
+            <Pressable key={p.id} onPress={() => toggleSelect(p.id)} style={[s.item, sel && s.itemSelected]}>
+              <View style={[s.checkbox, sel && s.checkboxSelected]}>
+                {sel && <Icon name="check" size={10} color="#fff" />}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
