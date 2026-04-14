@@ -43,7 +43,6 @@ export default function PdvScreen() {
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
-    discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
   } = useCart();
   const IS_WIDE = useIsWide();
   const [search, setSearch] = useState("");
@@ -89,13 +88,11 @@ export default function PdvScreen() {
       <ScannerBar onScan={handleScan} />
       <View style={s.searchRow}>
         <TextInput style={[s.searchInput, { flex: 1 }]} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
-        {/* P0 #7: Quick customer registration button */}
         <Pressable onPress={() => setShowNewCustomer(true)} style={s.newCustomerBtn}>
           <Icon name="user_plus" size={15} color={Colors.violet3} />
           <Text style={s.newCustomerText}>Novo cliente</Text>
         </Pressable>
       </View>
-      {/* P0 #1: paddingRight ensures last category chip is fully visible */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}>
         {categories.map(c => <Pressable key={c} onPress={() => setCategory(c)} style={[s.catChip, category === c && s.catChipActive]}><Text style={[s.catChipText, category === c && s.catChipTextActive]}>{c}</Text></Pressable>)}
       </ScrollView>
@@ -121,6 +118,7 @@ export default function PdvScreen() {
     <View style={s.webRoot}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 32, paddingBottom: 48 }}>
         <Text style={s.pageTitle}>Caixa</Text>
+        <BrandBanner mode="block" />
         {productGrid}
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
@@ -134,6 +132,7 @@ export default function PdvScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "transparent" }} contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
       <Text style={s.pageTitle}>Caixa</Text>
+      <BrandBanner mode="block" />
       {productGrid}
       <CartPanel {...cartPanelProps} />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}

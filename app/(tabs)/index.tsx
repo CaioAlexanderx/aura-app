@@ -13,6 +13,7 @@ import { toast } from "@/components/Toast";
 import { ProfileBanner } from "@/components/ProfileBanner";
 import { BrandBanner } from "@/components/BrandBanner";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
 import { IS_WIDE, MOCK_DASHBOARD, EMPTY_DATA, greeting, fmt } from "@/components/screens/dashboard/types";
 import { Avatar } from "@/components/screens/dashboard/Avatar";
@@ -29,6 +30,9 @@ export default function DashboardScreen() {
   const { user, company, token, isDemo, logout } = useAuthStore();
   const router = useRouter();
   const [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
+
+  // Shared profile hook — syncs trade_name to auth store
+  const { tradeName } = useCompanyProfile();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard", company?.id],
@@ -51,15 +55,17 @@ export default function DashboardScreen() {
       <SkeletonStyle />
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>
 
-        {/* Header */}
+        {/* Header with logo in center */}
         <View style={s.header}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1 }}>
             <Avatar name={user?.name ?? "A"} />
-            <View>
+            <View style={{ flexShrink: 1 }}>
               <Text style={s.gr}>{greeting()}, {user?.name?.split(" ")[0] ?? "usuario"}</Text>
-              <Text style={s.cn}>{company?.name ?? "---"}</Text>
+              <Text style={s.cn} numberOfLines={1}>{tradeName || company?.name || "---"}</Text>
             </View>
           </View>
+          {/* Brand logo in center of header (Negocio+) */}
+          <BrandBanner mode="header" />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <PlanBadge plan={company?.plan ?? "essencial"} />
             <TouchableOpacity onPress={logout} style={s.lo}>
@@ -71,7 +77,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <BrandBanner />
         <ProfileBanner />
         {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={() => setEmailVerified(true)} />}
 
