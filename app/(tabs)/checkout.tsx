@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image, ActivityIndicator, TextInput } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
@@ -8,57 +8,96 @@ import { billingApi, ApiError } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 
-const isWeb = Platform.OS === "web";
+var isWeb = Platform.OS === "web";
 
-// Feature flag: cartao habilitado quando tokenizacao Asaas for liberada
-const CARD_ENABLED = false;
-
-const PLANS = [
+var PLANS = [
   { key: "essencial", label: "Essencial", monthly: 89, desc: "Para comecar", features: ["1 usuario", "PDV + Estoque", "NF-e ate 50/mes", "Suporte chat"] },
   { key: "negocio", label: "Negocio", monthly: 199, desc: "Para crescer", popular: true, features: ["Ate 3 usuarios", "CRM + WhatsApp", "NF-e ilimitada", "Analista de Negocios"] },
   { key: "expansao", label: "Expansao", monthly: 299, desc: "Para escalar", features: ["Usuarios ilimitados", "IA 5 agentes", "Multi-gateway", "Suporte prioritario"] },
 ];
 
-const ANNUAL_DISCOUNT = 0.20;
+var ANNUAL_DISCOUNT = 0.20;
 
-// BUGFIX P1 #4: Format with thousands separator (pt-BR locale)
-function fmt(v: number) {
-  return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function fmt(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
 
+// Card number mask: 1234 5678 9012 3456
+function maskCard(v: string) {
+  var d = v.replace(/\D/g, "").slice(0, 16);
+  return d.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
+}
+// Expiry mask: MM/AA
+function maskExpiry(v: string) {
+  var d = v.replace(/\D/g, "").slice(0, 4);
+  if (d.length >= 3) return d.slice(0, 2) + "/" + d.slice(2);
+  return d;
+}
+// CPF mask: 123.456.789-01
+function maskCpf(v: string) {
+  var d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length > 9) return d.slice(0,3) + "." + d.slice(3,6) + "." + d.slice(6,9) + "-" + d.slice(9);
+  if (d.length > 6) return d.slice(0,3) + "." + d.slice(3,6) + "." + d.slice(6);
+  if (d.length > 3) return d.slice(0,3) + "." + d.slice(3);
+  return d;
+}
+
+// Detect card brand from number
+function cardBrand(n: string) {
+  var d = n.replace(/\D/g, "");
+  if (/^4/.test(d)) return "Visa";
+  if (/^5[1-5]/.test(d)) return "Mastercard";
+  if (/^3[47]/.test(d)) return "Amex";
+  if (/^606282|^3841/.test(d)) return "Hipercard";
+  if (/^(636368|438935|504175|451416|636297)/.test(d)) return "Elo";
+  return "";
+}
+
 type Cycle = "monthly" | "annual";
+type Method = "pix" | "card";
 
 export default function CheckoutScreen() {
-  const params = useLocalSearchParams<{ plan?: string }>();
-  const { company, isDemo } = useAuthStore();
-  const [selectedPlan, setSelectedPlan] = useState(params.plan || "negocio");
-  const [cycle, setCycle] = useState<Cycle>("monthly");
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  var params = useLocalSearchParams<{ plan?: string }>();
+  var { company, isDemo } = useAuthStore();
+  var [selectedPlan, setSelectedPlan] = useState(params.plan || "negocio");
+  var [cycle, setCycle] = useState<Cycle>("monthly");
+  var [method, setMethod] = useState<Method>("pix");
+  var [loading, setLoading] = useState(false);
+  var [success, setSuccess] = useState(false);
 
   // Pix state
-  const [pixQr, setPixQr] = useState<string | null>(null);
-  const [pixCopyPaste, setPixCopyPaste] = useState<string | null>(null);
-  const [pixExpiration, setPixExpiration] = useState<string | null>(null);
-  const [polling, setPolling] = useState(false);
-  const pollRef = useRef<any>(null);
+  var [pixQr, setPixQr] = useState<string | null>(null);
+  var [pixCopyPaste, setPixCopyPaste] = useState<string | null>(null);
+  var [pixExpiration, setPixExpiration] = useState<string | null>(null);
+  var [polling, setPolling] = useState(false);
+  var pollRef = useRef<any>(null);
 
-  const plan = PLANS.find(p => p.key === selectedPlan) || PLANS[1];
-  const isAnnual = cycle === "annual";
+  // Card state
+  var [cardNumber, setCardNumber] = useState("");
+  var [cardExpiry, setCardExpiry] = useState("");
+  var [cardCvv, setCardCvv] = useState("");
+  var [cardName, setCardName] = useState("");
+  var [cardCpf, setCardCpf] = useState("");
+  var [tokenizing, setTokenizing] = useState(false);
 
-  // Price calculations
-  const annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
-  const annualMonthly = Math.round(annualTotal / 12 * 100) / 100;
-  const annualSavings = plan.monthly * 12 - annualTotal;
-  const price = isAnnual ? annualTotal : plan.monthly;
+  var plan = PLANS.find(function(p) { return p.key === selectedPlan; }) || PLANS[1];
+  var isAnnual = cycle === "annual";
+  var annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
+  var annualMonthly = Math.round(annualTotal / 12 * 100) / 100;
+  var annualSavings = plan.monthly * 12 - annualTotal;
+  var price = isAnnual ? annualTotal : plan.monthly;
 
-  // Subscribe with Pix
+  // Card validation
+  var cardDigits = cardNumber.replace(/\D/g, "");
+  var expiryParts = cardExpiry.split("/");
+  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11;
+  var brand = cardBrand(cardNumber);
+
+  // Pix subscribe
   async function handlePixSubscribe() {
     if (!company?.id) return;
     setLoading(true);
     try {
-      const res = await billingApi.subscribe(company.id, selectedPlan, "PIX", undefined, cycle);
+      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", undefined, cycle);
       if (res.pix_qr_code) {
         setPixQr(res.pix_qr_code);
         setPixCopyPaste(res.pix_copy_paste || null);
@@ -70,30 +109,53 @@ export default function CheckoutScreen() {
     } finally { setLoading(false); }
   }
 
+  // Card subscribe: tokenize then subscribe
+  async function handleCardSubscribe() {
+    if (!company?.id || !cardValid) return;
+    setTokenizing(true);
+    try {
+      // Step 1: Tokenize card via backend proxy
+      var tokenRes = await billingApi.tokenize(company.id, {
+        card_number: cardDigits,
+        card_expiry_month: expiryParts[0],
+        card_expiry_year: expiryParts[1],
+        card_ccv: cardCvv,
+        holder_name: cardName,
+        holder_cpf: cardCpf.replace(/\D/g, ""),
+      });
+
+      // Step 2: Subscribe with token
+      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""));
+      setSuccess(true);
+      toast.success("Assinatura ativada com cartao " + (tokenRes.credit_card_brand || brand) + " final " + (tokenRes.credit_card_last4 || cardDigits.slice(-4)) + "!");
+      setTimeout(function() { router.replace("/(tabs)/" as any); }, 2000);
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartao");
+    } finally { setTokenizing(false); }
+  }
+
   function startPolling() {
     if (!company?.id) return;
     setPolling(true);
-    pollRef.current = setInterval(async () => {
+    pollRef.current = setInterval(async function() {
       try {
-        const st = await billingApi.status(company.id);
+        var st = await billingApi.status(company!.id);
         if (st.billing_status === "active") {
           clearInterval(pollRef.current);
           setPolling(false);
           setSuccess(true);
           toast.success("Pagamento confirmado!");
-          setTimeout(() => router.replace("/(tabs)/"), 2000);
+          setTimeout(function() { router.replace("/(tabs)/" as any); }, 2000);
         }
       } catch {}
     }, 3000);
   }
 
-  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
+  useEffect(function() { return function() { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
 
   function copyPix() {
     if (!pixCopyPaste) return;
-    if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(pixCopyPaste);
-    }
+    if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) navigator.clipboard.writeText(pixCopyPaste);
     toast.success("Codigo Pix copiado!");
   }
 
@@ -116,10 +178,10 @@ export default function CheckoutScreen() {
 
       {/* Cycle toggle */}
       <View style={z.cycleRow}>
-        <Pressable onPress={() => setCycle("monthly")} style={[z.cycleBtn, cycle==="monthly" && z.cycleBtnActive]}>
+        <Pressable onPress={function() { setCycle("monthly"); }} style={[z.cycleBtn, cycle==="monthly" && z.cycleBtnActive]}>
           <Text style={[z.cycleTxt, cycle==="monthly" && z.cycleTxtActive]}>Mensal</Text>
         </Pressable>
-        <Pressable onPress={() => setCycle("annual")} style={[z.cycleBtn, cycle==="annual" && z.cycleBtnActive]}>
+        <Pressable onPress={function() { setCycle("annual"); }} style={[z.cycleBtn, cycle==="annual" && z.cycleBtnActive]}>
           <Text style={[z.cycleTxt, cycle==="annual" && z.cycleTxtActive]}>Anual</Text>
           <View style={z.discBadge}><Text style={z.discText}>-20%</Text></View>
         </Pressable>
@@ -127,13 +189,13 @@ export default function CheckoutScreen() {
 
       {/* Plan cards */}
       <View style={z.plansRow}>
-        {PLANS.map(p => {
-          const sel = selectedPlan === p.key;
-          const pAnnualMo = Math.round(p.monthly * (1 - ANNUAL_DISCOUNT) * 100) / 100;
-          const pAnnualTotal = Math.round(p.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
-          const displayPrice = isAnnual ? pAnnualMo : p.monthly;
+        {PLANS.map(function(p) {
+          var sel = selectedPlan === p.key;
+          var pAnnualMo = Math.round(p.monthly * (1 - ANNUAL_DISCOUNT) * 100) / 100;
+          var displayPrice = isAnnual ? pAnnualMo : p.monthly;
+          var pAnnualTotal = Math.round(p.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
           return (
-            <Pressable key={p.key} onPress={() => setSelectedPlan(p.key)} style={[z.planCard, sel && z.planCardSel, p.popular && !sel && z.planCardPop]}>
+            <Pressable key={p.key} onPress={function() { setSelectedPlan(p.key); }} style={[z.planCard, sel && z.planCardSel, p.popular && !sel && z.planCardPop]}>
               {p.popular && <View style={z.popBadge}><Text style={z.popText}>Mais popular</Text></View>}
               <Text style={[z.planName, sel && {color:"#fff"}]}>{p.label}</Text>
               <Text style={[z.planPrice, sel && {color:"#fff"}]}>{fmtMo(displayPrice)}</Text>
@@ -142,19 +204,19 @@ export default function CheckoutScreen() {
                   <Text style={[z.planOrig, sel && {color:"rgba(255,255,255,0.4)"}]}>
                     <Text style={{ textDecorationLine: "line-through" }}>{fmtMo(p.monthly)}</Text>
                   </Text>
-                  <Text style={[z.planAnnualTotal, sel && {color:"rgba(255,255,255,0.6)"}]}>
-                    {fmt(pAnnualTotal)} no ano
-                  </Text>
+                  <Text style={[z.planAnnualTotal, sel && {color:"rgba(255,255,255,0.6)"}]}>{fmt(pAnnualTotal)} no ano</Text>
                 </View>
               )}
               <Text style={[z.planDesc, sel && {color:"rgba(255,255,255,0.7)"}]}>{p.desc}</Text>
               <View style={{ marginTop: 10, gap: 4 }}>
-                {p.features.map(f => (
-                  <View key={f} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Icon name="check" size={10} color={sel ? "#fff" : Colors.green} />
-                    <Text style={{ fontSize: 11, color: sel ? "rgba(255,255,255,0.8)" : Colors.ink3 }}>{f}</Text>
-                  </View>
-                ))}
+                {p.features.map(function(f) {
+                  return (
+                    <View key={f} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Icon name="check" size={10} color={sel ? "#fff" : Colors.green} />
+                      <Text style={{ fontSize: 11, color: sel ? "rgba(255,255,255,0.8)" : Colors.ink3 }}>{f}</Text>
+                    </View>
+                  );
+                })}
               </View>
             </Pressable>
           );
@@ -164,15 +226,14 @@ export default function CheckoutScreen() {
       {/* Payment method */}
       <Text style={z.sectionTitle}>Forma de pagamento</Text>
       <View style={z.methodRow}>
-        <View style={[z.methodBtn, z.methodBtnActive]}>
-          <Icon name="wallet" size={16} color={Colors.violet3} />
-          <Text style={[z.methodTxt, z.methodTxtActive]}>Pix</Text>
-        </View>
-        <View style={[z.methodBtn, { opacity: 0.5 }]}>
-          <Icon name="cart" size={16} color={Colors.ink3} />
-          <Text style={z.methodTxt}>Cartao</Text>
-          <View style={z.soonBadge}><Text style={z.soonText}>Em breve</Text></View>
-        </View>
+        <Pressable onPress={function() { setMethod("pix"); }} style={[z.methodBtn, method === "pix" && z.methodBtnActive]}>
+          <Icon name="wallet" size={16} color={method === "pix" ? Colors.violet3 : Colors.ink3} />
+          <Text style={[z.methodTxt, method === "pix" && z.methodTxtActive]}>Pix</Text>
+        </Pressable>
+        <Pressable onPress={function() { setMethod("card"); }} style={[z.methodBtn, method === "card" && z.methodBtnActive]}>
+          <Icon name="cart" size={16} color={method === "card" ? Colors.violet3 : Colors.ink3} />
+          <Text style={[z.methodTxt, method === "card" && z.methodTxtActive]}>Cartao</Text>
+        </Pressable>
       </View>
 
       {/* Summary */}
@@ -185,24 +246,20 @@ export default function CheckoutScreen() {
           <>
             <Text style={z.summaryEquiv}>Equivale a {fmtMo(annualMonthly)}</Text>
             <Text style={z.summarySaving}>Economia de {fmt(annualSavings)} por ano</Text>
-            <Text style={z.summaryHint}>Pagamento unico via Pix. Acesso por 12 meses.</Text>
+            <Text style={z.summaryHint}>{method === "pix" ? "Pagamento unico via Pix. Acesso por 12 meses." : "Cobrado mensalmente no cartao com 15% de desconto."}</Text>
           </>
         )}
-        {!isAnnual && <Text style={z.summaryHint}>Cobrado via Pix todo mes. Cancele quando quiser.</Text>}
+        {!isAnnual && <Text style={z.summaryHint}>{method === "pix" ? "Cobrado via Pix todo mes." : "Cobrado mensalmente no cartao."} Cancele quando quiser.</Text>}
       </View>
 
-      {/* Pix action */}
-      {!pixQr && (
+      {/* PIX flow */}
+      {method === "pix" && !pixQr && (
         <View style={z.formCard}>
           <View style={z.pixInfoRow}>
             <Icon name="wallet" size={20} color={Colors.green} />
             <View style={{ flex: 1 }}>
               <Text style={z.pixInfoTitle}>Pagamento instantaneo via Pix</Text>
-              <Text style={z.pixInfoDesc}>
-                {isAnnual
-                  ? "Pague uma vez e tenha acesso por 12 meses."
-                  : "Voce recebera um lembrete mensal por e-mail."}
-              </Text>
+              <Text style={z.pixInfoDesc}>{isAnnual ? "Pague uma vez e tenha acesso por 12 meses." : "Voce recebera um lembrete mensal por e-mail."}</Text>
             </View>
           </View>
           <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && {opacity:0.6}]}>
@@ -211,8 +268,7 @@ export default function CheckoutScreen() {
         </View>
       )}
 
-      {/* Pix QR displayed */}
-      {pixQr && (
+      {method === "pix" && pixQr && (
         <View style={z.pixCard}>
           <Text style={z.pixTitle}>Escaneie o QR Code ou copie o codigo</Text>
           <Image source={{uri:"data:image/png;base64,"+pixQr}} style={z.pixQrImg} resizeMode="contain" />
@@ -232,14 +288,72 @@ export default function CheckoutScreen() {
         </View>
       )}
 
-      <Pressable onPress={() => router.back()} style={z.backLink}>
+      {/* CARD flow */}
+      {method === "card" && (
+        <View style={z.formCard}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Icon name="cart" size={18} color={Colors.violet3} />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.ink }}>Dados do cartao</Text>
+            {brand ? <View style={z.brandBadge}><Text style={z.brandText}>{brand}</Text></View> : null}
+          </View>
+
+          <View style={z.cardField}>
+            <Text style={z.cardLabel}>Numero do cartao</Text>
+            <TextInput style={z.cardInput} value={cardNumber} onChangeText={function(v) { setCardNumber(maskCard(v)); }}
+              placeholder="1234 5678 9012 3456" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={19} />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>Validade</Text>
+              <TextInput style={z.cardInput} value={cardExpiry} onChangeText={function(v) { setCardExpiry(maskExpiry(v)); }}
+                placeholder="MM/AA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={5} />
+            </View>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>CVV</Text>
+              <TextInput style={z.cardInput} value={cardCvv} onChangeText={function(v) { setCardCvv(v.replace(/\D/g, "").slice(0, 4)); }}
+                placeholder="123" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={4} secureTextEntry />
+            </View>
+          </View>
+
+          <View style={z.cardField}>
+            <Text style={z.cardLabel}>Nome no cartao</Text>
+            <TextInput style={z.cardInput} value={cardName} onChangeText={function(v) { setCardName(v.toUpperCase()); }}
+              placeholder="MARIA DA SILVA" placeholderTextColor={Colors.ink3} autoCapitalize="characters" />
+          </View>
+
+          <View style={z.cardField}>
+            <Text style={z.cardLabel}>CPF do titular</Text>
+            <TextInput style={z.cardInput} value={cardCpf} onChangeText={function(v) { setCardCpf(maskCpf(v)); }}
+              placeholder="123.456.789-01" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={14} />
+          </View>
+
+          <View style={z.secureRow}>
+            <Icon name="lock" size={12} color={Colors.green} />
+            <Text style={z.secureText}>Pagamento seguro. Dados tokenizados via Asaas. Seu cartao nao e armazenado.</Text>
+          </View>
+
+          <Pressable onPress={handleCardSubscribe} disabled={tokenizing || !cardValid} style={[z.payBtn, (tokenizing || !cardValid) && {opacity:0.5}]}>
+            {tokenizing ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={z.payBtnText}>Processando...</Text>
+              </View>
+            ) : (
+              <Text style={z.payBtnText}>Assinar com cartao - {isAnnual ? fmtMo(annualMonthly) : fmtMo(price)}</Text>
+            )}
+          </Pressable>
+        </View>
+      )}
+
+      <Pressable onPress={function() { router.back(); }} style={z.backLink}>
         <Text style={z.backLinkText}>Voltar</Text>
       </Pressable>
     </ScrollView>
   );
 }
 
-const z = StyleSheet.create({
+var z = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   cnt: { padding: IS_WIDE ? 40 : 20, paddingBottom: 60, maxWidth: 560, alignSelf: "center", width: "100%" },
   title: { fontSize: 24, fontWeight: "800", color: Colors.ink, textAlign: "center", marginBottom: 4 },
@@ -268,8 +382,6 @@ const z = StyleSheet.create({
   methodBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   methodTxt: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   methodTxtActive: { color: Colors.violet3 },
-  soonBadge: { backgroundColor: Colors.bg4, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
-  soonText: { fontSize: 8, color: Colors.ink3, fontWeight: "600" },
   summaryCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   summaryLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
@@ -291,6 +403,14 @@ const z = StyleSheet.create({
   pixExpiry: { fontSize: 11, color: Colors.amber, marginBottom: 8 },
   pollingRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   pollingText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
+  // Card form
+  cardField: { marginBottom: 12 },
+  cardLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 5, letterSpacing: 0.3 },
+  cardInput: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink, fontFamily: Platform.OS === "web" ? "monospace" : undefined } as any,
+  brandBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border2 },
+  brandText: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
+  secureRow: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 16, marginTop: 4 },
+  secureText: { fontSize: 10, color: Colors.ink3, flex: 1, lineHeight: 15 },
   backLink: { alignSelf: "center", marginTop: 8, paddingVertical: 10 },
   backLinkText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   successCard: { alignItems: "center", gap: 12, padding: 40 },
