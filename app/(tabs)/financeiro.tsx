@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi } from "@/hooks/useTransactions";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -15,19 +15,25 @@ import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { TABS, fmt } from "@/components/screens/financeiro/types";
-import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS, mapImportedTransaction } from "@/utils/csv";
+import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
 import { FinanceiroToolbar } from "@/components/FinanceiroToolbar";
 import { AgentBanner } from "@/components/AgentBanner";
+import { useAuthStore } from "@/stores/auth";
+import { useQueryClient } from "@tanstack/react-query";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+const API = "https://aura-backend-production-f805.up.railway.app/api/v1";
 
 export default function FinanceiroScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const scrollRef = useRef<any>(null);
   const { transactions, summary, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab);
+  const { company, token } = useAuthStore();
+  const qc = useQueryClient();
   const periodLabel = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const uncategorized = transactions.filter((t: any) => !t.category || t.category === 'outros').map((t: any) => t.description).filter(Boolean);
 
@@ -36,12 +42,45 @@ export default function FinanceiroScreen() {
     if (transactions.length === 0) { toast.error("Nenhum lancamento para exportar"); return; }
     downloadCSV(arrayToCSV(transactions, TRANSACTION_COLUMNS), `aura_lancamentos_${new Date().toISOString().slice(0,10)}.csv`);
   }
+
+  // BATCH IMPORT: sends raw CSV rows to backend for normalization
   async function handleImport() {
+    if (!company?.id || !token) { toast.error("Sessao expirada"); return; }
     try {
-      const rows = await pickFileAndParse(); let imported = 0, skipped = 0;
-      for (const row of rows) { const mapped = mapImportedTransaction(row); if (mapped) { createTransaction(mapped); imported++; } else skipped++; }
-      toast.success(`${imported} lancamentos importados${skipped > 0 ? ` (${skipped} ignorados)` : ""}`);
-    } catch {}
+      setImporting(true);
+      const rows = await pickFileAndParse();
+      if (rows.length === 0) { toast.error("Arquivo vazio"); setImporting(false); return; }
+
+      // Send raw rows directly — backend handles all format normalization
+      // (DD/MM/YYYY, comma decimals, empty descriptions, Portuguese field names)
+      const res = await fetch(`${API}/companies/${company.id}/transactions/batch?partial=true`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ transactions: rows }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || `Erro ${res.status}`);
+        setImporting(false);
+        return;
+      }
+
+      // Refresh transactions list
+      qc.invalidateQueries({ queryKey: ["transactions", company.id] });
+
+      if (data.saved > 0) {
+        toast.success(`${data.saved} lancamentos importados!${data.error_count > 0 ? ` (${data.error_count} com erro)` : ""}`);
+      } else {
+        const errMsg = data.errors?.[0]?.errors?.[0] || "Verifique o formato do CSV";
+        toast.error(`0 lancamentos validos. ${errMsg}`);
+      }
+    } catch (err: any) {
+      toast.error("Erro ao importar: " + (err?.message || "tente novamente"));
+    } finally {
+      setImporting(false);
+    }
   }
 
   return (
@@ -57,13 +96,18 @@ export default function FinanceiroScreen() {
         </ScrollView>
 
         {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
-        {activeTab === 1 && transactions.length > 0 && <ImportExportBar onExport={handleExport} onImport={handleImport} itemCount={transactions.length} />}
+        {activeTab === 1 && transactions.length > 0 && (
+          <View style={s.importBar}>
+            <ImportExportBar onExport={handleExport} onImport={!importing ? handleImport : undefined} itemCount={transactions.length} />
+            {importing && <View style={s.importingBadge}><ActivityIndicator size="small" color={Colors.violet3} /><Text style={s.importingText}>Importando...</Text></View>}
+          </View>
+        )}
         {isLoading && activeTab < 4 && <ListSkeleton rows={4} showCards />}
 
         {activeTab === 0 && (
           <View>
             {transactions.length === 0 && !isLoading && !isDemo ? (
-              <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} secondaryLabel="Importar de planilha" onSecondary={handleImport} />
+              <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} secondaryLabel="Importar de planilha" onSecondary={!importing ? handleImport : undefined} />
             ) : (
               <View>
                 <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={periodLabel} />
@@ -80,7 +124,12 @@ export default function FinanceiroScreen() {
         )}
         {activeTab === 1 && (
           <View>
-            {transactions.length === 0 && !isLoading && <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle="Lance sua primeira receita ou despesa." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} secondaryLabel="Importar CSV" onSecondary={handleImport} />}
+            {transactions.length === 0 && !isLoading && (
+              <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle="Lance sua primeira receita ou despesa, ou importe de uma planilha CSV."
+                actionLabel="Novo lancamento" onAction={() => setShowModal(true)}
+                secondaryLabel={importing ? "Importando..." : "Importar CSV"}
+                onSecondary={!importing ? handleImport : undefined} />
+            )}
             {transactions.length > 0 && <View style={s.listCard}>{transactions.map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}</View>}
           </View>
         )}
@@ -106,6 +155,9 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
+  importBar: { marginBottom: 12 },
+  importingBadge: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.border2 },
+  importingText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 });
