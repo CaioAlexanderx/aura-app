@@ -15,6 +15,7 @@ import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
+import { ScrollableChips } from "@/components/ScrollableChips";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -63,7 +64,6 @@ export default function EstoqueScreen() {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
-  // P0 #11: variants query (after editProduct state declaration)
   const editingProductId = editProduct?.id || null;
   const { data: variantsData, refetch: refetchVariants } = useQuery({
     queryKey: ['variants', company?.id, editingProductId],
@@ -136,7 +136,6 @@ export default function EstoqueScreen() {
         onAction={() => { setEditProduct(null); setShowAddForm(true); setActiveTab(0); }}
       />
 
-      {/* KPIs */}
       {products.length > 0 && (
         <View style={s.summaryRow}>
           <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades`} />
@@ -153,7 +152,6 @@ export default function EstoqueScreen() {
             onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
             editProduct={editProduct}
           />
-          {/* P0 #11: Variants — only when editing existing product */}
           {editProduct?.id && (
             <VariantsSection
               productId={editProduct.id}
@@ -168,7 +166,6 @@ export default function EstoqueScreen() {
 
       {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {/* Empty state */}
       {!isLoading && products.length === 0 && !isDemo && !showAddForm && (
         <View>
           <EmptyState
@@ -187,24 +184,17 @@ export default function EstoqueScreen() {
               <Text style={s.emptyImportTitle}>Importar planilha</Text>
               <Text style={s.emptyImportDesc}>Cadastre varios produtos de uma vez via CSV</Text>
             </View>
-            <ServerImport
-              entity="products"
-              onComplete={handleImportComplete}
-            />
+            <ServerImport entity="products" onComplete={handleImportComplete} />
           </View>
         </View>
       )}
 
       {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
 
-      {/* Toolbar */}
       {products.length > 0 && activeTab === 0 && (
         <View style={s.toolbar}>
           <ImportExportBar onExport={handleExport} itemCount={products.length} />
-          <ServerImport
-            entity="products"
-            onComplete={handleImportComplete}
-          />
+          <ServerImport entity="products" onComplete={handleImportComplete} />
           {!bulkMode ? (
             <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}>
               <Text style={s.bulkBtnText}>Selecionar</Text>
@@ -217,7 +207,6 @@ export default function EstoqueScreen() {
         </View>
       )}
 
-      {/* Bulk action bar */}
       {bulkMode && bulkSelected.size > 0 && (
         <View style={s.bulkBar}>
           <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size > 1 ? "s" : ""}</Text>
@@ -239,13 +228,7 @@ export default function EstoqueScreen() {
             value={search}
             onChangeText={setSearch}
           />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-            {filterCategories.map(c => (
-              <Pressable key={c} onPress={() => setCatFilter(c)} style={[s.catChip, catFilter === c && s.catChipActive]}>
-                <Text style={[s.catChipText, catFilter === c && s.catChipTextActive]}>{c}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
           <View style={s.listCard}>
             {paginated.map(p => (
               <ProductRow
@@ -335,10 +318,6 @@ const s = StyleSheet.create({
   bulkDeleteAction: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   bulkActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 12 },
-  catChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  catChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  catChipText:   { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
-  catChipTextActive: { color: Colors.violet3, fontWeight: "600" },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   abcInfo:     { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
   abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
