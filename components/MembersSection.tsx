@@ -11,41 +11,41 @@ import { useMembers } from "@/hooks/useMembers";
 import { useAuthStore } from "@/stores/auth";
 import type { Member } from "@/hooks/useMembers";
 
-const MODULE_LABELS: Record<string, string> = {
-  pdv: "Caixa (PDV)", estoque: "Estoque", clientes: "Clientes",
-  financeiro: "Financeiro", relatorios: "Relatorios",
+var MODULE_LABELS: Record<string, string> = {
+  painel: "Painel (Dashboard)", pdv: "Caixa (PDV)", estoque: "Estoque",
+  clientes: "Clientes", financeiro: "Financeiro", relatorios: "Relatorios",
   folha: "Folha de pagamento", configuracoes: "Configuracoes",
 };
-const MODULE_ORDER = ["pdv", "estoque", "clientes", "financeiro", "relatorios", "folha", "configuracoes"];
-const ROLE_OPTIONS = ["Colaborador", "Gerente", "Atendente", "Caixa", "Analista"];
+var MODULE_ORDER = ["painel", "pdv", "estoque", "clientes", "financeiro", "relatorios", "folha", "configuracoes"];
+var ROLE_OPTIONS = ["Colaborador", "Gerente", "Atendente", "Caixa", "Analista"];
 
 function StatusBadge({ status }: { status: string }) {
-  const m: Record<string, { label: string; bg: string; color: string }> = {
+  var m: Record<string, { label: string; bg: string; color: string }> = {
     active: { label: "Ativo", bg: Colors.greenD, color: Colors.green },
     pending: { label: "Pendente", bg: Colors.amberD, color: Colors.amber },
     suspended: { label: "Suspenso", bg: Colors.redD, color: Colors.red },
   };
-  const cfg = m[status] || m.pending;
-  return <View style={[badge.wrap, { backgroundColor: cfg.bg }]}><Text style={[badge.text, { color: cfg.color }]}>{cfg.label}</Text></View>;
+  var cfg = m[status] || m.pending;
+  return <View style={[bdg.wrap, { backgroundColor: cfg.bg }]}><Text style={[bdg.text, { color: cfg.color }]}>{cfg.label}</Text></View>;
 }
-const badge = StyleSheet.create({ wrap: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }, text: { fontSize: 10, fontWeight: "700" } });
+var bdg = StyleSheet.create({ wrap: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }, text: { fontSize: 10, fontWeight: "700" } });
 
 function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving }: {
   member: Member; isOwner: boolean;
   onUpdate: (perms: Record<string, boolean>, role: string) => void;
   onRemove: () => void; isUpdating: boolean; isRemoving: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [perms, setPerms] = useState<Record<string, boolean>>(member.permissions || {});
-  const [role, setRole] = useState(member.role_label);
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const canEdit = !isOwner && member.status !== "suspended";
-  const isOwnerLabel = member.role_label === "owner";
-  const isPending = member.status === "pending";
+  var [expanded, setExpanded] = useState(false);
+  var [perms, setPerms] = useState<Record<string, boolean>>(member.permissions || {});
+  var [role, setRole] = useState(member.role_label);
+  var [confirmRemove, setConfirmRemove] = useState(false);
+  var canEdit = !isOwner && member.status !== "suspended";
+  var isOwnerLabel = member.role_label === "owner";
+  var isPending = member.status === "pending";
 
   return (
     <View>
-      <Pressable onPress={() => canEdit && !isPending && setExpanded(!expanded)} style={s.memberRow}>
+      <Pressable onPress={function() { if (canEdit && !isPending) setExpanded(!expanded); }} style={s.memberRow}>
         <View style={s.avatar}><Text style={s.avatarText}>{(member.name || "?")[0].toUpperCase()}</Text></View>
         <View style={{ flex: 1 }}>
           <Text style={s.memberName}>{member.name}</Text>
@@ -55,12 +55,10 @@ function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {isOwnerLabel
-            ? <View style={[badge.wrap, { backgroundColor: Colors.violetD }]}><Text style={[badge.text, { color: Colors.violet3 }]}>Titular</Text></View>
+            ? <View style={[bdg.wrap, { backgroundColor: Colors.violetD }]}><Text style={[bdg.text, { color: Colors.violet3 }]}>Titular</Text></View>
             : <StatusBadge status={member.status} />}
-          {/* P0 #10: Delete button visible for pending members */}
           {isPending && (
-            <Pressable onPress={() => setConfirmRemove(true)} disabled={isRemoving}
-              style={s.deleteBtn} hitSlop={8}>
+            <Pressable onPress={function() { setConfirmRemove(true); }} disabled={isRemoving} style={s.deleteBtn} hitSlop={8}>
               <Icon name="x" size={14} color={Colors.red} />
             </Pressable>
           )}
@@ -72,25 +70,29 @@ function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving
         <View style={s.permEditor}>
           <Text style={s.permSectionLabel}>Funcao</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6, marginBottom: 16 }}>
-            {ROLE_OPTIONS.map(r => (
-              <Pressable key={r} onPress={() => setRole(r)} style={[s.roleChip, role === r && s.roleChipActive]}>
-                <Text style={[s.roleChipText, role === r && { color: Colors.violet3 }]}>{r}</Text>
-              </Pressable>
-            ))}
+            {ROLE_OPTIONS.map(function(r) {
+              return (
+                <Pressable key={r} onPress={function() { setRole(r); }} style={[s.roleChip, role === r && s.roleChipActive]}>
+                  <Text style={[s.roleChipText, role === r && { color: Colors.violet3 }]}>{r}</Text>
+                </Pressable>
+              );
+            })}
           </ScrollView>
           <Text style={s.permSectionLabel}>Acesso aos modulos</Text>
-          {MODULE_ORDER.map(key => (
-            <View key={key} style={s.permRow}>
-              <Text style={s.permLabel}>{MODULE_LABELS[key]}</Text>
-              <Switch value={!!perms[key]} onValueChange={() => setPerms(p => ({ ...p, [key]: !p[key] }))}
-                trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
-            </View>
-          ))}
+          {MODULE_ORDER.map(function(key) {
+            return (
+              <View key={key} style={s.permRow}>
+                <Text style={s.permLabel}>{MODULE_LABELS[key]}</Text>
+                <Switch value={!!perms[key]} onValueChange={function() { setPerms(function(p) { return { ...p, [key]: !p[key] }; }); }}
+                  trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+              </View>
+            );
+          })}
           <View style={s.permActions}>
-            <Pressable onPress={() => onUpdate(perms, role)} disabled={isUpdating} style={[s.savePermBtn, isUpdating && { opacity: 0.6 }]}>
+            <Pressable onPress={function() { onUpdate(perms, role); }} disabled={isUpdating} style={[s.savePermBtn, isUpdating && { opacity: 0.6 }]}>
               {isUpdating ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.savePermBtnText}>Salvar permissoes</Text>}
             </Pressable>
-            <Pressable onPress={() => setConfirmRemove(true)} disabled={isRemoving} style={s.removeBtn}>
+            <Pressable onPress={function() { setConfirmRemove(true); }} disabled={isRemoving} style={s.removeBtn}>
               <Text style={s.removeBtnText}>Suspender</Text>
             </Pressable>
           </View>
@@ -101,8 +103,8 @@ function MemberRow({ member, isOwner, onUpdate, onRemove, isUpdating, isRemoving
         title={isPending ? "Cancelar convite?" : "Suspender membro?"}
         message={isPending ? "O link de convite sera invalidado." : "O membro perdera acesso imediatamente."}
         confirmLabel={isPending ? "Cancelar convite" : "Suspender"} destructive
-        onConfirm={() => { setConfirmRemove(false); onRemove(); }}
-        onCancel={() => setConfirmRemove(false)} />
+        onConfirm={function() { setConfirmRemove(false); onRemove(); }}
+        onCancel={function() { setConfirmRemove(false); }} />
     </View>
   );
 }
@@ -115,8 +117,8 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, onClose }: {
     toast.success("Link copiado!");
   }
   function shareWhatsApp() {
-    const msg = `Voce foi convidado para a equipe de ${companyName} no app Aura como ${role}.\n\nAcesse o link para entrar:\n${inviteUrl}`;
-    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+    var msg = "Voce foi convidado para a equipe de " + companyName + " no app Aura como " + role + ".\n\nAcesse o link para entrar:\n" + inviteUrl;
+    Linking.openURL("https://wa.me/?text=" + encodeURIComponent(msg));
   }
   return (
     <View style={s.inviteSuccess}>
@@ -127,7 +129,7 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, onClose }: {
             <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.green }}>Link de acesso gerado!</Text>
           </View>
           <Text style={{ fontSize: 11, color: Colors.ink3, marginBottom: 12 }}>
-            {email ? `Compartilhe com ${email} para` : "Compartilhe o link para que a pessoa"} crie a conta e entre na equipe.
+            {email ? "Compartilhe com " + email + " para" : "Compartilhe o link para que a pessoa"} crie a conta e entre na equipe.
           </Text>
         </View>
         <Pressable onPress={onClose} style={s.successClose}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>
@@ -143,17 +145,17 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, onClose }: {
 }
 
 export function MembersSection() {
-  const { company } = useAuthStore();
-  const {
+  var { company } = useAuthStore();
+  var {
     members, active, pending, monthlyCost, isLoading,
     lastInvite, clearLastInvite,
     inviteMember, isInviting, updateMember, isUpdating, removeMember, isRemoving,
   } = useMembers();
 
-  const [inviteMode, setInviteMode] = useState<"none" | "link" | "email">("none");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("Colaborador");
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(inviteEmail.trim());
+  var [inviteMode, setInviteMode] = useState<"none" | "link" | "email">("none");
+  var [inviteEmail, setInviteEmail] = useState("");
+  var [inviteRole, setInviteRole] = useState("Colaborador");
+  var emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(inviteEmail.trim());
 
   async function handleInviteLink() {
     try { await inviteMember({ email: "", role_label: inviteRole }); setInviteMode("none"); setInviteRole("Colaborador"); } catch {}
@@ -164,18 +166,22 @@ export function MembersSection() {
   }
   function cancelInvite() { setInviteMode("none"); setInviteEmail(""); setInviteRole("Colaborador"); }
 
-  const RoleSelector = () => (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={[s.formLabel, { marginBottom: 8 }]}>Funcao</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-        {ROLE_OPTIONS.map(r => (
-          <Pressable key={r} onPress={() => setInviteRole(r)} style={[s.roleChip, inviteRole === r && s.roleChipActive]}>
-            <Text style={[s.roleChipText, inviteRole === r && { color: Colors.violet3 }]}>{r}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
-  );
+  function RoleSelector() {
+    return (
+      <View style={{ marginBottom: 16 }}>
+        <Text style={[s.formLabel, { marginBottom: 8 }]}>Funcao</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+          {ROLE_OPTIONS.map(function(r) {
+            return (
+              <Pressable key={r} onPress={function() { setInviteRole(r); }} style={[s.roleChip, inviteRole === r && s.roleChipActive]}>
+                <Text style={[s.roleChipText, inviteRole === r && { color: Colors.violet3 }]}>{r}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={s.container}>
@@ -184,17 +190,17 @@ export function MembersSection() {
           <Text style={s.title}>Equipe</Text>
           <Text style={s.subtitle}>
             {active} ativo{active !== 1 ? "s" : ""}
-            {pending > 0 ? ` / ${pending} pendente${pending !== 1 ? "s" : ""}` : ""}
-            {monthlyCost > 0 ? ` / +R$${monthlyCost}/mes` : ""}
+            {pending > 0 ? " / " + pending + " pendente" + (pending !== 1 ? "s" : "") : ""}
+            {monthlyCost > 0 ? " / +R$" + monthlyCost + "/mes" : ""}
           </Text>
         </View>
         {inviteMode === "none" && !lastInvite && (
           <View style={{ flexDirection: "row", gap: 6 }}>
-            <Pressable onPress={() => setInviteMode("link")} style={s.inviteBtn} disabled={isInviting}>
+            <Pressable onPress={function() { setInviteMode("link"); }} style={s.inviteBtn} disabled={isInviting}>
               {isInviting ? <ActivityIndicator size="small" color="#fff" />
                 : <><Icon name="link" size={13} color="#fff" /><Text style={s.inviteBtnText}>Gerar link</Text></>}
             </Pressable>
-            <Pressable onPress={() => setInviteMode("email")} style={s.inviteBtnSecondary}>
+            <Pressable onPress={function() { setInviteMode("email"); }} style={s.inviteBtnSecondary}>
               <Icon name="mail" size={13} color={Colors.violet3} />
             </Pressable>
           </View>
@@ -240,12 +246,14 @@ export function MembersSection() {
         <View style={s.empty}><Text style={s.emptyText}>Apenas voce por aqui. Convide sua equipe!</Text></View>
       ) : (
         <View>
-          {members.map(m => (
-            <MemberRow key={m.id} member={m} isOwner={m.role_label === "owner"}
-              onUpdate={(perms, role) => updateMember(m.id, { permissions: perms, role_label: role })}
-              onRemove={() => removeMember(m.id)}
-              isUpdating={isUpdating} isRemoving={isRemoving} />
-          ))}
+          {members.map(function(m) {
+            return (
+              <MemberRow key={m.id} member={m} isOwner={m.role_label === "owner"}
+                onUpdate={function(perms, role) { updateMember(m.id, { permissions: perms, role_label: role }); }}
+                onRemove={function() { removeMember(m.id); }}
+                isUpdating={isUpdating} isRemoving={isRemoving} />
+            );
+          })}
         </View>
       )}
 
@@ -256,7 +264,7 @@ export function MembersSection() {
   );
 }
 
-const s = StyleSheet.create({
+var s = StyleSheet.create({
   container: { backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   title: { fontSize: 15, fontWeight: "700", color: Colors.ink },
