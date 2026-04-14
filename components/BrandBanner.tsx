@@ -3,12 +3,12 @@ import { View, Text, Image, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
-const isWeb = Platform.OS === "web";
+var isWeb = Platform.OS === "web";
 
 /**
  * BrandBanner — shows the client's logo
  * Gate: Negocio+ plans only
- * Uses native <img> on web for reliability (RN Image fails silently)
+ * Uses native <img> on web with retry logic
  */
 
 type Props = {
@@ -16,27 +16,47 @@ type Props = {
 };
 
 function WebImage({ src, width, height }: { src: string; width: number; height: number }) {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
+  var [loaded, setLoaded] = useState(false);
+  var [error, setError] = useState(false);
+  var [retried, setRetried] = useState(false);
+
+  // Reset state when src changes
+  useEffect(function() {
+    setLoaded(false);
+    setError(false);
+    setRetried(false);
+  }, [src]);
 
   if (error || !src) return null;
 
+  // Add cache-busting on retry
+  var imgSrc = retried ? src + (src.includes("?") ? "&" : "?") + "t=" + Date.now() : src;
+
   if (isWeb && typeof document !== "undefined") {
     return (
-      <View style={{ width, height, alignItems: "center", justifyContent: "center" }}>
-        {!loaded && <Text style={{ fontSize: 10, color: Colors.ink3 }}>...</Text>}
+      <View style={{ width: width, height: height, alignItems: "center", justifyContent: "center" }}>
+        {!loaded && <Text style={{ fontSize: 9, color: Colors.ink3 }}>Carregando...</Text>}
         <img
-          src={src}
-          alt="Logo"
+          src={imgSrc}
+          alt="Logo da empresa"
+          crossOrigin="anonymous"
           style={{
             maxWidth: width,
             maxHeight: height,
             objectFit: "contain" as any,
-            opacity: loaded ? 1 : 0,
-            transition: "opacity 0.3s ease",
+            display: loaded ? "block" : "none",
           }}
-          onLoad={() => setLoaded(true)}
-          onError={() => { console.warn("[BrandBanner] Image failed:", src); setError(true); }}
+          onLoad={function() { setLoaded(true); }}
+          onError={function() {
+            if (!retried) {
+              // Retry once without cache
+              console.warn("[BrandBanner] Retrying image:", src);
+              setRetried(true);
+            } else {
+              console.warn("[BrandBanner] Image failed after retry:", src);
+              setError(true);
+            }
+          }}
         />
       </View>
     );
@@ -46,23 +66,16 @@ function WebImage({ src, width, height }: { src: string; width: number; height: 
   return (
     <Image
       source={{ uri: src }}
-      style={{ width, height }}
+      style={{ width: width, height: height }}
       resizeMode="contain"
-      onError={() => { console.warn("[BrandBanner] Image failed:", src); setError(true); }}
+      onError={function() { console.warn("[BrandBanner] Native image failed:", src); setError(true); }}
     />
   );
 }
 
 export function BrandBanner({ mode = "block" }: Props) {
-  const { logoUrl, plan } = useCompanyProfile();
-  const canShow = plan === "negocio" || plan === "expansao" || plan === "personalizado";
-
-  // Debug logging (remove after confirmed working)
-  useEffect(() => {
-    if (isWeb) {
-      console.log("[BrandBanner]", { mode, plan, canShow, logoUrl: logoUrl?.substring(0, 60) });
-    }
-  }, [logoUrl, plan]);
+  var { logoUrl, plan } = useCompanyProfile();
+  var canShow = plan === "negocio" || plan === "expansao" || plan === "personalizado";
 
   if (!canShow || !logoUrl) return null;
 
@@ -90,7 +103,7 @@ export function BrandBanner({ mode = "block" }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+var s = StyleSheet.create({
   headerWrap: {
     flex: 1,
     alignItems: "center",
