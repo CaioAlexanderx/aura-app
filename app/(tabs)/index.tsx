@@ -11,6 +11,7 @@ import { TrialBanner } from "@/components/TrialBanner";
 import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 import { ProfileBanner } from "@/components/ProfileBanner";
+import { BrandBanner } from "@/components/BrandBanner";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 
 import { IS_WIDE, MOCK_DASHBOARD, EMPTY_DATA, greeting, fmt } from "@/components/screens/dashboard/types";
@@ -70,6 +71,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        <BrandBanner />
         <ProfileBanner />
         {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={() => setEmailVerified(true)} />}
 

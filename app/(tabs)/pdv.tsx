@@ -5,6 +5,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { useCart } from "@/hooks/useCart";
 import { useCustomers } from "@/hooks/useCustomers";
 import { EmptyState } from "@/components/EmptyState";
+import { BrandBanner } from "@/components/BrandBanner";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { ProductCard } from "@/components/screens/pdv/ProductCard";
