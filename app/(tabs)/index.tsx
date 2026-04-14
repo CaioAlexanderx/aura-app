@@ -14,6 +14,7 @@ import { ProfileBanner } from "@/components/ProfileBanner";
 import { BrandBanner } from "@/components/BrandBanner";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { useVisibleModules } from "@/hooks/useVisibleModules";
 
 import { IS_WIDE, MOCK_DASHBOARD, EMPTY_DATA, greeting, fmt } from "@/components/screens/dashboard/types";
 import { Avatar } from "@/components/screens/dashboard/Avatar";
@@ -26,27 +27,60 @@ import { ObligationRow } from "@/components/screens/dashboard/ObligationRow";
 import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalyticsCard";
 import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
 
+// Route priority when dashboard is not accessible
+var FALLBACK_ROUTES: { mod: string; route: string }[] = [
+  { mod: "pdv", route: "/pdv" },
+  { mod: "estoque", route: "/estoque" },
+  { mod: "financeiro", route: "/financeiro" },
+  { mod: "clientes", route: "/clientes" },
+  { mod: "nfe", route: "/nfe" },
+  { mod: "contabilidade", route: "/contabilidade" },
+  { mod: "folha", route: "/folha" },
+  { mod: "agendamento", route: "/agendamento" },
+  { mod: "canal", route: "/canal" },
+  { mod: "agentes", route: "/agentes" },
+  { mod: "configuracoes", route: "/configuracoes" },
+];
+
 export default function DashboardScreen() {
-  const { user, company, token, isDemo, logout } = useAuthStore();
-  const router = useRouter();
-  const [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
+  var { user, company, token, isDemo, logout } = useAuthStore();
+  var router = useRouter();
+  var [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
+  var visibleMods = useVisibleModules();
 
-  // Shared profile hook — syncs trade_name to auth store
-  const { tradeName } = useCompanyProfile();
+  // Redirect to first available module if dashboard is not accessible
+  useEffect(function() {
+    if (visibleMods.size === 0) return; // still loading
+    if (visibleMods.has("painel")) return; // has access, stay here
 
-  const { data, isLoading, isError } = useQuery({
+    for (var i = 0; i < FALLBACK_ROUTES.length; i++) {
+      if (visibleMods.has(FALLBACK_ROUTES[i].mod)) {
+        router.replace(FALLBACK_ROUTES[i].route as any);
+        return;
+      }
+    }
+  }, [visibleMods]);
+
+  // If user doesn't have painel access, show nothing while redirecting
+  if (visibleMods.size > 0 && !visibleMods.has("painel")) {
+    return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
+  }
+
+  var { tradeName } = useCompanyProfile();
+
+  var { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard", company?.id],
-    queryFn: () => dashboardApi.aggregate(company!.id),
+    queryFn: function() { return dashboardApi.aggregate(company!.id); },
     enabled: !!company?.id && !!token && !isDemo,
     retry: 1, staleTime: 60000,
   });
 
-  useEffect(() => { if (isError && !isDemo) toast.error("Erro ao carregar dashboard."); }, [isError]);
-  useEffect(() => { if ((user as any)?.email_verified !== undefined) setEmailVerified((user as any).email_verified); }, [(user as any)?.email_verified]);
+  useEffect(function() { if (isError && !isDemo) toast.error("Erro ao carregar dashboard."); }, [isError]);
+  useEffect(function() { if ((user as any)?.email_verified !== undefined) setEmailVerified((user as any).email_verified); }, [(user as any)?.email_verified]);
 
-  const d = isDemo ? MOCK_DASHBOARD : (data || EMPTY_DATA);
-  const isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
-  const go = (p: string) => router.push(p as any);
+  var d = isDemo ? MOCK_DASHBOARD : (data || EMPTY_DATA);
+  var isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
+  var go = function(p: string) { router.push(p as any); };
 
   return (
     <View style={{ flex: 1 }}>
@@ -55,7 +89,6 @@ export default function DashboardScreen() {
       <SkeletonStyle />
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>
 
-        {/* Header with logo in center */}
         <View style={s.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1 }}>
             <Avatar name={user?.name ?? "A"} />
@@ -64,7 +97,6 @@ export default function DashboardScreen() {
               <Text style={s.cn} numberOfLines={1}>{tradeName || company?.name || "---"}</Text>
             </View>
           </View>
-          {/* Brand logo in center of header (Negocio+) */}
           <BrandBanner mode="header" />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <PlanBadge plan={company?.plan ?? "essencial"} />
@@ -78,7 +110,7 @@ export default function DashboardScreen() {
         </View>
 
         <ProfileBanner />
-        {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={() => setEmailVerified(true)} />}
+        {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={function() { setEmailVerified(true); }} />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
         {isEmpty && <EmptyDashboard name={user?.name?.split(" ")[0] ?? "usuario"} onPress={go} />}
@@ -90,20 +122,18 @@ export default function DashboardScreen() {
             <Text style={s.sec}>Visao geral</Text>
             <KPIGrid d={d} onNavigate={go} />
 
-            {!isDemo && <SalesAnalyticsCard onPress={() => go("/pdv")} />}
+            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/pdv"); }} />}
 
-            {/* Quick actions */}
             <Text style={s.sec}>Acesso rapido</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
-              <QuickAction ic="cart" iconColor={Colors.green} label="PDV" onPress={() => go("/pdv")} />
-              <QuickAction ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={() => go("/financeiro")} />
-              <QuickAction ic="package" iconColor={Colors.amber} label="Estoque" onPress={() => go("/estoque")} />
-              <QuickAction ic="file_text" iconColor={Colors.red} label="NF-e" onPress={() => go("/nfe")} />
-              <QuickAction ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={() => go("/contabilidade")} />
-              <QuickAction ic="users" iconColor={Colors.violet3} label="Clientes" onPress={() => go("/clientes")} />
+              <QuickAction ic="cart" iconColor={Colors.green} label="PDV" onPress={function() { go("/pdv"); }} />
+              <QuickAction ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={function() { go("/financeiro"); }} />
+              <QuickAction ic="package" iconColor={Colors.amber} label="Estoque" onPress={function() { go("/estoque"); }} />
+              <QuickAction ic="file_text" iconColor={Colors.red} label="NF-e" onPress={function() { go("/nfe"); }} />
+              <QuickAction ic="calculator" iconColor="#8b5cf6" label="Contabil" onPress={function() { go("/contabilidade"); }} />
+              <QuickAction ic="users" iconColor={Colors.violet3} label="Clientes" onPress={function() { go("/clientes"); }} />
             </ScrollView>
 
-            {/* Obligations */}
             {d.obligations && d.obligations.length > 0 && (
               <>
                 <View style={s.sh}>
@@ -111,25 +141,24 @@ export default function DashboardScreen() {
                   <View style={s.db2}><Text style={s.dt2}>Estimativa</Text></View>
                 </View>
                 <View style={s.lc}>
-                  {d.obligations.map((o: any) => (
-                    <ObligationRow key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} />
-                  ))}
+                  {d.obligations.map(function(o: any) {
+                    return <ObligationRow key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} />;
+                  })}
                   <View style={s.lf}><Text style={s.lft}>Apoio contabil informativo</Text></View>
                 </View>
               </>
             )}
 
-            {/* Recent transactions */}
             {d.recentSales && d.recentSales.length > 0 && (
               <>
                 <View style={s.sh}>
                   <Text style={s.sec}>Ultimas transacoes</Text>
-                  <TouchableOpacity onPress={() => go("/financeiro")}><Text style={s.sa}>Ver todas</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={function() { go("/financeiro"); }}><Text style={s.sa}>Ver todas</Text></TouchableOpacity>
                 </View>
                 <View style={s.lc}>
-                  {d.recentSales.map((sl: any) => (
-                    <SaleRow key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} type={sl.type} />
-                  ))}
+                  {d.recentSales.map(function(sl: any) {
+                    return <SaleRow key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} type={sl.type} />;
+                  })}
                 </View>
               </>
             )}
@@ -144,7 +173,7 @@ export default function DashboardScreen() {
   );
 }
 
-const s = StyleSheet.create({
+var s = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 },
