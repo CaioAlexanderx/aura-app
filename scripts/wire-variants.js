@@ -20,7 +20,7 @@ code = code.replace(
   'import { AddProductForm } from "@/components/screens/estoque/AddProductForm";\nimport { VariantsSection } from "@/components/VariantsSection";'
 );
 
-// 2. Add query for variants (import useQuery if not present)
+// 2. Add useQuery import if not present
 if (!code.includes('useQuery')) {
   code = code.replace(
     'import { useQueryClient } from "@tanstack/react-query";',
@@ -28,25 +28,7 @@ if (!code.includes('useQuery')) {
   );
 }
 
-// 3. Add variants query inside component, after queryClient
-const variantsHook = `
-  // P0 #11: variants for editing product
-  const editingProductId = editProduct?.id || null;
-  const { data: variantsData, refetch: refetchVariants } = useQuery({
-    queryKey: ['variants', company?.id, editingProductId],
-    queryFn: () => companiesApi.getVariants(company!.id, editingProductId!),
-    enabled: !!company?.id && !!editingProductId && showAddForm,
-    staleTime: 30000,
-  });
-`;
-
-// Insert after scrollRef
-code = code.replace(
-  'const scrollRef = useRef<any>(null);',
-  'const scrollRef = useRef<any>(null);' + variantsHook
-);
-
-// 4. Add companiesApi import if not there
+// 3. Add companiesApi import if not there
 if (!code.includes('companiesApi')) {
   code = code.replace(
     'import { useAuthStore } from "@/stores/auth";',
@@ -54,11 +36,26 @@ if (!code.includes('companiesApi')) {
   );
 }
 
-// 5. Insert VariantsSection after AddProductForm close tag
-// Find: </AddProductForm>\n      )} or the closing of the showAddForm block
+// 4. Add variants query hook after scrollRef
+const variantsHook = `
+  // P0 #11: variants for editing product
+  const editingProductId = editProduct?.id || null;
+  const { data: variantsData, refetch: refetchVariants } = useQuery({
+    queryKey: ['variants', company?.id, editingProductId],
+    queryFn: () => companiesApi.variants(company!.id, editingProductId!),
+    enabled: !!company?.id && !!editingProductId && showAddForm,
+    staleTime: 30000,
+  });
+`;
+code = code.replace(
+  'const scrollRef = useRef<any>(null);',
+  'const scrollRef = useRef<any>(null);' + variantsHook
+);
+
+// 5. Insert VariantsSection after AddProductForm
 const variantsBlock = `
 
-      {/* P0 #11: Variants — only when editing existing product */}
+      {/* P0 #11: Variants \u2014 only when editing existing product */}
       {showAddForm && editProduct?.id && (
         <VariantsSection
           productId={editProduct.id}
@@ -69,12 +66,10 @@ const variantsBlock = `
         />
       )}`;
 
-// Insert after the AddProductForm closing block
 const addFormPattern = /editProduct={editProduct}\s*\n\s*\/>/;
 if (addFormPattern.test(code)) {
   code = code.replace(addFormPattern, (match) => match + variantsBlock);
 } else {
-  // Alternative: insert after the showAddForm block closing
   code = code.replace(
     '{isLoading && <ListSkeleton',
     variantsBlock + '\n\n      {isLoading && <ListSkeleton'
