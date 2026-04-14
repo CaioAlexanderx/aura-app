@@ -40,7 +40,9 @@ export default function PdvScreen() {
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
+    discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
   } = useCart();
   const IS_WIDE = useIsWide();
   const [search, setSearch] = useState("");

@@ -6,6 +6,7 @@ import { couponsApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { CartItem } from "@/hooks/useCart";
+import { DiscountSection } from "./DiscountSection";
 import { PAYMENTS } from "@/hooks/useCart";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -51,7 +52,8 @@ export function CartPanel({
   customers, employees,
   selectedCustomerId, selectCustomer,
   selectedEmployeeId, selectedEmployeeName, selectEmployee,
-  couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
+  discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
+    couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
 }: {
   cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; totalAfterCoupon?: number; itemCount: number;
   isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void;
@@ -63,6 +65,12 @@ export function CartPanel({
   selectedEmployeeId?: string | null;
   selectedEmployeeName?: string | null;
   selectEmployee?: (id: string | null, name: string | null) => void;
+  discountType?: "%" | "R$";
+  setDiscountType?: (t: "%" | "R$") => void;
+  discountValue?: string;
+  setDiscountValue?: (v: string) => void;
+  manualDiscountAmount?: number;
+  clearDiscount?: () => void;
   couponCode?: string;
   setCouponCode?: (v: string) => void;
   couponApplied?: { code: string; discount: number } | null;
@@ -256,6 +264,21 @@ export function CartPanel({
                   </Pressable>
                 </View>
               )}
+            </View>
+          )}
+
+          {/* P1 #1: Manual discount */}
+          {setDiscountType && setDiscountValue && (
+            <View style={{ marginTop: 4 }}>
+              <DiscountSection
+                total={total}
+                discountType={discountType || "%"}
+                setDiscountType={setDiscountType}
+                discountValue={discountValue || ""}
+                setDiscountValue={setDiscountValue}
+                manualDiscountAmount={manualDiscountAmount || 0}
+                clearDiscount={clearDiscount || (() => {})}
+              />
             </View>
           )}
 
