@@ -18,29 +18,29 @@ function esc(s: string): string {
 }
 
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
-  const { company, token } = useAuthStore();
-  const [mode, setMode] = useState<"barcode" | "qr">("barcode");
-  const [search, setSearch] = useState("");
-  const isWeb = Platform.OS === "web";
+  var { company, token } = useAuthStore();
+  var [mode, setMode] = useState<"barcode" | "qr">("barcode");
+  var [search, setSearch] = useState("");
+  var isWeb = Platform.OS === "web";
 
-  const productsWithCode = useMemo(
-    () => products.filter(p => p.barcode || p.code),
+  var productsWithCode = useMemo(
+    function() { return products.filter(function(p) { return p.barcode || p.code; }); },
     [products]
   );
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
+  var filtered = useMemo(function() {
+    var q = search.toLowerCase().trim();
     if (!q) return productsWithCode;
-    return productsWithCode.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.barcode || p.code || "").toLowerCase().includes(q)
-    );
+    return productsWithCode.filter(function(p) {
+      return p.name.toLowerCase().includes(q) ||
+        (p.barcode || p.code || "").toLowerCase().includes(q);
+    });
   }, [productsWithCode, search]);
 
   function toggleSelect(id: string) {
     onSelectionChange(
       selectedIds.includes(id)
-        ? selectedIds.filter(i => i !== id)
+        ? selectedIds.filter(function(i) { return i !== id; })
         : [...selectedIds, id]
     );
   }
@@ -64,7 +64,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     if (selected.length === 0) { toast.error("Produtos sem codigo"); return; }
 
     var isQR = mode === "qr";
-    var COLS = 3; // 3 etiquetas por linha na bobina
+    var COLS = 3;
 
     // Detect barcode format
     var firstCode = selected[0].barcode || selected[0].code;
@@ -87,12 +87,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       return '<td class="cell bc-layout"><div class="bc-box"><svg id="bc-' + i + '" data-code="' + code + '"></svg></div><div class="name">' + name + '</div><div class="price">' + price + '</div></td>';
     });
 
-    // Pad last row with empty cells to complete the 3-column grid
+    // Pad last row
     while (cells.length % COLS !== 0) {
       cells.push('<td class="cell"></td>');
     }
 
-    // Group cells into rows of 3
+    // Group cells into rows
     var rowsHtml = "";
     for (var r = 0; r < cells.length; r += COLS) {
       rowsHtml += "<tr>" + cells.slice(r, r + COLS).join("") + "</tr>\n";
@@ -105,32 +105,31 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
     }
     html += '<style>';
-    // Page = full row width (3 x 33mm = 99mm) x 21mm height
     html += '@page{margin:0;size:99mm 21mm}';
     html += '*{margin:0;padding:0;box-sizing:border-box}';
     html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5}';
 
-    // Table layout: each row = 1 physical label row, each cell = 1 label
     html += 'table{border-collapse:collapse;width:99mm;table-layout:fixed}';
     html += 'tr{height:21mm;page-break-after:always;page-break-inside:avoid}';
     html += 'tr:last-child{page-break-after:auto}';
-    html += '.cell{width:33mm;height:21mm;background:#fff;overflow:hidden;vertical-align:middle;padding:0}';
+    html += '.cell{width:33mm;height:21mm;background:#fff;overflow:hidden;vertical-align:top;padding:0}';
 
-    // BARCODE cell layout
-    html += '.bc-layout{text-align:center;padding:1mm 2mm}';
-    html += '.bc-box{width:27mm;height:10mm;margin:0 auto;overflow:hidden;display:flex;align-items:center;justify-content:center}';
+    // BARCODE layout — clear separation between barcode zone and text zone
+    // Total 21mm: 1mm top pad + 11mm barcode + 0.5mm gap + 3.5mm name + 4mm price + 1mm bottom pad
+    html += '.bc-layout{text-align:center;padding:1mm 1.5mm}';
+    html += '.bc-box{width:28mm;height:11mm;margin:0 auto;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff}';
     html += '.bc-box svg{width:100%!important;height:100%!important;display:block}';
-    html += '.bc-layout .name{font-size:5pt;font-weight:600;line-height:1.1;max-height:4mm;overflow:hidden;word-break:break-word;margin-top:0.5mm}';
-    html += '.bc-layout .price{font-size:7pt;font-weight:900;margin-top:0.2mm}';
+    html += '.bc-layout .name{font-size:5.5pt;font-weight:600;line-height:1.1;max-height:3.5mm;overflow:hidden;word-break:break-word;margin-top:0.5mm;white-space:nowrap;text-overflow:ellipsis}';
+    html += '.bc-layout .price{font-size:8pt;font-weight:900;margin-top:0.3mm}';
 
-    // QR cell layout
+    // QR layout
     html += '.qr-layout{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm}';
     html += '.qr-layout .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
     html += '.qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;overflow:hidden}';
     html += '.qr-layout .name{font-size:5.5pt;font-weight:700;line-height:1.15;max-height:10mm;overflow:hidden;word-break:break-word}';
     html += '.qr-layout .price{font-size:7.5pt;font-weight:900;white-space:nowrap}';
 
-    // Preview bar (screen only)
+    // Preview
     html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
     html += '.preview-bar span{color:#a78bfa;font-size:12px}';
     html += '.preview-bar b{color:#e2e8f0;font-size:13px}';
@@ -148,9 +147,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       html += '<script>';
       html += 'document.querySelectorAll("[data-code]").forEach(function(el){';
       html += 'var code=el.getAttribute("data-code");';
-      html += 'try{JsBarcode(el,code,{format:"' + jsFormat + '",width:1,height:28,margin:6,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}';
-      html += 'catch(e){try{JsBarcode(el,code,{format:"CODE128",width:1,height:28,margin:6,fontSize:7,textMargin:1,displayValue:true,font:"Arial",background:"#ffffff",lineColor:"#000000"});}catch(e2){}}';
-      // Convert fixed pixel dimensions to viewBox for responsive scaling
+      // FIX: displayValue:false — prevents number text overlapping with product name
+      // FIX: height:50 + margin:8 — taller bars + wider quiet zones for reliable scanning
+      // FIX: width:1.5 — slightly wider bars for thermal printer clarity
+      html += 'try{JsBarcode(el,code,{format:"' + jsFormat + '",width:1.5,height:50,margin:8,displayValue:false,background:"#ffffff",lineColor:"#000000"});}';
+      html += 'catch(e){try{JsBarcode(el,code,{format:"CODE128",width:1.5,height:50,margin:8,displayValue:false,background:"#ffffff",lineColor:"#000000"});}catch(e2){}}';
+      // Convert fixed pixel dimensions to viewBox for responsive scaling inside .bc-box
       html += 'var w=el.getAttribute("width");var h=el.getAttribute("height");';
       html += 'if(w&&h){el.setAttribute("viewBox","0 0 "+w+" "+h);el.removeAttribute("width");el.removeAttribute("height");}';
       html += '});';
@@ -184,10 +186,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           <Text style={s.hint}>Selecione os produtos e clique em imprimir. Otimizado para Bematech L42 PRO.</Text>
         </View>
         <View style={s.modeToggle}>
-          <Pressable onPress={() => setMode("barcode")} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}>
+          <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}>
             <Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>Cod. barras</Text>
           </Pressable>
-          <Pressable onPress={() => setMode("qr")} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}>
+          <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}>
             <Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text>
           </Pressable>
         </View>
@@ -198,7 +200,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           <Icon name="search" size={14} color={Colors.ink3} />
           <TextInput style={s.searchInput} placeholder="Buscar produto..." placeholderTextColor={Colors.ink3}
             value={search} onChangeText={setSearch} />
-          {search.length > 0 && <Pressable onPress={() => setSearch("")}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
+          {search.length > 0 && <Pressable onPress={function() { setSearch(""); }}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
         </View>
         <Pressable onPress={toggleAll} style={s.selectAllBtn}>
           <Text style={s.selectAllText}>{allSelected ? "Desmarcar" : "Selecionar"} todos ({filtered.length})</Text>
@@ -211,10 +213,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             {productsWithCode.length === 0 ? "Nenhum produto com codigo cadastrado" : "Nenhum produto encontrado"}
           </Text>
         )}
-        {filtered.map(p => {
-          const sel = selectedIds.includes(p.id);
+        {filtered.map(function(p) {
+          var sel = selectedIds.includes(p.id);
           return (
-            <Pressable key={p.id} onPress={() => toggleSelect(p.id)} style={[s.item, sel && s.itemSelected]}>
+            <Pressable key={p.id} onPress={function() { toggleSelect(p.id); }} style={[s.item, sel && s.itemSelected]}>
               <View style={[s.checkbox, sel && s.checkboxSelected]}>
                 {sel && <Icon name="check" size={10} color="#fff" />}
               </View>
@@ -241,7 +243,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   );
 }
 
-const s = StyleSheet.create({
+var s = StyleSheet.create({
   container: { gap: 12 },
   header: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 },
   title: { fontSize: 16, fontWeight: "700", color: Colors.ink },
