@@ -15,7 +15,11 @@ function mapApiTransaction(t: any): Transaction {
     amount: parseFloat(t.amount) || 0,
     status: t.status === "pending" ? "pending" : "confirmed",
     source: t.source || "manual",
-  };
+    // Preserve raw dates for TransactionRow formatting and sorting
+    due_date: t.due_date || null,
+    created_at: t.created_at || null,
+    paid_at: t.paid_at || null,
+  } as Transaction & { due_date?: string; created_at?: string; paid_at?: string };
 }
 
 function safePeriod(raw: any): string {
@@ -32,7 +36,7 @@ export function useTransactionsApi(activeTab?: number) {
 
   const { data: apiTx, isLoading: isLoadingTx } = useQuery({
     queryKey: ["transactions", companyId],
-    queryFn: () => companiesApi.transactions(companyId!, "limit=50"),
+    queryFn: () => companiesApi.transactions(companyId!, "limit=200"),
     enabled: !!companyId && !!token && !isDemo,
     retry: 1, staleTime: 30000,
   });
@@ -55,7 +59,14 @@ export function useTransactionsApi(activeTab?: number) {
     if (isDemo) return [];
     const arr = apiTx?.transactions || apiTx?.rows || apiTx;
     if (!(arr instanceof Array)) return [];
-    return arr.map(mapApiTransaction);
+    const mapped = arr.map(mapApiTransaction);
+    // Sort by due_date descending (most recent first)
+    mapped.sort((a: any, b: any) => {
+      const da = a.due_date || a.created_at || "";
+      const db = b.due_date || b.created_at || "";
+      return db.localeCompare(da);
+    });
+    return mapped;
   }, [apiTx, isDemo]);
 
   const summary = useMemo(() => {
@@ -87,13 +98,11 @@ export function useTransactionsApi(activeTab?: number) {
     onError: () => toast.error("Erro ao criar lancamento"),
   });
 
-  // M9: Optimistic delete — remove from cache immediately, rollback on error
   const deleteMutation = useMutation({
     mutationFn: (txId: string) => companiesApi.deleteTransaction(companyId!, txId),
     onMutate: async (txId: string) => {
       await qc.cancelQueries({ queryKey: ["transactions", companyId] });
       const prev = qc.getQueryData(["transactions", companyId]);
-      // Optimistically remove the transaction from cache
       qc.setQueryData(["transactions", companyId], (old: any) => {
         if (!old) return old;
         if (old.transactions) return { ...old, transactions: old.transactions.filter((t: any) => t.id !== txId) };
@@ -105,7 +114,6 @@ export function useTransactionsApi(activeTab?: number) {
       return { prev };
     },
     onError: (_err, _txId, context) => {
-      // Rollback on error
       if (context?.prev) qc.setQueryData(["transactions", companyId], context.prev);
       toast.error("Erro ao excluir lancamento");
     },

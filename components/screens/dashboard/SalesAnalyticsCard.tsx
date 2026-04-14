@@ -13,33 +13,29 @@ const PERIODS = [
 
 type PeriodKey = typeof PERIODS[number]["key"];
 
-/**
- * P1 #3: Quick period selector for Dashboard
- * Replaces "Desempenho de vendas" with Ontem/Hoje/Semana/Mes tabs
- * Shows: total R$, total vendas, total produtos, ticket medio, growth vs anterior
- */
 export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
   const [period, setPeriod] = useState<PeriodKey>("today");
   const { data, isLoading, isFetching } = useSalesAnalytics(period, "day");
   const { data: ranking } = useProductsRanking(period);
   const isWeb = Platform.OS === "web";
 
-  const totalSales = data?.total_sales || 0;
-  const totalRevenue = data?.total_revenue || 0;
-  const avgTicket = data?.avg_ticket || 0;
-  const growth = data?.comparison?.growth_pct;
-  const topProducts = ranking?.products?.slice(0, 3) || [];
-  const totalProductsSold = ranking?.summary?.total_sold || totalSales;
+  // FIX: API returns nested { summary: { total_sales, ... } }
+  const summary = data?.summary || data;
+  const totalSales = summary?.total_sales || 0;
+  const totalRevenue = summary?.total_revenue || 0;
+  const avgTicket = summary?.avg_ticket || 0;
+
+  // Top products: from dedicated ranking endpoint OR from salesAnalytics.top_products
+  const topProducts = ranking?.products?.slice(0, 3) || data?.top_products?.slice(0, 3) || [];
+  const totalProductsSold = ranking?.summary?.total_sold || topProducts.reduce((s: number, p: any) => s + (p.total_qty || p.qty_sold || 0), 0) || totalSales;
 
   const periodLabel = PERIODS.find(p => p.key === period)?.label || "Hoje";
   const comparisonLabel = period === "today" ? "ontem" : period === "yesterday" ? "anteontem" : period === "week" ? "semana anterior" : "mes anterior";
 
-  // Show empty state only if ALL periods would be empty (month has no sales)
   if (!isLoading && totalSales === 0 && totalRevenue === 0 && period === "month" && !topProducts.length) return null;
 
   return (
     <View>
-      {/* Header with period selector */}
       <View style={s.header}>
         <Text style={s.title}>Vendas</Text>
         <View style={s.periodBar}>
@@ -54,7 +50,6 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
       </View>
 
       <View style={[s.card, isFetching && { opacity: 0.7 }]}>
-        {/* Main KPIs row */}
         <View style={s.kpiRow}>
           <View style={s.kpiMain}>
             <Text style={s.kpiMainValue}>{fmt(totalRevenue)}</Text>
@@ -78,23 +73,12 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
           </View>
         </View>
 
-        {/* Growth badge */}
-        {growth !== undefined && growth !== null && (
-          <View style={[s.growthBadge, { backgroundColor: growth >= 0 ? Colors.greenD : Colors.redD }]}>
-            <Text style={[s.growthText, { color: growth >= 0 ? Colors.green : Colors.red }]}>
-              {growth >= 0 ? "+" : ""}{growth.toFixed(1)}% vs {comparisonLabel}
-            </Text>
-          </View>
-        )}
-
-        {/* No sales for this period */}
         {!isLoading && totalSales === 0 && (
           <View style={s.emptyPeriod}>
             <Text style={s.emptyText}>Nenhuma venda {periodLabel.toLowerCase() === "hoje" ? "hoje ainda" : periodLabel.toLowerCase()}</Text>
           </View>
         )}
 
-        {/* Top products */}
         {topProducts.length > 0 && (
           <View style={s.topSection}>
             <Text style={s.topTitle}>Mais vendidos ({periodLabel.toLowerCase()})</Text>
@@ -104,14 +88,13 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
                   <Text style={[s.topRankText, i === 0 && { color: Colors.amber }]}>{i + 1}</Text>
                 </View>
                 <Text style={s.topName} numberOfLines={1}>{p.name}</Text>
-                <Text style={s.topQty}>{p.qty_sold} un</Text>
-                <Text style={s.topRev}>{fmtK(p.revenue)}</Text>
+                <Text style={s.topQty}>{p.total_qty || p.qty_sold || 0} un</Text>
+                <Text style={s.topRev}>{fmtK(p.total_revenue || p.revenue || 0)}</Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* Footer link */}
         <Pressable onPress={onPress} style={s.footer}>
           <Text style={s.footerText}>Ver analise completa</Text>
         </Pressable>
@@ -128,26 +111,18 @@ const s = StyleSheet.create({
   periodBtnActive: { backgroundColor: Colors.violet },
   periodText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   periodTextActive: { color: "#fff", fontWeight: "600" },
-
   card: { backgroundColor: Colors.bg3, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 24 },
-
   kpiRow: { gap: 12, marginBottom: 12 },
   kpiMain: { alignItems: "center", paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   kpiMainValue: { fontSize: 28, fontWeight: "800", color: Colors.green, letterSpacing: -0.5 },
   kpiMainLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 2 },
-
   kpiSide: { flexDirection: "row", justifyContent: "space-around" },
   kpiSmall: { alignItems: "center", flex: 1 },
   kpiSmallValue: { fontSize: 18, fontWeight: "800", color: Colors.ink },
   kpiSmallLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 },
   kpiDivider: { width: 1, backgroundColor: Colors.border, marginHorizontal: 4 },
-
-  growthBadge: { alignSelf: "center", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5, marginBottom: 12 },
-  growthText: { fontSize: 11, fontWeight: "600" },
-
   emptyPeriod: { alignItems: "center", paddingVertical: 16 },
   emptyText: { fontSize: 12, color: Colors.ink3, fontStyle: "italic" as any },
-
   topSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12, marginTop: 4 },
   topTitle: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
@@ -156,7 +131,6 @@ const s = StyleSheet.create({
   topName: { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "500" },
   topQty: { fontSize: 11, color: Colors.ink3 },
   topRev: { fontSize: 12, color: Colors.green, fontWeight: "600", minWidth: 70, textAlign: "right" },
-
   footer: { alignItems: "center", paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8 },
   footerText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
 });

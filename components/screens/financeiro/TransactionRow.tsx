@@ -4,22 +4,37 @@ import { Colors } from "@/constants/colors";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
 
-// M1: Removed "Pendente" status display — confuses users since all new
-// transactions default to pending. Only show source label if relevant.
+function formatDate(item: Transaction): string {
+  // Prefer due_date (business date), fallback to date field
+  const raw = (item as any).due_date || (item as any).created_at;
+  if (!raw) return item.date || "---";
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return item.date || "---";
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch {
+    return item.date || "---";
+  }
+}
+
 export function TransactionRow({ item, onDelete }: { item: Transaction; onDelete?: (id: string) => void }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
   const isIncome = item.type === "income";
   const sourceLabel = item.source === "pdv" ? "PDV" : item.source === "folha" ? "Folha" : item.source === "lote" ? "Lote" : "";
+  const dateStr = formatDate(item);
+  const isPending = item.status === "pending";
 
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
       style={[s.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]}>
       <View style={s.left}>
         <View style={[s.dot, { backgroundColor: isIncome ? Colors.green : Colors.red }]} />
-        <View>
-          <Text style={s.desc}>{item.desc}</Text>
-          <Text style={s.meta}>{item.date} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.desc} numberOfLines={1}>{item.desc}</Text>
+          <Text style={s.meta}>
+            {dateStr} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}{isPending ? " / Pendente" : ""}
+          </Text>
         </View>
       </View>
       <View style={s.right}>
