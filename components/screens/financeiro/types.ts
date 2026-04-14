@@ -36,52 +36,61 @@ export type WithdrawalData = {
 
 export type PeriodKey = "week" | "month" | "year" | "prev_year";
 
-export const PERIODS: { key: PeriodKey; label: string }[] = [
+export var PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "week", label: "Semanal" },
   { key: "month", label: "Mensal" },
   { key: "year", label: "Anual" },
   { key: "prev_year", label: "Ano Anterior" },
 ];
 
-export const TABS = ["Visao Geral", "Lancamentos", "Analise", "Retirada", "Cupons"];
-export const INCOME_CATS = ["Vendas", "Servicos", "Outros", "Investimentos"];
-export const EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
+export var TABS = ["Visao Geral", "Lancamentos", "Analise", "Retirada", "Cupons"];
+export var INCOME_CATS = ["Vendas", "Servicos", "Outros", "Investimentos"];
+export var EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
 
-export const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-export const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1).replace(".", ",")}k` : fmt(n);
+export function fmt(n: number): string {
+  return "R$ " + round2(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+export function fmtK(n: number): string {
+  return n >= 1000 ? "R$ " + (n / 1000).toFixed(1).replace(".", ",") + "k" : fmt(n);
+}
+
+/** Round to 2 decimal places — prevents 3-decimal display bug */
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 export function getPeriodRange(key: PeriodKey): { start: Date; end: Date; label: string } {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   switch (key) {
     case "week": {
-      const start = new Date(today);
+      var start = new Date(today);
       start.setDate(today.getDate() - 6);
       start.setHours(0, 0, 0, 0);
-      return { start, end: today, label: "Ultimos 7 dias" };
+      return { start: start, end: today, label: "Ultimos 7 dias" };
     }
     case "month": {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthName = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-      return { start, end: today, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) };
+      var startM = new Date(now.getFullYear(), now.getMonth(), 1);
+      var monthName = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      return { start: startM, end: today, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) };
     }
     case "year": {
-      const start = new Date(now.getFullYear(), 0, 1);
-      return { start, end: today, label: String(now.getFullYear()) };
+      var startY = new Date(now.getFullYear(), 0, 1);
+      return { start: startY, end: today, label: String(now.getFullYear()) };
     }
     case "prev_year": {
-      const y = now.getFullYear() - 1;
+      var y = now.getFullYear() - 1;
       return { start: new Date(y, 0, 1), end: new Date(y, 11, 31, 23, 59, 59), label: String(y) };
     }
   }
 }
 
 export function filterByPeriod(txs: Transaction[], key: PeriodKey): Transaction[] {
-  const { start, end } = getPeriodRange(key);
-  return txs.filter(t => {
-    const raw = (t as any).due_date || (t as any).created_at || t.date;
+  var range = getPeriodRange(key);
+  return txs.filter(function(t) {
+    var raw = (t as any).due_date || (t as any).created_at || t.date;
     if (!raw) return false;
-    const d = new Date(raw);
-    return d >= start && d <= end;
+    var d = new Date(raw);
+    return d >= range.start && d <= range.end;
   });
 }
