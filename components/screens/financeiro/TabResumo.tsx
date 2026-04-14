@@ -5,6 +5,7 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { useFinancialAnalysis } from "@/hooks/useFinancialAnalysis";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
+import { EmployeeDonut, EmployeeMonthlyChart, RevenueTrendLine } from "./FinancialCharts";
 
 type Props = { transactions: Transaction[]; dreApi: any };
 const isWeb = Platform.OS === "web";
@@ -244,8 +245,11 @@ export function TabResumo({ transactions, dreApi }: Props) {
       <VelocityHero velocity={d.velocity} current={d.current} previous={d.previous} />
       <CompCards current={d.current} previous={d.previous} />
       <MonthlyChart data={d.monthly} />
+      <RevenueTrendLine monthly={d.monthly} />
       <DayOfWeekSection data={d.dayOfWeek} insights={d.insights} />
       <EmployeeRanking employees={d.employees} />
+      <EmployeeDonut employees={d.employees} />
+      <EmployeeMonthlyChart data={d.employeeMonthly} employees={d.employees.map((e: any) => e.name)} />
       <TicketDistribution data={d.ticketDistribution} />
       <WeeklyTrend data={d.weeklyTrend} />
       <TopCustomers data={d.topCustomers} />
