@@ -13,12 +13,10 @@ import { startAutoSync } from "@/services/offlineSync";
 
 const queryClient = new QueryClient();
 
-// Detect ?email_verified=true in URL (from confirmation link redirect)
 function checkVerifiedParam() {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
   if (params.get("email_verified") === "true") {
-    // Clean URL
     const url = new URL(window.location.href);
     url.searchParams.delete("email_verified");
     url.searchParams.delete("verify_error");
@@ -41,12 +39,10 @@ function AuthGuard() {
     );
   }, []);
 
-  // On mount: check if returning from email confirmation link
   useEffect(() => {
     if (!isHydrated || !token) return;
     const verified = checkVerifiedParam();
     if (verified) {
-      // Refresh user data from server to get updated email_verified
       authApi.me(token).then(res => {
         if ((res.user as any)?.email_verified) {
           useAuthStore.setState({ user: { ...res.user, email_verified: true } as any });
@@ -61,25 +57,26 @@ function AuthGuard() {
     const onVerify = segments[1] === "verify-email";
     const emailVerified = !!(user as any)?.email_verified;
 
-    // Not logged in -> login
+    // P0 #5 FIX: Skip ALL redirects when on /invite/* routes
+    // The invite page handles its own navigation after accepting/rejecting
+    const onInvite = segments[0] === "invite";
+    if (onInvite) return;
+
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
       return;
     }
 
-    // Logged in, email NOT verified, not demo -> verify-email
     if (token && !isDemo && user && !emailVerified && !onVerify) {
       router.replace("/(auth)/verify-email");
       return;
     }
 
-    // Logged in, email verified (or demo), still on auth pages -> dashboard
     if (token && (emailVerified || isDemo) && inAuth && !onVerify) {
       router.replace("/(tabs)");
       return;
     }
 
-    // On verify-email but already verified -> dashboard
     if (token && emailVerified && onVerify) {
       router.replace("/(tabs)");
       return;
