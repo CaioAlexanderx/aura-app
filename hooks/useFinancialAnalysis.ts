@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
+import type { PeriodKey } from "@/components/screens/financeiro/types";
 
-const API = "https://aura-backend-production-f805.up.railway.app/api/v1";
+var API = "https://aura-backend-production-f805.up.railway.app/api/v1";
 
 export type MonthlyData = {
   month: string; label: string; receita: number; despesa: number; resultado: number;
@@ -31,22 +32,34 @@ export type AnalysisData = {
   };
 };
 
-async function fetchAnalysis(companyId: string, token: string, months = 13): Promise<AnalysisData> {
-  const res = await fetch(`${API}/companies/${companyId}/financial/analysis?months=${months}`, {
-    headers: { Authorization: `Bearer ${token}` },
+// Map period to months for the backend
+function periodToMonths(period?: PeriodKey): number {
+  switch (period) {
+    case "week": return 1;
+    case "month": return 1;
+    case "year": return 12;
+    case "prev_year": return 24;
+    default: return 13;
+  }
+}
+
+async function fetchAnalysis(companyId: string, token: string, months: number): Promise<AnalysisData> {
+  var res = await fetch(API + "/companies/" + companyId + "/financial/analysis?months=" + months, {
+    headers: { Authorization: "Bearer " + token },
   });
   if (!res.ok) throw new Error("Erro ao carregar analise");
   return res.json();
 }
 
-export function useFinancialAnalysis(months = 13) {
-  const { company, token } = useAuthStore();
-  const companyId = company?.id;
+export function useFinancialAnalysis(months?: number, period?: PeriodKey) {
+  var { company, token } = useAuthStore();
+  var companyId = company?.id;
+  var effectiveMonths = months || periodToMonths(period);
   return useQuery<AnalysisData>({
-    queryKey: ["financialAnalysis", companyId, months],
-    queryFn: () => fetchAnalysis(companyId!, token!, months),
+    queryKey: ["financialAnalysis", companyId, effectiveMonths],
+    queryFn: function() { return fetchAnalysis(companyId!, token!, effectiveMonths); },
     enabled: !!companyId && !!token,
-    staleTime: 60_000,
+    staleTime: 60000,
     retry: 1,
   });
 }

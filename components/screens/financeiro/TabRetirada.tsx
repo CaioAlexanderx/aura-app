@@ -7,54 +7,49 @@ import { fmt } from "./types";
 
 type Props = { transactions: Transaction[] };
 type Regime = "mei" | "simples";
+var r2 = function(n: number) { return Math.round(n * 100) / 100; };
 
-const REGIME_CONFIG = {
+var REGIME_CONFIG = {
   mei: { label: "MEI", dasFixed: 75.90, dasRate: 0, needsProLabore: false, revenueLimit: 81000 },
   simples: { label: "Simples Nacional", dasFixed: 0, dasRate: 0.06, needsProLabore: true, revenueLimit: 4800000 },
 };
 
-// M7: Read detected regime from localStorage (set during CNPJ lookup in register)
 function getDetectedRegime(): string | null {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    const cfg = JSON.parse(localStorage.getItem("aura_config") || "{}");
-    return cfg.detectedRegime || null;
-  } catch { return null; }
+  try { if (typeof localStorage === "undefined") return null; var cfg = JSON.parse(localStorage.getItem("aura_config") || "{}"); return cfg.detectedRegime || null; } catch { return null; }
 }
 
 export function TabRetirada({ transactions }: Props) {
-  const { company } = useAuthStore();
-  const realIncome = useMemo(() => transactions.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
-  const realExpenses = useMemo(() => transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
+  var { company } = useAuthStore();
+  var realIncome = useMemo(function() { return transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
+  var realExpenses = useMemo(function() { return transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
 
-  // M7: Check company data first, then localStorage fallback from CNPJ lookup
-  const detectedRegime = getDetectedRegime();
-  const regime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" || detectedRegime === "mei" ? "mei" : "simples";
-  const cfg = REGIME_CONFIG[regime];
+  var detectedRegime = getDetectedRegime();
+  var regime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" || detectedRegime === "mei" ? "mei" : "simples";
+  var cfg = REGIME_CONFIG[regime];
 
-  const [customRevenue, setCustomRevenue] = useState("");
-  const [customExpenses, setCustomExpenses] = useState("");
-  const [proLaboreEnabled, setProLaboreEnabled] = useState(cfg.needsProLabore);
+  var [customRevenue, setCustomRevenue] = useState("");
+  var [customExpenses, setCustomExpenses] = useState("");
+  var [proLaboreEnabled, setProLaboreEnabled] = useState(cfg.needsProLabore);
 
-  const rev = parseFloat(customRevenue.replace(/[^0-9.,]/g, "").replace(",", ".")) || realIncome;
-  const exp = parseFloat(customExpenses.replace(/[^0-9.,]/g, "").replace(",", ".")) || realExpenses;
+  var rev = r2(parseFloat(customRevenue.replace(/[^0-9.,]/g, "").replace(",", ".")) || realIncome);
+  var exp = r2(parseFloat(customExpenses.replace(/[^0-9.,]/g, "").replace(",", ".")) || realExpenses);
 
-  const das = regime === "mei" ? cfg.dasFixed : rev * cfg.dasRate;
-  const lucroOp = rev - exp - das;
+  var das = r2(regime === "mei" ? cfg.dasFixed : rev * cfg.dasRate);
+  var lucroOp = r2(rev - exp - das);
 
-  let proLabore = 0, inss = 0, fatorR = 0;
+  var proLabore = 0, inss = 0, fatorR = 0;
   if (proLaboreEnabled && regime === "simples") {
-    const minProLabore = rev * 0.28;
-    proLabore = Math.max(minProLabore, 1412);
-    inss = proLabore * 0.11;
+    var minProLabore = rev * 0.28;
+    proLabore = r2(Math.max(minProLabore, 1412));
+    inss = r2(proLabore * 0.11);
     fatorR = rev > 0 ? Math.round((proLabore / rev) * 100) : 0;
   }
 
-  const maxRetirada = Math.max(0, lucroOp - proLabore - inss);
-  const seguraRetirada = Math.max(0, maxRetirada * 0.85);
-  const idealRetirada = Math.max(0, maxRetirada * 0.70);
-  const caixaApos = rev - exp - das - proLabore - inss - seguraRetirada;
-  const hasData = rev > 0;
+  var maxRetirada = r2(Math.max(0, lucroOp - proLabore - inss));
+  var seguraRetirada = r2(Math.max(0, maxRetirada * 0.85));
+  var idealRetirada = r2(Math.max(0, maxRetirada * 0.70));
+  var caixaApos = r2(rev - exp - das - proLabore - inss - seguraRetirada);
+  var hasData = rev > 0;
 
   return (
     <View>
@@ -69,7 +64,7 @@ export function TabRetirada({ transactions }: Props) {
           <View style={s.proLaboreToggle}>
             <View style={{ flex: 1 }}>
               <Text style={s.proLaboreLabel}>Pro-labore no contrato social</Text>
-              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Fator R sera calculado na simulacao" : "Sem pro-labore \u2014 retirada como distribuicao de lucro"}</Text>
+              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Fator R sera calculado na simulacao" : "Sem pro-labore — retirada como distribuicao de lucro"}</Text>
             </View>
             <Switch value={proLaboreEnabled} onValueChange={setProLaboreEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
           </View>
@@ -95,32 +90,32 @@ export function TabRetirada({ transactions }: Props) {
           <View style={s.impactCard}><Text style={s.impactTitle}>Se voce retirar o valor seguro:</Text>
             <View style={s.impactRow}><Text style={s.impactLabel}>Caixa apos retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
             <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria ({regime === "mei" ? "DAS fixo" : "DAS 6%"})</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
-            {proLaboreEnabled && regime === "simples" && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(proLabore + inss)}</Text></View>}
+            {proLaboreEnabled && regime === "simples" && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(r2(proLabore + inss))}</Text></View>}
             <View style={[s.impactRow, { borderBottomWidth: 0 }]}><Text style={s.impactLabel}>Status</Text><View style={[s.impactBadge, { backgroundColor: caixaApos >= 0 ? Colors.greenD : Colors.redD }]}><Text style={[s.impactBadgeText, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{caixaApos >= 0 ? "Saudavel" : "Risco"}</Text></View></View>
           </View>
 
-          <View style={s.messageCard}><Text style={s.messageText}>{seguraRetirada > 0 ? `Hoje voce pode retirar ${fmt(seguraRetirada)} com seguranca. Acima de ${fmt(maxRetirada)}, sua folga de caixa comeca a ficar apertada.` : `Com o cenario atual, nao recomendamos retirada. Suas despesas e obrigacoes consomem toda a receita.`}</Text></View>
+          <View style={s.messageCard}><Text style={s.messageText}>{seguraRetirada > 0 ? "Hoje voce pode retirar " + fmt(seguraRetirada) + " com seguranca. Acima de " + fmt(maxRetirada) + ", sua folga de caixa comeca a ficar apertada." : "Com o cenario atual, nao recomendamos retirada. Suas despesas e obrigacoes consomem toda a receita."}</Text></View>
 
           <View style={s.waterfall}><Text style={s.wfTitle}>Como calculamos</Text>
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado do negocio</Text></View>
             <WRow label="(+) Receita bruta" value={rev} color={Colors.green} />
             {exp > 0 && <WRow label="(-) Despesas operacionais" value={exp} color={Colors.red} />}
-            <WRow label={regime === "mei" ? "(-) DAS fixo mensal" : `(-) DAS estimado (${(cfg.dasRate*100).toFixed(0)}%)`} value={das} color={Colors.red} />
+            <WRow label={regime === "mei" ? "(-) DAS fixo mensal" : "(-) DAS estimado (" + (cfg.dasRate*100).toFixed(0) + "%)"}  value={das} color={Colors.red} />
             <WRow label="= Lucro operacional" value={lucroOp} bold />
-            {proLaboreEnabled && regime === "simples" && <View><View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View><WRow label={`(-) Pro-labore (${fatorR}% da receita)`} value={proLabore} color={Colors.amber} /><WRow label="(-) INSS (11%)" value={inss} color={Colors.red} /></View>}
+            {proLaboreEnabled && regime === "simples" && <View><View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View><WRow label={"(-) Pro-labore (" + fatorR + "% da receita)"} value={proLabore} color={Colors.amber} /><WRow label="(-) INSS (11%)" value={inss} color={Colors.red} /></View>}
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado final</Text></View>
             <WRow label="Retirada segura (85%)" value={seguraRetirada} highlight color={Colors.green} />
           </View>
 
           {proLaboreEnabled && regime === "simples" && (
             <View style={s.fatorCard}><View style={s.fatorTop}><View><Text style={s.fatorTitle}>Monitor Fator R</Text><Text style={s.fatorValue}>{fatorR}%</Text></View><View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}><Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text></View></View>
-              <View style={s.fatorBar}><View style={[s.fatorFill, { width: `${Math.min(fatorR, 100)}%`, backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} /><View style={s.fatorMark} /></View>
+              <View style={s.fatorBar}><View style={[s.fatorFill, { width: Math.min(fatorR, 100) + "%", backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} /><View style={s.fatorMark} /></View>
               <View style={s.fatorLabels}><Text style={s.fatorLabelLeft}>0%</Text><Text style={s.fatorLabel28}>28%</Text><Text style={s.fatorLabelRight}>100%</Text></View>
-              <Text style={s.fatorHint}>{fatorR >= 28 ? `Pro-labore ${fatorR - 28} pontos acima do minimo. Folga para Anexo III.` : `Pro-labore ${28 - fatorR} pontos abaixo. Considere aumentar para evitar Anexo V.`}</Text>
+              <Text style={s.fatorHint}>{fatorR >= 28 ? "Pro-labore " + (fatorR - 28) + " pontos acima do minimo. Folga para Anexo III." : "Pro-labore " + (28 - fatorR) + " pontos abaixo. Considere aumentar para evitar Anexo V."}</Text>
             </View>
           )}
 
-          {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"\u2022"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"\u2022"} Limite: R$ 81.000/ano ({fmt(81000/12)}/mes)</Text><Text style={s.meiInfoText}>{"\u2022"} Receita anual estimada: {fmt(rev * 12)} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
+          {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"\u2022"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"\u2022"} Limite: R$ 81.000/ano ({fmt(r2(81000/12))})/mes</Text><Text style={s.meiInfoText}>{"\u2022"} Receita anual estimada: {fmt(r2(rev * 12))} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
 
           <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Valores para referencia e apoio a decisao. Resultados baseados nos lancamentos registrados.</Text></View>
         </View>
@@ -132,9 +127,9 @@ export function TabRetirada({ transactions }: Props) {
 function WRow({ label, value, color, bold, highlight }: { label: string; value: number; color?: string; bold?: boolean; highlight?: boolean }) {
   return <View style={[st.wRow, bold && st.wRowBold, highlight && st.wRowHighlight]}><Text style={[st.wLabel, bold && st.wLabelBold, highlight && st.wLabelHL]}>{label}</Text><Text style={[st.wValue, bold && st.wValueBold, color ? { color } : {}]}>{fmt(value)}</Text></View>;
 }
-const st = StyleSheet.create({ wRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: Colors.border }, wRowBold: { backgroundColor: Colors.bg4, borderBottomWidth: 0, borderRadius: 10, marginTop: 4, marginBottom: 4 }, wRowHighlight: { backgroundColor: Colors.violetD, borderBottomWidth: 0, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: Colors.border2 }, wLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "500" }, wLabelBold: { color: Colors.ink, fontWeight: "600" }, wLabelHL: { color: Colors.ink, fontWeight: "700" }, wValue: { fontSize: 14, color: Colors.ink, fontWeight: "600" }, wValueBold: { fontSize: 16, fontWeight: "800" } });
+var st = StyleSheet.create({ wRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: Colors.border }, wRowBold: { backgroundColor: Colors.bg4, borderBottomWidth: 0, borderRadius: 10, marginTop: 4, marginBottom: 4 }, wRowHighlight: { backgroundColor: Colors.violetD, borderBottomWidth: 0, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: Colors.border2 }, wLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "500" }, wLabelBold: { color: Colors.ink, fontWeight: "600" }, wLabelHL: { color: Colors.ink, fontWeight: "700" }, wValue: { fontSize: 14, color: Colors.ink, fontWeight: "600" }, wValueBold: { fontSize: 16, fontWeight: "800" } });
 
-const s = StyleSheet.create({
+var s = StyleSheet.create({
   header: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20, gap: 8 },
   headerTitle: { fontSize: 20, color: Colors.ink, fontWeight: "800" },
   headerDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
@@ -180,7 +175,7 @@ const s = StyleSheet.create({
   fatorValue: { fontSize: 28, fontWeight: "800", color: Colors.ink },
   fatorBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   fatorBadgeText: { fontSize: 12, fontWeight: "700" },
-  fatorBar: { height: 12, backgroundColor: Colors.bg4, borderRadius: 6, overflow: "visible", position: "relative" },
+  fatorBar: { height: 12, backgroundColor: Colors.bg4, borderRadius: 6, overflow: "visible", position: "relative" as any },
   fatorFill: { height: 12, borderRadius: 6 },
   fatorMark: { position: "absolute", left: "28%", top: -3, width: 3, height: 18, backgroundColor: Colors.ink, borderRadius: 1.5 },
   fatorLabels: { flexDirection: "row", justifyContent: "space-between" },
