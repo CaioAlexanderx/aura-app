@@ -22,7 +22,7 @@ import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -50,14 +50,6 @@ export default function EstoqueScreen() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
-  // P0 #11: variants for editing product
-  const editingProductId = editProduct?.id || null;
-  const { data: variantsData, refetch: refetchVariants } = useQuery({
-    queryKey: ['variants', company?.id, editingProductId],
-    queryFn: () => companiesApi.variants(company!.id, editingProductId!),
-    enabled: !!company?.id && !!editingProductId && showAddForm,
-    staleTime: 30000,
-  });
 
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
@@ -70,6 +62,15 @@ export default function EstoqueScreen() {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  // P0 #11: variants query (after editProduct state declaration)
+  const editingProductId = editProduct?.id || null;
+  const { data: variantsData, refetch: refetchVariants } = useQuery({
+    queryKey: ['variants', company?.id, editingProductId],
+    queryFn: () => companiesApi.variants(company!.id, editingProductId!),
+    enabled: !!company?.id && !!editingProductId && showAddForm,
+    staleTime: 30000,
+  });
 
   const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...categories, ...products.map(p => p.category)]));
   const filterCategories = ["Todos", ...allCategories.filter(Boolean)];
@@ -135,7 +136,7 @@ export default function EstoqueScreen() {
         onAction={() => { setEditProduct(null); setShowAddForm(true); setActiveTab(0); }}
       />
 
-      {/* KPIs — so exibe se tem produtos */}
+      {/* KPIs */}
       {products.length > 0 && (
         <View style={s.summaryRow}>
           <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades`} />
@@ -145,28 +146,29 @@ export default function EstoqueScreen() {
       )}
 
       {showAddForm && (
-        <AddProductForm
-          categories={allCategories}
-          onSave={handleSaveProduct}
-          onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
-          editProduct={editProduct}
-        />
-
-      {/* P0 #11: Variants — only when editing existing product */}
-      {showAddForm && editProduct?.id && (
-        <VariantsSection
-          productId={editProduct.id}
-          productName={editProduct.name || ''}
-          basePrice={editProduct.price || 0}
-          variants={variantsData?.variants || []}
-          onUpdate={() => refetchVariants()}
-        />
-      )}
+        <>
+          <AddProductForm
+            categories={allCategories}
+            onSave={handleSaveProduct}
+            onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
+            editProduct={editProduct}
+          />
+          {/* P0 #11: Variants — only when editing existing product */}
+          {editProduct?.id && (
+            <VariantsSection
+              productId={editProduct.id}
+              productName={editProduct.name || ''}
+              basePrice={editProduct.price || 0}
+              variants={variantsData?.variants || []}
+              onUpdate={() => refetchVariants()}
+            />
+          )}
+        </>
       )}
 
       {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {/* Empty state: mostra botoes de adicionar E importar */}
+      {/* Empty state */}
       {!isLoading && products.length === 0 && !isDemo && !showAddForm && (
         <View>
           <EmptyState
@@ -177,7 +179,6 @@ export default function EstoqueScreen() {
             actionLabel="+ Adicionar produto"
             onAction={() => { setShowAddForm(true); setActiveTab(0); }}
           />
-          {/* Importar CSV mesmo com estoque vazio */}
           <View style={s.emptyImport}>
             <View style={s.emptyImportIcon}>
               <Icon name="upload" size={18} color={Colors.violet3} />
@@ -196,7 +197,7 @@ export default function EstoqueScreen() {
 
       {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
 
-      {/* Toolbar: exportar + importar + selecionar — SO quando tem produtos */}
+      {/* Toolbar */}
       {products.length > 0 && activeTab === 0 && (
         <View style={s.toolbar}>
           <ImportExportBar onExport={handleExport} itemCount={products.length} />
@@ -342,7 +343,6 @@ const s = StyleSheet.create({
   abcInfo:     { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
   abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
   abcInfoText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18 },
-  // Card de importar no empty state
   emptyImport: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: Colors.bg3, borderRadius: 16, padding: 16,
