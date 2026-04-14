@@ -1,81 +1,41 @@
 // ============================================================
 // CSV Import/Export Utilities — pure JS, no external deps
+// FIX: mapImportedTransaction handles empty descriptions,
+//      DD/MM/YYYY dates, comma decimals, vendedor field
 // ============================================================
 import { Platform } from "react-native";
 import { toast } from "@/components/Toast";
 
-// ── Export ───────────────────────────────────────────────────
-
-// Separador ponto-e-virgula: compativel com Excel Brasil (abre sem configuracao)
+// -- Export --
 const SEP = ";";
+function escapeCSV(val: any): string { if (val == null) return ""; const str = String(val); if (str.includes(SEP) || str.includes('"') || str.includes("\n")) return '"' + str.replace(/"/g, '""') + '"'; return str; }
+function fmtBRL(val: any): string { const n = parseFloat(val); if (isNaN(n)) return ""; return n.toFixed(2).replace(".", ","); }
 
-function escapeCSV(val: any): string {
-  if (val == null) return "";
-  const str = String(val);
-  // Escapa aspas e envolve em aspas se tiver separador, aspas ou quebra de linha
-  if (str.includes(SEP) || str.includes('"') || str.includes("\n")) {
-    return '"' + str.replace(/"/g, '""') + '"';
-  }
-  return str;
-}
-
-// Formata numero como moeda BR para o CSV (ex: 1234.56 → "1234,56")
-function fmtBRL(val: any): string {
-  const n = parseFloat(val);
-  if (isNaN(n)) return "";
-  return n.toFixed(2).replace(".", ",");
-}
-
-export function arrayToCSV(
-  rows: Record<string, any>[],
-  columns: { key: string; label: string; format?: "brl" | "int" | "text" }[]
-): string {
+export function arrayToCSV(rows: Record<string, any>[], columns: { key: string; label: string; format?: "brl" | "int" | "text" }[]): string {
   const header = columns.map(c => escapeCSV(c.label)).join(SEP);
-  const body = rows.map(row =>
-    columns.map(c => {
-      const val = row[c.key];
-      if (c.format === "brl") return fmtBRL(val);
-      if (c.format === "int") return val != null ? String(Math.round(Number(val))) : "";
-      return escapeCSV(val);
-    }).join(SEP)
-  ).join("\n");
+  const body = rows.map(row => columns.map(c => { const val = row[c.key]; if (c.format === "brl") return fmtBRL(val); if (c.format === "int") return val != null ? String(Math.round(Number(val))) : ""; return escapeCSV(val); }).join(SEP)).join("\n");
   return header + "\n" + body;
 }
 
 export function downloadCSV(csv: string, filename: string) {
   if (Platform.OS !== "web") { toast.info("Export disponivel apenas na versao web"); return; }
-  const BOM = "\uFEFF"; // BOM UTF-8: garante acentos no Excel
+  const BOM = "\uFEFF";
   const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
   toast.success(`${filename} exportado!`);
 }
 
-// ── Import ───────────────────────────────────────────────────
-
-// Detecta separador: se mais ";" do que "," → arquivo Excel BR
-function detectSeparator(headerLine: string): string {
-  const semicolons = (headerLine.match(/;/g) || []).length;
-  const commas     = (headerLine.match(/,/g) || []).length;
-  return semicolons > commas ? ";" : ",";
-}
+// -- Import --
+function detectSeparator(headerLine: string): string { const semicolons = (headerLine.match(/;/g) || []).length; const commas = (headerLine.match(/,/g) || []).length; return semicolons > commas ? ";" : ","; }
 
 function parseCSVLine(line: string, sep: string): string[] {
-  const result: string[] = [];
-  let current = ""; let inQuotes = false;
+  const result: string[] = []; let current = ""; let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
-    if (inQuotes) {
-      if (c === '"' && line[i + 1] === '"') { current += '"'; i++; }
-      else if (c === '"') { inQuotes = false; }
-      else { current += c; }
-    } else {
-      if (c === '"') { inQuotes = true; }
-      else if (c === sep) { result.push(current.trim()); current = ""; }
-      else { current += c; }
-    }
+    if (inQuotes) { if (c === '"' && line[i + 1] === '"') { current += '"'; i++; } else if (c === '"') { inQuotes = false; } else { current += c; } }
+    else { if (c === '"') { inQuotes = true; } else if (c === sep) { result.push(current.trim()); current = ""; } else { current += c; } }
   }
   result.push(current.trim());
   return result;
@@ -99,17 +59,13 @@ export function pickFileAndParse(): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
     if (Platform.OS !== "web") { toast.info("Import disponivel apenas na versao web"); reject(new Error("web only")); return; }
     const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".csv,.txt,.tsv";
+    input.type = "file"; input.accept = ".csv,.txt,.tsv,.xlsx";
     input.onchange = (e: any) => {
       const file = e.target?.files?.[0];
       if (!file) { reject(new Error("no file")); return; }
-      if (file.size > 5 * 1024 * 1024) { toast.error("Arquivo muito grande (max 5MB)"); reject(new Error("too large")); return; }
+      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (max 10MB)"); reject(new Error("too large")); return; }
       const reader = new FileReader();
-      reader.onload = () => {
-        try { resolve(parseCSV(reader.result as string)); }
-        catch (err) { toast.error("Erro ao ler CSV"); reject(err); }
-      };
+      reader.onload = () => { try { resolve(parseCSV(reader.result as string)); } catch (err) { toast.error("Erro ao ler CSV"); reject(err); } };
       reader.onerror = () => reject(new Error("read error"));
       reader.readAsText(file, "UTF-8");
     };
@@ -117,84 +73,111 @@ export function pickFileAndParse(): Promise<Record<string, string>[]> {
   });
 }
 
-// ── Column Definitions ──────────────────────────────────────
-
+// -- Column Definitions --
 export const TRANSACTION_COLUMNS: { key: string; label: string; format?: any }[] = [
-  { key: "type",     label: "Tipo" },
-  { key: "amount",   label: "Valor (R$)",  format: "brl" },
-  { key: "desc",     label: "Descricao" },
-  { key: "category", label: "Categoria" },
-  { key: "date",     label: "Data" },
+  { key: "type", label: "Tipo" }, { key: "amount", label: "Valor (R$)", format: "brl" },
+  { key: "desc", label: "Descricao" }, { key: "category", label: "Categoria" }, { key: "date", label: "Data" },
 ];
 
-// Estoque — modelo completo com todos os campos relevantes
-// Separador ";" compativel com Excel Brasil sem configuracao
 export const PRODUCT_COLUMNS: { key: string; label: string; format?: any }[] = [
-  { key: "name",      label: "Nome do produto" },
-  { key: "code",      label: "SKU / Codigo interno" },
-  { key: "barcode",   label: "Codigo de barras (EAN)" },
-  { key: "category",  label: "Categoria" },
-  { key: "brand",     label: "Marca" },
-  { key: "unit",      label: "Unidade" },
-  { key: "price",     label: "Preco de venda (R$)",   format: "brl" },
-  { key: "cost",      label: "Preco de custo (R$)",   format: "brl" },
-  { key: "stock",     label: "Estoque atual",          format: "int" },
-  { key: "minStock",  label: "Estoque minimo",         format: "int" },
-  { key: "sold30d",   label: "Vendas ultimos 30 dias", format: "int" },
-  { key: "abc",       label: "Curva ABC" },
-  { key: "color",     label: "Cor" },
-  { key: "size",      label: "Tamanho" },
-  { key: "notes",     label: "Observacoes" },
+  { key: "name", label: "Nome do produto" }, { key: "code", label: "SKU / Codigo interno" },
+  { key: "barcode", label: "Codigo de barras (EAN)" }, { key: "category", label: "Categoria" },
+  { key: "brand", label: "Marca" }, { key: "unit", label: "Unidade" },
+  { key: "price", label: "Preco de venda (R$)", format: "brl" }, { key: "cost", label: "Preco de custo (R$)", format: "brl" },
+  { key: "stock", label: "Estoque atual", format: "int" }, { key: "minStock", label: "Estoque minimo", format: "int" },
+  { key: "sold30d", label: "Vendas ultimos 30 dias", format: "int" }, { key: "abc", label: "Curva ABC" },
+  { key: "color", label: "Cor" }, { key: "size", label: "Tamanho" }, { key: "notes", label: "Observacoes" },
 ];
 
 export const CUSTOMER_COLUMNS: { key: string; label: string; format?: any }[] = [
-  { key: "name",         label: "Nome" },
-  { key: "email",        label: "Email" },
-  { key: "phone",        label: "Telefone" },
-  { key: "instagram",    label: "Instagram" },
-  { key: "birthday",     label: "Aniversario" },
-  { key: "totalSpent",   label: "Total gasto (R$)", format: "brl" },
-  { key: "visits",       label: "Visitas",           format: "int" },
-  { key: "lastPurchase", label: "Ultima compra" },
-  { key: "notes",        label: "Observacoes" },
+  { key: "name", label: "Nome" }, { key: "email", label: "Email" }, { key: "phone", label: "Telefone" },
+  { key: "instagram", label: "Instagram" }, { key: "birthday", label: "Aniversario" },
+  { key: "totalSpent", label: "Total gasto (R$)", format: "brl" }, { key: "visits", label: "Visitas", format: "int" },
+  { key: "lastPurchase", label: "Ultima compra" }, { key: "notes", label: "Observacoes" },
 ];
 
-// ── Row Mappers (CSV → app format) ──────────────────────────
+// -- Helpers --
+function parseBRDate(d: string): string {
+  if (!d) return "";
+  const s = d.trim();
+  // DD/MM/YYYY or DD-MM-YYYY
+  const br = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (br) return `${br[3]}-${br[2].padStart(2, "0")}-${br[1].padStart(2, "0")}`;
+  // DD/MM/YY
+  const brShort = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+  if (brShort) { const yr = parseInt(brShort[3]) > 50 ? "19" + brShort[3] : "20" + brShort[3]; return `${yr}-${brShort[2].padStart(2, "0")}-${brShort[1].padStart(2, "0")}`; }
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return s;
+}
 
-export function mapImportedTransaction(row: Record<string, string>): { type: string; amount: number; description: string; category: string } | null {
-  const desc   = row.descricao || row.description || row.desc || row.nome || "";
-  const rawAmt = (row.valor || row["valor (r$)"] || row.amount || row.value || "0").replace(/[^0-9.,]/g, "").replace(",", ".");
-  const amount = parseFloat(rawAmt);
-  if (!desc || amount <= 0) return null;
-  const rawType = (row.tipo || row.type || "").toLowerCase();
-  const type    = rawType.includes("despesa") || rawType.includes("expense") || rawType.includes("saida") ? "expense" : "income";
-  const category = row.categoria || row.category || "Importado";
-  return { type, amount, description: desc, category };
+function parseBRAmount(v: string): number {
+  if (!v) return 0;
+  let raw = v.replace(/[R$\s]/g, "");
+  // 1.500,00 → 1500.00
+  if (raw.includes(".") && raw.includes(",")) raw = raw.replace(/\./g, "").replace(",", ".");
+  else if (raw.includes(",")) raw = raw.replace(",", ".");
+  return parseFloat(raw) || 0;
+}
+
+// -- Row Mappers --
+
+// FIX: handles empty descriptions, DD/MM/YYYY dates, comma decimals, vendedor
+export function mapImportedTransaction(row: Record<string, string>): {
+  type: string; amount: number; description: string; category: string;
+  due_date: string; vendedor?: string;
+} | null {
+  // Parse amount (handles comma decimal and R$ prefix)
+  const rawAmt = row.valor || row["valor (r$)"] || row.amount || row.value || "0";
+  const amount = parseBRAmount(rawAmt);
+  if (amount <= 0) return null;
+
+  // Parse type (accepts Portuguese)
+  const rawType = (row.tipo || row.type || "").toLowerCase().trim();
+  const type = (rawType.includes("despesa") || rawType.includes("expense") || rawType.includes("saida") || rawType.includes("debito") || rawType.includes("custo"))
+    ? "expense" : "income";
+
+  // Parse date (handles DD/MM/YYYY)
+  const rawDate = row.data || row.date || row.due_date || row.vencimento || "";
+  const due_date = parseBRDate(rawDate);
+
+  // Parse description — AUTO-GENERATE if empty
+  let desc = (row.descricao || row.description || row.desc || row.nome || "").trim();
+  const vendedor = (row.vendedor || row.employee_name || row.seller || row.funcionario || "").trim();
+  const category = (row.categoria || row.category || "").trim() || "Importado";
+
+  if (!desc) {
+    // Build from context: "Venda Kaila 18/03/2025" or "Despesa Fixas 05/10/2025"
+    const parts: string[] = [];
+    parts.push(type === "income" ? "Venda" : "Despesa");
+    if (vendedor) parts.push(vendedor);
+    if (category && category !== "Importado") parts.push(category);
+    if (rawDate) parts.push(rawDate);
+    desc = parts.join(" ");
+  }
+
+  const result: any = { type, amount, description: desc, category, due_date };
+  if (vendedor) result.vendedor = vendedor;
+  return result;
 }
 
 export function mapImportedProduct(row: Record<string, string>): Record<string, any> | null {
   const name = row["nome do produto"] || row.nome || row.name || row.produto || "";
   if (!name) return null;
-
-  function parseBRL(v: string) {
-    if (!v) return 0;
-    return parseFloat(v.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-  }
-
   return {
     name,
-    sku:        row["sku / codigo interno"] || row.sku || row.codigo || undefined,
-    barcode:    row["codigo de barras (ean)"] || row["codigo de barras"] || row.barcode || row.ean || undefined,
-    category:   row.categoria || row.category || "Importado",
-    brand:      row.marca || row.brand || undefined,
-    price:      parseBRL(row["preco de venda (r$)"] || row["preco venda"] || row.preco || row.price || "0"),
-    cost_price: parseBRL(row["preco de custo (r$)"] || row["preco custo"] || row.custo || row.cost || "0"),
-    stock_qty:  parseInt(row["estoque atual"] || row.estoque || row.stock || row.quantidade || "0") || 0,
-    min_stock:  parseInt(row["estoque minimo"] || row.min_stock || row.minstock || "0") || 0,
-    unit:       row.unidade || row.unit || "un",
-    color:      row.cor || row.color || undefined,
-    size:       row.tamanho || row.size || undefined,
-    notes:      row.observacoes || row.notes || undefined,
+    sku: row["sku / codigo interno"] || row.sku || row.codigo || undefined,
+    barcode: row["codigo de barras (ean)"] || row["codigo de barras"] || row.barcode || row.ean || undefined,
+    category: row.categoria || row.category || "Importado",
+    brand: row.marca || row.brand || undefined,
+    price: parseBRAmount(row["preco de venda (r$)"] || row["preco venda"] || row.preco || row.price || "0"),
+    cost_price: parseBRAmount(row["preco de custo (r$)"] || row["preco custo"] || row.custo || row.cost || "0"),
+    stock_qty: parseInt(row["estoque atual"] || row.estoque || row.stock || row.quantidade || "0") || 0,
+    min_stock: parseInt(row["estoque minimo"] || row.min_stock || row.minstock || "0") || 0,
+    unit: row.unidade || row.unit || "un",
+    color: row.cor || row.color || undefined,
+    size: row.tamanho || row.size || undefined,
+    notes: row.observacoes || row.notes || undefined,
   };
 }
 
@@ -203,10 +186,10 @@ export function mapImportedCustomer(row: Record<string, string>): Record<string,
   if (!name) return null;
   return {
     name,
-    email:            row.email || undefined,
-    phone:            row.telefone || row.phone || row.whatsapp || row.celular || undefined,
+    email: row.email || undefined,
+    phone: row.telefone || row.phone || row.whatsapp || row.celular || undefined,
     instagram_handle: row.instagram || undefined,
-    birth_date:       row.aniversario || row.birthday || row.nascimento || undefined,
-    notes:            row.observacoes || row.notes || row.obs || undefined,
+    birth_date: row.aniversario || row.birthday || row.nascimento || undefined,
+    notes: row.observacoes || row.notes || row.obs || undefined,
   };
 }
