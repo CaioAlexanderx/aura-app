@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { ServerImport } from "@/components/ServerImport";
 import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
+import { VariantsSection } from "@/components/VariantsSection";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
@@ -20,6 +21,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
+import { companiesApi } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
 
@@ -48,6 +50,15 @@ export default function EstoqueScreen() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
+  // P0 #11: variants for editing product
+  const editingProductId = editProduct?.id || null;
+  const { data: variantsData, refetch: refetchVariants } = useQuery({
+    queryKey: ['variants', company?.id, editingProductId],
+    queryFn: () => companiesApi.variants(company!.id, editingProductId!),
+    enabled: !!company?.id && !!editingProductId && showAddForm,
+    staleTime: 30000,
+  });
+
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
@@ -140,6 +151,17 @@ export default function EstoqueScreen() {
           onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
           editProduct={editProduct}
         />
+
+      {/* P0 #11: Variants — only when editing existing product */}
+      {showAddForm && editProduct?.id && (
+        <VariantsSection
+          productId={editProduct.id}
+          productName={editProduct.name || ''}
+          basePrice={editProduct.price || 0}
+          variants={variantsData?.variants || []}
+          onUpdate={() => refetchVariants()}
+        />
+      )}
       )}
 
       {isLoading && <ListSkeleton rows={4} showCards />}
