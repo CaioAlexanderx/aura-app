@@ -14,7 +14,7 @@ import { TransactionRow } from "@/components/screens/financeiro/TransactionRow";
 import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
-import { TABS, PERIODS, fmt, filterByPeriod } from "@/components/screens/financeiro/types";
+import { TABS, PERIODS, fmt } from "@/components/screens/financeiro/types";
 import type { PeriodKey } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
@@ -35,17 +35,13 @@ export default function FinanceiroScreen() {
   var [importing, setImporting] = useState(false);
   var [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   var scrollRef = useRef<any>(null);
-  var { transactions: allTransactions, summary: rawSummary, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab);
+
+  // FIX: pass period to hook so backend filters by date range
+  var { transactions, summary, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab, period);
   var { company, token } = useAuthStore();
   var qc = useQueryClient();
 
-  var transactions = useMemo(function() { return filterByPeriod(allTransactions, period); }, [allTransactions, period]);
-
-  var summary = useMemo(function() {
-    var income = transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0);
-    var expenses = transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0);
-    return { income: income, expenses: expenses, balance: income - expenses };
-  }, [transactions]);
+  // No more client-side filterByPeriod — backend already returns filtered data
 
   var displayTransactions = useMemo(function() {
     if (typeFilter === "all") return transactions;
@@ -86,28 +82,32 @@ export default function FinanceiroScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <TransactionModal visible={showModal} onClose={() => setShowModal(false)} onSave={createTransaction} />
+      <TransactionModal visible={showModal} onClose={function() { setShowModal(false); }} onSave={createTransaction} />
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-        <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={() => setShowModal(true)} />
+        <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={function() { setShowModal(true); }} />
 
         <AgentBanner context="financeiro" />
 
         <View style={s.periodBar}>
-          {PERIODS.map(p => (
-            <Pressable key={p.key} onPress={() => setPeriod(p.key)}
-              style={[s.periodBtn, period === p.key && s.periodBtnActive, isWeb && { transition: "all 0.2s ease" } as any]}>
-              <Text style={[s.periodText, period === p.key && s.periodTextActive]}>{p.label}</Text>
-            </Pressable>
-          ))}
+          {PERIODS.map(function(p) {
+            return (
+              <Pressable key={p.key} onPress={function() { setPeriod(p.key); }}
+                style={[s.periodBtn, period === p.key && s.periodBtnActive, isWeb && { transition: "all 0.2s ease" } as any]}>
+                <Text style={[s.periodText, period === p.key && s.periodTextActive]}>{p.label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-          {TABS.map((tab, i) => (
-            <Pressable key={tab} onPress={() => handleTabSelect(i)}
-              style={[s.tab, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
-              <Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text>
-            </Pressable>
-          ))}
+          {TABS.map(function(tab, i) {
+            return (
+              <Pressable key={tab} onPress={function() { handleTabSelect(i); }}
+                style={[s.tab, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
+                <Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
         {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
@@ -122,7 +122,7 @@ export default function FinanceiroScreen() {
         {activeTab === 0 && (
           <View>
             {transactions.length === 0 && !isLoading && !isDemo ? (
-              <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={() => setShowModal(true)} secondaryLabel="Importar de planilha" onSecondary={!importing ? handleImport : undefined} />
+              <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={function() { setShowModal(true); }} secondaryLabel="Importar de planilha" onSecondary={!importing ? handleImport : undefined} />
             ) : (
               <View>
                 <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={period} />
@@ -131,10 +131,10 @@ export default function FinanceiroScreen() {
                   <View>
                     <View style={s.sectionHeader}>
                       <Text style={s.sectionTitle}>Ultimos lancamentos</Text>
-                      <Pressable onPress={() => handleTabSelect(1)}><Text style={s.seeAll}>Ver todos</Text></Pressable>
+                      <Pressable onPress={function() { handleTabSelect(1); }}><Text style={s.seeAll}>Ver todos</Text></Pressable>
                     </View>
                     <View style={s.listCard}>
-                      {transactions.slice(0, 8).map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}
+                      {transactions.slice(0, 8).map(function(t) { return <TransactionRow key={t.id} item={t} onDelete={!isDemo ? function(id) { setDeleteTarget(id); } : undefined} />; })}
                     </View>
                   </View>
                 )}
@@ -146,29 +146,31 @@ export default function FinanceiroScreen() {
         {activeTab === 1 && (
           <View>
             <View style={s.typeFilterRow}>
-              {(["all", "income", "expense"] as const).map(tf => (
-                <Pressable key={tf} onPress={() => setTypeFilter(tf)}
-                  style={[s.typeBtn, typeFilter === tf && s.typeBtnActive, isWeb && { transition: "all 0.15s ease" } as any]}>
-                  <Text style={[s.typeText, typeFilter === tf && s.typeTextActive]}>
-                    {tf === "all" ? "Todos" : tf === "income" ? "Entradas" : "Saidas"}
-                  </Text>
-                  <View style={[s.typeBadge, tf === "income" && { backgroundColor: Colors.greenD }, tf === "expense" && { backgroundColor: Colors.redD }]}>
-                    <Text style={[s.typeBadgeText, tf === "income" && { color: Colors.green }, tf === "expense" && { color: Colors.red }]}>
-                      {tf === "all" ? transactions.length : transactions.filter(function(t) { return t.type === tf; }).length}
+              {(["all", "income", "expense"] as const).map(function(tf) {
+                return (
+                  <Pressable key={tf} onPress={function() { setTypeFilter(tf); }}
+                    style={[s.typeBtn, typeFilter === tf && s.typeBtnActive, isWeb && { transition: "all 0.15s ease" } as any]}>
+                    <Text style={[s.typeText, typeFilter === tf && s.typeTextActive]}>
+                      {tf === "all" ? "Todos" : tf === "income" ? "Entradas" : "Saidas"}
                     </Text>
-                  </View>
-                </Pressable>
-              ))}
+                    <View style={[s.typeBadge, tf === "income" && { backgroundColor: Colors.greenD }, tf === "expense" && { backgroundColor: Colors.redD }]}>
+                      <Text style={[s.typeBadgeText, tf === "income" && { color: Colors.green }, tf === "expense" && { color: Colors.red }]}>
+                        {tf === "all" ? transactions.length : transactions.filter(function(t) { return t.type === tf; }).length}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
             {displayTransactions.length === 0 && !isLoading && (
               <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle="Lance sua primeira receita ou despesa, ou importe de uma planilha CSV."
-                actionLabel="Novo lancamento" onAction={() => setShowModal(true)}
+                actionLabel="Novo lancamento" onAction={function() { setShowModal(true); }}
                 secondaryLabel={importing ? "Importando..." : "Importar CSV"}
                 onSecondary={!importing ? handleImport : undefined} />
             )}
             {displayTransactions.length > 0 && (
               <View style={s.listCard}>
-                {displayTransactions.map(t => <TransactionRow key={t.id} item={t} onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} />)}
+                {displayTransactions.map(function(t) { return <TransactionRow key={t.id} item={t} onDelete={!isDemo ? function(id) { setDeleteTarget(id); } : undefined} />; })}
               </View>
             )}
           </View>
@@ -178,7 +180,7 @@ export default function FinanceiroScreen() {
         {activeTab === 3 && <TabRetirada transactions={transactions} />}
         {activeTab === 4 && <TabCupons />}
 
-        <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={() => setDeleteTarget(null)} />
+        <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
     </View>
