@@ -38,14 +38,12 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
   var qc = useQueryClient();
   var companyId = company?.id;
 
-  // Compute date range from period for server-side filtering
   var periodRange = useMemo(function() {
     var p = period || "month";
     var range = getPeriodRange(p);
     return { start: toISODate(range.start), end: toISODate(range.end) };
   }, [period]);
 
-  // FIX: Send start/end to backend so DB filters by period
   var { data: apiTx, isLoading: isLoadingTx } = useQuery({
     queryKey: ["transactions", companyId, periodRange.start, periodRange.end],
     queryFn: function() {
@@ -83,7 +81,6 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
     return mapped;
   }, [apiTx, isDemo]);
 
-  // Summary now comes from the backend (already filtered by period)
   var summary = useMemo(function() {
     var income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0);
     var expenses = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0);
@@ -138,7 +135,8 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
     },
   });
 
-  function createTransaction(body: { type: string; amount: number; description: string; category: string }) {
+  // FIX: type now includes due_date for retroactive entries
+  function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string }) {
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
     createMutation.mutate(body);
