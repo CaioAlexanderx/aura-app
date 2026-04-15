@@ -31,8 +31,11 @@ export function TabResumo({ transactions, dreApi, period }: Props) {
     <CompCards current={d.current} previous={d.previous} />
     <InsightsBlock insights={d.insights} velocity={d.velocity} current={d.current} employees={d.employees} />
     <MonthlyChart data={d.monthly} />
+      <RevenueTrendLine monthly={d.monthly} />
     <DayOfWeekChart data={d.dayOfWeek} insights={d.insights} />
     <EmployeeRanking employees={d.employees} />
+      <EmployeeDonut employees={d.employees} />
+      <EmployeeMonthlyChart data={d.employeeMonthly} employees={d.employees.map((e: any) => e.name)} />
     <TicketDistribution data={d.ticketDistribution} />
     <WeeklyTrend data={d.weeklyTrend} />
     <TopCustomers data={d.topCustomers} />
