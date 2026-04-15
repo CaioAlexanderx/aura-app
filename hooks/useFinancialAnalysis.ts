@@ -32,19 +32,10 @@ export type AnalysisData = {
   };
 };
 
-// Map period to months for the backend
-function periodToMonths(period?: PeriodKey): number {
-  switch (period) {
-    case "week": return 1;
-    case "month": return 1;
-    case "year": return 12;
-    case "prev_year": return 24;
-    default: return 13;
-  }
-}
-
-async function fetchAnalysis(companyId: string, token: string, months: number): Promise<AnalysisData> {
-  var res = await fetch(API + "/companies/" + companyId + "/financial/analysis?months=" + months, {
+async function fetchAnalysis(companyId: string, token: string, period?: PeriodKey): Promise<AnalysisData> {
+  var params = new URLSearchParams();
+  if (period) params.set("period", period);
+  var res = await fetch(API + "/companies/" + companyId + "/financial/analysis?" + params.toString(), {
     headers: { Authorization: "Bearer " + token },
   });
   if (!res.ok) throw new Error("Erro ao carregar analise");
@@ -54,10 +45,10 @@ async function fetchAnalysis(companyId: string, token: string, months: number): 
 export function useFinancialAnalysis(months?: number, period?: PeriodKey) {
   var { company, token } = useAuthStore();
   var companyId = company?.id;
-  var effectiveMonths = months || periodToMonths(period);
+  // Include period in queryKey so React Query treats each filter as a different cache entry
   return useQuery<AnalysisData>({
-    queryKey: ["financialAnalysis", companyId, effectiveMonths],
-    queryFn: function() { return fetchAnalysis(companyId!, token!, effectiveMonths); },
+    queryKey: ["financialAnalysis", companyId, period || "default"],
+    queryFn: function() { return fetchAnalysis(companyId!, token!, period); },
     enabled: !!companyId && !!token,
     staleTime: 60000,
     retry: 1,
