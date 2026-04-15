@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi, dashboardApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import type { Transaction, DreData, WithdrawalData } from "@/components/screens/financeiro/types";
+import type { Transaction, DreData, WithdrawalData, PeriodKey } from "@/components/screens/financeiro/types";
+import { getPeriodRange } from "@/components/screens/financeiro/types";
 
 function mapApiTransaction(t: any): Transaction {
   return {
@@ -28,15 +29,29 @@ function safePeriod(raw: any): string {
   return "Periodo atual";
 }
 
-export function useTransactionsApi(activeTab?: number) {
+function toISODate(d: Date): string {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
   var { company, token, isDemo } = useAuthStore();
   var qc = useQueryClient();
   var companyId = company?.id;
 
-  // FIX: load ALL transactions (was limit=200, couldn't see Ano Anterior)
+  // Compute date range from period for server-side filtering
+  var periodRange = useMemo(function() {
+    var p = period || "month";
+    var range = getPeriodRange(p);
+    return { start: toISODate(range.start), end: toISODate(range.end) };
+  }, [period]);
+
+  // FIX: Send start/end to backend so DB filters by period
   var { data: apiTx, isLoading: isLoadingTx } = useQuery({
-    queryKey: ["transactions", companyId],
-    queryFn: function() { return companiesApi.transactions(companyId!, "limit=10000"); },
+    queryKey: ["transactions", companyId, periodRange.start, periodRange.end],
+    queryFn: function() {
+      var params = "limit=5000&start=" + periodRange.start + "&end=" + periodRange.end;
+      return companiesApi.transactions(companyId!, params);
+    },
     enabled: !!companyId && !!token && !isDemo,
     retry: 1, staleTime: 30000,
   });
@@ -62,12 +77,13 @@ export function useTransactionsApi(activeTab?: number) {
     var mapped = arr.map(mapApiTransaction);
     mapped.sort(function(a: any, b: any) {
       var da = a.due_date || a.created_at || "";
-      var db = b.due_date || b.created_at || "";
-      return db.localeCompare(da);
+      var db2 = b.due_date || b.created_at || "";
+      return db2.localeCompare(da);
     });
     return mapped;
   }, [apiTx, isDemo]);
 
+  // Summary now comes from the backend (already filtered by period)
   var summary = useMemo(function() {
     var income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0);
     var expenses = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0);
@@ -101,8 +117,8 @@ export function useTransactionsApi(activeTab?: number) {
     mutationFn: function(txId: string) { return companiesApi.deleteTransaction(companyId!, txId); },
     onMutate: async function(txId: string) {
       await qc.cancelQueries({ queryKey: ["transactions", companyId] });
-      var prev = qc.getQueryData(["transactions", companyId]);
-      qc.setQueryData(["transactions", companyId], function(old: any) {
+      var prev = qc.getQueryData(["transactions", companyId, periodRange.start, periodRange.end]);
+      qc.setQueryData(["transactions", companyId, periodRange.start, periodRange.end], function(old: any) {
         if (!old) return old;
         if (old.transactions) return { ...old, transactions: old.transactions.filter(function(t: any) { return t.id !== txId; }) };
         if (old.rows) return { ...old, rows: old.rows.filter(function(t: any) { return t.id !== txId; }) };
@@ -113,7 +129,7 @@ export function useTransactionsApi(activeTab?: number) {
       return { prev: prev };
     },
     onError: function(_err: any, _txId: any, context: any) {
-      if (context?.prev) qc.setQueryData(["transactions", companyId], context.prev);
+      if (context?.prev) qc.setQueryData(["transactions", companyId, periodRange.start, periodRange.end], context.prev);
       toast.error("Erro ao excluir lancamento");
     },
     onSettled: function() {
