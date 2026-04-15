@@ -1,25 +1,29 @@
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { fmtK, fmt } from "../types";
-import { Card, PAL } from "./shared";
+import { Card, PAL, PERIOD_LABELS } from "./shared";
 
-export function VelocityHero({ velocity, current, previous }: any) {
+type Props = { velocity: any; current: any; previous: any; period?: string };
+
+export function VelocityHero({ velocity, current, previous, period }: Props) {
   var trend = velocity.tendencia_pct;
   var tColor = trend >= 0 ? PAL.green : PAL.red;
   var marginColor = current.margem_pct >= 20 ? PAL.green : current.margem_pct >= 10 ? PAL.amber : PAL.red;
+  var periodLabel = PERIOD_LABELS[period || "month"] || "do periodo";
+
   return (
     <Card style={{ marginBottom: 16, padding: 22 }}>
       <View style={s.heroRow}>
         <View style={{ flex: 1 }}>
-          <Text style={s.heroLabel}>FATURAMENTO DO PERIODO</Text>
+          <Text style={s.heroLabel}>FATURAMENTO {periodLabel.toUpperCase()}</Text>
           <Text style={[s.heroValue, { color: PAL.green }]}>{fmtK(current.receita)}</Text>
-          {velocity.projecao_mes > 0 && <Text style={s.heroSub}>Projecao: {fmtK(velocity.projecao_mes)}</Text>}
+          {velocity.projecao_mes > 0 && period !== "prev_year" && <Text style={s.heroSub}>Projecao do mes: {fmtK(velocity.projecao_mes)}</Text>}
         </View>
         <View style={s.velBox}>
           <Text style={s.velLabel}>VELOCIDADE</Text>
           <Text style={[s.velValue, { color: tColor }]}>{fmtK(velocity.media_dia_7d)}/dia</Text>
           <View style={[s.trendBadge, { backgroundColor: trend >= 0 ? Colors.greenD : Colors.redD }]}>
-            <Text style={[s.trendText, { color: tColor }]}>{trend >= 0 ? "+" : ""}{trend.toFixed(0)}%</Text>
+            <Text style={[s.trendText, { color: tColor }]}>{trend >= 0 ? "+" : ""}{trend.toFixed(0)}% vs 30d</Text>
           </View>
         </View>
       </View>
@@ -42,7 +46,7 @@ var s = StyleSheet.create({
   velLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", letterSpacing: 0.8, marginBottom: 2 },
   velValue: { fontSize: 18, fontWeight: "800" },
   trendBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 4 },
-  trendText: { fontSize: 11, fontWeight: "700" },
+  trendText: { fontSize: 10, fontWeight: "700" },
   heroStrip: { flexDirection: "row", marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border },
   stripItem: { flex: 1, alignItems: "center" },
   stripLabel: { fontSize: 9, color: Colors.ink3, letterSpacing: 0.4, marginBottom: 3 },

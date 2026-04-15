@@ -27,15 +27,15 @@ export function TabResumo({ transactions, dreApi, period }: Props) {
 
   var d = data;
   return <View>
-    <VelocityHero velocity={d.velocity} current={d.current} previous={d.previous} />
+    <VelocityHero velocity={d.velocity} current={d.current} previous={d.previous} period={period} />
     <CompCards current={d.current} previous={d.previous} />
+    <InsightsBlock insights={d.insights} velocity={d.velocity} current={d.current} employees={d.employees} />
     <MonthlyChart data={d.monthly} />
     <DayOfWeekChart data={d.dayOfWeek} insights={d.insights} />
     <EmployeeRanking employees={d.employees} />
     <TicketDistribution data={d.ticketDistribution} />
     <WeeklyTrend data={d.weeklyTrend} />
     <TopCustomers data={d.topCustomers} />
-    <InsightsBlock insights={d.insights} velocity={d.velocity} current={d.current} employees={d.employees} />
     <View style={cs.disclaimer}><Text style={cs.disclaimerText}>Estimativas para apoio a decisao - nao substitui contabilidade oficial.</Text></View>
   </View>;
 }
