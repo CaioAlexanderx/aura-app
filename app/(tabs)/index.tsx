@@ -27,7 +27,6 @@ import { ObligationRow } from "@/components/screens/dashboard/ObligationRow";
 import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalyticsCard";
 import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
 
-// Route priority when dashboard is not accessible
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "pdv", route: "/pdv" },
   { mod: "estoque", route: "/estoque" },
@@ -43,16 +42,27 @@ var FALLBACK_ROUTES: { mod: string; route: string }[] = [
 ];
 
 export default function DashboardScreen() {
+  // ALL hooks MUST be called before any conditional return (React rules of hooks)
   var { user, company, token, isDemo, logout } = useAuthStore();
   var router = useRouter();
   var [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
   var visibleMods = useVisibleModules();
+  var { tradeName } = useCompanyProfile();
+  var [redirecting, setRedirecting] = useState(false);
+
+  var { data, isLoading, isError } = useQuery({
+    queryKey: ["dashboard", company?.id],
+    queryFn: function() { return dashboardApi.aggregate(company!.id); },
+    enabled: !!company?.id && !!token && !isDemo && !redirecting,
+    retry: 1, staleTime: 60000,
+  });
 
   // Redirect to first available module if dashboard is not accessible
   useEffect(function() {
-    if (visibleMods.size === 0) return; // still loading
-    if (visibleMods.has("painel")) return; // has access, stay here
+    if (visibleMods.size === 0) return;
+    if (visibleMods.has("painel")) return;
 
+    setRedirecting(true);
     for (var i = 0; i < FALLBACK_ROUTES.length; i++) {
       if (visibleMods.has(FALLBACK_ROUTES[i].mod)) {
         router.replace(FALLBACK_ROUTES[i].route as any);
@@ -61,22 +71,13 @@ export default function DashboardScreen() {
     }
   }, [visibleMods]);
 
-  // If user doesn't have painel access, show nothing while redirecting
-  if (visibleMods.size > 0 && !visibleMods.has("painel")) {
-    return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
-  }
-
-  var { tradeName } = useCompanyProfile();
-
-  var { data, isLoading, isError } = useQuery({
-    queryKey: ["dashboard", company?.id],
-    queryFn: function() { return dashboardApi.aggregate(company!.id); },
-    enabled: !!company?.id && !!token && !isDemo,
-    retry: 1, staleTime: 60000,
-  });
-
   useEffect(function() { if (isError && !isDemo) toast.error("Erro ao carregar dashboard."); }, [isError]);
   useEffect(function() { if ((user as any)?.email_verified !== undefined) setEmailVerified((user as any).email_verified); }, [(user as any)?.email_verified]);
+
+  // Show blank while redirecting (no hooks after this point)
+  if (redirecting || (visibleMods.size > 0 && !visibleMods.has("painel"))) {
+    return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
+  }
 
   var d = isDemo ? MOCK_DASHBOARD : (data || EMPTY_DATA);
   var isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
