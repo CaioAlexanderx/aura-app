@@ -1,10 +1,4 @@
-export { DashboardAdmin } from "./DashboardAdmin";
-export { ClientsAdmin } from "./ClientsAdmin";
-export { FinanceiroAdmin } from "./FinanceiroAdmin";
-export { ContabilidadeAdmin } from "./ContabilidadeAdmin";
-export { EquipeAdmin } from "./EquipeAdmin";
-export { SuporteAdmin } from "./SuporteAdmin";
-export { ConfigAdmin } from "./ConfigAdmin";
-export { LogsAdmin } from "./LogsAdmin";
-export type { AdminClient } from "./types";
-export { PLAN_C, STATUS_C, MODULE_LABELS } from "./types";
+export { DashboardAdmin } from './DashboardAdmin';
+export { ClientsAdmin } from './ClientsAdmin';
+export { EquipeAdmin } from './EquipeAdmin';
+export { SolicitacoesAdmin } from './SolicitacoesAdmin';
