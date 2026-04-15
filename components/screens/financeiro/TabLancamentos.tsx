@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
@@ -19,7 +19,7 @@ type Props = {
 };
 
 export function TabLancamentos({ transactions, isLoading, importing, onNewTransaction, onExport, onImport, onDelete }: Props) {
-  var [typeFilter, setTypeFilter] = __import_useState("all" as "all" | "income" | "expense");
+  var [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
 
   var displayTransactions = useMemo(function() {
     if (typeFilter === "all") return transactions;
@@ -68,9 +68,6 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
     </View>
   );
 }
-
-// Inline useState import to avoid hook issues
-import { useState as __import_useState } from "react";
 
 var s = StyleSheet.create({
   typeFilterRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
