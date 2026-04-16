@@ -12,9 +12,10 @@ export type Product = {
   sold30d: number;
   unit: string;
   brand: string;
-  notes: string;   // descricao/observacoes
-  color: string;   // hex e.g. #A3C1FF
-  size: string;    // tamanho e.g. P, M, G, 500ml
+  notes: string;
+  color: string;
+  size: string;
+  has_variants?: boolean;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];

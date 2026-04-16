@@ -4,6 +4,12 @@ import { pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
+// productId: para produtos sem variante = product.id
+//            para produtos com variante = product.id + '__' + variant.id
+// Essa convencao permite que o CartPanel (19KB) funcione sem mudancas:
+// - key={item.productId} continua unico
+// - updateQty/removeItem por productId continuam funcionando
+// No finalizeSale, decompomos de volta pra product_id + variant_id.
 export type CartItem = { productId: string; name: string; price: number; qty: number };
 export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string; couponCode?: string; couponDiscount?: number; manualDiscount?: number };
 
@@ -15,6 +21,12 @@ export const PAYMENTS = [
 ];
 
 const MAX_DISCOUNT_PCT = 50;
+
+function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } {
+  var idx = cartKey.indexOf("__");
+  if (idx < 0) return { pid: cartKey, vid: null };
+  return { pid: cartKey.slice(0, idx), vid: cartKey.slice(idx + 2) };
+}
 
 export function useCart() {
   const { company, isDemo } = useAuthStore();
@@ -34,7 +46,6 @@ export function useCart() {
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
 
-  // P1 #1: Manual discount
   const [discountType, setDiscountType] = useState<"%" | "R$">("%");
   const [discountValue, setDiscountValue] = useState("");
 
@@ -52,7 +63,6 @@ export function useCart() {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
 
-  // Compute manual discount amount (capped at 50%)
   const parsedDiscount = parseFloat(discountValue.replace(",", ".")) || 0;
   let manualDiscountAmount = 0;
   if (parsedDiscount > 0 && total > 0) {
@@ -68,33 +78,39 @@ export function useCart() {
   const couponDiscount = couponApplied?.discount || 0;
   const totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
 
-  function addToCart(product: { id: string; name: string; price: number }) {
+  // addToCart: aceita variante opcional. Se variante fornecida,
+  // productId no cart vira "pid__vid" e name vira "nome (label)".
+  function addToCart(product: { id: string; name: string; price: number }, variant?: { id: string; label: string; price?: number }) {
     setLastSale(null);
-    setCart(prev => {
-      const existing = prev.find(i => i.productId === product.id);
-      if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { productId: product.id, name: product.name, price: product.price, qty: 1 }];
+    var cartKey = variant ? product.id + "__" + variant.id : product.id;
+    var displayName = variant ? product.name + " (" + variant.label + ")" : product.name;
+    var effectivePrice = (variant?.price != null && variant.price > 0) ? variant.price : product.price;
+
+    setCart(function(prev) {
+      var existing = prev.find(function(i) { return i.productId === cartKey; });
+      if (existing) return prev.map(function(i) { return i.productId === cartKey ? { ...i, qty: i.qty + 1 } : i; });
+      return [...prev, { productId: cartKey, name: displayName, price: effectivePrice, qty: 1 }];
     });
     if (couponApplied) setCouponApplied(null);
   }
 
   function setQty(productId: string, qty: number) {
-    if (qty <= 0) { setCart(prev => prev.filter(i => i.productId !== productId)); return; }
-    setCart(prev => prev.map(i => i.productId === productId ? { ...i, qty } : i));
+    if (qty <= 0) { setCart(function(prev) { return prev.filter(function(i) { return i.productId !== productId; }); }); return; }
+    setCart(function(prev) { return prev.map(function(i) { return i.productId === productId ? { ...i, qty: qty } : i; }); });
     if (couponApplied) setCouponApplied(null);
   }
 
   function updateQty(productId: string, delta: number) {
-    setCart(prev => prev.map(i => {
+    setCart(function(prev) { return prev.map(function(i) {
       if (i.productId !== productId) return i;
-      const newQty = i.qty + delta;
+      var newQty = i.qty + delta;
       return newQty > 0 ? { ...i, qty: newQty } : i;
-    }));
+    }); });
     if (couponApplied) setCouponApplied(null);
   }
 
   function removeItem(productId: string) {
-    setCart(prev => prev.filter(i => i.productId !== productId));
+    setCart(function(prev) { return prev.filter(function(i) { return i.productId !== productId; }); });
     if (couponApplied) setCouponApplied(null);
   }
 
@@ -103,21 +119,30 @@ export function useCart() {
   function clearCoupon() { setCouponCode(""); setCouponApplied(null); }
   function clearDiscount() { setDiscountValue(""); }
 
-  function finalizeSale() {
+  function finalizeSale(saleDate?: string) {
     if (cart.length === 0 || isProcessing) return;
     setIsProcessing(true);
 
-    const cartSnapshot = [...cart];
-    const saleData: any = {
-      items: cartSnapshot.map(i => ({ product_id: i.productId, quantity: i.qty, unit_price: i.price, product_name_snapshot: i.name })),
+    var cartSnapshot = [...cart];
+    var saleData: any = {
+      items: cartSnapshot.map(function(i) {
+        var decomposed = decomposeCartKey(i.productId);
+        return {
+          product_id: decomposed.pid,
+          variant_id: decomposed.vid || undefined,
+          quantity: i.qty,
+          unit_price: i.price,
+          product_name_snapshot: i.name,
+        };
+      }),
       payment_method: payment,
       customer_id: selectedCustomerId || undefined,
       employee_id: selectedEmployeeId || undefined,
     };
 
+    if (saleDate) saleData.sale_date = saleDate;
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
 
-    // P1 #1: Send manual discount to backend
     if (manualDiscountAmount > 0) {
       if (discountType === "%") {
         saleData.discount_pct = Math.min(parsedDiscount, MAX_DISCOUNT_PCT);
@@ -128,15 +153,15 @@ export function useCart() {
 
     if (companyId && !isDemo) {
       saleMutation.mutate(saleData, {
-        onSuccess: (res: any) => {
-          const saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale({ id: String(saleId), total: totalAfterCoupon, payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, couponCode: couponApplied?.code, couponDiscount: couponApplied?.discount, manualDiscount: manualDiscountAmount || undefined });
+        onSuccess: function(res: any) {
+          var saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
+          setLastSale({ id: String(saleId), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, couponCode: couponApplied?.code, couponDiscount: couponApplied?.discount, manualDiscount: manualDiscountAmount || undefined });
           setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
         },
-        onError: (err: any) => { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
+        onError: function(err: any) { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
       });
     } else {
-      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total: totalAfterCoupon, payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined });
+      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined });
       setCart([]); setIsProcessing(false);
     }
   }

@@ -5,7 +5,6 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
 
-// Processa deletes em lotes para nao sobrecarregar o servidor
 async function deleteBatched(
   ids: string[],
   deleteFn: (id: string) => Promise<any>,
@@ -40,6 +39,7 @@ function mapApiProduct(p: any): Product {
     notes: p.notes || p.description || "",
     color: p.color || "",
     size: p.size || "",
+    has_variants: !!p.has_variants,
   };
 }
 
@@ -126,7 +126,6 @@ export function useProducts() {
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
-  // Bulk delete em lotes de 10 — nao sobrecarrega o servidor
   async function bulkDeleteProducts(ids: string[]) {
     if (!companyId || isDemo || ids.length === 0) return;
     setBulkDeleting(true);

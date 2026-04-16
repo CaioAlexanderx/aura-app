@@ -14,11 +14,13 @@ import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
 import { ScannerBar } from "@/components/screens/pdv/ScannerBar";
 import { QuickCustomerModal } from "@/components/QuickCustomerModal";
+import { VariantPickerModal } from "@/components/VariantPickerModal";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/Pagination";
 import { employeesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
+import type { Product } from "@/components/screens/estoque/types";
 
 const PAGE_SIZE = 20;
 
@@ -50,7 +52,9 @@ export default function PdvScreen() {
   const [category, setCategory] = useState("Todos");
   const [showNewCustomer, setShowNewCustomer] = useState(false);
 
-  // "Novo Cliente" é funcionalidade de CRM — disponível a partir do plano Negócio
+  // Fase C: variant picker
+  const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
+
   const canAddCustomer = (company?.plan || "essencial") !== "essencial";
 
   const { data: empData } = useQuery({
@@ -72,8 +76,23 @@ export default function PdvScreen() {
 
   function handleScan(code: string) {
     const product = products.find(p => p.barcode === code);
-    if (product) addToCart(product);
+    if (product) handleAddProduct(product);
     else setSearch(code);
+  }
+
+  // Fase C: ao clicar num produto, verificar se tem variantes
+  function handleAddProduct(product: Product) {
+    if (product.has_variants) {
+      setPendingProduct(product);
+    } else {
+      addToCart(product);
+    }
+  }
+
+  function handleVariantSelected(variant: { id: string; label: string; price: number; stock: number }) {
+    if (!pendingProduct) return;
+    addToCart(pendingProduct, variant);
+    setPendingProduct(null);
   }
 
   function emitNfe() { toast.info("Emissao de NF-e sera integrada apos configuracao do provedor."); }
@@ -101,7 +120,10 @@ export default function PdvScreen() {
       </View>
       <ScrollableChips items={categories} active={category} onSelect={setCategory} />
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-        {paginated.map(p => <ProductCard key={p.id} product={p} onAdd={() => addToCart(p)} isWide={IS_WIDE} />)}
+        {paginated.map(p => (
+          <ProductCard key={p.id} product={p} onAdd={() => handleAddProduct(p)} isWide={IS_WIDE}
+            variantBadge={p.has_variants ? "Variantes" : undefined} />
+        ))}
         {filtered.length === 0 && products.length === 0 && <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre produtos no Estoque para eles aparecerem aqui no Caixa." />}
         {filtered.length === 0 && products.length > 0 && <View style={{ width: "100%", alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
       </View>
@@ -111,7 +133,7 @@ export default function PdvScreen() {
 
   const cartPanelProps = {
     cart, payment, setPayment, total, totalAfterCoupon, itemCount, isWide: IS_WIDE,
-    setQty, updateQty, removeItem, finalizeSale, isProcessing,
+    setQty, updateQty, removeItem, finalizeSale: () => finalizeSale(), isProcessing,
     customers: slimCustomers, employees,
     selectedCustomerId, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
@@ -130,6 +152,7 @@ export default function PdvScreen() {
         <CartPanel {...cartPanelProps} />
       </View>
       <QuickCustomerModal visible={showNewCustomer} onClose={() => setShowNewCustomer(false)} onCustomerCreated={handleCustomerCreated} />
+      <VariantPickerModal visible={!!pendingProduct} product={pendingProduct} onSelect={handleVariantSelected} onClose={() => setPendingProduct(null)} />
     </View>
   );
 
@@ -141,6 +164,7 @@ export default function PdvScreen() {
       <CartPanel {...cartPanelProps} />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       <QuickCustomerModal visible={showNewCustomer} onClose={() => setShowNewCustomer(false)} onCustomerCreated={handleCustomerCreated} />
+      <VariantPickerModal visible={!!pendingProduct} product={pendingProduct} onSelect={handleVariantSelected} onClose={() => setPendingProduct(null)} />
     </ScrollView>
   );
 }
