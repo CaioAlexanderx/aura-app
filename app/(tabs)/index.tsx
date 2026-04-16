@@ -123,7 +123,8 @@ export default function DashboardScreen() {
             <Text style={s.sec}>Visao geral</Text>
             <KPIGrid d={d} onNavigate={go} />
 
-            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/pdv"); }} />}
+            {/* Ver analise completa -> Financeiro (dados agregados), nao Caixa (interface de venda) */}
+            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
 
             <Text style={s.sec}>Acesso rapido</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
