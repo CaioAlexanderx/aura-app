@@ -71,13 +71,13 @@ function alertFor(days: number): AlertLevel { if (days <= 3) return "critical"; 
 
 // ── Portal URLs oficiais ──
 const PORTALS = {
-  pgmei: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/Identificacao", label: "Portal PGMEI" },
-  dasn: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/dasnsimei.app/", label: "Portal DASN-SIMEI" },
-  pgdasd: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgdasd2018.app/", label: "Portal PGDAS-D" },
-  simples: { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/", label: "Portal Simples Nacional" },
-  esocial: { url: "https://login.esocial.gov.br/", label: "Portal eSocial" },
-  ecac: { url: "https://cav.receita.fazenda.gov.br/", label: "e-CAC Receita Federal" },
-  regularize: { url: "https://www.regularize.pgfn.gov.br/", label: "Regularize PGFN" },
+  pgmei:     { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/Identificacao", label: "Portal PGMEI" },
+  dasn:      { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/dasnsimei.app/", label: "Portal DASN-SIMEI" },
+  pgdasd:    { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgdasd2018.app/", label: "Portal PGDAS-D" },
+  simples:   { url: "https://www8.receita.fazenda.gov.br/SimplesNacional/", label: "Portal Simples Nacional" },
+  esocial:   { url: "https://login.esocial.gov.br/", label: "Portal eSocial" },
+  ecac:      { url: "https://cav.receita.fazenda.gov.br/", label: "e-CAC Receita Federal" },
+  regularize:{ url: "https://www.regularize.pgfn.gov.br/", label: "Regularize PGFN" },
 };
 
 export function getMEIObligations(): Obligation[] {
@@ -85,18 +85,28 @@ export function getMEIObligations(): Obligation[] {
   const dasnDue = new Date(new Date().getFullYear(), 4, 31).toISOString(); const dasnDays = daysUntil(dasnDue);
   return [
     {
+      // ── DAS MEI — valor fixo, apenas 2 passos ──
+      // 1. Aura gera o QR Code (automatico)
+      // 2. Cliente escaneia e paga
       code: "das_mei", name: "Pagar DAS-MEI", frequency: "mensal", due_date: dasDue,
       filter_label: "aura_resolve",
-      aura_action: "Aura calcula o valor e direciona voce ao portal de pagamento.",
-      user_action: "Pagar via Pix, boleto ou debito automatico",
-      status: "pending", checkpoint_done: 0, checkpoint_total: 4,
+      aura_action: "O DAS MEI tem valor fixo. A Aura gera o QR Code para voce pagar em segundos.",
+      user_action: "Escanear o QR Code e pagar pelo app do banco",
+      status: "pending", checkpoint_done: 0, checkpoint_total: 2,
       alert_level: alertFor(dasDays), days_until_due: dasDays, estimated_amount: 75.90,
-      portal_url: PORTALS.pgmei.url, portal_label: PORTALS.pgmei.label,
       steps: [
-        { text: "Aura calcula o valor do DAS (INSS + ISS/ICMS)", auto: true, hint: "Valor estimado com base no seu CNAE", doc_type: "pdf", doc_note: "Demonstrativo de calculo" },
-        { text: "Acesse o portal PGMEI para gerar a guia", auto: false, hint: "Informe seu CNPJ no portal", portal_url: PORTALS.pgmei.url, portal_label: "Abrir PGMEI", doc_type: "gif", doc_note: "Como acessar o PGMEI" },
-        { text: "Gere o boleto ou QR Code Pix", auto: false, hint: "Escolha a forma de pagamento", doc_type: "gif", doc_note: "Como gerar o boleto/Pix" },
-        { text: "Confirme o pagamento no app", auto: false, hint: "Marque como concluido apos pagar" },
+        {
+          text: "Aura gera o QR Code do DAS",
+          auto: true,
+          hint: "Valor fixo mensal: INSS + ISS/ICMS conforme seu CNAE. Nenhum calculo necessario.",
+          doc_type: "pdf",
+          doc_note: "QR Code para pagamento",
+        },
+        {
+          text: "Escaneie o QR Code e confirme o pagamento",
+          auto: false,
+          hint: "Pelo app do seu banco ou qualquer carteira Pix",
+        },
       ],
     },
     {
