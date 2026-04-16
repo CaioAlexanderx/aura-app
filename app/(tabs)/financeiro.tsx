@@ -12,22 +12,23 @@ import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { TABS, PERIODS } from "@/components/screens/financeiro/types";
-import type { PeriodKey } from "@/components/screens/financeiro/types";
+import type { PeriodKey, Transaction } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
 import { FinanceiroToolbar } from "@/components/FinanceiroToolbar";
 import { AgentBanner } from "@/components/AgentBanner";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { BASE_URL } from "@/services/api";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 var isWeb = Platform.OS === "web";
-var API = "https://aura-backend-production-f805.up.railway.app/api/v1";
 
 export default function FinanceiroScreen() {
   var [activeTab, setActiveTab] = useState(0);
   var [period, setPeriod] = useState<PeriodKey>("month");
   var [showModal, setShowModal] = useState(false);
+  var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
   var scrollRef = useRef<any>(null);
@@ -51,7 +52,8 @@ export default function FinanceiroScreen() {
       setImporting(true);
       var rows = await pickFileAndParse();
       if (rows.length === 0) { toast.error("Arquivo vazio"); setImporting(false); return; }
-      var res = await fetch(API + "/companies/" + company.id + "/transactions/batch?partial=true", {
+      // FIX F-03: usar BASE_URL do api.ts em vez de URL hardcoded
+      var res = await fetch(BASE_URL + "/companies/" + company.id + "/transactions/batch?partial=true", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ transactions: rows }),
       });
@@ -68,16 +70,22 @@ export default function FinanceiroScreen() {
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
+  function handleEdit(tx: Transaction) {
+    setEditTx(tx);
+    setShowModal(true);
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <TransactionModal
         visible={showModal}
-        onClose={function() { setShowModal(false); }}
+        onClose={function() { setShowModal(false); setEditTx(null); }}
         onSave={createTransaction}
         onSaleCreated={handleSaleCreated}
+        editTransaction={editTx}
       />
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-        <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={function() { setShowModal(true); }} />
+        <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={function() { setEditTx(null); setShowModal(true); }} />
         <AgentBanner context="financeiro" />
 
         <View style={s.periodBar}>
@@ -99,8 +107,8 @@ export default function FinanceiroScreen() {
         {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
         {isLoading && activeTab < 4 && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} period={period} isLoading={isLoading} isDemo={isDemo} onNewTransaction={function() { setShowModal(true); }} onImport={!importing ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={function(id) { setDeleteTarget(id); }} />}
-        {activeTab === 1 && <TabLancamentos transactions={transactions} isLoading={isLoading} importing={importing} onNewTransaction={function() { setShowModal(true); }} onExport={handleExport} onImport={handleImport} onDelete={!isDemo ? function(id) { setDeleteTarget(id); } : undefined} />}
+        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} period={period} isLoading={isLoading} isDemo={isDemo} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onImport={!importing ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={function(id) { setDeleteTarget(id); }} />}
+        {activeTab === 1 && <TabLancamentos transactions={transactions} isLoading={isLoading} importing={importing} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onExport={handleExport} onImport={handleImport} onDelete={!isDemo ? function(id) { setDeleteTarget(id); } : undefined} onEdit={!isDemo ? handleEdit : undefined} />}
         {activeTab === 2 && <TabResumo transactions={transactions} dreApi={dreData} period={period} />}
         {activeTab === 3 && <TabRetirada transactions={transactions} />}
         {activeTab === 4 && <TabCupons />}
