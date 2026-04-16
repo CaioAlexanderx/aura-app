@@ -4,17 +4,31 @@ import { Colors } from "@/constants/colors";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
 
+// TIMEZONE FIX: due_date eh uma string 'YYYY-MM-DD' (date-only).
+// new Date('2026-04-16') em JS interpreta como UTC midnight.
+// No browser em SP (UTC-3) isso vira 15/04 21:00 local -> exibia D-1.
+// Solucao: renderizar due_date em timezone UTC pra preservar o dia.
+// created_at e timestamptz - renderizar em America/Sao_Paulo.
 function formatDate(item: Transaction): string {
-  // Prefer due_date (business date), fallback to date field
-  const raw = (item as any).due_date || (item as any).created_at;
-  if (!raw) return item.date || "---";
-  try {
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) return item.date || "---";
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  } catch {
-    return item.date || "---";
+  const due = (item as any).due_date;
+  if (due) {
+    try {
+      return new Date(due).toLocaleDateString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        timeZone: "UTC",
+      });
+    } catch {}
   }
+  const created = (item as any).created_at;
+  if (created) {
+    try {
+      return new Date(created).toLocaleDateString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        timeZone: "America/Sao_Paulo",
+      });
+    } catch {}
+  }
+  return item.date || "---";
 }
 
 export function TransactionRow({ item, onDelete }: { item: Transaction; onDelete?: (id: string) => void }) {

@@ -34,9 +34,10 @@ export type WithdrawalData = {
   fatorR: number;
 };
 
-export type PeriodKey = "week" | "month" | "year" | "prev_year";
+export type PeriodKey = "all" | "week" | "month" | "year" | "prev_year";
 
 export var PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: "all", label: "Todos" },
   { key: "week", label: "Semanal" },
   { key: "month", label: "Mensal" },
   { key: "year", label: "Anual" },
@@ -54,7 +55,7 @@ export function fmtK(n: number): string {
   return n >= 1000 ? "R$ " + (n / 1000).toFixed(1).replace(".", ",") + "k" : fmt(n);
 }
 
-/** Round to 2 decimal places — prevents 3-decimal display bug */
+/** Round to 2 decimal places - prevents 3-decimal display bug */
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -63,6 +64,9 @@ export function getPeriodRange(key: PeriodKey): { start: Date; end: Date; label:
   var now = new Date();
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   switch (key) {
+    case "all": {
+      return { start: new Date(1970, 0, 1), end: new Date(2100, 0, 1), label: "Todos os lancamentos" };
+    }
     case "week": {
       var start = new Date(today);
       start.setDate(today.getDate() - 6);
@@ -86,6 +90,7 @@ export function getPeriodRange(key: PeriodKey): { start: Date; end: Date; label:
 }
 
 export function filterByPeriod(txs: Transaction[], key: PeriodKey): Transaction[] {
+  if (key === "all") return txs;
   var range = getPeriodRange(key);
   return txs.filter(function(t) {
     var raw = (t as any).due_date || (t as any).created_at || t.date;
