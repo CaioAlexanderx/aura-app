@@ -50,6 +50,9 @@ export default function PdvScreen() {
   const [category, setCategory] = useState("Todos");
   const [showNewCustomer, setShowNewCustomer] = useState(false);
 
+  // "Novo Cliente" é funcionalidade de CRM — disponível a partir do plano Negócio
+  const canAddCustomer = (company?.plan || "essencial") !== "essencial";
+
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
     queryFn: () => employeesApi.list(company!.id),
@@ -89,10 +92,12 @@ export default function PdvScreen() {
       <ScannerBar onScan={handleScan} />
       <View style={s.searchRow}>
         <TextInput style={[s.searchInput, { flex: 1 }]} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
-        <Pressable onPress={() => setShowNewCustomer(true)} style={s.newCustomerBtn}>
-          <Icon name="user_plus" size={15} color={Colors.violet3} />
-          <Text style={s.newCustomerText}>Novo cliente</Text>
-        </Pressable>
+        {canAddCustomer && (
+          <Pressable onPress={() => setShowNewCustomer(true)} style={s.newCustomerBtn}>
+            <Icon name="user_plus" size={15} color={Colors.violet3} />
+            <Text style={s.newCustomerText}>Novo cliente</Text>
+          </Pressable>
+        )}
       </View>
       <ScrollableChips items={categories} active={category} onSelect={setCategory} />
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
