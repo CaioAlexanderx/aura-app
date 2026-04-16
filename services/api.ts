@@ -131,6 +131,16 @@ export var companiesApi = {
   createProduct: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/products", { method: "POST", body: body }); },
   updateProduct: function(companyId: string, prodId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + prodId, { method: "PATCH", body: body }); },
   deleteProduct: function(companyId: string, prodId: string) { return request<any>("/companies/" + companyId + "/products/" + prodId, { method: "DELETE" }); },
+  checkDuplicate: function(companyId: string, name: string, excludeId?: string) {
+    var q = "?name=" + encodeURIComponent(name) + (excludeId ? "&exclude_id=" + encodeURIComponent(excludeId) : "");
+    return request<{ duplicates: Array<{ id: string; name: string; sku: string; barcode: string; color: string; size: string; price: number; stock_qty: number }>; count: number }>("/companies/" + companyId + "/products/check-duplicate" + q, { retry: 0 });
+  },
+  duplicateGroups: function(companyId: string) {
+    return request<{ groups: Array<{ name: string; normalized_name: string; count: number; products: Array<any> }>; total: number }>("/companies/" + companyId + "/products/duplicate-groups");
+  },
+  mergeAsVariants: function(companyId: string, body: { primary_id: string; attribute_name: string; variants: Array<{ product_id: string; value: string }> }) {
+    return request<any>("/companies/" + companyId + "/products/merge-as-variants", { method: "POST", body: body, timeout: 30000 });
+  },
   variants: function(companyId: string, productId: string) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants"); },
   createVariant: function(companyId: string, productId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants", { method: "POST", body: body }); },
   updateVariant: function(companyId: string, productId: string, variantId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "PATCH", body: body }); },

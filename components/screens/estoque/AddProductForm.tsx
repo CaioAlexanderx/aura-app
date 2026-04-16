@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -8,6 +8,7 @@ import { VariantsSection } from "@/components/VariantsSection";
 import { ImageUploadSection } from "@/components/ImageUploadSection";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
+import { hexToName } from "@/utils/colorNames";
 import type { Product } from "./types";
 import { UNITS } from "./types";
 
@@ -52,6 +53,30 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [size, setSize]         = useState(editProduct?.size || "");
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
+
+  // Fase A: duplicate detection com debounce
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [checkingDup, setCheckingDup] = useState(false);
+
+  useEffect(() => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length < 2 || !company?.id) {
+      setDuplicates([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setCheckingDup(true);
+      try {
+        const res = await companiesApi.checkDuplicate(company.id, trimmed, editProduct?.id);
+        setDuplicates(res.duplicates || []);
+      } catch {
+        setDuplicates([]);
+      } finally {
+        setCheckingDup(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [name, company?.id, editProduct?.id]);
 
   const { data: variantsData, refetch: refetchVariants } = useQuery({
     queryKey: ["variants", company?.id, editProduct?.id],
@@ -109,6 +134,40 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Pomada modeladora" placeholderTextColor={Colors.ink3} />
       </FormField>
 
+      {/* Fase A: aviso de duplicatas */}
+      {duplicates.length > 0 && (
+        <View style={s.dupBanner}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <Text style={s.dupIcon}>!</Text>
+            <Text style={s.dupTitle}>
+              Voce ja tem {duplicates.length} produto{duplicates.length > 1 ? "s" : ""} com esse nome
+            </Text>
+          </View>
+          <Text style={s.dupSub}>Podem ser variantes (cor/tamanho) do mesmo produto.</Text>
+          <View style={{ marginTop: 10, gap: 6 }}>
+            {duplicates.slice(0, 5).map((d, i) => (
+              <View key={d.id || i} style={s.dupRow}>
+                {d.color && (
+                  <View style={[s.dupColorDot, { backgroundColor: d.color }]} />
+                )}
+                <Text style={s.dupRowText} numberOfLines={1}>
+                  {d.color ? hexToName(d.color) : ""}{d.color && (d.size || d.barcode) ? " \u00b7 " : ""}
+                  {d.size ? "T: " + d.size : ""}{d.size && d.barcode ? " \u00b7 " : ""}
+                  {d.barcode ? d.barcode.slice(-8) : ""}
+                </Text>
+                <Text style={s.dupStock}>{d.stock_qty} un</Text>
+              </View>
+            ))}
+            {duplicates.length > 5 && (
+              <Text style={s.dupMore}>+ {duplicates.length - 5} outros</Text>
+            )}
+          </View>
+          <Text style={s.dupHint}>
+            Dica: depois de salvar, use a ferramenta &quot;Unificar duplicatas&quot; na tela de Estoque.
+          </Text>
+        </View>
+      )}
+
       {/* P1 #1: Image upload — only in edit mode (product needs an ID for upload endpoint) */}
       {isEdit && editProduct?.id && (
         <ImageUploadSection
@@ -164,7 +223,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
             {Platform.OS === "web" ? (
               <Pressable onPress={openColorPicker} style={s.colorRow}>
                 <View style={[s.colorSwatch, { backgroundColor: color || Colors.bg4, borderStyle: color ? "solid" : "dashed" }]} />
-                <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>{color || "Toque para escolher"}</Text>
+                <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>{color ? (hexToName(color) + " \u00b7 " + color) : "Toque para escolher"}</Text>
                 {color && (
                   <Pressable onPress={(e) => { e.stopPropagation?.(); setColor(""); }}>
                     <Text style={{ fontSize: 11, color: Colors.red }}>Remover</Text>
@@ -179,7 +238,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
                       style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: c, borderWidth: color === c ? 3 : 1.5, borderColor: color === c ? Colors.violet : Colors.border }} />
                   ))}
                 </View>
-                {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{color}</Text>}
+                {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{hexToName(color)} \u00b7 {color}</Text>}
               </View>
             )}
           </FormField>
@@ -237,6 +296,33 @@ const s = StyleSheet.create({
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   saveBtn: { backgroundColor: Colors.violet, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
   saveText: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  // Fase A: banner de duplicatas
+  dupBanner: {
+    backgroundColor: "#fef3c7",
+    borderLeftWidth: 4,
+    borderLeftColor: "#f59e0b",
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+    marginTop: -8,
+  },
+  dupIcon: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: "#f59e0b", color: "#fff",
+    fontSize: 13, fontWeight: "800", textAlign: "center", lineHeight: 22,
+  },
+  dupTitle: { fontSize: 13, fontWeight: "700", color: "#78350f", flex: 1 },
+  dupSub: { fontSize: 11.5, color: "#92400e", lineHeight: 17 },
+  dupRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(255,255,255,0.6)",
+    borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6,
+  },
+  dupColorDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: "rgba(0,0,0,0.1)" },
+  dupRowText: { fontSize: 11.5, color: "#78350f", flex: 1 },
+  dupStock: { fontSize: 11, color: "#92400e", fontWeight: "600" },
+  dupMore: { fontSize: 11, color: "#92400e", fontStyle: "italic", paddingLeft: 8 },
+  dupHint: { fontSize: 11, color: "#78350f", marginTop: 10, fontStyle: "italic", lineHeight: 16 },
 });
 
 export default AddProductForm;

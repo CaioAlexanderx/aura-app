@@ -16,6 +16,7 @@ import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
 import { ScrollableChips } from "@/components/ScrollableChips";
+import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -64,6 +65,8 @@ export default function EstoqueScreen() {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
+  const [showMergeModal, setShowMergeModal] = useState(false);
+
   const editingProductId = editProduct?.id || null;
   const { data: variantsData, refetch: refetchVariants } = useQuery({
     queryKey: ['variants', company?.id, editingProductId],
@@ -71,6 +74,15 @@ export default function EstoqueScreen() {
     enabled: !!company?.id && !!editingProductId && showAddForm,
     staleTime: 30000,
   });
+
+  // Fase B: detectar grupos de duplicatas
+  const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
+    queryKey: ["duplicateGroups", company?.id],
+    queryFn: () => companiesApi.duplicateGroups(company!.id),
+    enabled: !!company?.id && !isDemo,
+    staleTime: 60000,
+  });
+  const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
 
   const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...categories, ...products.map(p => p.category)]));
   const filterCategories = ["Todos", ...allCategories.filter(Boolean)];
@@ -89,6 +101,8 @@ export default function EstoqueScreen() {
     if (editProduct) { updateProduct(product); setEditProduct(null); }
     else addProduct(product);
     setShowAddForm(false);
+    // Refetch duplicates apos criar produto
+    setTimeout(() => refetchDupGroups(), 500);
   }
 
   function handleEdit(product: Product) {
@@ -105,6 +119,7 @@ export default function EstoqueScreen() {
 
   function handleImportComplete() {
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
+    refetchDupGroups();
   }
 
   function toggleBulkSelect(id: string) {
@@ -125,6 +140,7 @@ export default function EstoqueScreen() {
   async function handleBulkDelete() {
     await bulkDeleteProducts(Array.from(bulkSelected));
     exitBulkMode();
+    refetchDupGroups();
   }
 
   return (
@@ -142,6 +158,27 @@ export default function EstoqueScreen() {
           <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
           <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
         </View>
+      )}
+
+      {/* Fase B: banner de aviso de duplicatas */}
+      {dupGroupsCount > 0 && !showAddForm && !isDemo && (
+        <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBanner}>
+          <View style={s.dupBannerIcon}>
+            <Text style={s.dupBannerIconText}>!</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.dupBannerTitle}>
+              {dupGroupsCount} grupo{dupGroupsCount > 1 ? "s" : ""} de produtos duplicados
+            </Text>
+            <Text style={s.dupBannerDesc}>
+              Produtos com o mesmo nome podem ser unificados em variantes (cor/tamanho).
+            </Text>
+          </View>
+          <View style={s.dupBannerCta}>
+            <Text style={s.dupBannerCtaText}>Unificar</Text>
+            <Text style={s.dupBannerArrow}>{"\u203a"}</Text>
+          </View>
+        </Pressable>
       )}
 
       {showAddForm && (
@@ -202,6 +239,11 @@ export default function EstoqueScreen() {
           ) : (
             <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}>
               <Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text>
+            </Pressable>
+          )}
+          {dupGroupsCount > 0 && !bulkMode && !isDemo && (
+            <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBtn}>
+              <Text style={s.dupBtnText}>{"\u2691 Unificar " + dupGroupsCount + (dupGroupsCount > 1 ? " grupos" : " grupo")}</Text>
             </Pressable>
           )}
         </View>
@@ -278,7 +320,7 @@ export default function EstoqueScreen() {
         message="Esta acao nao pode ser desfeita."
         confirmLabel="Excluir"
         destructive
-        onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); } }}
+        onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }}
         onCancel={() => setDeleteTarget(null)}
       />
 
@@ -290,6 +332,15 @@ export default function EstoqueScreen() {
         destructive
         onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }}
         onCancel={() => setShowBulkConfirm(false)}
+      />
+
+      <MergeDuplicatesModal
+        visible={showMergeModal}
+        onClose={() => setShowMergeModal(false)}
+        onComplete={() => {
+          qc.invalidateQueries({ queryKey: ["products", company?.id] });
+          refetchDupGroups();
+        }}
       />
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
@@ -312,6 +363,8 @@ const s = StyleSheet.create({
   toolbar:   { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
   bulkBtn:   { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   bulkBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  dupBtn: { backgroundColor: Colors.amberD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: "rgba(245,158,11,0.3)" },
+  dupBtnText: { fontSize: 12, color: Colors.amber, fontWeight: "700" },
   bulkBar:   { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
   bulkCount: { fontSize: 13, color: Colors.violet3, fontWeight: "700", flex: 1 },
   bulkAction: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
@@ -336,4 +389,26 @@ const s = StyleSheet.create({
   emptyImportDesc:  { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+  // Fase B: banner de aviso no topo do Estoque
+  dupBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#fef3c7",
+    borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: "rgba(245,158,11,0.3)",
+    marginBottom: 16,
+  },
+  dupBannerIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center",
+  },
+  dupBannerIconText: { color: "#fff", fontSize: 18, fontWeight: "800" },
+  dupBannerTitle: { fontSize: 13, fontWeight: "700", color: "#78350f" },
+  dupBannerDesc: { fontSize: 11.5, color: "#92400e", marginTop: 2, lineHeight: 16 },
+  dupBannerCta: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "#f59e0b", borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  dupBannerCtaText: { fontSize: 12, color: "#fff", fontWeight: "700" },
+  dupBannerArrow: { fontSize: 14, color: "#fff", fontWeight: "800" },
 });
