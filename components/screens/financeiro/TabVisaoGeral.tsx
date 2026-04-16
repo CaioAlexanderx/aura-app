@@ -9,10 +9,15 @@ import type { Transaction, PeriodKey } from "./types";
 
 var isWeb = Platform.OS === "web";
 
+type Summary = { income: number; expenses: number; balance: number };
+
 type Props = {
   transactions: Transaction[];
-  summary: { income: number; expenses: number; balance: number };
+  summary: Summary;
+  previousSummary?: Summary | null;
   period: PeriodKey;
+  customStart?: string;
+  customEnd?: string;
   isLoading: boolean;
   isDemo: boolean;
   onNewTransaction: () => void;
@@ -21,14 +26,14 @@ type Props = {
   onDelete?: (id: string) => void;
 };
 
-export function TabVisaoGeral({ transactions, summary, period, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete }: Props) {
+export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete }: Props) {
   if (transactions.length === 0 && !isLoading && !isDemo) {
     return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
   }
 
   return (
     <View>
-      <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={period} />
+      <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={period} customStart={customStart} customEnd={customEnd} previousSummary={previousSummary} />
       <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
       {transactions.length > 0 && (
         <View>

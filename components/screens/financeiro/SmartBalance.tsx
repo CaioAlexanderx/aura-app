@@ -8,29 +8,60 @@ const W = Dimensions.get("window").width;
 const NARROW = W < 480;
 const isWeb = Platform.OS === "web";
 
+type Summary = { income: number; expenses: number; balance: number };
+
 type Props = {
   income: number;
   expenses: number;
   balance: number;
   txCount: number;
   period: PeriodKey;
+  customStart?: string;
+  customEnd?: string;
+  previousSummary?: Summary | null;
 };
 
-export function SmartBalance({ income, expenses, balance, txCount, period }: Props) {
+function delta(cur: number, prev: number): number | null {
+  if (prev === 0 && cur === 0) return null;
+  if (prev === 0) return cur > 0 ? 100 : -100;
+  return Math.round(((cur - prev) / Math.abs(prev)) * 100);
+}
+
+function DeltaBadge({ value, invert }: { value: number | null; invert?: boolean }) {
+  if (value === null) return null;
+  var up = invert ? value < 0 : value > 0;
+  var color = up ? Colors.green : value === 0 ? Colors.ink3 : Colors.red;
+  var bg = up ? Colors.greenD : value === 0 ? Colors.bg4 : Colors.redD;
+  var arrow = value > 0 ? "\u2191" : value < 0 ? "\u2193" : "";
+  return (
+    <View style={[ds.badge, { backgroundColor: bg }]}>
+      <Text style={[ds.badgeText, { color: color }]}>{arrow}{Math.abs(value)}% vs anterior</Text>
+    </View>
+  );
+}
+
+var ds = StyleSheet.create({
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginTop: 4, alignSelf: "center" },
+  badgeText: { fontSize: 10, fontWeight: "700" },
+});
+
+export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary }: Props) {
   const healthy = balance > 0;
   const pct = income > 0 ? Math.round((expenses / income) * 100) : 0;
   const barWidth = Math.min(pct, 100);
-  const { label: periodLabel } = getPeriodRange(period);
+  const { label: periodLabel } = getPeriodRange(period, customStart, customEnd);
 
   const healthLabel = pct <= 50 ? "Excelente" : pct <= 70 ? "Saudavel" : pct <= 90 ? "Atencao" : "Critico";
   const healthColor = pct <= 50 ? Colors.green : pct <= 70 ? Colors.green : pct <= 90 ? Colors.amber : Colors.red;
   const healthBg = pct <= 50 ? Colors.greenD : pct <= 70 ? Colors.greenD : pct <= 90 ? Colors.amberD : Colors.redD;
-
   const margin = income > 0 ? Math.round((balance / income) * 100) : 0;
+
+  var revDelta = previousSummary ? delta(income, previousSummary.income) : null;
+  var expDelta = previousSummary ? delta(expenses, previousSummary.expenses) : null;
+  var balDelta = previousSummary ? delta(balance, previousSummary.balance) : null;
 
   return (
     <View style={[s.card, isWeb && { transition: "all 0.3s ease" } as any]}>
-      {/* Period + Health */}
       <View style={s.topRow}>
         <Text style={s.period}>{periodLabel}</Text>
         <View style={[s.healthBadge, { backgroundColor: healthBg }]}>
@@ -39,13 +70,12 @@ export function SmartBalance({ income, expenses, balance, txCount, period }: Pro
         </View>
       </View>
 
-      {/* Balance hero */}
       <Text style={s.balanceLabel}>Saldo do periodo</Text>
       <Text style={[s.balanceValue, { color: healthy ? Colors.green : Colors.red, fontSize: NARROW ? 28 : 38 }]}>
         {fmt(balance)}
       </Text>
+      {balDelta !== null && <DeltaBadge value={balDelta} />}
 
-      {/* Margin badge */}
       {income > 0 && (
         <View style={[s.marginBadge, { backgroundColor: margin >= 20 ? Colors.greenD : margin >= 0 ? Colors.amberD : Colors.redD }]}>
           <Text style={[s.marginText, { color: margin >= 20 ? Colors.green : margin >= 0 ? Colors.amber : Colors.red }]}>
@@ -54,7 +84,6 @@ export function SmartBalance({ income, expenses, balance, txCount, period }: Pro
         </View>
       )}
 
-      {/* Progress bar */}
       <View style={s.barSection}>
         <View style={s.barRow}>
           <View style={s.barTrack}>
@@ -69,20 +98,20 @@ export function SmartBalance({ income, expenses, balance, txCount, period }: Pro
         <Text style={s.barHint}>despesas / receitas</Text>
       </View>
 
-      {/* Stats row */}
       <View style={s.statsRow}>
         <View style={s.stat}>
           <Text style={s.statLabel}>Entradas</Text>
           <Text style={[s.statValue, { color: Colors.green }]} numberOfLines={1}>
             {NARROW ? fmtK(income) : fmt(income)}
           </Text>
-          <Text style={s.statCount}>{txCount > 0 ? txCount + " lanc." : ""}</Text>
+          {revDelta !== null ? <DeltaBadge value={revDelta} /> : <Text style={s.statCount}>{txCount > 0 ? txCount + " lanc." : ""}</Text>}
         </View>
         <View style={[s.stat, s.statBorder]}>
           <Text style={s.statLabel}>Saidas</Text>
           <Text style={[s.statValue, { color: Colors.red }]} numberOfLines={1}>
             {NARROW ? fmtK(expenses) : fmt(expenses)}
           </Text>
+          {expDelta !== null && <DeltaBadge value={expDelta} invert />}
         </View>
         <View style={s.stat}>
           <Text style={s.statLabel}>Resultado</Text>
@@ -96,22 +125,15 @@ export function SmartBalance({ income, expenses, balance, txCount, period }: Pro
 }
 
 const s = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.bg3,
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: Colors.border2,
-    marginBottom: 20,
-  },
+  card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 22, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 8 },
   period: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8, flex: 1 },
   healthBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, flexShrink: 0 },
   healthDot: { width: 7, height: 7, borderRadius: 4 },
   healthText: { fontSize: 11, fontWeight: "700" },
   balanceLabel: { fontSize: 11, color: Colors.ink3, marginBottom: 2, letterSpacing: 0.3 },
-  balanceValue: { fontWeight: "800", letterSpacing: -1, marginBottom: 8 },
-  marginBadge: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 16 },
+  balanceValue: { fontWeight: "800", letterSpacing: -1, marginBottom: 4 },
+  marginBadge: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 16, marginTop: 4 },
   marginText: { fontSize: 11, fontWeight: "700" },
   barSection: { marginBottom: 18 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10 },

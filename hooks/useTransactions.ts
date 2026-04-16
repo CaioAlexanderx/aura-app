@@ -4,7 +4,7 @@ import { companiesApi, dashboardApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Transaction, DreData, WithdrawalData, PeriodKey } from "@/components/screens/financeiro/types";
-import { getPeriodRange } from "@/components/screens/financeiro/types";
+import { getPeriodRange, getPreviousPeriodRange } from "@/components/screens/financeiro/types";
 
 function mapApiTransaction(t: any): Transaction {
   return {
@@ -33,16 +33,24 @@ function toISODate(d: Date): string {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
+export function useTransactionsApi(activeTab?: number, period?: PeriodKey, customStart?: string, customEnd?: string) {
   var { company, token, isDemo } = useAuthStore();
   var qc = useQueryClient();
   var companyId = company?.id;
 
   var periodRange = useMemo(function() {
     var p = period || "month";
-    var range = getPeriodRange(p);
+    var range = getPeriodRange(p, customStart, customEnd);
     return { start: toISODate(range.start), end: toISODate(range.end) };
-  }, [period]);
+  }, [period, customStart, customEnd]);
+
+  // F-10: periodo anterior pra comparativo
+  var prevRange = useMemo(function() {
+    var p = period || "month";
+    var prev = getPreviousPeriodRange(p, customStart, customEnd);
+    if (!prev) return null;
+    return { start: toISODate(prev.start), end: toISODate(prev.end) };
+  }, [period, customStart, customEnd]);
 
   var { data: apiTx, isLoading: isLoadingTx } = useQuery({
     queryKey: ["transactions", companyId, periodRange.start, periodRange.end],
@@ -52,6 +60,17 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
     },
     enabled: !!companyId && !!token && !isDemo,
     retry: 1, staleTime: 30000,
+  });
+
+  // F-10: buscar resumo do periodo anterior
+  var { data: apiPrevTx } = useQuery({
+    queryKey: ["transactions-prev", companyId, prevRange?.start, prevRange?.end],
+    queryFn: function() {
+      var params = "limit=1&start=" + prevRange!.start + "&end=" + prevRange!.end;
+      return companiesApi.transactions(companyId!, params);
+    },
+    enabled: !!companyId && !!token && !isDemo && !!prevRange,
+    retry: 1, staleTime: 120000,
   });
 
   var { data: apiDre } = useQuery({
@@ -87,6 +106,14 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
     return { income: income, expenses: expenses, balance: income - expenses };
   }, [apiTx, transactions]);
 
+  // F-10: resumo do periodo anterior
+  var previousSummary = useMemo(function() {
+    if (!apiPrevTx?.summary) return null;
+    var income = parseFloat(apiPrevTx.summary.income) || 0;
+    var expenses = parseFloat(apiPrevTx.summary.expenses) || 0;
+    return { income: income, expenses: expenses, balance: income - expenses };
+  }, [apiPrevTx]);
+
   var dreData: DreData | null = useMemo(function() {
     var raw = apiDre;
     if (!raw || (!raw.totalIncome && !raw.income && !raw.total_income)) return null;
@@ -103,6 +130,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
     mutationFn: function(body: any) { return companiesApi.createTransaction(companyId!, body); },
     onSuccess: function() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
+      qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["dre", companyId] });
       toast.success("Lancamento criado!");
@@ -131,11 +159,11 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
     },
     onSettled: function() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
+      qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
     },
   });
 
-  // FIX: type now includes due_date for retroactive entries
   function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string }) {
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
@@ -147,7 +175,8 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey) {
   }
 
   return {
-    transactions: transactions, summary: summary, dreData: dreData, withdrawalData: withdrawalData,
+    transactions: transactions, summary: summary, previousSummary: previousSummary,
+    dreData: dreData, withdrawalData: withdrawalData,
     isLoading: isLoadingTx && !isDemo, isDemo: isDemo,
     createTransaction: createTransaction, deleteTransaction: deleteTransaction,
     createMutation: !isDemo && companyId ? createMutation : undefined,
