@@ -62,9 +62,20 @@ export default function FinanceiroScreen() {
     } catch (err: any) { toast.error("Erro ao importar: " + (err?.message || "tente novamente")); } finally { setImporting(false); }
   }
 
+  function handleSaleCreated() {
+    qc.invalidateQueries({ queryKey: ["transactions", company?.id] });
+    qc.invalidateQueries({ queryKey: ["dashboard", company?.id] });
+    qc.invalidateQueries({ queryKey: ["products", company?.id] });
+  }
+
   return (
     <View style={{ flex: 1 }}>
-      <TransactionModal visible={showModal} onClose={function() { setShowModal(false); }} onSave={createTransaction} />
+      <TransactionModal
+        visible={showModal}
+        onClose={function() { setShowModal(false); }}
+        onSave={createTransaction}
+        onSaleCreated={handleSaleCreated}
+      />
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
         <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={function() { setShowModal(true); }} />
         <AgentBanner context="financeiro" />
