@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
@@ -7,9 +7,9 @@ import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { Icon } from "@/components/Icon";
 import { useProducts } from "@/hooks/useProducts";
 import { useAuthStore } from "@/stores/auth";
-import { pdvApi, companiesApi } from "@/services/api";
+import { pdvApi, companiesApi, employeesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { PAYMENTS } from "@/hooks/useCart";
 
 var isWeb = Platform.OS === "web";
@@ -73,11 +73,56 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated }: {
   var [variantOptions, setVariantOptions] = useState<any[]>([]);
   var [variantLoading, setVariantLoading] = useState(false);
 
+  // Cliente e vendedora (opcionais)
+  var [custSearch, setCustSearch] = useState("");
+  var [custId, setCustId] = useState<string | null>(null);
+  var [custName, setCustName] = useState<string | null>(null);
+  var [custOpen, setCustOpen] = useState(false);
+  var [empSearch, setEmpSearch] = useState("");
+  var [empId, setEmpId] = useState<string | null>(null);
+  var [empName, setEmpName] = useState<string | null>(null);
+  var [empOpen, setEmpOpen] = useState(false);
+
+  // Fetch clientes e funcionarios somente quando aba Venda aberta
+  var { data: custData } = useQuery({
+    queryKey: ["customers", company?.id],
+    queryFn: function() { return companiesApi.customers(company!.id); },
+    enabled: !!company?.id && isSale,
+    staleTime: 120_000,
+  });
+  var { data: empData } = useQuery({
+    queryKey: ["employees", company?.id],
+    queryFn: function() { return employeesApi.list(company!.id); },
+    enabled: !!company?.id && isSale,
+    staleTime: 120_000,
+  });
+
+  var allCustomers: any[] = custData?.customers || custData?.data || [];
+  var allEmployees: any[] = empData?.employees || empData?.data || [];
+
+  var filteredCustomers = useMemo(function() {
+    if (!custSearch || custSearch.length < 2) return allCustomers.slice(0, 6);
+    var q = custSearch.toLowerCase();
+    return allCustomers.filter(function(c: any) {
+      return (c.name || "").toLowerCase().includes(q) || (c.phone || "").includes(q);
+    }).slice(0, 8);
+  }, [allCustomers, custSearch]);
+
+  var filteredEmployees = useMemo(function() {
+    if (!empSearch || empSearch.length < 1) return allEmployees.slice(0, 6);
+    var q = empSearch.toLowerCase();
+    return allEmployees.filter(function(e: any) {
+      return (e.name || e.full_name || "").toLowerCase().includes(q);
+    }).slice(0, 8);
+  }, [allEmployees, empSearch]);
+
   var saleTotal = saleItems.reduce(function(s, i) { return s + i.price * i.qty; }, 0);
 
   function reset() {
     setAmount(""); setDesc(""); setCategory(""); setDateStr(todayBR()); setBatchText(""); setMode("unit");
     setSaleSearch(""); setSaleItems([]); setSalePayment("pix"); setVariantPending(null); setVariantOptions([]);
+    setCustSearch(""); setCustId(null); setCustName(null); setCustOpen(false);
+    setEmpSearch(""); setEmpId(null); setEmpName(null); setEmpOpen(false);
   }
 
   function parseAmount(masked: string): number {
@@ -127,7 +172,6 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated }: {
 
   function handleAddSaleProduct(product: any) {
     if (product.has_variants) {
-      // Buscar variantes
       setVariantPending(product);
       setVariantLoading(true);
       companiesApi.variants(company!.id, product.id)
@@ -186,11 +230,15 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated }: {
         }),
         payment_method: salePayment,
         sale_date: iso,
+        customer_id: custId || undefined,
+        employee_id: empId || undefined,
       });
       toast.success("Venda retroativa registrada!");
       qc.invalidateQueries({ queryKey: ["products", company.id] });
       qc.invalidateQueries({ queryKey: ["transactions", company.id] });
       qc.invalidateQueries({ queryKey: ["dashboard", company.id] });
+      qc.invalidateQueries({ queryKey: ["customers", company.id] });
+      qc.invalidateQueries({ queryKey: ["employees", company.id] });
       onSaleCreated?.();
       reset(); onClose();
     } catch (err: any) {
@@ -278,6 +326,63 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated }: {
               </View>
             </View>
 
+            {/* Cliente (opcional) */}
+            <View style={{ zIndex: 20 }}>
+              <Text style={s.label}>Cliente (opcional)</Text>
+              {custId ? (
+                <View style={s.selectedChip}>
+                  <Icon name="user" size={12} color={Colors.violet3} />
+                  <Text style={s.selectedChipText} numberOfLines={1}>{custName}</Text>
+                  <Pressable onPress={function() { setCustId(null); setCustName(null); setCustSearch(""); }} style={s.chipRemove}><Text style={s.chipRemoveText}>x</Text></Pressable>
+                </View>
+              ) : (
+                <View>
+                  <TextInput style={s.input} value={custSearch} onChangeText={function(v) { setCustSearch(v); setCustOpen(true); }} onFocus={function() { setCustOpen(true); }} placeholder="Buscar cliente por nome ou telefone..." placeholderTextColor={Colors.ink3} />
+                  {custOpen && filteredCustomers.length > 0 && (
+                    <View style={s.dropdown}>
+                      {filteredCustomers.map(function(c: any) {
+                        return (
+                          <Pressable key={c.id} onPress={function() { setCustId(c.id); setCustName(c.name); setCustSearch(""); setCustOpen(false); }} style={s.dropdownRow}>
+                            <Text style={s.srName} numberOfLines={1}>{c.name}</Text>
+                            {c.phone ? <Text style={s.srMeta}>{c.phone}</Text> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+
+            {/* Vendedora (opcional) */}
+            <View style={{ zIndex: 10 }}>
+              <Text style={s.label}>Vendedor(a) (opcional)</Text>
+              {empId ? (
+                <View style={s.selectedChip}>
+                  <Icon name="user" size={12} color={Colors.violet3} />
+                  <Text style={s.selectedChipText} numberOfLines={1}>{empName}</Text>
+                  <Pressable onPress={function() { setEmpId(null); setEmpName(null); setEmpSearch(""); }} style={s.chipRemove}><Text style={s.chipRemoveText}>x</Text></Pressable>
+                </View>
+              ) : (
+                <View>
+                  <TextInput style={s.input} value={empSearch} onChangeText={function(v) { setEmpSearch(v); setEmpOpen(true); }} onFocus={function() { setEmpOpen(true); }} placeholder="Buscar vendedor(a)..." placeholderTextColor={Colors.ink3} />
+                  {empOpen && filteredEmployees.length > 0 && (
+                    <View style={s.dropdown}>
+                      {filteredEmployees.map(function(e: any) {
+                        var eName = e.name || e.full_name || "Sem nome";
+                        return (
+                          <Pressable key={e.id} onPress={function() { setEmpId(e.id); setEmpName(eName); setEmpSearch(""); setEmpOpen(false); }} style={s.dropdownRow}>
+                            <Text style={s.srName} numberOfLines={1}>{eName}</Text>
+                            {e.role ? <Text style={s.srMeta}>{e.role}</Text> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+
             <Text style={s.label}>Produto</Text>
             <TextInput style={s.input} value={saleSearch} onChangeText={setSaleSearch} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} />
 
@@ -289,7 +394,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated }: {
                     <Pressable key={p.id} onPress={function() { handleAddSaleProduct(p); }} style={s.searchResultRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.srName} numberOfLines={1}>{p.name}</Text>
-                        <Text style={s.srMeta}>{fmtPrice(p.price)} \u00b7 {p.stock} un{p.has_variants ? " \u00b7 Variantes" : ""}</Text>
+                        <Text style={s.srMeta}>{fmtPrice(p.price)} {"\u00b7"} {p.stock} un{p.has_variants ? " \u00b7 Variantes" : ""}</Text>
                       </View>
                       {p.color && /^#/.test(p.color) && <View style={[s.srColor, { backgroundColor: p.color }]} />}
                     </Pressable>
@@ -412,6 +517,13 @@ var s = StyleSheet.create({
   qtyText: { fontSize: 13, color: Colors.ink, fontWeight: "700", minWidth: 20, textAlign: "center" },
   removeBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", marginLeft: 4 },
   removeText: { fontSize: 11, color: Colors.red, fontWeight: "700" },
+  // Customer/Employee picker
+  selectedChip: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.violet },
+  selectedChipText: { flex: 1, fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  chipRemove: { width: 22, height: 22, borderRadius: 6, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
+  chipRemoveText: { fontSize: 11, color: Colors.ink3, fontWeight: "700" },
+  dropdown: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, marginTop: 4, maxHeight: 180, overflow: "hidden" },
+  dropdownRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
 });
 
 export default TransactionModal;
