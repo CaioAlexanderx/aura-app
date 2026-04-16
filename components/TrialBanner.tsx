@@ -4,8 +4,14 @@ import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 
+var PLAN_LABELS: Record<string, string> = {
+  essencial: "Essencial",
+  negocio:   "Negocio",
+  expansao:  "Expansao",
+};
+
 export function TrialBanner() {
-  const { trialActive, trialEndsAt, isDemo } = useAuthStore();
+  const { trialActive, trialEndsAt, isDemo, company } = useAuthStore();
   const router = useRouter();
 
   if (isDemo || !trialActive || !trialEndsAt) return null;
@@ -14,6 +20,8 @@ export function TrialBanner() {
   const end = new Date(trialEndsAt);
   const daysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000));
   const urgent = daysLeft <= 2;
+
+  const planLabel = PLAN_LABELS[company?.plan ?? ""] ?? (company?.plan ?? "teste");
 
   return (
     <View style={[s.banner, urgent && s.bannerUrgent]}>
@@ -26,7 +34,7 @@ export function TrialBanner() {
           <Text style={s.sub}>
             {urgent
               ? "Seu período de teste termina em breve. Assine para não perder acesso."
-              : "Você está no período de teste do plano Negócio."}
+              : `Você está no período de teste do plano ${planLabel}.`}
           </Text>
         </View>
       </View>
