@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { fmt, fmtK } from "./types";
-import type { PeriodKey } from "./types";
+import type { PeriodKey, Transaction } from "./types";
 import { getPeriodRange } from "./types";
+import { useMemo } from "react";
 
 const W = Dimensions.get("window").width;
 const NARROW = W < 480;
@@ -19,6 +20,7 @@ type Props = {
   customStart?: string;
   customEnd?: string;
   previousSummary?: Summary | null;
+  transactions?: Transaction[];
 };
 
 function delta(cur: number, prev: number): number | null {
@@ -45,7 +47,64 @@ var ds = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: "700" },
 });
 
-export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary }: Props) {
+// F-11: Mini sparkline — ultimos 7 dias de receita vs despesa
+function MiniSparkline({ transactions }: { transactions: Transaction[] }) {
+  var days = useMemo(function() {
+    var result: { income: number; expense: number; label: string }[] = [];
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var iso = d.toISOString().slice(0, 10);
+      var label = d.toLocaleDateString("pt-BR", { weekday: "narrow" });
+      var inc = 0; var exp = 0;
+      transactions.forEach(function(t) {
+        var raw = (t as any).due_date || (t as any).created_at || "";
+        if (raw && raw.slice(0, 10) === iso) {
+          if (t.type === "income") inc += t.amount;
+          else exp += t.amount;
+        }
+      });
+      result.push({ income: inc, expense: exp, label: label });
+    }
+    return result;
+  }, [transactions]);
+
+  var max = Math.max(1, ...days.map(function(d) { return Math.max(d.income, d.expense); }));
+  var BAR_H = 48;
+
+  return (
+    <View style={sk.container}>
+      <Text style={sk.title}>Ultimos 7 dias</Text>
+      <View style={sk.row}>
+        {days.map(function(d, i) {
+          var incH = Math.max(2, (d.income / max) * BAR_H);
+          var expH = Math.max(d.expense > 0 ? 2 : 0, (d.expense / max) * BAR_H);
+          var isToday = i === 6;
+          return (
+            <View key={i} style={sk.col}>
+              <View style={sk.bars}>
+                <View style={[sk.bar, { height: incH, backgroundColor: isToday ? Colors.green : Colors.green + "88" }]} />
+                {expH > 0 && <View style={[sk.bar, { height: expH, backgroundColor: isToday ? Colors.red : Colors.red + "55" }]} />}
+              </View>
+              <Text style={[sk.label, isToday && { color: Colors.ink, fontWeight: "700" }]}>{d.label}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+var sk = StyleSheet.create({
+  container: { marginBottom: 16, paddingTop: 4 },
+  title: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 },
+  row: { flexDirection: "row", justifyContent: "space-between", gap: 4 },
+  col: { flex: 1, alignItems: "center", gap: 4 },
+  bars: { height: 50, justifyContent: "flex-end", gap: 1, width: "100%" },
+  bar: { borderRadius: 3, width: "100%", minHeight: 2 },
+  label: { fontSize: 9, color: Colors.ink3, fontWeight: "500" },
+});
+
+export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary, transactions }: Props) {
   const healthy = balance > 0;
   const pct = income > 0 ? Math.round((expenses / income) * 100) : 0;
   const barWidth = Math.min(pct, 100);
@@ -98,6 +157,9 @@ export function SmartBalance({ income, expenses, balance, txCount, period, custo
         <Text style={s.barHint}>despesas / receitas</Text>
       </View>
 
+      {/* F-11: Sparkline */}
+      {transactions && transactions.length > 0 && period !== "all" && <MiniSparkline transactions={transactions} />}
+
       <View style={s.statsRow}>
         <View style={s.stat}>
           <Text style={s.statLabel}>Entradas</Text>
@@ -135,7 +197,7 @@ const s = StyleSheet.create({
   balanceValue: { fontWeight: "800", letterSpacing: -1, marginBottom: 4 },
   marginBadge: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 16, marginTop: 4 },
   marginText: { fontSize: 11, fontWeight: "700" },
-  barSection: { marginBottom: 18 },
+  barSection: { marginBottom: 14 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   barTrack: { flex: 1, height: 6, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" },
   barFill: { height: 6, borderRadius: 3 },
