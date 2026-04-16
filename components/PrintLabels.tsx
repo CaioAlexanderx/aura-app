@@ -47,13 +47,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     setQuantities(function(prev) { return { ...prev, [id]: v }; });
   }
 
-  // Auto-fill quantity from stock when selecting
   function toggleSelect(id: string) {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter(function(i) { return i !== id; }));
     } else {
       onSelectionChange([...selectedIds, id]);
-      // Default qty = stock qty (if > 0)
       if (!quantities[id]) {
         var p = products.find(function(pr) { return pr.id === id; });
         if (p && p.stock > 1) setQty(id, p.stock);
@@ -67,7 +65,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); }));
     } else {
       onSelectionChange(Array.from(new Set([...selectedIds, ...ids])));
-      // Auto-fill quantities for newly selected
       var newQtys: Record<string, number> = { ...quantities };
       filtered.forEach(function(p) {
         if (!newQtys[p.id] && p.stock > 1) newQtys[p.id] = p.stock;
@@ -76,7 +73,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     }
   }
 
-  // Total label count
   var totalLabels = selectedIds.reduce(function(sum, id) { return sum + getQty(id); }, 0);
 
   function handlePrint() {
@@ -101,6 +97,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var storeHeader = showStoreName && storeName ? esc(storeName.toUpperCase()) : "";
 
     // Build cells — repeat each product by its quantity
+    // CRITICAL: <td class="cell"> stays as table-cell (NO display:flex on td).
+    //           Flex layout goes on inner <div class="bc-inner"> or <div class="qr-inner">.
+    //           This preserves the 3-column table layout.
     var cells: string[] = [];
     var labelIdx = 0;
     selected.forEach(function(p) {
@@ -112,16 +111,25 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       for (var q = 0; q < qty; q++) {
         if (isQR) {
           var qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(p.barcode || p.code) + "&bgcolor=ffffff&color=000000&margin=1";
-          cells.push('<td class="cell qr-layout"><img src="' + qrUrl + '" class="qr"><div class="info">' + (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') + '<div class="name">' + name + '</div><div class="price">' + price + '</div></div></td>');
+          cells.push(
+            '<td class="cell"><div class="qr-inner">' +
+              '<img src="' + qrUrl + '" class="qr">' +
+              '<div class="info">' +
+                (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
+                '<div class="name">' + name + '</div>' +
+                '<div class="price">' + price + '</div>' +
+              '</div>' +
+            '</div></td>'
+          );
         } else {
           var storeLine = storeHeader ? '<div class="store">' + storeHeader + '</div>' : '';
           cells.push(
-            '<td class="cell bc-layout">' +
+            '<td class="cell"><div class="bc-inner">' +
               storeLine +
               '<div class="name">' + name + '</div>' +
               '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
               '<div class="price">' + price + '</div>' +
-            '</td>'
+            '</div></td>'
           );
         }
         labelIdx++;
@@ -147,24 +155,26 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += '@page{margin:0;size:99mm 21mm}';
     html += '*{margin:0;padding:0;box-sizing:border-box}';
     html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
+    // TABLE: 99mm = 3 x 33mm. table-layout:fixed forces equal columns.
     html += 'table{border-collapse:collapse;width:99mm;table-layout:fixed}';
-    html += 'tr{height:21mm;page-break-after:always;page-break-inside:avoid}';
-    html += 'tr:last-child{page-break-after:auto}';
-    html += '.cell{width:33mm;height:21mm;background:#fff;overflow:hidden;vertical-align:top;padding:0}';
-    // BARCODE layout — vertical stack, aspect-ratio preserved, native JsBarcode text below
-    html += '.bc-layout{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;gap:0.3mm}';
-    html += '.bc-layout .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-    html += '.bc-layout .name{font-size:6pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000}';
-    html += '.bc-layout .bc-box{flex:1 1 auto;width:100%;max-width:31mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
-    html += '.bc-layout .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
-    html += '.bc-layout .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
-    // QR layout — unchanged structure, store name added optional
-    html += '.qr-layout{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm}';
-    html += '.qr-layout .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
-    html += '.qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
-    html += '.qr-layout .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-    html += '.qr-layout .name{font-size:6pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
-    html += '.qr-layout .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
+    html += 'tr{height:21mm;page-break-inside:avoid}';
+    // CELL: plain td, NO display override — must remain display:table-cell for 3-col layout
+    html += '.cell{width:33mm;height:21mm;overflow:hidden;vertical-align:top;padding:0}';
+    // BARCODE inner div — flex column, full height of cell
+    html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;width:33mm;gap:0.3mm}';
+    html += '.bc-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html += '.bc-inner .name{font-size:6pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000}';
+    html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:31mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
+    html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
+    html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
+    // QR inner div — flex row
+    html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:21mm;width:33mm}';
+    html += '.qr-inner .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
+    html += '.qr-inner .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
+    html += '.qr-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html += '.qr-inner .name{font-size:6pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
+    html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
+    // Preview bar (hidden on print)
     html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
     html += '.preview-bar span{color:#a78bfa;font-size:12px}';
     html += '.preview-bar b{color:#e2e8f0;font-size:13px}';
@@ -179,9 +189,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += '<button onclick="window.print()">Imprimir</button></div>';
 
     if (!isQR) {
-      // Render JsBarcode with readable bars + native number display below
-      // width:2 (thick bars), height:38, displayValue:true, fontSize:13 bold
-      // IMPORTANT: do NOT convert width/height to viewBox — preserves aspect ratio
       html += '<script>';
       html += 'document.querySelectorAll("[data-code]").forEach(function(el){';
       html += 'var code=el.getAttribute("data-code");';
@@ -200,7 +207,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       if (!w) {
         var w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+        else { toast.error("Popup bloqueado \u2014 permita popups para app.getaura.com.br"); return; }
       }
       toast.success(totalLabels + " etiqueta(s) abertas para impressao");
     } catch (err) {
@@ -228,7 +235,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         </View>
       </View>
 
-      {/* Store name toggle */}
       {storeName ? (
         <Pressable onPress={function() { setShowStoreName(!showStoreName); }} style={s.storeToggle}>
           <View style={[s.checkbox, showStoreName && s.checkboxSelected]}>
@@ -271,7 +277,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 </View>
                 <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
               </Pressable>
-              {/* Quantity selector — only when selected */}
               {sel && (
                 <View style={s.qtyRow}>
                   <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}>
@@ -337,7 +342,6 @@ var s = StyleSheet.create({
   itemCode: { fontSize: 10, color: Colors.ink3, marginTop: 1, fontFamily: "monospace" as any },
   itemPrice: { fontSize: 13, color: Colors.green, fontWeight: "700", flexShrink: 0 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
-  // Quantity selector
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingBottom: 8, paddingLeft: 40 },
   qtyBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
   qtyBtnText: { fontSize: 16, color: Colors.violet3, fontWeight: "700" },
