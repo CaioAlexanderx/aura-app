@@ -22,7 +22,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [search, setSearch] = useState("");
   var [quantities, setQuantities] = useState<Record<string, number>>({});
+  var [showStoreName, setShowStoreName] = useState(true);
   var isWeb = Platform.OS === "web";
+
+  var storeName = (company && (company.trade_name || company.legal_name)) || "";
 
   var productsWithCode = useMemo(
     function() { return products.filter(function(p) { return p.barcode || p.code; }); },
@@ -95,6 +98,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     else if (numOnly && firstCode.length === 8) jsFormat = "EAN8";
     else if (numOnly && firstCode.length === 12) jsFormat = "UPC";
 
+    var storeHeader = showStoreName && storeName ? esc(storeName.toUpperCase()) : "";
+
     // Build cells — repeat each product by its quantity
     var cells: string[] = [];
     var labelIdx = 0;
@@ -107,9 +112,17 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       for (var q = 0; q < qty; q++) {
         if (isQR) {
           var qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(p.barcode || p.code) + "&bgcolor=ffffff&color=000000&margin=1";
-          cells.push('<td class="cell qr-layout"><img src="' + qrUrl + '" class="qr"><div class="info"><div class="name">' + name + '</div><div class="price">' + price + '</div></div></td>');
+          cells.push('<td class="cell qr-layout"><img src="' + qrUrl + '" class="qr"><div class="info">' + (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') + '<div class="name">' + name + '</div><div class="price">' + price + '</div></div></td>');
         } else {
-          cells.push('<td class="cell bc-layout"><div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div><div class="name">' + name + '</div><div class="price">' + price + '</div></td>');
+          var storeLine = storeHeader ? '<div class="store">' + storeHeader + '</div>' : '';
+          cells.push(
+            '<td class="cell bc-layout">' +
+              storeLine +
+              '<div class="name">' + name + '</div>' +
+              '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
+              '<div class="price">' + price + '</div>' +
+            '</td>'
+          );
         }
         labelIdx++;
       }
@@ -133,21 +146,25 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += '<style>';
     html += '@page{margin:0;size:99mm 21mm}';
     html += '*{margin:0;padding:0;box-sizing:border-box}';
-    html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5}';
+    html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
     html += 'table{border-collapse:collapse;width:99mm;table-layout:fixed}';
     html += 'tr{height:21mm;page-break-after:always;page-break-inside:avoid}';
     html += 'tr:last-child{page-break-after:auto}';
     html += '.cell{width:33mm;height:21mm;background:#fff;overflow:hidden;vertical-align:top;padding:0}';
-    html += '.bc-layout{text-align:center;padding:1mm 1.5mm}';
-    html += '.bc-box{width:28mm;height:11mm;margin:0 auto;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff}';
-    html += '.bc-box svg{width:100%!important;height:100%!important;display:block}';
-    html += '.bc-layout .name{font-size:5.5pt;font-weight:600;line-height:1.1;max-height:3.5mm;overflow:hidden;word-break:break-word;margin-top:0.5mm;white-space:nowrap;text-overflow:ellipsis}';
-    html += '.bc-layout .price{font-size:8pt;font-weight:900;margin-top:0.3mm}';
+    // BARCODE layout — vertical stack, aspect-ratio preserved, native JsBarcode text below
+    html += '.bc-layout{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;gap:0.3mm}';
+    html += '.bc-layout .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html += '.bc-layout .name{font-size:6pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000}';
+    html += '.bc-layout .bc-box{flex:1 1 auto;width:100%;max-width:31mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
+    html += '.bc-layout .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
+    html += '.bc-layout .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
+    // QR layout — unchanged structure, store name added optional
     html += '.qr-layout{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm}';
     html += '.qr-layout .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
-    html += '.qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;overflow:hidden}';
-    html += '.qr-layout .name{font-size:5.5pt;font-weight:700;line-height:1.15;max-height:10mm;overflow:hidden;word-break:break-word}';
-    html += '.qr-layout .price{font-size:7.5pt;font-weight:900;white-space:nowrap}';
+    html += '.qr-layout .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
+    html += '.qr-layout .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html += '.qr-layout .name{font-size:6pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
+    html += '.qr-layout .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
     html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
     html += '.preview-bar span{color:#a78bfa;font-size:12px}';
     html += '.preview-bar b{color:#e2e8f0;font-size:13px}';
@@ -158,17 +175,19 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += '@media print{.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
     html += '</style></head><body>';
     html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
-    html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "Codigo de barras") + ')</span><br><b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + selected.length + ' produto' + (selected.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
+    html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "Codigo de barras legivel") + ')</span><br><b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + selected.length + ' produto' + (selected.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
     html += '<button onclick="window.print()">Imprimir</button></div>';
 
     if (!isQR) {
+      // Render JsBarcode with readable bars + native number display below
+      // width:2 (thick bars), height:38, displayValue:true, fontSize:13 bold
+      // IMPORTANT: do NOT convert width/height to viewBox — preserves aspect ratio
       html += '<script>';
       html += 'document.querySelectorAll("[data-code]").forEach(function(el){';
       html += 'var code=el.getAttribute("data-code");';
-      html += 'try{JsBarcode(el,code,{format:"' + jsFormat + '",width:1.5,height:50,margin:8,displayValue:false,background:"#ffffff",lineColor:"#000000"});}'
-      html += 'catch(e){try{JsBarcode(el,code,{format:"CODE128",width:1.5,height:50,margin:8,displayValue:false,background:"#ffffff",lineColor:"#000000"});}catch(e2){}}';
-      html += 'var w=el.getAttribute("width");var h=el.getAttribute("height");';
-      html += 'if(w&&h){el.setAttribute("viewBox","0 0 "+w+" "+h);el.removeAttribute("width");el.removeAttribute("height");}';
+      html += 'var opts={width:2,height:38,margin:2,displayValue:true,fontSize:13,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
+      html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"' + jsFormat + '"}));}';
+      html += 'catch(e){try{JsBarcode(el,code,Object.assign({},opts,{format:"CODE128"}));}catch(e2){console.error(e2);}}';
       html += '});';
       html += '</scr' + 'ipt>';
     }
@@ -195,7 +214,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <View>
+        <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Etiquetas 33x21mm (3 colunas)</Text>
           <Text style={s.hint}>Selecione os produtos e ajuste a quantidade de etiquetas por item.</Text>
         </View>
@@ -208,6 +227,16 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           </Pressable>
         </View>
       </View>
+
+      {/* Store name toggle */}
+      {storeName ? (
+        <Pressable onPress={function() { setShowStoreName(!showStoreName); }} style={s.storeToggle}>
+          <View style={[s.checkbox, showStoreName && s.checkboxSelected]}>
+            {showStoreName && <Icon name="check" size={10} color="#fff" />}
+          </View>
+          <Text style={s.storeToggleText}>Incluir nome da loja no topo: <Text style={s.storeTogglePreview}>{storeName.toUpperCase()}</Text></Text>
+        </Pressable>
+      ) : null}
 
       <View style={s.toolbar}>
         <View style={s.searchBox}>
@@ -290,6 +319,9 @@ var s = StyleSheet.create({
   modeBtnActive: { backgroundColor: Colors.violet },
   modeText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   modeTextActive: { color: "#fff", fontWeight: "600" },
+  storeToggle: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
+  storeToggleText: { fontSize: 12, color: Colors.ink2, flex: 1 },
+  storeTogglePreview: { fontWeight: "700", color: Colors.violet3, letterSpacing: 0.5 },
   toolbar: { flexDirection: "row", gap: 8, alignItems: "center" },
   searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
   searchInput: { flex: 1, fontSize: 13, color: Colors.ink } as any,
