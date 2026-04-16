@@ -21,18 +21,15 @@ var ANNUAL_DISCOUNT = 0.20;
 function fmt(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
 
-// Card number mask: 1234 5678 9012 3456
 function maskCard(v: string) {
   var d = v.replace(/\D/g, "").slice(0, 16);
   return d.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
 }
-// Expiry mask: MM/AA
 function maskExpiry(v: string) {
   var d = v.replace(/\D/g, "").slice(0, 4);
   if (d.length >= 3) return d.slice(0, 2) + "/" + d.slice(2);
   return d;
 }
-// CPF mask: 123.456.789-01
 function maskCpf(v: string) {
   var d = v.replace(/\D/g, "").slice(0, 11);
   if (d.length > 9) return d.slice(0,3) + "." + d.slice(3,6) + "." + d.slice(6,9) + "-" + d.slice(9);
@@ -41,7 +38,6 @@ function maskCpf(v: string) {
   return d;
 }
 
-// Detect card brand from number
 function cardBrand(n: string) {
   var d = n.replace(/\D/g, "");
   if (/^4/.test(d)) return "Visa";
@@ -57,7 +53,7 @@ type Method = "pix" | "card";
 
 export default function CheckoutScreen() {
   var params = useLocalSearchParams<{ plan?: string }>();
-  var { company, isDemo } = useAuthStore();
+  var { company, isDemo, isStaff, trialActive, hydrate, logout } = useAuthStore();
   var [selectedPlan, setSelectedPlan] = useState(params.plan || "negocio");
   var [cycle, setCycle] = useState<Cycle>("monthly");
   var [method, setMethod] = useState<Method>("pix");
@@ -79,6 +75,11 @@ export default function CheckoutScreen() {
   var [cardCpf, setCardCpf] = useState("");
   var [tokenizing, setTokenizing] = useState(false);
 
+  // Determine if the user already has an active plan (plan-change scenario vs new-user gate)
+  var billingStatus    = (company as any)?.billing_status;
+  var accessCodeUsed   = !!(company as any)?.access_code_used;
+  var hasActiveBilling = billingStatus === "active" || trialActive || accessCodeUsed || isDemo || isStaff;
+
   var plan = PLANS.find(function(p) { return p.key === selectedPlan; }) || PLANS[1];
   var isAnnual = cycle === "annual";
   var annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
@@ -86,13 +87,11 @@ export default function CheckoutScreen() {
   var annualSavings = plan.monthly * 12 - annualTotal;
   var price = isAnnual ? annualTotal : plan.monthly;
 
-  // Card validation
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
   var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11;
   var brand = cardBrand(cardNumber);
 
-  // Pix subscribe
   async function handlePixSubscribe() {
     if (!company?.id) return;
     setLoading(true);
@@ -109,12 +108,10 @@ export default function CheckoutScreen() {
     } finally { setLoading(false); }
   }
 
-  // Card subscribe: tokenize then subscribe
   async function handleCardSubscribe() {
     if (!company?.id || !cardValid) return;
     setTokenizing(true);
     try {
-      // Step 1: Tokenize card via backend proxy
       var tokenRes = await billingApi.tokenize(company.id, {
         card_number: cardDigits,
         card_expiry_month: expiryParts[0],
@@ -124,10 +121,12 @@ export default function CheckoutScreen() {
         holder_cpf: cardCpf.replace(/\D/g, ""),
       });
 
-      // Step 2: Subscribe with token
       var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""));
       setSuccess(true);
       toast.success("Assinatura ativada com cartao " + (tokenRes.credit_card_brand || brand) + " final " + (tokenRes.credit_card_last4 || cardDigits.slice(-4)) + "!");
+      // Refresh billing_status no store antes de redirecionar,
+      // senao o billing gate redirecionaria de volta ao checkout.
+      await hydrate();
       setTimeout(function() { router.replace("/(tabs)/" as any); }, 2000);
     } catch (err: any) {
       toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartao");
@@ -145,6 +144,8 @@ export default function CheckoutScreen() {
           setPolling(false);
           setSuccess(true);
           toast.success("Pagamento confirmado!");
+          // Refresh billing_status no store antes de redirecionar.
+          await hydrate();
           setTimeout(function() { router.replace("/(tabs)/" as any); }, 2000);
         }
       } catch {}
@@ -346,9 +347,23 @@ export default function CheckoutScreen() {
         </View>
       )}
 
-      <Pressable onPress={function() { router.back(); }} style={z.backLink}>
-        <Text style={z.backLinkText}>Voltar</Text>
-      </Pressable>
+      {
+        /* Footer action:
+           - Se usuario JA tem plano ativo (troca de plano) → Cancelar (voltar)
+           - Se usuario AINDA nao pagou (billing gate) → Sair da conta
+             Isso impede que o usuario navegue para outras telas sem pagar,
+             pois o billing gate o redirecionaria de volta aqui. */
+        hasActiveBilling ? (
+          <Pressable onPress={function() { router.back(); }} style={z.backLink}>
+            <Text style={z.backLinkText}>Cancelar</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={function() { logout(); }} style={z.backLink}>
+            <Icon name="logout" size={14} color={Colors.ink3} />
+            <Text style={[z.backLinkText, { marginLeft: 6 }]}>Sair da conta</Text>
+          </Pressable>
+        )
+      }
     </ScrollView>
   );
 }
@@ -403,7 +418,6 @@ var z = StyleSheet.create({
   pixExpiry: { fontSize: 11, color: Colors.amber, marginBottom: 8 },
   pollingRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   pollingText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
-  // Card form
   cardField: { marginBottom: 12 },
   cardLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 5, letterSpacing: 0.3 },
   cardInput: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.ink, fontFamily: Platform.OS === "web" ? "monospace" : undefined } as any,
@@ -411,7 +425,7 @@ var z = StyleSheet.create({
   brandText: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
   secureRow: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 16, marginTop: 4 },
   secureText: { fontSize: 10, color: Colors.ink3, flex: 1, lineHeight: 15 },
-  backLink: { alignSelf: "center", marginTop: 8, paddingVertical: 10 },
+  backLink: { alignSelf: "center", marginTop: 8, paddingVertical: 10, flexDirection: "row", alignItems: "center" },
   backLinkText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   successCard: { alignItems: "center", gap: 12, padding: 40 },
   successIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: Colors.green + "33" },

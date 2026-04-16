@@ -27,7 +27,7 @@ function checkVerifiedParam() {
 }
 
 function AuthGuard() {
-  const { token, user, isHydrated, isDemo, hydrate } = useAuthStore();
+  const { token, user, company, isHydrated, isDemo, isStaff, trialActive, hydrate } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -53,35 +53,58 @@ function AuthGuard() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    const inAuth = segments[0] === "(auth)";
-    const onVerify = segments[1] === "verify-email";
+
+    const inAuth      = segments[0] === "(auth)";
+    const onVerify    = segments[1] === "verify-email";
+    const inTabs      = segments[0] === "(tabs)";
+    const onCheckout  = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
 
-    // P0 #5 FIX: Skip ALL redirects when on /invite/* routes
-    // The invite page handles its own navigation after accepting/rejecting
+    // Invite pages handle their own navigation — skip all redirects
     const onInvite = segments[0] === "invite";
     if (onInvite) return;
 
+    // 1. Not logged in → login
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
       return;
     }
 
+    // 2. Logged in but email not verified → verify-email
     if (token && !isDemo && user && !emailVerified && !onVerify) {
       router.replace("/(auth)/verify-email");
       return;
     }
 
+    // 3. Logged in + verified → bounce out of auth pages
     if (token && (emailVerified || isDemo) && inAuth && !onVerify) {
       router.replace("/(tabs)");
       return;
     }
-
     if (token && emailVerified && onVerify) {
       router.replace("/(tabs)");
       return;
     }
-  }, [token, user, isHydrated, isDemo, segments]);
+
+    // 4. Billing gate — verified user with company but no active plan → checkout
+    //
+    // hasActiveBilling = true when ANY of:
+    //   - billing_status === 'active'  (paid via Asaas)
+    //   - trialActive === true         (access-code with trial days)
+    //   - access_code_used === true    (alpha/beta testers, no billing_status yet)
+    //   - isDemo / isStaff             (exempt)
+    //
+    // company must exist (invite-only users have company = null until they join)
+    const billingStatus    = (company as any)?.billing_status;
+    const accessCodeUsed   = !!(company as any)?.access_code_used;
+    const hasActiveBilling = billingStatus === "active" || trialActive || accessCodeUsed;
+    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && !hasActiveBilling;
+
+    if (token && needsCheckout && inTabs && !onCheckout) {
+      router.replace("/(tabs)/checkout");
+      return;
+    }
+  }, [token, user, company, isHydrated, isDemo, isStaff, trialActive, segments]);
 
   return <Slot />;
 }
