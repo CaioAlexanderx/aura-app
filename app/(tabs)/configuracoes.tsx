@@ -20,11 +20,35 @@ function openEmail() {
   else Linking.openURL(mailto);
 }
 
+function EquipeGate() {
+  return (
+    <View style={g.wrap}>
+      <View style={g.row}>
+        <Icon name="users" size={16} color={Colors.ink3} />
+        <Text style={g.label}>Convide sua equipe e defina permissoes de acesso.</Text>
+      </View>
+      <Pressable onPress={() => router.push("/(tabs)/planos")} style={g.badge}>
+        <Icon name="lock" size={11} color={Colors.ink3} />
+        <Text style={g.badgeText}>A partir do plano Negocio</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const g = StyleSheet.create({
+  wrap:      { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 4, gap: 10 },
+  row:       { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  label:     { fontSize: 13, color: Colors.ink3, flex: 1, lineHeight: 18 },
+  badge:     { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
+  badgeText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
+});
+
 export default function ConfiguracoesScreen() {
   const { user, company, isDemo } = useAuthStore();
   const profile = useConfigProfile();
   const plan    = company?.plan || "essencial";
   const planDat = PLANS[plan] || PLANS.essencial;
+  const isEssencial = plan === "essencial";
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -107,9 +131,9 @@ export default function ConfiguracoesScreen() {
             <Icon name="chevron_right" size={16} color={Colors.ink3} />
           </Pressable>
 
-          {/* EQUIPE */}
+          {/* EQUIPE — bloqueado no Essencial */}
           <SectionTitle title="Equipe" />
-          <MembersSection />
+          {isEssencial ? <EquipeGate /> : <MembersSection />}
 
           {/* MINHA CONTA */}
           <SectionTitle title="Minha conta" />
