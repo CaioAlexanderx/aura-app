@@ -4,6 +4,19 @@ import { Colors } from "@/constants/colors";
 import type { Product } from "./types";
 import { fmt } from "./types";
 
+var COLOR_NAMES: Record<string, string> = {
+  '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
+  '#808080':'Cinza','#0000ff':'Azul','#000080':'Marinho','#00ff00':'Verde',
+  '#008000':'Verde Esc.','#ffff00':'Amarelo','#ffa500':'Laranja','#ff00ff':'Pink',
+  '#ffc0cb':'Rosa','#800080':'Roxo','#a52a2a':'Marrom','#800000':'Vinho',
+  '#ffd700':'Dourado','#f5f5dc':'Bege','#ff6347':'Coral','#40e0d0':'Turquesa',
+  '#4b0082':'Indigo','#dc143c':'Carmesim','#2f4f4f':'Chumbo','#d2691e':'Caramelo',
+};
+function hexToName(hex: string) {
+  if (!hex) return '';
+  return COLOR_NAMES[hex.toLowerCase()] || hex;
+}
+
 function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
   const colors = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
   const bgs = { A: Colors.greenD, B: Colors.amberD, C: "rgba(255,255,255,0.05)" };
@@ -26,6 +39,8 @@ export function ProductRow({
   const isWeb = Platform.OS === "web";
   const isLow = product.stock <= product.minStock;
   const margin = product.price > 0 ? ((product.price - product.cost) / product.price * 100).toFixed(0) : "0";
+  const colorName = product.color ? hexToName(product.color) : "";
+  const hasVariant = !!(product.color || product.size);
 
   return (
     <View>
@@ -43,11 +58,19 @@ export function ProductRow({
         )}
         <View style={s.left}>
           {showAbc && !onSelect && <AbcBadge abc={product.abc} />}
-          {/* Color swatch */}
-          {product.color ? <View style={{ width: 18, height: 18, borderRadius: 4, backgroundColor: product.color, borderWidth: 1, borderColor: Colors.border }} /> : null}
+          {/* Color swatch com nome */}
+          {product.color ? (
+            <View style={s.colorGroup}>
+              <View style={[s.colorSwatch, { backgroundColor: product.color }]} />
+              <Text style={s.colorName}>{colorName}</Text>
+            </View>
+          ) : null}
           <View style={s.info}>
-            <Text style={s.name}>{product.name}</Text>
-            <Text style={s.meta}>{product.code} / {product.category}{product.size ? " / " + product.size : ""}</Text>
+            <View style={s.nameRow}>
+              <Text style={s.name} numberOfLines={1}>{product.name}</Text>
+              {product.size ? <View style={s.sizeBadge}><Text style={s.sizeBadgeText}>{product.size}</Text></View> : null}
+            </View>
+            <Text style={s.meta}>{product.code} / {product.category}</Text>
           </View>
         </View>
         <View style={s.right}>
@@ -66,6 +89,26 @@ export function ProductRow({
             )}
             <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
           </View>
+          {/* Cor e Tamanho */}
+          {hasVariant && (
+            <View style={s.variantRow}>
+              {product.color ? (
+                <View style={s.variantItem}>
+                  <Text style={s.detailLabel}>Cor</Text>
+                  <View style={s.variantColorDisplay}>
+                    <View style={[s.variantDot, { backgroundColor: product.color }]} />
+                    <Text style={s.variantText}>{colorName}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {product.size ? (
+                <View style={s.variantItem}>
+                  <Text style={s.detailLabel}>Tamanho</Text>
+                  <Text style={s.variantText}>{product.size}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
           {product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Codigo de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
           {product.notes ? <Text style={s.notesText}>{product.notes}</Text> : null}
           <View style={s.actionsRow}>
@@ -87,8 +130,16 @@ const s = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
   left: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
   info: { flex: 1 },
-  name: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  name: { fontSize: 13, color: Colors.ink, fontWeight: "600", flexShrink: 1 },
   meta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  // Cor: swatch + nome
+  colorGroup: { alignItems: "center", gap: 2 },
+  colorSwatch: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: Colors.border },
+  colorName: { fontSize: 8, color: Colors.ink3, maxWidth: 44, textAlign: "center" },
+  // Tamanho badge inline
+  sizeBadge: { backgroundColor: Colors.bg4, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: Colors.border },
+  sizeBadgeText: { fontSize: 9, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.3 },
   right: { alignItems: "flex-end", gap: 2 },
   stockRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   stock: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
@@ -99,6 +150,12 @@ const s = StyleSheet.create({
   detailItem: { width: "30%", minWidth: 100, paddingVertical: 8, gap: 4 },
   detailLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   detailValue: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+  // Variantes no detalhe expandido
+  variantRow: { flexDirection: "row", gap: 20, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  variantItem: { gap: 4 },
+  variantColorDisplay: { flexDirection: "row", alignItems: "center", gap: 6 },
+  variantDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: Colors.border },
+  variantText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   barcodeRow: { flexDirection: "row", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   barcodeLabel: { fontSize: 11, color: Colors.ink3 },
   barcodeValue: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
