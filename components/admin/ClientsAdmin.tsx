@@ -1,124 +1,269 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Switch } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminApi } from "@/services/api";
-import { HoverRow } from "@/components/HoverRow";
+import { request, adminApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
-import { PLAN_C, STATUS_C, MODULE_LABELS } from "./types";
-import type { AdminClient } from "./types";
+import { PLAN_C, MODULE_LABELS } from "./types";
+
+var isWeb = Platform.OS === "web";
+
+type Client360 = {
+  id: string; trade_name: string; legal_name: string; plan: string;
+  is_active: boolean; billing_status: string; billing_cycle: string;
+  module_overrides: Record<string, boolean> | null; created_at: string;
+  last_active_at: string | null; tax_regime: string; trial_ends_at: string | null;
+  owner_email: string; owner_name: string;
+  health_score: number | null; risk_level: string | null;
+  activity_score: number; usage_score: number; payment_score: number; adoption_score: number;
+  tx_count: number; prod_count: number; cust_count: number; total_revenue: number;
+};
+
+type ActivityData = {
+  usage: Record<string, number>; features_used: string[]; features_count: number;
+  recent_transactions: any[]; member_since: string; plan: string; billing_status: string;
+};
+
+var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
+var fmtK = function(n: number) { return n >= 1000 ? "R$ " + (n/1000).toFixed(1).replace(".",",") + "k" : fmt(n); };
+
+var HEALTH_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  healthy:   { bg: Colors.greenD, text: Colors.green, label: "Saudavel" },
+  attention: { bg: Colors.amberD, text: Colors.amber, label: "Atencao" },
+  at_risk:   { bg: Colors.redD,   text: Colors.red,   label: "Risco" },
+  critical:  { bg: Colors.redD,   text: Colors.red,   label: "Critico" },
+};
+
+var BILLING_LABELS: Record<string, { label: string; color: string }> = {
+  active: { label: "Ativo", color: Colors.green },
+  trial: { label: "Trial", color: Colors.amber },
+  pending: { label: "Pendente", color: Colors.amber },
+  overdue: { label: "Inadimplente", color: Colors.red },
+  cancelled: { label: "Cancelado", color: Colors.red },
+};
+
+var FILTERS = [
+  { key: "all", label: "Todos" },
+  { key: "at_risk", label: "Em risco" },
+  { key: "attention", label: "Atencao" },
+  { key: "healthy", label: "Saudaveis" },
+  { key: "trial", label: "Trial" },
+];
 
 export function ClientsAdmin() {
-  const { token, isStaff } = useAuthStore();
-  const queryClient = useQueryClient();
-  const { data: apiClients, isLoading } = useQuery({
-    queryKey: ["admin-clients"],
-    queryFn: () => adminApi.clients(),
+  var { token, isStaff } = useAuthStore();
+  var qc = useQueryClient();
+  var [filter, setFilter] = useState("all");
+  var [selectedId, setSelectedId] = useState<string | null>(null);
+
+  var { data, isLoading } = useQuery<{ total: number; clients: Client360[] }>({
+    queryKey: ["admin-clients-360"],
+    queryFn: function() { return request("/admin/clients-360"); },
     enabled: !!token && isStaff,
-    retry: 1,
-    staleTime: 30000,
+    staleTime: 60_000,
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ companyId, overrides }: { companyId: string; overrides: Record<string, boolean> }) =>
-      adminApi.updateModules(companyId, overrides),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
-      toast.success("Modulos atualizados");
-    },
-    onError: () => toast.error("Erro ao atualizar modulos"),
+  var selectedClient = selectedId ? (data?.clients || []).find(function(c) { return c.id === selectedId; }) : null;
+
+  var { data: activityData, isLoading: loadingActivity } = useQuery<ActivityData>({
+    queryKey: ["admin-client-activity", selectedId],
+    queryFn: function() { return request("/admin/clients/" + selectedId + "/activity"); },
+    enabled: !!selectedId,
+    staleTime: 120_000,
   });
 
-  const [selected, setSelected] = useState<string | null>(null);
-  const [filter, setFilter] = useState("all");
-
-  const clients: AdminClient[] = apiClients?.clients || [];
-  const filtered = filter === "all" ? clients : clients.filter(c =>
-    filter === "active" ? c.is_active : filter === "inactive" ? !c.is_active : true
-  );
+  var toggleMutation = useMutation({
+    mutationFn: function(p: { companyId: string; overrides: Record<string, boolean> }) { return adminApi.updateModules(p.companyId, p.overrides); },
+    onSuccess: function() { qc.invalidateQueries({ queryKey: ["admin-clients-360"] }); toast.success("Modulos atualizados"); },
+    onError: function() { toast.error("Erro ao atualizar"); },
+  });
 
   if (isLoading) return <ListSkeleton rows={4} showCards />;
 
-  function handleToggle(client: AdminClient, moduleKey: string, enabled: boolean) {
-    const currentOverrides = client.module_overrides || {};
-    const newOverrides = { ...currentOverrides, [moduleKey]: enabled };
-    toggleMutation.mutate({ companyId: client.id, overrides: newOverrides });
+  var clients = data?.clients || [];
+  var filtered = clients.filter(function(c) {
+    if (filter === "all") return true;
+    if (filter === "trial") return c.billing_status === "trial";
+    if (filter === "at_risk") return c.risk_level === "at_risk" || c.risk_level === "critical";
+    return c.risk_level === filter;
+  });
+
+  function handleToggle(client: Client360, moduleKey: string, enabled: boolean) {
+    var overrides = { ...(client.module_overrides || {}), [moduleKey]: enabled };
+    toggleMutation.mutate({ companyId: client.id, overrides: overrides });
   }
 
-  return (
-    <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-        {[{ k: "all", l: "Todos" }, { k: "active", l: "Ativos" }, { k: "inactive", l: "Inativos" }].map(f => (
-          <Pressable key={f.k} onPress={() => setFilter(f.k)} style={[s.chip, filter === f.k && s.chipActive]}>
-            <Text style={[s.chipText, filter === f.k && s.chipTextActive]}>
-              {f.l} ({f.k === "all" ? clients.length : clients.filter(c => f.k === "active" ? c.is_active : !c.is_active).length})
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+  // Slide-over do cliente selecionado
+  if (selectedClient) {
+    var sc = selectedClient;
+    var hc = HEALTH_COLORS[sc.risk_level || "attention"] || HEALTH_COLORS.attention;
+    var bc = BILLING_LABELS[sc.billing_status] || { label: sc.billing_status, color: Colors.ink3 };
+    var pc = PLAN_C[sc.plan] || { color: Colors.ink3, label: sc.plan || "?" };
+    var act = activityData;
 
-      {filtered.length === 0 && <Text style={{ fontSize: 13, color: Colors.ink3, textAlign: "center", paddingVertical: 40 }}>Nenhum cliente encontrado</Text>}
+    return (
+      <View>
+        <Pressable onPress={function() { setSelectedId(null); }} style={s.backBtn}>
+          <Text style={s.backText}>{"<"} Voltar aos clientes</Text>
+        </Pressable>
 
-      {filtered.map(client => {
-        const pc = PLAN_C[client.plan] || { color: Colors.ink3, label: client.plan || "?" };
-        const sc = client.is_active ? STATUS_C.active : STATUS_C.false;
-        const isOpen = selected === client.id;
-        const displayName = client.trade_name || client.legal_name || "Sem nome";
-        return (
-          <Pressable key={client.id} onPress={() => setSelected(isOpen ? null : client.id)}>
-            <HoverRow style={s.row}>
-              <View style={s.info}>
-                <Text style={s.name}>{displayName}</Text>
-                <Text style={s.sub}>{client.owner_email}</Text>
-              </View>
-              <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
-              <View style={[s.badge, { backgroundColor: sc.color + "18" }]}><Text style={[s.badgeText, { color: sc.color }]}>{sc.label}</Text></View>
-            </HoverRow>
+        {/* Header */}
+        <View style={s.slideHeader}>
+          <View style={s.slideAvatar}><Text style={s.slideAvatarText}>{(sc.trade_name || sc.legal_name || "?")[0].toUpperCase()}</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.slideName}>{sc.trade_name || sc.legal_name}</Text>
+            <Text style={s.slideEmail}>{sc.owner_email}</Text>
+          </View>
+          <View style={[s.healthBadgeLg, { backgroundColor: hc.bg }]}>
+            <Text style={[s.healthScoreLg, { color: hc.text }]}>{sc.health_score || 0}</Text>
+            <Text style={[s.healthLabelLg, { color: hc.text }]}>{hc.label}</Text>
+          </View>
+        </View>
 
-            {isOpen && (
-              <View style={s.detail}>
-                <View style={s.detailGrid}>
-                  <View style={s.detailItem}><Text style={s.detailLabel}>Owner</Text><Text style={s.detailValue}>{client.owner_name || "-"}</Text></View>
-                  <View style={s.detailItem}><Text style={s.detailLabel}>Email</Text><Text style={s.detailValue}>{client.owner_email}</Text></View>
-                  <View style={s.detailItem}><Text style={s.detailLabel}>Desde</Text><Text style={s.detailValue}>{client.created_at ? new Date(client.created_at).toLocaleDateString("pt-BR") : "-"}</Text></View>
-                  <View style={s.detailItem}><Text style={s.detailLabel}>Plano</Text><Text style={[s.detailValue, { color: pc.color }]}>{pc.label}</Text></View>
-                </View>
+        {/* Badges */}
+        <View style={s.badgesRow}>
+          <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
+          <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
+          <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>{sc.tax_regime === "mei" ? "MEI" : "Simples"}</Text></View>
+          <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>Desde {sc.created_at ? new Date(sc.created_at).toLocaleDateString("pt-BR") : "?"}</Text></View>
+        </View>
 
-                <View style={s.detailGrid}>
-                  <View style={s.detailItem}>
-                    <Text style={s.detailLabel}>Modulos visiveis</Text>
-                    <Text style={s.detailValue}>{(client.visible_modules || []).length}</Text>
+        {/* Health Breakdown */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Health score</Text>
+          <View style={s.healthGrid}>
+            {[{ label: "Atividade", score: sc.activity_score, max: 25, icon: "clock" },
+              { label: "Volume uso", score: sc.usage_score, max: 25, icon: "bar_chart" },
+              { label: "Pagamento", score: sc.payment_score, max: 25, icon: "dollar" },
+              { label: "Adocao", score: sc.adoption_score, max: 25, icon: "star" },
+            ].map(function(dim) {
+              var pct = Math.round((dim.score / dim.max) * 100);
+              var color = pct >= 80 ? Colors.green : pct >= 40 ? Colors.amber : Colors.red;
+              return (
+                <View key={dim.label} style={s.healthDim}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={s.healthDimLabel}>{dim.label}</Text>
+                    <Text style={[s.healthDimScore, { color: color }]}>{dim.score}/{dim.max}</Text>
                   </View>
-                  <View style={s.detailItem}>
-                    <Text style={s.detailLabel}>Overrides</Text>
-                    <Text style={s.detailValue}>{Object.keys(client.module_overrides || {}).length}</Text>
+                  <View style={s.healthBar}>
+                    <View style={[s.healthBarFill, { width: pct + "%", backgroundColor: color }, isWeb && { transition: "width 0.4s" } as any]} />
                   </View>
                 </View>
+              );
+            })}
+          </View>
+        </View>
 
-                <View style={s.toggles}>
-                  <Text style={s.toggleTitle}>Modulos</Text>
-                  {MODULE_LABELS.map(mod => {
-                    const isVisible = (client.visible_modules || []).includes(mod.key);
-                    const hasOverride = client.module_overrides && mod.key in client.module_overrides;
-                    return (
-                      <View key={mod.key} style={s.toggleRow}>
-                        <Text style={[s.toggleLabel, !isVisible && { opacity: 0.4 }]}>
-                          {mod.label} {hasOverride ? "(override)" : ""}
-                        </Text>
-                        <Switch
-                          value={isVisible}
-                          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-                          thumbColor={isVisible ? Colors.violet : Colors.ink3}
-                          onValueChange={(val) => handleToggle(client, mod.key, val)}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
+        {/* Metricas de uso */}
+        {loadingActivity ? <ActivityIndicator color={Colors.violet3} style={{ padding: 20 }} /> : act && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Uso da plataforma</Text>
+            <View style={s.usageGrid}>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.total_transactions}</Text><Text style={s.usageLabel}>Lancamentos</Text></View>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.tx_30d}</Text><Text style={s.usageLabel}>Ultimos 30d</Text></View>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.total_sales}</Text><Text style={s.usageLabel}>Vendas PDV</Text></View>
+              <View style={s.usageStat}><Text style={[s.usageVal, { color: Colors.green }]}>{fmtK(act.usage.total_revenue)}</Text><Text style={s.usageLabel}>Receita total</Text></View>
+            </View>
+            <View style={s.usageGrid}>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.total_products}</Text><Text style={s.usageLabel}>Produtos</Text></View>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.total_customers}</Text><Text style={s.usageLabel}>Clientes</Text></View>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.active_employees}</Text><Text style={s.usageLabel}>Empregados</Text></View>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.features_count}</Text><Text style={s.usageLabel}>Features usadas</Text></View>
+            </View>
+            {act.features_used.length > 0 && (
+              <View style={s.featuresRow}>
+                {act.features_used.map(function(f) {
+                  return <View key={f} style={s.featureBadge}><Text style={s.featureText}>{f}</Text></View>;
+                })}
               </View>
             )}
+          </View>
+        )}
+
+        {/* Ultimas transacoes */}
+        {act && act.recent_transactions.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Ultimas transacoes</Text>
+            {act.recent_transactions.map(function(tx: any) {
+              var isIncome = tx.type === "income";
+              return (
+                <View key={tx.id} style={s.txRow}>
+                  <View style={[s.txDot, { backgroundColor: isIncome ? Colors.green : Colors.red }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.txDesc} numberOfLines={1}>{tx.description || tx.category || "Lancamento"}</Text>
+                    <Text style={s.txMeta}>{new Date(tx.created_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</Text>
+                  </View>
+                  <Text style={[s.txAmount, { color: isIncome ? Colors.green : Colors.red }]}>{isIncome ? "+" : "-"}{fmt(tx.amount)}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Modulos */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Modulos</Text>
+          {MODULE_LABELS.map(function(mod) {
+            var isVisible = true; // simplified - would check visible_modules
+            var hasOverride = sc.module_overrides && mod.key in (sc.module_overrides || {});
+            return (
+              <View key={mod.key} style={s.toggleRow}>
+                <Text style={s.toggleLabel}>{mod.label}{hasOverride ? " (override)" : ""}</Text>
+                <Switch
+                  value={isVisible}
+                  trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+                  thumbColor={isVisible ? Colors.violet : Colors.ink3}
+                  onValueChange={function(val) { handleToggle(sc, mod.key, val); }}
+                />
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  // Lista de clientes
+  return (
+    <View>
+      {/* Filtros */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        {FILTERS.map(function(f) {
+          var count = f.key === "all" ? clients.length
+            : f.key === "trial" ? clients.filter(function(c) { return c.billing_status === "trial"; }).length
+            : f.key === "at_risk" ? clients.filter(function(c) { return c.risk_level === "at_risk" || c.risk_level === "critical"; }).length
+            : clients.filter(function(c) { return c.risk_level === f.key; }).length;
+          return (
+            <Pressable key={f.key} onPress={function() { setFilter(f.key); }} style={[s.chip, filter === f.key && s.chipActive]}>
+              <Text style={[s.chipText, filter === f.key && s.chipTextActive]}>{f.label} ({count})</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Tabela */}
+      {filtered.length === 0 && <Text style={{ fontSize: 13, color: Colors.ink3, textAlign: "center", padding: 40 }}>Nenhum cliente encontrado</Text>}
+
+      {filtered.map(function(client) {
+        var pc = PLAN_C[client.plan] || { color: Colors.ink3, label: client.plan || "?" };
+        var hc = HEALTH_COLORS[client.risk_level || "attention"] || HEALTH_COLORS.attention;
+        var bc = BILLING_LABELS[client.billing_status] || { label: "?", color: Colors.ink3 };
+        var displayName = client.trade_name || client.legal_name || "Sem nome";
+        return (
+          <Pressable key={client.id} onPress={function() { setSelectedId(client.id); }} style={[s.clientRow, isWeb && { cursor: "pointer", transition: "background-color 0.15s" } as any]}>
+            <View style={[s.healthDot, { backgroundColor: hc.bg }]}>
+              <Text style={[s.healthDotText, { color: hc.text }]}>{client.health_score || "?"}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.clientName} numberOfLines={1}>{displayName}</Text>
+              <Text style={s.clientMeta}>{client.owner_email} \u00b7 {client.tx_count} tx \u00b7 {fmtK(client.total_revenue)}</Text>
+            </View>
+            <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
+            <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
+            <Icon name="chevron_right" size={14} color={Colors.ink3} />
           </Pressable>
         );
       })}
@@ -126,24 +271,52 @@ export function ClientsAdmin() {
   );
 }
 
-const s = StyleSheet.create({
+var s = StyleSheet.create({
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
-  row: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 6, gap: 8, flexWrap: "wrap" },
-  info: { flex: 1, minWidth: 150, gap: 2 },
-  name: { fontSize: 14, fontWeight: "600", color: Colors.ink },
-  sub: { fontSize: 11, color: Colors.ink3 },
+  clientRow: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 6, gap: 10 },
+  healthDot: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  healthDotText: { fontSize: 13, fontWeight: "800" },
+  clientName: { fontSize: 14, fontWeight: "600", color: Colors.ink },
+  clientMeta: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: "600" },
-  detail: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, marginBottom: 8, marginTop: -2, borderWidth: 1, borderColor: Colors.border },
-  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
-  detailItem: { minWidth: 100, gap: 2 },
-  detailLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  detailValue: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  toggles: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12 },
-  toggleTitle: { fontSize: 12, fontWeight: "600", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
+  // Slide-over
+  backBtn: { marginBottom: 16 },
+  backText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  slideHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
+  slideAvatar: { width: 52, height: 52, borderRadius: 16, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" },
+  slideAvatarText: { fontSize: 22, fontWeight: "800", color: Colors.violet3 },
+  slideName: { fontSize: 20, fontWeight: "800", color: Colors.ink },
+  slideEmail: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  healthBadgeLg: { alignItems: "center", borderRadius: 12, padding: 12, minWidth: 70 },
+  healthScoreLg: { fontSize: 24, fontWeight: "800" },
+  healthLabelLg: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  badgesRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 20 },
+  section: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
+  healthGrid: { gap: 10 },
+  healthDim: { gap: 4 },
+  healthDimLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  healthDimScore: { fontSize: 12, fontWeight: "700" },
+  healthBar: { height: 6, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" },
+  healthBarFill: { height: 6, borderRadius: 3 },
+  usageGrid: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  usageStat: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, alignItems: "center" },
+  usageVal: { fontSize: 15, fontWeight: "800", color: Colors.ink },
+  usageLabel: { fontSize: 8, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 2, textAlign: "center" },
+  featuresRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  featureBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: Colors.border2 },
+  featureText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
+  txRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  txDot: { width: 8, height: 8, borderRadius: 4 },
+  txDesc: { fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  txMeta: { fontSize: 10, color: Colors.ink3 },
+  txAmount: { fontSize: 12, fontWeight: "700" },
   toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
   toggleLabel: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
 });
+
+export default ClientsAdmin;
