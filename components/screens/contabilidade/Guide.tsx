@@ -4,6 +4,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { StepAction } from "./StepAction";
+import { FiscalPdfButton } from "./FiscalPdfButton";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
 import type { Obligation } from "./types";
@@ -24,7 +25,6 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
     return [];
   });
 
-  // ── DAS MEI: QR Code e verificação de pagamento ──────────
   const [qrBase64, setQrBase64]         = useState<string | null>(null);
   const [qrLoading, setQrLoading]       = useState(false);
   const [qrError, setQrError]           = useState<string | null>(null);
@@ -32,7 +32,6 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
   const [paymentFound, setPaymentFound] = useState(false);
   const pollRef = useRef<any>(null);
 
-  // Auto-gera QR ao abrir o guia do DAS MEI
   useEffect(() => {
     if (!isDasMei || !company?.id || isDone) return;
     generateQr();
@@ -41,40 +40,27 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
 
   async function generateQr() {
     if (!company?.id) return;
-    setQrLoading(true);
-    setQrError(null);
+    setQrLoading(true); setQrError(null);
     try {
       const res = await request<{ qr_base64: string }>(`/companies/${company.id}/obligations/das-mei/qr`, { method: "POST" });
       setQrBase64(res.qr_base64);
-    } catch {
-      setQrError("Nao foi possivel gerar o QR Code. Use o link abaixo para acessar o PGMEI manualmente.");
-    } finally {
-      setQrLoading(false);
-    }
+    } catch { setQrError("Nao foi possivel gerar o QR Code. Use o link abaixo para acessar o PGMEI manualmente."); }
+    finally { setQrLoading(false); }
   }
 
   async function checkPayment() {
     if (!company?.id) return;
     setCheckingPay(true);
     try {
-      const res = await request<{ paid: boolean; transaction?: { amount: number; description: string } }>(
-        `/companies/${company.id}/obligations/das-mei/check-payment`
-      );
+      const res = await request<{ paid: boolean; transaction?: { amount: number; description: string } }>(`/companies/${company.id}/obligations/das-mei/check-payment`);
       if (res.paid) {
-        setPaymentFound(true);
-        clearInterval(pollRef.current);
+        setPaymentFound(true); clearInterval(pollRef.current);
         toast.success("Pagamento do DAS detectado! Obrigacao concluida.");
         setTimeout(() => onComplete(o.code), 600);
-      } else {
-        toast.info("Pagamento nao detectado ainda. Se ja pagou, registre no Financeiro ou marque manualmente.");
-      }
-    } catch {
-      toast.error("Erro ao verificar pagamento.");
-    } finally {
-      setCheckingPay(false);
-    }
+      } else { toast.info("Pagamento nao detectado ainda. Se ja pagou, registre no Financeiro ou marque manualmente."); }
+    } catch { toast.error("Erro ao verificar pagamento."); }
+    finally { setCheckingPay(false); }
   }
-  // ─────────────────────────────────────────────────────────
 
   const steps = o.steps || [];
   const isAutomatic = o.filter_label === "aura_resolve";
@@ -144,52 +130,22 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
               </View>
               {st.hint && !d && <Text style={s.stepHint}>{st.hint}</Text>}
               <StepAction step={st} completed={d} />
+              <FiscalPdfButton obligationCode={o.code} stepIndex={i} completed={d} />
 
-              {/* ── DAS MEI: QR Code no passo 0 ─────────────── */}
               {isDasMei && i === 0 && !d && (
                 <View style={s.qrWrap}>
-                  {qrLoading && (
-                    <View style={s.qrLoading}>
-                      <ActivityIndicator color={Colors.violet3} size="small" />
-                      <Text style={s.qrLoadingText}>Gerando QR Code...</Text>
-                    </View>
-                  )}
-                  {!qrLoading && qrError && (
-                    <Text style={s.qrError}>{qrError}</Text>
-                  )}
-                  {!qrLoading && qrBase64 && (
-                    <View style={s.qrBlock}>
-                      <Image
-                        source={{ uri: `data:image/png;base64,${qrBase64}` }}
-                        style={s.qrImage}
-                        resizeMode="contain"
-                      />
-                      <Text style={s.qrCaption}>Escaneie para abrir o PGMEI com seu CNPJ</Text>
-                    </View>
-                  )}
+                  {qrLoading && (<View style={s.qrLoading}><ActivityIndicator color={Colors.violet3} size="small" /><Text style={s.qrLoadingText}>Gerando QR Code...</Text></View>)}
+                  {!qrLoading && qrError && (<Text style={s.qrError}>{qrError}</Text>)}
+                  {!qrLoading && qrBase64 && (<View style={s.qrBlock}><Image source={{ uri: `data:image/png;base64,${qrBase64}` }} style={s.qrImage} resizeMode="contain" /><Text style={s.qrCaption}>Escaneie para abrir o PGMEI com seu CNPJ</Text></View>)}
                 </View>
               )}
 
-              {/* ── DAS MEI: verificar pagamento no passo 1 ── */}
               {isDasMei && i === 1 && !d && (
                 <View style={s.checkWrap}>
                   <Pressable onPress={checkPayment} disabled={checkingPay || paymentFound} style={[s.checkBtn, (checkingPay || paymentFound) && { opacity: 0.6 }]}>
-                    {checkingPay ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <ActivityIndicator size="small" color={Colors.violet3} />
-                        <Text style={s.checkBtnText}>Verificando...</Text>
-                      </View>
-                    ) : paymentFound ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Icon name="check" size={14} color={Colors.green} />
-                        <Text style={[s.checkBtnText, { color: Colors.green }]}>Pagamento confirmado!</Text>
-                      </View>
-                    ) : (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Icon name="search" size={14} color={Colors.violet3} />
-                        <Text style={s.checkBtnText}>Verificar pagamento automaticamente</Text>
-                      </View>
-                    )}
+                    {checkingPay ? (<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><ActivityIndicator size="small" color={Colors.violet3} /><Text style={s.checkBtnText}>Verificando...</Text></View>)
+                    : paymentFound ? (<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name="check" size={14} color={Colors.green} /><Text style={[s.checkBtnText, { color: Colors.green }]}>Pagamento confirmado!</Text></View>)
+                    : (<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name="search" size={14} color={Colors.violet3} /><Text style={s.checkBtnText}>Verificar pagamento automaticamente</Text></View>)}
                   </Pressable>
                   <Text style={s.checkHint}>Se o DAS estiver registrado no Financeiro, a Aura detecta e conclui automaticamente.</Text>
                 </View>
@@ -237,19 +193,17 @@ const s = StyleSheet.create({
   disclaimer: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14 },
   disclaimerIcon: { fontSize: 14, color: Colors.amber, fontWeight: "700" },
   disclaimerText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
-  // ── DAS MEI QR ──
-  qrWrap:       { marginTop: 16, marginLeft: 48, gap: 10 },
-  qrLoading:    { flexDirection: "row", alignItems: "center", gap: 8 },
-  qrLoadingText:{ fontSize: 12, color: Colors.ink3 },
-  qrError:      { fontSize: 11, color: Colors.amber, lineHeight: 16 },
-  qrBlock:      { alignItems: "center", gap: 8 },
-  qrImage:      { width: 180, height: 180, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
-  qrCaption:    { fontSize: 11, color: Colors.ink3, textAlign: "center" },
-  // ── DAS MEI check payment ──
-  checkWrap:    { marginTop: 14, marginLeft: 48, gap: 8 },
-  checkBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: Colors.border2, alignSelf: "flex-start" },
+  qrWrap: { marginTop: 16, marginLeft: 48, gap: 10 },
+  qrLoading: { flexDirection: "row", alignItems: "center", gap: 8 },
+  qrLoadingText: { fontSize: 12, color: Colors.ink3 },
+  qrError: { fontSize: 11, color: Colors.amber, lineHeight: 16 },
+  qrBlock: { alignItems: "center", gap: 8 },
+  qrImage: { width: 180, height: 180, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
+  qrCaption: { fontSize: 11, color: Colors.ink3, textAlign: "center" },
+  checkWrap: { marginTop: 14, marginLeft: 48, gap: 8 },
+  checkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: Colors.border2, alignSelf: "flex-start" },
   checkBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  checkHint:    { fontSize: 10, color: Colors.ink3, lineHeight: 15 },
+  checkHint: { fontSize: 10, color: Colors.ink3, lineHeight: 15 },
 });
 
 export default Guide;
