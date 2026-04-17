@@ -25,6 +25,7 @@ import { QuickAction } from "@/components/screens/dashboard/QuickAction";
 import { SaleRow } from "@/components/screens/dashboard/SaleRow";
 import { ObligationRow } from "@/components/screens/dashboard/ObligationRow";
 import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalyticsCard";
+import { TopSellersCard } from "@/components/screens/dashboard/TopSellersCard";
 import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
@@ -42,7 +43,6 @@ var FALLBACK_ROUTES: { mod: string; route: string }[] = [
 ];
 
 export default function DashboardScreen() {
-  // ALL hooks MUST be called before any conditional return (React rules of hooks)
   var { user, company, token, isDemo, logout } = useAuthStore();
   var router = useRouter();
   var [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
@@ -57,11 +57,9 @@ export default function DashboardScreen() {
     retry: 1, staleTime: 60000,
   });
 
-  // Redirect to first available module if dashboard is not accessible
   useEffect(function() {
     if (visibleMods.size === 0) return;
     if (visibleMods.has("painel")) return;
-
     setRedirecting(true);
     for (var i = 0; i < FALLBACK_ROUTES.length; i++) {
       if (visibleMods.has(FALLBACK_ROUTES[i].mod)) {
@@ -74,7 +72,6 @@ export default function DashboardScreen() {
   useEffect(function() { if (isError && !isDemo) toast.error("Erro ao carregar dashboard."); }, [isError]);
   useEffect(function() { if ((user as any)?.email_verified !== undefined) setEmailVerified((user as any).email_verified); }, [(user as any)?.email_verified]);
 
-  // Show blank while redirecting (no hooks after this point)
   if (redirecting || (visibleMods.size > 0 && !visibleMods.has("painel"))) {
     return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
   }
@@ -123,8 +120,8 @@ export default function DashboardScreen() {
             <Text style={s.sec}>Visao geral</Text>
             <KPIGrid d={d} onNavigate={go} />
 
-            {/* Ver analise completa -> Financeiro (dados agregados), nao Caixa (interface de venda) */}
             {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
+            {!isDemo && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
 
             <Text style={s.sec}>Acesso rapido</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.actsScroll} contentContainerStyle={s.acts}>
