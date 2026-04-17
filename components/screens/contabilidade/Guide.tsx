@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { StepAction } from "./StepAction";
 import { FiscalPdfButton } from "./FiscalPdfButton";
+import { StepAutoData } from "./StepAutoData";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
 import type { Obligation } from "./types";
@@ -52,7 +53,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
     if (!company?.id) return;
     setCheckingPay(true);
     try {
-      const res = await request<{ paid: boolean; transaction?: { amount: number; description: string } }>(`/companies/${company.id}/obligations/das-mei/check-payment`);
+      const res = await request<{ paid: boolean }>(`/companies/${company.id}/obligations/das-mei/check-payment`);
       if (res.paid) {
         setPaymentFound(true); clearInterval(pollRef.current);
         toast.success("Pagamento do DAS detectado! Obrigacao concluida.");
@@ -130,6 +131,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
               </View>
               {st.hint && !d && <Text style={s.stepHint}>{st.hint}</Text>}
               <StepAction step={st} completed={d} />
+              <StepAutoData obligationCode={o.code} stepIndex={i} completed={d} />
               <FiscalPdfButton obligationCode={o.code} stepIndex={i} completed={d} />
 
               {isDasMei && i === 0 && !d && (
