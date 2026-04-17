@@ -21,6 +21,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { BASE_URL } from "@/services/api";
 import { Icon } from "@/components/Icon";
+import { WebPortal } from "@/components/WebPortal";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 var isWeb = Platform.OS === "web";
@@ -94,13 +95,16 @@ export default function FinanceiroScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <TransactionModal
-        visible={showModal}
-        onClose={function() { setShowModal(false); setEditTx(null); }}
-        onSave={createTransaction}
-        onSaleCreated={handleSaleCreated}
-        editTransaction={editTx}
-      />
+      {/* WebPortal: renderiza no document.body pra escapar de ancestors com CSS transform */}
+      <WebPortal active={showModal}>
+        <TransactionModal
+          visible={showModal}
+          onClose={function() { setShowModal(false); setEditTx(null); }}
+          onSave={createTransaction}
+          onSaleCreated={handleSaleCreated}
+          editTransaction={editTx}
+        />
+      </WebPortal>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
         <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={function() { setEditTx(null); setShowModal(true); }} />
         <AgentBanner context="financeiro" />
