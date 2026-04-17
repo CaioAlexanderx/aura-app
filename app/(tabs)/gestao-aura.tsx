@@ -7,9 +7,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
-import { DashboardAdmin, ClientsAdmin, EquipeAdmin, SolicitacoesAdmin } from "@/components/admin";
+import { DashboardAdmin, ClientsAdmin, ReceitaAdmin, EquipeAdmin, SolicitacoesAdmin } from "@/components/admin";
 
-var TABS = ["Painel", "Clientes", "Equipe", "Solicitacoes"];
+var TABS = ["Painel", "Clientes", "Receita", "Equipe", "Solicitacoes"];
 
 export default function GestaoAuraScreen() {
   var router = useRouter();
@@ -32,7 +32,7 @@ export default function GestaoAuraScreen() {
     return (
       <View style={s.guard}>
         <Icon name="bar_chart" size={32} color={Colors.amber} />
-        <Text style={s.guardTitle}>Gestao Aura</Text>
+        <Text style={s.guardTitle}>Central de Comando</Text>
         <Text style={s.guardDesc}>Este painel e exclusivo para a equipe Aura e nao esta disponivel no modo demonstrativo.</Text>
         <Pressable onPress={function() { router.replace("/"); }} style={s.guardBtn}>
           <Text style={s.guardBtnText}>Voltar ao painel</Text>
@@ -45,16 +45,17 @@ export default function GestaoAuraScreen() {
 
   return (
     <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
-      <PageHeader title="Gestao Aura" />
+      <PageHeader title="Central de Comando" />
       <View style={s.adminBadge}>
         <Icon name="star" size={12} color={Colors.amber} />
-        <Text style={s.adminText}>Painel administrativo</Text>
+        <Text style={s.adminText}>Gestao 360 da plataforma Aura</Text>
       </View>
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />
       {tab === 0 && <DashboardAdmin />}
       {tab === 1 && <ClientsAdmin />}
-      {tab === 2 && <EquipeAdmin />}
-      {tab === 3 && <SolicitacoesAdmin />}
+      {tab === 2 && <ReceitaAdmin />}
+      {tab === 3 && <EquipeAdmin />}
+      {tab === 4 && <SolicitacoesAdmin />}
     </ScrollView>
   );
 }
