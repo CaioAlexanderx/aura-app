@@ -49,7 +49,6 @@ export default function FinanceiroScreen() {
   var [importing, setImporting] = useState(false);
   var scrollRef = useRef<any>(null);
 
-  // F-07: custom date range
   var [customStartBR, setCustomStartBR] = useState("");
   var [customEndBR, setCustomEndBR] = useState("");
   var customStart = brToISO(customStartBR) || undefined;
@@ -114,7 +113,6 @@ export default function FinanceiroScreen() {
           })}
         </View>
 
-        {/* F-07: Custom date range picker */}
         {period === "custom" && (
           <View style={s.customRow}>
             <View style={s.customField}>
@@ -145,7 +143,7 @@ export default function FinanceiroScreen() {
         {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
         {isLoading && activeTab < 4 && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} previousSummary={previousSummary} period={period} customStart={customStart} customEnd={customEnd} isLoading={isLoading} isDemo={isDemo} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onImport={!importing ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={function(id) { setDeleteTarget(id); }} />}
+        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} previousSummary={previousSummary} period={period} customStart={customStart} customEnd={customEnd} isLoading={isLoading} isDemo={isDemo} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onImport={!importing ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={function(id) { setDeleteTarget(id); }} onEdit={!isDemo ? handleEdit : undefined} />}
         {activeTab === 1 && <TabLancamentos transactions={transactions} isLoading={isLoading} importing={importing} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onExport={handleExport} onImport={handleImport} onDelete={!isDemo ? function(id) { setDeleteTarget(id); } : undefined} onEdit={!isDemo ? handleEdit : undefined} />}
         {activeTab === 2 && <TabResumo transactions={transactions} dreApi={dreData} period={period} />}
         {activeTab === 3 && <TabRetirada transactions={transactions} />}
@@ -166,13 +164,11 @@ var s = StyleSheet.create({
   periodBtnActive: { backgroundColor: Colors.violet },
   periodText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   periodTextActive: { color: "#fff", fontWeight: "700" },
-  // F-07: custom date picker
   customRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2 },
   customField: { flex: 1 },
   customLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
-  // Tabs
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },

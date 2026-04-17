@@ -29,9 +29,10 @@ type Props = {
   onImport?: () => void;
   onGoToLancamentos: () => void;
   onDelete?: (id: string) => void;
+  onEdit?: (tx: Transaction) => void;
 };
 
-export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete }: Props) {
+export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete, onEdit }: Props) {
   if (transactions.length === 0 && !isLoading && !isDemo) {
     return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
   }
@@ -53,7 +54,7 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
           </View>
           <View style={s.listCard}>
             {transactions.slice(0, 8).map(function(t) {
-              return <TransactionRow key={t.id} item={t} onDelete={!isDemo ? onDelete : undefined} />;
+              return <TransactionRow key={t.id} item={t} onDelete={!isDemo ? onDelete : undefined} onEdit={!isDemo ? onEdit : undefined} />;
             })}
           </View>
         </View>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
 
@@ -26,7 +27,6 @@ function formatDate(item: Transaction): string {
   return item.date || "---";
 }
 
-// Extrair metodo de pagamento da descricao: "Venda PDV - ... (pix)" -> "Pix"
 function extractPayment(desc: string): string | null {
   var match = desc.match(/\((pix|cartao|debito|dinheiro|credito)\)\s*$/i);
   if (match) {
@@ -80,7 +80,16 @@ export function TransactionRow({ item, onDelete, onEdit }: { item: Transaction; 
         <Text style={[s.amount, { color: isIncome ? Colors.green : Colors.red }]}>
           {isIncome ? "+" : "-"}{fmt(item.amount)}
         </Text>
-        {onDelete && <Pressable onPress={(e) => { e.stopPropagation?.(); onDelete(item.id); }} style={s.deleteBtn} hitSlop={8}><Text style={s.deleteText}>x</Text></Pressable>}
+        {onEdit && (
+          <Pressable onPress={(e) => { e.stopPropagation?.(); onEdit(item); }} style={s.editBtn} hitSlop={8}>
+            <Icon name="edit" size={12} color={Colors.violet3} />
+          </Pressable>
+        )}
+        {onDelete && (
+          <Pressable onPress={(e) => { e.stopPropagation?.(); onDelete(item.id); }} style={s.deleteBtn} hitSlop={8}>
+            <Text style={s.deleteText}>x</Text>
+          </Pressable>
+        )}
       </View>
     </Pressable>
   );
@@ -95,8 +104,9 @@ const s = StyleSheet.create({
   meta: { fontSize: 11, color: Colors.ink3 },
   payBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
   payText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.3 },
-  right: { flexDirection: "row", alignItems: "center", gap: 8 },
+  right: { flexDirection: "row", alignItems: "center", gap: 6 },
   amount: { fontSize: 14, fontWeight: "600" },
+  editBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   deleteBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center" },
   deleteText: { fontSize: 11, color: Colors.red, fontWeight: "700" },
 });
