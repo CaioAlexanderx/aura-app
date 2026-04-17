@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -16,10 +16,15 @@ type RankedEmployee = {
   trend_pct: number; share_pct: number; is_top: boolean; medal: string | null;
 };
 
+type UnassignedData = {
+  total_sales: number; total_revenue: number; avg_ticket: number; share_pct: number;
+} | null;
+
 type RankingData = {
   period: { start: string; end: string; label: string };
-  total_revenue: number; total_employees: number;
-  ranking: RankedEmployee[]; employee_of_month: RankedEmployee | null;
+  total_revenue: number; total_sales: number; total_employees: number;
+  ranking: RankedEmployee[]; unassigned: UnassignedData;
+  employee_of_month: RankedEmployee | null;
 };
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
@@ -40,7 +45,7 @@ export function SalesRanking() {
   var companyId = company?.id;
   var [period, setPeriod] = useState("month");
 
-  var { data, isLoading, isError } = useQuery<RankingData>({
+  var { data, isLoading } = useQuery<RankingData>({
     queryKey: ["employees-ranking", companyId, period],
     queryFn: function() { return request<RankingData>("/companies/" + companyId + "/employees/ranking?period=" + period); },
     enabled: !!companyId,
@@ -49,9 +54,11 @@ export function SalesRanking() {
   });
 
   var ranking = data?.ranking || [];
-  var hasData = ranking.length > 0 && data && data.total_revenue > 0;
+  var unassigned = data?.unassigned;
+  var totalRevenue = data?.total_revenue || 0;
+  var totalSales = data?.total_sales || 0;
+  var hasData = totalSales > 0;
   var top3 = ranking.slice(0, 3);
-  var rest = ranking.slice(3);
 
   return (
     <View>
@@ -64,63 +71,62 @@ export function SalesRanking() {
         })}
       </View>
 
-      {/* Loading */}
       {isLoading && <ListSkeleton rows={3} showCards />}
 
-      {/* Empty state — abaixo dos filtros */}
       {!isLoading && !hasData && (
-        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda vinculada a funcionarios" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : " este mes") + ". Ao registrar uma venda no PDV, selecione o vendedor responsavel."} />
+        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda registrada" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : " este mes") + ". Ao registrar uma venda no PDV, selecione o vendedor responsavel."} />
       )}
 
-      {/* Dados */}
       {!isLoading && hasData && data && (
         <>
-          {/* KPIs */}
+          {/* KPIs — totais reais (com + sem vendedor) */}
           <View style={s.kpiRow}>
             <View style={s.kpiCard}>
               <Text style={s.kpiLabel}>Vendas</Text>
-              <Text style={s.kpiVal}>{ranking.reduce(function(s, e) { return s + e.total_sales; }, 0)}</Text>
+              <Text style={s.kpiVal}>{totalSales}</Text>
             </View>
             <View style={s.kpiCard}>
               <Text style={s.kpiLabel}>Faturamento</Text>
-              <Text style={[s.kpiVal, { color: Colors.green }]}>{fmtK(data.total_revenue)}</Text>
+              <Text style={[s.kpiVal, { color: Colors.green }]}>{fmtK(totalRevenue)}</Text>
             </View>
             <View style={s.kpiCard}>
               <Text style={s.kpiLabel}>Ticket medio</Text>
-              <Text style={s.kpiVal}>{data.total_revenue > 0 ? fmt(data.total_revenue / ranking.reduce(function(s, e) { return s + e.total_sales; }, 1)) : "R$ 0"}</Text>
+              <Text style={s.kpiVal}>{totalSales > 0 ? fmt(totalRevenue / totalSales) : "R$ 0"}</Text>
             </View>
           </View>
 
           {/* Podium — top 3 */}
-          <View style={s.podium}>
-            {top3.map(function(emp) {
-              var medal = emp.medal || "";
-              var bg = MEDAL_BG[medal] || Colors.bg4;
-              var border = MEDAL_BORDER[medal] || Colors.border;
-              var emoji = MEDAL_EMOJI[medal] || "";
-              var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
-              var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
-              return (
-                <View key={emp.id} style={[s.podiumCard, { borderColor: border }]}>
-                  <Text style={s.podiumMedal}>{emoji}</Text>
-                  <View style={[s.podiumAvatar, { backgroundColor: bg }]}>
-                    <Text style={s.podiumInitial}>{(emp.full_name || "?")[0].toUpperCase()}</Text>
+          {top3.length > 0 && (
+            <View style={s.podium}>
+              {top3.map(function(emp) {
+                var medal = emp.medal || "";
+                var bg = MEDAL_BG[medal] || Colors.bg4;
+                var border = MEDAL_BORDER[medal] || Colors.border;
+                var emoji = MEDAL_EMOJI[medal] || "";
+                var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
+                var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
+                return (
+                  <View key={emp.id} style={[s.podiumCard, { borderColor: border }]}>
+                    <Text style={s.podiumMedal}>{emoji}</Text>
+                    <View style={[s.podiumAvatar, { backgroundColor: bg }]}>
+                      <Text style={s.podiumInitial}>{(emp.full_name || "?")[0].toUpperCase()}</Text>
+                    </View>
+                    <Text style={s.podiumName} numberOfLines={1}>{emp.full_name}</Text>
+                    <Text style={s.podiumRole}>{emp.job_role || "Vendedor"}</Text>
+                    <Text style={[s.podiumRevenue, { color: Colors.green }]}>{fmtK(emp.total_revenue)}</Text>
+                    <View style={s.podiumStats}>
+                      <Text style={s.podiumStat}>{emp.total_sales} vendas</Text>
+                      <Text style={[s.podiumTrend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
+                    </View>
+                    <View style={s.shareBar}>
+                      <View style={[s.shareFill, { width: emp.share_pct + "%", backgroundColor: border }, isWeb && { transition: "width 0.4s" } as any]} />
+                    </View>
+                    <Text style={s.shareText}>{emp.share_pct}% do total</Text>
                   </View>
-                  <Text style={s.podiumName} numberOfLines={1}>{emp.full_name}</Text>
-                  <Text style={s.podiumRole}>{emp.job_role || "Vendedor"}</Text>
-                  <Text style={[s.podiumRevenue, { color: Colors.green }]}>{fmtK(emp.total_revenue)}</Text>
-                  <View style={s.podiumStats}>
-                    <Text style={s.podiumStat}>{emp.total_sales} vendas</Text>
-                    <Text style={[s.podiumTrend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
-                  </View>
-                  <View style={s.shareBar}>
-                    <View style={[s.shareFill, { width: emp.share_pct + "%", backgroundColor: border }, isWeb && { transition: "width 0.4s" } as any]} />
-                  </View>
-                  <Text style={s.shareText}>{emp.share_pct}% do total</Text>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* Tabela completa */}
           <View style={s.tableCard}>
@@ -145,7 +151,30 @@ export function SalesRanking() {
                 </View>
               );
             })}
+
+            {/* Vendas sem vendedor atribuido */}
+            {unassigned && unassigned.total_sales > 0 && (
+              <View style={[s.tableRow, { borderBottomWidth: 0, opacity: 0.7 }]}>
+                <Text style={[s.tablePos, { color: Colors.ink3 }]}>-</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.tableName, { color: Colors.ink3 }]}>Sem vendedor</Text>
+                  <Text style={s.tableRole}>Vendas nao atribuidas</Text>
+                </View>
+                <View style={s.tableRight}>
+                  <Text style={[s.tableRevenue, { color: Colors.ink3 }]}>{fmtK(unassigned.total_revenue)}</Text>
+                  <Text style={s.tableSales}>{unassigned.total_sales} vendas ({unassigned.share_pct}%)</Text>
+                </View>
+              </View>
+            )}
           </View>
+
+          {/* Alerta de vendas nao atribuidas */}
+          {unassigned && unassigned.total_sales > 0 && (
+            <View style={s.warningBanner}>
+              <Icon name="alert" size={14} color={Colors.amber} />
+              <Text style={s.warningText}>{unassigned.total_sales} venda{unassigned.total_sales > 1 ? "s" : ""} sem vendedor atribuido ({fmtK(unassigned.total_revenue)}). Atribua um vendedor no PDV para contabilizar no ranking.</Text>
+            </View>
+          )}
         </>
       )}
     </View>
@@ -176,7 +205,7 @@ var s = StyleSheet.create({
   shareBar: { height: 4, width: "100%", backgroundColor: Colors.bg4, borderRadius: 2, marginTop: 6, overflow: "hidden" },
   shareFill: { height: 4, borderRadius: 2 },
   shareText: { fontSize: 9, color: Colors.ink3, marginTop: 2 },
-  tableCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: Colors.border },
+  tableCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
   tableTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 10, paddingHorizontal: 4 },
   tableRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: Colors.border },
   tablePos: { width: 24, fontSize: 14, fontWeight: "800", color: Colors.ink3, textAlign: "center" },
@@ -186,6 +215,8 @@ var s = StyleSheet.create({
   tableRevenue: { fontSize: 13, fontWeight: "700", color: Colors.green },
   tableSales: { fontSize: 10, color: Colors.ink3 },
   tableTrend: { fontSize: 10, fontWeight: "700" },
+  warningBanner: { flexDirection: "row", gap: 8, backgroundColor: Colors.amberD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.amber + "33", alignItems: "flex-start" },
+  warningText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 16 },
 });
 
 export default SalesRanking;
