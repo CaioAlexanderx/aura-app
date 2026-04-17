@@ -5,6 +5,9 @@ import { EmptyState } from "@/components/EmptyState";
 import { SmartBalance } from "./SmartBalance";
 import { SparklineBar } from "./SparklineBar";
 import { PendingCards } from "./PendingCards";
+import { CashFlowCard } from "./CashFlowCard";
+import { AIFinancialInsights } from "./AIFinancialInsights";
+import { ReconciliationSection } from "./ReconciliationSection";
 import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
 import type { Transaction, PeriodKey } from "./types";
@@ -38,7 +41,10 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
       <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={period} customStart={customStart} customEnd={customEnd} previousSummary={previousSummary} />
       <SparklineBar transactions={transactions} />
       <PendingCards transactions={transactions} />
+      <CashFlowCard />
+      <AIFinancialInsights summary={summary} txCount={transactions.length} />
       <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
+      <ReconciliationSection />
       {transactions.length > 0 && (
         <View>
           <View style={s.sectionHeader}>
