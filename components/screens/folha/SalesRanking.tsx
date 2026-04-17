@@ -48,19 +48,14 @@ export function SalesRanking() {
     retry: 1,
   });
 
-  if (isLoading) return <ListSkeleton rows={3} showCards />;
-
-  if (isError || !data || data.ranking.length === 0) {
-    return <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle="O ranking sera gerado quando funcionarios forem vinculados a vendas no PDV. Ao registrar uma venda, selecione o vendedor responsavel." />;
-  }
-
-  var ranking = data.ranking;
+  var ranking = data?.ranking || [];
+  var hasData = ranking.length > 0 && data && data.total_revenue > 0;
   var top3 = ranking.slice(0, 3);
   var rest = ranking.slice(3);
 
   return (
     <View>
-      {/* Seletor de periodo */}
+      {/* Seletor de periodo — sempre visivel */}
       <View style={s.periodBar}>
         {PERIODS.map(function(p) {
           return <Pressable key={p.key} onPress={function() { setPeriod(p.key); }} style={[s.periodBtn, period === p.key && s.periodBtnActive, isWeb && { transition: "all 0.15s" } as any]}>
@@ -69,78 +64,89 @@ export function SalesRanking() {
         })}
       </View>
 
-      {/* KPIs */}
-      <View style={s.kpiRow}>
-        <View style={s.kpiCard}>
-          <Text style={s.kpiLabel}>Vendas</Text>
-          <Text style={s.kpiVal}>{ranking.reduce(function(s, e) { return s + e.total_sales; }, 0)}</Text>
-        </View>
-        <View style={s.kpiCard}>
-          <Text style={s.kpiLabel}>Faturamento</Text>
-          <Text style={[s.kpiVal, { color: Colors.green }]}>{fmtK(data.total_revenue)}</Text>
-        </View>
-        <View style={s.kpiCard}>
-          <Text style={s.kpiLabel}>Ticket medio</Text>
-          <Text style={s.kpiVal}>{data.total_revenue > 0 ? fmt(data.total_revenue / ranking.reduce(function(s, e) { return s + e.total_sales; }, 1)) : "R$ 0"}</Text>
-        </View>
-      </View>
+      {/* Loading */}
+      {isLoading && <ListSkeleton rows={3} showCards />}
 
-      {/* Podium — top 3 */}
-      <View style={s.podium}>
-        {top3.map(function(emp) {
-          var medal = emp.medal || "";
-          var bg = MEDAL_BG[medal] || Colors.bg4;
-          var border = MEDAL_BORDER[medal] || Colors.border;
-          var emoji = MEDAL_EMOJI[medal] || "";
-          var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
-          var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
-          return (
-            <View key={emp.id} style={[s.podiumCard, { borderColor: border }]}>
-              <Text style={s.podiumMedal}>{emoji}</Text>
-              <View style={[s.podiumAvatar, { backgroundColor: bg }]}>
-                <Text style={s.podiumInitial}>{(emp.full_name || "?")[0].toUpperCase()}</Text>
-              </View>
-              <Text style={s.podiumName} numberOfLines={1}>{emp.full_name}</Text>
-              <Text style={s.podiumRole}>{emp.job_role || "Vendedor"}</Text>
-              <Text style={[s.podiumRevenue, { color: Colors.green }]}>{fmtK(emp.total_revenue)}</Text>
-              <View style={s.podiumStats}>
-                <Text style={s.podiumStat}>{emp.total_sales} vendas</Text>
-                <Text style={[s.podiumTrend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
-              </View>
-              <View style={s.shareBar}>
-                <View style={[s.shareFill, { width: emp.share_pct + "%", backgroundColor: border }, isWeb && { transition: "width 0.4s" } as any]} />
-              </View>
-              <Text style={s.shareText}>{emp.share_pct}% do total</Text>
+      {/* Empty state — abaixo dos filtros */}
+      {!isLoading && !hasData && (
+        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda vinculada a funcionarios" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : " este mes") + ". Ao registrar uma venda no PDV, selecione o vendedor responsavel."} />
+      )}
+
+      {/* Dados */}
+      {!isLoading && hasData && data && (
+        <>
+          {/* KPIs */}
+          <View style={s.kpiRow}>
+            <View style={s.kpiCard}>
+              <Text style={s.kpiLabel}>Vendas</Text>
+              <Text style={s.kpiVal}>{ranking.reduce(function(s, e) { return s + e.total_sales; }, 0)}</Text>
             </View>
-          );
-        })}
-      </View>
+            <View style={s.kpiCard}>
+              <Text style={s.kpiLabel}>Faturamento</Text>
+              <Text style={[s.kpiVal, { color: Colors.green }]}>{fmtK(data.total_revenue)}</Text>
+            </View>
+            <View style={s.kpiCard}>
+              <Text style={s.kpiLabel}>Ticket medio</Text>
+              <Text style={s.kpiVal}>{data.total_revenue > 0 ? fmt(data.total_revenue / ranking.reduce(function(s, e) { return s + e.total_sales; }, 1)) : "R$ 0"}</Text>
+            </View>
+          </View>
 
-      {/* Tabela completa */}
-      {rest.length > 0 && (
-        <View style={s.tableCard}>
-          <Text style={s.tableTitle}>Todos os vendedores</Text>
-          {ranking.map(function(emp) {
-            var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
-            var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
-            return (
-              <View key={emp.id} style={s.tableRow}>
-                <Text style={s.tablePos}>{emp.position}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.tableName} numberOfLines={1}>{emp.full_name}</Text>
-                  <Text style={s.tableRole}>{emp.job_role || "Vendedor"}</Text>
+          {/* Podium — top 3 */}
+          <View style={s.podium}>
+            {top3.map(function(emp) {
+              var medal = emp.medal || "";
+              var bg = MEDAL_BG[medal] || Colors.bg4;
+              var border = MEDAL_BORDER[medal] || Colors.border;
+              var emoji = MEDAL_EMOJI[medal] || "";
+              var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
+              var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
+              return (
+                <View key={emp.id} style={[s.podiumCard, { borderColor: border }]}>
+                  <Text style={s.podiumMedal}>{emoji}</Text>
+                  <View style={[s.podiumAvatar, { backgroundColor: bg }]}>
+                    <Text style={s.podiumInitial}>{(emp.full_name || "?")[0].toUpperCase()}</Text>
+                  </View>
+                  <Text style={s.podiumName} numberOfLines={1}>{emp.full_name}</Text>
+                  <Text style={s.podiumRole}>{emp.job_role || "Vendedor"}</Text>
+                  <Text style={[s.podiumRevenue, { color: Colors.green }]}>{fmtK(emp.total_revenue)}</Text>
+                  <View style={s.podiumStats}>
+                    <Text style={s.podiumStat}>{emp.total_sales} vendas</Text>
+                    <Text style={[s.podiumTrend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
+                  </View>
+                  <View style={s.shareBar}>
+                    <View style={[s.shareFill, { width: emp.share_pct + "%", backgroundColor: border }, isWeb && { transition: "width 0.4s" } as any]} />
+                  </View>
+                  <Text style={s.shareText}>{emp.share_pct}% do total</Text>
                 </View>
-                <View style={s.tableRight}>
-                  <Text style={s.tableRevenue}>{fmtK(emp.total_revenue)}</Text>
-                  <View style={{ flexDirection: "row", gap: 6 }}>
-                    <Text style={s.tableSales}>{emp.total_sales} vendas</Text>
-                    <Text style={[s.tableTrend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
+              );
+            })}
+          </View>
+
+          {/* Tabela completa */}
+          <View style={s.tableCard}>
+            <Text style={s.tableTitle}>Todos os vendedores</Text>
+            {ranking.map(function(emp) {
+              var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
+              var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
+              return (
+                <View key={emp.id} style={s.tableRow}>
+                  <Text style={s.tablePos}>{emp.position}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.tableName} numberOfLines={1}>{emp.full_name}</Text>
+                    <Text style={s.tableRole}>{emp.job_role || "Vendedor"}</Text>
+                  </View>
+                  <View style={s.tableRight}>
+                    <Text style={s.tableRevenue}>{fmtK(emp.total_revenue)}</Text>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      <Text style={s.tableSales}>{emp.total_sales} vendas</Text>
+                      <Text style={[s.tableTrend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        </>
       )}
     </View>
   );
