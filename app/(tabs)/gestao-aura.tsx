@@ -14,6 +14,7 @@ var TABS = ["Painel", "Clientes", "Receita", "Operacoes", "Crescimento"];
 export default function GestaoAuraScreen() {
   var router = useRouter();
   var { isStaff, isDemo } = useAuthStore();
+  var [tab, setTab] = useState(0);
 
   if (!isStaff && !isDemo) {
     return (
@@ -40,8 +41,6 @@ export default function GestaoAuraScreen() {
       </View>
     );
   }
-
-  var [tab, setTab] = useState(0);
 
   return (
     <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
