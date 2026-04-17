@@ -5,6 +5,7 @@ import { useObligations } from "@/hooks/useObligations";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { FiscalHero } from "@/components/screens/contabilidade/FiscalHero";
 import { DasPreviewCard } from "@/components/screens/contabilidade/DasPreviewCard";
+import { UpcomingAlerts } from "@/components/screens/contabilidade/UpcomingAlerts";
 import { ObligationTimeline } from "@/components/screens/contabilidade/ObligationTimeline";
 import { AuraAutoSection } from "@/components/screens/contabilidade/AuraAutoSection";
 import { Guide } from "@/components/screens/contabilidade/Guide";
@@ -55,12 +56,7 @@ export default function ContabilidadeScreen() {
         <View>
           <FiscalHero regimeLabel={regimeLabel} actionable={total} done={done} pending={pending} overdue={overdue} />
           <DasPreviewCard />
-          {timelinePending.length > 0 && (
-            <View style={{ marginBottom: 8 }}>
-              <Text style={s.sectionTitle}>Suas obrigacoes</Text>
-              <ObligationTimeline items={timelinePending} onGuide={openGuide} />
-            </View>
-          )}
+          <UpcomingAlerts obligations={obligations} onGuide={openGuide} />
           {timelineDone.length > 0 && (
             <View style={{ marginBottom: 8 }}>
               <View style={s.sectionHeader}><Text style={s.sectionTitle}>Concluidas</Text><Text style={s.sectionCount}>{timelineDone.length}</Text></View>
