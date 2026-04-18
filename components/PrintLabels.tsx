@@ -5,6 +5,8 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
+import { hexToName } from "@/utils/colorNames";
+import { LabelVariantSelector } from "@/components/LabelVariantSelector";
 import type { Product } from "@/components/screens/estoque/types";
 
 type Props = {
@@ -17,12 +19,22 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function buildLabelName(name: string, size: string, color: string): string {
+  if (!size && !color) return name;
+  var parts = [name.length > 16 ? name.substring(0, 16).trim() + "..." : name];
+  if (size) parts.push(size);
+  if (color && /^#[0-9A-Fa-f]{6}$/.test(color)) parts.push(hexToName(color));
+  return parts.join(" | ");
+}
+
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   var { company, token } = useAuthStore();
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [search, setSearch] = useState("");
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
+  var [overrideSizes, setOverrideSizes] = useState<Record<string, string>>({});
+  var [overrideColors, setOverrideColors] = useState<Record<string, string>>({});
   var isWeb = Platform.OS === "web";
 
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
@@ -75,6 +87,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   var totalLabels = selectedIds.reduce(function(sum, id) { return sum + getQty(id); }, 0);
 
+  function getEffectiveSize(p: Product): string {
+    return overrideSizes[p.id] || (p as any).size || "";
+  }
+  function getEffectiveColor(p: Product): string {
+    return overrideColors[p.id] || (p as any).color || "";
+  }
+
   function handlePrint() {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) {
       toast.error("Selecione pelo menos um produto");
@@ -96,16 +115,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
     var storeHeader = showStoreName && storeName ? esc(storeName.toUpperCase()) : "";
 
-    // Build cells — repeat each product by its quantity
-    // CRITICAL: <td class="cell"> stays as table-cell (NO display:flex on td).
-    //           Flex layout goes on inner <div class="bc-inner"> or <div class="qr-inner">.
-    //           This preserves the 3-column table layout.
     var cells: string[] = [];
     var labelIdx = 0;
     selected.forEach(function(p) {
       var qty = getQty(p.id);
       var code = esc(p.barcode || p.code);
-      var name = esc(p.name);
+      var effSize = getEffectiveSize(p);
+      var effColor = getEffectiveColor(p);
+      var labelName = esc(buildLabelName(p.name, effSize, effColor));
       var price = "R$ " + p.price.toFixed(2).replace(".", ",");
 
       for (var q = 0; q < qty; q++) {
@@ -116,7 +133,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
               '<img src="' + qrUrl + '" class="qr">' +
               '<div class="info">' +
                 (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
-                '<div class="name">' + name + '</div>' +
+                '<div class="name">' + labelName + '</div>' +
                 '<div class="price">' + price + '</div>' +
               '</div>' +
             '</div></td>'
@@ -126,7 +143,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           cells.push(
             '<td class="cell"><div class="bc-inner">' +
               storeLine +
-              '<div class="name">' + name + '</div>' +
+              '<div class="name">' + labelName + '</div>' +
               '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
               '<div class="price">' + price + '</div>' +
             '</div></td>'
@@ -155,26 +172,21 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     html += '@page{margin:0;size:99mm 21mm}';
     html += '*{margin:0;padding:0;box-sizing:border-box}';
     html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
-    // TABLE: 99mm = 3 x 33mm. table-layout:fixed forces equal columns.
     html += 'table{border-collapse:collapse;width:99mm;table-layout:fixed}';
     html += 'tr{height:21mm;page-break-inside:avoid}';
-    // CELL: plain td, NO display override — must remain display:table-cell for 3-col layout
     html += '.cell{width:33mm;height:21mm;overflow:hidden;vertical-align:top;padding:0}';
-    // BARCODE inner div — flex column, full height of cell
     html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;width:33mm;gap:0.3mm}';
     html += '.bc-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-    html += '.bc-inner .name{font-size:6pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000}';
+    html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
     html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:31mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
     html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
     html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
-    // QR inner div — flex row
     html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:21mm;width:33mm}';
     html += '.qr-inner .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
     html += '.qr-inner .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
     html += '.qr-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-    html += '.qr-inner .name{font-size:6pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
+    html += '.qr-inner .name{font-size:5.5pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
     html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
-    // Preview bar (hidden on print)
     html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
     html += '.preview-bar span{color:#a78bfa;font-size:12px}';
     html += '.preview-bar b{color:#e2e8f0;font-size:13px}';
@@ -217,6 +229,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   }
 
   var allSelected = filtered.length > 0 && filtered.every(function(p) { return selectedIds.includes(p.id); });
+
+  function hasVariantInfo(p: Product): boolean {
+    return !!((p as any).color || (p as any).size);
+  }
 
   return (
     <View style={s.container}>
@@ -265,6 +281,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         {filtered.map(function(p) {
           var sel = selectedIds.includes(p.id);
           var qty = getQty(p.id);
+          var effSize = getEffectiveSize(p);
+          var effColor = getEffectiveColor(p);
+          var labelPreview = buildLabelName(p.name, effSize, effColor);
+          var showVariant = hasVariantInfo(p);
           return (
             <View key={p.id} style={[s.item, sel && s.itemSelected]}>
               <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
@@ -272,8 +292,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                   {sel && <Icon name="check" size={10} color="#fff" />}
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
-                  <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
+                  <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                    <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
+                    {effColor && /^#/.test(effColor) && <View style={[s.colorDot, { backgroundColor: effColor }]} />}
+                    {effSize ? <Text style={s.sizeBadge}>{effSize}</Text> : null}
+                  </View>
                 </View>
                 <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
               </Pressable>
@@ -295,6 +319,16 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                   </Pressable>
                   <Text style={s.qtyLabel}>etiq.</Text>
                 </View>
+              )}
+              {sel && showVariant && (
+                <LabelVariantSelector
+                  currentSize={(p as any).size || ""}
+                  currentColor={(p as any).color || ""}
+                  overrideSize={overrideSizes[p.id] || ""}
+                  overrideColor={overrideColors[p.id] || ""}
+                  onChangeSize={function(v) { setOverrideSizes(function(prev) { return { ...prev, [p.id]: v }; }); }}
+                  onChangeColor={function(v) { setOverrideColors(function(prev) { return { ...prev, [p.id]: v }; }); }}
+                />
               )}
             </View>
           );
@@ -339,9 +373,11 @@ var s = StyleSheet.create({
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   checkboxSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
-  itemCode: { fontSize: 10, color: Colors.ink3, marginTop: 1, fontFamily: "monospace" as any },
+  itemCode: { fontSize: 10, color: Colors.ink3, fontFamily: "monospace" as any },
   itemPrice: { fontSize: 13, color: Colors.green, fontWeight: "700", flexShrink: 0 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
+  colorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
+  sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingBottom: 8, paddingLeft: 40 },
   qtyBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
   qtyBtnText: { fontSize: 16, color: Colors.violet3, fontWeight: "700" },
