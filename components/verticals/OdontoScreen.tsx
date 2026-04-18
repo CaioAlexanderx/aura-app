@@ -6,16 +6,14 @@ import { BillingDashboard } from '@/components/verticals/odonto/BillingDashboard
 import { RepasseDentista } from '@/components/verticals/odonto/RepasseDentista';
 import { AutomationConfig } from '@/components/verticals/odonto/AutomationConfig';
 import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
-import {
-  AgendaTab, PacientesTab, OdontogramaTab, OrcamentosTab,
-  ProntuarioTab, ConveniosTab, CheckinTab, EsperaTab,
-} from '@/components/verticals/odonto/OdontoTabWrappers';
+import { AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab } from '@/components/verticals/odonto/OdontoClinicTabs';
+import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab } from '@/components/verticals/odonto/OdontoAdminTabs';
 import type { VerticalConfig } from '@/components/verticals/VerticalShell';
 
 // ============================================================
 // OdontoScreen — Orchestrator for the Odontologia vertical
 // ALL 13 tabs wired to real API-connected components
-// No more empty states — every tab renders live data
+// Tab wrappers split into OdontoClinicTabs + OdontoAdminTabs
 // ============================================================
 
 const CONFIG: VerticalConfig = {
@@ -32,7 +30,6 @@ const TABS = [
   'Automacoes', 'Convenios', 'Check-in', 'Espera',
 ];
 
-// Tab → Component mapping (all connected to API)
 const TAB_COMPONENTS: Record<string, React.FC> = {
   Dashboard:   OdontoDashboard,
   Agenda:      AgendaTab,
