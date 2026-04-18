@@ -8,6 +8,8 @@ import { Payslip } from "@/components/screens/folha/Payslip";
 import { PayrollSummary } from "@/components/screens/folha/PayrollSummary";
 import { PayrollHistory } from "@/components/screens/folha/PayrollHistory";
 import { SalesRanking } from "@/components/screens/folha/SalesRanking";
+import { TabMetas } from "@/components/screens/folha/TabMetas";
+import { TabComissoes } from "@/components/screens/folha/TabComissoes";
 import { TABS, fmt, FGTS_RATE } from "@/components/screens/folha/types";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -19,7 +21,6 @@ const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.
 type FormData = { name: string; role: string; salary: string; admDate: string; cpf: string; phone: string; email: string };
 const emptyForm: FormData = { name: "", role: "", salary: "", admDate: "", cpf: "", phone: "", email: "" };
 
-// ── Masks ───────────────────────────────────────────────
 function maskCPF(v: string): string {
   const d = v.replace(/\D/g, "").slice(0, 11);
   if (d.length <= 3) return d;
@@ -223,6 +224,8 @@ export default function FolhaScreen() {
       {tab === 1 && <PayrollSummary employees={employees} totals={totals} totalBruto={totalBruto} />}
       {tab === 2 && <PayrollHistory />}
       {tab === 3 && <SalesRanking />}
+      {tab === 4 && <TabMetas />}
+      {tab === 5 && <TabComissoes />}
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
