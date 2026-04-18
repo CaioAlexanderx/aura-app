@@ -29,16 +29,40 @@ function variantLabel(v: any): string {
   return parts.join(" \u00b7 ") || v.sku_suffix || "Variante";
 }
 
+// Recognized attribute names for size and color
+// BUGFIX: Eryca uses "Variacao" for sizes (P, G, U) — not "Tamanho"
+var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "variacao", "variação", "medida", "numero", "num"]);
+var COLOR_ATTRS = new Set(["cor", "color", "colour"]);
+
 // Extracts size and color from variant attributes
 function variantSizeColor(v: any): { size: string; color: string } {
   var size = ""; var color = "";
   for (var a of (v.attributes || [])) {
     var val = String(a.value || "").trim();
+    if (!val) continue;
     var attr = (a.attribute || a.attribute_name || "").toLowerCase();
-    if (attr === "tamanho" || attr === "size") size = val;
-    else if (attr === "cor" || attr === "color" || /^#[0-9a-fA-F]{6}$/.test(val)) color = val;
+    if (SIZE_ATTRS.has(attr)) size = val;
+    else if (COLOR_ATTRS.has(attr) || /^#[0-9a-fA-F]{6}$/.test(val)) color = val;
+    else if (!size) size = val; // unknown attr -> fallback to size (more useful on label)
   }
   return { size: size, color: color };
+}
+
+// Map common PT-BR color names to hex for the visual dot
+var COLOR_NAME_TO_HEX: Record<string, string> = {
+  preto: "#000000", branco: "#ffffff", vermelho: "#ef4444", azul: "#3b82f6",
+  verde: "#22c55e", amarelo: "#eab308", rosa: "#ec4899", roxo: "#8b5cf6",
+  laranja: "#f97316", marrom: "#92400e", bege: "#d4b896", cinza: "#6b7280",
+  prata: "#c0c0c0", dourado: "#d4a017", nude: "#e8c4a0", caramelo: "#c68e4e",
+  bordô: "#800020", vinho: "#722f37", "azul escuro": "#1e3a5f", "verde agua": "#7fffd4",
+};
+
+function colorNameToHex(name: string): string | null {
+  if (/^#[0-9a-fA-F]{6}$/.test(name)) return name;
+  // Handle "bordô (#871912)" pattern
+  var hexMatch = name.match(/#[0-9a-fA-F]{6}/);
+  if (hexMatch) return hexMatch[0];
+  return COLOR_NAME_TO_HEX[name.toLowerCase().trim()] || null;
 }
 
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
@@ -48,7 +72,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
-  // Track which variants are selected per product: { productId: Set<variantId> }
   var [selectedVariants, setSelectedVariants] = useState<Record<string, Set<string>>>({});
   var isWeb = Platform.OS === "web";
 
@@ -79,7 +102,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     companiesApi.variants(company.id, productId).then(function(res) {
       var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
       setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
-      // Auto-select all variants and set qty from stock
       if (active.length > 0) {
         var varIds = new Set(active.map(function(v: any) { return v.id; }));
         setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
@@ -98,7 +120,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function toggleSelect(id: string) {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter(function(i) { return i !== id; }));
-      // Clear variant selections
       setSelectedVariants(function(prev) { var n = { ...prev }; delete n[id]; return n; });
     } else {
       onSelectionChange([...selectedIds, id]);
@@ -145,17 +166,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     }
   }
 
-  // Calculate total labels including variant sub-items
   var totalLabels = useMemo(function() {
     var total = 0;
     selectedIds.forEach(function(id) {
       var variants = variantCache[id] || [];
       var selVars = selectedVariants[id];
       if (variants.length > 0 && selVars && selVars.size > 0) {
-        // Count from selected variants
         selVars.forEach(function(vid) { total += getQty(id + "__" + vid); });
       } else {
-        // No variants — count from product
         total += getQty(id);
       }
     });
@@ -176,7 +194,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var selVars = selectedVariants[id];
 
       if (variants.length > 0 && selVars && selVars.size > 0) {
-        // Generate one label line per selected variant
         variants.forEach(function(v: any) {
           if (!selVars.has(v.id)) return;
           var sc = variantSizeColor(v);
@@ -188,7 +205,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           });
         });
       } else {
-        // No variants — single label for the product
         items.push({
           name: p.name, price: p.price, barcode: p.barcode || p.code,
           size: p.size || "", color: p.color || "", qty: getQty(id),
@@ -211,6 +227,16 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       }
       toast.success(totalLabels + " etiqueta(s) abertas para impressao");
     } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
+  }
+
+  // Renders a color indicator (dot for hex, text badge for named colors)
+  function renderColorIndicator(colorVal: string) {
+    if (!colorVal) return null;
+    var hex = colorNameToHex(colorVal);
+    if (hex) {
+      return <View style={[s.colorDot, { backgroundColor: hex }]} />;
+    }
+    return <Text style={s.colorBadge}>{colorVal}</Text>;
   }
 
   var allSelected = filtered.length > 0 && filtered.every(function(p) { return selectedIds.includes(p.id); });
@@ -266,7 +292,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           var selVars = selectedVariants[p.id] || new Set();
           var allVarsSelected = hasVariants && variants.every(function(v: any) { return selVars.has(v.id); });
 
-          // For products without variants, show simple row
           if (!hasVariants) {
             var qty = getQty(p.id);
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
@@ -280,7 +305,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                     <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
                       <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
-                      {p.color && /^#/.test(p.color) && <View style={[s.colorDot, { backgroundColor: p.color }]} />}
+                      {renderColorIndicator(p.color)}
                       {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                     </View>
                   </View>
@@ -300,7 +325,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             );
           }
 
-          // Product WITH variants: show parent + expanded variant sub-rows
           return (
             <View key={p.id} style={[s.item, s.itemSelected]}>
               <View style={s.parentRow}>
@@ -336,7 +360,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          {sc.color && /^#/.test(sc.color) && <View style={[s.colorDot, { backgroundColor: sc.color }]} />}
+                          {renderColorIndicator(sc.color)}
                           <Text style={s.variantName} numberOfLines={1}>{label}</Text>
                           {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
                         </View>
@@ -407,6 +431,7 @@ var s = StyleSheet.create({
   itemPrice: { fontSize: 13, color: Colors.green, fontWeight: "700", flexShrink: 0 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
   colorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
+  colorBadge: { fontSize: 9, fontWeight: "600", color: Colors.ink2, backgroundColor: Colors.bg4, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   variantHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
   toggleAllVarsBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
