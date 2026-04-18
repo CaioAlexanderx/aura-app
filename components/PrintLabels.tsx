@@ -16,7 +16,6 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
-// Extracts a display label from variant attributes
 function variantLabel(v: any): string {
   var attrs = v.attributes || [];
   var parts: string[] = [];
@@ -29,12 +28,9 @@ function variantLabel(v: any): string {
   return parts.join(" \u00b7 ") || v.sku_suffix || "Variante";
 }
 
-// Recognized attribute names for size and color
-// BUGFIX: Eryca uses "Variacao" for sizes (P, G, U) — not "Tamanho"
 var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "variacao", "variação", "medida", "numero", "num"]);
 var COLOR_ATTRS = new Set(["cor", "color", "colour"]);
 
-// Extracts size and color from variant attributes
 function variantSizeColor(v: any): { size: string; color: string } {
   var size = ""; var color = "";
   for (var a of (v.attributes || [])) {
@@ -43,12 +39,11 @@ function variantSizeColor(v: any): { size: string; color: string } {
     var attr = (a.attribute || a.attribute_name || "").toLowerCase();
     if (SIZE_ATTRS.has(attr)) size = val;
     else if (COLOR_ATTRS.has(attr) || /^#[0-9a-fA-F]{6}$/.test(val)) color = val;
-    else if (!size) size = val; // unknown attr -> fallback to size (more useful on label)
+    else if (!size) size = val;
   }
   return { size: size, color: color };
 }
 
-// Map common PT-BR color names to hex for the visual dot
 var COLOR_NAME_TO_HEX: Record<string, string> = {
   preto: "#000000", branco: "#ffffff", vermelho: "#ef4444", azul: "#3b82f6",
   verde: "#22c55e", amarelo: "#eab308", rosa: "#ec4899", roxo: "#8b5cf6",
@@ -59,7 +54,6 @@ var COLOR_NAME_TO_HEX: Record<string, string> = {
 
 function colorNameToHex(name: string): string | null {
   if (/^#[0-9a-fA-F]{6}$/.test(name)) return name;
-  // Handle "bordô (#871912)" pattern
   var hexMatch = name.match(/#[0-9a-fA-F]{6}/);
   if (hexMatch) return hexMatch[0];
   return COLOR_NAME_TO_HEX[name.toLowerCase().trim()] || null;
@@ -74,13 +68,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
   var [selectedVariants, setSelectedVariants] = useState<Record<string, Set<string>>>({});
   var isWeb = Platform.OS === "web";
-
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
 
   var productsWithCode = useMemo(
-    function() { return products.filter(function(p) { return p.barcode || p.code; }); },
-    [products]
-  );
+    function() { return products.filter(function(p) { return p.barcode || p.code; }); }, [products]);
 
   var filtered = useMemo(function() {
     var q = search.toLowerCase().trim();
@@ -91,9 +82,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   }, [productsWithCode, search]);
 
   function getQty(key: string) { return quantities[key] || 1; }
-  function setQty(key: string, n: number) {
-    setQuantities(function(prev) { return { ...prev, [key]: Math.max(1, Math.min(999, n)) }; });
-  }
+  function setQty(key: string, n: number) { setQuantities(function(prev) { return { ...prev, [key]: Math.max(1, Math.min(999, n)) }; }); }
 
   function fetchVariantsIfNeeded(productId: string) {
     if (variantCache[productId] || !company?.id) return;
@@ -106,15 +95,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         var varIds = new Set(active.map(function(v: any) { return v.id; }));
         setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
         var newQtys: Record<string, number> = {};
-        active.forEach(function(v: any) {
-          var stock = parseInt(v.stock_qty) || 1;
-          newQtys[productId + "__" + v.id] = Math.max(1, stock);
-        });
+        active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = Math.max(1, stock); });
         setQuantities(function(prev) { return { ...prev, ...newQtys }; });
       }
-    }).catch(function() {
-      setVariantCache(function(prev) { return { ...prev, [productId]: [] }; });
-    });
+    }).catch(function() { setVariantCache(function(prev) { return { ...prev, [productId]: [] }; }); });
   }
 
   function toggleSelect(id: string) {
@@ -124,18 +108,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     } else {
       onSelectionChange([...selectedIds, id]);
       fetchVariantsIfNeeded(id);
-      if (!quantities[id]) {
-        var p = products.find(function(pr) { return pr.id === id; });
-        if (p && p.stock > 1) setQty(id, p.stock);
-      }
+      if (!quantities[id]) { var p = products.find(function(pr) { return pr.id === id; }); if (p && p.stock > 1) setQty(id, p.stock); }
     }
   }
 
   function toggleVariant(productId: string, variantId: string) {
     setSelectedVariants(function(prev) {
       var current = new Set(prev[productId] || []);
-      if (current.has(variantId)) current.delete(variantId);
-      else current.add(variantId);
+      if (current.has(variantId)) current.delete(variantId); else current.add(variantId);
       return { ...prev, [productId]: current };
     });
   }
@@ -144,98 +124,61 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var variants = variantCache[productId] || [];
     var current = selectedVariants[productId] || new Set();
     var allSelected = variants.every(function(v: any) { return current.has(v.id); });
-    if (allSelected) {
-      setSelectedVariants(function(prev) { return { ...prev, [productId]: new Set() }; });
-    } else {
-      var all = new Set(variants.map(function(v: any) { return v.id; }));
-      setSelectedVariants(function(prev) { return { ...prev, [productId]: all }; });
-    }
+    if (allSelected) { setSelectedVariants(function(prev) { return { ...prev, [productId]: new Set() }; }); }
+    else { var all = new Set(variants.map(function(v: any) { return v.id; })); setSelectedVariants(function(prev) { return { ...prev, [productId]: all }; }); }
   }
 
   function toggleAll() {
     var ids = filtered.map(function(p) { return p.id; });
-    if (ids.every(function(id) { return selectedIds.includes(id); })) {
-      onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); }));
-    } else {
-      var newIds = Array.from(new Set([...selectedIds, ...ids]));
-      onSelectionChange(newIds);
-      filtered.forEach(function(p) {
-        fetchVariantsIfNeeded(p.id);
-        if (!quantities[p.id] && p.stock > 1) setQty(p.id, p.stock);
-      });
-    }
+    if (ids.every(function(id) { return selectedIds.includes(id); })) { onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); })); }
+    else { var newIds = Array.from(new Set([...selectedIds, ...ids])); onSelectionChange(newIds); filtered.forEach(function(p) { fetchVariantsIfNeeded(p.id); if (!quantities[p.id] && p.stock > 1) setQty(p.id, p.stock); }); }
   }
 
   var totalLabels = useMemo(function() {
     var total = 0;
     selectedIds.forEach(function(id) {
-      var variants = variantCache[id] || [];
-      var selVars = selectedVariants[id];
-      if (variants.length > 0 && selVars && selVars.size > 0) {
-        selVars.forEach(function(vid) { total += getQty(id + "__" + vid); });
-      } else {
-        total += getQty(id);
-      }
+      var variants = variantCache[id] || []; var selVars = selectedVariants[id];
+      if (variants.length > 0 && selVars && selVars.size > 0) { selVars.forEach(function(vid) { total += getQty(id + "__" + vid); }); }
+      else { total += getQty(id); }
     });
     return total;
   }, [selectedIds, quantities, selectedVariants, variantCache]);
 
   function handlePrint() {
-    if (!isWeb || !company?.id || !token || selectedIds.length === 0) {
-      toast.error("Selecione pelo menos um produto"); return;
-    }
+    if (!isWeb || !company?.id || !token || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
     var items: LabelItem[] = [];
-
     selectedIds.forEach(function(id) {
       var p = products.find(function(pr) { return pr.id === id; });
       if (!p || !(p.barcode || p.code)) return;
-
-      var variants = variantCache[id] || [];
-      var selVars = selectedVariants[id];
-
+      var variants = variantCache[id] || []; var selVars = selectedVariants[id];
       if (variants.length > 0 && selVars && selVars.size > 0) {
         variants.forEach(function(v: any) {
           if (!selVars.has(v.id)) return;
           var sc = variantSizeColor(v);
           var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
           var effectiveBarcode = v.barcode || p.barcode || p.code;
-          items.push({
-            name: p.name, price: effectivePrice, barcode: effectiveBarcode,
-            size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id),
-          });
+          // FIX: fallback to parent color/size when variant has no attributes
+          items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size || p.size || "", color: sc.color || p.color || "", qty: getQty(id + "__" + v.id) });
         });
       } else {
-        items.push({
-          name: p.name, price: p.price, barcode: p.barcode || p.code,
-          size: p.size || "", color: p.color || "", qty: getQty(id),
-        });
+        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
       }
     });
-
     if (items.length === 0) { toast.error("Nenhum item selecionado"); return; }
-
     var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
-
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
-      if (!w) {
-        var w2 = window.open("", "_blank");
-        if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado \u2014 permita popups para app.getaura.com.br"); return; }
-      }
+      if (!w) { var w2 = window.open("", "_blank"); if (w2) { w2.document.write(html); w2.document.close(); } else { toast.error("Popup bloqueado \u2014 permita popups para app.getaura.com.br"); return; } }
       toast.success(totalLabels + " etiqueta(s) abertas para impressao");
     } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
   }
 
-  // Renders a color indicator (dot for hex, text badge for named colors)
   function renderColorIndicator(colorVal: string) {
     if (!colorVal) return null;
     var hex = colorNameToHex(colorVal);
-    if (hex) {
-      return <View style={[s.colorDot, { backgroundColor: hex }]} />;
-    }
+    if (hex) return <View style={[s.colorDot, { backgroundColor: hex }]} />;
     return <Text style={s.colorBadge}>{colorVal}</Text>;
   }
 
@@ -249,20 +192,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           <Text style={s.hint}>Selecione os produtos. Produtos com variantes expandem automaticamente para selecao individual.</Text>
         </View>
         <View style={s.modeToggle}>
-          <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}>
-            <Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>Cod. barras</Text>
-          </Pressable>
-          <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}>
-            <Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text>
-          </Pressable>
+          <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>Cod. barras</Text></Pressable>
+          <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}><Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text></Pressable>
         </View>
       </View>
 
       {storeName ? (
         <Pressable onPress={function() { setShowStoreName(!showStoreName); }} style={s.storeToggle}>
-          <View style={[s.checkbox, showStoreName && s.checkboxSelected]}>
-            {showStoreName && <Icon name="check" size={10} color="#fff" />}
-          </View>
+          <View style={[s.checkbox, showStoreName && s.checkboxSelected]}>{showStoreName && <Icon name="check" size={10} color="#fff" />}</View>
           <Text style={s.storeToggleText}>Incluir nome da loja no topo: <Text style={s.storeTogglePreview}>{storeName.toUpperCase()}</Text></Text>
         </Pressable>
       ) : null}
@@ -270,21 +207,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       <View style={s.toolbar}>
         <View style={s.searchBox}>
           <Icon name="search" size={14} color={Colors.ink3} />
-          <TextInput style={s.searchInput} placeholder="Buscar produto..." placeholderTextColor={Colors.ink3}
-            value={search} onChangeText={setSearch} />
+          <TextInput style={s.searchInput} placeholder="Buscar produto..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
           {search.length > 0 && <Pressable onPress={function() { setSearch(""); }}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
         </View>
-        <Pressable onPress={toggleAll} style={s.selectAllBtn}>
-          <Text style={s.selectAllText}>{allSelected ? "Desmarcar" : "Selecionar"} todos ({filtered.length})</Text>
-        </Pressable>
+        <Pressable onPress={toggleAll} style={s.selectAllBtn}><Text style={s.selectAllText}>{allSelected ? "Desmarcar" : "Selecionar"} todos ({filtered.length})</Text></Pressable>
       </View>
 
       <ScrollView style={s.list} nestedScrollEnabled>
-        {filtered.length === 0 && (
-          <Text style={s.emptyText}>
-            {productsWithCode.length === 0 ? "Nenhum produto com codigo cadastrado" : "Nenhum produto encontrado"}
-          </Text>
-        )}
+        {filtered.length === 0 && (<Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com codigo cadastrado" : "Nenhum produto encontrado"}</Text>)}
         {filtered.map(function(p) {
           var sel = selectedIds.includes(p.id);
           var variants = variantCache[p.id] || [];
@@ -298,9 +228,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             return (
               <View key={p.id} style={[s.item, sel && s.itemSelected]}>
                 <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
-                  <View style={[s.checkbox, sel && s.checkboxSelected]}>
-                    {sel && <Icon name="check" size={10} color="#fff" />}
-                  </View>
+                  <View style={[s.checkbox, sel && s.checkboxSelected]}>{sel && <Icon name="check" size={10} color="#fff" />}</View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
@@ -314,9 +242,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 {sel && (
                   <View style={s.qtyRow}>
                     <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
-                    <TextInput style={s.qtyInput} value={String(qty)}
-                      onChangeText={function(v) { var n = parseInt(v); if (!isNaN(n)) setQty(p.id, n); }}
-                      keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                    <TextInput style={s.qtyInput} value={String(qty)} onChangeText={function(v) { var n = parseInt(v); if (!isNaN(n)) setQty(p.id, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
                     <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
                     <Text style={s.qtyLabel}>etiq.</Text>
                   </View>
@@ -325,16 +251,19 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             );
           }
 
+          // Product WITH variants: parent row shows color + size from product
           return (
             <View key={p.id} style={[s.item, s.itemSelected]}>
               <View style={s.parentRow}>
                 <Pressable onPress={function() { toggleSelect(p.id); }} style={{ marginRight: 8 }}>
-                  <View style={[s.checkbox, s.checkboxSelected]}>
-                    <Icon name="check" size={10} color="#fff" />
-                  </View>
+                  <View style={[s.checkbox, s.checkboxSelected]}><Icon name="check" size={10} color="#fff" /></View>
                 </Pressable>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    {renderColorIndicator(p.color)}
+                    <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
+                    {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
+                  </View>
                   <Text style={s.variantHint}>{variants.length} variante{variants.length > 1 ? "s" : ""} | {selVars.size} selecionada{selVars.size !== 1 ? "s" : ""}</Text>
                 </View>
                 <Pressable onPress={function() { toggleAllVariants(p.id); }} style={s.toggleAllVarsBtn}>
@@ -355,14 +284,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 return (
                   <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected]}>
                     <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft}>
-                      <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>
-                        {vsel && <Icon name="check" size={8} color="#fff" />}
-                      </View>
+                      <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          {renderColorIndicator(sc.color)}
+                          {renderColorIndicator(sc.color || p.color)}
                           <Text style={s.variantName} numberOfLines={1}>{label}</Text>
-                          {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
+                          {(sc.size || p.size) ? <Text style={s.sizeBadge}>{sc.size || p.size}</Text> : null}
                         </View>
                         <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
                       </View>
@@ -371,9 +298,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                     {vsel && (
                       <View style={s.qtyRowVariant}>
                         <Pressable onPress={function() { setQty(vkey, vqty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
-                        <TextInput style={s.qtyInputSmall} value={String(vqty)}
-                          onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(vkey, n); }}
-                          keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                        <TextInput style={s.qtyInputSmall} value={String(vqty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(vkey, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
                         <Pressable onPress={function() { setQty(vkey, vqty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
                         <Text style={s.qtyLabel}>etiq.</Text>
                       </View>
@@ -390,7 +315,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         <Icon name="file_text" size={16} color="#fff" />
         <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
       </Pressable>
-
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
         <Text style={s.setupText}>Chrome: Ctrl+P, papel 99x21mm, Margens: Nenhuma, Escala: 100%. A quantidade padrao e baseada no estoque de cada variante.</Text>
