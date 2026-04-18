@@ -11,6 +11,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { GlobalOverlays } from "@/components/GlobalOverlays";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
@@ -262,6 +263,7 @@ export default function TabsLayout() {
         <PageTransition><Slot /></PageTransition>
       </div>
       <MBar />
+      <GlobalOverlays />
     </div>
   );
 
@@ -272,6 +274,7 @@ export default function TabsLayout() {
         <ToastContainer />
         <PageTransition><Slot /></PageTransition>
       </div>
+      <GlobalOverlays />
     </div>
   );
 
@@ -283,6 +286,7 @@ export default function TabsLayout() {
           <PageTransition><Slot /></PageTransition>
         </View>
         <MBar />
+        <GlobalOverlays />
       </View>
     </ErrorBoundary>
   );
