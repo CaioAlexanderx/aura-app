@@ -25,7 +25,7 @@ export type PayslipType = "mensal" | "ferias" | "decimo_terceiro";
 export type HistoryItem = { id: string; month: string; total: number; liquid: number; paidAt: string; employees: number };
 export type RankingItem = { empId: string; name: string; role: string; sales: number; revenue: number; avgTicket: number; topProduct: string; trend: "up" | "down" };
 
-export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Ranking"];
+export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Ranking", "Metas", "Comissoes"];
 
 export const STATUS_MAP: Record<string, { l: string; c: string }> = {
   active: { l: "Ativo", c: Colors.green },
