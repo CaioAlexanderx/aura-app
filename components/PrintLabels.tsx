@@ -6,7 +6,6 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
-import { LabelVariantSelector } from "@/components/LabelVariantSelector";
 import { buildLabelHtml, buildLabelName } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { LabelItem } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
@@ -17,15 +16,40 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
+// Extracts a display label from variant attributes
+function variantLabel(v: any): string {
+  var attrs = v.attributes || [];
+  var parts: string[] = [];
+  for (var a of attrs) {
+    var val = String(a.value || "").trim();
+    if (!val) continue;
+    if (/^#[0-9a-fA-F]{6}$/.test(val)) parts.push(hexToName(val));
+    else parts.push(val);
+  }
+  return parts.join(" \u00b7 ") || v.sku_suffix || "Variante";
+}
+
+// Extracts size and color from variant attributes
+function variantSizeColor(v: any): { size: string; color: string } {
+  var size = ""; var color = "";
+  for (var a of (v.attributes || [])) {
+    var val = String(a.value || "").trim();
+    var attr = (a.attribute || a.attribute_name || "").toLowerCase();
+    if (attr === "tamanho" || attr === "size") size = val;
+    else if (attr === "cor" || attr === "color" || /^#[0-9a-fA-F]{6}$/.test(val)) color = val;
+  }
+  return { size: size, color: color };
+}
+
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   var { company, token } = useAuthStore();
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [search, setSearch] = useState("");
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
-  var [overrideSizes, setOverrideSizes] = useState<Record<string, string>>({});
-  var [overrideColors, setOverrideColors] = useState<Record<string, string>>({});
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
+  // Track which variants are selected per product: { productId: Set<variantId> }
+  var [selectedVariants, setSelectedVariants] = useState<Record<string, Set<string>>>({});
   var isWeb = Platform.OS === "web";
 
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
@@ -43,9 +67,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     });
   }, [productsWithCode, search]);
 
-  function getQty(id: string) { return quantities[id] || 1; }
-  function setQty(id: string, n: number) {
-    setQuantities(function(prev) { return { ...prev, [id]: Math.max(1, Math.min(999, n)) }; });
+  function getQty(key: string) { return quantities[key] || 1; }
+  function setQty(key: string, n: number) {
+    setQuantities(function(prev) { return { ...prev, [key]: Math.max(1, Math.min(999, n)) }; });
   }
 
   function fetchVariantsIfNeeded(productId: string) {
@@ -53,35 +77,29 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var p = products.find(function(pr) { return pr.id === productId; });
     if (!p || !p.has_variants) return;
     companiesApi.variants(company.id, productId).then(function(res) {
-      setVariantCache(function(prev) { return { ...prev, [productId]: (res.variants || []).filter(function(v: any) { return v.is_active !== false; }) }; });
+      var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
+      setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
+      // Auto-select all variants and set qty from stock
+      if (active.length > 0) {
+        var varIds = new Set(active.map(function(v: any) { return v.id; }));
+        setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
+        var newQtys: Record<string, number> = {};
+        active.forEach(function(v: any) {
+          var stock = parseInt(v.stock_qty) || 1;
+          newQtys[productId + "__" + v.id] = Math.max(1, stock);
+        });
+        setQuantities(function(prev) { return { ...prev, ...newQtys }; });
+      }
     }).catch(function() {
       setVariantCache(function(prev) { return { ...prev, [productId]: [] }; });
     });
   }
 
-  function getAvailableOptions(p: Product) {
-    var sizes = new Set<string>();
-    var colors = new Set<string>();
-    // Direct product fields
-    if (p.size) sizes.add(p.size);
-    if (p.color && /^#[0-9A-Fa-f]{6}$/.test(p.color)) colors.add(p.color);
-    // From variants — BUGFIX: API returns "attribute" key, not "attribute_name"
-    var variants = variantCache[p.id] || [];
-    variants.forEach(function(v: any) {
-      (v.attributes || []).forEach(function(a: any) {
-        var val = String(a.value || "").trim();
-        if (!val) return;
-        var attrLower = (a.attribute || a.attribute_name || "").toLowerCase();
-        if (attrLower === "tamanho" || attrLower === "size") sizes.add(val);
-        else if (attrLower === "cor" || attrLower === "color" || /^#[0-9A-Fa-f]{6}$/.test(val)) colors.add(val);
-      });
-    });
-    return { sizes: Array.from(sizes), colors: Array.from(colors) };
-  }
-
   function toggleSelect(id: string) {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter(function(i) { return i !== id; }));
+      // Clear variant selections
+      setSelectedVariants(function(prev) { var n = { ...prev }; delete n[id]; return n; });
     } else {
       onSelectionChange([...selectedIds, id]);
       fetchVariantsIfNeeded(id);
@@ -92,6 +110,27 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     }
   }
 
+  function toggleVariant(productId: string, variantId: string) {
+    setSelectedVariants(function(prev) {
+      var current = new Set(prev[productId] || []);
+      if (current.has(variantId)) current.delete(variantId);
+      else current.add(variantId);
+      return { ...prev, [productId]: current };
+    });
+  }
+
+  function toggleAllVariants(productId: string) {
+    var variants = variantCache[productId] || [];
+    var current = selectedVariants[productId] || new Set();
+    var allSelected = variants.every(function(v: any) { return current.has(v.id); });
+    if (allSelected) {
+      setSelectedVariants(function(prev) { return { ...prev, [productId]: new Set() }; });
+    } else {
+      var all = new Set(variants.map(function(v: any) { return v.id; }));
+      setSelectedVariants(function(prev) { return { ...prev, [productId]: all }; });
+    }
+  }
+
   function toggleAll() {
     var ids = filtered.map(function(p) { return p.id; });
     if (ids.every(function(id) { return selectedIds.includes(id); })) {
@@ -99,30 +138,65 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     } else {
       var newIds = Array.from(new Set([...selectedIds, ...ids]));
       onSelectionChange(newIds);
-      var newQtys: Record<string, number> = { ...quantities };
       filtered.forEach(function(p) {
-        if (!newQtys[p.id] && p.stock > 1) newQtys[p.id] = p.stock;
         fetchVariantsIfNeeded(p.id);
+        if (!quantities[p.id] && p.stock > 1) setQty(p.id, p.stock);
       });
-      setQuantities(newQtys);
     }
   }
 
-  var totalLabels = selectedIds.reduce(function(sum, id) { return sum + getQty(id); }, 0);
-
-  function getEffectiveSize(p: Product): string { return overrideSizes[p.id] || p.size || ""; }
-  function getEffectiveColor(p: Product): string { return overrideColors[p.id] || p.color || ""; }
+  // Calculate total labels including variant sub-items
+  var totalLabels = useMemo(function() {
+    var total = 0;
+    selectedIds.forEach(function(id) {
+      var variants = variantCache[id] || [];
+      var selVars = selectedVariants[id];
+      if (variants.length > 0 && selVars && selVars.size > 0) {
+        // Count from selected variants
+        selVars.forEach(function(vid) { total += getQty(id + "__" + vid); });
+      } else {
+        // No variants — count from product
+        total += getQty(id);
+      }
+    });
+    return total;
+  }, [selectedIds, quantities, selectedVariants, variantCache]);
 
   function handlePrint() {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) {
       toast.error("Selecione pelo menos um produto"); return;
     }
-    var selected = products.filter(function(p) { return selectedIds.includes(p.id) && (p.barcode || p.code); });
-    if (selected.length === 0) { toast.error("Produtos sem codigo"); return; }
+    var items: LabelItem[] = [];
 
-    var items: LabelItem[] = selected.map(function(p) {
-      return { name: p.name, price: p.price, barcode: p.barcode || p.code, size: getEffectiveSize(p), color: getEffectiveColor(p), qty: getQty(p.id) };
+    selectedIds.forEach(function(id) {
+      var p = products.find(function(pr) { return pr.id === id; });
+      if (!p || !(p.barcode || p.code)) return;
+
+      var variants = variantCache[id] || [];
+      var selVars = selectedVariants[id];
+
+      if (variants.length > 0 && selVars && selVars.size > 0) {
+        // Generate one label line per selected variant
+        variants.forEach(function(v: any) {
+          if (!selVars.has(v.id)) return;
+          var sc = variantSizeColor(v);
+          var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
+          var effectiveBarcode = v.barcode || p.barcode || p.code;
+          items.push({
+            name: p.name, price: effectivePrice, barcode: effectiveBarcode,
+            size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id),
+          });
+        });
+      } else {
+        // No variants — single label for the product
+        items.push({
+          name: p.name, price: p.price, barcode: p.barcode || p.code,
+          size: p.size || "", color: p.color || "", qty: getQty(id),
+        });
+      }
     });
+
+    if (items.length === 0) { toast.error("Nenhum item selecionado"); return; }
 
     var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
 
@@ -146,7 +220,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       <View style={s.header}>
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Etiquetas 33x21mm (3 colunas)</Text>
-          <Text style={s.hint}>Selecione os produtos e ajuste a quantidade de etiquetas por item.</Text>
+          <Text style={s.hint}>Selecione os produtos. Produtos com variantes expandem automaticamente para selecao individual.</Text>
         </View>
         <View style={s.modeToggle}>
           <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}>
@@ -179,7 +253,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         </Pressable>
       </View>
 
-      <View style={s.list}>
+      <ScrollView style={s.list} nestedScrollEnabled>
         {filtered.length === 0 && (
           <Text style={s.emptyText}>
             {productsWithCode.length === 0 ? "Nenhum produto com codigo cadastrado" : "Nenhum produto encontrado"}
@@ -187,61 +261,115 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         )}
         {filtered.map(function(p) {
           var sel = selectedIds.includes(p.id);
-          var qty = getQty(p.id);
-          var effSize = getEffectiveSize(p);
-          var effColor = getEffectiveColor(p);
-          var labelPreview = buildLabelName(p.name, effSize, effColor);
-          var opts = getAvailableOptions(p);
-          var showVariant = sel && (opts.sizes.length > 0 || opts.colors.length > 0);
-          return (
-            <View key={p.id} style={[s.item, sel && s.itemSelected]}>
-              <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
-                <View style={[s.checkbox, sel && s.checkboxSelected]}>
-                  {sel && <Icon name="check" size={10} color="#fff" />}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                    <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
-                    {effColor && /^#/.test(effColor) && <View style={[s.colorDot, { backgroundColor: effColor }]} />}
-                    {effSize ? <Text style={s.sizeBadge}>{effSize}</Text> : null}
+          var variants = variantCache[p.id] || [];
+          var hasVariants = sel && variants.length > 0;
+          var selVars = selectedVariants[p.id] || new Set();
+          var allVarsSelected = hasVariants && variants.every(function(v: any) { return selVars.has(v.id); });
+
+          // For products without variants, show simple row
+          if (!hasVariants) {
+            var qty = getQty(p.id);
+            var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
+            return (
+              <View key={p.id} style={[s.item, sel && s.itemSelected]}>
+                <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
+                  <View style={[s.checkbox, sel && s.checkboxSelected]}>
+                    {sel && <Icon name="check" size={10} color="#fff" />}
                   </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                      <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
+                      {p.color && /^#/.test(p.color) && <View style={[s.colorDot, { backgroundColor: p.color }]} />}
+                      {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
+                    </View>
+                  </View>
+                  <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                </Pressable>
+                {sel && (
+                  <View style={s.qtyRow}>
+                    <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
+                    <TextInput style={s.qtyInput} value={String(qty)}
+                      onChangeText={function(v) { var n = parseInt(v); if (!isNaN(n)) setQty(p.id, n); }}
+                      keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                    <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
+                    <Text style={s.qtyLabel}>etiq.</Text>
+                  </View>
+                )}
+              </View>
+            );
+          }
+
+          // Product WITH variants: show parent + expanded variant sub-rows
+          return (
+            <View key={p.id} style={[s.item, s.itemSelected]}>
+              <View style={s.parentRow}>
+                <Pressable onPress={function() { toggleSelect(p.id); }} style={{ marginRight: 8 }}>
+                  <View style={[s.checkbox, s.checkboxSelected]}>
+                    <Icon name="check" size={10} color="#fff" />
+                  </View>
+                </Pressable>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
+                  <Text style={s.variantHint}>{variants.length} variante{variants.length > 1 ? "s" : ""} | {selVars.size} selecionada{selVars.size !== 1 ? "s" : ""}</Text>
                 </View>
-                <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
-              </Pressable>
-              {sel && (
-                <View style={s.qtyRow}>
-                  <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
-                  <TextInput style={s.qtyInput} value={String(qty)}
-                    onChangeText={function(v) { var n = parseInt(v); if (!isNaN(n)) setQty(p.id, n); }}
-                    keyboardType="number-pad" maxLength={3} selectTextOnFocus />
-                  <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
-                  <Text style={s.qtyLabel}>etiq.</Text>
-                </View>
-              )}
-              {showVariant && (
-                <LabelVariantSelector
-                  availableSizes={opts.sizes}
-                  availableColors={opts.colors}
-                  selectedSize={overrideSizes[p.id] || p.size || ""}
-                  selectedColor={overrideColors[p.id] || p.color || ""}
-                  onChangeSize={function(v) { setOverrideSizes(function(prev) { return { ...prev, [p.id]: v }; }); }}
-                  onChangeColor={function(v) { setOverrideColors(function(prev) { return { ...prev, [p.id]: v }; }); }}
-                />
-              )}
+                <Pressable onPress={function() { toggleAllVariants(p.id); }} style={s.toggleAllVarsBtn}>
+                  <Text style={s.toggleAllVarsText}>{allVarsSelected ? "Nenhuma" : "Todas"}</Text>
+                </Pressable>
+              </View>
+
+              {variants.map(function(v: any) {
+                var vsel = selVars.has(v.id);
+                var vkey = p.id + "__" + v.id;
+                var vqty = getQty(vkey);
+                var label = variantLabel(v);
+                var sc = variantSizeColor(v);
+                var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
+                var vBarcode = v.barcode || p.barcode || p.code;
+                var vStock = parseInt(v.stock_qty) || 0;
+
+                return (
+                  <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected]}>
+                    <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft}>
+                      <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>
+                        {vsel && <Icon name="check" size={8} color="#fff" />}
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          {sc.color && /^#/.test(sc.color) && <View style={[s.colorDot, { backgroundColor: sc.color }]} />}
+                          <Text style={s.variantName} numberOfLines={1}>{label}</Text>
+                          {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
+                        </View>
+                        <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
+                      </View>
+                      <Text style={s.variantPrice}>R$ {effectivePrice.toFixed(2).replace(".", ",")}</Text>
+                    </Pressable>
+                    {vsel && (
+                      <View style={s.qtyRowVariant}>
+                        <Pressable onPress={function() { setQty(vkey, vqty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
+                        <TextInput style={s.qtyInputSmall} value={String(vqty)}
+                          onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(vkey, n); }}
+                          keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                        <Pressable onPress={function() { setQty(vkey, vqty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
+                        <Text style={s.qtyLabel}>etiq.</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           );
         })}
-      </View>
+      </ScrollView>
 
-      <Pressable onPress={handlePrint} style={[s.printBtn, selectedIds.length === 0 && { opacity: 0.5 }]} disabled={selectedIds.length === 0}>
+      <Pressable onPress={handlePrint} style={[s.printBtn, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
         <Icon name="file_text" size={16} color="#fff" />
-        <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s) de {selectedIds.length} produto(s)</Text>
+        <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
       </Pressable>
 
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Chrome: Ctrl+P, papel 99x21mm, Margens: Nenhuma, Escala: 100%. A quantidade padrao e baseada no estoque do produto.</Text>
+        <Text style={s.setupText}>Chrome: Ctrl+P, papel 99x21mm, Margens: Nenhuma, Escala: 100%. A quantidade padrao e baseada no estoque de cada variante.</Text>
       </View>
     </View>
   );
@@ -265,22 +393,37 @@ var s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 13, color: Colors.ink } as any,
   selectAllBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
   selectAllText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
-  list: { gap: 3, backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, maxHeight: 500 },
-  item: { borderRadius: 10, backgroundColor: Colors.bg, overflow: "hidden" },
+  list: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, maxHeight: 520 },
+  item: { borderRadius: 10, backgroundColor: Colors.bg, overflow: "hidden", marginBottom: 3 },
   itemSelected: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   itemLeft: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 10 },
+  parentRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 10 },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   checkboxSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  checkboxSmall: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  checkboxSmallSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
   itemCode: { fontSize: 10, color: Colors.ink3, fontFamily: "monospace" as any },
   itemPrice: { fontSize: 13, color: Colors.green, fontWeight: "700", flexShrink: 0 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
   colorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
+  variantHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  toggleAllVarsBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
+  toggleAllVarsText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
+  variantRow: { marginHorizontal: 8, marginBottom: 3, borderRadius: 8, backgroundColor: Colors.bg, overflow: "hidden", borderLeftWidth: 3, borderLeftColor: "transparent" },
+  variantRowSelected: { borderLeftColor: Colors.violet, backgroundColor: Colors.bg + "cc" },
+  variantLeft: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10 },
+  variantName: { fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  variantMeta: { fontSize: 9, color: Colors.ink3, fontFamily: "monospace" as any, marginTop: 1 },
+  variantPrice: { fontSize: 12, color: Colors.green, fontWeight: "700", flexShrink: 0 },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingBottom: 8, paddingLeft: 40 },
+  qtyRowVariant: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 10, paddingBottom: 6, paddingLeft: 34 },
   qtyBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
-  qtyBtnText: { fontSize: 16, color: Colors.violet3, fontWeight: "700" },
+  qtyBtnSmall: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+  qtyBtnText: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
   qtyInput: { width: 48, height: 28, borderRadius: 7, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border2, textAlign: "center", fontSize: 13, fontWeight: "700", color: Colors.ink, paddingVertical: 0 } as any,
+  qtyInputSmall: { width: 40, height: 24, borderRadius: 6, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border2, textAlign: "center", fontSize: 12, fontWeight: "700", color: Colors.ink, paddingVertical: 0 } as any,
   qtyLabel: { fontSize: 10, color: Colors.ink3, marginLeft: 2 },
   printBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14 },
   printBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
