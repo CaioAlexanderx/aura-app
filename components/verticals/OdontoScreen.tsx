@@ -4,11 +4,14 @@ import { VerticalShell, VerticalRow, VerticalEmpty } from '@/components/vertical
 import { DentalFunnel } from '@/components/verticals/odonto/DentalFunnel';
 import { BillingDashboard } from '@/components/verticals/odonto/BillingDashboard';
 import { RepasseDentista } from '@/components/verticals/odonto/RepasseDentista';
+import { AutomationConfig } from '@/components/verticals/odonto/AutomationConfig';
+import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
 import type { KPI, FlowStep, VerticalConfig } from '@/components/verticals/VerticalShell';
 
 // ============================================================
 // OdontoScreen — Orchestrator for the Odontologia vertical
 // Uses VerticalShell + wires all odonto components
+// ODONTO-1 to ODONTO-4 complete
 // ============================================================
 
 const CONFIG: VerticalConfig = {
@@ -19,10 +22,7 @@ const CONFIG: VerticalConfig = {
   professional: 'Dr. Nome — CRO-SP 00000',
 };
 
-const TABS = ['Agenda', 'Pacientes', 'Funil', 'Odontograma', 'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses', 'Convenios', 'Check-in', 'Espera'];
-
-// Tabs with custom components (rendered directly, not via VerticalShell content)
-const CUSTOM_TABS = ['Funil', 'Cobrancas', 'Repasses'];
+const TABS = ['Dashboard', 'Agenda', 'Pacientes', 'Funil', 'Odontograma', 'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses', 'Automacoes', 'Convenios', 'Check-in', 'Espera'];
 
 const SCREEN_DATA: Record<string, { kpis: KPI[]; flow: { title: string; steps: FlowStep[] }; actionLabel: string; rows: any[]; emptyIcon: string; emptyTitle: string; emptySubtitle: string }> = {
   Agenda: {
@@ -76,9 +76,18 @@ const SCREEN_DATA: Record<string, { kpis: KPI[]; flow: { title: string; steps: F
 };
 
 export default function OdontoScreen() {
-  const [tab, setTab] = useState('Agenda');
+  const [tab, setTab] = useState('Dashboard');
 
   // Custom tabs render their own components directly
+  if (tab === 'Dashboard') {
+    return (
+      <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
+        kpis={[]} flowSteps={[]} flowTitle="">
+        <OdontoDashboard />
+      </VerticalShell>
+    );
+  }
+
   if (tab === 'Funil') {
     return (
       <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
@@ -102,6 +111,15 @@ export default function OdontoScreen() {
       <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
         kpis={[]} flowSteps={[]} flowTitle="">
         <RepasseDentista />
+      </VerticalShell>
+    );
+  }
+
+  if (tab === 'Automacoes') {
+    return (
+      <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
+        kpis={[]} flowSteps={[]} flowTitle="">
+        <AutomationConfig />
       </VerticalShell>
     );
   }
