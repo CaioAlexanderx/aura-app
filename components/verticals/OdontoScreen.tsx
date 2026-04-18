@@ -1,6 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { VerticalShell, VerticalRow, VerticalEmpty } from '@/components/verticals/VerticalShell';
+import { DentalFunnel } from '@/components/verticals/odonto/DentalFunnel';
+import { BillingDashboard } from '@/components/verticals/odonto/BillingDashboard';
+import { RepasseDentista } from '@/components/verticals/odonto/RepasseDentista';
 import type { KPI, FlowStep, VerticalConfig } from '@/components/verticals/VerticalShell';
 
 // ============================================================
@@ -16,7 +19,10 @@ const CONFIG: VerticalConfig = {
   professional: 'Dr. Nome — CRO-SP 00000',
 };
 
-const TABS = ['Agenda', 'Pacientes', 'Odontograma', 'Orcamentos', 'Prontuario', 'Convenios', 'Check-in', 'Espera'];
+const TABS = ['Agenda', 'Pacientes', 'Funil', 'Odontograma', 'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses', 'Convenios', 'Check-in', 'Espera'];
+
+// Tabs with custom components (rendered directly, not via VerticalShell content)
+const CUSTOM_TABS = ['Funil', 'Cobrancas', 'Repasses'];
 
 const SCREEN_DATA: Record<string, { kpis: KPI[]; flow: { title: string; steps: FlowStep[] }; actionLabel: string; rows: any[]; emptyIcon: string; emptyTitle: string; emptySubtitle: string }> = {
   Agenda: {
@@ -71,10 +77,36 @@ const SCREEN_DATA: Record<string, { kpis: KPI[]; flow: { title: string; steps: F
 
 export default function OdontoScreen() {
   const [tab, setTab] = useState('Agenda');
-  const data = SCREEN_DATA[tab] || SCREEN_DATA.Agenda;
 
-  // TODO: Replace with real API data via useEffect + api calls
-  // const { data: agendaData } = useQuery(['dental-agenda'], () => api.get(`/companies/${companyId}/dental/agenda`));
+  // Custom tabs render their own components directly
+  if (tab === 'Funil') {
+    return (
+      <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
+        kpis={[]} flowSteps={[]} flowTitle="">
+        <DentalFunnel />
+      </VerticalShell>
+    );
+  }
+
+  if (tab === 'Cobrancas') {
+    return (
+      <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
+        kpis={[]} flowSteps={[]} flowTitle="">
+        <BillingDashboard />
+      </VerticalShell>
+    );
+  }
+
+  if (tab === 'Repasses') {
+    return (
+      <VerticalShell config={CONFIG} tabs={TABS} activeTab={tab} onTabChange={setTab}
+        kpis={[]} flowSteps={[]} flowTitle="">
+        <RepasseDentista />
+      </VerticalShell>
+    );
+  }
+
+  const data = SCREEN_DATA[tab] || SCREEN_DATA.Agenda;
 
   return (
     <VerticalShell
