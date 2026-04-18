@@ -51,7 +51,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function fetchVariantsIfNeeded(productId: string) {
     if (variantCache[productId] || !company?.id) return;
     var p = products.find(function(pr) { return pr.id === productId; });
-    if (!p || !(p as any).has_variants) return;
+    if (!p || !p.has_variants) return;
     companiesApi.variants(company.id, productId).then(function(res) {
       setVariantCache(function(prev) { return { ...prev, [productId]: (res.variants || []).filter(function(v: any) { return v.is_active !== false; }) }; });
     }).catch(function() {
@@ -62,14 +62,16 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function getAvailableOptions(p: Product) {
     var sizes = new Set<string>();
     var colors = new Set<string>();
-    if ((p as any).size) sizes.add((p as any).size);
-    if ((p as any).color && /^#[0-9A-Fa-f]{6}$/.test((p as any).color)) colors.add((p as any).color);
+    // Direct product fields
+    if (p.size) sizes.add(p.size);
+    if (p.color && /^#[0-9A-Fa-f]{6}$/.test(p.color)) colors.add(p.color);
+    // From variants — BUGFIX: API returns "attribute" key, not "attribute_name"
     var variants = variantCache[p.id] || [];
     variants.forEach(function(v: any) {
       (v.attributes || []).forEach(function(a: any) {
         var val = String(a.value || "").trim();
         if (!val) return;
-        var attrLower = (a.attribute_name || "").toLowerCase();
+        var attrLower = (a.attribute || a.attribute_name || "").toLowerCase();
         if (attrLower === "tamanho" || attrLower === "size") sizes.add(val);
         else if (attrLower === "cor" || attrLower === "color" || /^#[0-9A-Fa-f]{6}$/.test(val)) colors.add(val);
       });
@@ -108,8 +110,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   var totalLabels = selectedIds.reduce(function(sum, id) { return sum + getQty(id); }, 0);
 
-  function getEffectiveSize(p: Product): string { return overrideSizes[p.id] || (p as any).size || ""; }
-  function getEffectiveColor(p: Product): string { return overrideColors[p.id] || (p as any).color || ""; }
+  function getEffectiveSize(p: Product): string { return overrideSizes[p.id] || p.size || ""; }
+  function getEffectiveColor(p: Product): string { return overrideColors[p.id] || p.color || ""; }
 
   function handlePrint() {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) {
@@ -221,8 +223,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 <LabelVariantSelector
                   availableSizes={opts.sizes}
                   availableColors={opts.colors}
-                  selectedSize={overrideSizes[p.id] || (p as any).size || ""}
-                  selectedColor={overrideColors[p.id] || (p as any).color || ""}
+                  selectedSize={overrideSizes[p.id] || p.size || ""}
+                  selectedColor={overrideColors[p.id] || p.color || ""}
                   onChangeSize={function(v) { setOverrideSizes(function(prev) { return { ...prev, [p.id]: v }; }); }}
                   onChangeColor={function(v) { setOverrideColors(function(prev) { return { ...prev, [p.id]: v }; }); }}
                 />
