@@ -157,7 +157,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           var sc = variantSizeColor(v);
           var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
           var effectiveBarcode = v.barcode || p.barcode || p.code;
-          // FIX: fallback to parent color/size when variant has no attributes
           items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size || p.size || "", color: sc.color || p.color || "", qty: getQty(id + "__" + v.id) });
         });
       } else {
@@ -230,7 +229,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
                   <View style={[s.checkbox, sel && s.checkboxSelected]}>{sel && <Icon name="check" size={10} color="#fff" />}</View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
+                      {p.has_variants && <Text style={s.varBadge}>V</Text>}
+                    </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
                       <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
                       {renderColorIndicator(p.color)}
@@ -251,7 +253,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             );
           }
 
-          // Product WITH variants: parent row shows color + size from product
           return (
             <View key={p.id} style={[s.item, s.itemSelected]}>
               <View style={s.parentRow}>
@@ -262,6 +263,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {renderColorIndicator(p.color)}
                     <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={s.varBadge}>V</Text>
                     {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                   </View>
                   <Text style={s.variantHint}>{variants.length} variante{variants.length > 1 ? "s" : ""} | {selVars.size} selecionada{selVars.size !== 1 ? "s" : ""}</Text>
@@ -357,6 +359,7 @@ var s = StyleSheet.create({
   colorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   colorBadge: { fontSize: 9, fontWeight: "600", color: Colors.ink2, backgroundColor: Colors.bg4, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
+  varBadge: { fontSize: 8, fontWeight: "700", color: "#06b6d4", backgroundColor: "rgba(6,182,212,0.12)", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, overflow: "hidden" },
   variantHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
   toggleAllVarsBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
   toggleAllVarsText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
