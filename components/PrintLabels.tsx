@@ -4,9 +4,11 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
-import { BASE_URL } from "@/services/api";
+import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
 import { LabelVariantSelector } from "@/components/LabelVariantSelector";
+import { buildLabelHtml, buildLabelName } from "@/components/screens/estoque/labels/buildLabelHtml";
+import type { LabelItem } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
 
 type Props = {
@@ -14,18 +16,6 @@ type Props = {
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
 };
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function buildLabelName(name: string, size: string, color: string): string {
-  if (!size && !color) return name;
-  var parts = [name.length > 16 ? name.substring(0, 16).trim() + "..." : name];
-  if (size) parts.push(size);
-  if (color && /^#[0-9A-Fa-f]{6}$/.test(color)) parts.push(hexToName(color));
-  return parts.join(" | ");
-}
 
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   var { company, token } = useAuthStore();
@@ -35,6 +25,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [showStoreName, setShowStoreName] = useState(true);
   var [overrideSizes, setOverrideSizes] = useState<Record<string, string>>({});
   var [overrideColors, setOverrideColors] = useState<Record<string, string>>({});
+  var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
   var isWeb = Platform.OS === "web";
 
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
@@ -48,15 +39,42 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var q = search.toLowerCase().trim();
     if (!q) return productsWithCode;
     return productsWithCode.filter(function(p) {
-      return p.name.toLowerCase().includes(q) ||
-        (p.barcode || p.code || "").toLowerCase().includes(q);
+      return p.name.toLowerCase().includes(q) || (p.barcode || p.code || "").toLowerCase().includes(q);
     });
   }, [productsWithCode, search]);
 
   function getQty(id: string) { return quantities[id] || 1; }
   function setQty(id: string, n: number) {
-    var v = Math.max(1, Math.min(999, n));
-    setQuantities(function(prev) { return { ...prev, [id]: v }; });
+    setQuantities(function(prev) { return { ...prev, [id]: Math.max(1, Math.min(999, n)) }; });
+  }
+
+  function fetchVariantsIfNeeded(productId: string) {
+    if (variantCache[productId] || !company?.id) return;
+    var p = products.find(function(pr) { return pr.id === productId; });
+    if (!p || !(p as any).has_variants) return;
+    companiesApi.variants(company.id, productId).then(function(res) {
+      setVariantCache(function(prev) { return { ...prev, [productId]: (res.variants || []).filter(function(v: any) { return v.is_active !== false; }) }; });
+    }).catch(function() {
+      setVariantCache(function(prev) { return { ...prev, [productId]: [] }; });
+    });
+  }
+
+  function getAvailableOptions(p: Product) {
+    var sizes = new Set<string>();
+    var colors = new Set<string>();
+    if ((p as any).size) sizes.add((p as any).size);
+    if ((p as any).color && /^#[0-9A-Fa-f]{6}$/.test((p as any).color)) colors.add((p as any).color);
+    var variants = variantCache[p.id] || [];
+    variants.forEach(function(v: any) {
+      (v.attributes || []).forEach(function(a: any) {
+        var val = String(a.value || "").trim();
+        if (!val) return;
+        var attrLower = (a.attribute_name || "").toLowerCase();
+        if (attrLower === "tamanho" || attrLower === "size") sizes.add(val);
+        else if (attrLower === "cor" || attrLower === "color" || /^#[0-9A-Fa-f]{6}$/.test(val)) colors.add(val);
+      });
+    });
+    return { sizes: Array.from(sizes), colors: Array.from(colors) };
   }
 
   function toggleSelect(id: string) {
@@ -64,6 +82,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       onSelectionChange(selectedIds.filter(function(i) { return i !== id; }));
     } else {
       onSelectionChange([...selectedIds, id]);
+      fetchVariantsIfNeeded(id);
       if (!quantities[id]) {
         var p = products.find(function(pr) { return pr.id === id; });
         if (p && p.stock > 1) setQty(id, p.stock);
@@ -76,10 +95,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     if (ids.every(function(id) { return selectedIds.includes(id); })) {
       onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); }));
     } else {
-      onSelectionChange(Array.from(new Set([...selectedIds, ...ids])));
+      var newIds = Array.from(new Set([...selectedIds, ...ids]));
+      onSelectionChange(newIds);
       var newQtys: Record<string, number> = { ...quantities };
       filtered.forEach(function(p) {
         if (!newQtys[p.id] && p.stock > 1) newQtys[p.id] = p.stock;
+        fetchVariantsIfNeeded(p.id);
       });
       setQuantities(newQtys);
     }
@@ -87,130 +108,21 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   var totalLabels = selectedIds.reduce(function(sum, id) { return sum + getQty(id); }, 0);
 
-  function getEffectiveSize(p: Product): string {
-    return overrideSizes[p.id] || (p as any).size || "";
-  }
-  function getEffectiveColor(p: Product): string {
-    return overrideColors[p.id] || (p as any).color || "";
-  }
+  function getEffectiveSize(p: Product): string { return overrideSizes[p.id] || (p as any).size || ""; }
+  function getEffectiveColor(p: Product): string { return overrideColors[p.id] || (p as any).color || ""; }
 
   function handlePrint() {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) {
-      toast.error("Selecione pelo menos um produto");
-      return;
+      toast.error("Selecione pelo menos um produto"); return;
     }
-
     var selected = products.filter(function(p) { return selectedIds.includes(p.id) && (p.barcode || p.code); });
     if (selected.length === 0) { toast.error("Produtos sem codigo"); return; }
 
-    var isQR = mode === "qr";
-    var COLS = 3;
-
-    var firstCode = selected[0].barcode || selected[0].code;
-    var numOnly = /^\d+$/.test(firstCode);
-    var jsFormat = "CODE128";
-    if (numOnly && firstCode.length === 13) jsFormat = "EAN13";
-    else if (numOnly && firstCode.length === 8) jsFormat = "EAN8";
-    else if (numOnly && firstCode.length === 12) jsFormat = "UPC";
-
-    var storeHeader = showStoreName && storeName ? esc(storeName.toUpperCase()) : "";
-
-    var cells: string[] = [];
-    var labelIdx = 0;
-    selected.forEach(function(p) {
-      var qty = getQty(p.id);
-      var code = esc(p.barcode || p.code);
-      var effSize = getEffectiveSize(p);
-      var effColor = getEffectiveColor(p);
-      var labelName = esc(buildLabelName(p.name, effSize, effColor));
-      var price = "R$ " + p.price.toFixed(2).replace(".", ",");
-
-      for (var q = 0; q < qty; q++) {
-        if (isQR) {
-          var qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(p.barcode || p.code) + "&bgcolor=ffffff&color=000000&margin=1";
-          cells.push(
-            '<td class="cell"><div class="qr-inner">' +
-              '<img src="' + qrUrl + '" class="qr">' +
-              '<div class="info">' +
-                (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
-                '<div class="name">' + labelName + '</div>' +
-                '<div class="price">' + price + '</div>' +
-              '</div>' +
-            '</div></td>'
-          );
-        } else {
-          var storeLine = storeHeader ? '<div class="store">' + storeHeader + '</div>' : '';
-          cells.push(
-            '<td class="cell"><div class="bc-inner">' +
-              storeLine +
-              '<div class="name">' + labelName + '</div>' +
-              '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
-              '<div class="price">' + price + '</div>' +
-            '</div></td>'
-          );
-        }
-        labelIdx++;
-      }
+    var items: LabelItem[] = selected.map(function(p) {
+      return { name: p.name, price: p.price, barcode: p.barcode || p.code, size: getEffectiveSize(p), color: getEffectiveColor(p), qty: getQty(p.id) };
     });
 
-    while (cells.length % COLS !== 0) {
-      cells.push('<td class="cell"></td>');
-    }
-
-    var rowsHtml = "";
-    for (var r = 0; r < cells.length; r += COLS) {
-      rowsHtml += "<tr>" + cells.slice(r, r + COLS).join("") + "</tr>\n";
-    }
-    var totalRows = cells.length / COLS;
-
-    var html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
-    html += '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
-    if (!isQR) {
-      html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
-    }
-    html += '<style>';
-    html += '@page{margin:0;size:99mm 21mm}';
-    html += '*{margin:0;padding:0;box-sizing:border-box}';
-    html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
-    html += 'table{border-collapse:collapse;width:99mm;table-layout:fixed}';
-    html += 'tr{height:21mm;page-break-inside:avoid}';
-    html += '.cell{width:33mm;height:21mm;overflow:hidden;vertical-align:top;padding:0}';
-    html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;width:33mm;gap:0.3mm}';
-    html += '.bc-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-    html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
-    html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:31mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
-    html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
-    html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
-    html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:21mm;width:33mm}';
-    html += '.qr-inner .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
-    html += '.qr-inner .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
-    html += '.qr-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-    html += '.qr-inner .name{font-size:5.5pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
-    html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
-    html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
-    html += '.preview-bar span{color:#a78bfa;font-size:12px}';
-    html += '.preview-bar b{color:#e2e8f0;font-size:13px}';
-    html += '.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}';
-    html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-bottom:80px}';
-    html += '.preview-wrap table{border:1px dashed #ccc}';
-    html += '.preview-wrap .cell{border:1px dashed #eee}';
-    html += '@media print{.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
-    html += '</style></head><body>';
-    html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
-    html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "Codigo de barras legivel") + ')</span><br><b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + selected.length + ' produto' + (selected.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
-    html += '<button onclick="window.print()">Imprimir</button></div>';
-
-    if (!isQR) {
-      html += '<script>';
-      html += 'document.querySelectorAll("[data-code]").forEach(function(el){';
-      html += 'var code=el.getAttribute("data-code");';
-      html += 'var opts={width:2,height:38,margin:2,displayValue:true,fontSize:13,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
-      html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"' + jsFormat + '"}));}';
-      html += 'catch(e){try{JsBarcode(el,code,Object.assign({},opts,{format:"CODE128"}));}catch(e2){console.error(e2);}}';
-      html += '});';
-      html += '</scr' + 'ipt>';
-    }
-    html += '</body></html>';
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
 
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -222,17 +134,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         else { toast.error("Popup bloqueado \u2014 permita popups para app.getaura.com.br"); return; }
       }
       toast.success(totalLabels + " etiqueta(s) abertas para impressao");
-    } catch (err) {
-      console.error("[PrintLabels] Error:", err);
-      toast.error("Erro ao gerar etiquetas");
-    }
+    } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
   }
 
   var allSelected = filtered.length > 0 && filtered.every(function(p) { return selectedIds.includes(p.id); });
-
-  function hasVariantInfo(p: Product): boolean {
-    return !!((p as any).color || (p as any).size);
-  }
 
   return (
     <View style={s.container}>
@@ -284,7 +189,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           var effSize = getEffectiveSize(p);
           var effColor = getEffectiveColor(p);
           var labelPreview = buildLabelName(p.name, effSize, effColor);
-          var showVariant = hasVariantInfo(p);
+          var opts = getAvailableOptions(p);
+          var showVariant = sel && (opts.sizes.length > 0 || opts.colors.length > 0);
           return (
             <View key={p.id} style={[s.item, sel && s.itemSelected]}>
               <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
@@ -303,29 +209,20 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
               </Pressable>
               {sel && (
                 <View style={s.qtyRow}>
-                  <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}>
-                    <Text style={s.qtyBtnText}>{"<"}</Text>
-                  </Pressable>
-                  <TextInput
-                    style={s.qtyInput}
-                    value={String(qty)}
+                  <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
+                  <TextInput style={s.qtyInput} value={String(qty)}
                     onChangeText={function(v) { var n = parseInt(v); if (!isNaN(n)) setQty(p.id, n); }}
-                    keyboardType="number-pad"
-                    maxLength={3}
-                    selectTextOnFocus
-                  />
-                  <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}>
-                    <Text style={s.qtyBtnText}>{"\u203A"}</Text>
-                  </Pressable>
+                    keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                  <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
                   <Text style={s.qtyLabel}>etiq.</Text>
                 </View>
               )}
-              {sel && showVariant && (
+              {showVariant && (
                 <LabelVariantSelector
-                  currentSize={(p as any).size || ""}
-                  currentColor={(p as any).color || ""}
-                  overrideSize={overrideSizes[p.id] || ""}
-                  overrideColor={overrideColors[p.id] || ""}
+                  availableSizes={opts.sizes}
+                  availableColors={opts.colors}
+                  selectedSize={overrideSizes[p.id] || (p as any).size || ""}
+                  selectedColor={overrideColors[p.id] || (p as any).color || ""}
                   onChangeSize={function(v) { setOverrideSizes(function(prev) { return { ...prev, [p.id]: v }; }); }}
                   onChangeColor={function(v) { setOverrideColors(function(prev) { return { ...prev, [p.id]: v }; }); }}
                 />
