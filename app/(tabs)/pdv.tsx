@@ -39,11 +39,14 @@ export default function PdvScreen() {
   const { products, isDemo } = useProducts();
   const { company } = useAuthStore();
   const { customers } = useCustomers();
+  const plan = (company?.plan || "essencial").toLowerCase();
+  const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
   const {
     cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    sellerName, setSellerName,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
   } = useCart();
@@ -51,16 +54,15 @@ export default function PdvScreen() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
   const [showNewCustomer, setShowNewCustomer] = useState(false);
-
-  // Fase C: variant picker
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
-  const canAddCustomer = (company?.plan || "essencial") !== "essencial";
+  const canAddCustomer = isNegocioPlus;
 
+  // Employees: only fetched for Negocio+ (API returns 403 for Essencial)
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
     queryFn: () => employeesApi.list(company!.id),
-    enabled: !!company?.id,
+    enabled: !!company?.id && isNegocioPlus,
     staleTime: 60000,
   });
   const employees = (empData?.employees || []).map((e: any) => ({ id: e.id, name: e.name || "" }));
@@ -80,13 +82,9 @@ export default function PdvScreen() {
     else setSearch(code);
   }
 
-  // Fase C: ao clicar num produto, verificar se tem variantes
   function handleAddProduct(product: Product) {
-    if (product.has_variants) {
-      setPendingProduct(product);
-    } else {
-      addToCart(product);
-    }
+    if (product.has_variants) { setPendingProduct(product); }
+    else { addToCart(product); }
   }
 
   function handleVariantSelected(variant: { id: string; label: string; price: number; stock: number }) {
@@ -96,10 +94,7 @@ export default function PdvScreen() {
   }
 
   function emitNfe() { toast.info("Emissao de NF-e sera integrada apos configuracao do provedor."); }
-
-  function handleCustomerCreated(c: { id: string; name: string; phone: string }) {
-    selectCustomer(c.id, c.name);
-  }
+  function handleCustomerCreated(c: { id: string; name: string; phone: string }) { selectCustomer(c.id, c.name); }
 
   if (lastSale) {
     if (IS_WIDE) return <View style={s.webRoot}><View style={{ flex: 1 }}><SaleComplete sale={lastSale} onNewSale={newSale} onEmitNfe={emitNfe} /></View></View>;
@@ -137,6 +132,8 @@ export default function PdvScreen() {
     customers: slimCustomers, employees,
     selectedCustomerId, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    sellerName, setSellerName,
+    plan,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
   };
 
