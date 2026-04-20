@@ -39,6 +39,7 @@ function mapApiProduct(p: any): Product {
     notes: p.notes || p.description || "",
     color: p.color || "",
     size: p.size || "",
+    image_url: p.image_url || "",
     has_variants: !!p.has_variants,
   };
 }
