@@ -4,14 +4,8 @@ import { pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
-// productId: para produtos sem variante = product.id
-//            para produtos com variante = product.id + '__' + variant.id
-// Essa convencao permite que o CartPanel (19KB) funcione sem mudancas:
-// - key={item.productId} continua unico
-// - updateQty/removeItem por productId continuam funcionando
-// No finalizeSale, decompomos de volta pra product_id + variant_id.
 export type CartItem = { productId: string; name: string; price: number; qty: number };
-export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string; couponCode?: string; couponDiscount?: number; manualDiscount?: number };
+export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string; sellerName?: string; couponCode?: string; couponDiscount?: number; manualDiscount?: number };
 
 export const PAYMENTS = [
   { key: "pix", label: "Pix" },
@@ -42,6 +36,9 @@ export function useCart() {
   const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
+
+  // Seller name (free text) — used by all plans
+  const [sellerName, setSellerName] = useState<string>("");
 
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
@@ -78,8 +75,6 @@ export function useCart() {
   const couponDiscount = couponApplied?.discount || 0;
   const totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
 
-  // addToCart: aceita variante opcional. Se variante fornecida,
-  // productId no cart vira "pid__vid" e name vira "nome (label)".
   function addToCart(product: { id: string; name: string; price: number }, variant?: { id: string; label: string; price?: number }) {
     setLastSale(null);
     var cartKey = variant ? product.id + "__" + variant.id : product.id;
@@ -124,6 +119,7 @@ export function useCart() {
     setIsProcessing(true);
 
     var cartSnapshot = [...cart];
+    var effectiveSellerName = sellerName.trim() || selectedEmployeeName || null;
     var saleData: any = {
       items: cartSnapshot.map(function(i) {
         var decomposed = decomposeCartKey(i.productId);
@@ -138,6 +134,7 @@ export function useCart() {
       payment_method: payment,
       customer_id: selectedCustomerId || undefined,
       employee_id: selectedEmployeeId || undefined,
+      seller_name: effectiveSellerName || undefined,
     };
 
     if (saleDate) saleData.sale_date = saleDate;
@@ -155,13 +152,14 @@ export function useCart() {
       saleMutation.mutate(saleData, {
         onSuccess: function(res: any) {
           var saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale({ id: String(saleId), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, couponCode: couponApplied?.code, couponDiscount: couponApplied?.discount, manualDiscount: manualDiscountAmount || undefined });
+          setLastSale({ id: String(saleId), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, sellerName: effectiveSellerName || undefined, couponCode: couponApplied?.code, couponDiscount: couponApplied?.discount, manualDiscount: manualDiscountAmount || undefined });
           setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setSellerName("");
         },
         onError: function(err: any) { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
       });
     } else {
-      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined });
+      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, sellerName: effectiveSellerName || undefined });
       setCart([]); setIsProcessing(false);
     }
   }
@@ -170,6 +168,7 @@ export function useCart() {
     setLastSale(null); setCart([]); setIsProcessing(false);
     setSelectedCustomerId(null); setSelectedCustomerName(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
+    setSellerName("");
     clearCoupon(); clearDiscount();
   }
 
@@ -178,6 +177,7 @@ export function useCart() {
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
+    sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
   };
