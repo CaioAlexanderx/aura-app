@@ -15,6 +15,7 @@ export type Product = {
   notes: string;
   color: string;
   size: string;
+  image_url?: string;
   has_variants?: boolean;
 };
 
