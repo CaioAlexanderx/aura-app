@@ -2,6 +2,7 @@
 // AURA. -- VariantPickerModal
 // Modal para selecionar variante de um produto (cor/tamanho/etc)
 // Usado no PDV (Fase C) e na Venda retroativa (TransactionModal).
+// FIX: herda cor/tamanho do produto pai quando variante nao tem atributos
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -20,29 +21,53 @@ export type VariantChoice = {
 
 var isWeb = Platform.OS === "web";
 
-function getLabel(v: any): string {
+var COLOR_NAME_TO_HEX: Record<string, string> = {
+  preto: "#000000", branco: "#ffffff", vermelho: "#ef4444", azul: "#3b82f6",
+  verde: "#22c55e", amarelo: "#eab308", rosa: "#ec4899", roxo: "#8b5cf6",
+  laranja: "#f97316", marrom: "#92400e", bege: "#d4b896", cinza: "#6b7280",
+  prata: "#c0c0c0", dourado: "#d4a017", nude: "#e8c4a0", caramelo: "#c68e4e",
+};
+
+function toHex(val: string): string | null {
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) return val;
+  var m = val.match(/#[0-9a-fA-F]{6}/);
+  if (m) return m[0];
+  return COLOR_NAME_TO_HEX[val.toLowerCase().trim()] || null;
+}
+
+function getLabel(v: any, parentColor?: string, parentSize?: string): string {
   var attrs = v.attributes || [];
   var parts: string[] = [];
   for (var a of attrs) {
     if (!a.value) continue;
-    // Se o valor parece um hex, converte pra nome
     if (/^#[0-9a-fA-F]{6}$/.test(a.value)) parts.push(hexToName(a.value));
     else parts.push(a.value);
   }
-  return parts.join(" \u00b7 ") || v.sku_suffix || "Variante";
+  // Fallback: if variant has no attributes, show parent info + suffix
+  if (parts.length === 0) {
+    var inherited: string[] = [];
+    if (parentColor) inherited.push(hexToName(parentColor) || parentColor);
+    if (parentSize) inherited.push(parentSize);
+    var suffix = v.sku_suffix || "Variante";
+    return inherited.length > 0 ? suffix + " \u00b7 " + inherited.join(" \u00b7 ") : suffix;
+  }
+  return parts.join(" \u00b7 ");
 }
 
-function getColor(v: any): string | null {
+function getColor(v: any, parentColor?: string): string | null {
   var attrs = v.attributes || [];
   for (var a of attrs) {
-    if (/^#[0-9a-fA-F]{6}$/.test(a.value)) return a.value;
+    var h = toHex(a.value || "");
+    if (h) return h;
   }
+  // Fallback to parent color
+  if (parentColor) return toHex(parentColor);
   return null;
 }
 
 export function VariantPickerModal({ visible, product, onSelect, onClose }: {
   visible: boolean;
-  product: { id: string; name: string; price: number } | null;
+  product: { id: string; name: string; price: number; color?: string; size?: string } | null;
   onSelect: (variant: VariantChoice) => void;
   onClose: () => void;
 }) {
@@ -62,6 +87,8 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
   if (!visible || !product) return null;
 
   var activeVariants = variants.filter(function(v: any) { return v.is_active !== false; });
+  var parentColor = product.color || "";
+  var parentSize = product.size || "";
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -71,7 +98,11 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
             <Text style={s.title}>Qual variante?</Text>
             <Pressable onPress={onClose} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
           </View>
-          <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, marginBottom: 8 }}>
+            {parentColor ? <View style={[s.parentDot, { backgroundColor: toHex(parentColor) || parentColor }]} /> : null}
+            <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
+            {parentSize ? <Text style={s.sizeBadge}>{parentSize}</Text> : null}
+          </View>
 
           {loading ? (
             <View style={{ paddingVertical: 30, alignItems: "center" }}>
@@ -84,10 +115,10 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
           ) : (
             <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 8, padding: 16 }}>
               {activeVariants.map(function(v: any) {
-                var label = getLabel(v);
+                var label = getLabel(v, parentColor, parentSize);
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : product.price;
                 var stock = parseInt(v.stock_qty) || 0;
-                var hex = getColor(v);
+                var hex = getColor(v, parentColor);
                 return (
                   <Pressable key={v.id} onPress={function() { onSelect({ id: v.id, label: label, price: effectivePrice, stock: stock, barcode: v.barcode }); }}
                     style={[s.variantRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}>
@@ -95,7 +126,7 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
                     <View style={{ flex: 1 }}>
                       <Text style={s.variantLabel}>{label}</Text>
                       <Text style={s.variantMeta}>
-                        R$ {effectivePrice.toFixed(2).replace(".", ",")} \u00b7 {stock} un
+                        R$ {effectivePrice.toFixed(2).replace(".", ",")} {"\u00b7"} {stock} un
                         {v.barcode ? " \u00b7 ..." + String(v.barcode).slice(-4) : ""}
                       </Text>
                     </View>
@@ -120,7 +151,9 @@ var s = StyleSheet.create({
   title: { fontSize: 17, fontWeight: "700", color: Colors.ink },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
   closeText: { fontSize: 16, color: Colors.ink3, fontWeight: "600" },
-  productName: { fontSize: 13, color: Colors.ink3, paddingHorizontal: 20, marginBottom: 8 },
+  productName: { fontSize: 13, color: Colors.ink3, flex: 1 },
+  parentDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   empty: { fontSize: 13, color: Colors.ink3 },
   variantRow: {
     flexDirection: "row", alignItems: "center", gap: 10,
