@@ -52,8 +52,9 @@ export function CartPanel({
   customers, employees,
   selectedCustomerId, selectCustomer,
   selectedEmployeeId, selectedEmployeeName, selectEmployee,
+  sellerName, setSellerName, plan,
   discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
-    couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
+  couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
 }: {
   cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; totalAfterCoupon?: number; itemCount: number;
   isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void;
@@ -65,6 +66,9 @@ export function CartPanel({
   selectedEmployeeId?: string | null;
   selectedEmployeeName?: string | null;
   selectEmployee?: (id: string | null, name: string | null) => void;
+  sellerName?: string;
+  setSellerName?: (v: string) => void;
+  plan?: string;
   discountType?: "%" | "R$";
   setDiscountType?: (t: "%" | "R$") => void;
   discountValue?: string;
@@ -81,7 +85,11 @@ export function CartPanel({
   const [customerSearch, setCustomerSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [showSellerInput, setShowSellerInput] = useState(false);
   const [couponLoading, setCouponLoading] = useState(false);
+
+  const currentPlan = (plan || "essencial").toLowerCase();
+  const isNegocioPlus = currentPlan === "negocio" || currentPlan === "expansao" || currentPlan === "personalizado";
 
   const matchedCustomers = customers && customerSearch.length >= 2
     ? customers.filter(c => {
@@ -99,6 +107,34 @@ export function CartPanel({
   const manyEmployees = (employees?.length || 0) > 5;
   const displayTotal = totalAfterCoupon ?? total;
 
+  // Check if the typed seller name matches an existing employee
+  const sellerNameTrimmed = (sellerName || "").trim();
+  const sellerIsKnownEmployee = employees?.some(e => e.name.toLowerCase() === sellerNameTrimmed.toLowerCase());
+
+  function handleSelectEmployee(id: string, name: string) {
+    if (selectEmployee) selectEmployee(id, name);
+    if (setSellerName) setSellerName(name);
+    setEmployeeSearch("");
+    setShowEmployeeDropdown(false);
+    setShowSellerInput(false);
+  }
+
+  function handleClearSeller() {
+    if (selectEmployee) selectEmployee(null, null);
+    if (setSellerName) setSellerName("");
+    setEmployeeSearch("");
+    setShowEmployeeDropdown(false);
+    setShowSellerInput(false);
+  }
+
+  function handleConfirmNewSeller() {
+    if (!sellerNameTrimmed) return;
+    setShowSellerInput(false);
+    if (isNegocioPlus && !sellerIsKnownEmployee) {
+      toast.info(`"${sellerNameTrimmed}" adicionada! Conclua o cadastro na Folha de Pagamento.`);
+    }
+  }
+
   async function handleApplyCoupon() {
     if (!couponCode?.trim() || !company?.id || !setCouponApplied) return;
     setCouponLoading(true);
@@ -107,13 +143,17 @@ export function CartPanel({
       if (res.valid) {
         setCouponApplied({ code: res.code || couponCode.trim().toUpperCase(), discount: res.discount_amount || 0 });
         toast.success(`Cupom ${res.code} aplicado! -${fmt(res.discount_amount || 0)}`);
-      } else {
-        toast.error(res.error || "Cupom invalido");
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao validar cupom");
-    } finally { setCouponLoading(false); }
+      } else { toast.error(res.error || "Cupom invalido"); }
+    } catch (err: any) { toast.error(err?.message || "Erro ao validar cupom"); }
+    finally { setCouponLoading(false); }
   }
+
+  // Display name for the active seller
+  const activeSeller = selectedEmployee
+    ? { name: selectedEmployee.name, isEmployee: true }
+    : sellerNameTrimmed
+      ? { name: sellerNameTrimmed, isEmployee: false }
+      : null;
 
   return (
     <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 8, flex: isWide ? 1 : undefined }}>
@@ -142,8 +182,7 @@ export function CartPanel({
             onPlus={() => updateQty(item.productId, 1)}
             onMinus={() => updateQty(item.productId, -1)}
             onRemove={() => removeItem(item.productId)}
-            onSetQty={(qty) => setQty(item.productId, qty)}
-          />
+            onSetQty={(qty) => setQty(item.productId, qty)} />
         ))}
       </ScrollView>
 
@@ -183,40 +222,67 @@ export function CartPanel({
             </View>
           )}
 
-          {/* Vendedor */}
-          {employees && employees.length > 0 && selectEmployee && (
+          {/* ══ Vendedor(a) — todos os planos ══ */}
+          {setSellerName && (
             <View style={{ marginBottom: 14 }}>
-              <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
-              {selectedEmployee ? (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
+                {!activeSeller && !showSellerInput && (
+                  <Pressable onPress={() => setShowSellerInput(true)} style={s.addSellerBtn}>
+                    <Icon name="plus" size={12} color={Colors.violet3} />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Seller selected — show badge */}
+              {activeSeller && !showSellerInput ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <View style={{ flex: 1, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 }}>
-                    <Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{selectedEmployee.name}</Text>
+                    <Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{activeSeller.name}</Text>
+                    {activeSeller.isEmployee && <Text style={{ fontSize: 9, color: Colors.ink3, marginTop: 1 }}>Cadastrada na Folha</Text>}
+                    {!activeSeller.isEmployee && isNegocioPlus && <Text style={{ fontSize: 9, color: Colors.amber, marginTop: 1 }}>Cadastro pendente na Folha</Text>}
                   </View>
-                  <Pressable onPress={() => { selectEmployee(null, null); setEmployeeSearch(""); setShowEmployeeDropdown(false); }} style={s.clearBtn}>
+                  <Pressable onPress={handleClearSeller} style={s.clearBtn}>
                     <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
                   </Pressable>
                 </View>
-              ) : manyEmployees ? (
-                <View>
-                  <TextInput style={s.searchSmall} value={employeeSearch} onChangeText={v => { setEmployeeSearch(v); setShowEmployeeDropdown(true); }} onFocus={() => setShowEmployeeDropdown(true)} placeholder="Buscar vendedor..." placeholderTextColor={Colors.ink3} />
-                  {showEmployeeDropdown && matchedEmployees.length > 0 && (
-                    <View style={s.dropdown}>
-                      {matchedEmployees.map(e => (
-                        <Pressable key={e.id} onPress={() => { selectEmployee(e.id, e.name); setEmployeeSearch(""); setShowEmployeeDropdown(false); }} style={s.dropdownItem}>
-                          <Text style={{ fontSize: 12, color: Colors.ink, fontWeight: "500" }}>{e.name}</Text>
-                        </Pressable>
-                      ))}
+              ) : null}
+
+              {/* Inline input — shown after clicking "+" */}
+              {showSellerInput && (
+                <View style={{ gap: 8 }}>
+                  {/* For Negocio+: show existing employees first as chips */}
+                  {isNegocioPlus && employees && employees.length > 0 && (
+                    <View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6, paddingBottom: 6 }}>
+                        {(manyEmployees ? matchedEmployees : employees).map(e => (
+                          <Pressable key={e.id} onPress={() => handleSelectEmployee(e.id, e.name)}
+                            style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}>
+                            <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>{e.name.split(" ")[0]}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                      <Text style={{ fontSize: 10, color: Colors.ink3, marginBottom: 4 }}>ou digite um novo nome:</Text>
                     </View>
                   )}
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-                  {employees.map(e => (
-                    <Pressable key={e.id} onPress={() => selectEmployee(e.id, e.name)} style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}>
-                      <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>{e.name.split(" ")[0]}</Text>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <TextInput
+                      style={[s.searchSmall, { flex: 1 }]}
+                      value={sellerName || ""}
+                      onChangeText={v => { setSellerName(v); if (selectEmployee) selectEmployee(null, null); }}
+                      placeholder="Nome da vendedora..."
+                      placeholderTextColor={Colors.ink3}
+                      autoFocus
+                      onSubmitEditing={handleConfirmNewSeller}
+                    />
+                    <Pressable onPress={handleConfirmNewSeller} style={[s.confirmSellerBtn, !sellerNameTrimmed && { opacity: 0.4 }]} disabled={!sellerNameTrimmed}>
+                      <Icon name="check" size={14} color="#fff" />
                     </Pressable>
-                  ))}
-                </ScrollView>
+                    <Pressable onPress={() => { setShowSellerInput(false); handleClearSeller(); }} style={s.clearBtn}>
+                      <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
+                    </Pressable>
+                  </View>
+                </View>
               )}
             </View>
           )}
@@ -231,7 +297,7 @@ export function CartPanel({
             ))}
           </View>
 
-          {/* Cupom de desconto */}
+          {/* Cupom */}
           {setCouponCode && (
             <View style={{ marginTop: 14 }}>
               <Text style={s.sectionLabel}>Cupom de desconto</Text>
@@ -248,37 +314,22 @@ export function CartPanel({
                 </View>
               ) : (
                 <View style={s.couponRow}>
-                  <TextInput
-                    style={s.couponInput}
-                    value={couponCode}
-                    onChangeText={v => setCouponCode(v.toUpperCase())}
-                    placeholder="Codigo do cupom"
-                    placeholderTextColor={Colors.ink3}
-                    autoCapitalize="characters"
-                    onSubmitEditing={handleApplyCoupon}
-                  />
+                  <TextInput style={s.couponInput} value={couponCode} onChangeText={v => setCouponCode(v.toUpperCase())}
+                    placeholder="Codigo do cupom" placeholderTextColor={Colors.ink3} autoCapitalize="characters" onSubmitEditing={handleApplyCoupon} />
                   <Pressable onPress={handleApplyCoupon} disabled={couponLoading || !couponCode?.trim()} style={[s.couponBtn, (!couponCode?.trim() || couponLoading) && { opacity: 0.5 }]}>
-                    {couponLoading
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={s.couponBtnText}>Aplicar</Text>}
+                    {couponLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.couponBtnText}>Aplicar</Text>}
                   </Pressable>
                 </View>
               )}
             </View>
           )}
 
-          {/* P1 #1: Manual discount */}
+          {/* Manual discount */}
           {setDiscountType && setDiscountValue && (
             <View style={{ marginTop: 4 }}>
-              <DiscountSection
-                total={total}
-                discountType={discountType || "%"}
-                setDiscountType={setDiscountType}
-                discountValue={discountValue || ""}
-                setDiscountValue={setDiscountValue}
-                manualDiscountAmount={manualDiscountAmount || 0}
-                clearDiscount={clearDiscount || (() => {})}
-              />
+              <DiscountSection total={total} discountType={discountType || "%"} setDiscountType={setDiscountType}
+                discountValue={discountValue || ""} setDiscountValue={setDiscountValue}
+                manualDiscountAmount={manualDiscountAmount || 0} clearDiscount={clearDiscount || (() => {})} />
             </View>
           )}
 
@@ -288,9 +339,7 @@ export function CartPanel({
           <View style={s.totalRow}>
             <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "600" }}>Total</Text>
             <View style={{ alignItems: "flex-end" }}>
-              {couponApplied && (
-                <Text style={s.totalOriginal}>{fmt(total)}</Text>
-              )}
+              {couponApplied && <Text style={s.totalOriginal}>{fmt(total)}</Text>}
               <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(displayTotal)}</Text>
             </View>
           </View>
@@ -321,7 +370,7 @@ const s = StyleSheet.create({
   badge: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  sectionLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
+  sectionLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8 },
   payRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
   payChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
   payChipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
@@ -335,6 +384,8 @@ const s = StyleSheet.create({
   dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 160, overflow: "hidden" },
   dropdownItem: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   clearBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
+  addSellerBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet + "44", alignItems: "center", justifyContent: "center" },
+  confirmSellerBtn: { width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
   couponRow: { flexDirection: "row", gap: 8 },
   couponInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13, color: Colors.ink, fontWeight: "600", letterSpacing: 1 },
   couponBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 16, justifyContent: "center" },
