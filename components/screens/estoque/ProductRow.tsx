@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
+import { ProductImageUpload } from "@/components/ProductImageUpload";
 import type { Product } from "./types";
 import { fmt } from "./types";
 
@@ -41,6 +42,7 @@ export function ProductRow({
   const margin = product.price > 0 ? ((product.price - product.cost) / product.price * 100).toFixed(0) : "0";
   const colorName = product.color ? hexToName(product.color) : "";
   const hasVariant = !!(product.color || product.size);
+  const hasImage = !!product.image_url;
 
   return (
     <View>
@@ -50,16 +52,17 @@ export function ProductRow({
         onHoverOut={isWeb ? () => setHovered(false) : undefined}
         style={[s.row, hovered && { backgroundColor: Colors.bg4 }, isSelected && { backgroundColor: Colors.violetD }, isWeb && { transition: "background-color 0.15s ease" } as any]}
       >
-        {/* Checkbox bulk select */}
         {onSelect && (
           <View style={[s.checkbox, isSelected && s.checkboxSelected]}>
-            {isSelected && <Text style={s.checkmark}>✓</Text>}
+            {isSelected && <Text style={s.checkmark}>{"\u2713"}</Text>}
           </View>
         )}
         <View style={s.left}>
           {showAbc && !onSelect && <AbcBadge abc={product.abc} />}
-          {/* Color swatch com nome */}
-          {product.color ? (
+          {/* Product thumbnail */}
+          {hasImage ? (
+            <Image source={{ uri: product.image_url }} style={s.thumb} resizeMode="cover" />
+          ) : product.color ? (
             <View style={s.colorGroup}>
               <View style={[s.colorSwatch, { backgroundColor: product.color }]} />
               <Text style={s.colorName}>{colorName}</Text>
@@ -83,13 +86,16 @@ export function ProductRow({
       </Pressable>
       {expanded && !onSelect && (
         <View style={s.detail}>
-          <View style={s.detailGrid}>
-            {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
-              <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
-            )}
-            <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
+          {/* Photo upload in detail */}
+          <View style={s.detailPhotoRow}>
+            <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
+            <View style={s.detailGrid}>
+              {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+                <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
+              )}
+              <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
+            </View>
           </View>
-          {/* Cor e Tamanho */}
           {hasVariant && (
             <View style={s.variantRow}>
               {product.color ? (
@@ -133,11 +139,10 @@ const s = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   name: { fontSize: 13, color: Colors.ink, fontWeight: "600", flexShrink: 1 },
   meta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  // Cor: swatch + nome
+  thumb: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
   colorGroup: { alignItems: "center", gap: 2 },
   colorSwatch: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: Colors.border },
   colorName: { fontSize: 8, color: Colors.ink3, maxWidth: 44, textAlign: "center" },
-  // Tamanho badge inline
   sizeBadge: { backgroundColor: Colors.bg4, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: Colors.border },
   sizeBadgeText: { fontSize: 9, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.3 },
   right: { alignItems: "flex-end", gap: 2 },
@@ -146,11 +151,11 @@ const s = StyleSheet.create({
   alertDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.red },
   price: { fontSize: 11, color: Colors.ink3 },
   detail: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, marginHorizontal: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
-  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  detailPhotoRow: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
+  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4, flex: 1 },
   detailItem: { width: "30%", minWidth: 100, paddingVertical: 8, gap: 4 },
   detailLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   detailValue: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
-  // Variantes no detalhe expandido
   variantRow: { flexDirection: "row", gap: 20, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   variantItem: { gap: 4 },
   variantColorDisplay: { flexDirection: "row", alignItems: "center", gap: 6 },
