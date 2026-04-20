@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 
 var fmt = function(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
@@ -36,7 +36,7 @@ function hexToName(hex: string | undefined): string {
 }
 
 export function ProductCard({ product, onAdd, isWide, variantBadge }: {
-  product: { id: string; name: string; price: number; category: string; stock: number; barcode: string; color?: string; size?: string; has_variants?: boolean };
+  product: { id: string; name: string; price: number; category: string; stock: number; barcode: string; color?: string; size?: string; has_variants?: boolean; image_url?: string };
   onAdd: () => void; isWide: boolean; variantBadge?: string;
 }) {
   var [h, sH] = useState(false);
@@ -44,14 +44,19 @@ export function ProductCard({ product, onAdd, isWide, variantBadge }: {
   var hasColor = product.color && /^#[0-9a-fA-F]{3,8}$/.test(product.color);
   var colorName = hasColor ? hexToName(product.color) : "";
   var barcodeTail = product.barcode ? product.barcode.slice(-4) : "";
+  var hasImage = !!product.image_url;
 
   return (
     <Pressable onPress={onAdd} onHoverIn={isWeb ? function() { sH(true); } : undefined} onHoverOut={isWeb ? function() { sH(false); } : undefined}
       style={[s.card, { width: isWide ? "30%" : "47%", margin: "1.5%" }, h && s.cardHovered, isWeb && { transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" } as any]}>
       <View style={s.headerRow}>
-        <View style={[s.iconWrap, h && s.iconWrapHovered, hasColor && { borderColor: product.color + "66" }]}>
-          <Text style={[s.icon, h && { color: "#fff" }]}>{catIcon}</Text>
-        </View>
+        {hasImage ? (
+          <Image source={{ uri: product.image_url }} style={s.productImage} resizeMode="cover" />
+        ) : (
+          <View style={[s.iconWrap, h && s.iconWrapHovered, hasColor && { borderColor: product.color + "66" }]}>
+            <Text style={[s.icon, h && { color: "#fff" }]}>{catIcon}</Text>
+          </View>
+        )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           {variantBadge && (
             <View style={s.variantBadge}>
@@ -60,7 +65,7 @@ export function ProductCard({ product, onAdd, isWide, variantBadge }: {
           )}
           {barcodeTail ? (
             <View style={s.barcodeTailWrap}>
-              <Text style={s.barcodeTailPrefix}>\u2026</Text>
+              <Text style={s.barcodeTailPrefix}>{"\u2026"}</Text>
               <Text style={s.barcodeTail}>{barcodeTail}</Text>
             </View>
           ) : null}
@@ -105,6 +110,7 @@ var s = StyleSheet.create({
   iconWrap: { width: 38, height: 38, borderRadius: 12, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   iconWrapHovered: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   icon: { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
+  productImage: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   barcodeTailWrap: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   barcodeTailPrefix: { fontSize: 10, color: Colors.ink3, fontFamily: "monospace" as any, marginRight: 1 },
   barcodeTail: { fontSize: 11, color: Colors.ink2, fontFamily: "monospace" as any, fontWeight: "700", letterSpacing: 0.5 },
@@ -118,7 +124,6 @@ var s = StyleSheet.create({
   price: { fontSize: 16, color: Colors.green, fontWeight: "800", marginTop: "auto" as any },
   bottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   stock: { fontSize: 10, color: Colors.ink3, fontWeight: "500" },
-  // Badge de variante
   variantBadge: { backgroundColor: Colors.amberD, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(245,158,11,0.25)" },
   variantBadgeText: { fontSize: 9, color: Colors.amber, fontWeight: "700" },
 });
