@@ -2,7 +2,6 @@ import { ScrollView, StyleSheet, View, Text } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Colors } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
-import { DemoBanner } from '@/components/DemoBanner';
 import OdontoScreen from '@/components/verticals/OdontoScreen';
 import BarberScreen from '@/components/verticals/BarberScreen';
 import FoodScreen from '@/components/verticals/FoodScreen';
@@ -15,15 +14,13 @@ import FoodScreen from '@/components/verticals/FoodScreen';
 // TODO: Replace with real hook
 function useActiveVertical(): string | null {
   // In production: fetch from /companies/:id/modules and return active vertical
-  // For demo: return based on demo toggle in sidebar
   const [vertical, setVertical] = useState<string | null>('odonto');
-  // Listen to global demo toggle (set from sidebar)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('aura_demo_vertical');
+      const stored = localStorage.getItem('aura_active_vertical');
       if (stored) setVertical(stored);
       const handler = () => {
-        const v = localStorage.getItem('aura_demo_vertical');
+        const v = localStorage.getItem('aura_active_vertical');
         setVertical(v);
       };
       window.addEventListener('storage', handler);
@@ -48,7 +45,6 @@ export default function VerticalTab() {
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
-      <DemoBanner />
       <PageHeader
         title={activeVertical ? verticalNames[activeVertical] || 'Modulo Vertical' : 'Modulo Vertical'}
         subtitle={activeVertical ? 'Funcionalidades especializadas do seu segmento' : 'Ative um modulo vertical na Gestao Aura'}

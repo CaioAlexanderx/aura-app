@@ -11,7 +11,6 @@ import {
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
-const DEMO_TOKEN = "demo-token-aura-2026";
 
 const storage = {
   get: (): Promise<string | null> =>
@@ -43,26 +42,13 @@ const refreshStorage = {
       : SecureStore.deleteItemAsync(REFRESH_KEY),
 };
 
-const DEMO_USER = {
-  id: "demo-user",
-  name: "Caio",
-  email: "demo@getaura.com.br",
-  role: "client",
-  is_staff: false,
-} as const;
-
-const DEMO_COMPANY = {
-  id: "demo-company",
-  name: "Aura Demo",
-  plan: "negocio",
-  onboarding_step: "done",
-  trial_active: false,
-  trial_ends_at: null,
-} as const;
-
 type User = LoginResponse["user"];
 type Company = Exclude<LoginResponse["company"], null>;
 
+// Nota: campo `isDemo` mantido no state (sempre false) para nao quebrar
+// destructurings em ~38 arquivos que ainda referenciam ele. O modo demo foi
+// removido do UI (botao no login + loginDemo + DEMO_TOKEN). O campo ficara
+// sempre false e sera limpo dos consumers numa passada de refactor futura.
 type AuthState = {
   token: string | null;
   refreshToken: string | null;
@@ -77,7 +63,6 @@ type AuthState = {
   trialEndsAt: string | null;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  loginDemo: () => Promise<void>;
   register: (body: RegisterBody) => Promise<void>;
   logout: () => Promise<void>;
   setCompanyLogo: (logo: string) => void;
@@ -90,7 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
   setOnUnauthorized(() => {
     const state = get();
-    if (state.token && !state.isDemo) {
+    if (state.token) {
       console.warn("[AUTH] Token expired, logging out");
       state.logout();
     }
@@ -115,20 +100,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
       if (!token) {
         set({ isHydrated: true });
-        return;
-      }
-
-      if (token === DEMO_TOKEN) {
-        set({
-          token,
-          refreshToken: null,
-          user: DEMO_USER as User,
-          company: DEMO_COMPANY as Company,
-          isDemo: true,
-          isStaff: false,
-          isHydrated: true,
-          trialActive: false,
-        });
         return;
       }
 
@@ -184,21 +155,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         set({ isLoading: false });
         throw err;
       }
-    },
-
-    loginDemo: async () => {
-      set({ isLoading: true });
-      await storage.set(DEMO_TOKEN);
-      set({
-        token: DEMO_TOKEN,
-        refreshToken: null,
-        user: DEMO_USER as User,
-        company: DEMO_COMPANY as Company,
-        isLoading: false,
-        isDemo: true,
-        isStaff: false,
-        trialActive: false,
-      });
     },
 
     register: async (body: RegisterBody) => {

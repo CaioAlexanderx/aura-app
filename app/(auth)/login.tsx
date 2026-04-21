@@ -134,7 +134,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const { login, loginDemo, isLoading } = useAuthStore();
+  const { login, isLoading } = useAuthStore();
 
   // Native fade-in for mobile
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -244,13 +244,6 @@ export default function LoginScreen() {
           <Text style={s.link}>Criar conta gratis</Text>
         </Link>
       </View>
-
-      {!isInviteFlow && (
-        <Pressable style={s.demoBtn} onPress={loginDemo} disabled={isLoading}>
-          <Icon name="dashboard" size={14} color={Colors.violet3} />
-          <Text style={s.demoBtnText}>Explorar modo demonstrativo</Text>
-        </Pressable>
-      )}
 
       <Text style={s.footerTag}>Aura. - Tecnologia para Negocios</Text>
     </View>
@@ -374,7 +367,5 @@ const s = StyleSheet.create({
   footerRow: { flexDirection: "row", justifyContent: "center", marginBottom: 16 },
   footerText: { fontSize: 13, color: Colors.ink3 },
   link: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  demoBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 13, borderWidth: 1, borderColor: Colors.border2, marginBottom: 20 },
-  demoBtnText: { color: Colors.violet3, fontSize: 13, fontWeight: "600" },
   footerTag: { fontSize: 11, color: Colors.ink3, textAlign: "center", opacity: 0.5 },
 });
