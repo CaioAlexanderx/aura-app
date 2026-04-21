@@ -4,6 +4,9 @@
 // Sem campos de estoque, barcode, cor, tamanho.
 // Salva com unit='srv' para diferenciar de produtos fisicos.
 // Integra categorias gerenciadas (type='service').
+// Aceita onOpenCategories opcional: botao "Gerenciar" inline
+// que dispara abertura do CategoriesModal no parent com
+// initialType='service' (travado).
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, Dimensions } from "react-native";
@@ -15,9 +18,10 @@ import type { Product } from "./types";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-export function AddServiceForm({ onSave, onCancel }: {
+export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
   onSave: (p: Product) => void;
   onCancel: () => void;
+  onOpenCategories?: () => void;
 }) {
   var { categories: managedServiceCategories } = useProductCategories("service");
 
@@ -107,7 +111,14 @@ export function AddServiceForm({ onSave, onCancel }: {
       </View>
 
       <View style={{ marginBottom: 16, marginTop: 16 }}>
-        <Text style={s.label}>Categoria</Text>
+        <View style={s.categoryLabelRow}>
+          <Text style={s.label}>Categoria</Text>
+          {onOpenCategories && (
+            <Pressable onPress={onOpenCategories} style={s.manageBtn} hitSlop={6}>
+              <Text style={s.manageBtnText}>Gerenciar</Text>
+            </Pressable>
+          )}
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {chipList.map(function(c) {
             var selected = category === c && !showNewCat;
@@ -137,7 +148,6 @@ export function AddServiceForm({ onSave, onCancel }: {
             autoFocus
           />
         )}
-        <Text style={s.categoryHint}>Gerencie suas categorias de servicos pelo botao &quot;Categorias&quot; na tela de Estoque.</Text>
       </View>
 
       <View style={{ marginBottom: 16 }}>
@@ -173,12 +183,14 @@ var s = StyleSheet.create({
   label: { fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
   input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   row2: { flexDirection: IS_WIDE ? "row" : "column", gap: IS_WIDE ? 12 : 16 },
+  categoryLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  manageBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  manageBtnText: { fontSize: 10, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.3 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
   chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
-  categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
