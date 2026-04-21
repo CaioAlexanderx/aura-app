@@ -1,13 +1,16 @@
 // ============================================================
 // AURA. — AddServiceForm
 // Formulario simplificado para cadastrar servicos no estoque
-// Sem campos de estoque, barcode, cor, tamanho
+// Sem campos de estoque, barcode, cor, tamanho.
+// Salva com unit='srv' para diferenciar de produtos fisicos.
+// Integra categorias gerenciadas (type='service').
 // ============================================================
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
+import { useProductCategories } from "@/hooks/useProductCategories";
 import type { Product } from "./types";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -16,30 +19,59 @@ export function AddServiceForm({ onSave, onCancel }: {
   onSave: (p: Product) => void;
   onCancel: () => void;
 }) {
+  var { categories: managedServiceCategories } = useProductCategories("service");
+
+  // Lista de chips: categorias cadastradas do tipo servico, sempre com "Servicos" como fallback
+  var chipList = useMemo(() => {
+    var names = managedServiceCategories.map(function(c) { return c.name; });
+    var set = new Set(names.map(function(n) { return n.toLowerCase(); }));
+    if (!set.has("servicos")) names.push("Servicos");
+    return names;
+  }, [managedServiceCategories]);
+
+  var colorByName = useMemo(() => {
+    var map: Record<string, string | null> = {};
+    managedServiceCategories.forEach(function(c) { map[c.name] = c.color; });
+    return map;
+  }, [managedServiceCategories]);
+
   var [name, setName] = useState("");
   var [price, setPrice] = useState("");
   var [cost, setCost] = useState("");
   var [notes, setNotes] = useState("");
   var [duration, setDuration] = useState("");
+  var [category, setCategory] = useState<string>("");
+  var [newCategory, setNewCategory] = useState("");
+  var [showNewCat, setShowNewCat] = useState(false);
+
+  // Quando as categorias chegam e nada esta selecionado, seleciona a primeira
+  useEffect(function() {
+    if (!category && chipList.length > 0) {
+      setCategory(chipList[0]);
+    }
+  }, [chipList, category]);
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome do servico"); return; }
     if (!price.trim()) { toast.error("Preencha o preco do servico"); return; }
     var desc = notes.trim();
     if (duration.trim()) desc = (desc ? desc + " | " : "") + "Duracao: " + duration.trim();
+
+    var finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : (category || "Servicos");
+
     onSave({
       id: Date.now().toString(),
       name: name.trim(),
       code: "SRV-" + String(Math.floor(Math.random() * 9999) + 1).padStart(4, "0"),
       barcode: "",
-      category: "Servicos",
+      category: finalCategory,
       price: parseFloat(price.replace(",", ".")) || 0,
       cost: parseFloat(cost.replace(",", ".")) || 0,
       stock: 0,
       minStock: 0,
       abc: "C",
       sold30d: 0,
-      unit: "un",
+      unit: "srv",
       brand: "",
       notes: desc,
       color: "",
@@ -75,6 +107,40 @@ export function AddServiceForm({ onSave, onCancel }: {
       </View>
 
       <View style={{ marginBottom: 16, marginTop: 16 }}>
+        <Text style={s.label}>Categoria</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+          {chipList.map(function(c) {
+            var selected = category === c && !showNewCat;
+            var chipColor = colorByName[c];
+            return (
+              <Pressable
+                key={c}
+                onPress={function() { setCategory(c); setShowNewCat(false); }}
+                style={[s.chip, selected && s.chipActive]}
+              >
+                {chipColor ? <View style={[s.chipDot, { backgroundColor: chipColor }]} /> : null}
+                <Text style={[s.chipText, selected && s.chipTextActive]}>{c}</Text>
+              </Pressable>
+            );
+          })}
+          <Pressable onPress={function() { setShowNewCat(true); }} style={[s.chip, showNewCat && s.chipActive]}>
+            <Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text>
+          </Pressable>
+        </ScrollView>
+        {showNewCat && (
+          <TextInput
+            style={[s.input, { marginTop: 8 }]}
+            value={newCategory}
+            onChangeText={setNewCategory}
+            placeholder="Nome da nova categoria"
+            placeholderTextColor={Colors.ink3}
+            autoFocus
+          />
+        )}
+        <Text style={s.categoryHint}>Gerencie suas categorias de servicos pelo botao &quot;Categorias&quot; na tela de Estoque.</Text>
+      </View>
+
+      <View style={{ marginBottom: 16 }}>
         <Text style={s.label}>Duracao estimada (opcional)</Text>
         <TextInput style={s.input} value={duration} onChangeText={setDuration} placeholder="Ex: 45 min, 1h30, 2 horas" placeholderTextColor={Colors.ink3} />
       </View>
@@ -107,6 +173,12 @@ var s = StyleSheet.create({
   label: { fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
   input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   row2: { flexDirection: IS_WIDE ? "row" : "column", gap: IS_WIDE ? 12 : 16 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
+  chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+  chipTextActive: { color: Colors.violet3, fontWeight: "600" },
+  categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
