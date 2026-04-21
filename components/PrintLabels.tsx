@@ -28,18 +28,32 @@ function variantLabel(v: any): string {
   return parts.join(" \u00b7 ") || v.sku_suffix || "Variante";
 }
 
-var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "variacao", "variação", "medida", "numero", "num"]);
+var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "tam.", "variacao", "variacao", "medida", "numero", "num", "numeracao", "n"]);
 var COLOR_ATTRS = new Set(["cor", "color", "colour"]);
 
+// Extrai size e color dos atributos da variante usando dois passes:
+// Pass 1: match explicito por nome do atributo (Tamanho, Cor)
+// Pass 2: se size ainda vazio, usa primeiro atributo nao-cor como fallback
 function variantSizeColor(v: any): { size: string; color: string } {
   var size = ""; var color = "";
-  for (var a of (v.attributes || [])) {
+  var attrs = v.attributes || [];
+  for (var a of attrs) {
     var val = String(a.value || "").trim();
     if (!val) continue;
-    var attr = (a.attribute || a.attribute_name || "").toLowerCase();
-    if (SIZE_ATTRS.has(attr)) size = val;
-    else if (COLOR_ATTRS.has(attr) || /^#[0-9a-fA-F]{6}$/.test(val)) color = val;
-    else if (!size) size = val;
+    var attr = (a.attribute || a.attribute_name || "").toLowerCase().trim();
+    if (SIZE_ATTRS.has(attr) && !size) size = val;
+    else if ((COLOR_ATTRS.has(attr) || /^#[0-9a-fA-F]{6}$/.test(val)) && !color) color = val;
+  }
+  if (!size) {
+    for (var b of attrs) {
+      var bval = String(b.value || "").trim();
+      if (!bval) continue;
+      var battr = (b.attribute || b.attribute_name || "").toLowerCase().trim();
+      if (COLOR_ATTRS.has(battr)) continue;
+      if (/^#[0-9a-fA-F]{6}$/.test(bval)) continue;
+      size = bval;
+      break;
+    }
   }
   return { size: size, color: color };
 }
@@ -49,7 +63,7 @@ var COLOR_NAME_TO_HEX: Record<string, string> = {
   verde: "#22c55e", amarelo: "#eab308", rosa: "#ec4899", roxo: "#8b5cf6",
   laranja: "#f97316", marrom: "#92400e", bege: "#d4b896", cinza: "#6b7280",
   prata: "#c0c0c0", dourado: "#d4a017", nude: "#e8c4a0", caramelo: "#c68e4e",
-  bordô: "#800020", vinho: "#722f37", "azul escuro": "#1e3a5f", "verde agua": "#7fffd4",
+  "bordo": "#800020", vinho: "#722f37", "azul escuro": "#1e3a5f", "verde agua": "#7fffd4",
 };
 
 function colorNameToHex(name: string): string | null {
@@ -157,7 +171,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           var sc = variantSizeColor(v);
           var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
           var effectiveBarcode = v.barcode || p.barcode || p.code;
-          items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size || p.size || "", color: sc.color || p.color || "", qty: getQty(id + "__" + v.id) });
+          // FIX: nao faz fallback para p.size/p.color quando eh variante.
+          // Cada variante usa APENAS seu proprio size/color (evita unificar todas as etiquetas no size do pai).
+          items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id) });
         });
       } else {
         items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
@@ -289,9 +305,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          {renderColorIndicator(sc.color || p.color)}
+                          {renderColorIndicator(sc.color)}
                           <Text style={s.variantName} numberOfLines={1}>{label}</Text>
-                          {(sc.size || p.size) ? <Text style={s.sizeBadge}>{sc.size || p.size}</Text> : null}
+                          {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
                         </View>
                         <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
                       </View>
