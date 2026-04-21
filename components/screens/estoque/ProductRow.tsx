@@ -18,6 +18,12 @@ function hexToName(hex: string) {
   return COLOR_NAMES[hex.toLowerCase()] || hex;
 }
 
+function isServiceProduct(p: Product) {
+  const unit = String(p.unit || "").toLowerCase();
+  const cat = String(p.category || "").toLowerCase();
+  return unit === "srv" || cat === "servicos" || cat === "serviços" || cat === "servico" || cat === "serviço";
+}
+
 function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
   const colors = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
   const bgs = { A: Colors.greenD, B: Colors.amberD, C: "rgba(255,255,255,0.05)" };
@@ -38,7 +44,9 @@ export function ProductRow({
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isWeb = Platform.OS === "web";
-  const isLow = product.stock <= product.minStock;
+  const isService = isServiceProduct(product);
+  // Servico nao tem estoque, entao nunca esta "baixo"
+  const isLow = !isService && product.stock <= product.minStock;
   const margin = product.price > 0 ? ((product.price - product.cost) / product.price * 100).toFixed(0) : "0";
   const colorName = product.color ? hexToName(product.color) : "";
   const hasVariant = !!(product.color || product.size);
@@ -58,9 +66,13 @@ export function ProductRow({
           </View>
         )}
         <View style={s.left}>
-          {showAbc && !onSelect && <AbcBadge abc={product.abc} />}
-          {/* Product thumbnail */}
-          {hasImage ? (
+          {showAbc && !onSelect && !isService && <AbcBadge abc={product.abc} />}
+          {/* Thumbnail: servico ganha ícone ao invés de swatch/imagem */}
+          {isService ? (
+            <View style={s.serviceBadge}>
+              <Text style={s.serviceBadgeIcon}>{"\u2605"}</Text>
+            </View>
+          ) : hasImage ? (
             <Image source={{ uri: product.image_url }} style={s.thumb} resizeMode="cover" />
           ) : product.color ? (
             <View style={s.colorGroup}>
@@ -71,32 +83,46 @@ export function ProductRow({
           <View style={s.info}>
             <View style={s.nameRow}>
               <Text style={s.name} numberOfLines={1}>{product.name}</Text>
-              {product.size ? <View style={s.sizeBadge}><Text style={s.sizeBadgeText}>{product.size}</Text></View> : null}
+              {!isService && product.size ? <View style={s.sizeBadge}><Text style={s.sizeBadgeText}>{product.size}</Text></View> : null}
             </View>
             <Text style={s.meta}>{product.code} / {product.category}</Text>
           </View>
         </View>
         <View style={s.right}>
-          <View style={s.stockRow}>
-            <Text style={[s.stock, isLow && { color: Colors.red }]}>{product.stock} {product.unit}</Text>
-            {isLow && <View style={s.alertDot} />}
-          </View>
+          {isService ? (
+            <View style={s.serviceTag}>
+              <Text style={s.serviceTagText}>Servico</Text>
+            </View>
+          ) : (
+            <View style={s.stockRow}>
+              <Text style={[s.stock, isLow && { color: Colors.red }]}>{product.stock} {product.unit}</Text>
+              {isLow && <View style={s.alertDot} />}
+            </View>
+          )}
           <Text style={s.price}>{fmt(product.price)}</Text>
         </View>
       </Pressable>
       {expanded && !onSelect && (
         <View style={s.detail}>
-          {/* Photo upload in detail */}
-          <View style={s.detailPhotoRow}>
-            <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
+          {/* Photo upload in detail (produtos apenas) */}
+          {!isService ? (
+            <View style={s.detailPhotoRow}>
+              <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
+              <View style={s.detailGrid}>
+                {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+                  <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
+                )}
+                <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
+              </View>
+            </View>
+          ) : (
             <View style={s.detailGrid}>
-              {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+              {[["Preco", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)]].map(([l, v]) =>
                 <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
               )}
-              <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
             </View>
-          </View>
-          {hasVariant && (
+          )}
+          {!isService && hasVariant && (
             <View style={s.variantRow}>
               {product.color ? (
                 <View style={s.variantItem}>
@@ -115,10 +141,10 @@ export function ProductRow({
               ) : null}
             </View>
           )}
-          {product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Codigo de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
+          {!isService && product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Codigo de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
           {product.notes ? <Text style={s.notesText}>{product.notes}</Text> : null}
           <View style={s.actionsRow}>
-            {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>Editar produto</Text></Pressable>}
+            {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>{isService ? "Editar servico" : "Editar produto"}</Text></Pressable>}
             {onDelete && <Pressable onPress={() => onDelete(product.id)} style={s.deleteBtn}><Text style={s.deleteBtnText}>Excluir</Text></Pressable>}
           </View>
         </View>
@@ -145,6 +171,11 @@ const s = StyleSheet.create({
   colorName: { fontSize: 8, color: Colors.ink3, maxWidth: 44, textAlign: "center" },
   sizeBadge: { backgroundColor: Colors.bg4, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: Colors.border },
   sizeBadgeText: { fontSize: 9, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.3 },
+  // Service visuals
+  serviceBadge: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  serviceBadgeIcon: { fontSize: 16, color: Colors.violet3 },
+  serviceTag: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border2 },
+  serviceTagText: { fontSize: 10, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.3 },
   right: { alignItems: "flex-end", gap: 2 },
   stockRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   stock: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
