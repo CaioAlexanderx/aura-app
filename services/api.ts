@@ -145,6 +145,11 @@ export var companiesApi = {
   createVariant: function(companyId: string, productId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants", { method: "POST", body: body }); },
   updateVariant: function(companyId: string, productId: string, variantId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "PATCH", body: body }); },
   deleteVariant: function(companyId: string, productId: string, variantId: string) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "DELETE" }); },
+  // Product categories
+  productCategories: function(companyId: string) { return request<{ categories: Array<{ id: string; name: string; color: string | null; sort_order: number; product_count: number }>; total: number }>("/companies/" + companyId + "/product-categories"); },
+  createProductCategory: function(companyId: string, body: { name: string; color?: string | null; sort_order?: number }) { return request<any>("/companies/" + companyId + "/product-categories", { method: "POST", body: body }); },
+  updateProductCategory: function(companyId: string, catId: string, body: { name?: string; color?: string | null; sort_order?: number }) { return request<any>("/companies/" + companyId + "/product-categories/" + catId, { method: "PATCH", body: body }); },
+  deleteProductCategory: function(companyId: string, catId: string, moveTo?: string) { return request<any>("/companies/" + companyId + "/product-categories/" + catId + (moveTo ? "?move_to=" + encodeURIComponent(moveTo) : ""), { method: "DELETE" }); },
   customers: function(companyId: string) { return request<any>("/companies/" + companyId + "/customers"); },
   createCustomer: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/customers", { method: "POST", body: body }); },
   updateCustomer: function(companyId: string, custId: string, body: any) { return request<any>("/companies/" + companyId + "/customers/" + custId, { method: "PATCH", body: body }); },
