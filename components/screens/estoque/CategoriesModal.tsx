@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Modal, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Modal, ScrollView, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useProductCategories, type ProductCategory } from "@/hooks/useProductCategories";
+import type { CategoryType } from "@/services/api";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -11,10 +12,21 @@ const PRESET_COLORS = [
   "#6b7280", "#1f2937", "#92400e", "#0ea5e9",
 ];
 
-type DeleteTarget = { cat: ProductCategory; moveTo: string | null } | null;
+type DeleteTarget = { cat: ProductCategory } | null;
 
-export function CategoriesModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { categories, isLoading, create, update, remove, isCreating, isUpdating, isDeleting } = useProductCategories();
+export function CategoriesModal({
+  visible, onClose, initialType,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  initialType?: CategoryType;
+}) {
+  // type ativo no modal. Quando initialType vem fixo, travamos o toggle.
+  const [type, setType] = useState<CategoryType>(initialType || "product");
+  const lockedType = !!initialType;
+
+  const { categories, isLoading, create, update, remove, isCreating, isUpdating, isDeleting } =
+    useProductCategories(type);
 
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState<string | null>(null);
@@ -23,6 +35,15 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
   const [editColor, setEditColor] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [deleteMoveTo, setDeleteMoveTo] = useState<string | null>(null);
+
+  // Ao trocar de aba zera o form
+  function switchType(next: CategoryType) {
+    if (lockedType) return;
+    setType(next);
+    setNewName(""); setNewColor(null);
+    setEditingId(null); setEditName(""); setEditColor(null);
+    setDeleteTarget(null); setDeleteMoveTo(null);
+  }
 
   function handleCreate() {
     const name = newName.trim();
@@ -50,7 +71,7 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
   }
 
   function startDelete(cat: ProductCategory) {
-    setDeleteTarget({ cat, moveTo: null });
+    setDeleteTarget({ cat });
     setDeleteMoveTo(null);
   }
 
@@ -65,19 +86,49 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
     ? categories.filter(c => c.id !== deleteTarget.cat.id)
     : [];
 
+  const itemLabel = type === "service" ? "servico" : "produto";
+  const itemLabelPlural = type === "service" ? "servicos" : "produtos";
+  const titleText = type === "service" ? "Categorias de servicos" : "Categorias de produtos";
+  const subtitleText = type === "service"
+    ? "Organize seus servicos em grupos (ex: Corte, Coloracao, Estetica)."
+    : "Organize seus produtos em grupos.";
+  const createPlaceholder = type === "service"
+    ? "Ex: Corte, Coloracao, Manicure..."
+    : "Ex: Bebidas, Vestuario...";
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.overlay}>
         <View style={s.modal}>
           <View style={s.header}>
             <View style={{ flex: 1 }}>
-              <Text style={s.title}>Categorias de produtos</Text>
-              <Text style={s.subtitle}>Organize seus produtos em grupos.</Text>
+              <Text style={s.title}>{titleText}</Text>
+              <Text style={s.subtitle}>{subtitleText}</Text>
             </View>
             <Pressable onPress={onClose} style={s.closeBtn} hitSlop={8}>
               <Icon name="x" size={14} color={Colors.ink3} />
             </Pressable>
           </View>
+
+          {/* Toggle Produtos / Servicos */}
+          {!lockedType && (
+            <View style={s.segmented}>
+              <Pressable
+                onPress={() => switchType("product")}
+                style={[s.segBtn, type === "product" && s.segBtnActive]}
+              >
+                <Icon name="package" size={11} color={type === "product" ? "#fff" : Colors.ink3} />
+                <Text style={[s.segText, type === "product" && s.segTextActive]}>Produtos</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => switchType("service")}
+                style={[s.segBtn, type === "service" && s.segBtnActive]}
+              >
+                <Icon name="star" size={11} color={type === "service" ? "#fff" : Colors.ink3} />
+                <Text style={[s.segText, type === "service" && s.segTextActive]}>Servicos</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* Create */}
           <View style={s.createCard}>
@@ -87,7 +138,7 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
                 style={s.input}
                 value={newName}
                 onChangeText={setNewName}
-                placeholder="Ex: Bebidas, Vestuario..."
+                placeholder={createPlaceholder}
                 placeholderTextColor={Colors.ink3}
                 onSubmitEditing={handleCreate}
               />
@@ -127,7 +178,7 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
             {!isLoading && categories.length === 0 && (
               <View style={s.empty}>
                 <Text style={s.emptyTitle}>Nenhuma categoria cadastrada</Text>
-                <Text style={s.emptyHint}>Crie sua primeira categoria acima para comecar a organizar.</Text>
+                <Text style={s.emptyHint}>Crie sua primeira categoria acima para comecar a organizar seus {itemLabelPlural}.</Text>
               </View>
             )}
 
@@ -171,7 +222,7 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
                       {cat.color ? <View style={[s.dot, { backgroundColor: cat.color }]} /> : <View style={[s.dot, { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border }]} />}
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={s.name} numberOfLines={1}>{cat.name}</Text>
-                        <Text style={s.count}>{cat.product_count} produto{cat.product_count !== 1 ? "s" : ""}</Text>
+                        <Text style={s.count}>{cat.product_count} {cat.product_count === 1 ? itemLabel : itemLabelPlural}</Text>
                       </View>
                       <Pressable onPress={() => startEdit(cat)} style={s.iconBtn} hitSlop={6}>
                         <Icon name="edit" size={12} color={Colors.violet3} />
@@ -199,10 +250,10 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
           title={"Excluir categoria \"" + (deleteTarget?.cat.name || "") + "\"?"}
           message={
             deleteTarget && deleteTarget.cat.product_count > 0
-              ? "Esta categoria tem " + deleteTarget.cat.product_count + " produto(s)."
+              ? "Esta categoria tem " + deleteTarget.cat.product_count + " " + (deleteTarget.cat.product_count === 1 ? itemLabel : itemLabelPlural) + "."
                 + (deleteMoveTo
                     ? " Eles serao movidos para \"" + deleteMoveTo + "\"."
-                    : " Se voce nao escolher um destino, os produtos ficarao sem categoria cadastrada.")
+                    : " Se voce nao escolher um destino, os itens ficarao sem categoria cadastrada.")
               : "Esta acao nao pode ser desfeita."
           }
           confirmLabel={isDeleting ? "Removendo..." : "Excluir"}
@@ -211,11 +262,13 @@ export function CategoriesModal({ visible, onClose }: { visible: boolean; onClos
           onCancel={() => { setDeleteTarget(null); setDeleteMoveTo(null); }}
         />
 
-        {/* Move picker (antes do confirm) - so aparece se tem produtos */}
+        {/* Move picker (preview antes do confirm) — so aparece se tem itens */}
         {deleteTarget && deleteTarget.cat.product_count > 0 && availableMoveTargets.length > 0 && (
           <View style={s.moveBanner} pointerEvents="box-none">
             <View style={s.moveBannerInner}>
-              <Text style={s.moveBannerTitle}>Mover {deleteTarget.cat.product_count} produto(s) para:</Text>
+              <Text style={s.moveBannerTitle}>
+                Mover {deleteTarget.cat.product_count} {deleteTarget.cat.product_count === 1 ? itemLabel : itemLabelPlural} para:
+              </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
                 <Pressable
                   onPress={() => setDeleteMoveTo(null)}
@@ -249,7 +302,12 @@ const s = StyleSheet.create({
   title: { fontSize: 17, fontWeight: "700", color: Colors.ink },
   subtitle: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
   closeBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  createCard: { backgroundColor: Colors.bg4, margin: 16, marginTop: 4, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 10 },
+  segmented: { flexDirection: "row", gap: 4, marginHorizontal: 20, marginBottom: 12, padding: 4, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
+  segBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 7 },
+  segBtnActive: { backgroundColor: Colors.violet },
+  segText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+  segTextActive: { color: "#fff", fontWeight: "700" },
+  createCard: { backgroundColor: Colors.bg4, marginHorizontal: 16, marginBottom: 4, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 10 },
   sectionLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
   createRow: { flexDirection: "row", gap: 8 },
   input: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
@@ -266,10 +324,10 @@ const s = StyleSheet.create({
   colorChipSmall: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border },
   colorChipSmallActive: { borderWidth: 2.5, borderColor: Colors.violet },
   noColorText: { fontSize: 8, color: Colors.ink3, fontWeight: "600" },
-  list: { paddingHorizontal: 16, paddingBottom: 8, maxHeight: 360 },
+  list: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, maxHeight: 340 },
   empty: { alignItems: "center", paddingVertical: 32, gap: 6 },
   emptyTitle: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
-  emptyHint: { fontSize: 11, color: Colors.ink3, textAlign: "center", maxWidth: 280 },
+  emptyHint: { fontSize: 11, color: Colors.ink3, textAlign: "center", maxWidth: 320 },
   row: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border },
   dot: { width: 14, height: 14, borderRadius: 7 },
   name: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
@@ -277,7 +335,6 @@ const s = StyleSheet.create({
   iconBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
   editActions: { flexDirection: "row", gap: 6, justifyContent: "flex-end", marginTop: 2 },
   footer: { padding: 16, paddingTop: 8, flexDirection: "row", gap: 8, borderTopWidth: 1, borderTopColor: Colors.border },
-  // Move target banner (preview antes de confirmar delete)
   moveBanner: { position: "absolute", left: 0, right: 0, bottom: 100, alignItems: "center", paddingHorizontal: 20 },
   moveBannerInner: { width: "100%", maxWidth: 480, backgroundColor: Colors.violetD, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border2, gap: 10 },
   moveBannerTitle: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
