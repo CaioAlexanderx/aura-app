@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
+import { useProductCategories } from "@/hooks/useProductCategories";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -18,6 +19,7 @@ import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
 import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
+import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -50,6 +52,7 @@ function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) =>
 
 export default function EstoqueScreen() {
   const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useProducts();
+  const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
@@ -68,6 +71,7 @@ export default function EstoqueScreen() {
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [showCategoriesModal, setShowCategoriesModal] = useState(false);
 
   const editingProductId = editProduct?.id || null;
   const { data: variantsData, refetch: refetchVariants } = useQuery({
@@ -85,8 +89,18 @@ export default function EstoqueScreen() {
   });
   const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
 
-  const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...categories, ...products.map(p => p.category)]));
-  const filterCategories = ["Todos", ...allCategories.filter(Boolean)];
+  // Categorias cadastradas tem prioridade; categorias derivadas dos produtos
+  // (legado, ainda nao cadastradas) entram depois para cobrir o que ja existe.
+  const allCategories = useMemo(() => {
+    return Array.from(new Set([
+      ...DEFAULT_CATEGORIES,
+      ...managedCategoryNames,
+      ...categories,
+      ...products.map(p => p.category),
+    ])).filter(Boolean);
+  }, [managedCategoryNames, categories, products]);
+
+  const filterCategories = ["Todos", ...allCategories];
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     const matchCat = catFilter === "Todos" || p.category === catFilter;
@@ -225,6 +239,10 @@ export default function EstoqueScreen() {
         <View style={s.toolbar}>
           <ImportExportBar onExport={handleExport} itemCount={products.length} />
           <ServerImport entity="products" onComplete={handleImportComplete} />
+          <Pressable onPress={() => setShowCategoriesModal(true)} style={s.catBtn}>
+            <Icon name="tag" size={12} color={Colors.violet3} />
+            <Text style={s.catBtnText}>Categorias</Text>
+          </Pressable>
           {!bulkMode ? (
             <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}><Text style={s.bulkBtnText}>Selecionar</Text></Pressable>
           ) : (
@@ -276,6 +294,7 @@ export default function EstoqueScreen() {
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
       <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
       <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
+      <CategoriesModal visible={showCategoriesModal} onClose={() => setShowCategoriesModal(false)} />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
   );
@@ -301,6 +320,8 @@ const s = StyleSheet.create({
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   tabTextActive: { color: "#fff", fontWeight: "600" },
   toolbar: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
+  catBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
+  catBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   bulkBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   bulkBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   dupBtn: { backgroundColor: Colors.amberD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: "rgba(245,158,11,0.3)" },
