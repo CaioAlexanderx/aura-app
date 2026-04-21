@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 var fmt = function(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
 
@@ -36,8 +37,11 @@ export function TabMetas() {
   var [month, setMonth] = useState(currentMonth());
   var [showForm, setShowForm] = useState(false);
   var [formEmpId, setFormEmpId] = useState("");
+  var [formEmpName, setFormEmpName] = useState("");
   var [formAmount, setFormAmount] = useState("");
   var [formUnits, setFormUnits] = useState("");
+  var [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  var [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   var { data: trackingData, isLoading } = useQuery({
     queryKey: ["goals-tracking", company?.id, month],
@@ -55,8 +59,22 @@ export function TabMetas() {
 
   var saveMutation = useMutation({
     mutationFn: function(body: any) { return request("/companies/" + company!.id + "/goals", { method: "POST", body: body }); },
-    onSuccess: function() { qc.invalidateQueries({ queryKey: ["goals-tracking", company?.id] }); toast.success("Meta salva!"); setShowForm(false); setFormAmount(""); setFormUnits(""); },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["goals-tracking", company?.id] });
+      toast.success(editingGoalId ? "Meta atualizada!" : "Meta salva!");
+      resetForm();
+    },
     onError: function(err: any) { toast.error(err?.message || "Erro ao salvar"); },
+  });
+
+  var deleteMutation = useMutation({
+    mutationFn: function(goalId: string) { return request("/companies/" + company!.id + "/goals/" + goalId, { method: "DELETE" }); },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["goals-tracking", company?.id] });
+      toast.success("Meta removida");
+      setDeleteTarget(null);
+    },
+    onError: function(err: any) { toast.error(err?.message || "Erro ao remover"); setDeleteTarget(null); },
   });
 
   var tracking = (trackingData as any) || {};
@@ -64,16 +82,35 @@ export function TabMetas() {
   var team = tracking.team || {};
   var allEmployees = ((empData as any)?.employees || (empData as any)?.data || []);
 
+  function resetForm() {
+    setShowForm(false);
+    setEditingGoalId(null);
+    setFormEmpId("");
+    setFormEmpName("");
+    setFormAmount("");
+    setFormUnits("");
+  }
+
   function handleSave() {
     var amt = parseFloat(formAmount.replace(",", "."));
     if (!formEmpId || !amt || amt <= 0) { toast.error("Selecione um vendedor e informe o valor"); return; }
     saveMutation.mutate({ employee_id: formEmpId, reference_month: month, goal_amount: amt, goal_units: parseInt(formUnits) || null });
   }
 
+  function handleEdit(e: any) {
+    setEditingGoalId(e.goal_id);
+    setFormEmpId(e.employee_id);
+    setFormEmpName(e.employee_name);
+    setFormAmount(String(e.goal_amount));
+    setFormUnits(e.goal_units > 0 ? String(e.goal_units) : "");
+    setShowForm(true);
+  }
+
   function changeMonth(delta: number) {
     var parts = month.split("-"); var y = parseInt(parts[0]); var m = parseInt(parts[1]) + delta;
     if (m > 12) { m = 1; y++; } if (m < 1) { m = 12; y--; }
     setMonth(y + "-" + String(m).padStart(2, "0"));
+    resetForm();
   }
 
   var monthLabel = (function() { var p = month.split("-"); var names = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]; return names[parseInt(p[1])-1] + "/" + p[0]; })();
@@ -84,7 +121,7 @@ export function TabMetas() {
         <Pressable onPress={function() { changeMonth(-1); }} style={s.monthBtn}><Text style={s.monthBtnText}>{"\u2039"}</Text></Pressable>
         <Text style={s.monthLabel}>{monthLabel}</Text>
         <Pressable onPress={function() { changeMonth(1); }} style={s.monthBtn}><Text style={s.monthBtnText}>{"\u203A"}</Text></Pressable>
-        <Pressable onPress={function() { setShowForm(!showForm); }} style={s.addGoalBtn}>
+        <Pressable onPress={function() { if (showForm) resetForm(); else setShowForm(true); }} style={s.addGoalBtn}>
           <Icon name="plus" size={14} color={Colors.violet3} />
           <Text style={s.addGoalText}>Definir meta</Text>
         </Pressable>
@@ -110,14 +147,18 @@ export function TabMetas() {
 
       {showForm && (
         <View style={s.formCard}>
-          <Text style={s.formTitle}>Definir meta para {monthLabel}</Text>
-          <Text style={s.formLabel}>Vendedor</Text>
-          <View style={s.pickerRow}>
-            {allEmployees.map(function(e: any) {
-              var active = formEmpId === e.id;
-              return <Pressable key={e.id} onPress={function() { setFormEmpId(e.id); }} style={[s.pickerBtn, active && s.pickerBtnActive]}><Text style={[s.pickerText, active && s.pickerTextActive]}>{e.name}</Text></Pressable>;
-            })}
-          </View>
+          <Text style={s.formTitle}>{editingGoalId ? "Editar meta de " + formEmpName : "Definir meta para " + monthLabel}</Text>
+          {!editingGoalId && (
+            <>
+              <Text style={s.formLabel}>Vendedor</Text>
+              <View style={s.pickerRow}>
+                {allEmployees.map(function(e: any) {
+                  var active = formEmpId === e.id;
+                  return <Pressable key={e.id} onPress={function() { setFormEmpId(e.id); setFormEmpName(e.name); }} style={[s.pickerBtn, active && s.pickerBtnActive]}><Text style={[s.pickerText, active && s.pickerTextActive]}>{e.name}</Text></Pressable>;
+                })}
+              </View>
+            </>
+          )}
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
               <Text style={s.formLabel}>Meta R$</Text>
@@ -128,9 +169,14 @@ export function TabMetas() {
               <TextInput style={s.formInput} value={formUnits} onChangeText={setFormUnits} placeholder="50" placeholderTextColor={Colors.ink3} keyboardType="number-pad" />
             </View>
           </View>
-          <Pressable onPress={handleSave} disabled={saveMutation.isPending} style={[s.saveBtn, saveMutation.isPending && { opacity: 0.6 }]}>
-            {saveMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>Salvar meta</Text>}
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+            <Pressable onPress={resetForm} style={s.cancelBtn}>
+              <Text style={s.cancelBtnText}>Cancelar</Text>
+            </Pressable>
+            <Pressable onPress={handleSave} disabled={saveMutation.isPending} style={[s.saveBtn, saveMutation.isPending && { opacity: 0.6 }]}>
+              {saveMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{editingGoalId ? "Atualizar" : "Salvar meta"}</Text>}
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -142,7 +188,7 @@ export function TabMetas() {
 
       {employees.map(function(e: any) {
         return (
-          <View key={e.employee_id} style={s.empCard}>
+          <View key={e.goal_id || e.employee_id} style={s.empCard}>
             <View style={s.empHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={s.empName}>{e.employee_name}</Text>
@@ -160,9 +206,31 @@ export function TabMetas() {
             <View style={s.empFooter}>
               <Text style={s.empFooterText}>Projecao: {fmt(e.projected_revenue)} | Falta: {fmt(e.remaining)} | Ticket: {fmt(e.ticket_medio)}</Text>
             </View>
+            {e.goal_id && (
+              <View style={s.empActions}>
+                <Pressable onPress={function() { handleEdit(e); }} style={s.editGoalBtn}>
+                  <Icon name="edit" size={12} color={Colors.violet3} />
+                  <Text style={s.editGoalText}>Editar</Text>
+                </Pressable>
+                <Pressable onPress={function() { setDeleteTarget({ id: e.goal_id, name: e.employee_name }); }} style={s.deleteGoalBtn}>
+                  <Icon name="x" size={12} color={Colors.red} />
+                  <Text style={s.deleteGoalText}>Excluir</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         );
       })}
+
+      <ConfirmDialog
+        visible={!!deleteTarget}
+        title="Excluir meta?"
+        message={deleteTarget ? "Remover a meta de " + deleteTarget.name + " para " + monthLabel + "? Esta acao nao pode ser desfeita." : ""}
+        confirmLabel="Excluir"
+        destructive
+        onConfirm={function() { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+        onCancel={function() { setDeleteTarget(null); }}
+      />
     </View>
   );
 }
@@ -191,8 +259,10 @@ var s = StyleSheet.create({
   pickerBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   pickerText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   pickerTextActive: { color: Colors.violet3, fontWeight: "600" },
-  saveBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  saveBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
   saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  cancelBtn: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+  cancelBtnText: { color: Colors.ink3, fontSize: 13, fontWeight: "600" },
   empty: { alignItems: "center", paddingVertical: 40, gap: 8 },
   emptyText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
   emptyHint: { fontSize: 12, color: Colors.ink3, textAlign: "center", maxWidth: 280 },
@@ -206,6 +276,11 @@ var s = StyleSheet.create({
   empStatLabel: { fontSize: 8, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 2 },
   empFooter: { paddingTop: 4 },
   empFooterText: { fontSize: 10, color: Colors.ink3 },
+  empActions: { flexDirection: "row", gap: 6, marginTop: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  editGoalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  editGoalText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  deleteGoalBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "33" },
+  deleteGoalText: { fontSize: 11, color: Colors.red, fontWeight: "600" },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: "700" },
 });
