@@ -23,6 +23,7 @@ import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
+import type { CategoryType } from "@/services/api";
 import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
@@ -50,6 +51,8 @@ function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) =>
   </ScrollView>;
 }
 
+type CategoriesModalState = { open: boolean; initialType?: CategoryType };
+
 export default function EstoqueScreen() {
   const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useProducts();
   const { categoryNames: managedCategoryNames } = useProductCategories();
@@ -71,7 +74,7 @@ export default function EstoqueScreen() {
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
   const [showMergeModal, setShowMergeModal] = useState(false);
-  const [showCategoriesModal, setShowCategoriesModal] = useState(false);
+  const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
   const editingProductId = editProduct?.id || null;
   const { data: variantsData, refetch: refetchVariants } = useQuery({
@@ -200,9 +203,9 @@ export default function EstoqueScreen() {
       {/* Service form (simplified) */}
       {showServiceForm && (
         <AddServiceForm
-          categories={allCategories}
           onSave={handleSaveProduct}
           onCancel={() => setShowServiceForm(false)}
+          onOpenCategories={() => setCategoriesModal({ open: true, initialType: "service" })}
         />
       )}
 
@@ -239,7 +242,7 @@ export default function EstoqueScreen() {
         <View style={s.toolbar}>
           <ImportExportBar onExport={handleExport} itemCount={products.length} />
           <ServerImport entity="products" onComplete={handleImportComplete} />
-          <Pressable onPress={() => setShowCategoriesModal(true)} style={s.catBtn}>
+          <Pressable onPress={() => setCategoriesModal({ open: true })} style={s.catBtn}>
             <Icon name="tag" size={12} color={Colors.violet3} />
             <Text style={s.catBtnText}>Categorias</Text>
           </Pressable>
@@ -294,7 +297,11 @@ export default function EstoqueScreen() {
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
       <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
       <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
-      <CategoriesModal visible={showCategoriesModal} onClose={() => setShowCategoriesModal(false)} />
+      <CategoriesModal
+        visible={categoriesModal.open}
+        initialType={categoriesModal.initialType}
+        onClose={() => setCategoriesModal({ open: false })}
+      />
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
   );
