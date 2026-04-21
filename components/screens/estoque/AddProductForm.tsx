@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -6,9 +6,11 @@ import { toast } from "@/components/Toast";
 import { BarcodeQRSection } from "@/components/BarcodeQRSection";
 import { VariantsSection } from "@/components/VariantsSection";
 import { ImageUploadSection } from "@/components/ImageUploadSection";
+import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
+import { useProductCategories } from "@/hooks/useProductCategories";
 import type { Product } from "./types";
 import { UNITS } from "./types";
 
@@ -38,11 +40,27 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const isEdit = !!editProduct;
   const { company } = useAuthStore();
   const qc = useQueryClient();
+  const { categories: managedCategories } = useProductCategories();
+
+  // Merge: categorias cadastradas (primeiro) + categorias derivadas dos produtos existentes
+  // que ainda nao foram cadastradas (ficam no final como legado).
+  const mergedCategoryList = useMemo(() => {
+    const managed = managedCategories.map(c => c.name);
+    const managedSet = new Set(managed.map(n => n.toLowerCase()));
+    const fromProducts = categories.filter(c => c && !managedSet.has(c.toLowerCase()));
+    return [...managed, ...fromProducts];
+  }, [managedCategories, categories]);
+
+  const managedColorByName = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    managedCategories.forEach(c => { map[c.name] = c.color; });
+    return map;
+  }, [managedCategories]);
 
   const [name, setName]         = useState(editProduct?.name || "");
   const [code, setCode]         = useState(editProduct?.code || "");
   const [barcode, setBarcode]   = useState(editProduct?.barcode || "");
-  const [category, setCategory] = useState(editProduct?.category || categories[0] || "");
+  const [category, setCategory] = useState(editProduct?.category || mergedCategoryList[0] || "");
   const [price, setPrice]       = useState(editProduct ? String(editProduct.price) : "");
   const [cost, setCost]         = useState(editProduct ? String(editProduct.cost) : "");
   const [stock, setStock]       = useState(editProduct ? String(editProduct.stock) : "");
@@ -54,9 +72,23 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
 
+  // Estoque colapsavel: aberto no edit quando ja tem estoque/min; fechado no create.
+  const initialShowStock = isEdit && (
+    (parseInt(editProduct?.stock as any) || 0) > 0 ||
+    (parseInt(editProduct?.minStock as any) || 0) > 0
+  );
+  const [showStock, setShowStock] = useState(initialShowStock);
+
   // Fase A: duplicate detection com debounce
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [checkingDup, setCheckingDup] = useState(false);
+
+  // Default category quando a primeira categoria cadastrada chega e ainda nao ha selecao
+  useEffect(() => {
+    if (!isEdit && !category && mergedCategoryList.length > 0) {
+      setCategory(mergedCategoryList[0]);
+    }
+  }, [isEdit, category, mergedCategoryList]);
 
   useEffect(() => {
     const trimmed = name.trim();
@@ -85,6 +117,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     staleTime: 30000,
   });
   const variants = ((variantsData as any)?.variants || variantsData || []) as any[];
+  const hasVariants = variants.length > 0;
 
   function generateCode() {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
@@ -197,10 +230,26 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
 
       <FormField label="Categoria">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-          {categories.map(c => <Pressable key={c} onPress={() => { setCategory(c); setShowNewCat(false); }} style={[s.chip, category === c && !showNewCat && s.chipActive]}><Text style={[s.chipText, category === c && !showNewCat && s.chipTextActive]}>{c}</Text></Pressable>)}
-          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}><Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text></Pressable>
+          {mergedCategoryList.map(c => {
+            const selected = category === c && !showNewCat;
+            const chipColor = managedColorByName[c];
+            return (
+              <Pressable
+                key={c}
+                onPress={() => { setCategory(c); setShowNewCat(false); }}
+                style={[s.chip, selected && s.chipActive]}
+              >
+                {chipColor ? <View style={[s.chipDot, { backgroundColor: chipColor }]} /> : null}
+                <Text style={[s.chipText, selected && s.chipTextActive]}>{c}</Text>
+              </Pressable>
+            );
+          })}
+          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}>
+            <Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text>
+          </Pressable>
         </ScrollView>
         {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
+        <Text style={s.categoryHint}>Gerencie suas categorias pelo botao &quot;Categorias&quot; na tela de Estoque.</Text>
       </FormField>
 
       <View style={s.divider} />
@@ -210,10 +259,37 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <View style={{ flex: 1 }}><FormField label="Custo"><TextInput style={s.input} value={cost} onChangeText={setCost} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></FormField></View>
       </View>
 
-      <View style={s.row2}>
-        <View style={{ flex: 1 }}><FormField label="Qtd. atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
-        <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
-      </View>
+      {/* Bloco de estoque agora e opcional e colapsavel */}
+      <Pressable onPress={() => setShowStock(!showStock)} style={s.stockToggle}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.stockToggleTitle}>Estoque inicial {isEdit ? "" : "(opcional)"}</Text>
+          <Text style={s.stockToggleSub}>
+            {showStock
+              ? "Informe a quantidade em maos e o nivel minimo para alertas."
+              : hasVariants
+                ? "Produto com variantes: estoque e controlado por variante."
+                : "Voce pode dar entrada de estoque depois, a qualquer momento."}
+          </Text>
+        </View>
+        <Icon name={showStock ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />
+      </Pressable>
+
+      {showStock && (
+        <>
+          {hasVariants && (
+            <View style={s.stockVariantHint}>
+              <Icon name="alert" size={12} color={Colors.amber} />
+              <Text style={s.stockVariantHintText}>
+                Este produto tem variantes. O estoque informado aqui e apenas do produto base; cada variante tem estoque proprio.
+              </Text>
+            </View>
+          )}
+          <View style={s.row2}>
+            <View style={{ flex: 1 }}><FormField label="Qtd. atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
+            <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
+          </View>
+        </>
+      )}
 
       <View style={s.divider} />
 
@@ -282,15 +358,23 @@ const s = StyleSheet.create({
   input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   row2: { flexDirection: IS_WIDE ? "row" : "column", gap: IS_WIDE ? 12 : 0 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
   chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
+  categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10 },
   colorSwatch: { width: 36, height: 36, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border },
   colorText: { fontSize: 12, color: Colors.ink, fontWeight: "500", flex: 1 },
+  // Estoque colapsavel
+  stockToggle: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
+  stockToggleTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
+  stockToggleSub: { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
+  stockVariantHint: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.amber + "33", marginBottom: 10 },
+  stockVariantHintText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 15 },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
