@@ -88,6 +88,16 @@ export type RegisterBody = { name: string; email: string; password: string; comp
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string };
 
+export type CategoryType = "product" | "service";
+export type ProductCategoryRow = {
+  id: string;
+  name: string;
+  color: string | null;
+  sort_order: number;
+  type: CategoryType;
+  product_count: number;
+};
+
 // Auth API
 export var authApi = {
   login: function(email: string, password: string) { return request<LoginResponse>("/auth/login", { method: "POST", body: { email: email, password: password }, retry: 1 }); },
@@ -145,11 +155,20 @@ export var companiesApi = {
   createVariant: function(companyId: string, productId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants", { method: "POST", body: body }); },
   updateVariant: function(companyId: string, productId: string, variantId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "PATCH", body: body }); },
   deleteVariant: function(companyId: string, productId: string, variantId: string) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "DELETE" }); },
-  // Product categories
-  productCategories: function(companyId: string) { return request<{ categories: Array<{ id: string; name: string; color: string | null; sort_order: number; product_count: number }>; total: number }>("/companies/" + companyId + "/product-categories"); },
-  createProductCategory: function(companyId: string, body: { name: string; color?: string | null; sort_order?: number }) { return request<any>("/companies/" + companyId + "/product-categories", { method: "POST", body: body }); },
-  updateProductCategory: function(companyId: string, catId: string, body: { name?: string; color?: string | null; sort_order?: number }) { return request<any>("/companies/" + companyId + "/product-categories/" + catId, { method: "PATCH", body: body }); },
-  deleteProductCategory: function(companyId: string, catId: string, moveTo?: string) { return request<any>("/companies/" + companyId + "/product-categories/" + catId + (moveTo ? "?move_to=" + encodeURIComponent(moveTo) : ""), { method: "DELETE" }); },
+  // Product/Service categories (compartilham a mesma tabela via coluna type)
+  productCategories: function(companyId: string, type?: CategoryType) {
+    var q = type ? "?type=" + type : "";
+    return request<{ categories: ProductCategoryRow[]; total: number; type: CategoryType }>("/companies/" + companyId + "/product-categories" + q);
+  },
+  createProductCategory: function(companyId: string, body: { name: string; color?: string | null; sort_order?: number; type?: CategoryType }) {
+    return request<any>("/companies/" + companyId + "/product-categories", { method: "POST", body: body });
+  },
+  updateProductCategory: function(companyId: string, catId: string, body: { name?: string; color?: string | null; sort_order?: number }) {
+    return request<any>("/companies/" + companyId + "/product-categories/" + catId, { method: "PATCH", body: body });
+  },
+  deleteProductCategory: function(companyId: string, catId: string, moveTo?: string) {
+    return request<any>("/companies/" + companyId + "/product-categories/" + catId + (moveTo ? "?move_to=" + encodeURIComponent(moveTo) : ""), { method: "DELETE" });
+  },
   customers: function(companyId: string) { return request<any>("/companies/" + companyId + "/customers"); },
   createCustomer: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/customers", { method: "POST", body: body }); },
   updateCustomer: function(companyId: string, custId: string, body: any) { return request<any>("/companies/" + companyId + "/customers/" + custId, { method: "PATCH", body: body }); },
