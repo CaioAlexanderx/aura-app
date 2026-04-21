@@ -198,7 +198,7 @@ function MBar() {
   });
 
   return (
-    <View style={{ position: "relative" }}>
+    <View style={{ position: "relative", flexShrink: 0, zIndex: 50 } as any}>
       {showMore && Platform.OS === "web" && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 998, background: "rgba(0,0,0,0.5)" } as any} onClick={() => setShowMore(false)}>
           <div style={{ position: "absolute", bottom: 56, left: 8, right: 8, background: C.bg2, borderRadius: 16, border: "1px solid " + C.border, padding: 12, maxHeight: "60vh", overflowY: "auto", zIndex: 999 } as any} onClick={(e: any) => e.stopPropagation()}>
@@ -216,7 +216,7 @@ function MBar() {
           </div>
         </div>
       )}
-      <View style={{ flexDirection: "row", backgroundColor: C.bg2, borderTopWidth: 1, borderTopColor: C.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6 }}>
+      <View style={{ flexDirection: "row", backgroundColor: C.bg2, borderTopWidth: 1, borderTopColor: C.border, paddingBottom: Platform.OS === "ios" ? 20 : 6, paddingTop: 6, flexShrink: 0 }}>
         {filteredTabs.map(t => {
           const a = isA(p, t.r);
           return (
@@ -256,10 +256,15 @@ export default function TabsLayout() {
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
+  // MOBILE WEB: flex column com height:100vh.
+  // `minHeight: 0` no wrapper do Slot e `flexShrink: 0` na MBar sao essenciais:
+  // sem isso, quando o conteudo da tela e alto (ex: Caixa, Estoque), o flex:1
+  // nao comprime (default min-height:auto em flex items) e empurra a MBar para
+  // fora da viewport, deixando o usuario sem navegacao.
   if (w && isNarrow) return (
-    <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative" } as any}>
+    <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative", overflow: "hidden" } as any}>
       <ToastContainer />
-      <div style={{ flex: 1, overflow: "auto", position: "relative" } as any}>
+      <div style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0, minWidth: 0 } as any}>
         <PageTransition><Slot /></PageTransition>
       </div>
       <MBar />
@@ -270,7 +275,7 @@ export default function TabsLayout() {
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative" } as any}>
+      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative", minWidth: 0 } as any}>
         <ToastContainer />
         <PageTransition><Slot /></PageTransition>
       </div>
