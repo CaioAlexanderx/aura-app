@@ -4,10 +4,8 @@ import { Colors } from "@/constants/colors";
 import { IS_WIDE, fmt } from "@/constants/helpers";
 import { TabBar } from "@/components/TabBar";
 import { HoverCard } from "@/components/HoverCard";
-import { DemoBanner } from "@/components/DemoBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
-import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { useAppointments } from "@/hooks/useAppointments";
 
@@ -201,7 +199,6 @@ const cfg = StyleSheet.create({
 });
 
 export default function AgendamentoScreen() {
-  const { isDemo } = useAuthStore();
   const [tab, setTab] = useState(0);
   const { appointments, kpis, isLoading, updateAppointment, cancelAppointment } = useAppointments();
 
@@ -219,7 +216,6 @@ export default function AgendamentoScreen() {
       {tab === 0 && <DayView appointments={appointments} onConfirm={handleConfirm} onCancel={handleCancel} />}
       {tab === 1 && <TimeSlots />}
       {tab === 2 && <ScheduleConfig />}
-      <DemoBanner />
     </ScrollView>
   );
 }

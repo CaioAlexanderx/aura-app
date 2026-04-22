@@ -6,7 +6,6 @@ import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { DemoTour } from "@/components/DemoTour";
 import { TrialBanner } from "@/components/TrialBanner";
 import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
@@ -82,7 +81,6 @@ export default function DashboardScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <DemoTour visible={isDemo} />
       <TrialBanner />
       <SkeletonStyle />
       <ScrollView style={s.scroll} contentContainerStyle={s.content}>

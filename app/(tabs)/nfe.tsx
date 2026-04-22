@@ -9,7 +9,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "@/components/Toast";
-import { DemoBanner } from "@/components/DemoBanner";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { TABS, STATUS_MAP, DocRow, fmt, ns } from "@/components/screens/nfe/shared";
 import type { NfeDoc } from "@/components/screens/nfe/shared";
@@ -91,7 +90,6 @@ export default function NfeScreen() {
       {tab === 3 && company?.id && <TabConfig companyId={company.id} />}
       <ConfirmDialog visible={!!cancelTarget} title="Cancelar nota fiscal?" message="O cancelamento sera enviado a SEFAZ. Esta acao nao pode ser desfeita." confirmLabel="Cancelar nota" destructive
         onConfirm={() => { if (cancelTarget) { cancelMut.mutate(cancelTarget); setCancelTarget(null); } }} onCancel={() => setCancelTarget(null)} />
-      <DemoBanner />
     </ScrollView>
   );
 }
