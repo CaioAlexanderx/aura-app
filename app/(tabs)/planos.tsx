@@ -26,7 +26,7 @@ const PLANS = [
   },
   {
     key: "negocio", name: "Negocio", subtitle: "Para crescer", popular: true,
-    monthly: 199, features: [
+    monthly: 169.90, features: [
       "Tudo do Essencial +",
       "Cadastro e historico de clientes",
       "Mensagens automaticas pelo WhatsApp",
@@ -40,7 +40,7 @@ const PLANS = [
   },
   {
     key: "expansao", name: "Expansao", subtitle: "Para escalar",
-    monthly: 299, features: [
+    monthly: 269.90, features: [
       "Tudo do Negocio +",
       "Assistente inteligente para seu negocio",
       "Chat rapido em cada tela",
@@ -103,7 +103,7 @@ export default function PlanosScreen() {
         <Pressable onPress={() => setAnnual(true)} style={[s.toggleBtn, annual && s.toggleActive]}><Text style={[s.toggleText, annual && s.toggleTextActive]}>Anual</Text><View style={s.discountBadge}><Text style={s.discountText}>15% OFF</Text></View></Pressable>
       </View>
 
-      {annual && <Text style={s.savingsHint}>Economize ate {fmtR(savings(299))} por ano no plano Expansao</Text>}
+      {annual && <Text style={s.savingsHint}>Economize ate {fmtR(savings(269.90))} por ano no plano Expansao</Text>}
 
       <View style={s.plansRow}>
         {PLANS.map(plan => {
@@ -116,7 +116,7 @@ export default function PlanosScreen() {
               <Text style={s.planName}>{plan.name}</Text>
               <Text style={s.planSub}>{plan.subtitle}</Text>
               <View style={s.priceRow}>
-                {annual && <Text style={s.priceOld}>R$ {plan.monthly}</Text>}
+                {annual && <Text style={s.priceOld}>R$ {plan.monthly.toFixed(2).replace(".", ",")}</Text>}
                 <Text style={s.priceValue}>R$ {mo.toFixed(2).replace(".", ",")}</Text>
                 <Text style={s.pricePeriod}>/mes</Text>
               </View>
