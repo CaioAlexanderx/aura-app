@@ -5,3 +5,4 @@ export { OperacoesAdmin } from './OperacoesAdmin';
 export { CrescimentoAdmin } from './CrescimentoAdmin';
 export { EquipeAdmin } from './EquipeAdmin';
 export { SolicitacoesAdmin } from './SolicitacoesAdmin';
+export { AccessCodesCard } from './AccessCodesCard';
