@@ -17,6 +17,18 @@ const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
+// Labels e icones das verticais. Usados pra renderizar a seção "Meu Segmento"
+// dinamicamente quando company.vertical_active esta setado. Sem isso, a tela
+// /vertical existe mas fica orfa — sem link no menu = usuario nao vai ver.
+const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
+  odonto:   { label: "Odontologia",    icon: "star" },
+  barber:   { label: "Barber / Salao", icon: "star" },
+  food:     { label: "Food Service",   icon: "star" },
+  estetica: { label: "Estetica",       icon: "star" },
+  pet:      { label: "Pet Shop",       icon: "star" },
+  academia: { label: "Academia",       icon: "star" },
+};
+
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
@@ -94,17 +106,34 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
   const isStaff = (u as any)?.is_staff === true;
+  const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
-  const filteredNav = useMemo(() =>
-    NAV.map(section => ({
+  const filteredNav = useMemo(() => {
+    const base = NAV.map(section => ({
       ...section,
       i: section.i.filter(item => {
         if (item.staff && !isStaff) return false;
         return !item.mod || visibleMods.has(item.mod);
       }),
-    })).filter(section => section.i.length > 0),
-    [visibleMods, isStaff]
-  );
+    })).filter(section => section.i.length > 0);
+
+    // Injeta seção "Meu Segmento" quando ha vertical ativa.
+    // Posicao: antes da seção Admin (se existir), senao no final.
+    if (activeVertical) {
+      const meta = VERTICAL_NAV[activeVertical] || { label: "Modulo Vertical", icon: "star" };
+      const verticalSection: NavSection = {
+        s: "Meu Segmento",
+        i: [{ r: "/vertical", l: meta.label, ic: meta.icon }],
+      };
+      const adminIdx = base.findIndex(s => s.s === "Admin");
+      if (adminIdx >= 0) {
+        base.splice(adminIdx, 0, verticalSection);
+      } else {
+        base.push(verticalSection);
+      }
+    }
+    return base;
+  }, [visibleMods, isStaff, activeVertical]);
 
   return (
     <View style={[{ width: sw, height: '100%', backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, justifyContent: "flex-start", overflow: "hidden" as any }, { transition: "width 0.25s ease, padding 0.25s ease" } as any]}>
@@ -168,17 +197,18 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 function MBar() {
   const C = useColors();
   const p = usePathname(), ro = useRouter();
-  const { user: u } = useAuthStore();
+  const { user: u, company: co } = useAuthStore();
   const visibleMods = useVisibleModules();
   const [showMore, setShowMore] = useState(false);
   const isStaff = (u as any)?.is_staff === true;
+  const activeVertical = (co as any)?.vertical_active as string | null | undefined;
   const MTABS = [
     { r: "/", l: "Painel", ic: "dashboard", mod: "painel" },
     { r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },
     { r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },
     { r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },
   ];
-  const ALL_MORE: (NavItem & { staff?: boolean })[] = [
+  const ALL_MORE: (NavItem & { staff?: boolean; vertical?: boolean })[] = [
     { r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },
     { r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" },
     { r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },
@@ -187,13 +217,22 @@ function MBar() {
     { r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" },
     { r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" },
     { r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" },
+    { r: "/vertical", l: "Meu Segmento", ic: "star", vertical: true },
     { r: "/configuracoes", l: "Configuracoes", ic: "settings", mod: "configuracoes" },
     { r: "/gestao-aura", l: "Gestao Aura", ic: "shield", staff: true },
   ];
 
   const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
-  const filteredMore = ALL_MORE.filter(t => {
+  const filteredMore = ALL_MORE.map(t => {
+    // Customiza label do item vertical com o nome da vertical ativa
+    if (t.vertical && activeVertical) {
+      const meta = VERTICAL_NAV[activeVertical];
+      if (meta) return { ...t, l: meta.label };
+    }
+    return t;
+  }).filter(t => {
     if (t.staff) return isStaff;
+    if (t.vertical) return !!activeVertical;
     return !t.mod || visibleMods.has(t.mod);
   });
 
