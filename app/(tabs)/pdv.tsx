@@ -17,7 +17,7 @@ import { QuickCustomerModal } from "@/components/QuickCustomerModal";
 import { VariantPickerModal } from "@/components/VariantPickerModal";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/Pagination";
-import { employeesApi } from "@/services/api";
+import { employeesApi, pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@/components/screens/estoque/types";
@@ -76,10 +76,45 @@ export default function PdvScreen() {
   });
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search + category);
 
-  function handleScan(code: string) {
-    const product = products.find(p => p.barcode === code);
-    if (product) handleAddProduct(product);
-    else setSearch(code);
+  // FIX 22/04 (Fase C gap): handleScan variant-aware.
+  // 1. Busca local por barcode do produto pai (rapido, UX instantanea)
+  // 2. Se nao achou, consulta backend /pdv/scan/:code que tambem procura
+  //    em product_variants.barcode e products.sku
+  // 3. Fallback: preenche o campo de busca textual
+  async function handleScan(code: string) {
+    const cleaned = (code || "").trim();
+    if (!cleaned) return;
+
+    // Step 1: barcode do produto pai (local)
+    const localProduct = products.find(p => p.barcode === cleaned);
+    if (localProduct) { handleAddProduct(localProduct); return; }
+
+    // Step 2: backend lookup (variante, sku, textual)
+    if (!company?.id || isDemo) { setSearch(cleaned); return; }
+    try {
+      const result = await pdvApi.scan(company.id, cleaned);
+      if (result.match === "exact" && result.source === "variant_barcode" && result.product && result.variant_id) {
+        // Barcode de variante: adiciona direto ao carrinho
+        const parent = products.find(p => p.id === result.product.id);
+        if (parent) {
+          const suffix = (result.product as any).sku_suffix || "Variante";
+          const price = result.effective_price || parent.price;
+          addToCart(parent, { id: result.variant_id, label: suffix, price: price });
+          toast.success(parent.name + " - " + suffix);
+          return;
+        }
+      }
+      if (result.match === "exact" && result.product) {
+        // Barcode/SKU do pai: delega a handleAddProduct (abre modal se tiver variantes)
+        const fullProduct = products.find(p => p.id === result.product.id);
+        if (fullProduct) { handleAddProduct(fullProduct); return; }
+      }
+      // Sem match exato: fallback para busca textual
+      setSearch(cleaned);
+    } catch {
+      // Erro de rede/lookup: degrada pra busca textual
+      setSearch(cleaned);
+    }
   }
 
   function handleAddProduct(product: Product) {
