@@ -9,23 +9,22 @@ import { aiApi } from "@/services/api";
 
 var isWeb = Platform.OS === "web";
 
-var ROUTE_CONTEXT: Record<string, string> = {
-  "/": "geral",
-  "/financeiro": "financeiro",
-  "/pdv": "estoque",
-  "/estoque": "estoque",
-  "/clientes": "crm",
-  "/contabilidade": "contabil",
-  "/nfe": "contabil",
-  "/folha": "financeiro",
-  "/canal": "marketing",
-  "/agentes": "geral",
-};
-
+// Determina contexto da IA pela rota atual.
+// ODT-12: fix bug pre-existente (antes usava path.includes("") que e sempre true,
+// o que fazia TODO pathname cair em "geral"). Agora usa startsWith explicito
+// na ordem correta, com odonto para /vertical.
 function getContext(path: string): string {
-  for (var route in ROUTE_CONTEXT) {
-    if (path === route || path.includes(route.slice(1))) return ROUTE_CONTEXT[route];
-  }
+  if (path === "/" || path === "") return "geral";
+  if (path.startsWith("/vertical")) return "odonto";
+  if (path.startsWith("/financeiro")) return "financeiro";
+  if (path.startsWith("/pdv")) return "estoque";
+  if (path.startsWith("/estoque")) return "estoque";
+  if (path.startsWith("/clientes")) return "crm";
+  if (path.startsWith("/contabilidade")) return "contabil";
+  if (path.startsWith("/nfe")) return "contabil";
+  if (path.startsWith("/folha")) return "financeiro";
+  if (path.startsWith("/canal")) return "marketing";
+  if (path.startsWith("/agentes")) return "geral";
   return "geral";
 }
 
@@ -36,6 +35,7 @@ var CONTEXT_LABELS: Record<string, string> = {
   crm: "Clientes",
   contabil: "Contabil",
   marketing: "Marketing",
+  odonto: "Odontologia",
 };
 
 type Message = { role: "user" | "assistant"; content: string };

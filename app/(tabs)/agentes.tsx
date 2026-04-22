@@ -7,16 +7,16 @@ import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
-import { DemoBanner } from "@/components/DemoBanner";
 import { EmptyState } from "@/components/EmptyState";
 
 const AGENT_META: Record<string, { icon: string; color: string }> = {
-  Financeiro: { icon: "wallet", color: Colors.green },
-  Estoque:    { icon: "package", color: Colors.amber },
-  CRM:        { icon: "users", color: Colors.violet3 },
-  Contabil:   { icon: "calculator", color: Colors.red },
-  Marketing:  { icon: "bar_chart", color: "#db2777" },
-  Geral:      { icon: "star", color: Colors.violet3 },
+  Financeiro:   { icon: "wallet", color: Colors.green },
+  Estoque:      { icon: "package", color: Colors.amber },
+  CRM:          { icon: "users", color: Colors.violet3 },
+  Contabil:     { icon: "calculator", color: Colors.red },
+  Marketing:    { icon: "bar_chart", color: "#db2777" },
+  Odontologico: { icon: "tooth", color: "#06B6D4" },
+  Geral:        { icon: "star", color: Colors.violet3 },
 };
 
 function getAgentMeta(name: string) { return AGENT_META[name] || AGENT_META.Geral; }
@@ -105,6 +105,13 @@ export default function AgentesScreen() {
   const totalSaved = (totalActions * 0.25).toFixed(1);
   const hasData = activityData.length > 0;
 
+  // Contextos disponiveis. Backend mapeia cada um para system prompt especifico.
+  const CONTEXTS = ["geral", "financeiro", "estoque", "crm", "contabil", "marketing", "odonto"];
+  const CTX_LABEL: Record<string, string> = {
+    geral: "Geral", financeiro: "Financeiro", estoque: "Estoque",
+    crm: "CRM", contabil: "Contabil", marketing: "Marketing", odonto: "Odontologia",
+  };
+
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
       <PageHeader title="Agentes" />
@@ -173,11 +180,11 @@ export default function AgentesScreen() {
       <Text style={z.sectionTitle}>Conversar com agente</Text>
       <View style={z.chatCard}>
         <View style={z.chatCtxRow}>
-          {["geral", "financeiro", "estoque", "crm", "contabil", "marketing"].map(ctx => (
+          {CONTEXTS.map(ctx => (
             <Pressable key={ctx} onPress={() => setChatCtx(ctx)}
               style={[z.chatCtxChip, chatCtx === ctx && z.chatCtxChipActive]}>
               <Text style={[z.chatCtxText, chatCtx === ctx && z.chatCtxTextActive]}>
-                {ctx.charAt(0).toUpperCase() + ctx.slice(1)}
+                {CTX_LABEL[ctx]}
               </Text>
             </Pressable>
           ))}
@@ -210,8 +217,6 @@ export default function AgentesScreen() {
         <Icon name="star" size={14} color={Colors.violet3} />
         <Text style={z.infoText}>Os agentes analisam seus dados em tempo real e executam acoes automaticamente. Insights proativos aparecem no topo de cada aba.</Text>
       </View>
-
-      <DemoBanner />
     </ScrollView>
   );
 }
