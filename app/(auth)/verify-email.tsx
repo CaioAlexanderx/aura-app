@@ -11,7 +11,7 @@ import { authApi } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 
-const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
+const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
 
 if (typeof document !== "undefined" && !document.getElementById("aura-login-v2-css")) {

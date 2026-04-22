@@ -14,7 +14,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { maskCNPJ, maskPhone } from "@/utils/masks";
 
-const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/aura-icon.svg";
+const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
 const isWeb = Platform.OS === "web";
 
