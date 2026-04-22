@@ -11,8 +11,12 @@ var PLAN_LABELS: Record<string, string> = {
 };
 
 export function TrialBanner() {
-  const { trialActive, trialEndsAt, isDemo, company } = useAuthStore();
+  const { trialActive, trialEndsAt, isDemo, isStaff, company } = useAuthStore();
   const router = useRouter();
+
+  // Staff da Aura nao ve avisos de cobranca/trial — conta interna
+  // nao precisa de assinatura e os banners poluem o painel.
+  if (isStaff) return null;
 
   if (isDemo || !trialActive || !trialEndsAt) return null;
 
