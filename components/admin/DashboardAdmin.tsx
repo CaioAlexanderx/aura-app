@@ -7,6 +7,7 @@ import { request, BASE_URL } from "@/services/api";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { toast } from "@/components/Toast";
 import { useState } from "react";
+import { AccessCodesCard } from "./AccessCodesCard";
 
 var isWeb = Platform.OS === "web";
 
@@ -84,6 +85,9 @@ export function DashboardAdmin() {
 
   return (
     <View>
+      {/* Codigos de acesso — criacao e gestao pela equipe Aura */}
+      <AccessCodesCard />
+
       {/* KPI Cards - row 1: MRR + Clientes + ARPU */}
       <View style={s.kpiRow}>
         <View style={[s.kpiCard, s.kpiMain]}>
