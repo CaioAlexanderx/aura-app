@@ -78,10 +78,24 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 }
 
 // Types
+export type VerticalKey = "odonto" | "barber" | "food" | "estetica" | "pet" | "academia";
+
 export type LoginResponse = {
   token: string;
   user: { id: string; name: string; email: string; role: string; is_staff?: boolean; email_verified?: boolean };
-  company: { id: string; name: string; plan: string; onboarding_step: string; module_overrides?: Record<string, boolean>; trial_active?: boolean; trial_ends_at?: string } | null;
+  company: {
+    id: string;
+    name: string;
+    plan: string;
+    onboarding_step: string;
+    module_overrides?: Record<string, boolean>;
+    trial_active?: boolean;
+    trial_ends_at?: string;
+    vertical_active?: VerticalKey | null;
+    member_role?: string;
+    billing_status?: string | null;
+    access_code_used?: boolean;
+  } | null;
   code_applied?: { type: string; plan: string; discount_pct: number; trial_days: number } | null;
 };
 export type RegisterBody = { name: string; email: string; password: string; company_name?: string; phone?: string; cnpj?: string; access_code?: string };
@@ -321,6 +335,16 @@ export var adminApi = {
   clients: function() { return request<any>("/admin/clients"); },
   clientModules: function(companyId: string) { return request<any>("/admin/clients/" + companyId + "/modules"); },
   updateModules: function(companyId: string, overrides: Record<string, boolean>) { return request<any>("/admin/clients/" + companyId + "/modules", { method: "PUT", body: { overrides: overrides } }); },
+  // Altera plano do cliente (PATCH /admin/clients/:cid/plan).
+  // Nao mexe em Asaas — so capabilities.
+  setPlan: function(companyId: string, plan: string) {
+    return request<{ company: any; visible_modules: string[]; changed: boolean; message: string }>("/admin/clients/" + companyId + "/plan", { method: "PATCH", body: { plan: plan }, retry: 0 });
+  },
+  // Ativa ou desativa modulo vertical (PATCH /admin/clients/:cid/vertical).
+  // Passar null desativa.
+  setVertical: function(companyId: string, vertical: VerticalKey | null) {
+    return request<{ company: any; changed: boolean; message: string }>("/admin/clients/" + companyId + "/vertical", { method: "PATCH", body: { vertical: vertical }, retry: 0 });
+  },
   // Access codes (codigos de acesso — trial, promo, manual, referral)
   accessCodes: {
     list: function(params?: { type?: string; is_active?: boolean; q?: string; limit?: number }) {
