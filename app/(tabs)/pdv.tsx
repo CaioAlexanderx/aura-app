@@ -139,8 +139,23 @@ export default function PdvScreen() {
   const productGrid = (
     <View>
       <ScannerBar onScan={handleScan} />
+
+      {/* Busca: label em cinza para diferenciar do scanner (violeta) */}
+      <View style={s.searchHeader}>
+        <Icon name="search" size={12} color={Colors.ink3} />
+        <Text style={s.searchLabel}>BUSCAR PRODUTO</Text>
+      </View>
       <View style={s.searchRow}>
-        <TextInput style={[s.searchInput, { flex: 1 }]} placeholder="Buscar produto por nome..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+        <View style={s.searchInputWrap}>
+          <Icon name="search" size={16} color={Colors.ink3} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Digite o nome do produto..."
+            placeholderTextColor={Colors.ink3}
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
         {canAddCustomer && (
           <Pressable onPress={() => setShowNewCustomer(true)} style={s.newCustomerBtn}>
             <Icon name="user_plus" size={15} color={Colors.violet3} />
@@ -148,6 +163,7 @@ export default function PdvScreen() {
           </Pressable>
         )}
       </View>
+
       <ScrollableChips items={categories} active={category} onSelect={setCategory} />
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {paginated.map(p => (
@@ -204,8 +220,18 @@ export default function PdvScreen() {
 const s = StyleSheet.create({
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
   webRoot: { flex: 1, flexDirection: "row", backgroundColor: "transparent" },
-  searchRow: { flexDirection: "row", gap: 8, marginBottom: 12, alignItems: "center" },
-  searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
+
+  // Busca de produto: label em cinza (neutro) para contrastar com o scanner (violeta)
+  searchHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, paddingHorizontal: 2 },
+  searchLabel: { fontSize: 10, fontWeight: "700", color: Colors.ink3, letterSpacing: 1.2 },
+  searchRow: { flexDirection: "row", gap: 8, marginBottom: 12, alignItems: "stretch" },
+  searchInputWrap: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.bg3, borderRadius: 10,
+    paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, paddingVertical: 11 },
+
   newCustomerBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
   newCustomerText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16 },
