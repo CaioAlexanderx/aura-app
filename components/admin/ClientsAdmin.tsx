@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
+import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 
 var isWeb = Platform.OS === "web";
 
@@ -53,6 +54,40 @@ var FILTERS = [
   { key: "trial", label: "Trial" },
 ];
 
+// Labels + plano minimo. Expande MODULE_LABELS pra cobrir todos os modulos reais
+// do MODULE_PLAN_MAP (alinhado com services/modules.js do backend).
+var MODULE_CATALOG: Array<{ key: string; label: string; minPlan: string }> = [
+  { key: "painel",        label: "Painel",          minPlan: "essencial" },
+  { key: "financeiro",    label: "Financeiro",      minPlan: "essencial" },
+  { key: "pdv",           label: "Caixa (PDV)",     minPlan: "essencial" },
+  { key: "estoque",       label: "Estoque",         minPlan: "essencial" },
+  { key: "nfe",           label: "NF-e",            minPlan: "essencial" },
+  { key: "contabilidade", label: "Contabilidade",   minPlan: "essencial" },
+  { key: "suporte",       label: "Seu Analista",    minPlan: "essencial" },
+  { key: "configuracoes", label: "Configuracoes",   minPlan: "essencial" },
+  { key: "clientes",      label: "Clientes",        minPlan: "negocio" },
+  { key: "folha",         label: "Folha",           minPlan: "negocio" },
+  { key: "agendamento",   label: "Agenda",          minPlan: "negocio" },
+  { key: "canal",         label: "Canal Digital",   minPlan: "negocio" },
+  { key: "whatsapp",      label: "WhatsApp",        minPlan: "negocio" },
+  { key: "agentes",       label: "Agentes IA",      minPlan: "expansao" },
+];
+
+var PLAN_LABEL_MAP: Record<string, string> = { essencial: "Essencial", negocio: "Negocio+", expansao: "Expansao" };
+
+// Calcula visibilidade real de um modulo pra uma empresa,
+// aplicando override acima do plano (mesma logica do backend).
+function computeVisible(plan: string, overrides: Record<string, boolean> | null, modKey: string): { visible: boolean; reason: "admin_show" | "admin_hide" | "plan" | "plan_required" } {
+  var ov = overrides?.[modKey];
+  if (ov === true)  return { visible: true,  reason: "admin_show" };
+  if (ov === false) return { visible: false, reason: "admin_hide" };
+  var planLvl = PLAN_LEVEL[plan] ?? 0;
+  var modMin  = MODULE_PLAN_MAP[modKey];
+  var modLvl  = PLAN_LEVEL[modMin] ?? 0;
+  if (planLvl >= modLvl) return { visible: true,  reason: "plan" };
+  return { visible: false, reason: "plan_required" };
+}
+
 export function ClientsAdmin() {
   var { token, isStaff } = useAuthStore();
   var qc = useQueryClient();
@@ -81,6 +116,21 @@ export function ClientsAdmin() {
     onError: function() { toast.error("Erro ao atualizar"); },
   });
 
+  var planMutation = useMutation({
+    mutationFn: function(p: { companyId: string; plan: string }) {
+      return request<any>("/admin/clients/" + p.companyId + "/plan", {
+        method: "PATCH",
+        body: { plan: p.plan },
+        retry: 0,
+      });
+    },
+    onSuccess: function(result: any) {
+      qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      toast.success("Plano alterado para " + (PLAN_LABEL_MAP[result.company?.plan] || result.company?.plan));
+    },
+    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar plano"); },
+  });
+
   if (isLoading) return <ListSkeleton rows={4} showCards />;
 
   var clients = data?.clients || [];
@@ -92,8 +142,26 @@ export function ClientsAdmin() {
   });
 
   function handleToggle(client: Client360, moduleKey: string, enabled: boolean) {
-    var overrides = { ...(client.module_overrides || {}), [moduleKey]: enabled };
-    toggleMutation.mutate({ companyId: client.id, overrides: overrides });
+    // Determina se o valor desejado difere do default do plano.
+    // Se for igual ao default, podemos remover o override (limpar).
+    var planLvl = PLAN_LEVEL[client.plan] ?? 0;
+    var modMin  = MODULE_PLAN_MAP[moduleKey];
+    var modLvl  = PLAN_LEVEL[modMin] ?? 0;
+    var planDefault = planLvl >= modLvl;
+
+    var current = { ...(client.module_overrides || {}) } as Record<string, boolean>;
+    if (enabled === planDefault) {
+      // volta ao default do plano — limpar override
+      delete current[moduleKey];
+    } else {
+      current[moduleKey] = enabled;
+    }
+    toggleMutation.mutate({ companyId: client.id, overrides: current });
+  }
+
+  function handleChangePlan(client: Client360, newPlan: string) {
+    if (newPlan === client.plan) return;
+    planMutation.mutate({ companyId: client.id, plan: newPlan });
   }
 
   // Slide-over do cliente selecionado
@@ -129,6 +197,38 @@ export function ClientsAdmin() {
           <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
           <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>{sc.tax_regime === "mei" ? "MEI" : "Simples"}</Text></View>
           <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>Desde {sc.created_at ? new Date(sc.created_at).toLocaleDateString("pt-BR") : "?"}</Text></View>
+        </View>
+
+        {/* Seletor de plano */}
+        <View style={s.section}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={s.sectionTitle}>Plano de acesso</Text>
+            {planMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+          <View style={s.planSelector}>
+            {["essencial", "negocio", "expansao"].map(function(planKey) {
+              var active = sc.plan === planKey;
+              var pcc = PLAN_C[planKey] || { color: Colors.ink3, label: planKey };
+              return (
+                <Pressable
+                  key={planKey}
+                  onPress={function() { handleChangePlan(sc, planKey); }}
+                  disabled={active || planMutation.isPending}
+                  style={[
+                    s.planOption,
+                    active && { borderColor: pcc.color, backgroundColor: pcc.color + "12" },
+                  ]}
+                >
+                  <Text style={[s.planOptionLabel, active && { color: pcc.color }]}>{pcc.label}</Text>
+                  {active && <Text style={[s.planOptionMeta, { color: pcc.color }]}>atual</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={s.planHint}>
+            Alterar plano aqui ajusta apenas os modulos visiveis.
+            Nao altera a cobranca no Asaas — faca isso separadamente se necessario.
+          </Text>
         </View>
 
         {/* Health Breakdown */}
@@ -203,20 +303,43 @@ export function ClientsAdmin() {
           </View>
         )}
 
-        {/* Modulos */}
+        {/* Modulos — com logica REAL de visibilidade (override > plano) */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Modulos</Text>
-          {MODULE_LABELS.map(function(mod) {
-            var isVisible = true; // simplified - would check visible_modules
-            var hasOverride = sc.module_overrides && mod.key in (sc.module_overrides || {});
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Text style={s.sectionTitle}>Modulos</Text>
+            {toggleMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+          <Text style={s.modulesHint}>
+            Por padrao, seguem o plano do cliente. Toggle manual cria um override
+            (o modulo fica destacado como "forcado ativo" ou "forcado inativo").
+          </Text>
+          {MODULE_CATALOG.map(function(mod) {
+            var r = computeVisible(sc.plan, sc.module_overrides, mod.key);
+            var overridden = r.reason === "admin_show" || r.reason === "admin_hide";
+            var planLabel = PLAN_LABEL_MAP[mod.minPlan] || mod.minPlan;
+            var reasonText =
+              r.reason === "admin_show"     ? "forcado ativo" :
+              r.reason === "admin_hide"     ? "forcado inativo" :
+              r.reason === "plan_required"  ? "requer " + planLabel :
+              "plano " + planLabel;
+            var reasonColor =
+              r.reason === "admin_show"     ? Colors.violet3 :
+              r.reason === "admin_hide"     ? Colors.red :
+              r.reason === "plan_required"  ? Colors.amber :
+              Colors.ink3;
+
             return (
-              <View key={mod.key} style={s.toggleRow}>
-                <Text style={s.toggleLabel}>{mod.label}{hasOverride ? " (override)" : ""}</Text>
+              <View key={mod.key} style={[s.toggleRow, overridden && s.toggleRowOverride]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.toggleLabel}>{mod.label}</Text>
+                  <Text style={[s.toggleReason, { color: reasonColor }]}>{reasonText}</Text>
+                </View>
                 <Switch
-                  value={isVisible}
+                  value={r.visible}
                   trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-                  thumbColor={isVisible ? Colors.violet : Colors.ink3}
+                  thumbColor={r.visible ? Colors.violet : Colors.ink3}
                   onValueChange={function(val) { handleToggle(sc, mod.key, val); }}
+                  disabled={toggleMutation.isPending}
                 />
               </View>
             );
@@ -315,8 +438,27 @@ var s = StyleSheet.create({
   txDesc: { fontSize: 12, color: Colors.ink, fontWeight: "500" },
   txMeta: { fontSize: 10, color: Colors.ink3 },
   txAmount: { fontSize: 12, fontWeight: "700" },
-  toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
-  toggleLabel: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 },
+  toggleRowOverride: { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border2 },
+  toggleLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  toggleReason: { fontSize: 10, marginTop: 2, textTransform: "lowercase" },
+  modulesHint: { fontSize: 10, color: Colors.ink3, marginBottom: 12, lineHeight: 14 },
+  // Plan selector
+  planSelector: { flexDirection: "row", gap: 8 },
+  planOption: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bg4,
+    alignItems: "center",
+    gap: 4,
+  },
+  planOptionLabel: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  planOptionMeta: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  planHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
 });
 
 export default ClientsAdmin;
