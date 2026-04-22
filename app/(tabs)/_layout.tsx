@@ -20,13 +20,14 @@ type NavSection = { s: string; i: NavItem[] };
 // Labels e icones das verticais. Usados pra renderizar a seção "Meu Segmento"
 // dinamicamente quando company.vertical_active esta setado. Sem isso, a tela
 // /vertical existe mas fica orfa — sem link no menu = usuario nao vai ver.
+// Icones: ver components/Icon.tsx (tooth/scissors/utensils/sparkles/paw/dumbbell).
 const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
-  odonto:   { label: "Odontologia",    icon: "star" },
-  barber:   { label: "Barber / Salao", icon: "star" },
-  food:     { label: "Food Service",   icon: "star" },
-  estetica: { label: "Estetica",       icon: "star" },
-  pet:      { label: "Pet Shop",       icon: "star" },
-  academia: { label: "Academia",       icon: "star" },
+  odonto:   { label: "Odontologia",    icon: "tooth" },
+  barber:   { label: "Barber / Salao", icon: "scissors" },
+  food:     { label: "Food Service",   icon: "utensils" },
+  estetica: { label: "Estetica",       icon: "sparkles" },
+  pet:      { label: "Pet Shop",       icon: "paw" },
+  academia: { label: "Academia",       icon: "dumbbell" },
 };
 
 const NAV: NavSection[] = [
@@ -224,10 +225,10 @@ function MBar() {
 
   const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
   const filteredMore = ALL_MORE.map(t => {
-    // Customiza label do item vertical com o nome da vertical ativa
+    // Customiza label + icone do item vertical com meta da vertical ativa
     if (t.vertical && activeVertical) {
       const meta = VERTICAL_NAV[activeVertical];
-      if (meta) return { ...t, l: meta.label };
+      if (meta) return { ...t, l: meta.label, ic: meta.icon };
     }
     return t;
   }).filter(t => {
