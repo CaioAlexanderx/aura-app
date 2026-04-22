@@ -24,10 +24,13 @@ const PATHS: Record<string, string> = {
   upload:         "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4 M17 8l-5-5-5 5 M12 3v12",
   copy:           "M20 9h-9a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-9a2 2 0 00-2-2z M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1",
   refresh:        "M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15",
+  drag_handle:    "M8 6h.01 M8 12h.01 M8 18h.01 M16 6h.01 M16 12h.01 M16 18h.01",
   // ── Security ────────────────────────────────────────────────
   lock:           "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z M7 11V7a5 5 0 0110 0v4",
   unlock:         "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z M7 11V7a5 5 0 019.9-1",
   eye:            "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 12a3 3 0 100-6 3 3 0 000 6z",
+  eye_off:        "M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94 M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19 M14.12 14.12a3 3 0 11-4.24-4.24 M1 1l22 22",
+  shield:         "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
   // ── Finance ─────────────────────────────────────────────────
   wallet:         "M21 12V7H5a2 2 0 010-4h14v4 M3 5v16h18v-8H3 M18 16h.01",
   dollar:         "M12 1v22 M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
@@ -65,6 +68,19 @@ const PATHS: Record<string, string> = {
   // ── Web / Globe ─────────────────────────────────────────────
   globe:          "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z",
   brain:          "M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a3 3 0 01-3 3h-2a3 3 0 01-3-3v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z M9 22v-2 M15 22v-2 M12 17v5",
+  // ── Verticals ───────────────────────────────────────────────
+  // Dente (odontologia) — duas raizes, coroa arredondada. Baseado em Tabler Icons "tooth" (MIT).
+  tooth:          "M9 3c-1.66 0-3 1.34-3 3 0 1.46-.91 2.62-1.5 4-.5 1.2-.5 2 .5 3 1 .5 1.5 2 1 4.5C5.5 20 6 22 7 22c1.5 0 2-2 2-4 0-3 2-3 2-3s2 0 2 3c0 2 .5 4 2 4 1 0 1.5-2 1-4.5C14.5 15 15 13.5 16 13c1-1 1-1.8.5-3-.59-1.38-1.5-2.54-1.5-4 0-1.66-1.34-3-3-3-2 0-2 1-3 1s-1-1-3-1z",
+  // Tesoura (barbearia) — duas laminas cruzadas
+  scissors:       "M6 9a3 3 0 100-6 3 3 0 000 6z M6 21a3 3 0 100-6 3 3 0 000 6z M20 4L8.12 15.88 M14.47 14.48L20 20 M8.12 8.12L12 12",
+  // Prato/talheres (food)
+  utensils:       "M3 2v7c0 1.66 1.34 3 3 3s3-1.34 3-3V2 M6 2v20 M15 2v20 M18 2c1.66 0 3 1.34 3 3v6h-3",
+  // Patinha (pet)
+  paw:            "M11 16a3 3 0 10-6 0 3 3 0 006 0z M19 16a3 3 0 10-6 0 3 3 0 006 0z M7 7a2 2 0 10-4 0 2 2 0 004 0z M13 6a2 2 0 10-4 0 2 2 0 004 0z M19 6a2 2 0 10-4 0 2 2 0 004 0z",
+  // Halter (academia)
+  dumbbell:       "M6 6h2v12H6z M16 6h2v12h-2z M3 9h3v6H3z M18 9h3v6h-3z M8 12h8",
+  // Sparkles (estetica)
+  sparkles:       "M12 2l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z M19 15l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5z",
 };
 
 type IconName = keyof typeof PATHS;
@@ -112,6 +128,8 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
     download: "D", upload: "U", copy: "C", refresh: "R", eye: "O", menu: "=",
     grid: "#", clock: "T", tag: "#", barcode: "|||", camera: "O",
+    drag_handle: "=", eye_off: "O", shield: "U",
+    tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
   };
 
   return (
