@@ -226,7 +226,22 @@ export var referralsApi = {
 };
 
 // PDV / Sales API
-export var pdvApi = { createSale: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body }); } };
+export type PdvScanResult = {
+  match: "exact" | "partial" | "none";
+  source?: "barcode" | "variant_barcode" | "sku";
+  product?: any;
+  variant_id?: string;
+  effective_price?: number;
+  suggestions?: any[];
+  message?: string;
+  error?: string;
+};
+export var pdvApi = {
+  createSale: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body }); },
+  scan: function(companyId: string, code: string) {
+    return request<PdvScanResult>("/companies/" + companyId + "/pdv/scan/" + encodeURIComponent(code), { retry: 0, timeout: 5000 });
+  },
+};
 
 // Coupons API
 export type CouponValidation = { valid: boolean; coupon_id?: string; code?: string; discount_type?: string; discount_value?: number; discount_amount?: number; final_total?: number; error?: string };
