@@ -1,3 +1,14 @@
+// ============================================================
+// AURA. — ScannerInput (redesign 22/04)
+// Separacao visual forte do campo de busca. Features UX:
+// - Label "SCANNER" em caps violeta (claro = nao e busca)
+// - Icone barcode (nao search) + borda accent violeta
+// - Glow/ring violeta quando focado (comunicando "ouvindo")
+// - Dot verde pulsante no topo quando focado (pronto p/ bipe)
+// - Placeholder direto: "Bipe o codigo ou digite..."
+// - Camera com icone proprio (camera, nao search)
+// - Hint textual substituido por tooltip discreto no info icon
+// ============================================================
 import { useState, useRef, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -10,16 +21,19 @@ type Props = {
   placeholder?: string;
 };
 
+var isWeb = Platform.OS === 'web';
+
 export function ScannerInput({ onScan, placeholder }: Props) {
   const [inputValue, setInputValue] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number>(0);
-  const isWeb = Platform.OS === 'web';
 
   // Handle barcode scanner input (USB scanners type + Enter)
   function handleSubmit() {
@@ -39,14 +53,12 @@ export function ScannerInput({ onScan, placeholder }: Props) {
       });
       streamRef.current = stream;
 
-      // Create video element
       const video = document.createElement('video');
       video.srcObject = stream;
       video.setAttribute('playsinline', 'true');
       await video.play();
       videoRef.current = video;
 
-      // Create canvas for frame capture
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
@@ -58,7 +70,7 @@ export function ScannerInput({ onScan, placeholder }: Props) {
     } catch (err) {
       toast.error('Nao foi possivel acessar a camera. Verifique as permissoes.');
     }
-  }, [isWeb]);
+  }, []);
 
   function scanFrame() {
     if (!videoRef.current || !canvasRef.current || !scanning) return;
@@ -72,7 +84,6 @@ export function ScannerInput({ onScan, placeholder }: Props) {
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Try BarcodeDetector API (Chrome 83+)
     if ('BarcodeDetector' in window) {
       const detector = new (window as any).BarcodeDetector({
         formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39']
@@ -90,7 +101,6 @@ export function ScannerInput({ onScan, placeholder }: Props) {
         if (scanning) animRef.current = requestAnimationFrame(scanFrame);
       });
     } else {
-      // Fallback: no BarcodeDetector, just show camera and let user type
       animRef.current = requestAnimationFrame(scanFrame);
     }
   }
@@ -118,28 +128,81 @@ export function ScannerInput({ onScan, placeholder }: Props) {
       container.innerHTML = '';
       container.appendChild(videoRef.current);
     }
-  }, [cameraActive, isWeb]);
+  }, [cameraActive]);
+
+  // Pulse animation for "ready" dot (web only; subtle on native)
+  useEffect(() => {
+    if (!isWeb || !isFocused) return;
+    // Inject a one-time CSS keyframe for the pulse
+    var styleId = 'aura-scanner-pulse-kf';
+    if (!document.getElementById(styleId)) {
+      var style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = '@keyframes auraPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }';
+      document.head.appendChild(style);
+    }
+  }, [isFocused]);
+
+  var readyDotStyle: any = isWeb && isFocused
+    ? { animation: 'auraPulse 1.4s ease-in-out infinite' }
+    : {};
 
   return (
     <View style={z.container}>
+      {/* Header: label + status + tooltip */}
+      <View style={z.header}>
+        <View style={z.labelGroup}>
+          <Icon name="barcode" size={12} color={Colors.violet3} />
+          <Text style={z.label}>SCANNER</Text>
+          {isFocused && (
+            <View style={z.readyGroup}>
+              <View style={[z.readyDot, readyDotStyle]} />
+              <Text style={z.readyText}>pronto</Text>
+            </View>
+          )}
+        </View>
+        <Pressable
+          onPress={() => setShowHint(!showHint)}
+          onHoverIn={isWeb ? () => setShowHint(true) : undefined}
+          onHoverOut={isWeb ? () => setShowHint(false) : undefined}
+          style={z.infoBtn}
+        >
+          <Icon name="info" size={13} color={Colors.ink3} />
+        </Pressable>
+      </View>
+
+      {showHint && (
+        <View style={z.hintBox}>
+          <Text style={z.hintText}>
+            Scanners USB/Bluetooth funcionam automaticamente ao escanear. Tambem aceita digitacao manual.
+          </Text>
+        </View>
+      )}
+
+      {/* Input + camera */}
       <View style={z.inputRow}>
-        <View style={z.inputWrap}>
-          <Icon name="search" size={16} color={Colors.ink3} />
+        <View style={[z.inputWrap, isFocused && z.inputWrapFocused]}>
+          <Icon name="barcode" size={18} color={isFocused ? Colors.violet3 : Colors.ink3} />
           <TextInput
             ref={inputRef}
             style={z.input}
             value={inputValue}
             onChangeText={setInputValue}
             onSubmitEditing={handleSubmit}
-            placeholder={placeholder || 'Escanear ou digitar codigo...'}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={placeholder || 'Bipe o codigo ou digite...'}
             placeholderTextColor={Colors.ink3}
             autoFocus
             returnKeyType="search"
           />
         </View>
         {isWeb && (
-          <Pressable onPress={cameraActive ? stopCamera : startCamera} style={[z.cameraBtn, cameraActive && z.cameraBtnActive]}>
-            <Icon name={cameraActive ? 'x' : 'search'} size={18} color={cameraActive ? '#fff' : Colors.violet3} />
+          <Pressable
+            onPress={cameraActive ? stopCamera : startCamera}
+            style={[z.cameraBtn, cameraActive && z.cameraBtnActive]}
+          >
+            <Icon name={cameraActive ? 'x' : 'camera'} size={18} color={cameraActive ? '#fff' : Colors.violet3} />
           </Pressable>
         )}
       </View>
@@ -158,25 +221,44 @@ export function ScannerInput({ onScan, placeholder }: Props) {
           )}
         </View>
       )}
-
-      <Text style={z.hint}>Scanners USB/Bluetooth funcionam automaticamente ao escanear</Text>
     </View>
   );
 }
 
 const z = StyleSheet.create({
-  container: { marginBottom: 16 },
+  container: { marginBottom: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, paddingHorizontal: 2 },
+  labelGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  label: { fontSize: 10, fontWeight: '700', color: Colors.violet3, letterSpacing: 1.2 },
+  readyGroup: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 },
+  readyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22c55e' },
+  readyText: { fontSize: 9, fontWeight: '600', color: '#22c55e', letterSpacing: 0.6 },
+  infoBtn: { padding: 4, borderRadius: 4 },
+  hintBox: { backgroundColor: Colors.bg4, borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
+  hintText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   inputRow: { flexDirection: 'row', gap: 8 },
-  inputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.bg3, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
-  input: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 12 },
-  cameraBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: Colors.bg3, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border2 },
+  inputWrap: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.bg3, borderRadius: 12,
+    paddingHorizontal: 14, borderWidth: 1.5, borderColor: Colors.border,
+    ...(isWeb ? { transition: 'border-color 0.15s ease, box-shadow 0.15s ease' } as any : {}),
+  },
+  inputWrapFocused: {
+    borderColor: Colors.violet3,
+    ...(isWeb ? { boxShadow: '0 0 0 3px rgba(139, 92, 246, 0.15)' } as any : {}),
+  },
+  input: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 13, fontWeight: '500' },
+  cameraBtn: {
+    width: 48, height: 48, borderRadius: 12,
+    backgroundColor: Colors.violetD, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border2,
+  },
   cameraBtnActive: { backgroundColor: Colors.red, borderColor: Colors.red },
   cameraContainer: { marginTop: 12, alignItems: 'center', backgroundColor: Colors.bg3, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: Colors.border },
   cameraOverlay: { position: 'absolute', top: '50%', left: 20, right: 20, height: 2 },
   scanLine: { height: 2, backgroundColor: Colors.violet + '66' },
   cameraHint: { fontSize: 11, color: Colors.ink3, marginTop: 8, textAlign: 'center' },
   cameraFallback: { fontSize: 10, color: Colors.amber, marginTop: 4, textAlign: 'center' },
-  hint: { fontSize: 10, color: Colors.ink3, marginTop: 6, marginLeft: 4 },
 });
 
 export default ScannerInput;
