@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, Activi
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { request, adminApi } from "@/services/api";
+import { request, adminApi, type VerticalKey } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -21,6 +21,9 @@ type Client360 = {
   health_score: number | null; risk_level: string | null;
   activity_score: number; usage_score: number; payment_score: number; adoption_score: number;
   tx_count: number; prod_count: number; cust_count: number; total_revenue: number;
+  vertical_active: VerticalKey | null;
+  vertical_enabled_at: string | null;
+  suggested_vertical: string | null;
 };
 
 type ActivityData = {
@@ -75,6 +78,19 @@ var MODULE_CATALOG: Array<{ key: string; label: string; minPlan: string }> = [
 
 var PLAN_LABEL_MAP: Record<string, string> = { essencial: "Essencial", negocio: "Negocio+", expansao: "Expansao" };
 
+// Catalogo de verticais — cor tematica, icone e se esta pronta ou em desenvolvimento.
+// 'ready=false' mostra badge "em breve" e ainda permite ativacao (mostra tela de
+// "modulo em desenvolvimento" pro cliente) pra sinalizar interesse.
+type VerticalMeta = { key: VerticalKey; label: string; color: string; icon: string; ready: boolean };
+var VERTICAL_META: VerticalMeta[] = [
+  { key: "odonto",   label: "Odontologia",   color: "#06b6d4", icon: "\uD83E\uDE7A", ready: true  }, // cyan 🦷
+  { key: "barber",   label: "Barber / Salao", color: Colors.amber, icon: "\u2702\uFE0F", ready: true  }, // amber ✂️
+  { key: "food",     label: "Food Service",  color: "#fb7185", icon: "\uD83C\uDF7D\uFE0F", ready: true  }, // coral 🍽️
+  { key: "estetica", label: "Estetica",      color: Colors.ink3, icon: "\u2728", ready: false }, // em dev ✨
+  { key: "pet",      label: "Pet Shop",      color: Colors.ink3, icon: "\uD83D\uDC3E", ready: false }, // em dev 🐾
+  { key: "academia", label: "Academia",      color: Colors.ink3, icon: "\uD83C\uDFCB\uFE0F", ready: false }, // em dev 🏋️
+];
+
 // Calcula visibilidade real de um modulo pra uma empresa,
 // aplicando override acima do plano (mesma logica do backend).
 function computeVisible(plan: string, overrides: Record<string, boolean> | null, modKey: string): { visible: boolean; reason: "admin_show" | "admin_hide" | "plan" | "plan_required" } {
@@ -117,18 +133,27 @@ export function ClientsAdmin() {
   });
 
   var planMutation = useMutation({
-    mutationFn: function(p: { companyId: string; plan: string }) {
-      return request<any>("/admin/clients/" + p.companyId + "/plan", {
-        method: "PATCH",
-        body: { plan: p.plan },
-        retry: 0,
-      });
-    },
+    mutationFn: function(p: { companyId: string; plan: string }) { return adminApi.setPlan(p.companyId, p.plan); },
     onSuccess: function(result: any) {
       qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
       toast.success("Plano alterado para " + (PLAN_LABEL_MAP[result.company?.plan] || result.company?.plan));
     },
     onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar plano"); },
+  });
+
+  var verticalMutation = useMutation({
+    mutationFn: function(p: { companyId: string; vertical: VerticalKey | null }) { return adminApi.setVertical(p.companyId, p.vertical); },
+    onSuccess: function(result: any) {
+      qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      var v = result.company?.vertical_active as VerticalKey | null;
+      if (v) {
+        var meta = VERTICAL_META.find(function(x) { return x.key === v; });
+        toast.success("Vertical ativada: " + (meta?.label || v));
+      } else {
+        toast.success("Vertical desativada");
+      }
+    },
+    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar vertical"); },
   });
 
   if (isLoading) return <ListSkeleton rows={4} showCards />;
@@ -162,6 +187,13 @@ export function ClientsAdmin() {
   function handleChangePlan(client: Client360, newPlan: string) {
     if (newPlan === client.plan) return;
     planMutation.mutate({ companyId: client.id, plan: newPlan });
+  }
+
+  // Clicar na vertical ja ativa = desativa (toggle).
+  // Clicar em outra = troca pra essa.
+  function handleChangeVertical(client: Client360, nextVertical: VerticalKey | null) {
+    if (client.vertical_active === nextVertical) return;
+    verticalMutation.mutate({ companyId: client.id, vertical: nextVertical });
   }
 
   // Slide-over do cliente selecionado
@@ -228,6 +260,57 @@ export function ClientsAdmin() {
           <Text style={s.planHint}>
             Alterar plano aqui ajusta apenas os modulos visiveis.
             Nao altera a cobranca no Asaas — faca isso separadamente se necessario.
+          </Text>
+        </View>
+
+        {/* Seletor de modulo vertical */}
+        <View style={s.section}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={s.sectionTitle}>Modulo vertical</Text>
+            {verticalMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+          <View style={s.verticalGrid}>
+            {/* Card "Nenhuma" — desativa a vertical */}
+            <Pressable
+              onPress={function() { handleChangeVertical(sc, null); }}
+              disabled={!sc.vertical_active || verticalMutation.isPending}
+              style={[
+                s.verticalOption,
+                !sc.vertical_active && { borderColor: Colors.ink3, backgroundColor: Colors.bg4 },
+              ]}
+            >
+              <Text style={s.verticalIcon}>\u2014</Text>
+              <Text style={[s.verticalLabel, !sc.vertical_active && { color: Colors.ink }]}>Nenhuma</Text>
+              {!sc.vertical_active && <Text style={[s.verticalMeta, { color: Colors.ink3 }]}>atual</Text>}
+            </Pressable>
+
+            {/* 6 verticais */}
+            {VERTICAL_META.map(function(v) {
+              var active = sc.vertical_active === v.key;
+              return (
+                <Pressable
+                  key={v.key}
+                  onPress={function() { handleChangeVertical(sc, v.key); }}
+                  disabled={active || verticalMutation.isPending}
+                  style={[
+                    s.verticalOption,
+                    active && { borderColor: v.color, backgroundColor: v.color + "14" },
+                  ]}
+                >
+                  <Text style={s.verticalIcon}>{v.icon}</Text>
+                  <Text style={[s.verticalLabel, active && { color: v.color }]}>{v.label}</Text>
+                  {active && <Text style={[s.verticalMeta, { color: v.color }]}>ativo</Text>}
+                  {!active && !v.ready && (
+                    <View style={s.soonBadge}><Text style={s.soonText}>em breve</Text></View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={s.verticalHint}>
+            Ativa uma tab dedicada no app do cliente com funcionalidades do segmento.
+            {sc.suggested_vertical ? " Sugestao baseada no CNAE: " + sc.suggested_vertical + "." : ""}
+            {" "}Sem custo extra no alpha — R$69/mes no pricing oficial.
           </Text>
         </View>
 
@@ -375,6 +458,7 @@ export function ClientsAdmin() {
         var hc = HEALTH_COLORS[client.risk_level || "attention"] || HEALTH_COLORS.attention;
         var bc = BILLING_LABELS[client.billing_status] || { label: "?", color: Colors.ink3 };
         var displayName = client.trade_name || client.legal_name || "Sem nome";
+        var vMeta = client.vertical_active ? VERTICAL_META.find(function(x) { return x.key === client.vertical_active; }) : null;
         return (
           <Pressable key={client.id} onPress={function() { setSelectedId(client.id); }} style={[s.clientRow, isWeb && { cursor: "pointer", transition: "background-color 0.15s" } as any]}>
             <View style={[s.healthDot, { backgroundColor: hc.bg }]}>
@@ -385,6 +469,7 @@ export function ClientsAdmin() {
               <Text style={s.clientMeta}>{client.owner_email} \u00b7 {client.tx_count} tx \u00b7 {fmtK(client.total_revenue)}</Text>
             </View>
             <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
+            {vMeta && <View style={[s.badge, { backgroundColor: vMeta.color + "18" }]}><Text style={[s.badgeText, { color: vMeta.color }]}>{vMeta.icon}</Text></View>}
             <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
             <Icon name="chevron_right" size={14} color={Colors.ink3} />
           </Pressable>
@@ -459,6 +544,36 @@ var s = StyleSheet.create({
   planOptionLabel: { fontSize: 13, fontWeight: "700", color: Colors.ink },
   planOptionMeta: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
   planHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
+  // Vertical selector — grid 3 col desktop / 2 col mobile
+  verticalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  verticalOption: {
+    width: isWeb ? "31%" : "48%",
+    minHeight: 82,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bg4,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    position: "relative",
+  },
+  verticalIcon: { fontSize: 22 },
+  verticalLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, textAlign: "center" },
+  verticalMeta: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  soonBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: Colors.amber + "22",
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  soonText: { fontSize: 8, color: Colors.amber, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  verticalHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
 });
 
 export default ClientsAdmin;
