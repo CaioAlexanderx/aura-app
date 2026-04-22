@@ -40,6 +40,8 @@ const PATHS: Record<string, string> = {
   package:        "M16.5 9.4l-9-5.19 M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
   bag:            "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0",
   tag:            "M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z M7 7h.01",
+  barcode:        "M3 5v14 M6 5v14 M9 5v14 M12 5v14 M15 5v14 M18 5v14 M21 5v14",
+  camera:         "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z M12 17a4 4 0 100-8 4 4 0 000 8z",
   // ── People ──────────────────────────────────────────────────
   users:          "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
   user_plus:      "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M8.5 11a4 4 0 100-8 4 4 0 000 8z M20 8v6 M23 11h-6",
@@ -109,7 +111,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     headset: "H", brain: "I", globe: "G", lock: "L", unlock: "L", plus: "+",
     minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
     download: "D", upload: "U", copy: "C", refresh: "R", eye: "O", menu: "=",
-    grid: "#", clock: "T", tag: "#",
+    grid: "#", clock: "T", tag: "#", barcode: "|||", camera: "O",
   };
 
   return (
