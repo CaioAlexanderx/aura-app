@@ -105,7 +105,11 @@ function computeVisible(plan: string, overrides: Record<string, boolean> | null,
 }
 
 export function ClientsAdmin() {
-  var { token, isStaff } = useAuthStore();
+  // company aqui eh a empresa do proprio usuario logado (staff).
+  // Usamos isso pra sincronizar o store local quando o admin altera
+  // plano/vertical/modulos da propria empresa (senao o app NAO reflete
+  // ate o proximo logout/login, porque /me so eh chamado no hydrate).
+  var { token, isStaff, company: ownCompany } = useAuthStore();
   var qc = useQueryClient();
   var [filter, setFilter] = useState("all");
   var [selectedId, setSelectedId] = useState<string | null>(null);
@@ -128,7 +132,15 @@ export function ClientsAdmin() {
 
   var toggleMutation = useMutation({
     mutationFn: function(p: { companyId: string; overrides: Record<string, boolean> }) { return adminApi.updateModules(p.companyId, p.overrides); },
-    onSuccess: function() { qc.invalidateQueries({ queryKey: ["admin-clients-360"] }); toast.success("Modulos atualizados"); },
+    onSuccess: function(_data: any, variables: { companyId: string; overrides: Record<string, boolean> }) {
+      qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      // Se o admin mexeu na propria empresa, atualiza store local pra
+      // refletir na UI imediatamente (sidebar, gates de modulos, etc).
+      if (ownCompany?.id === variables.companyId) {
+        useAuthStore.getState().updateCompany({ module_overrides: variables.overrides });
+      }
+      toast.success("Modulos atualizados");
+    },
     onError: function() { toast.error("Erro ao atualizar"); },
   });
 
@@ -136,6 +148,9 @@ export function ClientsAdmin() {
     mutationFn: function(p: { companyId: string; plan: string }) { return adminApi.setPlan(p.companyId, p.plan); },
     onSuccess: function(result: any) {
       qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      if (ownCompany?.id === result.company?.id) {
+        useAuthStore.getState().updateCompany({ plan: result.company.plan });
+      }
       toast.success("Plano alterado para " + (PLAN_LABEL_MAP[result.company?.plan] || result.company?.plan));
     },
     onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar plano"); },
@@ -145,6 +160,12 @@ export function ClientsAdmin() {
     mutationFn: function(p: { companyId: string; vertical: VerticalKey | null }) { return adminApi.setVertical(p.companyId, p.vertical); },
     onSuccess: function(result: any) {
       qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      // Se o admin ativou/desativou a vertical da propria empresa,
+      // propaga pro store local pra tab Vertical renderizar a tela nova
+      // sem precisar logout/login.
+      if (ownCompany?.id === result.company?.id) {
+        useAuthStore.getState().updateCompany({ vertical_active: result.company.vertical_active });
+      }
       var v = result.company?.vertical_active as VerticalKey | null;
       if (v) {
         var meta = VERTICAL_META.find(function(x) { return x.key === v; });
