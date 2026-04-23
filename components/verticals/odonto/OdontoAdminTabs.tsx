@@ -3,7 +3,8 @@
 // OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab
 // Extracted from OdontoTabWrappers.tsx
 // ============================================================
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable } from "react-native";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +19,18 @@ import { ListaEsperaDental } from "@/components/verticals/odonto/ListaEsperaDent
 function useCompanyId() { return useAuthStore().company?.id; }
 function Loader() { return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>; }
 
+// D-FIX #5: CTA reutilizavel pra criar orcamento pelo Caixa.
+// Redireciona pra aba /pdv onde o dentista adiciona produtos/procedimentos
+// ao carrinho e clica em "Orcamento" pra gerar o PDF.
+function NovoOrcamentoCTA() {
+  return (
+    <Pressable onPress={function() { router.push("/pdv"); }} style={z.ctaBtn}>
+      <Icon name="file_text" size={14} color="#fff" />
+      <Text style={z.ctaText}>Novo orcamento (Caixa)</Text>
+    </Pressable>
+  );
+}
+
 export function OrcamentosTab() {
   var cid = useCompanyId();
   var { data, isLoading } = useQuery({
@@ -28,12 +41,27 @@ export function OrcamentosTab() {
   if (isLoading) return <Loader />;
   var plans = ((data as any)?.plans) || [];
   if (plans.length === 0) {
-    return <View style={z.empty}><Icon name="file_text" size={24} color={Colors.ink3} /><Text style={z.emptyText}>Nenhum orcamento criado</Text><Text style={z.hintText}>Crie orcamentos pela aba Pacientes ou Odontograma.</Text></View>;
+    return (
+      <View style={z.empty}>
+        <Icon name="file_text" size={24} color={Colors.ink3} />
+        <Text style={z.emptyText}>Nenhum orcamento criado</Text>
+        <Text style={z.hintText}>Crie orcamentos pelo Caixa ou pelas abas Pacientes / Odontograma.</Text>
+        <View style={{ marginTop: 12 }}><NovoOrcamentoCTA /></View>
+      </View>
+    );
   }
   var funnelData = plans.map(function(p: any) {
     return { id: p.id, patient_name: p.patient_name || "", title: p.title || "Orcamento", total_amount: parseFloat(p.total_amount) || 0, status: p.status || "pending", items_done: parseInt(p.items_done) || 0, items_total: parseInt(p.items_total) || 0, created_at: p.created_at };
   });
-  return <OrcamentoFunnel plans={funnelData} />;
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={z.headerRow}>
+        <Text style={z.headerTitle}>{plans.length} orcamento{plans.length > 1 ? "s" : ""}</Text>
+        <NovoOrcamentoCTA />
+      </View>
+      <OrcamentoFunnel plans={funnelData} />
+    </View>
+  );
 }
 
 export function ConveniosTab() {
@@ -101,4 +129,12 @@ var z = StyleSheet.create({
   empty: { alignItems: "center", paddingVertical: 40, gap: 8 },
   emptyText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
   hintText: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+  ctaBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.violet, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 9,
+  },
+  ctaText: { fontSize: 12, color: "#fff", fontWeight: "700" },
 });
