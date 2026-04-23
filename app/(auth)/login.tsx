@@ -287,7 +287,7 @@ export default function LoginScreen() {
               {/* Hero text block */}
               <div className="v2-hero" style={{ display: "flex", flexDirection: "column", gap: 28, position: "relative", zIndex: 2 } as any}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3.5, textTransform: "uppercase", color: Colors.violet3 }}>
-                  Feito para quem toca sozinho
+                  Gestao Inteligente
                 </div>
                 <div style={{ fontFamily: Fonts.heading, fontSize: 56, lineHeight: 1.08, color: Colors.ink, letterSpacing: -2, maxWidth: 480 }}>
                   Seu <em style={{ fontStyle: "italic", color: Colors.violet3 }}>negocio</em> inteiro na palma da mao.
