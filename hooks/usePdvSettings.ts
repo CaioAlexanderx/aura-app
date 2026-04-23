@@ -37,3 +37,43 @@ export function usePdvSettings() {
     invalidate: function() { qc.invalidateQueries({ queryKey: ["pdv-settings", company?.id] }); },
   };
 }
+
+// ============================================================
+// validateSaleAgainstSettings — verifica se a venda atende as
+// politicas configuradas (require_customer/require_seller).
+//
+// Usado pelo PDV antes de chamar finalizeSale(). Retorna lista
+// de campos faltando em portugues pra mostrar mensagem amigavel.
+//
+// Considera vendedora preenchida se sellerId OU sellerName livre
+// estiver setado (alguns clientes preenchem manual sem cadastrar
+// funcionario formal).
+// ============================================================
+
+export type SaleContext = {
+  customerId?: string | null;
+  sellerId?: string | null;
+  sellerName?: string | null;
+};
+
+export type SaleValidation = {
+  ok: boolean;
+  missing: string[]; // ex: ["cliente", "vendedora"]
+};
+
+export function validateSaleAgainstSettings(
+  settings: PdvSettings | null | undefined,
+  ctx: SaleContext
+): SaleValidation {
+  const missing: string[] = [];
+  const s = settings || DEFAULT_SETTINGS;
+
+  if (s.require_customer && !ctx.customerId) {
+    missing.push("cliente");
+  }
+  if (s.require_seller && !ctx.sellerId && !(ctx.sellerName || "").trim()) {
+    missing.push("vendedora");
+  }
+
+  return { ok: missing.length === 0, missing: missing };
+}
