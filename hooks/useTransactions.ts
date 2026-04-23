@@ -19,7 +19,12 @@ function mapApiTransaction(t: any): Transaction {
     due_date: t.due_date || null,
     created_at: t.created_at || null,
     paid_at: t.paid_at || null,
-  } as Transaction & { due_date?: string; created_at?: string; paid_at?: string };
+    // Sessao 22-23/04: campos novos (vem do backend ddb07f5)
+    payment_method: t.payment_method || null,
+    employee_id: t.employee_id || null,
+    employee_name: t.employee_name || null,
+    idempotency_key: t.idempotency_key || null,
+  } as Transaction;
 }
 
 function safePeriod(raw: any): string {
@@ -52,6 +57,15 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { start: toISODate(prev.start), end: toISODate(prev.end) };
   }, [period, customStart, customEnd]);
 
+  // Mes vigente — calculado independente do filtro selecionado.
+  // Usado pelo MonthExpensesBanner pra avisar quando ha despesas no
+  // mes atual escondidas pelo filtro (ex: cliente esta vendo "Dia"
+  // ou "Semana" e nao percebe que tem 5 contas a vencer este mes).
+  var currentMonthRange = useMemo(function() {
+    var range = getPeriodRange("month");
+    return { start: toISODate(range.start), end: toISODate(range.end) };
+  }, []);
+
   var { data: apiTx, isLoading: isLoadingTx } = useQuery({
     queryKey: ["transactions", companyId, periodRange.start, periodRange.end],
     queryFn: function() {
@@ -71,6 +85,20 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     },
     enabled: !!companyId && !!token && !isDemo && !!prevRange,
     retry: 1, staleTime: 120000,
+  });
+
+  // Query do mes vigente — sempre ativa, INDEPENDENTE do filtro.
+  // Otimizacao: se period === "month" reutiliza apiTx (mesmo range).
+  var monthQueryEnabled = !!companyId && !!token && !isDemo && period !== "month";
+  var { data: apiCurrentMonth } = useQuery({
+    queryKey: ["current-month-expenses", companyId, currentMonthRange.start, currentMonthRange.end],
+    queryFn: function() {
+      // Pede so as despesas pra economizar payload (limit=1 + summary cobre tudo)
+      var params = "limit=1&type=expense&start=" + currentMonthRange.start + "&end=" + currentMonthRange.end;
+      return companiesApi.transactions(companyId!, params);
+    },
+    enabled: monthQueryEnabled,
+    retry: 1, staleTime: 60000,
   });
 
   var { data: apiDre } = useQuery({
@@ -114,6 +142,20 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { income: income, expenses: expenses, balance: income - expenses };
   }, [apiPrevTx]);
 
+  // Despesas do mes vigente — usado pelo banner.
+  // Quando period === "month" reutiliza apiTx (mesmo dado, evita query extra).
+  var currentMonthExpenses = useMemo(function() {
+    if (period === "month") {
+      // Usa os dados que ja temos
+      var exp = transactions.filter(function(t) { return t.type === "expense"; });
+      return { count: exp.length, total: exp.reduce(function(s, t) { return s + t.amount; }, 0) };
+    }
+    // Usa a query separada do mes
+    var total = parseFloat(apiCurrentMonth?.summary?.expenses) || 0;
+    var count = apiCurrentMonth?.total || 0;
+    return { count: count, total: total };
+  }, [apiCurrentMonth, period, transactions]);
+
   var dreData: DreData | null = useMemo(function() {
     var raw = apiDre;
     if (!raw || (!raw.totalIncome && !raw.income && !raw.total_income)) return null;
@@ -131,6 +173,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     onSuccess: function() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
       qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
+      qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["dre", companyId] });
       toast.success("Lancamento criado!");
@@ -160,11 +203,12 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     onSettled: function() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
       qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
+      qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
     },
   });
 
-  function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string }) {
+  function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string; payment_method?: string; employee_id?: string }) {
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
     createMutation.mutate(body);
@@ -176,6 +220,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
 
   return {
     transactions: transactions, summary: summary, previousSummary: previousSummary,
+    currentMonthExpenses: currentMonthExpenses, // Tarefa C — banner
     dreData: dreData, withdrawalData: withdrawalData,
     isLoading: isLoadingTx && !isDemo, isDemo: isDemo,
     createTransaction: createTransaction, deleteTransaction: deleteTransaction,
