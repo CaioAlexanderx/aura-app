@@ -9,6 +9,7 @@ import { MembersSection } from "@/components/MembersSection";
 import { ReferralCard } from "@/components/ReferralCard";
 import { ProfileHero } from "@/components/screens/configuracoes/ProfileHero";
 import { CnpjSection } from "@/components/screens/configuracoes/CnpjSection";
+import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
 import { useConfigProfile } from "@/components/screens/configuracoes/useConfigProfile";
 import { SectionTitle, Card, EditField, InfoRow, PLANS, AURA_WHATSAPP, AURA_EMAIL, sh } from "@/components/screens/configuracoes/shared";
 
@@ -118,8 +119,9 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
-          {/* CUPONS DE DESCONTO */}
+          {/* VENDAS — politicas do caixa + cupons */}
           <SectionTitle title="Vendas" />
+          <PdvSettingsCard />
           <Pressable onPress={() => router.push("/(tabs)/cupons")} style={s.linkCard}>
             <View style={s.linkCardIcon}>
               <Icon name="star" size={18} color={Colors.violet3} />
