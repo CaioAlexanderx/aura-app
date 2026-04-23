@@ -16,18 +16,6 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
-function variantLabel(v: any): string {
-  var attrs = v.attributes || [];
-  var parts: string[] = [];
-  for (var a of attrs) {
-    var val = String(a.value || "").trim();
-    if (!val) continue;
-    if (/^#[0-9a-fA-F]{6}$/.test(val)) parts.push(hexToName(val));
-    else parts.push(val);
-  }
-  return parts.join(" \u00b7 ") || v.sku_suffix || "Variante";
-}
-
 var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "tam.", "variacao", "variacao", "medida", "numero", "num", "numeracao", "n"]);
 var COLOR_ATTRS = new Set(["cor", "color", "colour"]);
 
@@ -80,7 +68,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
+  // selectedVariants: variantes selecionadas para impressao
   var [selectedVariants, setSelectedVariants] = useState<Record<string, Set<string>>>({});
+  // includeParentInPrint: produtos pai que devem ter sua propria etiqueta
+  // impressa (usando p.color/p.size/p.barcode do pai). Independente das
+  // variantes selecionadas - permite "imprimir etiqueta do pai E etiquetas
+  // das variantes" simultaneamente.
+  var [includeParentInPrint, setIncludeParentInPrint] = useState<Record<string, boolean>>({});
   var isWeb = Platform.OS === "web";
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
 
@@ -106,8 +100,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
       setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
       if (active.length > 0) {
+        // Auto-seleciona TODAS as variantes ao expandir
         var varIds = new Set(active.map(function(v: any) { return v.id; }));
         setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
+        // Pai NAO eh auto-selecionado pra impressao (so as variantes).
+        // Usuario marca explicitamente se quiser tambem etiqueta do pai.
         var newQtys: Record<string, number> = {};
         active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = Math.max(1, stock); });
         setQuantities(function(prev) { return { ...prev, ...newQtys }; });
@@ -119,11 +116,18 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter(function(i) { return i !== id; }));
       setSelectedVariants(function(prev) { var n = { ...prev }; delete n[id]; return n; });
+      setIncludeParentInPrint(function(prev) { var n = { ...prev }; delete n[id]; return n; });
     } else {
       onSelectionChange([...selectedIds, id]);
       fetchVariantsIfNeeded(id);
       if (!quantities[id]) { var p = products.find(function(pr) { return pr.id === id; }); if (p && p.stock > 1) setQty(id, p.stock); }
     }
+  }
+
+  // Toggle do checkbox de impressao do pai (quando ele tem variantes).
+  // Quando produto NAO tem variantes, o "selectedIds" ja controla a impressao.
+  function toggleIncludeParent(productId: string) {
+    setIncludeParentInPrint(function(prev) { return { ...prev, [productId]: !prev[productId] }; });
   }
 
   function toggleVariant(productId: string, variantId: string) {
@@ -152,11 +156,19 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var total = 0;
     selectedIds.forEach(function(id) {
       var variants = variantCache[id] || []; var selVars = selectedVariants[id];
-      if (variants.length > 0 && selVars && selVars.size > 0) { selVars.forEach(function(vid) { total += getQty(id + "__" + vid); }); }
-      else { total += getQty(id); }
+      var hasAnyVariant = variants.length > 0;
+      if (hasAnyVariant) {
+        // Soma variantes selecionadas
+        if (selVars && selVars.size > 0) { selVars.forEach(function(vid) { total += getQty(id + "__" + vid); }); }
+        // Soma o pai SE marcado pra incluir
+        if (includeParentInPrint[id]) { total += getQty(id); }
+      } else {
+        // Produto sem variantes: sempre soma o pai
+        total += getQty(id);
+      }
     });
     return total;
-  }, [selectedIds, quantities, selectedVariants, variantCache]);
+  }, [selectedIds, quantities, selectedVariants, variantCache, includeParentInPrint]);
 
   function handlePrint() {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
@@ -165,21 +177,31 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var p = products.find(function(pr) { return pr.id === id; });
       if (!p || !(p.barcode || p.code)) return;
       var variants = variantCache[id] || []; var selVars = selectedVariants[id];
-      if (variants.length > 0 && selVars && selVars.size > 0) {
-        variants.forEach(function(v: any) {
-          if (!selVars.has(v.id)) return;
-          var sc = variantSizeColor(v);
-          var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
-          var effectiveBarcode = v.barcode || p.barcode || p.code;
-          // FIX: nao faz fallback para p.size/p.color quando eh variante.
-          // Cada variante usa APENAS seu proprio size/color (evita unificar todas as etiquetas no size do pai).
-          items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id) });
-        });
+      var hasAnyVariant = variants.length > 0;
+
+      if (hasAnyVariant) {
+        // Inclui o PAI SE marcado (com seus proprios size/color do produto base)
+        if (includeParentInPrint[id]) {
+          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
+        }
+        // Inclui variantes selecionadas
+        if (selVars && selVars.size > 0) {
+          variants.forEach(function(v: any) {
+            if (!selVars.has(v.id)) return;
+            var sc = variantSizeColor(v);
+            var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
+            var effectiveBarcode = v.barcode || p.barcode || p.code;
+            // FIX: nao faz fallback para p.size/p.color quando eh variante.
+            // Cada variante usa APENAS seu proprio size/color (evita unificar todas as etiquetas no size do pai).
+            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id) });
+          });
+        }
       } else {
+        // Produto sem variantes
         items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
       }
     });
-    if (items.length === 0) { toast.error("Nenhum item selecionado"); return; }
+    if (items.length === 0) { toast.error("Nenhum item selecionado. Marque o produto pai ou pelo menos uma variante."); return; }
     var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -204,7 +226,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       <View style={s.header}>
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Etiquetas 33x21mm (3 colunas)</Text>
-          <Text style={s.hint}>Selecione os produtos. Produtos com variantes expandem automaticamente para selecao individual.</Text>
+          <Text style={s.hint}>Selecione os produtos. Produtos com variantes mostram as variantes para selecao individual + opcao de etiqueta do pai.</Text>
         </View>
         <View style={s.modeToggle}>
           <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>Cod. barras</Text></Pressable>
@@ -236,9 +258,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           var hasVariants = sel && variants.length > 0;
           var selVars = selectedVariants[p.id] || new Set();
           var allVarsSelected = hasVariants && variants.every(function(v: any) { return selVars.has(v.id); });
+          var parentChecked = !!includeParentInPrint[p.id];
 
           if (!hasVariants) {
             var qty = getQty(p.id);
+            // FIX nomenclatura: usa buildLabelName (mesmo padrao do label final)
+            // pra preview ficar identico - "Vestido flor | U | Nude"
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
             return (
               <View key={p.id} style={[s.item, sel && s.itemSelected]}>
@@ -269,32 +294,66 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             );
           }
 
+          // Produto pai COM variantes - layout com checkboxes independentes:
+          // - Linha do pai: checkbox proprio (etiqueta do pai vai impressa SE marcado)
+          // - Linhas das variantes: checkbox de cada variante (independente)
+          // FIX nomenclatura: tambem usa buildLabelName no preview do pai
+          var parentLabelPreview = buildLabelName(p.name, p.size || "", p.color || "");
+          var parentQty = getQty(p.id);
           return (
             <View key={p.id} style={[s.item, s.itemSelected]}>
               <View style={s.parentRow}>
+                {/* Checkbox de SELECAO do produto (marca/desmarca o produto inteiro) */}
                 <Pressable onPress={function() { toggleSelect(p.id); }} style={{ marginRight: 8 }}>
                   <View style={[s.checkbox, s.checkboxSelected]}><Icon name="check" size={10} color="#fff" /></View>
                 </Pressable>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {renderColorIndicator(p.color)}
-                    <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={s.itemName} numberOfLines={1}>{parentLabelPreview}</Text>
                     <Text style={s.varBadge}>V</Text>
                     {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                   </View>
-                  <Text style={s.variantHint}>{variants.length} variante{variants.length > 1 ? "s" : ""} | {selVars.size} selecionada{selVars.size !== 1 ? "s" : ""}</Text>
+                  <Text style={s.variantHint}>{variants.length} variante{variants.length > 1 ? "s" : ""} | {selVars.size} selecionada{selVars.size !== 1 ? "s" : ""}{parentChecked ? " + etiqueta do pai" : ""}</Text>
                 </View>
                 <Pressable onPress={function() { toggleAllVariants(p.id); }} style={s.toggleAllVarsBtn}>
                   <Text style={s.toggleAllVarsText}>{allVarsSelected ? "Nenhuma" : "Todas"}</Text>
                 </Pressable>
               </View>
 
+              {/* Linha do PAI como item imprimivel separado (toggle independente) */}
+              <View style={[s.variantRow, parentChecked && s.variantRowSelected, s.parentSelfRow]}>
+                <Pressable onPress={function() { toggleIncludeParent(p.id); }} style={s.variantLeft}>
+                  <View style={[s.checkboxSmall, parentChecked && s.checkboxSmallSelected]}>{parentChecked && <Icon name="check" size={8} color="#fff" />}</View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      {renderColorIndicator(p.color)}
+                      <Text style={s.variantName} numberOfLines={1}>{parentLabelPreview}</Text>
+                      <Text style={s.parentSelfBadge}>PAI</Text>
+                      {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
+                    </View>
+                    <Text style={s.variantMeta}>{p.barcode || p.code} | {p.stock} un</Text>
+                  </View>
+                  <Text style={s.variantPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                </Pressable>
+                {parentChecked && (
+                  <View style={s.qtyRowVariant}>
+                    <Pressable onPress={function() { setQty(p.id, parentQty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
+                    <TextInput style={s.qtyInputSmall} value={String(parentQty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(p.id, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                    <Pressable onPress={function() { setQty(p.id, parentQty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
+                    <Text style={s.qtyLabel}>etiq.</Text>
+                  </View>
+                )}
+              </View>
+
               {variants.map(function(v: any) {
                 var vsel = selVars.has(v.id);
                 var vkey = p.id + "__" + v.id;
                 var vqty = getQty(vkey);
-                var label = variantLabel(v);
                 var sc = variantSizeColor(v);
+                // FIX nomenclatura: usa buildLabelName tbm pra variantes
+                // (antes usava variantLabel que junta com " · " - fora do padrao)
+                var vlabel = buildLabelName(p.name, sc.size, sc.color);
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
                 var vBarcode = v.barcode || p.barcode || p.code;
                 var vStock = parseInt(v.stock_qty) || 0;
@@ -306,7 +365,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                           {renderColorIndicator(sc.color)}
-                          <Text style={s.variantName} numberOfLines={1}>{label}</Text>
+                          <Text style={s.variantName} numberOfLines={1}>{vlabel}</Text>
                           {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
                         </View>
                         <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
@@ -376,6 +435,8 @@ var s = StyleSheet.create({
   colorBadge: { fontSize: 9, fontWeight: "600", color: Colors.ink2, backgroundColor: Colors.bg4, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   varBadge: { fontSize: 8, fontWeight: "700", color: "#06b6d4", backgroundColor: "rgba(6,182,212,0.12)", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, overflow: "hidden" },
+  parentSelfBadge: { fontSize: 8, fontWeight: "800", color: "#f59e0b", backgroundColor: "rgba(245,158,11,0.15)", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3, overflow: "hidden", letterSpacing: 0.3 },
+  parentSelfRow: { borderLeftColor: "#f59e0b" + "55" },
   variantHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
   toggleAllVarsBtn: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
   toggleAllVarsText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
