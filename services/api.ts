@@ -158,6 +158,43 @@ export type PdvSettings = {
   require_seller: boolean;    // exigir identificacao da vendedora em toda venda
 };
 
+// Sale Details (vinculo transacao -> venda do PDV)
+// Retornado por GET /companies/:id/transactions/:tx_id/sale-details
+export type SaleDetailsItem = {
+  id: string;
+  product_id: string | null;
+  variant_id?: string | null;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  total_price: number;
+  product_name: string;
+  image_url?: string | null;
+};
+export type SaleDetails = {
+  has_sale: boolean;
+  transaction: {
+    id: string;
+    amount: number;
+    description: string;
+    employee_id?: string | null;
+    employee_name?: string | null;
+  };
+  sale?: {
+    id: string;
+    total_amount: number;
+    discount_amount: number;
+    payment_method: string | null;
+    status: string | null;
+    cancelled_at?: string | null;
+    created_at: string;
+  };
+  customer?: { id: string; name: string; phone?: string | null } | null;
+  seller?: { id?: string | null; name?: string | null };
+  items?: SaleDetailsItem[];
+  available_employees: Array<{ id: string; name: string }>;
+};
+
 // Auth API
 export var authApi = {
   login: function(email: string, password: string) { return request<LoginResponse>("/auth/login", { method: "POST", body: { email: email, password: password }, retry: 1 }); },
@@ -188,6 +225,41 @@ export var pdvSettingsApi = {
   get: function(companyId: string) { return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { retry: 1 }); },
   save: function(companyId: string, settings: PdvSettings) {
     return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { method: "PUT", body: { settings: settings }, retry: 0 });
+  },
+};
+
+// Transaction <-> Sale API (Item 1 Eryca)
+// Permite editar mercadorias e vendedora vinculadas a uma transacao
+// que veio do PDV (idempotency_key formato "pdv-sale-{uuid}").
+export var transactionSaleApi = {
+  // Detalhes completos da venda (items, cliente, vendedora, employees disponiveis)
+  getDetails: function(companyId: string, txId: string) {
+    return request<SaleDetails>(
+      "/companies/" + companyId + "/transactions/" + txId + "/sale-details",
+      { retry: 1 }
+    );
+  },
+  // Devolucao parcial: remove item, devolve estoque, reduz total da venda,
+  // reduz valor da transacao original e cria transacao espelho de "devolucao".
+  removeItem: function(companyId: string, txId: string, itemId: string) {
+    return request<{
+      ok: boolean;
+      removed_item: { id: string; name: string; quantity: number; refund_amount: number };
+      new_sale_total: number;
+      new_tx_amount: number;
+      sale_cancelled: boolean;
+    }>(
+      "/companies/" + companyId + "/transactions/" + txId + "/sale-items/" + itemId,
+      { method: "DELETE", retry: 0, timeout: 15000 }
+    );
+  },
+  // Atualiza vendedora da transacao (e da venda vinculada se houver).
+  // employee_id null limpa o vinculo.
+  updateSeller: function(companyId: string, txId: string, employee_id: string | null, employee_name?: string) {
+    return request<{ ok: boolean; transaction: any; synced_to_sale: boolean }>(
+      "/companies/" + companyId + "/transactions/" + txId + "/seller",
+      { method: "PATCH", body: { employee_id: employee_id, employee_name: employee_name }, retry: 0 }
+    );
   },
 };
 
