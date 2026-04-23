@@ -2,6 +2,9 @@
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
 // AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab
 // Extracted from OdontoTabWrappers.tsx
+// D-FIX #1: AgendaTab agora le settings + practitioners e
+// passa apenas as cadeiras ativas (com nome do dentista) pra
+// AgendaDental.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -13,12 +16,15 @@ import { Icon } from "@/components/Icon";
 import { AgendaDental } from "@/components/verticals/odonto/AgendaDental";
 import { OdontogramaSVG } from "@/components/verticals/odonto/OdontogramaSVG";
 import { ProntuarioTimeline } from "@/components/verticals/odonto/ProntuarioTimeline";
+import { dentalConfigApi } from "@/services/dentalConfigApi";
 
 function useCompanyId() { return useAuthStore().company?.id; }
 function Loader() { return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>; }
 
 export function AgendaTab() {
   var cid = useCompanyId();
+
+  // Agendamentos do dia
   var { data, isLoading } = useQuery({
     queryKey: ["dental-agenda", cid],
     queryFn: function() {
@@ -29,7 +35,44 @@ export function AgendaTab() {
     },
     enabled: !!cid, staleTime: 15000,
   });
+
+  // D-FIX #1: settings define quais cadeiras estao ativas
+  var { data: settingsData } = useQuery({
+    queryKey: ["dental-settings", cid],
+    queryFn: function() { return dentalConfigApi.getSettings(cid!); },
+    enabled: !!cid, staleTime: 30000,
+  });
+
+  // Practitioners pra montar nomes das cadeiras
+  var { data: practitionersData } = useQuery({
+    queryKey: ["dental-practitioners", cid],
+    queryFn: function() { return dentalConfigApi.listPractitioners(cid!); },
+    enabled: !!cid, staleTime: 30000,
+  });
+
   if (isLoading) return <Loader />;
+
+  var settings = settingsData?.settings;
+  var practitioners = practitionersData?.practitioners || [];
+
+  // Monta lista de cadeiras ativas com nome do dentista alocado.
+  // Fallback (sem settings carregados): usa default do AgendaDental ["Cadeira 1", "Cadeira 2"]
+  var chairs: string[] | undefined = undefined;
+  if (settings) {
+    chairs = [];
+    settings.chairs_active.forEach(function(active, idx) {
+      if (!active) return;
+      var allocId = settings!.chair_practitioner_ids[idx];
+      var allocated = practitioners.find(function(p) { return p.id === allocId; });
+      if (allocated) {
+        chairs!.push("Cadeira " + (idx + 1) + " - " + allocated.name);
+      } else {
+        chairs!.push("Cadeira " + (idx + 1));
+      }
+    });
+    if (chairs.length === 0) chairs = ["Cadeira 1"];
+  }
+
   var appointments = ((data as any)?.appointments || []).map(function(a: any) {
     return {
       id: a.id, patient_name: a.patient_name || "Paciente", patient_phone: a.patient_phone,
@@ -38,7 +81,7 @@ export function AgendaTab() {
       chair: a.chair, professional_name: a.professional_name,
     };
   });
-  return <AgendaDental appointments={appointments} />;
+  return <AgendaDental appointments={appointments} chairs={chairs} />;
 }
 
 export function PacientesTab() {
