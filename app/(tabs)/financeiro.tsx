@@ -11,6 +11,7 @@ import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
 import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
+import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
 import { TABS, PERIODS } from "@/components/screens/financeiro/types";
 import type { PeriodKey, Transaction } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
@@ -42,8 +43,9 @@ function brToISO(br: string): string | null {
 }
 
 export default function FinanceiroScreen() {
+  // Periodo padrao agora eh "today" (Dia) — Tarefa B
   var [activeTab, setActiveTab] = useState(0);
-  var [period, setPeriod] = useState<PeriodKey>("month");
+  var [period, setPeriod] = useState<PeriodKey>("today");
   var [showModal, setShowModal] = useState(false);
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -55,11 +57,16 @@ export default function FinanceiroScreen() {
   var customStart = brToISO(customStartBR) || undefined;
   var customEnd = brToISO(customEndBR) || undefined;
 
-  var { transactions, summary, previousSummary, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab, period, customStart, customEnd);
+  var { transactions, summary, previousSummary, currentMonthExpenses, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab, period, customStart, customEnd);
   var { company, token } = useAuthStore();
   var qc = useQueryClient();
 
   var uncategorized = transactions.filter(function(t: any) { return !t.category || t.category === "outros"; }).map(function(t: any) { return t.description; }).filter(Boolean);
+
+  // Banner so aparece quando o filtro atual nao mostra despesas do mes vigente
+  // mas existem. Skipa quando filtro ja eh "month" (mostra normalmente) ou
+  // "all" (mostra tudo).
+  var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
@@ -134,6 +141,15 @@ export default function FinanceiroScreen() {
               </View>
             )}
           </View>
+        )}
+
+        {/* Banner que avisa sobre despesas do mes vigente quando o filtro atual esconde — Tarefa C */}
+        {showMonthBanner && (
+          <MonthExpensesBanner
+            count={currentMonthExpenses.count}
+            total={currentMonthExpenses.total}
+            onSwitchToMonth={function() { setPeriod("month"); }}
+          />
         )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
