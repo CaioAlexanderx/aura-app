@@ -138,6 +138,19 @@ export type CreateAccessCodeBody = {
   expires_at?: string | null;
 };
 
+// Sidebar Layout (preferencia de UI por usuario)
+// items eh lista linear (ordem importa). Cada item declara em qual secao
+// ele deve aparecer e se esta visivel ou escondido.
+export type SidebarLayoutItem = {
+  key: string;       // route path, ex: "/", "/financeiro", "/vertical"
+  section: string;   // nome da secao, ex: "Principal", "Vendas"
+  hidden: boolean;
+};
+export type SidebarLayout = {
+  version: number;
+  items: SidebarLayoutItem[];
+};
+
 // Auth API
 export var authApi = {
   login: function(email: string, password: string) { return request<LoginResponse>("/auth/login", { method: "POST", body: { email: email, password: password }, retry: 1 }); },
@@ -150,6 +163,16 @@ export var authApi = {
   verifyEmail: function(code: string) { return request<VerificationResponse>("/auth/verify-email", { method: "POST", body: { code: code }, retry: 0 }); },
   sendPhoneVerification: function() { return request<VerificationResponse>("/auth/send-phone-verification", { method: "POST", retry: 0 }); },
   verifyPhone: function(code: string) { return request<VerificationResponse>("/auth/verify-phone", { method: "POST", body: { code: code }, retry: 0 }); },
+};
+
+// Sidebar Layout API
+// GET: retorna layout salvo ou null (= padrao do sistema).
+// PUT: salva layout completo. Passar null reseta para o padrao.
+export var sidebarLayoutApi = {
+  get: function() { return request<{ layout: SidebarLayout | null }>("/auth/sidebar-layout", { retry: 1 }); },
+  save: function(layout: SidebarLayout | null) {
+    return request<{ layout: SidebarLayout | null }>("/auth/sidebar-layout", { method: "PUT", body: { layout: layout }, retry: 0 });
+  },
 };
 
 // Invite API
