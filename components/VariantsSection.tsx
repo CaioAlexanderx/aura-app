@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { QuickBatchModal } from "@/components/QuickBatchModal";
 
 type Variant = {
   id?: string;
@@ -20,6 +21,11 @@ type Props = {
   basePrice: number;
   variants: Variant[];
   onUpdate: () => void;
+  // Tarefa A: campos opcionais do produto pai pra promover ele em variante
+  // automaticamente quando o cliente cria o primeiro batch via "+".
+  productColor?: string | null;
+  productSize?: string | null;
+  productStock?: number;
 };
 
 const PRESET_COLORS = [
@@ -32,9 +38,10 @@ const PRESET_COLORS = [
 
 const ATTR_PRESETS = ["Cor", "Tamanho", "Material", "Peso", "Sabor", "Volume"];
 
-export function VariantsSection({ productId, productName, basePrice, variants, onUpdate }: Props) {
+export function VariantsSection({ productId, productName, basePrice, variants, onUpdate, productColor, productSize, productStock }: Props) {
   const { company } = useAuthStore();
   const [showForm, setShowForm] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const [price, setPrice] = useState('');
   const [stockQty, setStockQty] = useState('0');
   const [attrName, setAttrName] = useState('Cor');
@@ -138,17 +145,29 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
   // alertando.
   const ghostVariants = variants.filter(v => !v.attributes || v.attributes.length === 0);
 
+  // Tarefa A: oculta o "+ em lote" se ja tem batchModal aberto ou form unitario aberto
+  const showBatchAvailable = !showForm && !showBatchModal;
+
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={s.title}>Variantes</Text>
           <Text style={s.hint}>Cores, tamanhos ou qualquer variacao do produto</Text>
         </View>
-        <Pressable onPress={() => setShowForm(!showForm)} style={s.addBtn}>
-          <Icon name="plus" size={12} color={Colors.violet3} />
-          <Text style={s.addText}>{showForm ? 'Cancelar' : 'Adicionar'}</Text>
-        </Pressable>
+        <View style={s.headerActions}>
+          {/* Botao "+ em lote" — Tarefa A */}
+          {showBatchAvailable && (
+            <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
+              <Icon name="plus" size={11} color={Colors.violet3} />
+              <Text style={s.batchText}>Em lote</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => setShowForm(!showForm)} style={s.addBtn}>
+            <Icon name="plus" size={12} color={Colors.violet3} />
+            <Text style={s.addText}>{showForm ? 'Cancelar' : 'Adicionar'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Aviso se houver variantes sem atributos (caem como V1, V2... no Caixa) */}
@@ -204,9 +223,16 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
           })}
         </View>
       )}
-      {variants.length === 0 && !showForm && <Text style={s.empty}>Nenhuma variante cadastrada.</Text>}
+      {variants.length === 0 && !showForm && (
+        <View style={s.emptyBox}>
+          <Text style={s.empty}>Nenhuma variante cadastrada.</Text>
+          <Text style={s.emptyHint}>
+            Use "Em lote" pra criar varios tamanhos ou cores de uma vez (ex: "P, M, G").
+          </Text>
+        </View>
+      )}
 
-      {/* Add form — simplified */}
+      {/* Add form unitario — simplified */}
       {showForm && (
         <View style={s.form}>
           {/* Price + Stock in one row */}
@@ -310,18 +336,35 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
           </View>
         </View>
       )}
+
+      {/* Quick-batch modal — Tarefa A */}
+      <QuickBatchModal
+        visible={showBatchModal}
+        productId={productId}
+        productName={productName}
+        productColor={productColor}
+        productSize={productSize}
+        basePrice={basePrice}
+        baseStock={productStock || 0}
+        hasExistingVariants={variants.length > 0}
+        onClose={() => setShowBatchModal(false)}
+        onSuccess={onUpdate}
+      />
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   title: { fontSize: 13, fontWeight: '600', color: Colors.ink },
   hint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
   req: { color: Colors.red, fontWeight: '700' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: Colors.border2 },
   addText: { fontSize: 11, color: Colors.violet3, fontWeight: '600' },
+  batchBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.bg, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderStyle: 'dashed' as any, borderColor: Colors.violet3 + '55' },
+  batchText: { fontSize: 11, color: Colors.violet3, fontWeight: '700' },
   warnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: (Colors.amber || '#f59e0b') + '15', borderRadius: 8, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: (Colors.amber || '#f59e0b') + '40' },
   warnText: { flex: 1, fontSize: 11, color: Colors.ink, lineHeight: 15 },
   list: { gap: 4, marginBottom: 8 },
@@ -339,7 +382,9 @@ const s = StyleSheet.create({
   varPrice: { fontSize: 12, color: Colors.green, fontWeight: '600' },
   varStock: { fontSize: 11, color: Colors.ink3, minWidth: 40, textAlign: 'right' },
   delBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.redD, alignItems: 'center', justifyContent: 'center' },
-  empty: { fontSize: 11, color: Colors.ink3, textAlign: 'center', paddingVertical: 12 },
+  emptyBox: { paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 4 },
+  empty: { fontSize: 12, color: Colors.ink3, textAlign: 'center', fontWeight: '500' as any },
+  emptyHint: { fontSize: 10.5, color: Colors.ink3, textAlign: 'center', fontStyle: 'italic' as any, lineHeight: 14 },
   form: { backgroundColor: Colors.bg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
   formRow: { flexDirection: 'row', gap: 8 },
   label: { fontSize: 10, color: Colors.ink3, fontWeight: '600', marginBottom: 4 },
