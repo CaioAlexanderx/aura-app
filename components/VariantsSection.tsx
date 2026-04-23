@@ -74,6 +74,31 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
 
   async function handleSave() {
     if (!company?.id) { toast.error('Sessao expirada'); return; }
+
+    // VALIDACAO: variante PRECISA ter pelo menos 1 atributo (cor, tamanho, etc).
+    // Sem isso, no Caixa aparece como "V1, V2, V3..." indistinguiveis e o cliente
+    // nao consegue selecionar a variante certa. Bug encontrado pela Eryca em
+    // 22/04: 5 variantes sem atributos do produto "Calça Pantalona Finesse"
+    // apareciam todas como "V1 · Azul escuro · PP" no PDV.
+    if (attributes.length === 0) {
+      toast.error('Adicione pelo menos uma caracteristica (cor, tamanho, etc) antes de salvar');
+      return;
+    }
+
+    // Tambem valida que NAO existe outra variante com EXATAMENTE os mesmos
+    // atributos. Sem isso, criar 2x "Cor: Azul, Tamanho: M" gera duplicatas
+    // que confundem no Caixa.
+    const sigNew = attributes.map(a => a.attribute.toLowerCase().trim() + ':' + a.value.toLowerCase().trim()).sort().join('|');
+    const dup = variants.find(v => {
+      if (!v.attributes || v.attributes.length === 0) return false;
+      const sig = v.attributes.map(a => a.attribute.toLowerCase().trim() + ':' + a.value.toLowerCase().trim()).sort().join('|');
+      return sig === sigNew;
+    });
+    if (dup) {
+      toast.error('Ja existe uma variante com essas caracteristicas');
+      return;
+    }
+
     setSaving(true);
     try {
       await companiesApi.createVariant(company.id, productId, {
@@ -108,6 +133,11 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
     return { clean: clean || raw, hex: hexMatch ? hexMatch[0] : null };
   }
 
+  // Detecta variantes "fantasma" (sem atributos) — precisam ser corrigidas pelo
+  // cliente porque aparecem indistinguiveis no Caixa. Mostra um banner amarelo
+  // alertando.
+  const ghostVariants = variants.filter(v => !v.attributes || v.attributes.length === 0);
+
   return (
     <View style={s.container}>
       <View style={s.header}>
@@ -121,13 +151,25 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
         </Pressable>
       </View>
 
+      {/* Aviso se houver variantes sem atributos (caem como V1, V2... no Caixa) */}
+      {ghostVariants.length > 0 && (
+        <View style={s.warnBox}>
+          <Icon name="alert" size={13} color={Colors.amber || '#f59e0b'} />
+          <Text style={s.warnText}>
+            {ghostVariants.length} variante(s) sem caracteristicas. No Caixa elas
+            aparecem como "{ghostVariants.map(v => v.sku_suffix).join(', ')}" e
+            ficam indistinguiveis. Remova e recadastre adicionando cor/tamanho.
+          </Text>
+        </View>
+      )}
+
       {/* Existing variants */}
       {variants.length > 0 && (
         <View style={s.list}>
           {variants.map((v, i) => {
             const hasAttrs = v.attributes && v.attributes.length > 0;
             return (
-              <View key={v.id || i} style={s.variantRow}>
+              <View key={v.id || i} style={[s.variantRow, !hasAttrs && s.variantRowGhost]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   {hasAttrs ? (
                     <View style={s.varAttrsRow}>
@@ -143,7 +185,10 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
                       })}
                     </View>
                   ) : (
-                    <Text style={s.varLabel}>{v.sku_suffix}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={s.varLabelGhost}>{v.sku_suffix}</Text>
+                      <Text style={s.varGhostHint}>(sem caracteristicas)</Text>
+                    </View>
                   )}
                   <Text style={s.varSku}>SKU: {v.sku_suffix}</Text>
                 </View>
@@ -180,9 +225,10 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
           </View>
 
           {/* Attributes */}
-          <Text style={[s.label, { marginTop: 12 }]}>Caracteristicas</Text>
+          <Text style={[s.label, { marginTop: 12 }]}>Caracteristicas <Text style={s.req}>*</Text></Text>
+          <Text style={s.fieldHint}>Obrigatorio. Sem isso a variante fica indistinguivel no Caixa.</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ flexDirection: 'row', gap: 4, marginBottom: 8, paddingRight: 20 }}>
+            contentContainerStyle={{ flexDirection: 'row', gap: 4, marginVertical: 8, paddingRight: 20 }}>
             {ATTR_PRESETS.map(p => (
               <Pressable key={p} onPress={() => setAttrName(p)}
                 style={[s.presetChip, attrName === p && s.presetActive]}>
@@ -243,11 +289,22 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
             </View>
           )}
 
+          {/* Hint quando ainda nao adicionou nenhum atributo (ajuda a entender por que o save bloqueia) */}
+          {attributes.length === 0 && (
+            <View style={s.attrEmptyHint}>
+              <Icon name="info" size={11} color={Colors.ink3} />
+              <Text style={s.attrEmptyHintText}>
+                Digite o valor (ex: "Azul" ou "M") e clique no + pra adicionar.
+              </Text>
+            </View>
+          )}
+
           <View style={s.formActions}>
             <Pressable onPress={() => setShowForm(false)} style={s.cancelBtn}>
               <Text style={s.cancelText}>Cancelar</Text>
             </Pressable>
-            <Pressable onPress={handleSave} disabled={saving} style={[s.saveBtn, saving && { opacity: 0.6 }]}>
+            <Pressable onPress={handleSave} disabled={saving || attributes.length === 0}
+              style={[s.saveBtn, (saving || attributes.length === 0) && { opacity: 0.4 }]}>
               {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.saveText}>Salvar variante</Text>}
             </Pressable>
           </View>
@@ -262,11 +319,17 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
   title: { fontSize: 13, fontWeight: '600', color: Colors.ink },
   hint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  req: { color: Colors.red, fontWeight: '700' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: Colors.border2 },
   addText: { fontSize: 11, color: Colors.violet3, fontWeight: '600' },
+  warnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: (Colors.amber || '#f59e0b') + '15', borderRadius: 8, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: (Colors.amber || '#f59e0b') + '40' },
+  warnText: { flex: 1, fontSize: 11, color: Colors.ink, lineHeight: 15 },
   list: { gap: 4, marginBottom: 8 },
   variantRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bg, borderRadius: 10, padding: 10 },
+  variantRowGhost: { backgroundColor: (Colors.amber || '#f59e0b') + '0c', borderWidth: 1, borderColor: (Colors.amber || '#f59e0b') + '33' },
   varLabel: { fontSize: 12, fontWeight: '600', color: Colors.ink },
+  varLabelGhost: { fontSize: 12, fontWeight: '600', color: Colors.ink3 },
+  varGhostHint: { fontSize: 9, color: (Colors.amber || '#f59e0b'), fontStyle: 'italic' as any },
   varSku: { fontSize: 9, color: Colors.ink3, marginTop: 3, fontFamily: 'monospace' as any },
   varAttrsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   varAttrChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border },
@@ -287,6 +350,8 @@ const s = StyleSheet.create({
   presetText: { fontSize: 10, color: Colors.ink3, fontWeight: '500' },
   attrRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   attrAddBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.violet, alignItems: 'center', justifyContent: 'center' },
+  attrEmptyHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, marginBottom: 4, paddingHorizontal: 6 },
+  attrEmptyHintText: { flex: 1, fontSize: 10, color: Colors.ink3, fontStyle: 'italic' as any },
   colorSection: { marginBottom: 8 },
   colorSwatch: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: Colors.border },
   customColorBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border2, borderStyle: 'dashed' as any, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg4 },
