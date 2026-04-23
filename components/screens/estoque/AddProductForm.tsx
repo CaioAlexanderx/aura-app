@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { BarcodeQRSection } from "@/components/BarcodeQRSection";
-import { VariantsSection } from "@/components/VariantsSection";
+import { ProductVariationsSection } from "@/components/ProductVariationsSection";
 import { ImageUploadSection } from "@/components/ImageUploadSection";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -110,14 +110,20 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     return () => clearTimeout(timer);
   }, [name, company?.id, editProduct?.id]);
 
-  const { data: variantsData, refetch: refetchVariants } = useQuery({
-    queryKey: ["variants", company?.id, editProduct?.id],
-    queryFn: () => companiesApi.variants(company!.id, editProduct!.id),
+  // Query pra detectar se produto tem variacoes (sistema novo v2)
+  // usada pra decidir se mostra ou esconde os campos simples de cor/tamanho
+  const { data: variationsData } = useQuery({
+    queryKey: ["productVariations", company?.id, editProduct?.id],
+    queryFn: () => {
+      // importa dinamicamente pra nao criar ciclo
+      return import("@/services/productsVariationsApi").then(m =>
+        m.productsVariationsApi.get(company!.id, editProduct!.id)
+      );
+    },
     enabled: isEdit && !!editProduct?.id && !!company?.id,
     staleTime: 30000,
   });
-  const variants = ((variantsData as any)?.variants || variantsData || []) as any[];
-  const hasVariants = variants.length > 0;
+  const hasVariations = !!(variationsData && variationsData.mode !== 'none');
 
   function generateCode() {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
@@ -259,85 +265,94 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <View style={{ flex: 1 }}><FormField label="Custo"><TextInput style={s.input} value={cost} onChangeText={setCost} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></FormField></View>
       </View>
 
-      {/* Bloco de estoque agora e opcional e colapsavel */}
-      <Pressable onPress={() => setShowStock(!showStock)} style={s.stockToggle}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.stockToggleTitle}>Estoque inicial {isEdit ? "" : "(opcional)"}</Text>
-          <Text style={s.stockToggleSub}>
-            {showStock
-              ? "Informe a quantidade em maos e o nivel minimo para alertas."
-              : hasVariants
-                ? "Produto com variantes: estoque e controlado por variante."
-                : "Voce pode dar entrada de estoque depois, a qualquer momento."}
-          </Text>
-        </View>
-        <Icon name={showStock ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />
-      </Pressable>
-
-      {showStock && (
+      {/* Bloco de estoque: escondido quando produto tem variacoes v2 (o estoque vira soma) */}
+      {!hasVariations && (
         <>
-          {hasVariants && (
-            <View style={s.stockVariantHint}>
-              <Icon name="alert" size={12} color={Colors.amber} />
-              <Text style={s.stockVariantHintText}>
-                Este produto tem variantes. O estoque informado aqui e apenas do produto base; cada variante tem estoque proprio.
+          <Pressable onPress={() => setShowStock(!showStock)} style={s.stockToggle}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.stockToggleTitle}>Estoque {isEdit ? "" : "inicial (opcional)"}</Text>
+              <Text style={s.stockToggleSub}>
+                {showStock
+                  ? "Informe a quantidade em maos e o nivel minimo para alertas."
+                  : "Voce pode dar entrada de estoque depois, a qualquer momento."}
               </Text>
             </View>
+            <Icon name={showStock ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />
+          </Pressable>
+
+          {showStock && (
+            <View style={s.row2}>
+              <View style={{ flex: 1 }}><FormField label="Qtd. atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
+              <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
+            </View>
           )}
-          <View style={s.row2}>
-            <View style={{ flex: 1 }}><FormField label="Qtd. atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
-            <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
-          </View>
         </>
+      )}
+
+      {/* Aviso quando ja tem variacoes: estoque vira soma */}
+      {hasVariations && (
+        <View style={s.stockVariantHint}>
+          <Icon name="info" size={13} color={Colors.violet3} />
+          <Text style={s.stockVariantHintText}>
+            Estoque controlado por variacoes abaixo. Total atual: {variationsData?.total_variants || 0} variantes.
+          </Text>
+        </View>
       )}
 
       <View style={s.divider} />
 
-      <View style={s.row2}>
-        <View style={{ flex: 1 }}>
-          <FormField label="Cor">
-            {Platform.OS === "web" ? (
-              <Pressable onPress={openColorPicker} style={s.colorRow}>
-                <View style={[s.colorSwatch, { backgroundColor: color || Colors.bg4, borderStyle: color ? "solid" : "dashed" }]} />
-                <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>{color ? (hexToName(color) + " \u00b7 " + color) : "Toque para escolher"}</Text>
-                {color && (
-                  <Pressable onPress={(e) => { e.stopPropagation?.(); setColor(""); }}>
-                    <Text style={{ fontSize: 11, color: Colors.red }}>Remover</Text>
-                  </Pressable>
-                )}
-              </Pressable>
-            ) : (
-              <View>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {PRESET_COLORS.map(c => (
-                    <Pressable key={c} onPress={() => setColor(color === c ? "" : c)}
-                      style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: c, borderWidth: color === c ? 3 : 1.5, borderColor: color === c ? Colors.violet : Colors.border }} />
-                  ))}
+      {/* Campos simples de cor/tamanho do produto pai:
+          - Mostrados apenas no CREATE (produto novo) como atalho rapido
+          - No EDIT sao ESCONDIDOS porque a secao Cores e Tamanhos abaixo
+            substitui completamente (evita confusao e duplicacao) */}
+      {!isEdit && (
+        <View style={s.row2}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Cor principal (opcional)">
+              {Platform.OS === "web" ? (
+                <Pressable onPress={openColorPicker} style={s.colorRow}>
+                  <View style={[s.colorSwatch, { backgroundColor: color || Colors.bg4, borderStyle: color ? "solid" : "dashed" }]} />
+                  <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>{color ? (hexToName(color) + " \u00b7 " + color) : "Toque para escolher"}</Text>
+                  {color && (
+                    <Pressable onPress={(e) => { e.stopPropagation?.(); setColor(""); }}>
+                      <Text style={{ fontSize: 11, color: Colors.red }}>Remover</Text>
+                    </Pressable>
+                  )}
+                </Pressable>
+              ) : (
+                <View>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {PRESET_COLORS.map(c => (
+                      <Pressable key={c} onPress={() => setColor(color === c ? "" : c)}
+                        style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: c, borderWidth: color === c ? 3 : 1.5, borderColor: color === c ? Colors.violet : Colors.border }} />
+                    ))}
+                  </View>
+                  {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{hexToName(color)} \u00b7 {color}</Text>}
                 </View>
-                {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{hexToName(color)} \u00b7 {color}</Text>}
-              </View>
-            )}
-          </FormField>
+              )}
+            </FormField>
+          </View>
+          <View style={{ flex: 1 }}>
+            <FormField label="Tamanho (opcional)">
+              <TextInput style={s.input} value={size} onChangeText={setSize} placeholder="P, M, G, 500ml..." placeholderTextColor={Colors.ink3} />
+            </FormField>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <FormField label="Tamanho">
-            <TextInput style={s.input} value={size} onChangeText={setSize} placeholder="P, M, G, 500ml..." placeholderTextColor={Colors.ink3} />
-          </FormField>
-        </View>
-      </View>
+      )}
+
+      {!isEdit && (
+        <Text style={s.createHint}>
+          Salve o produto e abra ele novamente para adicionar mais cores e tamanhos com estoque proprio.
+        </Text>
+      )}
 
       <BarcodeQRSection code={barcode} productName={name} price={parseFloat(price.replace(",", ".")) || 0} onCodeChange={setBarcode} />
 
+      {/* Novo sistema de variacoes v2 - substitui VariantsSection antigo */}
       {isEdit && editProduct?.id && (
-        <VariantsSection
+        <ProductVariationsSection
           productId={editProduct.id}
           productName={name}
-          basePrice={parseFloat(price.replace(",", ".")) || 0}
-          variants={variants}
-          onUpdate={() => refetchVariants()}
-          productColor={color || null}
-          productSize={size || null}
-          productStock={parseInt(stock) || 0}
         />
       )}
 
@@ -373,6 +388,7 @@ const s = StyleSheet.create({
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
   categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
+  createHint: { fontSize: 11, color: Colors.ink3, marginBottom: 14, marginTop: -6, fontStyle: "italic" as any, paddingHorizontal: 4 },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10 },
@@ -382,8 +398,8 @@ const s = StyleSheet.create({
   stockToggle: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
   stockToggleTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   stockToggleSub: { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
-  stockVariantHint: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.amber + "33", marginBottom: 10 },
-  stockVariantHintText: { fontSize: 11, color: Colors.amber, flex: 1, lineHeight: 15 },
+  stockVariantHint: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border2, marginBottom: 10 },
+  stockVariantHintText: { fontSize: 11, color: Colors.violet3, flex: 1, lineHeight: 15, fontWeight: "500" },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
