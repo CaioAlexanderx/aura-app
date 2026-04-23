@@ -11,7 +11,6 @@ import { ImportExportBar } from "@/components/ImportExportBar";
 import { ServerImport } from "@/components/ServerImport";
 import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
 import { AddServiceForm } from "@/components/screens/estoque/AddServiceForm";
-import { VariantsSection } from "@/components/VariantsSection";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
@@ -75,14 +74,6 @@ export default function EstoqueScreen() {
 
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
-
-  const editingProductId = editProduct?.id || null;
-  const { data: variantsData, refetch: refetchVariants } = useQuery({
-    queryKey: ['variants', company?.id, editingProductId],
-    queryFn: () => companiesApi.variants(company!.id, editingProductId!),
-    enabled: !!company?.id && !!editingProductId && showAddForm,
-    staleTime: 30000,
-  });
 
   const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
     queryKey: ["duplicateGroups", company?.id],
@@ -210,26 +201,12 @@ export default function EstoqueScreen() {
       )}
 
       {showAddForm && (
-        <>
-          <AddProductForm
-            categories={allCategories}
-            onSave={handleSaveProduct}
-            onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
-            editProduct={editProduct}
-          />
-          {editProduct?.id && (
-            <VariantsSection
-              productId={editProduct.id}
-              productName={editProduct.name || ''}
-              basePrice={editProduct.price || 0}
-              variants={variantsData?.variants || []}
-              onUpdate={() => refetchVariants()}
-              productColor={(editProduct as any).color || null}
-              productSize={(editProduct as any).size || null}
-              productStock={editProduct.stock || 0}
-            />
-          )}
-        </>
+        <AddProductForm
+          categories={allCategories}
+          onSave={handleSaveProduct}
+          onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
+          editProduct={editProduct}
+        />
       )}
 
       {isLoading && <ListSkeleton rows={4} showCards />}
