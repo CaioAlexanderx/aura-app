@@ -3,46 +3,37 @@ import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
 // ============================================================
-// AURA. — Hook de configuracoes do PDV/Caixa
+// AURA. — Hook das configuracoes do PDV
 //
-// Le companies/:id/pdv-settings (cache infinito, invalida ao salvar).
-// Default = require_customer:false, require_seller:false (nao bloqueia).
+// Cache infinito por sessao (so muda quando cliente edita).
+// Retorna defaults seguros se ainda nao carregou.
+// Hook expõe `invalidate()` pra forcar re-fetch apos save manual.
 // ============================================================
 
-const DEFAULT: PdvSettings = { require_customer: false, require_seller: false };
+const DEFAULT_SETTINGS: PdvSettings = {
+  require_customer: false,
+  require_seller: false,
+};
 
 export function usePdvSettings() {
-  const { company } = useAuthStore();
+  const { token, company } = useAuthStore();
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["pdv-settings", company?.id],
-    queryFn: function() { return pdvSettingsApi.get(company!.id); },
-    enabled: !!company?.id,
+    queryFn: function() {
+      if (!company?.id) throw new Error("no company");
+      return pdvSettingsApi.get(company.id);
+    },
+    enabled: !!token && !!company?.id,
     staleTime: Infinity,
     retry: 1,
   });
 
   return {
-    settings: (data?.settings as PdvSettings) || DEFAULT,
+    settings: (data?.settings as PdvSettings | undefined) || DEFAULT_SETTINGS,
     isLoading: isLoading,
+    error: error as Error | null,
     invalidate: function() { qc.invalidateQueries({ queryKey: ["pdv-settings", company?.id] }); },
   };
-}
-
-// Helper: valida se uma venda pode ser finalizada baseado nos settings.
-// Retorna { ok: boolean, missing: string[] } — missing eh array de campos
-// faltantes em formato amigavel pro toast.
-export function validateSaleAgainstSettings(
-  settings: PdvSettings,
-  ctx: { customerId: string | null; sellerId: string | null; sellerName: string | null }
-): { ok: boolean; missing: string[] } {
-  const missing: string[] = [];
-  if (settings.require_customer && !ctx.customerId) {
-    missing.push("cliente");
-  }
-  if (settings.require_seller && !ctx.sellerId && !(ctx.sellerName && ctx.sellerName.trim())) {
-    missing.push("vendedora");
-  }
-  return { ok: missing.length === 0, missing: missing };
 }
