@@ -4,6 +4,7 @@ import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
 import { useCart } from "@/hooks/useCart";
 import { useCustomers } from "@/hooks/useCustomers";
+import { usePdvSettings, validateSaleAgainstSettings } from "@/hooks/usePdvSettings";
 import { EmptyState } from "@/components/EmptyState";
 import { BrandBanner } from "@/components/BrandBanner";
 import { ScrollableChips } from "@/components/ScrollableChips";
@@ -39,6 +40,7 @@ export default function PdvScreen() {
   const { products, isDemo } = useProducts();
   const { company } = useAuthStore();
   const { customers } = useCustomers();
+  const { settings: pdvSettings } = usePdvSettings();
   const plan = (company?.plan || "essencial").toLowerCase();
   const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
   const {
@@ -128,6 +130,22 @@ export default function PdvScreen() {
     setPendingProduct(null);
   }
 
+  // Wrapper de finalizacao: valida pdv_settings antes de chamar finalizeSale.
+  // Bloqueia + mostra toast amigavel se cliente/vendedora obrigatorios faltarem.
+  function handleFinalize() {
+    const v = validateSaleAgainstSettings(pdvSettings, {
+      customerId: selectedCustomerId,
+      sellerId: selectedEmployeeId,
+      sellerName: sellerName,
+    });
+    if (!v.ok) {
+      const list = v.missing.join(" e ");
+      toast.error("Selecione " + list + " antes de finalizar a venda");
+      return;
+    }
+    finalizeSale();
+  }
+
   function emitNfe() { toast.info("Emissao de NF-e sera integrada apos configuracao do provedor."); }
   function handleCustomerCreated(c: { id: string; name: string; phone: string }) { selectCustomer(c.id, c.name); }
 
@@ -177,15 +195,22 @@ export default function PdvScreen() {
     </View>
   );
 
+  // Aviso visual quando ha politica obrigatoria ativa — ajuda a vendedora
+  // saber por que o botao finalizar pode estar bloqueando.
+  const requiredHints: string[] = [];
+  if (pdvSettings.require_customer && !selectedCustomerId) requiredHints.push("Cliente obrigatorio");
+  if (pdvSettings.require_seller && !selectedEmployeeId && !sellerName?.trim()) requiredHints.push("Vendedora obrigatoria");
+
   const cartPanelProps = {
     cart, payment, setPayment, total, totalAfterCoupon, itemCount, isWide: IS_WIDE,
-    setQty, updateQty, removeItem, finalizeSale: () => finalizeSale(), isProcessing,
+    setQty, updateQty, removeItem, finalizeSale: handleFinalize, isProcessing,
     customers: slimCustomers, employees,
     selectedCustomerId, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
     plan,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
+    requiredHints: requiredHints,
   };
 
   if (IS_WIDE) return (
