@@ -11,6 +11,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
+import { SidebarEditor } from "@/components/SidebarEditor";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
@@ -73,6 +75,37 @@ function isA(p: string, r: string) {
   return p.includes(r.replace("/", ""));
 }
 
+// ============================================================
+// Helper: monta o NAV "cru" — filtrado por plano/staff/vertical,
+// MAS sem aplicar customizacoes do cliente (layout salvo).
+// Usado tanto na renderizacao (depois aplica layout) quanto pra
+// passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
+// ============================================================
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined): NavSection[] {
+  const base = NAV.map(section => ({
+    ...section,
+    i: section.i.filter(item => {
+      if (item.staff && !isStaff) return false;
+      return !item.mod || visibleMods.has(item.mod);
+    }),
+  })).filter(section => section.i.length > 0);
+
+  if (activeVertical) {
+    const meta = VERTICAL_NAV[activeVertical] || { label: "Modulo Vertical", icon: "star" };
+    const verticalSection: NavSection = {
+      s: "Meu Segmento",
+      i: [{ r: "/vertical", l: meta.label, ic: meta.icon }],
+    };
+    const adminIdx = base.findIndex(s => s.s === "Admin");
+    if (adminIdx >= 0) {
+      base.splice(adminIdx, 0, verticalSection);
+    } else {
+      base.push(verticalSection);
+    }
+  }
+  return base;
+}
+
 function AuraLogo({ C, collapsed }: { C: ReturnType<typeof useColors>; collapsed: boolean }) {
   if (collapsed) return <Image source={{ uri: LOGO_SVG }} style={{ width: 32, height: 32 }} resizeMode="contain" />;
   return (
@@ -104,37 +137,26 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const { isDark, toggle } = useThemeStore();
   const p = usePathname(), ro = useRouter(), { user: u, company: co, logout } = useAuthStore();
   const visibleMods = useVisibleModules();
+  const { layout } = useSidebarLayout();
+  const [editorOpen, setEditorOpen] = useState(false);
   const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
   const sw = collapsed ? 62 : 240;
   const isStaff = (u as any)?.is_staff === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
-  const filteredNav = useMemo(() => {
-    const base = NAV.map(section => ({
-      ...section,
-      i: section.i.filter(item => {
-        if (item.staff && !isStaff) return false;
-        return !item.mod || visibleMods.has(item.mod);
-      }),
-    })).filter(section => section.i.length > 0);
+  // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
+  // cliente ver TUDO disponivel.
+  const rawFilteredNav = useMemo(
+    () => buildRawNav(visibleMods, isStaff, activeVertical),
+    [visibleMods, isStaff, activeVertical]
+  );
 
-    // Injeta seção "Meu Segmento" quando ha vertical ativa.
-    // Posicao: antes da seção Admin (se existir), senao no final.
-    if (activeVertical) {
-      const meta = VERTICAL_NAV[activeVertical] || { label: "Modulo Vertical", icon: "star" };
-      const verticalSection: NavSection = {
-        s: "Meu Segmento",
-        i: [{ r: "/vertical", l: meta.label, ic: meta.icon }],
-      };
-      const adminIdx = base.findIndex(s => s.s === "Admin");
-      if (adminIdx >= 0) {
-        base.splice(adminIdx, 0, verticalSection);
-      } else {
-        base.push(verticalSection);
-      }
-    }
-    return base;
-  }, [visibleMods, isStaff, activeVertical]);
+  // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
+  // Se layout for null, retorna o raw inalterado.
+  const filteredNav = useMemo(
+    () => applyLayoutToNav(rawFilteredNav, layout),
+    [rawFilteredNav, layout]
+  );
 
   return (
     <View style={[{ width: sw, height: '100%', backgroundColor: C.bg2, borderRightWidth: 1, borderRightColor: C.border, paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, justifyContent: "flex-start", overflow: "hidden" as any }, { transition: "width 0.25s ease, padding 0.25s ease" } as any]}>
@@ -171,6 +193,10 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center" }}><Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>{(u?.name || "A").charAt(0).toUpperCase()}</Text></View>
               <View style={{ flex: 1 }}><Text style={{ fontSize: 12, color: C.ink, fontWeight: "600" }} numberOfLines={1}>{u?.name || "---"}</Text><Text style={{ fontSize: 10, color: C.violet3, marginTop: 1 }}>{pl}</Text></View>
             </View>
+            <Pressable onPress={() => setEditorOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
+              <Icon name="edit" size={14} color={C.ink3} />
+              <Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>Personalizar menu</Text>
+            </Pressable>
             <Pressable onPress={toggle} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
               <Icon name={isDark ? "sun" : "moon"} size={14} color={C.ink3} />
               <Text style={{ fontSize: 11, color: C.ink3, fontWeight: "500" }}>{isDark ? "Modo claro" : "Modo escuro"}</Text>
@@ -185,12 +211,15 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         ) : (
           <>
             <Pressable onPress={() => ro.push("/")} style={{ alignSelf: "center", width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center", marginBottom: 4 }} {...(Platform.OS === "web" ? { title: u?.name || "Perfil" } : {})}><Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>{(u?.name || "A").charAt(0).toUpperCase()}</Text></Pressable>
+            <Pressable onPress={() => setEditorOpen(true)} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Personalizar menu" } : {})}><Icon name="edit" size={14} color={C.ink3} /></Pressable>
             <Pressable onPress={toggle} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: isDark ? "Modo claro" : "Modo escuro" } : {})}><Icon name={isDark ? "sun" : "moon"} size={14} color={C.ink3} /></Pressable>
             <Pressable onPress={() => ro.push("/configuracoes" as any)} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Configuracoes" } : {})}><Icon name="settings" size={14} color={C.ink3} /></Pressable>
             <Pressable onPress={logout} style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, backgroundColor: C.bg4, alignItems: "center", justifyContent: "center" }} {...(Platform.OS === "web" ? { title: "Sair" } : {})}><Icon name="logout" size={14} color={C.ink3} /></Pressable>
           </>
         )}
       </View>
+
+      <SidebarEditor visible={editorOpen} onClose={() => setEditorOpen(false)} baseNav={rawFilteredNav} />
     </View>
   );
 }
@@ -200,42 +229,46 @@ function MBar() {
   const p = usePathname(), ro = useRouter();
   const { user: u, company: co } = useAuthStore();
   const visibleMods = useVisibleModules();
+  const { layout } = useSidebarLayout();
   const [showMore, setShowMore] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const isStaff = (u as any)?.is_staff === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
+
+  // 4 tabs fixas no rodape (nao editaveis pelo cliente).
   const MTABS = [
     { r: "/", l: "Painel", ic: "dashboard", mod: "painel" },
     { r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },
     { r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },
     { r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },
   ];
-  const ALL_MORE: (NavItem & { staff?: boolean; vertical?: boolean })[] = [
-    { r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },
-    { r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" },
-    { r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },
-    { r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },
-    { r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" },
-    { r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" },
-    { r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" },
-    { r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" },
-    { r: "/vertical", l: "Meu Segmento", ic: "star", vertical: true },
-    { r: "/configuracoes", l: "Configuracoes", ic: "settings", mod: "configuracoes" },
-    { r: "/gestao-aura", l: "Gestao Aura", ic: "shield", staff: true },
-  ];
+  const fixedTabKeys = new Set(MTABS.map(t => t.r));
+
+  // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
+  const rawFilteredNav = useMemo(
+    () => buildRawNav(visibleMods, isStaff, activeVertical),
+    [visibleMods, isStaff, activeVertical]
+  );
+
+  // filteredNav: aplica layout custom do cliente.
+  const filteredNav = useMemo(
+    () => applyLayoutToNav(rawFilteredNav, layout),
+    [rawFilteredNav, layout]
+  );
+
+  // Items pro menu "Mais" = todos do filteredNav que NAO estao nas tabs fixas.
+  // Achata mantendo ordem global do layout.
+  const filteredMore = useMemo(() => {
+    const flat: NavItem[] = [];
+    for (const section of filteredNav) {
+      for (const item of section.i) {
+        if (!fixedTabKeys.has(item.r)) flat.push(item);
+      }
+    }
+    return flat;
+  }, [filteredNav]);
 
   const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
-  const filteredMore = ALL_MORE.map(t => {
-    // Customiza label + icone do item vertical com meta da vertical ativa
-    if (t.vertical && activeVertical) {
-      const meta = VERTICAL_NAV[activeVertical];
-      if (meta) return { ...t, l: meta.label, ic: meta.icon };
-    }
-    return t;
-  }).filter(t => {
-    if (t.staff) return isStaff;
-    if (t.vertical) return !!activeVertical;
-    return !t.mod || visibleMods.has(t.mod);
-  });
 
   return (
     <View style={{ position: "relative", flexShrink: 0, zIndex: 50 } as any}>
@@ -252,6 +285,11 @@ function MBar() {
                   </div>
                 );
               })}
+              {/* Botao "Personalizar menu" no rodape do menu Mais */}
+              <div onClick={() => { setShowMore(false); setEditorOpen(true); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 12, borderRadius: 12, cursor: "pointer", background: "transparent", border: "1px dashed " + C.border2 } as any}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg4 } as any}><Icon name="edit" size={18} color={C.ink3} /></div>
+                <span style={{ fontSize: 10, color: C.ink3, fontWeight: "500", textAlign: "center" } as any}>Personalizar</span>
+              </div>
             </div>
           </div>
         </div>
@@ -273,6 +311,8 @@ function MBar() {
           <Text style={[{ fontSize: 9, color: C.ink3, fontWeight: "500" }, showMore && { color: C.violet3, fontWeight: "600" }]}>Mais</Text>
         </Pressable>
       </View>
+
+      <SidebarEditor visible={editorOpen} onClose={() => setEditorOpen(false)} baseNav={rawFilteredNav} />
     </View>
   );
 }
