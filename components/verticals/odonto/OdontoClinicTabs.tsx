@@ -1,8 +1,7 @@
 // ============================================================
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
 // D-UNIFY + D-FIX agenda: mapeia chair via practitioner_id + settings.
-// Agendamentos com practitioner_id alocado a uma cadeira ativa
-// aparecem automaticamente na coluna correspondente.
+// AgendaTab tem sub-views "Grade" (dia) e "Lista" (todos os periodos).
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -17,13 +16,12 @@ import { ProntuarioTimeline } from "@/components/verticals/odonto/ProntuarioTime
 import { NewPatientModal } from "@/components/verticals/odonto/NewPatientModal";
 import { NewAppointmentModal } from "@/components/verticals/odonto/NewAppointmentModal";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
+import { AppointmentsList } from "@/components/verticals/odonto/AppointmentsList";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
 
 function useCompanyId() { return useAuthStore().company?.id; }
 function Loader() { return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>; }
 
-// Retorna a label da cadeira ("Cadeira N - Dr Nome") para um practitioner_id,
-// ou undefined se nao estiver alocado a uma cadeira ativa.
 function chairLabelFor(practitionerId: string | null | undefined, settings: any, practitioners: any[]): string | undefined {
   if (!practitionerId || !settings) return undefined;
   const idx = settings.chair_practitioner_ids.indexOf(practitionerId);
@@ -33,11 +31,56 @@ function chairLabelFor(practitionerId: string | null | undefined, settings: any,
   return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
 }
 
+type ViewMode = "grid" | "list";
+
 export function AgendaTab() {
   const cid = useCompanyId();
+  const [view, setView] = useState<ViewMode>("grid");
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [initialDateTime, setInitialDateTime] = useState<string | undefined>(undefined);
+
+  return (
+    <View style={{ gap: 12 }}>
+      {/* View toggle */}
+      <View style={v.toggleRow}>
+        <Pressable onPress={() => setView("grid")} style={[v.toggleBtn, view === "grid" && v.toggleBtnActive]}>
+          <Icon name="calendar" size={13} color={view === "grid" ? "#fff" : Colors.ink3} />
+          <Text style={[v.toggleText, view === "grid" && v.toggleTextActive]}>Grade (hoje)</Text>
+        </Pressable>
+        <Pressable onPress={() => setView("list")} style={[v.toggleBtn, view === "list" && v.toggleBtnActive]}>
+          <Icon name="list" size={13} color={view === "list" ? "#fff" : Colors.ink3} />
+          <Text style={[v.toggleText, view === "list" && v.toggleTextActive]}>Lista</Text>
+        </Pressable>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={() => { setInitialDateTime(undefined); setShowNew(true); }} style={v.newBtn}>
+          <Icon name="plus" size={13} color="#fff" />
+          <Text style={v.newBtnText}>Agendar</Text>
+        </Pressable>
+      </View>
+
+      {view === "grid" && <AgendaGrid onNewAppointment={() => { setInitialDateTime(undefined); setShowNew(true); }}
+                                      onAppointmentPress={(id) => setDetailId(id)}
+                                      onSlotSelect={(iso) => { setInitialDateTime(iso); setShowNew(true); }} />}
+      {view === "list" && <AppointmentsList />}
+
+      <NewAppointmentModal
+        visible={showNew}
+        onClose={() => setShowNew(false)}
+        initialDateTime={initialDateTime}
+      />
+      <AppointmentDetailModal
+        visible={!!detailId}
+        appointmentId={detailId}
+        onClose={() => setDetailId(null)}
+      />
+    </View>
+  );
+}
+
+// Sub-componente: visao de grade (dia atual) com chairs
+function AgendaGrid({ onNewAppointment, onAppointmentPress, onSlotSelect }: any) {
+  const cid = useCompanyId();
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-agenda", cid],
@@ -66,7 +109,6 @@ export function AgendaTab() {
   const settings = settingsData?.settings;
   const practitioners = practitionersData?.practitioners || [];
 
-  // Monta lista de cadeiras ativas (labels)
   let chairs: string[] | undefined;
   if (settings) {
     chairs = [];
@@ -79,7 +121,6 @@ export function AgendaTab() {
     if (chairs.length === 0) chairs = ["Cadeira 1"];
   }
 
-  // Mapeia cada appointment pra sua cadeira (via practitioner_id)
   const appointments = ((data as any)?.appointments || []).map((a: any) => ({
     id: a.id,
     patient_name: a.patient_name || "Paciente",
@@ -92,39 +133,21 @@ export function AgendaTab() {
     professional_name: a.professional_name,
   }));
 
-  function handleNewAppointment() {
-    setInitialDateTime(undefined);
-    setShowNew(true);
-  }
-
   function handleSlotPress(_chair: string, time: string) {
     const today = new Date();
     const [h, m] = time.split(":");
     today.setHours(parseInt(h) || 9, parseInt(m) || 0, 0, 0);
-    setInitialDateTime(today.toISOString());
-    setShowNew(true);
+    onSlotSelect?.(today.toISOString());
   }
 
   return (
-    <>
-      <AgendaDental
-        appointments={appointments}
-        chairs={chairs}
-        onNewAppointment={handleNewAppointment}
-        onAppointmentPress={(a) => setDetailId(a.id)}
-        onSlotPress={handleSlotPress}
-      />
-      <NewAppointmentModal
-        visible={showNew}
-        onClose={() => setShowNew(false)}
-        initialDateTime={initialDateTime}
-      />
-      <AppointmentDetailModal
-        visible={!!detailId}
-        appointmentId={detailId}
-        onClose={() => setDetailId(null)}
-      />
-    </>
+    <AgendaDental
+      appointments={appointments}
+      chairs={chairs}
+      onNewAppointment={onNewAppointment}
+      onAppointmentPress={(a) => onAppointmentPress?.(a.id)}
+      onSlotPress={handleSlotPress}
+    />
   );
 }
 
@@ -274,6 +297,16 @@ export function ProntuarioTab() {
     </View>
   );
 }
+
+const v = StyleSheet.create({
+  toggleRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+  toggleBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  toggleBtnActive: { backgroundColor: Colors.violet || "#6d28d9", borderColor: Colors.violet || "#6d28d9" },
+  toggleText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+  toggleTextActive: { color: "#fff" },
+  newBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.violet3 || "#a78bfa", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  newBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+});
 
 const z = StyleSheet.create({
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
