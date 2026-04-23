@@ -195,6 +195,65 @@ export type SaleDetails = {
   available_employees: Array<{ id: string; name: string }>;
 };
 
+// Sales listing (Item 3 Eryca)
+// Retornado por GET /companies/:id/sales
+export type SaleStatus = "completed" | "cancelled";
+export type SalesListItem = {
+  id: string;
+  total_amount: number;
+  discount_amount: number;
+  payment_method: string | null;
+  status: SaleStatus;
+  cancelled_at?: string | null;
+  created_at: string;
+  customer: { id: string; name: string } | null;
+  seller: { id: string | null; name: string | null };
+  items_count: number;
+  transaction_id: string | null; // pra abrir TransactionModal direto
+};
+export type SalesStats = {
+  total_sales: number;
+  active_sales: number;
+  cancelled_sales: number;
+  revenue: number;
+  avg_ticket: number;
+};
+export type SalesListResponse = {
+  total: number;
+  limit: number;
+  offset: number;
+  sales: SalesListItem[];
+  stats: SalesStats;
+};
+export type SaleDetailFull = {
+  sale: {
+    id: string;
+    total_amount: number;
+    discount_amount: number;
+    payment_method: string | null;
+    status: SaleStatus;
+    cancelled_at?: string | null;
+    created_at: string;
+    notes: string | null;
+    cash_tendered: number | null;
+    coupon_code: string | null;
+    transaction_id: string | null;
+  };
+  customer: { id: string; name: string; phone: string | null; email: string | null } | null;
+  seller: { id: string | null; name: string | null };
+  items: SaleDetailsItem[];
+};
+export type SalesFilters = {
+  date_from?: string;  // ISO timestamptz
+  date_to?: string;    // ISO timestamptz
+  status?: "all" | "active" | "cancelled";
+  seller_id?: string;
+  customer_id?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+};
+
 // Auth API
 export var authApi = {
   login: function(email: string, password: string) { return request<LoginResponse>("/auth/login", { method: "POST", body: { email: email, password: password }, retry: 1 }); },
@@ -259,6 +318,35 @@ export var transactionSaleApi = {
     return request<{ ok: boolean; transaction: any; synced_to_sale: boolean }>(
       "/companies/" + companyId + "/transactions/" + txId + "/seller",
       { method: "PATCH", body: { employee_id: employee_id, employee_name: employee_name }, retry: 0 }
+    );
+  },
+};
+
+// Sales API (Item 3 Eryca — tela de visualizacao)
+export var salesApi = {
+  // Lista paginada com filtros + stats agregados (sobre o mesmo filtro).
+  list: function(companyId: string, filters?: SalesFilters) {
+    var qs: string[] = [];
+    if (filters?.date_from) qs.push("date_from=" + encodeURIComponent(filters.date_from));
+    if (filters?.date_to) qs.push("date_to=" + encodeURIComponent(filters.date_to));
+    if (filters?.status && filters.status !== "all") qs.push("status=" + filters.status);
+    if (filters?.seller_id) qs.push("seller_id=" + encodeURIComponent(filters.seller_id));
+    if (filters?.customer_id) qs.push("customer_id=" + encodeURIComponent(filters.customer_id));
+    if (filters?.q) qs.push("q=" + encodeURIComponent(filters.q));
+    if (filters?.limit) qs.push("limit=" + filters.limit);
+    if (filters?.offset) qs.push("offset=" + filters.offset);
+    var suffix = qs.length ? "?" + qs.join("&") : "";
+    return request<SalesListResponse>("/companies/" + companyId + "/sales" + suffix, { retry: 1 });
+  },
+  // Detalhes completos: sale + customer + seller + items
+  get: function(companyId: string, saleId: string) {
+    return request<SaleDetailFull>("/companies/" + companyId + "/sales/" + saleId, { retry: 1 });
+  },
+  // Cancela venda inteira (devolve estoque, marca cancelled, espelho no financeiro)
+  cancel: function(companyId: string, saleId: string, reason?: string) {
+    return request<{ ok: boolean; sale_id: string; refunded_amount: number; items_returned: number }>(
+      "/companies/" + companyId + "/sales/" + saleId + "/cancel",
+      { method: "POST", body: { reason: reason || "" }, retry: 0, timeout: 15000 }
     );
   },
 };
