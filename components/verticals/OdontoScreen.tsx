@@ -8,12 +8,13 @@ import { AutomationConfig } from '@/components/verticals/odonto/AutomationConfig
 import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
 import { AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab } from '@/components/verticals/odonto/OdontoClinicTabs';
 import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab } from '@/components/verticals/odonto/OdontoAdminTabs';
+import { DentalSettings } from '@/components/verticals/odonto/DentalSettings';
 import type { VerticalConfig } from '@/components/verticals/VerticalShell';
 
 // ============================================================
 // OdontoScreen — Orchestrator for the Odontologia vertical
-// ALL 13 tabs wired to real API-connected components
-// Tab wrappers split into OdontoClinicTabs + OdontoAdminTabs
+// 14 tabs wired to real API-connected components.
+// D-FIX #1+#6: aba "Configuracoes" adicionada (cadeiras + dentistas)
 // ============================================================
 
 const CONFIG: VerticalConfig = {
@@ -21,29 +22,30 @@ const CONFIG: VerticalConfig = {
   icon: '\uD83E\uDDB7',
   accent: '#06B6D4',
   establishment: 'Minha Clinica',
-  professional: 'Dr. Nome — CRO-SP 00000',
+  professional: 'Dr. Nome \u2014 CRO-SP 00000',
 };
 
 const TABS = [
   'Dashboard', 'Agenda', 'Pacientes', 'Funil', 'Odontograma',
   'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses',
-  'Automacoes', 'Convenios', 'Check-in', 'Espera',
+  'Automacoes', 'Convenios', 'Check-in', 'Espera', 'Configuracoes',
 ];
 
 const TAB_COMPONENTS: Record<string, React.FC> = {
-  Dashboard:   OdontoDashboard,
-  Agenda:      AgendaTab,
-  Pacientes:   PacientesTab,
-  Funil:       DentalFunnel,
-  Odontograma: OdontogramaTab,
-  Orcamentos:  OrcamentosTab,
-  Prontuario:  ProntuarioTab,
-  Cobrancas:   BillingDashboard,
-  Repasses:    RepasseDentista,
-  Automacoes:  AutomationConfig,
-  Convenios:   ConveniosTab,
-  'Check-in':  CheckinTab,
-  Espera:      EsperaTab,
+  Dashboard:      OdontoDashboard,
+  Agenda:         AgendaTab,
+  Pacientes:      PacientesTab,
+  Funil:          DentalFunnel,
+  Odontograma:    OdontogramaTab,
+  Orcamentos:     OrcamentosTab,
+  Prontuario:     ProntuarioTab,
+  Cobrancas:      BillingDashboard,
+  Repasses:       RepasseDentista,
+  Automacoes:     AutomationConfig,
+  Convenios:      ConveniosTab,
+  'Check-in':     CheckinTab,
+  Espera:         EsperaTab,
+  Configuracoes:  DentalSettings,
 };
 
 export default function OdontoScreen() {
