@@ -22,6 +22,7 @@ import { employeesApi, pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@/components/screens/estoque/types";
+import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 
 const PAGE_SIZE = 20;
 
@@ -146,6 +147,39 @@ export default function PdvScreen() {
     finalizeSale();
   }
 
+  // D-FIX #5: Gera PDF de orcamento do carrinho atual.
+  // Usa dados da company (nome, logo, telefone) do store.
+  // Desconto aplicado: cupom OU desconto manual (prioriza cupom se ambos).
+  function handleGenerateQuote() {
+    if (cart.length === 0) {
+      toast.info("Adicione produtos ao carrinho antes de gerar orcamento");
+      return;
+    }
+    const items: QuoteItem[] = cart.map(i => ({
+      name: i.name,
+      qty: i.qty,
+      unitPrice: i.price,
+    }));
+    const discount = couponApplied
+      ? couponApplied.discount
+      : (manualDiscountAmount || 0);
+    const afterDiscount = total - discount;
+    const profile = (company as any)?.profile || {};
+    openQuotePdf({
+      items: items,
+      customerName: selectedCustomerName,
+      sellerName: selectedEmployeeName || sellerName || null,
+      total: total,
+      totalAfterDiscount: discount > 0 ? afterDiscount : undefined,
+      discount: discount > 0 ? discount : undefined,
+      companyName: company?.name || "Sua empresa",
+      companyLogoUrl: profile.logo_url || null,
+      companyPhone: profile.phone || null,
+      companyAddress: profile.address || null,
+    });
+    toast.success("Orcamento gerado");
+  }
+
   function emitNfe() { toast.info("Emissao de NF-e sera integrada apos configuracao do provedor."); }
   function handleCustomerCreated(c: { id: string; name: string; phone: string }) { selectCustomer(c.id, c.name); }
 
@@ -211,6 +245,8 @@ export default function PdvScreen() {
     plan,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     requiredHints: requiredHints,
+    // D-FIX #5: botao orcamento disponivel em todos os planos
+    onGenerateQuote: handleGenerateQuote,
   };
 
   if (IS_WIDE) return (
