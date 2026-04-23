@@ -14,8 +14,17 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { PAYMENTS } from "@/hooks/useCart";
 import { CouponInput } from "./CouponInput";
 import { RecurrenceSelector } from "./RecurrenceSelector";
+import { SaleDetailsSection } from "./SaleDetailsSection";
 
 var isWeb = Platform.OS === "web";
+
+// Detecta se uma transaction veio do PDV (idempotency_key formato "pdv-sale-{uuid}").
+// Usado pra mostrar SaleDetailsSection (Item 1 Eryca) no modo edicao.
+function isPdvSaleTransaction(tx: Transaction | null | undefined): boolean {
+  if (!tx) return false;
+  const key = (tx as any).idempotency_key as string | undefined;
+  return typeof key === "string" && /^pdv-sale-/i.test(key);
+}
 
 function maskDate(v: string): string {
   var d = v.replace(/\D/g, "").slice(0, 8);
@@ -58,6 +67,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   editTransaction?: Transaction | null;
 }) {
   var isEditing = !!editTransaction;
+  var isLinkedToSale = isEditing && isPdvSaleTransaction(editTransaction);
   var [txType, setTxType] = useState<"income" | "expense" | "sale">("income");
   var [mode, setMode] = useState<"unit" | "batch">("unit");
   var [amount, setAmount] = useState("");
@@ -203,9 +213,17 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
   if (!visible) return null;
 
+  // Wrapper que sempre permite scroll quando ha SaleDetailsSection — modal pode ficar alto.
+  function FormBody(props: { children: any }) {
+    if (isLinkedToSale) {
+      return <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={s.form}>{props.children}</ScrollView>;
+    }
+    return <View style={s.form}>{props.children}</View>;
+  }
+
   return (
     <View style={s.overlay}>
-      <View style={[s.modal, isSale && { maxWidth: 540 }]}>
+      <View style={[s.modal, isSale && { maxWidth: 540 }, isLinkedToSale && { maxWidth: 540 }]}>
         <View style={s.header}>
           <Text style={s.title}>{isEditing ? "Editar lancamento" : "Novo lancamento"}</Text>
           <Pressable onPress={function() { reset(); onClose(); }} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
@@ -221,7 +239,15 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
           <>
             {!isEditing && <View style={s.modeRow}>{(["unit", "batch"] as const).map(function(m) { return <Pressable key={m} onPress={function() { setMode(m); }} style={[s.modeBtn, mode === m && s.modeBtnActive]}><Text style={[s.modeText, mode === m && s.modeTextActive]}>{m === "unit" ? "Unitario" : "Lote"}</Text></Pressable>; })}</View>}
             {(mode === "unit" || isEditing) ? (
-              <View style={s.form}>
+              <FormBody>
+                {/* SECAO DA VENDA — so quando editando lancamento que veio do PDV (Item 1 Eryca) */}
+                {isLinkedToSale && editTransaction && (
+                  <SaleDetailsSection
+                    txId={editTransaction.id}
+                    onClose={function() { reset(); onClose(); }}
+                  />
+                )}
+
                 <View style={s.rowFields}>
                   <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={s.input} value={amount} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
                   <View style={{ width: 130 }}><Text style={s.label}>Data</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
@@ -235,7 +261,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
                 <Pressable onPress={handleSaveUnit} disabled={saving} style={[s.saveBtn, { backgroundColor: isEditing ? Colors.violet : (isIncome ? Colors.green : Colors.red), opacity: saving ? 0.6 : 1 }]}>
                   {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{isEditing ? "Salvar alteracoes" : (isIncome ? "Lancar receita" : "Lancar despesa")}</Text>}
                 </Pressable>
-              </View>
+              </FormBody>
             ) : (
               <View style={s.form}>
                 <Text style={s.label}>Lancamentos em lote</Text>
