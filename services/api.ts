@@ -312,6 +312,24 @@ export var transactionSaleApi = {
       { method: "DELETE", retry: 0, timeout: 15000 }
     );
   },
+  // Adiciona produto a venda existente (EXTRA C). Atomico:
+  // decrementa estoque, insere sale_items, soma sales.total_amount e
+  // transactions.amount.
+  addItem: function(
+    companyId: string,
+    txId: string,
+    body: { product_id: string; variant_id?: string | null; quantity: number; unit_price?: number; product_name_snapshot?: string }
+  ) {
+    return request<{
+      ok: boolean;
+      item: SaleDetailsItem;
+      new_sale_total: number;
+      new_tx_amount: number;
+    }>(
+      "/companies/" + companyId + "/transactions/" + txId + "/sale-items",
+      { method: "POST", body: body, retry: 0, timeout: 15000 }
+    );
+  },
   // Atualiza vendedora da transacao (e da venda vinculada se houver).
   // employee_id null limpa o vinculo.
   updateSeller: function(companyId: string, txId: string, employee_id: string | null, employee_name?: string) {
