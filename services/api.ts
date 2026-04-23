@@ -151,6 +151,13 @@ export type SidebarLayout = {
   items: SidebarLayoutItem[];
 };
 
+// PDV Settings (configuracoes do Caixa por empresa)
+// Persistido em companies.pdv_settings (jsonb, migration 047).
+export type PdvSettings = {
+  require_customer: boolean;  // exigir identificacao do cliente em toda venda
+  require_seller: boolean;    // exigir identificacao da vendedora em toda venda
+};
+
 // Auth API
 export var authApi = {
   login: function(email: string, password: string) { return request<LoginResponse>("/auth/login", { method: "POST", body: { email: email, password: password }, retry: 1 }); },
@@ -172,6 +179,15 @@ export var sidebarLayoutApi = {
   get: function() { return request<{ layout: SidebarLayout | null }>("/auth/sidebar-layout", { retry: 1 }); },
   save: function(layout: SidebarLayout | null) {
     return request<{ layout: SidebarLayout | null }>("/auth/sidebar-layout", { method: "PUT", body: { layout: layout }, retry: 0 });
+  },
+};
+
+// PDV Settings API
+// GET/PUT companies/:id/pdv-settings
+export var pdvSettingsApi = {
+  get: function(companyId: string) { return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { retry: 1 }); },
+  save: function(companyId: string, settings: PdvSettings) {
+    return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { method: "PUT", body: { settings: settings }, retry: 0 });
   },
 };
 
