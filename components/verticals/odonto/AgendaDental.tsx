@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
+import { useMemo } from "react";
+import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 
 // ============================================================
-// D-05: AgendaDental — Multi-chair/professional dental agenda
-// Shows columns per chair/professional with time slots
+// D-05: AgendaDental — Visao DIA (multi-cadeira x hora)
+// Aceita prop `date` para permitir navegar entre dias sem recarregar.
 // ============================================================
 
 export interface DentalAppointment {
@@ -23,7 +23,7 @@ export interface DentalAppointment {
 interface Props {
   appointments: DentalAppointment[];
   chairs?: string[];
-  date?: string;
+  date?: Date;
   onAppointmentPress?: (appt: DentalAppointment) => void;
   onSlotPress?: (chair: string, time: string) => void;
   onNewAppointment?: () => void;
@@ -40,35 +40,44 @@ const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> =
 
 const HOURS = Array.from({ length: 12 }, (_, i) => `${String(i + 7).padStart(2, "0")}:00`);
 
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export function AgendaDental({
   appointments, chairs = ["Cadeira 1", "Cadeira 2"],
   date, onAppointmentPress, onSlotPress, onNewAppointment,
 }: Props) {
-  const displayDate = date || new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  const anchor = date || new Date();
+  const displayDate = anchor.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 
-  // Group appointments by chair
+  // Filtra apenas os agendamentos do dia ancorado
+  const dayAppointments = useMemo(() => {
+    return appointments.filter(a => sameDay(new Date(a.scheduled_at), anchor));
+  }, [appointments, anchor]);
+
   const byChair = useMemo(() => {
     const map: Record<string, DentalAppointment[]> = {};
     for (const ch of chairs) map[ch] = [];
-    for (const appt of appointments) {
+    for (const appt of dayAppointments) {
       const chair = appt.chair || chairs[0];
       if (!map[chair]) map[chair] = [];
       map[chair].push(appt);
     }
     return map;
-  }, [appointments, chairs]);
+  }, [dayAppointments, chairs]);
 
-  // KPIs
-  const total = appointments.filter(a => a.status !== "cancelado").length;
-  const confirmed = appointments.filter(a => a.status === "confirmado" || a.status === "concluido").length;
-  const pending = appointments.filter(a => a.status === "agendado").length;
-  const noShow = appointments.filter(a => a.status === "faltou").length;
+  // KPIs do dia
+  const total = dayAppointments.filter(a => a.status !== "cancelado").length;
+  const confirmed = dayAppointments.filter(a => a.status === "confirmado" || a.status === "concluido").length;
+  const pending = dayAppointments.filter(a => a.status === "agendado").length;
+  const noShow = dayAppointments.filter(a => a.status === "faltou").length;
 
   return (
     <View style={s.container}>
       {/* KPIs */}
       <View style={s.kpiRow}>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{total}</Text><Text style={s.kpiLbl}>Hoje</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{total}</Text><Text style={s.kpiLbl}>No dia</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{confirmed}</Text><Text style={s.kpiLbl}>Confirmados</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{pending}</Text><Text style={s.kpiLbl}>Pendentes</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{noShow}</Text><Text style={s.kpiLbl}>Faltas</Text></View>
@@ -89,14 +98,12 @@ export function AgendaDental({
         <View style={s.grid}>
           {chairs.map(chair => (
             <View key={chair} style={[s.column, { minWidth: chairs.length > 2 ? 200 : undefined, flex: chairs.length <= 2 ? 1 : undefined }]}>
-              {/* Chair header */}
               <View style={s.chairHeader}>
                 <View style={[s.chairDot, { backgroundColor: "#06B6D4" }]} />
                 <Text style={s.chairName}>{chair}</Text>
                 <Text style={s.chairCount}>{(byChair[chair] || []).length} agend.</Text>
               </View>
 
-              {/* Slots */}
               {HOURS.map(hour => {
                 const appt = (byChair[chair] || []).find(a => {
                   const t = new Date(a.scheduled_at);
@@ -149,7 +156,7 @@ const s = StyleSheet.create({
   kpiVal: { fontSize: 20, fontWeight: "700" },
   kpiLbl: { fontSize: 9, color: Colors.ink3 || "#888", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  dateTitle: { fontSize: 15, fontWeight: "600", color: Colors.ink || "#fff" },
+  dateTitle: { fontSize: 15, fontWeight: "600", color: Colors.ink || "#fff", textTransform: "capitalize" as any },
   addBtn: { backgroundColor: "#06B6D4", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
   addBtnText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   grid: { flexDirection: "row", gap: 10 },

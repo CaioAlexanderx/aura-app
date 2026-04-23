@@ -1,7 +1,6 @@
 // ============================================================
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
-// D-UNIFY + D-FIX agenda: mapeia chair via practitioner_id + settings.
-// AgendaTab tem sub-views "Grade" (dia) e "Lista" (todos os periodos).
+// D-UNIFY + agenda Dia/Semana/Mes com navegacao prev/next.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -11,6 +10,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { AgendaDental } from "@/components/verticals/odonto/AgendaDental";
+import { AgendaDentalWeek } from "@/components/verticals/odonto/AgendaDentalWeek";
+import { AgendaDentalMonth } from "@/components/verticals/odonto/AgendaDentalMonth";
+import { AgendaNavigator, agendaRangeFor, type AgendaView } from "@/components/verticals/odonto/AgendaNavigator";
 import { OdontogramaSVG } from "@/components/verticals/odonto/OdontogramaSVG";
 import { ProntuarioTimeline } from "@/components/verticals/odonto/ProntuarioTimeline";
 import { NewPatientModal } from "@/components/verticals/odonto/NewPatientModal";
@@ -31,66 +33,28 @@ function chairLabelFor(practitionerId: string | null | undefined, settings: any,
   return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
 }
 
-type ViewMode = "grid" | "list";
+type ViewMode = "calendar" | "list";
 
 export function AgendaTab() {
   const cid = useCompanyId();
-  const [view, setView] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("calendar");
+  const [agendaView, setAgendaView] = useState<AgendaView>("day");
+  const [anchorDate, setAnchorDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [initialDateTime, setInitialDateTime] = useState<string | undefined>(undefined);
 
-  return (
-    <View style={{ gap: 12 }}>
-      {/* View toggle */}
-      <View style={v.toggleRow}>
-        <Pressable onPress={() => setView("grid")} style={[v.toggleBtn, view === "grid" && v.toggleBtnActive]}>
-          <Icon name="calendar" size={13} color={view === "grid" ? "#fff" : Colors.ink3} />
-          <Text style={[v.toggleText, view === "grid" && v.toggleTextActive]}>Grade (hoje)</Text>
-        </Pressable>
-        <Pressable onPress={() => setView("list")} style={[v.toggleBtn, view === "list" && v.toggleBtnActive]}>
-          <Icon name="list" size={13} color={view === "list" ? "#fff" : Colors.ink3} />
-          <Text style={[v.toggleText, view === "list" && v.toggleTextActive]}>Lista</Text>
-        </Pressable>
-        <View style={{ flex: 1 }} />
-        <Pressable onPress={() => { setInitialDateTime(undefined); setShowNew(true); }} style={v.newBtn}>
-          <Icon name="plus" size={13} color="#fff" />
-          <Text style={v.newBtnText}>Agendar</Text>
-        </Pressable>
-      </View>
-
-      {view === "grid" && <AgendaGrid onNewAppointment={() => { setInitialDateTime(undefined); setShowNew(true); }}
-                                      onAppointmentPress={(id) => setDetailId(id)}
-                                      onSlotSelect={(iso) => { setInitialDateTime(iso); setShowNew(true); }} />}
-      {view === "list" && <AppointmentsList />}
-
-      <NewAppointmentModal
-        visible={showNew}
-        onClose={() => setShowNew(false)}
-        initialDateTime={initialDateTime}
-      />
-      <AppointmentDetailModal
-        visible={!!detailId}
-        appointmentId={detailId}
-        onClose={() => setDetailId(null)}
-      />
-    </View>
-  );
-}
-
-// Sub-componente: visao de grade (dia atual) com chairs
-function AgendaGrid({ onNewAppointment, onAppointmentPress, onSlotSelect }: any) {
-  const cid = useCompanyId();
+  // Range da query depende da view
+  const { start: rangeStart, end: rangeEnd } = agendaRangeFor(agendaView, anchorDate);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["dental-agenda", cid],
+    queryKey: ["dental-agenda", cid, agendaView, rangeStart.toISOString()],
     queryFn: () => {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-      return request(`/companies/${cid}/dental/agenda?start=${start}&end=${end}`);
+      const qs = `start=${encodeURIComponent(rangeStart.toISOString())}&end=${encodeURIComponent(rangeEnd.toISOString())}`;
+      return request(`/companies/${cid}/dental/agenda?${qs}`);
     },
-    enabled: !!cid, staleTime: 15000,
+    enabled: !!cid && viewMode === "calendar",
+    staleTime: 15000,
   });
 
   const { data: settingsData } = useQuery({
@@ -104,11 +68,10 @@ function AgendaGrid({ onNewAppointment, onAppointmentPress, onSlotSelect }: any)
     enabled: !!cid, staleTime: 30000,
   });
 
-  if (isLoading) return <Loader />;
-
   const settings = settingsData?.settings;
   const practitioners = practitionersData?.practitioners || [];
 
+  // Lista de cadeiras (usada so na view Dia)
   let chairs: string[] | undefined;
   if (settings) {
     chairs = [];
@@ -133,21 +96,104 @@ function AgendaGrid({ onNewAppointment, onAppointmentPress, onSlotSelect }: any)
     professional_name: a.professional_name,
   }));
 
-  function handleSlotPress(_chair: string, time: string) {
-    const today = new Date();
+  function handleNewAppointment() {
+    setInitialDateTime(undefined);
+    setShowNew(true);
+  }
+
+  function handleSlotPressDay(_chair: string, time: string) {
+    const dt = new Date(anchorDate);
     const [h, m] = time.split(":");
-    today.setHours(parseInt(h) || 9, parseInt(m) || 0, 0, 0);
-    onSlotSelect?.(today.toISOString());
+    dt.setHours(parseInt(h) || 9, parseInt(m) || 0, 0, 0);
+    setInitialDateTime(dt.toISOString());
+    setShowNew(true);
+  }
+
+  function handleSlotPressWeek(dt: Date) {
+    setInitialDateTime(dt.toISOString());
+    setShowNew(true);
+  }
+
+  // Click em dia no calendario do mes -> vai pra view Dia naquele dia
+  function handleDayPressMonth(d: Date) {
+    setAnchorDate(d);
+    setAgendaView("day");
   }
 
   return (
-    <AgendaDental
-      appointments={appointments}
-      chairs={chairs}
-      onNewAppointment={onNewAppointment}
-      onAppointmentPress={(a) => onAppointmentPress?.(a.id)}
-      onSlotPress={handleSlotPress}
-    />
+    <View style={{ gap: 12 }}>
+      {/* Toggle Calendario | Lista */}
+      <View style={v.toggleRow}>
+        <Pressable onPress={() => setViewMode("calendar")} style={[v.toggleBtn, viewMode === "calendar" && v.toggleBtnActive]}>
+          <Icon name="calendar" size={13} color={viewMode === "calendar" ? "#fff" : Colors.ink3} />
+          <Text style={[v.toggleText, viewMode === "calendar" && v.toggleTextActive]}>Calendario</Text>
+        </Pressable>
+        <Pressable onPress={() => setViewMode("list")} style={[v.toggleBtn, viewMode === "list" && v.toggleBtnActive]}>
+          <Icon name="list" size={13} color={viewMode === "list" ? "#fff" : Colors.ink3} />
+          <Text style={[v.toggleText, viewMode === "list" && v.toggleTextActive]}>Lista</Text>
+        </Pressable>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={handleNewAppointment} style={v.newBtn}>
+          <Icon name="plus" size={13} color="#fff" />
+          <Text style={v.newBtnText}>Agendar</Text>
+        </Pressable>
+      </View>
+
+      {viewMode === "calendar" && (
+        <>
+          <AgendaNavigator
+            view={agendaView}
+            date={anchorDate}
+            onViewChange={setAgendaView}
+            onDateChange={setAnchorDate}
+          />
+
+          {isLoading && <Loader />}
+
+          {!isLoading && agendaView === "day" && (
+            <AgendaDental
+              appointments={appointments}
+              chairs={chairs}
+              date={anchorDate}
+              onNewAppointment={handleNewAppointment}
+              onAppointmentPress={(a) => setDetailId(a.id)}
+              onSlotPress={handleSlotPressDay}
+            />
+          )}
+
+          {!isLoading && agendaView === "week" && (
+            <AgendaDentalWeek
+              appointments={appointments}
+              anchorDate={anchorDate}
+              onAppointmentPress={(a) => setDetailId(a.id)}
+              onSlotPress={handleSlotPressWeek}
+            />
+          )}
+
+          {!isLoading && agendaView === "month" && (
+            <AgendaDentalMonth
+              appointments={appointments}
+              anchorDate={anchorDate}
+              onDayPress={handleDayPressMonth}
+              onAppointmentPress={(a) => setDetailId(a.id)}
+            />
+          )}
+        </>
+      )}
+
+      {viewMode === "list" && <AppointmentsList />}
+
+      <NewAppointmentModal
+        visible={showNew}
+        onClose={() => setShowNew(false)}
+        initialDateTime={initialDateTime}
+      />
+      <AppointmentDetailModal
+        visible={!!detailId}
+        appointmentId={detailId}
+        onClose={() => setDetailId(null)}
+      />
+    </View>
   );
 }
 
