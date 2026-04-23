@@ -5,10 +5,11 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useTransactionSale } from "@/hooks/useTransactionSale";
+import { AddItemPicker } from "./AddItemPicker";
 import type { SaleDetailsItem } from "@/services/api";
 
 // ============================================================
-// AURA. — Detalhes da venda vinculada (Item 1 Eryca)
+// AURA. — Detalhes da venda vinculada (Item 1 Eryca + EXTRA C)
 //
 // Renderiza dentro do TransactionModal QUANDO o lancamento veio
 // do PDV. Mostra:
@@ -17,12 +18,14 @@ import type { SaleDetailsItem } from "@/services/api";
 //   3. Lista de mercadorias com botao "remover" por item
 //      (devolucao parcial: backend devolve estoque + reduz total
 //      + cria lancamento espelho de "devolucao" no financeiro)
+//   4. Botao "+ Adicionar produto" (EXTRA C) que abre picker
+//      pra incluir item novo na venda existente
 //
 // Comportamento:
 //   - Se transacao nao tem venda vinculada (tx criada manual),
 //     so mostra o seletor de vendedora.
-//   - Se a venda foi cancelada, items aparecem mas botao remover
-//     fica desabilitado.
+//   - Se a venda foi cancelada, items aparecem mas botoes de
+//     remover e adicionar ficam desabilitados.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -31,6 +34,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
   const {
     details, isLoading,
     removeItem, isRemoving,
+    addItem, isAdding,
     updateSeller, isSavingSeller,
   } = useTransactionSale(txId);
 
@@ -38,6 +42,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
   const [pendingRemoveItemName, setPendingRemoveItemName] = useState<string>("");
   const [empPickerOpen, setEmpPickerOpen] = useState(false);
   const [empSearch, setEmpSearch] = useState("");
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -201,7 +206,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
       )}
 
       {/* MERCADORIAS DA VENDA */}
-      {isLinked && items.length > 0 && (
+      {isLinked && (
         <View style={s.itemsBlock}>
           <View style={s.itemsHeader}>
             <Text style={s.itemsTitle}>Mercadorias ({items.length})</Text>
@@ -209,10 +214,12 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
               <Text style={s.itemsTotal}>Total: {fmt(sale.total_amount)}</Text>
             )}
           </View>
-          <Text style={s.warnHint}>
-            Remover um item devolve a quantidade ao estoque, reduz o total da venda
-            e cria um lancamento de "devolucao" no financeiro.
-          </Text>
+          {items.length > 0 && (
+            <Text style={s.warnHint}>
+              Remover devolve a quantidade ao estoque e cria devolucao no financeiro.
+              Adicionar decrementa o estoque e soma na venda.
+            </Text>
+          )}
           {items.map(function(item: SaleDetailsItem) {
             return (
               <View key={item.id} style={s.itemRow}>
@@ -243,14 +250,42 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
               </View>
             );
           })}
-        </View>
-      )}
 
-      {isLinked && items.length === 0 && (
-        <View style={s.emptyItems}>
-          <Text style={s.emptyItemsText}>
-            Esta venda nao possui mais items (todos foram removidos).
-          </Text>
+          {items.length === 0 && (
+            <Text style={s.emptyItemsText}>
+              Esta venda nao possui mais items (todos foram removidos).
+            </Text>
+          )}
+
+          {/* Botao "+ Adicionar produto" (EXTRA C) */}
+          {!isCancelled && !addPickerOpen && (
+            <Pressable
+              onPress={function() { setAddPickerOpen(true); }}
+              disabled={isAdding}
+              style={s.addBtn}
+            >
+              <Icon name="plus" size={13} color={Colors.violet3} />
+              <Text style={s.addBtnText}>Adicionar produto</Text>
+            </Pressable>
+          )}
+
+          {/* Picker (quando aberto) */}
+          {addPickerOpen && (
+            <AddItemPicker
+              onAdd={addItem}
+              isAdding={isAdding}
+              onCancel={function() { setAddPickerOpen(false); }}
+            />
+          )}
+
+          {isCancelled && items.length > 0 && (
+            <View style={s.cancelledHint}>
+              <Icon name="info" size={11} color={Colors.red} />
+              <Text style={s.cancelledHintText}>
+                Venda cancelada — items nao podem ser modificados.
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -310,8 +345,13 @@ const s = StyleSheet.create({
   itemMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
   removeBtn: { width: 30, height: 30, borderRadius: 7, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
   removeBtnDisabled: { backgroundColor: Colors.bg3, borderColor: Colors.border, opacity: 0.5 },
-  emptyItems: { padding: 14, alignItems: "center" },
-  emptyItemsText: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
+  emptyItemsText: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", textAlign: "center", paddingVertical: 12 },
+
+  addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, paddingVertical: 10, backgroundColor: Colors.violetD, borderRadius: 8, borderWidth: 1, borderStyle: "dashed" as any, borderColor: Colors.violet3 + "55" },
+  addBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+
+  cancelledHint: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red + "33" },
+  cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 14 },
 });
 
 export default SaleDetailsSection;
