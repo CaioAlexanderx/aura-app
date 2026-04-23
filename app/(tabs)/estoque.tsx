@@ -19,6 +19,7 @@ import { Pagination } from "@/components/Pagination";
 import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
+import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -73,6 +74,7 @@ export default function EstoqueScreen() {
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
   const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
@@ -155,7 +157,7 @@ export default function EstoqueScreen() {
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      {/* Header with two action buttons */}
+      {/* Header with three action buttons: servico, lote, produto */}
       <View style={s.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.pageTitle}>Estoque</Text>
@@ -165,6 +167,12 @@ export default function EstoqueScreen() {
             <Icon name="star" size={14} color={Colors.violet3} />
             <Text style={s.serviceBtnText}>+ Servico</Text>
           </Pressable>
+          {!isDemo && (
+            <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
+              <Icon name="layers" size={14} color={Colors.violet3} />
+              <Text style={s.batchBtnText}>+ Em lote</Text>
+            </Pressable>
+          )}
           <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} style={s.addBtn}>
             <Icon name="package" size={14} color="#fff" />
             <Text style={s.addBtnText}>+ Produto</Text>
@@ -215,8 +223,15 @@ export default function EstoqueScreen() {
         <View>
           <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou servico, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
           <View style={s.emptyImport}>
+            <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
+            <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole varios produtos de uma vez e cadastre em segundos</Text></View>
+            <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtnSmall}>
+              <Text style={s.batchBtnSmallText}>Abrir</Text>
+            </Pressable>
+          </View>
+          <View style={s.emptyImport}>
             <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
-            <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha</Text><Text style={s.emptyImportDesc}>Cadastre varios produtos de uma vez via CSV</Text></View>
+            <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha CSV</Text><Text style={s.emptyImportDesc}>Cadastre centenas de produtos via arquivo CSV</Text></View>
             <ServerImport entity="products" onComplete={handleImportComplete} />
           </View>
         </View>
@@ -283,6 +298,7 @@ export default function EstoqueScreen() {
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
       <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
       <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
+      <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
       <CategoriesModal
         visible={categoriesModal.open}
         initialType={categoriesModal.initialType}
@@ -298,9 +314,13 @@ const s = StyleSheet.create({
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, gap: 8, flexWrap: "wrap" },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
-  headerActions: { flexDirection: "row", gap: 8 },
+  headerActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   serviceBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
   serviceBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  batchBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
+  batchBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  batchBtnSmall: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  batchBtnSmallText: { fontSize: 12, color: "#fff", fontWeight: "700" },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 20 },
