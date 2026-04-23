@@ -329,7 +329,16 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       <BarcodeQRSection code={barcode} productName={name} price={parseFloat(price.replace(",", ".")) || 0} onCodeChange={setBarcode} />
 
       {isEdit && editProduct?.id && (
-        <VariantsSection productId={editProduct.id} productName={name} basePrice={parseFloat(price.replace(",", ".")) || 0} variants={variants} onUpdate={() => refetchVariants()} />
+        <VariantsSection
+          productId={editProduct.id}
+          productName={name}
+          basePrice={parseFloat(price.replace(",", ".")) || 0}
+          variants={variants}
+          onUpdate={() => refetchVariants()}
+          productColor={color || null}
+          productSize={size || null}
+          productStock={parseInt(stock) || 0}
+        />
       )}
 
       <FormField label="Descricao (opcional)">
