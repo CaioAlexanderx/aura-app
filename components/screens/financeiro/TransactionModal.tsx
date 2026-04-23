@@ -26,6 +26,29 @@ function isPdvSaleTransaction(tx: Transaction | null | undefined): boolean {
   return typeof key === "string" && /^pdv-sale-/i.test(key);
 }
 
+// Mapeamento PAYMENTS legacy (do useCart) → keys do backend (validados pela whitelist).
+// Backend aceita: pix, cash, credit, debit, voucher, transfer, boleto
+// Legacy:        pix, dinheiro, cartao, debito
+function paymentLegacyToBackend(legacyKey: string): string {
+  switch (legacyKey) {
+    case "pix": return "pix";
+    case "dinheiro": return "cash";
+    case "cartao": return "credit";
+    case "debito": return "debit";
+    default: return legacyKey;
+  }
+}
+function paymentBackendToLegacy(backendKey: string | null | undefined): string {
+  if (!backendKey) return "pix";
+  switch (backendKey) {
+    case "pix": return "pix";
+    case "cash": return "dinheiro";
+    case "credit": return "cartao";
+    case "debit": return "debito";
+    default: return backendKey;
+  }
+}
+
 function maskDate(v: string): string {
   var d = v.replace(/\D/g, "").slice(0, 8);
   if (d.length >= 5) return d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4);
@@ -80,6 +103,14 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var isSale = txType === "sale";
   var cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
 
+  // Campos novos editaveis no modo unit/edit (Sessao 23/04)
+  // Vendedor disponivel sempre, payment_method tambem. Sao opcionais.
+  var [unitPayment, setUnitPayment] = useState<string>("");  // backend key (pix/cash/credit/debit/etc)
+  var [unitEmpId, setUnitEmpId] = useState<string | null>(null);
+  var [unitEmpName, setUnitEmpName] = useState<string | null>(null);
+  var [unitEmpSearch, setUnitEmpSearch] = useState("");
+  var [unitEmpOpen, setUnitEmpOpen] = useState(false);
+
   var { products } = useProducts();
   var { company } = useAuthStore();
   var qc = useQueryClient();
@@ -102,12 +133,17 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [empName, setEmpName] = useState<string | null>(null);
   var [empOpen, setEmpOpen] = useState(false);
 
+  // Employees query — habilitada quando estiver editando OU em modo Sale OU em modo unit nao-vinculado a venda.
+  // Praticamente sempre, ja que o vendedor pode ser opcionalmente preenchido em qualquer caso.
+  var employeesEnabled = !!company?.id && (isSale || !isLinkedToSale);
   var { data: custData } = useQuery({ queryKey: ["customers", company?.id], queryFn: function() { return companiesApi.customers(company!.id); }, enabled: !!company?.id && isSale, staleTime: 120_000 });
-  var { data: empData } = useQuery({ queryKey: ["employees", company?.id], queryFn: function() { return employeesApi.list(company!.id); }, enabled: !!company?.id && isSale, staleTime: 120_000 });
+  var { data: empData } = useQuery({ queryKey: ["employees", company?.id], queryFn: function() { return employeesApi.list(company!.id); }, enabled: employeesEnabled, staleTime: 120_000 });
   var allCustomers: any[] = custData?.customers || custData?.data || [];
   var allEmployees: any[] = empData?.employees || empData?.data || [];
   var filteredCustomers = useMemo(function() { if (!custSearch || custSearch.length < 2) return allCustomers.slice(0, 6); var q = custSearch.toLowerCase(); return allCustomers.filter(function(c: any) { return (c.name || "").toLowerCase().includes(q) || (c.phone || "").includes(q); }).slice(0, 8); }, [allCustomers, custSearch]);
   var filteredEmployees = useMemo(function() { if (!empSearch || empSearch.length < 1) return allEmployees.slice(0, 6); var q = empSearch.toLowerCase(); return allEmployees.filter(function(e: any) { return (e.name || e.full_name || "").toLowerCase().includes(q); }).slice(0, 8); }, [allEmployees, empSearch]);
+  // Filtro independente pro dropdown unit (modo edit/lancamento de receita)
+  var filteredUnitEmployees = useMemo(function() { if (!unitEmpSearch || unitEmpSearch.length < 1) return allEmployees.slice(0, 6); var q = unitEmpSearch.toLowerCase(); return allEmployees.filter(function(e: any) { return (e.name || e.full_name || "").toLowerCase().includes(q); }).slice(0, 8); }, [allEmployees, unitEmpSearch]);
 
   var saleTotal = saleItems.reduce(function(s, i) { return s + i.price * i.qty; }, 0);
 
@@ -120,6 +156,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       var raw = (editTransaction as any).due_date || (editTransaction as any).created_at;
       if (raw) setDateStr(isoToBR(raw));
       setMode("unit");
+      // Sessao 23/04: pre-popula payment_method e employee_id se vier da tx
+      setUnitPayment((editTransaction as any).payment_method || "");
+      setUnitEmpId((editTransaction as any).employee_id || null);
+      setUnitEmpName((editTransaction as any).employee_name || null);
+      setUnitEmpSearch("");
+      setUnitEmpOpen(false);
     }
   }, [editTransaction]);
 
@@ -129,6 +171,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     setCustSearch(""); setCustId(null); setCustName(null); setCustOpen(false);
     setEmpSearch(""); setEmpId(null); setEmpName(null); setEmpOpen(false);
     setSaleCoupon(""); setRecurrence("");
+    setUnitPayment(""); setUnitEmpId(null); setUnitEmpName(null); setUnitEmpSearch(""); setUnitEmpOpen(false);
   }
 
   function parseAmount(masked: string): number { var nums = unmaskNumber(masked); return nums ? parseInt(nums) / 100 : 0; }
@@ -143,16 +186,52 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     if (isEditing && company?.id) {
       setSaving(true);
       try {
-        await companiesApi.updateTransaction(company.id, editTransaction!.id, { type: txType, amount: val, description: desc.trim(), category: category || cats[0], due_date: dueDate });
+        // PATCH inclui payment_method e employee_id (campos opcionais, so envia se mudou ou esta presente)
+        var patchBody: any = {
+          type: txType, amount: val, description: desc.trim(),
+          category: category || cats[0], due_date: dueDate,
+        };
+        // Inclui payment_method/employee se foram preenchidos OU se vieram preenchidos antes
+        // (permite limpar enviando string vazia ou null).
+        // Backend interpreta string vazia como NULL via ELSE no UPDATE? Nao — mando explicito.
+        var prevPay = (editTransaction as any).payment_method;
+        var prevEmp = (editTransaction as any).employee_id;
+        if (unitPayment !== prevPay) patchBody.payment_method = unitPayment || null;
+        if (unitEmpId !== prevEmp) {
+          patchBody.employee_id = unitEmpId; // null limpa
+          // employee_name vai junto, backend resolve do banco se id != null
+          if (unitEmpId && unitEmpName) patchBody.employee_name = unitEmpName;
+        }
+
+        await companiesApi.updateTransaction(company.id, editTransaction!.id, patchBody);
         qc.invalidateQueries({ queryKey: ["transactions", company.id] });
+        qc.invalidateQueries({ queryKey: ["transactions-prev", company.id] });
+        qc.invalidateQueries({ queryKey: ["current-month-expenses", company.id] });
         qc.invalidateQueries({ queryKey: ["dashboard", company.id] });
         qc.invalidateQueries({ queryKey: ["dre", company.id] });
+        // Se vinculado a venda, invalida tambem a sale-detail e listagem
+        if (isLinkedToSale) {
+          qc.invalidateQueries({ queryKey: ["sales-list", company.id] });
+          qc.invalidateQueries({ queryKey: ["sale-detail", company.id] });
+          qc.invalidateQueries({ queryKey: ["transaction-sale-details", company.id] });
+        }
         toast.success("Lancamento atualizado!");
         reset(); onClose();
       } catch (err: any) { toast.error(err?.message || "Erro ao atualizar"); }
       finally { setSaving(false); }
     } else {
-      onSave({ type: txType, amount: val, description: desc.trim(), category: category || cats[0], due_date: dueDate, recurrence_type: recurrence || undefined });
+      // Novo lancamento — passa campos opcionais (payment_method e employee_id)
+      var newBody: any = {
+        type: txType, amount: val, description: desc.trim(),
+        category: category || cats[0], due_date: dueDate,
+        recurrence_type: recurrence || undefined,
+      };
+      if (unitPayment) newBody.payment_method = unitPayment;
+      if (unitEmpId) {
+        newBody.employee_id = unitEmpId;
+        if (unitEmpName) newBody.employee_name = unitEmpName;
+      }
+      onSave(newBody);
       reset(); onClose();
     }
   }
@@ -214,9 +293,11 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   if (!visible) return null;
 
   // Wrapper que sempre permite scroll quando ha SaleDetailsSection — modal pode ficar alto.
+  // Tambem permite scroll se for edit (ganhou novos campos de pagamento/vendedor) ou nova receita.
   function FormBody(props: { children: any }) {
-    if (isLinkedToSale) {
-      return <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={s.form}>{props.children}</ScrollView>;
+    var needsScroll = isLinkedToSale || isEditing || (!isEditing && isIncome);
+    if (needsScroll) {
+      return <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={s.form}>{props.children}</ScrollView>;
     }
     return <View style={s.form}>{props.children}</View>;
   }
@@ -256,8 +337,67 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
                 <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
                 <Text style={s.label}>Categoria</Text>
                 <View style={s.catGrid}>{cats.map(function(cat) { return <Pressable key={cat} onPress={function() { setCategory(cat); }} style={[s.catBtn, category === cat && s.catBtnActive]}><Text style={[s.catText, category === cat && s.catTextActive]}>{cat}</Text></Pressable>; })}</View>
+
+                {/* Forma de pagamento (Sessao 23/04) — disponivel em todos os modos exceto 'sale'.
+                    Em editar de venda do PDV (isLinkedToSale): backend sincroniza com sales.payment_method automaticamente. */}
+                <Text style={s.label}>Forma de pagamento (opcional)</Text>
+                <View style={s.catGrid}>
+                  {PAYMENTS.map(function(p) {
+                    var beKey = paymentLegacyToBackend(p.key);
+                    var active = unitPayment === beKey;
+                    return (
+                      <Pressable key={p.key} onPress={function() { setUnitPayment(active ? "" : beKey); }}
+                        style={[s.catBtn, active && s.catBtnActive]}>
+                        <Text style={[s.catText, active && s.catTextActive]}>{p.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Vendedor(a) (Sessao 23/04) — opcional, busca employees ativos */}
+                <View style={{ zIndex: 5 }}>
+                  <Text style={s.label}>Vendedor(a) (opcional)</Text>
+                  {unitEmpId ? (
+                    <View style={s.selectedChip}>
+                      <Icon name="user_plus" size={12} color={Colors.violet3} />
+                      <Text style={s.selectedChipText} numberOfLines={1}>{unitEmpName}</Text>
+                      <Pressable onPress={function() { setUnitEmpId(null); setUnitEmpName(null); setUnitEmpSearch(""); }} style={s.chipRemove}>
+                        <Text style={s.chipRemoveText}>x</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View>
+                      <TextInput style={s.input} value={unitEmpSearch}
+                        onChangeText={function(v) { setUnitEmpSearch(v); setUnitEmpOpen(true); }}
+                        onFocus={function() { setUnitEmpOpen(true); }}
+                        placeholder="Buscar vendedor(a)..." placeholderTextColor={Colors.ink3} />
+                      {unitEmpOpen && filteredUnitEmployees.length > 0 && (
+                        <View style={s.dropdown}>
+                          {filteredUnitEmployees.map(function(e: any) {
+                            var eName = e.name || e.full_name || "Sem nome";
+                            return (
+                              <Pressable key={e.id} onPress={function() { setUnitEmpId(e.id); setUnitEmpName(eName); setUnitEmpSearch(""); setUnitEmpOpen(false); }} style={s.dropdownRow}>
+                                <Text style={s.srName} numberOfLines={1}>{eName}</Text>
+                                {e.role ? <Text style={s.srMeta}>{e.role}</Text> : null}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
                 {!isEditing && <RecurrenceSelector value={recurrence} onChange={setRecurrence} labelStyle={s.label} gridStyle={s.catGrid} btnStyle={s.catBtn} btnActiveStyle={s.catBtnActive} textStyle={s.catText} textActiveStyle={s.catTextActive} />}
                 {!isEditing && <View style={s.dateHint}><Icon name="info" size={11} color={Colors.ink3} /><Text style={s.dateHintText}>Altere a data para lancar retroativamente. Padrao: hoje.</Text></View>}
+                {isLinkedToSale && (
+                  <View style={s.dateHint}>
+                    <Icon name="info" size={11} color={Colors.violet3} />
+                    <Text style={[s.dateHintText, { color: Colors.violet3 }]}>
+                      Mudancas em forma de pagamento e vendedor sao sincronizadas com a venda do PDV.
+                    </Text>
+                  </View>
+                )}
                 <Pressable onPress={handleSaveUnit} disabled={saving} style={[s.saveBtn, { backgroundColor: isEditing ? Colors.violet : (isIncome ? Colors.green : Colors.red), opacity: saving ? 0.6 : 1 }]}>
                   {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{isEditing ? "Salvar alteracoes" : (isIncome ? "Lancar receita" : "Lancar despesa")}</Text>}
                 </Pressable>
@@ -298,7 +438,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
 var s = StyleSheet.create({
   overlay: { position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", zIndex: 100 },
-  modal: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 28, maxWidth: 480, width: "90%", borderWidth: 1, borderColor: Colors.border2, maxHeight: "90%" },
+  modal: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 28, maxWidth: 480, width: "90%", borderWidth: 1, borderColor: Colors.border2, maxHeight: "92%" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   title: { fontSize: 20, color: Colors.ink, fontWeight: "700" },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
