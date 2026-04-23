@@ -4,6 +4,8 @@
 > Substitui/expande o backlog odonto anterior (4 sprints/14 items mencionado
 > no AURA_STATUS de 09/04). Mantém o foco em produto: o que o **dentista**
 > realmente precisa pra usar a Aura no dia-a-dia.
+>
+> **Decisoes fechadas em 22/04 (sessao noturna):** ver bloco no fim do doc.
 
 ---
 
@@ -23,39 +25,48 @@ Tudo abaixo eh roadmap pra atender isso.
 
 ---
 
-## SPRINT D-FIX — Fixes criticos (3-4 dias)
+## SPRINT D-FIX — Fixes criticos (2 dias) [PROXIMO A EXECUTAR]
 
 Bugs/gaps que travam o uso atual. Fazer ANTES de qualquer redesign.
 
-### D-FIX-01 · Cadeiras configuraveis por plano
+### D-FIX-01 · Cadeiras configuraveis (max 2, ativaveis individualmente) ✅ DECIDIDO
 **Problema:** numero de cadeiras hoje eh fixo. Cliente que tem 1 cadeira nao deveria ver
 "Cadeira 1, Cadeira 2" na agenda.
 
-**Solucao:**
-- Migration: adicionar `dental_chairs_count int` em `companies` (default = limite do plano)
-- Limite por plano: Negocio = 2 cadeiras, Expansao = 4 cadeiras
-- UI: Configuracoes do modulo → seletor (1 a N, capado pelo plano)
-- Agenda: renderiza somente as cadeiras ativas
-- Validacao backend: nao deixa exceder limite do plano
+**Decisao 22/04:** limite global = **2 cadeiras maximo**, independente do plano.
+Cliente liga/desliga cada uma individualmente. (Nao diferencia mais Negocio vs Expansao
+nesse aspecto.)
 
-**Arquivos:** `companies` table, `src/routes/dental.js`, `app/(tabs)/vertical.tsx`,
+**Solucao:**
+- Migration: `dental_chairs jsonb` em `companies`, default
+  `'[{"id":1,"name":"Cadeira 1","active":true},{"id":2,"name":"Cadeira 2","active":false}]'`
+  (cadeira 2 vem desativada por default — cliente liga se precisar)
+- UI: Configuracoes do modulo Odonto → toggle por cadeira + campo nome editavel
+- Agenda: renderiza somente cadeiras com `active=true`
+- Validacao backend: max 2 itens no array, nao deixa renomear pra string vazia
+- Se cliente tiver agendamento marcado em cadeira que vai desativar, alerta antes
+
+**Arquivos:** migration, `src/routes/dental.js` (rotas chairs), `app/(tabs)/vertical.tsx`,
 `components/vertical/DentalConfig.tsx`
 
 **Effort:** 0.5 dia
 
 ---
 
-### D-FIX-02 · Cadastro de dentista nas configuracoes
+### D-FIX-02 · Cadastro de dentista nas configuracoes ✅ DECIDIDO
 **Problema:** nao ha onde cadastrar info do dentista (nome, CRO, especialidade).
 Esses dados sao necessarios pra orcamento, prescricao, atestado.
+
+**Decisao 22/04:** sem limite duro de dentistas (cliente cadastra quantos quiser).
+Recomendacao da UI: pareado com cadeiras (max 2 ativos sugerido), mas pode cadastrar
+mais (ex: dentistas que dividem cadeira em horarios diferentes).
 
 **Solucao:**
 - Migration: tabela `dental_dentists` (company_id, name, cro, cro_uf, specialty,
   email, phone, photo_url, is_active, created_at)
-- Multi-dentista: clinica pode ter mais de um (Negocio: 1, Expansao: ate 4)
 - UI: Configuracoes do modulo Odonto → tab "Dentistas" com CRUD
-- Cada agendamento futuramente referencia `dentist_id`
-- Cabecalho de orcamento/prescricao/atestado puxa nome+CRO
+- Cada agendamento futuramente referencia `dentist_id` (ver D-UNIFY-02)
+- Cabecalho de orcamento/prescricao/atestado puxa `nome + CRO/UF + especialidade`
 
 **Arquivos:** nova tabela, `src/routes/dental.js`, `components/vertical/DentalDentists.tsx`
 
@@ -63,23 +74,30 @@ Esses dados sao necessarios pra orcamento, prescricao, atestado.
 
 ---
 
-### D-FIX-03 · Convenios — pagina inoperante
+### D-FIX-03 · Convenios — marcar "em breve" ✅ DECIDIDO
 **Problema:** tab "Convenios" existe mas botoes nao fazem nada / nao salva.
 
-**Decisao a tomar (pergunta):** remover, redesenhar ou implementar de verdade?
-- **Implementar:** tabela `dental_insurance_plans` (company_id, name, code, contact,
-  notes), associacao com paciente, valor diferenciado por procedimento
-- **Marcar "em breve":** esconde a tab, mostra placeholder
-- **Remover:** apaga, agrupa info dentro do cadastro do paciente
+**Decisao 22/04:** marcar "em breve" agora. Implementacao completa entra no backlog
+(SPRINT D-EXTRA, depois do core).
 
-**Recomendacao:** marcar "em breve" agora, planejar implementacao depois do
-SPRINT D-UNIFY (depende de paciente unificado).
+**Solucao agora:**
+- Esconder logica atual da tab convenios
+- Mostrar placeholder com mensagem amigavel:
+  > "Convenios chegando em breve! Por enquanto, registre o nome do convenio nas
+  > observacoes do paciente."
+- Linkar pro formulario de feedback (botao "Avise-me quando estiver pronto")
 
-**Effort:** 0.25 dia (esconder) ou 2 dias (implementar)
+**Solucao final (D-EXTRA-01, futura):**
+- Tabela `dental_insurance_plans` (company_id, name, code, contact, notes)
+- Associacao paciente↔convenio
+- Tabela de procedimentos com valor diferenciado por convenio
+- Repasse e conciliacao
+
+**Effort:** 0.25 dia (placeholder)
 
 ---
 
-### D-FIX-04 · Botao de orcamento no Caixa (placeholder)
+### D-FIX-04 · Botao de orcamento no Caixa (placeholder) ✅ DECIDIDO
 **Problema:** dentista quer abrir orcamento direto do PDV, hoje nao existe.
 
 **Solucao temporaria (alpha):** botao "Orcamento" no PDV com badge "Em breve".
@@ -89,6 +107,10 @@ Click abre modal explicando que estara disponivel apos integracao Orcamento↔PD
 **Solucao final:** ver D-ORCAMENTO-03.
 
 **Effort:** 0.25 dia
+
+---
+
+**Total Sprint D-FIX: ~2 dias**
 
 ---
 
@@ -103,17 +125,16 @@ duplicado, relatorios nao batem.
 cadastrado num lugar nao aparece no outro. Dentista tem que cadastrar 2 vezes.
 
 **Solucao:**
-- **Decisao:** `customers` eh fonte unica. `dental_patients` vira VIEW + tabela
-  de extensao (`dental_patient_data` com campos especificos: alergias, plano,
-  observacao_medica, etc) referenciando `customers.id`
-- Migration: criar `dental_patient_data (customer_id PK, allergies jsonb,
-  medications jsonb, conditions text, insurance_id, last_visit, ...)`
+- **Decisao:** `customers` eh fonte unica. Criar tabela de extensao
+  `dental_patient_data (customer_id PK, allergies jsonb, medications jsonb,
+  conditions text, insurance_id, last_visit, ...)`
 - Migration: backfill — todo `dental_patient` existente vira `customer` + linha
   em `dental_patient_data`
 - Backend: rotas `/dental/patients` redirecionam pra `/customers` + JOIN
   com `dental_patient_data`
-- Frontend: tela "Pacientes" no modulo vertical = mesma `clientes.tsx` mas com
-  tab/filtro vertical=odonto + colunas extras (alergias, ultimo atendimento)
+- Frontend: **a aba "Pacientes" sai do vertical** (ver D-UNIFY-03). Cliente
+  acessa pelos botoes de integracao no vertical → vai pra Clientes (menu
+  principal) ja filtrado por vertical=odonto
 - Migration de dados existentes da Eryca + outros testers
 
 **Effort:** 2 dias
@@ -126,33 +147,37 @@ Mesmo problema: dois sistemas, dado nao bate, dentista usa um, recepcao usa
 outro.
 
 **Solucao:**
-- **Decisao:** `appointments` eh fonte unica. `dental_appointments` vira
-  `appointment_dental_data` (extensao) com campos especificos: chair_id,
-  procedure_codes[], dentist_id, prontuario_link, anamnese_id, etc
+- **Decisao:** `appointments` eh fonte unica. Criar `appointment_dental_data`
+  (extensao) com campos especificos: chair_id, procedure_codes[], dentist_id,
+  prontuario_link, anamnese_id, etc
 - Migration: criar `appointment_dental_data` referenciando `appointments.id`
 - Coluna `vertical` na `appointments` (default null, "odonto" pra esses)
 - Backend: rotas unificadas em `/appointments`, vertical-aware via flag
-- Frontend: tela "Agenda" do modulo vertical = mesma `agendamento.tsx` mas
-  com layout otimizado pra odonto (cadeiras como colunas, cores por status)
-- Calendario semanal/diario com cadeiras lado a lado (atual eh OK, so unifica
-  fonte de dado)
+- Frontend: **a aba "Agenda" sai do vertical** (ver D-UNIFY-03). Mas a Agenda
+  do menu principal passa a ter modo "odonto" quando vertical odonto ativa:
+  layout em colunas por cadeira, dropdowns de dentista, status com cores
+  (ja existem hoje no vertical)
 
 **Effort:** 2 dias
 
 ---
 
-### D-UNIFY-03 · Reflexo no Sidebar e nas verticais futuras
-**Consequencia:** se Pacientes vira filtro de Clientes e Agenda odonto vira
-Agenda do app filtrada, talvez **nao precisamos mais de "Pacientes" e "Agenda"
-separadas dentro do modulo vertical**. O modulo vertical foca em ferramentas
-clinicas (odontograma, anamnese, prontuario, orcamento), enquanto agenda+pacientes
-ficam no app principal.
+### D-UNIFY-03 · Remover Pacientes/Agenda do vertical + botoes de integracao ✅ DECIDIDO
+**Decisao 22/04:** remover essas abas do vertical e adicionar **botoes de
+acesso rapido** dentro do vertical pra facilitar a transicao.
 
-**Decisao a tomar (pergunta):**
-- **Opcao A:** Manter abas separadas dentro do vertical (atalhos pra mesma data)
-- **Opcao B:** Remover "Pacientes" e "Agenda" do vertical, deixar so no menu
-  principal — vertical fica leve com so as ferramentas clinicas
-- **Recomendacao:** Opcao B (menos confusao, menos abas — atende item 10 do user)
+**Solucao:**
+- Remover tabs "Pacientes" e "Agenda" do `vertical.tsx`
+- Na home do modulo vertical (D-UX-02 dashboard "Hoje"), adicionar botoes:
+  - **Botao "Ver agenda completa"** → navega pra `/agendamento` com filtro
+    odonto pre-aplicado
+  - **Botao "Ver todos os pacientes"** → navega pra `/clientes` com filtro
+    odonto
+  - **Botao "Novo paciente"** → modal rapido de cadastro (ou navega pra
+    /clientes?new=true)
+- O vertical fica leve com so as ferramentas clinicas
+
+**Beneficio:** atende item 10 do user (muitas abas) + reduz duplicacao mental.
 
 **Effort:** 0.5 dia (decisao + ajuste navegacao)
 
@@ -318,10 +343,12 @@ Items 9, 10, 11 do user. Atender o "bom design e usabilidade".
 
 Modulo vertical odonto = **3 abas** apenas:
 1. **Hoje** — agenda do dia + paciente atual + acessos rapidos (iniciar consulta,
-   gerar orcamento, novo paciente)
+   gerar orcamento, novo paciente, **botoes "Ver agenda completa" e "Ver todos
+   os pacientes"** que levam pro menu principal)
 2. **Clinico** — odontograma + prontuario + anexos + anamnese de pacientes
    (busca paciente → ve historico clinico completo)
 3. **Configuracoes** — cadeiras, dentistas, procedimentos padrao, convenios
+   (em breve)
 
 Tudo o que era "Orcamentos", "Pacientes", "Agenda" some daqui — vai pra menu
 principal (Caixa, Clientes, Agenda).
@@ -334,7 +361,12 @@ principal (Caixa, Clientes, Agenda).
 - Lista compacta dos agendamentos de hoje, agrupados por cadeira+horario
 - Card destaque do "proximo paciente" com botao gigante "Iniciar atendimento"
 - Mini-stats: pacientes hoje, faturamento previsto, orcamentos pendentes
-- Acessos rapidos: Novo paciente · Novo orcamento · Buscar paciente
+- Acessos rapidos:
+  - "Novo paciente" (modal rapido)
+  - "Novo orcamento"
+  - "Buscar paciente"
+  - **"Ver agenda completa" → /agendamento?vertical=odonto**
+  - **"Ver todos os pacientes" → /clientes?vertical=odonto**
 
 **Effort:** 1 dia
 
@@ -361,9 +393,48 @@ Antes de codar, **mapear no Figma/whiteboard** o fluxo:
 7. Finaliza → vira venda → pagamento → recibo
 8. Agenda retorno
 
-Validar com **Eryca** (tester atual) antes de implementar.
+**Decisao 22/04:** UAT sera feito com **outro tester** (nao Eryca). Caio define
+qual.
 
 **Effort:** 1 dia (sem codigo, so design)
+
+---
+
+## SPRINT D-EXTRA — Backlog longo prazo (futuro)
+
+Items adiados pra depois do core funcionar. Mantidos do backlog odonto anterior
+(09/04) + novos.
+
+### D-EXTRA-01 · Convenios completo (D-FIX-03 evolui pra ca)
+- Cadastro de convenios (tabela)
+- Associacao paciente↔convenio
+- Procedimentos com valor diferenciado por convenio
+- Conciliacao financeira
+
+### D-EXTRA-02 · Funil CRM odonto
+Atrair → agendar avaliacao → orcamento → fechamento → retorno
+
+### D-EXTRA-03 · Regua de cobranca
+Lembretes automaticos de parcela vencida (WhatsApp/email)
+
+### D-EXTRA-04 · Repasse dentista
+Split de % por dentista, relatorios de comissao
+
+### D-EXTRA-05 · NFS-e por procedimento
+Emissao automatica ao finalizar atendimento
+
+### D-EXTRA-06 · Portal do paciente
+Login do paciente, ve agendamentos, pagamentos, anexos, anamnese
+
+### D-EXTRA-07 · WhatsApp automatico
+Lembrete consulta (24h antes), orcamento enviado, parcela vencida, pos-consulta
+
+### D-EXTRA-08 · IA odonto
+Sugestao de tratamento baseada em odontograma + historico, insights de gestao
+
+### D-EXTRA-09 · Dashboard odonto
+Faturamento por dentista, taxa conversao orcamento, ticket medio, pacientes
+ativos, no-show rate, etc
 
 ---
 
@@ -371,13 +442,14 @@ Validar com **Eryca** (tester atual) antes de implementar.
 
 | Sprint | Effort | Prioridade | Bloqueia |
 |--------|--------|-----------|----------|
-| D-FIX (4 items) | 2 dias | **CRITICA** — fixes de bug | nada (paralelo) |
-| D-UNIFY (3 items) | 4-5 dias | **ALTA** — base estrutural | D-ORCAMENTO, D-ATENDIMENTO |
-| D-ORCAMENTO (3 items) | 3 dias | ALTA | D-ATENDIMENTO (parcial) |
-| D-ATENDIMENTO (4 items) | 4-5 dias | ALTA | nada (depois de UNIFY) |
-| D-UX (4 items) | 4 dias | MEDIA — pode ser feito incremental | nada |
+| **D-FIX** (4 items) | 2 dias | **CRITICA** — proximo a executar | nada (paralelo) |
+| **D-UNIFY** (3 items) | 4-5 dias | **ALTA** — base estrutural | D-ORCAMENTO, D-ATENDIMENTO |
+| **D-ORCAMENTO** (3 items) | 3 dias | ALTA | D-ATENDIMENTO (parcial) |
+| **D-ATENDIMENTO** (4 items) | 4-5 dias | ALTA | nada (depois de UNIFY) |
+| **D-UX** (4 items) | 4 dias | MEDIA — pode ser feito incremental | nada |
+| D-EXTRA (9 items) | a estimar | BAIXA — pos-core | nada |
 
-**Total estimado:** ~17-19 dias de trabalho focado.
+**Total estimado (D-FIX → D-UX):** ~17-19 dias de trabalho focado.
 
 **Sequencia sugerida:**
 1. Semana 1: D-FIX (paralelo com inicio D-UNIFY)
@@ -387,35 +459,20 @@ Validar com **Eryca** (tester atual) antes de implementar.
 
 ---
 
-## DECISOES PENDENTES
+## DECISOES FECHADAS — 22/04/2026 (sessao noturna)
 
-Antes de comecar D-FIX, preciso confirmar contigo:
+✅ **D-FIX-03 (Convenios):** marcar "em breve" agora. Implementacao completa
+em D-EXTRA-01 (sprint futura).
 
-1. **D-FIX-03 (Convenios):** marcar "em breve" agora ou implementar ja?
-2. **D-UNIFY-03 (Pacientes/Agenda do vertical):** remover essas abas do
-   vertical e deixar so no menu principal (Opcao B recomendada)?
-3. **Multi-dentista (D-FIX-02):** Negocio = 1 dentista ou Negocio = 2 dentistas
-   alinhado com 2 cadeiras?
-4. **Validacao com Eryca:** marcar sessao de UAT odonto antes de comecar
-   D-ATENDIMENTO?
+✅ **D-UNIFY-03 (Pacientes/Agenda no vertical):** remover essas abas do vertical.
+Adicionar botoes de integracao no dashboard "Hoje" do vertical apontando pro
+menu principal (Agenda, Clientes) ja com filtro odonto.
 
----
+✅ **D-FIX-01 (Cadeiras):** **limite global de 2 cadeiras** independente do plano.
+Cliente liga/desliga cada uma individualmente nas Configuracoes do modulo.
 
-## ITEMS REMANESCENTES DO BACKLOG ANTERIOR (mantidos)
-
-Do "Odonto backlog 4 sprints/14 items" mencionado no AURA_STATUS de 09/04 que
-**ainda fazem sentido** depois deste novo plano:
-
-- Funil CRM odonto (atrair, agendar avaliacao, orcamento, fechamento)
-- Regua de cobranca (lembretes de parcela vencida)
-- Repasse dentista (split de % com cada profissional)
-- NFS-e por procedimento
-- Portal do paciente (login, ve agendamentos, pagamentos, anexos)
-- WhatsApp automatico (lembrete consulta, orcamento enviado, parcela vencida)
-- IA odonto (sugestao de tratamento, insights)
-- Dashboard odonto (faturamento por dentista, taxa conversao orcamento, etc)
-
-Esses entram em sprints futuros depois que o core (D-FIX → D-UX) estiver firme.
+✅ **UAT (D-UX-04):** sera feito com **outro tester** (nao Eryca). Caio define
+qual.
 
 ---
 
