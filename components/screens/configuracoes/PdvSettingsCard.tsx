@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View, Text, StyleSheet, Switch, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { Card } from "@/components/screens/configuracoes/shared";
 
 // ============================================================
@@ -18,50 +19,33 @@ import { Card } from "@/components/screens/configuracoes/shared";
 // Quando ativo, o PDV bloqueia finalizacao da venda sem o campo.
 // ============================================================
 
-const DEFAULT: PdvSettings = { require_customer: false, require_seller: false };
-
 export function PdvSettingsCard() {
   const { company } = useAuthStore();
-  const [settings, setSettings] = useState<PdvSettings>(DEFAULT);
-  const [loading, setLoading] = useState(true);
+  const { settings: serverSettings, isLoading, invalidate } = usePdvSettings();
+  const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(function() {
-    if (!company?.id) return;
-    let cancelled = false;
-    pdvSettingsApi
-      .get(company.id)
-      .then(function(res) {
-        if (!cancelled) {
-          setSettings(res.settings || DEFAULT);
-          setLoading(false);
-        }
-      })
-      .catch(function() {
-        if (!cancelled) setLoading(false);
-      });
-    return function() { cancelled = true; };
-  }, [company?.id]);
+  // Usa pendingSettings durante save (optimistic), senao usa o do server
+  const display = pendingSettings || serverSettings;
 
   async function toggle(key: keyof PdvSettings, value: boolean) {
     if (!company?.id || saving) return;
-    const next: PdvSettings = { ...settings, [key]: value };
-    // Optimistic update
-    setSettings(next);
+    const next: PdvSettings = { ...display, [key]: value };
+    setPendingSettings(next);
     setSaving(true);
     try {
-      const res = await pdvSettingsApi.save(company.id, next);
-      setSettings(res.settings);
+      await pdvSettingsApi.save(company.id, next);
+      invalidate(); // forca React Query a re-buscar (sincroniza com backend)
+      setPendingSettings(null);
     } catch (err: any) {
-      // Reverte
-      setSettings(settings);
+      setPendingSettings(null); // reverte
       toast.error(err?.data?.error || "Erro ao salvar");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Card>
         <View style={s.loadingBox}>
@@ -90,10 +74,10 @@ export function PdvSettingsCard() {
           <Text style={s.rowDesc}>Bloqueia finalizar venda sem selecionar cliente</Text>
         </View>
         <Switch
-          value={settings.require_customer}
+          value={display.require_customer}
           onValueChange={function(v) { toggle("require_customer", v); }}
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-          thumbColor={settings.require_customer ? Colors.violet : Colors.ink3}
+          thumbColor={display.require_customer ? Colors.violet : Colors.ink3}
           disabled={saving}
         />
       </View>
@@ -106,10 +90,10 @@ export function PdvSettingsCard() {
           <Text style={s.rowDesc}>Bloqueia finalizar venda sem informar quem vendeu</Text>
         </View>
         <Switch
-          value={settings.require_seller}
+          value={display.require_seller}
           onValueChange={function(v) { toggle("require_seller", v); }}
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-          thumbColor={settings.require_seller ? Colors.violet : Colors.ink3}
+          thumbColor={display.require_seller ? Colors.violet : Colors.ink3}
           disabled={saving}
         />
       </View>
