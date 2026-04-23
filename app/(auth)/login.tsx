@@ -287,24 +287,19 @@ export default function LoginScreen() {
               {/* Hero text block */}
               <div className="v2-hero" style={{ display: "flex", flexDirection: "column", gap: 28, position: "relative", zIndex: 2 } as any}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3.5, textTransform: "uppercase", color: Colors.violet3 }}>
-                  Gestao Inteligente · 2026
+                  Feito para quem toca sozinho
                 </div>
                 <div style={{ fontFamily: Fonts.heading, fontSize: 56, lineHeight: 1.08, color: Colors.ink, letterSpacing: -2, maxWidth: 480 }}>
-                  O seu negocio merece mais do que <em style={{ fontStyle: "italic", color: Colors.violet3 }}>planilhas.</em>
+                  Seu <em style={{ fontStyle: "italic", color: Colors.violet3 }}>negocio</em> inteiro na palma da mao.
                 </div>
                 <div style={{ fontSize: 14, color: Colors.ink2, maxWidth: 420, lineHeight: 1.6 }}>
-                  Contabilidade, gestao e nota fiscal em um so lugar — rodando enquanto voce dorme.
+                  Vender, controlar estoque e emitir nota sem dor de cabeca.
                 </div>
               </div>
 
-              {/* Footer tag */}
-              <div className="v2-hero" style={{ display: "flex", gap: 20, fontSize: 11, color: Colors.ink3, letterSpacing: 1, textTransform: "uppercase", position: "relative", zIndex: 2 } as any}>
-                <span>Seguranca bancaria</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>LGPD</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>Suporte 7 dias</span>
-              </div>
+              {/* Spacer pra manter o justify-content: space-between balanceado
+                  apos remocao do bloco de footer (SEGURANCA / LGPD / SUPORTE) */}
+              <div style={{ minHeight: 1 } as any} />
             </div>
 
             {/* Form side */}
