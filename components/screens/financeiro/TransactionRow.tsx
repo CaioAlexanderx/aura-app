@@ -27,6 +27,7 @@ function formatDate(item: Transaction): string {
   return item.date || "---";
 }
 
+// Fallback pra transacoes antigas sem payment_method nativo no banco
 function extractPayment(desc: string): string | null {
   var match = desc.match(/\((pix|cartao|debito|dinheiro|credito)\)\s*$/i);
   if (match) {
@@ -39,10 +40,22 @@ function extractPayment(desc: string): string | null {
   return null;
 }
 
+// Mapeia payment_method nativo (vem do backend) para label + cores
+var PAYMENT_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  pix:      { label: "PIX",      bg: "#00968822",   text: "#009688" },
+  cash:     { label: "Dinheiro", bg: Colors.greenD, text: Colors.green },
+  credit:   { label: "Cartao",   bg: Colors.violetD, text: Colors.violet3 },
+  debit:    { label: "Debito",   bg: Colors.amberD || "#f59e0b22", text: Colors.amber || "#f59e0b" },
+  voucher:  { label: "Voucher",  bg: Colors.bg4,    text: Colors.ink3 },
+  transfer: { label: "Transf.",  bg: Colors.bg4,    text: Colors.ink3 },
+  boleto:   { label: "Boleto",   bg: Colors.bg4,    text: Colors.ink3 },
+};
+
+// Fallback colors pra extractPayment (legado)
 var paymentColors: Record<string, { bg: string; text: string }> = {
   "Pix": { bg: "#00968822", text: "#009688" },
   "Cartao": { bg: Colors.violetD, text: Colors.violet3 },
-  "Debito": { bg: Colors.amberD, text: Colors.amber },
+  "Debito": { bg: Colors.amberD || "#f59e0b22", text: Colors.amber || "#f59e0b" },
   "Dinheiro": { bg: Colors.greenD, text: Colors.green },
 };
 
@@ -53,8 +66,18 @@ export function TransactionRow({ item, onDelete, onEdit }: { item: Transaction; 
   const sourceLabel = item.source === "pdv" ? "PDV" : item.source === "folha" ? "Folha" : item.source === "lote" ? "Lote" : "";
   const dateStr = formatDate(item);
   const isPending = item.status === "pending";
-  const payment = extractPayment(item.desc);
-  const pc = payment ? paymentColors[payment] : null;
+
+  // PRIORIDADE: usa payment_method nativo (campo novo). Se nao existir,
+  // cai no fallback regex pra transacoes antigas.
+  const nativePay = (item as any).payment_method ? PAYMENT_LABELS[(item as any).payment_method.toLowerCase()] : null;
+  const legacyPay = !nativePay ? extractPayment(item.desc) : null;
+  const legacyPc = legacyPay ? paymentColors[legacyPay] : null;
+
+  const paymentLabel = nativePay?.label || legacyPay;
+  const paymentBg = nativePay?.bg || legacyPc?.bg;
+  const paymentText = nativePay?.text || legacyPc?.text;
+
+  const employeeName = (item as any).employee_name;
 
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
@@ -68,9 +91,15 @@ export function TransactionRow({ item, onDelete, onEdit }: { item: Transaction; 
             <Text style={s.meta}>
               {dateStr} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}{isPending ? " / Pendente" : ""}
             </Text>
-            {pc && (
-              <View style={[s.payBadge, { backgroundColor: pc.bg }]}>
-                <Text style={[s.payText, { color: pc.text }]}>{payment}</Text>
+            {paymentLabel && paymentBg && paymentText && (
+              <View style={[s.payBadge, { backgroundColor: paymentBg }]}>
+                <Text style={[s.payText, { color: paymentText }]}>{paymentLabel}</Text>
+              </View>
+            )}
+            {employeeName && (
+              <View style={s.empBadge}>
+                <Icon name="user_plus" size={9} color={Colors.ink3} />
+                <Text style={s.empText} numberOfLines={1}>{employeeName}</Text>
               </View>
             )}
           </View>
@@ -104,6 +133,8 @@ const s = StyleSheet.create({
   meta: { fontSize: 11, color: Colors.ink3 },
   payBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
   payText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.3 },
+  empBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: Colors.bg4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, maxWidth: 130 },
+  empText: { fontSize: 9.5, color: Colors.ink3, fontWeight: "600" },
   right: { flexDirection: "row", alignItems: "center", gap: 6 },
   amount: { fontSize: 14, fontWeight: "600" },
   editBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
