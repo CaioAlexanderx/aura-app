@@ -45,12 +45,25 @@ export function ConveniosTab() {
   });
   var { data: guides } = useQuery({
     queryKey: ["dental-tiss", cid],
-    queryFn: function() { return request("/companies/" + cid + "/dental/insurance/guides"); },
+    queryFn: function() { return request("/companies/" + cid + "/dental/insurance/tiss"); },
     enabled: !!cid, staleTime: 60000,
   });
   if (isLoading) return <Loader />;
-  var insurances = ((data as any)?.insurances) || [];
+  // BUG #8 fix: backend retorna { insurance: rows } (singular), frontend
+  // estava lendo `insurances` (plural) -> sempre vazio -> tela em branco.
+  // Tambem aceita `insurances` por compatibilidade caso o backend mude.
+  var insurances = ((data as any)?.insurance) || ((data as any)?.insurances) || [];
   var tissList = ((guides as any)?.guides) || [];
+
+  if (insurances.length === 0 && tissList.length === 0) {
+    return (
+      <View style={z.empty}>
+        <Icon name="shield" size={24} color={Colors.ink3} />
+        <Text style={z.emptyText}>Nenhum convenio cadastrado</Text>
+        <Text style={z.hintText}>Cadastre convenios e tabelas TUSS para faturamento via planos de saude.</Text>
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 16 }}>
       <ConvenioManager insurances={insurances} />
