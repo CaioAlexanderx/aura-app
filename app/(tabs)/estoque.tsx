@@ -218,7 +218,16 @@ export default function EstoqueScreen() {
             editProduct={editProduct}
           />
           {editProduct?.id && (
-            <VariantsSection productId={editProduct.id} productName={editProduct.name || ''} basePrice={editProduct.price || 0} variants={variantsData?.variants || []} onUpdate={() => refetchVariants()} />
+            <VariantsSection
+              productId={editProduct.id}
+              productName={editProduct.name || ''}
+              basePrice={editProduct.price || 0}
+              variants={variantsData?.variants || []}
+              onUpdate={() => refetchVariants()}
+              productColor={(editProduct as any).color || null}
+              productSize={(editProduct as any).size || null}
+              productStock={editProduct.stock || 0}
+            />
           )}
         </>
       )}
