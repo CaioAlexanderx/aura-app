@@ -1,6 +1,7 @@
 // ============================================================
-// AURA. -- Mapeamento hex -> nome de cor pt-BR (nearest RGB)
-// Usado pela ProductCard (PDV) e MergeDuplicatesModal (Estoque)
+// AURA. -- Mapeamento hex <-> nome de cor pt-BR (nearest RGB)
+// Usado pela ProductCard (PDV), MergeDuplicatesModal (Estoque) e
+// QuickBatchProductsModal (lote de produtos)
 // ============================================================
 
 const NAMED_COLORS: Array<{ name: string; r: number; g: number; b: number }> = [
@@ -32,6 +33,43 @@ const NAMED_COLORS: Array<{ name: string; r: number; g: number; b: number }> = [
   { name: "Prata",      r: 192, g: 192, b: 192 },
 ];
 
+// Versao normalizada (lowercase, sem acentos) -> hex
+// Construida uma vez em modulo load; O(1) lookup depois.
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function norm(s: string): string {
+  return stripAccents(String(s || "").toLowerCase().trim());
+}
+function rgbToHex(r: number, g: number, b: number): string {
+  const h = (n: number) => n.toString(16).padStart(2, "0");
+  return "#" + h(r) + h(g) + h(b);
+}
+
+const NAME_TO_HEX_INDEX: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  for (const c of NAMED_COLORS) {
+    out[norm(c.name)] = rgbToHex(c.r, c.g, c.b);
+  }
+  // Aliases comuns em pt-BR
+  out["escuro"]    = out["preto"];
+  out["black"]     = out["preto"];
+  out["white"]     = out["branco"];
+  out["red"]       = out["vermelho"];
+  out["blue"]      = out["azul"];
+  out["green"]     = out["verde"];
+  out["yellow"]    = out["amarelo"];
+  out["pink"]      = out["rosa"];
+  out["orange"]    = out["laranja"];
+  out["purple"]    = out["roxo"];
+  out["brown"]     = out["marrom"];
+  out["gray"]      = out["cinza"];
+  out["grey"]      = out["cinza"];
+  out["gold"]      = out["dourado"];
+  out["silver"]    = out["prata"];
+  return out;
+})();
+
 export function hexToName(hex: string | null | undefined): string {
   if (!hex || typeof hex !== "string") return "";
   const clean = hex.replace("#", "").trim();
@@ -49,4 +87,24 @@ export function hexToName(hex: string | null | undefined): string {
     if (d < bestDist) { bestDist = d; bestName = c.name; }
   }
   return bestName || hex;
+}
+
+// nameToHex: converte nome (pt-BR ou ingles) OU hex direto em hex.
+// - "azul"     -> "#3B82F6"
+// - "AZUL"     -> "#3B82F6"
+// - "#ff0000"  -> "#ff0000" (passthrough se ja for hex valido)
+// - "xyz"      -> null (nao reconhecido)
+// - ""/null    -> null
+export function nameToHex(input: string | null | undefined): string | null {
+  if (!input || typeof input !== "string") return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Ja e hex valido?
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed;
+  if (/^[0-9A-Fa-f]{6}$/.test(trimmed)) return "#" + trimmed;
+
+  // Busca pelo nome normalizado
+  const key = norm(trimmed);
+  return NAME_TO_HEX_INDEX[key] || null;
 }
