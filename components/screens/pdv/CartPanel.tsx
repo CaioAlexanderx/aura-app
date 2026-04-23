@@ -55,6 +55,7 @@ export function CartPanel({
   sellerName, setSellerName, plan,
   discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
   couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
+  onGenerateQuote,
 }: {
   cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; totalAfterCoupon?: number; itemCount: number;
   isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void;
@@ -80,6 +81,9 @@ export function CartPanel({
   couponApplied?: { code: string; discount: number } | null;
   setCouponApplied?: (v: { code: string; discount: number } | null) => void;
   clearCoupon?: () => void;
+  // D-FIX #5: callback opcional pra gerar PDF de orcamento do carrinho atual.
+  // O parent (pdv.tsx) cuida de montar QuoteData e chamar openQuotePdf().
+  onGenerateQuote?: () => void;
 }) {
   const { company } = useAuthStore();
   const [customerSearch, setCustomerSearch] = useState("");
@@ -343,9 +347,19 @@ export function CartPanel({
               <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(displayTotal)}</Text>
             </View>
           </View>
-          <Pressable onPress={finalizeSale} disabled={isProcessing} style={[s.finalizeBtn, isProcessing && { opacity: 0.5 }]}>
-            <Text style={s.finalizeText}>{isProcessing ? "Processando..." : "Finalizar venda"}</Text>
-          </Pressable>
+
+          {/* D-FIX #5: Acoes (orcamento + finalizar) */}
+          <View style={s.actionsRow}>
+            {onGenerateQuote && (
+              <Pressable onPress={onGenerateQuote} disabled={isProcessing} style={[s.quoteBtn, isProcessing && { opacity: 0.5 }]}>
+                <Icon name="file_text" size={13} color={Colors.violet3} />
+                <Text style={s.quoteBtnText}>Orcamento</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={finalizeSale} disabled={isProcessing} style={[s.finalizeBtn, isProcessing && { opacity: 0.5 }]}>
+              <Text style={s.finalizeText}>{isProcessing ? "Processando..." : "Finalizar venda"}</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -378,7 +392,11 @@ const s = StyleSheet.create({
   payTextActive: { color: "#fff", fontWeight: "600" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   totalOriginal: { fontSize: 13, color: Colors.ink3, textDecorationLine: "line-through", marginBottom: 2 },
-  finalizeBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  // D-FIX #5: Acoes lado a lado
+  actionsRow: { flexDirection: "row", gap: 8 },
+  quoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
+  quoteBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  finalizeBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   finalizeText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   searchSmall: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 12, color: Colors.ink },
   dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 160, overflow: "hidden" },
