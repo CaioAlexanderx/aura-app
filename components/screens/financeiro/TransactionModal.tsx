@@ -292,15 +292,103 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
   if (!visible) return null;
 
-  // Wrapper que sempre permite scroll quando ha SaleDetailsSection — modal pode ficar alto.
-  // Tambem permite scroll se for edit (ganhou novos campos de pagamento/vendedor) ou nova receita.
-  function FormBody(props: { children: any }) {
-    var needsScroll = isLinkedToSale || isEditing || (!isEditing && isIncome);
-    if (needsScroll) {
-      return <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={s.form}>{props.children}</ScrollView>;
-    }
-    return <View style={s.form}>{props.children}</View>;
-  }
+  // BUG FIX (23/04): antes havia uma `function FormBody(...)` declarada DENTRO
+  // deste componente. A cada keystroke (ex: setAmount) o TransactionModal
+  // re-renderizava e criava UMA NOVA referencia da funcao FormBody.
+  // React via "tipo de componente diferente" e DESMONTAVA toda a sub-arvore,
+  // incluindo o TextInput em foco — perdia foco a cada digito.
+  //
+  // Solucao: calcular needsScroll inline e usar ternaria diretamente no JSX
+  // (sem componente wrapper recriado). Mantem mesmo comportamento visual.
+  var needsScroll = isLinkedToSale || isEditing || (!isEditing && isIncome);
+
+  // Conteudo do form unitario, declarado uma vez como elemento React (constante,
+  // nao componente), pra ser embrulhado por <ScrollView> ou <View> sem causar
+  // remount.
+  var unitFormContent = (
+    <>
+      {/* SECAO DA VENDA — so quando editando lancamento que veio do PDV (Item 1 Eryca) */}
+      {isLinkedToSale && editTransaction && (
+        <SaleDetailsSection
+          txId={editTransaction.id}
+          onClose={function() { reset(); onClose(); }}
+        />
+      )}
+
+      <View style={s.rowFields}>
+        <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={s.input} value={amount} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
+        <View style={{ width: 130 }}><Text style={s.label}>Data</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
+      </View>
+      <Text style={s.label}>Descricao</Text>
+      <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
+      <Text style={s.label}>Categoria</Text>
+      <View style={s.catGrid}>{cats.map(function(cat) { return <Pressable key={cat} onPress={function() { setCategory(cat); }} style={[s.catBtn, category === cat && s.catBtnActive]}><Text style={[s.catText, category === cat && s.catTextActive]}>{cat}</Text></Pressable>; })}</View>
+
+      {/* Forma de pagamento (Sessao 23/04) — disponivel em todos os modos exceto 'sale'.
+          Em editar de venda do PDV (isLinkedToSale): backend sincroniza com sales.payment_method automaticamente. */}
+      <Text style={s.label}>Forma de pagamento (opcional)</Text>
+      <View style={s.catGrid}>
+        {PAYMENTS.map(function(p) {
+          var beKey = paymentLegacyToBackend(p.key);
+          var active = unitPayment === beKey;
+          return (
+            <Pressable key={p.key} onPress={function() { setUnitPayment(active ? "" : beKey); }}
+              style={[s.catBtn, active && s.catBtnActive]}>
+              <Text style={[s.catText, active && s.catTextActive]}>{p.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Vendedor(a) (Sessao 23/04) — opcional, busca employees ativos */}
+      <View style={{ zIndex: 5 }}>
+        <Text style={s.label}>Vendedor(a) (opcional)</Text>
+        {unitEmpId ? (
+          <View style={s.selectedChip}>
+            <Icon name="user_plus" size={12} color={Colors.violet3} />
+            <Text style={s.selectedChipText} numberOfLines={1}>{unitEmpName}</Text>
+            <Pressable onPress={function() { setUnitEmpId(null); setUnitEmpName(null); setUnitEmpSearch(""); }} style={s.chipRemove}>
+              <Text style={s.chipRemoveText}>x</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View>
+            <TextInput style={s.input} value={unitEmpSearch}
+              onChangeText={function(v) { setUnitEmpSearch(v); setUnitEmpOpen(true); }}
+              onFocus={function() { setUnitEmpOpen(true); }}
+              placeholder="Buscar vendedor(a)..." placeholderTextColor={Colors.ink3} />
+            {unitEmpOpen && filteredUnitEmployees.length > 0 && (
+              <View style={s.dropdown}>
+                {filteredUnitEmployees.map(function(e: any) {
+                  var eName = e.name || e.full_name || "Sem nome";
+                  return (
+                    <Pressable key={e.id} onPress={function() { setUnitEmpId(e.id); setUnitEmpName(eName); setUnitEmpSearch(""); setUnitEmpOpen(false); }} style={s.dropdownRow}>
+                      <Text style={s.srName} numberOfLines={1}>{eName}</Text>
+                      {e.role ? <Text style={s.srMeta}>{e.role}</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+
+      {!isEditing && <RecurrenceSelector value={recurrence} onChange={setRecurrence} labelStyle={s.label} gridStyle={s.catGrid} btnStyle={s.catBtn} btnActiveStyle={s.catBtnActive} textStyle={s.catText} textActiveStyle={s.catTextActive} />}
+      {!isEditing && <View style={s.dateHint}><Icon name="info" size={11} color={Colors.ink3} /><Text style={s.dateHintText}>Altere a data para lancar retroativamente. Padrao: hoje.</Text></View>}
+      {isLinkedToSale && (
+        <View style={s.dateHint}>
+          <Icon name="info" size={11} color={Colors.violet3} />
+          <Text style={[s.dateHintText, { color: Colors.violet3 }]}>
+            Mudancas em forma de pagamento e vendedor sao sincronizadas com a venda do PDV.
+          </Text>
+        </View>
+      )}
+      <Pressable onPress={handleSaveUnit} disabled={saving} style={[s.saveBtn, { backgroundColor: isEditing ? Colors.violet : (isIncome ? Colors.green : Colors.red), opacity: saving ? 0.6 : 1 }]}>
+        {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{isEditing ? "Salvar alteracoes" : (isIncome ? "Lancar receita" : "Lancar despesa")}</Text>}
+      </Pressable>
+    </>
+  );
 
   return (
     <View style={s.overlay}>
@@ -320,88 +408,15 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
           <>
             {!isEditing && <View style={s.modeRow}>{(["unit", "batch"] as const).map(function(m) { return <Pressable key={m} onPress={function() { setMode(m); }} style={[s.modeBtn, mode === m && s.modeBtnActive]}><Text style={[s.modeText, mode === m && s.modeTextActive]}>{m === "unit" ? "Unitario" : "Lote"}</Text></Pressable>; })}</View>}
             {(mode === "unit" || isEditing) ? (
-              <FormBody>
-                {/* SECAO DA VENDA — so quando editando lancamento que veio do PDV (Item 1 Eryca) */}
-                {isLinkedToSale && editTransaction && (
-                  <SaleDetailsSection
-                    txId={editTransaction.id}
-                    onClose={function() { reset(); onClose(); }}
-                  />
-                )}
-
-                <View style={s.rowFields}>
-                  <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={s.input} value={amount} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
-                  <View style={{ width: 130 }}><Text style={s.label}>Data</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
+              needsScroll ? (
+                <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={s.form}>
+                  {unitFormContent}
+                </ScrollView>
+              ) : (
+                <View style={s.form}>
+                  {unitFormContent}
                 </View>
-                <Text style={s.label}>Descricao</Text>
-                <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
-                <Text style={s.label}>Categoria</Text>
-                <View style={s.catGrid}>{cats.map(function(cat) { return <Pressable key={cat} onPress={function() { setCategory(cat); }} style={[s.catBtn, category === cat && s.catBtnActive]}><Text style={[s.catText, category === cat && s.catTextActive]}>{cat}</Text></Pressable>; })}</View>
-
-                {/* Forma de pagamento (Sessao 23/04) — disponivel em todos os modos exceto 'sale'.
-                    Em editar de venda do PDV (isLinkedToSale): backend sincroniza com sales.payment_method automaticamente. */}
-                <Text style={s.label}>Forma de pagamento (opcional)</Text>
-                <View style={s.catGrid}>
-                  {PAYMENTS.map(function(p) {
-                    var beKey = paymentLegacyToBackend(p.key);
-                    var active = unitPayment === beKey;
-                    return (
-                      <Pressable key={p.key} onPress={function() { setUnitPayment(active ? "" : beKey); }}
-                        style={[s.catBtn, active && s.catBtnActive]}>
-                        <Text style={[s.catText, active && s.catTextActive]}>{p.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* Vendedor(a) (Sessao 23/04) — opcional, busca employees ativos */}
-                <View style={{ zIndex: 5 }}>
-                  <Text style={s.label}>Vendedor(a) (opcional)</Text>
-                  {unitEmpId ? (
-                    <View style={s.selectedChip}>
-                      <Icon name="user_plus" size={12} color={Colors.violet3} />
-                      <Text style={s.selectedChipText} numberOfLines={1}>{unitEmpName}</Text>
-                      <Pressable onPress={function() { setUnitEmpId(null); setUnitEmpName(null); setUnitEmpSearch(""); }} style={s.chipRemove}>
-                        <Text style={s.chipRemoveText}>x</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View>
-                      <TextInput style={s.input} value={unitEmpSearch}
-                        onChangeText={function(v) { setUnitEmpSearch(v); setUnitEmpOpen(true); }}
-                        onFocus={function() { setUnitEmpOpen(true); }}
-                        placeholder="Buscar vendedor(a)..." placeholderTextColor={Colors.ink3} />
-                      {unitEmpOpen && filteredUnitEmployees.length > 0 && (
-                        <View style={s.dropdown}>
-                          {filteredUnitEmployees.map(function(e: any) {
-                            var eName = e.name || e.full_name || "Sem nome";
-                            return (
-                              <Pressable key={e.id} onPress={function() { setUnitEmpId(e.id); setUnitEmpName(eName); setUnitEmpSearch(""); setUnitEmpOpen(false); }} style={s.dropdownRow}>
-                                <Text style={s.srName} numberOfLines={1}>{eName}</Text>
-                                {e.role ? <Text style={s.srMeta}>{e.role}</Text> : null}
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </View>
-
-                {!isEditing && <RecurrenceSelector value={recurrence} onChange={setRecurrence} labelStyle={s.label} gridStyle={s.catGrid} btnStyle={s.catBtn} btnActiveStyle={s.catBtnActive} textStyle={s.catText} textActiveStyle={s.catTextActive} />}
-                {!isEditing && <View style={s.dateHint}><Icon name="info" size={11} color={Colors.ink3} /><Text style={s.dateHintText}>Altere a data para lancar retroativamente. Padrao: hoje.</Text></View>}
-                {isLinkedToSale && (
-                  <View style={s.dateHint}>
-                    <Icon name="info" size={11} color={Colors.violet3} />
-                    <Text style={[s.dateHintText, { color: Colors.violet3 }]}>
-                      Mudancas em forma de pagamento e vendedor sao sincronizadas com a venda do PDV.
-                    </Text>
-                  </View>
-                )}
-                <Pressable onPress={handleSaveUnit} disabled={saving} style={[s.saveBtn, { backgroundColor: isEditing ? Colors.violet : (isIncome ? Colors.green : Colors.red), opacity: saving ? 0.6 : 1 }]}>
-                  {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{isEditing ? "Salvar alteracoes" : (isIncome ? "Lancar receita" : "Lancar despesa")}</Text>}
-                </Pressable>
-              </FormBody>
+              )
             ) : (
               <View style={s.form}>
                 <Text style={s.label}>Lancamentos em lote</Text>
