@@ -1,15 +1,16 @@
 // ============================================================
 // AURA. — D-UNIFY: Modal de cadastro de paciente
 // POST /companies/:id/dental/patients
-// Campos LGPD obrigatorios destacados. Paciente = customer (is_patient=true).
+// Masks: CPF (000.000.000-00), Telefone ((00) 00000-0000), Data (DD/MM/AAAA)
 // ============================================================
 import { useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
+import { maskCpf, maskPhone, maskDateBR, brDateToISO, onlyDigits, isValidCpf } from "@/utils/mask";
 
 interface Props {
   visible: boolean;
@@ -25,7 +26,7 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
   const [cpf, setCpf] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [birthDate, setBirthDate] = useState("");
+  const [birthDateBR, setBirthDateBR] = useState(""); // DD/MM/AAAA
   const [gender, setGender] = useState<"M" | "F" | "outro" | "">("");
   const [allergies, setAllergies] = useState("");
   const [medicalHistory, setMedicalHistory] = useState("");
@@ -35,28 +36,31 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
-    setFullName(""); setCpf(""); setPhone(""); setEmail(""); setBirthDate("");
+    setFullName(""); setCpf(""); setPhone(""); setEmail(""); setBirthDateBR("");
     setGender(""); setAllergies(""); setMedicalHistory(""); setMedications("");
     setInsuranceName(""); setLgpdConsent(false); setError(null);
   }
 
   const createMut = useMutation({
-    mutationFn: () => request(`/companies/${cid}/dental/patients`, {
-      method: "POST",
-      body: {
-        full_name: fullName.trim(),
-        cpf: cpf.trim() || null,
-        phone: phone.trim() || null,
-        email: email.trim() || null,
-        birth_date: birthDate || null,
-        gender: gender || null,
-        allergies: allergies.trim() || null,
-        medical_history: medicalHistory.trim() || null,
-        medications: medications.trim() || null,
-        insurance_name: insuranceName.trim() || null,
-        lgpd_consent: lgpdConsent,
-      },
-    }),
+    mutationFn: () => {
+      const birthISO = birthDateBR.trim() ? brDateToISO(birthDateBR.trim()) : null;
+      return request(`/companies/${cid}/dental/patients`, {
+        method: "POST",
+        body: {
+          full_name: fullName.trim(),
+          cpf: onlyDigits(cpf) || null,
+          phone: onlyDigits(phone) || null,
+          email: email.trim() || null,
+          birth_date: birthISO,
+          gender: gender || null,
+          allergies: allergies.trim() || null,
+          medical_history: medicalHistory.trim() || null,
+          medications: medications.trim() || null,
+          insurance_name: insuranceName.trim() || null,
+          lgpd_consent: lgpdConsent,
+        },
+      });
+    },
     onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["dental-patients"] });
       qc.invalidateQueries({ queryKey: ["customers"] });
@@ -73,6 +77,8 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
   function handleSubmit() {
     setError(null);
     if (!fullName.trim()) return setError("Nome e obrigatorio");
+    if (cpf.trim() && !isValidCpf(cpf)) return setError("CPF invalido");
+    if (birthDateBR.trim() && !brDateToISO(birthDateBR)) return setError("Data de nascimento invalida (use DD/MM/AAAA)");
     if (!lgpdConsent) return setError("Consentimento LGPD e obrigatorio para dados de saude");
     createMut.mutate();
   }
@@ -87,7 +93,6 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <View style={s.backdrop}>
         <View style={s.sheet}>
-          {/* Header */}
           <View style={s.header}>
             <View>
               <Text style={s.title}>Novo paciente</Text>
@@ -99,21 +104,19 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
           </View>
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
-            {/* Secao 1: identificacao */}
             <Text style={s.sectionLabel}>Identificacao</Text>
 
             <Field label="Nome completo *" value={fullName} onChangeText={setFullName} autoCapitalize="words" />
-            <Field label="CPF" value={cpf} onChangeText={setCpf} keyboardType="numeric" placeholder="Somente numeros" />
+            <Field label="CPF" value={cpf} onChangeText={(v: string) => setCpf(maskCpf(v))} keyboardType="numeric" placeholder="000.000.000-00" maxLength={14} />
             <Row>
-              <Field label="Telefone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" style={{ flex: 1 }} />
+              <Field label="Telefone" value={phone} onChangeText={(v: string) => setPhone(maskPhone(v))} keyboardType="phone-pad" placeholder="(00) 00000-0000" maxLength={15} style={{ flex: 1 }} />
               <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" style={{ flex: 1 }} />
             </Row>
             <Row>
-              <Field label="Data nasc." value={birthDate} onChangeText={setBirthDate} placeholder="AAAA-MM-DD" style={{ flex: 1 }} />
+              <Field label="Data nasc." value={birthDateBR} onChangeText={(v: string) => setBirthDateBR(maskDateBR(v))} keyboardType="numeric" placeholder="DD/MM/AAAA" maxLength={10} style={{ flex: 1 }} />
               <GenderSelect value={gender} onChange={setGender} />
             </Row>
 
-            {/* Secao 2: ficha clinica */}
             <Text style={[s.sectionLabel, { marginTop: 16 }]}>Ficha clinica</Text>
 
             <Field label="Alergias" value={allergies} onChangeText={setAllergies} multiline />
@@ -121,7 +124,6 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
             <Field label="Medicamentos em uso" value={medications} onChangeText={setMedications} multiline />
             <Field label="Convenio" value={insuranceName} onChangeText={setInsuranceName} placeholder="Ex: Amil, Unimed..." />
 
-            {/* LGPD */}
             <Pressable onPress={() => setLgpdConsent(!lgpdConsent)} style={[s.lgpdBox, lgpdConsent && s.lgpdBoxActive]}>
               <View style={[s.checkbox, lgpdConsent && s.checkboxActive]}>
                 {lgpdConsent && <Icon name="check" size={12} color="#fff" />}
@@ -135,7 +137,6 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
             {error && <Text style={s.error}>{error}</Text>}
           </ScrollView>
 
-          {/* Footer */}
           <View style={s.footer}>
             <Pressable onPress={handleClose} style={[s.btn, s.btnGhost]} disabled={createMut.isPending}>
               <Text style={s.btnGhostText}>Cancelar</Text>
@@ -150,7 +151,6 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
   );
 }
 
-// ── Subcomponents ──
 function Field(props: any) {
   const { label, style, multiline, ...rest } = props;
   return (

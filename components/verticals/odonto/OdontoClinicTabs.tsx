@@ -1,7 +1,8 @@
 // ============================================================
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
-// D-UNIFY: PacientesTab com botao "Novo paciente" + modal;
-// AgendaTab com callbacks + modal de criacao + modal de detalhes.
+// D-UNIFY + D-FIX agenda: mapeia chair via practitioner_id + settings.
+// Agendamentos com practitioner_id alocado a uma cadeira ativa
+// aparecem automaticamente na coluna correspondente.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -20,6 +21,17 @@ import { dentalConfigApi } from "@/services/dentalConfigApi";
 
 function useCompanyId() { return useAuthStore().company?.id; }
 function Loader() { return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>; }
+
+// Retorna a label da cadeira ("Cadeira N - Dr Nome") para um practitioner_id,
+// ou undefined se nao estiver alocado a uma cadeira ativa.
+function chairLabelFor(practitionerId: string | null | undefined, settings: any, practitioners: any[]): string | undefined {
+  if (!practitionerId || !settings) return undefined;
+  const idx = settings.chair_practitioner_ids.indexOf(practitionerId);
+  if (idx === -1) return undefined;
+  if (!settings.chairs_active[idx]) return undefined;
+  const p = practitioners.find(x => x.id === practitionerId);
+  return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
+}
 
 export function AgendaTab() {
   const cid = useCompanyId();
@@ -43,7 +55,6 @@ export function AgendaTab() {
     queryFn: () => dentalConfigApi.getSettings(cid!),
     enabled: !!cid, staleTime: 30000,
   });
-
   const { data: practitionersData } = useQuery({
     queryKey: ["dental-practitioners", cid],
     queryFn: () => dentalConfigApi.listPractitioners(cid!),
@@ -55,6 +66,7 @@ export function AgendaTab() {
   const settings = settingsData?.settings;
   const practitioners = practitionersData?.practitioners || [];
 
+  // Monta lista de cadeiras ativas (labels)
   let chairs: string[] | undefined;
   if (settings) {
     chairs = [];
@@ -67,11 +79,17 @@ export function AgendaTab() {
     if (chairs.length === 0) chairs = ["Cadeira 1"];
   }
 
+  // Mapeia cada appointment pra sua cadeira (via practitioner_id)
   const appointments = ((data as any)?.appointments || []).map((a: any) => ({
-    id: a.id, patient_name: a.patient_name || "Paciente", patient_phone: a.patient_phone,
-    scheduled_at: a.scheduled_at, duration_min: a.duration_min || 60,
-    chief_complaint: a.chief_complaint, status: a.status || "agendado",
-    chair: a.chair, professional_name: a.professional_name,
+    id: a.id,
+    patient_name: a.patient_name || "Paciente",
+    patient_phone: a.patient_phone,
+    scheduled_at: a.scheduled_at,
+    duration_min: a.duration_min || 60,
+    chief_complaint: a.chief_complaint,
+    status: a.status || "agendado",
+    chair: chairLabelFor(a.practitioner_id, settings, practitioners),
+    professional_name: a.professional_name,
   }));
 
   function handleNewAppointment() {
@@ -125,7 +143,6 @@ export function PacientesTab() {
   return (
     <>
       <View style={{ gap: 10 }}>
-        {/* Toolbar: busca + novo paciente */}
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={[z.searchBox, { flex: 1 }]}>
             <Icon name="search" size={14} color={Colors.ink3} />
