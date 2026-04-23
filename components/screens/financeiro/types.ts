@@ -10,6 +10,11 @@ export type Transaction = {
   due_date?: string;
   created_at?: string;
   paid_at?: string;
+  // Sessao 22-23/04: campos novos pra editar/listar
+  payment_method?: string | null;
+  employee_id?: string | null;
+  employee_name?: string | null;
+  idempotency_key?: string | null;
 };
 
 export type DreData = {
@@ -34,14 +39,16 @@ export type WithdrawalData = {
   fatorR: number;
 };
 
-export type PeriodKey = "all" | "week" | "month" | "year" | "prev_year" | "custom";
+// "today" adicionado nesta sessao — primeira opcao pra acompanhamento operacional do dia
+export type PeriodKey = "today" | "all" | "week" | "month" | "year" | "prev_year" | "custom";
 
 export var PERIODS: { key: PeriodKey; label: string }[] = [
-  { key: "all", label: "Todos" },
+  { key: "today", label: "Dia" },
   { key: "week", label: "Semanal" },
   { key: "month", label: "Mensal" },
   { key: "year", label: "Anual" },
   { key: "prev_year", label: "Ant." },
+  { key: "all", label: "Todos" },
   { key: "custom", label: "Periodo" },
 ];
 
@@ -64,6 +71,11 @@ export function getPeriodRange(key: PeriodKey, customStart?: string, customEnd?:
   var now = new Date();
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   switch (key) {
+    case "today": {
+      var startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      var dayLabel = "Hoje, " + now.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+      return { start: startD, end: today, label: dayLabel };
+    }
     case "all": return { start: new Date(1970, 0, 1), end: new Date(2100, 0, 1), label: "Todos os lancamentos" };
     case "week": {
       var start = new Date(today); start.setDate(today.getDate() - 6); start.setHours(0, 0, 0, 0);
@@ -93,6 +105,11 @@ export function getPreviousPeriodRange(key: PeriodKey, customStart?: string, cus
   var now = new Date();
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   switch (key) {
+    case "today": {
+      var yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+      var yestEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+      return { start: yest, end: yestEnd };
+    }
     case "all": return null;
     case "week": {
       var end = new Date(today); end.setDate(today.getDate() - 7);
