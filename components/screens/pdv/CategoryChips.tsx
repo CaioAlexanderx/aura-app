@@ -2,7 +2,7 @@
 // AURA. -- PDV/Caixa · Category chips (pill-shaped, with counts)
 // ============================================================
 import { View, Text, Pressable, StyleSheet, Platform, ScrollView } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { IS_WEB, webOnly } from "./types";
 
 export type Cat = { id: string; label: string; count: number };
@@ -24,9 +24,9 @@ export function CategoryChips({ items, active, onSelect }: Props) {
       {items.map(c => {
         const isActive = active === c.id;
         const webBox = webOnly({
-          background: isActive ? "rgba(124,58,237,0.2)" : "rgba(14,18,40,0.55)",
-          border: isActive ? "1px solid rgba(124,58,237,0.4)" : "1px solid rgba(255,255,255,0.07)",
-          color: isActive ? "#fff" : "rgba(170,160,235,0.65)",
+          background: isActive ? "rgba(124,58,237,0.2)" : Glass.card,
+          border: isActive ? "1px solid rgba(124,58,237,0.4)" : "1px solid " + Glass.lineBorderCard,
+          color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink2,
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           boxShadow: isActive ? "0 4px 14px rgba(124,58,237,0.35)" : "none",
@@ -69,15 +69,15 @@ const s = StyleSheet.create({
   txt: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.ink3,
+    color: Colors.ink2,
   },
   txtActive: {
-    color: "#fff",
+    color: IS_DARK_MODE ? "#fff" : Colors.ink,
   },
   count: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 10,
-    opacity: 0.6,
+    opacity: 0.7,
     color: Colors.ink3,
   },
 });
