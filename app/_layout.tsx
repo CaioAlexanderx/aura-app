@@ -60,9 +60,12 @@ function AuthGuard() {
     const onCheckout = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
 
-    // Invite pages handle their own navigation — skip all redirects
+    // Paginas publicas — nenhum redirect, nenhum guard.
+    // Portal do paciente (rota /dental/portal/:token) precisa ser acessivel
+    // por qualquer pessoa com o link, sem login.
     const onInvite = segments[0] === "invite";
-    if (onInvite) return;
+    const onPublicDental = segments[0] === "dental";
+    if (onInvite || onPublicDental) return;
 
     // 1. Not logged in → login
     if (!token && !inAuth) {
@@ -86,25 +89,7 @@ function AuthGuard() {
       return;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 4. Billing gate
-    //
-    // hasActiveBilling = true quando:
-    //   - billing_status === 'active'  → pagou via Asaas
-    //   - trialActive === true         → trial_ends_at no futuro
-    //
-    // Excecoes sempre isentas: isDemo, isStaff, company = null.
-    //
-    // CENARIO 1 — Funcionario convidado (invite flow):
-    //   company = null imediatamente apos o registro → gate nao dispara.
-    //   Apos hydrate, company e preenchido com a empresa do empregador.
-    //   Funcionarios tem member_role != 'owner' → isentos do gate.
-    //   Apenas o OWNER e responsavel pelo pagamento.
-    //
-    // CENARIO 2 — Codigo de acesso com trial (ex: ENCANTO15 — 15 dias):
-    //   Durante o trial: trialActive = true → bypass.
-    //   Apos expirar: trialActive = false, billing_status != 'active' → checkout.
-    // ─────────────────────────────────────────────────────────────
+    // 4. Billing gate (ver comentario original)
     const billingStatus  = (company as any)?.billing_status;
     const hasActiveBilling = billingStatus === "active" || trialActive;
 
