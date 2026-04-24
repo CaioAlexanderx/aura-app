@@ -1,416 +1,621 @@
-import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator } from "react-native";
+// ============================================================
+// AURA. -- PDV/Caixa · Cart panel (header + body + foot)
+// Violet glass hero with big total, items list with qty controls,
+// payment chips, summary rows, and Limpar/Orçamento/Finalizar CTAs.
+// ============================================================
+import { forwardRef } from "react";
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { couponsApi } from "@/services/api";
-import { useAuthStore } from "@/stores/auth";
-import { toast } from "@/components/Toast";
-import type { CartItem } from "@/hooks/useCart";
-import { DiscountSection } from "./DiscountSection";
-import { PAYMENTS } from "@/hooks/useCart";
+import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt } from "./types";
 
-const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+export type CartDisplayItem = {
+  productId: string;
+  productBaseId: string; // without variant suffix, used to pick accent color
+  name: string;
+  price: number;
+  qty: number;
+};
 
-export type SlimCustomer = { id: string; name: string; phone?: string };
-export type SlimEmployee = { id: string; name: string };
+export type PayChip = { key: string; label: string; icon: string };
 
-function CartRow({ item, onPlus, onMinus, onRemove, onSetQty }: {
-  item: CartItem; onPlus: () => void; onMinus: () => void; onRemove: () => void; onSetQty: (qty: number) => void;
-}) {
-  const [h, sH] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editVal, setEditVal] = useState("");
-  const w = Platform.OS === "web";
-  function startEdit() { setEditVal(String(item.qty)); setEditing(true); }
-  function confirmEdit() { const v = parseInt(editVal); if (v > 0) onSetQty(v); setEditing(false); }
-  return (
-    <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
-      style={[s.row, h && { backgroundColor: Colors.bg4 }, w && { transition: "background-color 0.15s ease" } as any]}>
-      <View style={s.info}>
-        <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-        <Text style={s.unit}>{fmt(item.price)} / un</Text>
-      </View>
-      <View style={s.controls}>
-        <Pressable onPress={onMinus} style={s.btn}><Text style={s.btnText}>-</Text></Pressable>
-        {editing ? (
-          <TextInput style={s.qtyInput} value={editVal} onChangeText={setEditVal} onBlur={confirmEdit} onSubmitEditing={confirmEdit} keyboardType="number-pad" autoFocus selectTextOnFocus />
-        ) : (
-          <Pressable onPress={startEdit}><Text style={s.qty}>{item.qty}</Text></Pressable>
-        )}
-        <Pressable onPress={onPlus} style={s.btn}><Text style={s.btnText}>+</Text></Pressable>
-      </View>
-      <Text style={s.total}>{fmt(item.price * item.qty)}</Text>
-      <Pressable onPress={onRemove} style={s.removeBtn}><Text style={s.removeText}>x</Text></Pressable>
-    </Pressable>
-  );
-}
-
-function normalizePhone(p: string) { return p.replace(/\D/g, ""); }
-
-export function CartPanel({
-  cart, payment, setPayment, total, totalAfterCoupon, itemCount, isWide, setQty, updateQty, removeItem, finalizeSale, isProcessing,
-  customers, employees,
-  selectedCustomerId, selectCustomer,
-  selectedEmployeeId, selectedEmployeeName, selectEmployee,
-  sellerName, setSellerName, plan,
-  discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
-  couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
-  onGenerateQuote,
-}: {
-  cart: CartItem[]; payment: string; setPayment: (k: string) => void; total: number; totalAfterCoupon?: number; itemCount: number;
-  isWide: boolean; setQty: (id: string, qty: number) => void; updateQty: (id: string, d: number) => void;
-  removeItem: (id: string) => void; finalizeSale: () => void; isProcessing?: boolean;
-  customers?: SlimCustomer[];
-  employees?: SlimEmployee[];
-  selectedCustomerId?: string | null;
-  selectCustomer?: (id: string | null, name: string | null) => void;
-  selectedEmployeeId?: string | null;
-  selectedEmployeeName?: string | null;
-  selectEmployee?: (id: string | null, name: string | null) => void;
-  sellerName?: string;
-  setSellerName?: (v: string) => void;
-  plan?: string;
-  discountType?: "%" | "R$";
-  setDiscountType?: (t: "%" | "R$") => void;
-  discountValue?: string;
-  setDiscountValue?: (v: string) => void;
-  manualDiscountAmount?: number;
-  clearDiscount?: () => void;
-  couponCode?: string;
-  setCouponCode?: (v: string) => void;
-  couponApplied?: { code: string; discount: number } | null;
-  setCouponApplied?: (v: { code: string; discount: number } | null) => void;
-  clearCoupon?: () => void;
-  // D-FIX #5: callback opcional pra gerar PDF de orcamento do carrinho atual.
-  // O parent (pdv.tsx) cuida de montar QuoteData e chamar openQuotePdf().
+type Props = {
+  orderNumber?: string | null;
+  items: CartDisplayItem[];
+  subtotal: number;
+  discountAmount: number;
+  total: number;
+  itemCount: number;
+  payMethods: PayChip[];
+  activePay: string;
+  onPay: (k: string) => void;
+  onInc: (id: string) => void;
+  onDec: (id: string) => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+  onFinalize: () => void;
   onGenerateQuote?: () => void;
-}) {
-  const { company } = useAuthStore();
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [employeeSearch, setEmployeeSearch] = useState("");
-  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
-  const [showSellerInput, setShowSellerInput] = useState(false);
-  const [couponLoading, setCouponLoading] = useState(false);
+  showOrcamento?: boolean;
+  discountLabel?: string | null;
+  isProcessing?: boolean;
+  requiredHints?: string[];
+  emptyCta?: string;
+  headerSubtitle?: string | null;
+};
 
-  const currentPlan = (plan || "essencial").toLowerCase();
-  const isNegocioPlus = currentPlan === "negocio" || currentPlan === "expansao" || currentPlan === "personalizado";
-
-  const matchedCustomers = customers && customerSearch.length >= 2
-    ? customers.filter(c => {
-        const q = customerSearch.toLowerCase();
-        return c.name.toLowerCase().includes(q) || (c.phone ? normalizePhone(c.phone).includes(normalizePhone(customerSearch)) : false);
-      }).slice(0, 6)
-    : [];
-
-  const matchedEmployees = employees && employeeSearch.length >= 1
-    ? employees.filter(e => e.name.toLowerCase().includes(employeeSearch.toLowerCase())).slice(0, 5)
-    : (employees || []).slice(0, 8);
-
-  const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
-  const selectedEmployee = employees?.find(e => e.id === selectedEmployeeId);
-  const manyEmployees = (employees?.length || 0) > 5;
-  const displayTotal = totalAfterCoupon ?? total;
-
-  // Check if the typed seller name matches an existing employee
-  const sellerNameTrimmed = (sellerName || "").trim();
-  const sellerIsKnownEmployee = employees?.some(e => e.name.toLowerCase() === sellerNameTrimmed.toLowerCase());
-
-  function handleSelectEmployee(id: string, name: string) {
-    if (selectEmployee) selectEmployee(id, name);
-    if (setSellerName) setSellerName(name);
-    setEmployeeSearch("");
-    setShowEmployeeDropdown(false);
-    setShowSellerInput(false);
-  }
-
-  function handleClearSeller() {
-    if (selectEmployee) selectEmployee(null, null);
-    if (setSellerName) setSellerName("");
-    setEmployeeSearch("");
-    setShowEmployeeDropdown(false);
-    setShowSellerInput(false);
-  }
-
-  function handleConfirmNewSeller() {
-    if (!sellerNameTrimmed) return;
-    setShowSellerInput(false);
-    if (isNegocioPlus && !sellerIsKnownEmployee) {
-      toast.info(`"${sellerNameTrimmed}" adicionada! Conclua o cadastro na Folha de Pagamento.`);
-    }
-  }
-
-  async function handleApplyCoupon() {
-    if (!couponCode?.trim() || !company?.id || !setCouponApplied) return;
-    setCouponLoading(true);
-    try {
-      const res = await couponsApi.validate(company.id, couponCode.trim(), total);
-      if (res.valid) {
-        setCouponApplied({ code: res.code || couponCode.trim().toUpperCase(), discount: res.discount_amount || 0 });
-        toast.success(`Cupom ${res.code} aplicado! -${fmt(res.discount_amount || 0)}`);
-      } else { toast.error(res.error || "Cupom invalido"); }
-    } catch (err: any) { toast.error(err?.message || "Erro ao validar cupom"); }
-    finally { setCouponLoading(false); }
-  }
-
-  // Display name for the active seller
-  const activeSeller = selectedEmployee
-    ? { name: selectedEmployee.name, isEmployee: true }
-    : sellerNameTrimmed
-      ? { name: sellerNameTrimmed, isEmployee: false }
-      : null;
+export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
+  const {
+    orderNumber,
+    items,
+    subtotal,
+    discountAmount,
+    total,
+    itemCount,
+    payMethods,
+    activePay,
+    onPay,
+    onInc,
+    onDec,
+    onRemove,
+    onClear,
+    onFinalize,
+    onGenerateQuote,
+    showOrcamento,
+    discountLabel,
+    isProcessing,
+    requiredHints,
+    emptyCta,
+    headerSubtitle,
+  } = props;
 
   return (
-    <View style={{ padding: isWide ? 20 : 0, marginTop: isWide ? 0 : 8, flex: isWide ? 1 : undefined }}>
-      {isWide ? (
-        <View style={s.header}>
-          <Text style={s.headerTitle}>Caixa</Text>
-          {itemCount > 0 && <View style={s.badge}><Text style={s.badgeText}>{itemCount}</Text></View>}
+    <View
+      style={[
+        s.cart,
+        Platform.OS === "web"
+          ? ({
+              background: "rgba(9,12,26,0.55)",
+              backdropFilter: "blur(20px) saturate(150%)",
+              WebkitBackdropFilter: "blur(20px) saturate(150%)",
+              borderLeft: "1px solid rgba(255,255,255,0.06)",
+            } as any)
+          : { backgroundColor: Colors.bg2, borderLeftWidth: 1, borderLeftColor: Colors.border },
+      ]}
+    >
+      {/* HEAD */}
+      <View
+        ref={headRef as any}
+        style={[
+          s.head,
+          Platform.OS === "web"
+            ? ({
+                background:
+                  "linear-gradient(135deg, rgba(124,58,237,0.22), rgba(79,91,213,0.05))",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+              } as any)
+            : { backgroundColor: Colors.violetD, borderBottomWidth: 1, borderBottomColor: Colors.border },
+        ]}
+      >
+        {IS_WEB && (
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: "-40%",
+              right: "-30%",
+              width: "80%",
+              height: "200%",
+              background:
+                "radial-gradient(ellipse, rgba(167,139,250,0.35), transparent 60%)",
+              animation: "caixaHeroShift 12s ease-in-out infinite",
+              pointerEvents: "none",
+            } as any}
+          />
+        )}
+        <View style={s.headRow}>
+          <Text style={s.headLabel}>Total da venda</Text>
+          {orderNumber ? <Text style={s.headOrd}>{orderNumber}</Text> : null}
         </View>
-      ) : itemCount > 0 ? (
-        <View style={[s.header, s.mobileHeader]}>
-          <Text style={s.mobileHeaderTitle}>Carrinho</Text>
-          <View style={s.badge}><Text style={s.badgeText}>{itemCount} {itemCount === 1 ? "item" : "itens"}</Text></View>
+        <View style={s.totalRow}>
+          <Text style={s.cur}>R$ </Text>
+          <Text style={s.totalInt}>{fmtInt(Math.floor(total))}</Text>
+          <Text style={s.cents}>
+            ,{String(Math.round((total - Math.floor(total)) * 100)).padStart(2, "0")}
+          </Text>
         </View>
-      ) : null}
+        <View style={s.meta}>
+          <View>
+            <Text style={s.metaK}>Itens</Text>
+            <Text style={s.metaV}>{itemCount}</Text>
+          </View>
+          <View>
+            <Text style={s.metaK}>Desconto</Text>
+            <Text style={[s.metaV, { color: discountAmount > 0 ? Colors.green : "#fff" }]}>
+              {discountAmount > 0 ? "− " + fmtCurrency(discountAmount) : "R$ 0,00"}
+            </Text>
+          </View>
+          <View>
+            <Text style={s.metaK}>Pagamento</Text>
+            <Text style={[s.metaV, { color: Colors.violet3, textTransform: "uppercase" }]}>{activePay}</Text>
+          </View>
+        </View>
+        {headerSubtitle ? <Text style={s.subtitle}>{headerSubtitle}</Text> : null}
+      </View>
 
-      {cart.length === 0 && isWide && (
-        <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
-          <Text style={{ fontSize: 32, color: Colors.ink3 }}>$</Text>
-          <Text style={{ fontSize: 12, color: Colors.ink3, textAlign: "center" }}>Toque em um produto ou escaneie um codigo</Text>
-        </View>
-      )}
-
-      <ScrollView style={{ maxHeight: isWide ? 240 : undefined }} showsVerticalScrollIndicator={false}>
-        {cart.map(item => (
-          <CartRow key={item.productId} item={item}
-            onPlus={() => updateQty(item.productId, 1)}
-            onMinus={() => updateQty(item.productId, -1)}
-            onRemove={() => removeItem(item.productId)}
-            onSetQty={(qty) => setQty(item.productId, qty)} />
-        ))}
+      {/* BODY */}
+      <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 20 }}>
+        {items.length === 0 ? (
+          <View style={s.empty}>
+            <View style={s.emptyIco}>
+              <Icon name="cart" size={30} color="#a78bfa" />
+            </View>
+            <Text style={s.emptyTxt}>Carrinho vazio</Text>
+            <Text style={[s.emptyTxt, { marginTop: 4, fontWeight: "400" }]}>
+              {emptyCta || "Clique em um produto para adicionar"}
+            </Text>
+          </View>
+        ) : (
+          items.map(it => (
+            <CartItem
+              key={it.productId}
+              item={it}
+              onInc={() => onInc(it.productId)}
+              onDec={() => onDec(it.productId)}
+              onRemove={() => onRemove(it.productId)}
+            />
+          ))
+        )}
       </ScrollView>
 
-      {cart.length > 0 && (
-        <View style={{ marginTop: 12 }}>
-          <View style={s.divider} />
-
-          {/* Cliente */}
-          {customers && selectCustomer && (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={s.sectionLabel}>Cliente (opcional)</Text>
-              {selectedCustomer ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={{ flex: 1, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 }}>
-                    <Text style={{ fontSize: 13, color: Colors.ink, fontWeight: "600" }}>{selectedCustomer.name}</Text>
-                    {selectedCustomer.phone ? <Text style={{ fontSize: 10, color: Colors.ink3 }}>{selectedCustomer.phone}</Text> : null}
-                  </View>
-                  <Pressable onPress={() => { selectCustomer(null, null); setCustomerSearch(""); }} style={s.clearBtn}>
-                    <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View>
-                  <TextInput style={s.searchSmall} value={customerSearch} onChangeText={setCustomerSearch} placeholder="Buscar por nome ou telefone..." placeholderTextColor={Colors.ink3} />
-                  {matchedCustomers.length > 0 && (
-                    <View style={s.dropdown}>
-                      {matchedCustomers.map(c => (
-                        <Pressable key={c.id} onPress={() => { selectCustomer(c.id, c.name); setCustomerSearch(""); }} style={s.dropdownItem}>
-                          <Text style={{ fontSize: 12, color: Colors.ink, fontWeight: "500" }}>{c.name}</Text>
-                          {c.phone && <Text style={{ fontSize: 10, color: Colors.ink3 }}>{c.phone}</Text>}
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* ══ Vendedor(a) — todos os planos ══ */}
-          {setSellerName && (
-            <View style={{ marginBottom: 14 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <Text style={s.sectionLabel}>Vendedor(a) (opcional)</Text>
-                {!activeSeller && !showSellerInput && (
-                  <Pressable onPress={() => setShowSellerInput(true)} style={s.addSellerBtn}>
-                    <Icon name="plus" size={12} color={Colors.violet3} />
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Seller selected — show badge */}
-              {activeSeller && !showSellerInput ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={{ flex: 1, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 }}>
-                    <Text style={{ fontSize: 13, color: Colors.violet3, fontWeight: "600" }}>{activeSeller.name}</Text>
-                    {activeSeller.isEmployee && <Text style={{ fontSize: 9, color: Colors.ink3, marginTop: 1 }}>Cadastrada na Folha</Text>}
-                    {!activeSeller.isEmployee && isNegocioPlus && <Text style={{ fontSize: 9, color: Colors.amber, marginTop: 1 }}>Cadastro pendente na Folha</Text>}
-                  </View>
-                  <Pressable onPress={handleClearSeller} style={s.clearBtn}>
-                    <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {/* Inline input — shown after clicking "+" */}
-              {showSellerInput && (
-                <View style={{ gap: 8 }}>
-                  {/* For Negocio+: show existing employees first as chips */}
-                  {isNegocioPlus && employees && employees.length > 0 && (
-                    <View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6, paddingBottom: 6 }}>
-                        {(manyEmployees ? matchedEmployees : employees).map(e => (
-                          <Pressable key={e.id} onPress={() => handleSelectEmployee(e.id, e.name)}
-                            style={[s.payChip, selectedEmployeeId === e.id && s.payChipActive]}>
-                            <Text style={[s.payText, selectedEmployeeId === e.id && s.payTextActive]}>{e.name.split(" ")[0]}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                      <Text style={{ fontSize: 10, color: Colors.ink3, marginBottom: 4 }}>ou digite um novo nome:</Text>
-                    </View>
-                  )}
-                  <View style={{ flexDirection: "row", gap: 6 }}>
-                    <TextInput
-                      style={[s.searchSmall, { flex: 1 }]}
-                      value={sellerName || ""}
-                      onChangeText={v => { setSellerName(v); if (selectEmployee) selectEmployee(null, null); }}
-                      placeholder="Nome da vendedora..."
-                      placeholderTextColor={Colors.ink3}
-                      autoFocus
-                      onSubmitEditing={handleConfirmNewSeller}
-                    />
-                    <Pressable onPress={handleConfirmNewSeller} style={[s.confirmSellerBtn, !sellerNameTrimmed && { opacity: 0.4 }]} disabled={!sellerNameTrimmed}>
-                      <Icon name="check" size={14} color="#fff" />
-                    </Pressable>
-                    <Pressable onPress={() => { setShowSellerInput(false); handleClearSeller(); }} style={s.clearBtn}>
-                      <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-
-          <View style={s.divider} />
-          <Text style={s.sectionLabel}>Pagamento</Text>
-          <View style={s.payRow}>
-            {PAYMENTS.map(p => (
-              <Pressable key={p.key} onPress={() => setPayment(p.key)} style={[s.payChip, payment === p.key && s.payChipActive]}>
-                <Text style={[s.payText, payment === p.key && s.payTextActive]}>{p.label}</Text>
+      {/* FOOT */}
+      <View
+        style={[
+          s.foot,
+          Platform.OS === "web"
+            ? ({ background: "rgba(5,6,15,0.6)", borderTop: "1px solid rgba(255,255,255,0.06)" } as any)
+            : { backgroundColor: Colors.bg, borderTopWidth: 1, borderTopColor: Colors.border },
+        ]}
+      >
+        {/* Payment chips */}
+        <View style={s.payGrid}>
+          {payMethods.map(m => {
+            const isActive = activePay === m.key;
+            const webChip = webOnly({
+              background: isActive ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.03)",
+              border: isActive ? "1px solid rgba(124,58,237,0.4)" : "1px solid rgba(255,255,255,0.07)",
+              color: isActive ? "#fff" : "rgba(170,160,235,0.65)",
+              transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
+              cursor: "pointer",
+              boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
+            });
+            return (
+              <Pressable
+                key={m.key}
+                onPress={() => onPay(m.key)}
+                style={[
+                  s.payChip,
+                  isActive && s.payChipActive,
+                  Platform.OS === "web" ? (webChip as any) : null,
+                ] as any}
+              >
+                <Icon name={m.icon as any} size={16} color={isActive ? "#fff" : Colors.ink3} />
+                <Text style={[s.payLabel, isActive && { color: "#fff" }]}>{m.label}</Text>
               </Pressable>
-            ))}
-          </View>
-
-          {/* Cupom */}
-          {setCouponCode && (
-            <View style={{ marginTop: 14 }}>
-              <Text style={s.sectionLabel}>Cupom de desconto</Text>
-              {couponApplied ? (
-                <View style={s.couponApplied}>
-                  <Icon name="check" size={14} color={Colors.green} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.couponAppliedCode}>{couponApplied.code}</Text>
-                    <Text style={s.couponAppliedDiscount}>-{fmt(couponApplied.discount)}</Text>
-                  </View>
-                  <Pressable onPress={clearCoupon} style={s.clearBtn}>
-                    <Text style={{ color: Colors.red, fontWeight: "700", fontSize: 12 }}>x</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={s.couponRow}>
-                  <TextInput style={s.couponInput} value={couponCode} onChangeText={v => setCouponCode(v.toUpperCase())}
-                    placeholder="Codigo do cupom" placeholderTextColor={Colors.ink3} autoCapitalize="characters" onSubmitEditing={handleApplyCoupon} />
-                  <Pressable onPress={handleApplyCoupon} disabled={couponLoading || !couponCode?.trim()} style={[s.couponBtn, (!couponCode?.trim() || couponLoading) && { opacity: 0.5 }]}>
-                    {couponLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.couponBtnText}>Aplicar</Text>}
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Manual discount */}
-          {setDiscountType && setDiscountValue && (
-            <View style={{ marginTop: 4 }}>
-              <DiscountSection total={total} discountType={discountType || "%"} setDiscountType={setDiscountType}
-                discountValue={discountValue || ""} setDiscountValue={setDiscountValue}
-                manualDiscountAmount={manualDiscountAmount || 0} clearDiscount={clearDiscount || (() => {})} />
-            </View>
-          )}
-
-          <View style={s.divider} />
-
-          {/* Total */}
-          <View style={s.totalRow}>
-            <Text style={{ fontSize: 16, color: Colors.ink, fontWeight: "600" }}>Total</Text>
-            <View style={{ alignItems: "flex-end" }}>
-              {couponApplied && <Text style={s.totalOriginal}>{fmt(total)}</Text>}
-              <Text style={{ fontSize: 24, color: Colors.green, fontWeight: "800", letterSpacing: -0.5 }}>{fmt(displayTotal)}</Text>
-            </View>
-          </View>
-
-          {/* D-FIX #5: Acoes (orcamento + finalizar) */}
-          <View style={s.actionsRow}>
-            {onGenerateQuote && (
-              <Pressable onPress={onGenerateQuote} disabled={isProcessing} style={[s.quoteBtn, isProcessing && { opacity: 0.5 }]}>
-                <Icon name="file_text" size={13} color={Colors.violet3} />
-                <Text style={s.quoteBtnText}>Orcamento</Text>
-              </Pressable>
-            )}
-            <Pressable onPress={finalizeSale} disabled={isProcessing} style={[s.finalizeBtn, isProcessing && { opacity: 0.5 }]}>
-              <Text style={s.finalizeText}>{isProcessing ? "Processando..." : "Finalizar venda"}</Text>
-            </Pressable>
-          </View>
+            );
+          })}
         </View>
-      )}
+
+        {/* Summary */}
+        <View style={s.sumRow}>
+          <Text style={s.sumK}>Subtotal</Text>
+          <Text style={s.sumV}>{fmtCurrency(subtotal)}</Text>
+        </View>
+        <View style={s.sumRow}>
+          <Text style={[s.sumK, discountAmount > 0 && { color: Colors.green }]}>
+            Desconto{discountLabel ? " · " + discountLabel : ""}
+          </Text>
+          <Text style={[s.sumV, discountAmount > 0 && { color: Colors.green }]}>
+            {discountAmount > 0 ? "− " + fmtCurrency(discountAmount) : "R$ 0,00"}
+          </Text>
+        </View>
+        <View style={[s.sumRow, s.sumRowTotal]}>
+          <Text style={{ fontSize: 13, color: Colors.ink3, fontWeight: "600" }}>Total</Text>
+          <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>
+        </View>
+
+        {/* Required hints */}
+        {requiredHints && requiredHints.length > 0 && (
+          <View style={s.hintsBox}>
+            <Icon name="alert" size={11} color={Colors.amber} />
+            <Text style={s.hintsTxt}>{requiredHints.join(" · ")}</Text>
+          </View>
+        )}
+
+        {/* CTA row */}
+        <View style={s.ctaRow}>
+          <Pressable onPress={onClear} style={[s.ctaSec]}>
+            <Text style={s.ctaSecTxt}>Limpar</Text>
+          </Pressable>
+          {showOrcamento && onGenerateQuote && (
+            <Pressable onPress={onGenerateQuote} disabled={!!isProcessing} style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}>
+              <Icon name="file_text" size={15} color={Colors.violet3} />
+              <Text style={s.ctaAltTxt}>Orçamento</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={onFinalize}
+            disabled={!!isProcessing || items.length === 0}
+            style={[
+              s.ctaPri,
+              Platform.OS === "web"
+                ? ({
+                    background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
+                    boxShadow:
+                      "0 8px 20px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)",
+                    position: "relative",
+                    overflow: "hidden",
+                  } as any)
+                : { backgroundColor: Colors.violet },
+              (isProcessing || items.length === 0) && { opacity: 0.5 },
+            ]}
+          >
+            {IS_WEB && (
+              <span
+                aria-hidden
+                style={{
+                  content: '""',
+                  position: "absolute",
+                  top: 0,
+                  left: "-100%",
+                  width: "100%",
+                  height: "100%",
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+                  animation: "caixaShine 3s ease-in-out infinite",
+                  pointerEvents: "none",
+                } as any}
+              />
+            )}
+            {isProcessing ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Icon name="check" size={16} color="#fff" />
+                <Text style={s.ctaPriTxt}>Finalizar venda</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+function CartItem({
+  item,
+  onInc,
+  onDec,
+  onRemove,
+}: {
+  item: CartDisplayItem;
+  onInc: () => void;
+  onDec: () => void;
+  onRemove: () => void;
+}) {
+  const accent = accentForProduct(item.productBaseId);
+  const letter = productLetter(item.name);
+  const imgBg = webOnly({
+    background:
+      "radial-gradient(circle at 30% 30%, " +
+      accent +
+      "55, " +
+      accent +
+      "18)",
+    border: "1px solid " + accent + "40",
+  });
+  return (
+    <View style={s.item}>
+      <View style={[s.itemImg, Platform.OS === "web" ? (imgBg as any) : { backgroundColor: accent + "22", borderWidth: 1, borderColor: accent + "44" }]}>
+        <Text style={s.itemLetter}>{letter}</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={s.itemName}>
+          {item.name}
+        </Text>
+        <Text style={s.itemMeta}>
+          {fmtCurrency(item.price)} × {item.qty}
+        </Text>
+      </View>
+      <View style={s.qtyCtrl}>
+        <Pressable onPress={onDec} style={s.qtyBtn}>
+          <Text style={s.qtyBtnTxt}>−</Text>
+        </Pressable>
+        <Text style={s.qtyVal}>{item.qty}</Text>
+        <Pressable onPress={onInc} style={s.qtyBtn}>
+          <Text style={s.qtyBtnTxt}>+</Text>
+        </Pressable>
+      </View>
+      <Text style={s.itemPrice}>{fmtCurrency(item.price * item.qty)}</Text>
+      <Pressable onPress={onRemove} style={s.itemX}>
+        <Icon name="x" size={14} color={Colors.ink3} />
+      </Pressable>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
-  headerTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700" },
-  mobileHeader: { paddingTop: 16, paddingBottom: 4, borderTopWidth: 1, borderTopColor: Colors.border, marginBottom: 12 },
-  mobileHeaderTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 8 },
-  info: { flex: 1 }, name: { fontSize: 13, color: Colors.ink, fontWeight: "500" }, unit: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
-  controls: { flexDirection: "row", alignItems: "center", gap: 6 },
-  btn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
-  btnText: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  qty: { fontSize: 14, color: Colors.ink, fontWeight: "700", minWidth: 28, textAlign: "center", paddingVertical: 2, paddingHorizontal: 4, borderRadius: 4, backgroundColor: Colors.bg4 },
-  qtyInput: { width: 44, height: 28, borderRadius: 6, backgroundColor: Colors.bg4, borderWidth: 1.5, borderColor: Colors.violet, textAlign: "center", fontSize: 14, color: Colors.ink, fontWeight: "700", paddingVertical: 0 },
-  total: { fontSize: 13, color: Colors.green, fontWeight: "600", minWidth: 70, textAlign: "right" },
-  removeBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center" },
-  removeText: { fontSize: 11, color: Colors.red, fontWeight: "700" },
-  badge: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  sectionLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8 },
-  payRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  payChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
-  payChipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  payText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
-  payTextActive: { color: "#fff", fontWeight: "600" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  totalOriginal: { fontSize: 13, color: Colors.ink3, textDecorationLine: "line-through", marginBottom: 2 },
-  // D-FIX #5: Acoes lado a lado
-  actionsRow: { flexDirection: "row", gap: 8 },
-  quoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
-  quoteBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
-  finalizeBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
-  finalizeText: { fontSize: 14, color: "#fff", fontWeight: "700" },
-  searchSmall: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 12, color: Colors.ink },
-  dropdown: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, marginTop: 4, maxHeight: 160, overflow: "hidden" },
-  dropdownItem: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  clearBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
-  addSellerBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet + "44", alignItems: "center", justifyContent: "center" },
-  confirmSellerBtn: { width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
-  couponRow: { flexDirection: "row", gap: 8 },
-  couponInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13, color: Colors.ink, fontWeight: "600", letterSpacing: 1 },
-  couponBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 16, justifyContent: "center" },
-  couponBtnText: { fontSize: 12, color: "#fff", fontWeight: "700" },
-  couponApplied: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.greenD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.green + "33" },
-  couponAppliedCode: { fontSize: 13, color: Colors.green, fontWeight: "700", letterSpacing: 1 },
-  couponAppliedDiscount: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  cart: {
+    flex: 1,
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  head: {
+    padding: 22,
+    paddingHorizontal: 24,
+    position: "relative",
+    overflow: "hidden",
+  },
+  headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.5)",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  headOrd: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    color: Colors.violet3,
+    fontSize: 10,
+    letterSpacing: 0.6,
+  },
+  totalRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  cur: {
+    fontSize: 22,
+    color: "#fff",
+    opacity: 0.55,
+    marginRight: 6,
+    lineHeight: 44,
+    fontWeight: "400",
+  },
+  totalInt: {
+    fontSize: 46,
+    color: "#fff",
+    fontWeight: "600",
+    letterSpacing: -1,
+    lineHeight: 48,
+  },
+  cents: {
+    fontSize: 22,
+    color: "#fff",
+    opacity: 0.6,
+    lineHeight: 44,
+    fontWeight: "500",
+  },
+  meta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 14,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.1)",
+  },
+  metaK: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.45)",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  metaV: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 12,
+    color: "#fff",
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  subtitle: { fontSize: 10, color: "rgba(255,255,255,0.45)", marginTop: 10 },
+  body: { flex: 1 },
+  empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
+  emptyIco: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(124,58,237,0.1)",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "rgba(124,58,237,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  emptyTxt: {
+    color: Colors.ink3,
+    fontSize: 12,
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
+  },
+  itemImg: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  itemLetter: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "700",
+  },
+  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  itemMeta: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 10,
+    color: Colors.ink3,
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  qtyCtrl: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 2,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 8,
+  },
+  qtyBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qtyBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  qtyVal: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 13,
+    color: "#fff",
+    fontWeight: "700",
+    minWidth: 18,
+    textAlign: "center",
+  },
+  itemPrice: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 13,
+    color: Colors.violet3,
+    fontWeight: "700",
+    minWidth: 72,
+    textAlign: "right",
+  },
+  itemX: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    color: Colors.ink3 as any,
+  },
+  foot: {
+    padding: 14,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  payGrid: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 12,
+  },
+  payChip: {
+    flex: 1,
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  payChipActive: {
+    backgroundColor: Colors.violetD,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+  },
+  payLabel: {
+    fontSize: 10,
+    color: Colors.ink3,
+    fontWeight: "600",
+  },
+  sumRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  sumRowTotal: {
+    paddingTop: 10,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+  },
+  sumK: { fontSize: 12, color: Colors.ink3 },
+  sumV: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    color: Colors.ink,
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  hintsBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: Colors.amberD,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.25)",
+  },
+  hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
+  ctaRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+  },
+  ctaSec: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
+  ctaAlt: {
+    flex: 1.3,
+    height: 48,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.3)",
+  },
+  ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  ctaPri: {
+    flex: 1.7,
+    height: 48,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  ctaPriTxt: {
+    fontSize: 13,
+    color: "#fff",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
 });
 
 export default CartPanel;
