@@ -1,11 +1,11 @@
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { webOnly } from "./types";
 
 export function QuickAction({ ic, iconColor, label, onPress }: { ic: string; iconColor: string; label: string; onPress?: () => void }) {
   const webCard = webOnly({
-    background: "rgba(14,18,40,0.55)",
+    background: Glass.card,
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
     transition: "all 0.3s cubic-bezier(0.3, 0, 0.2, 1)",
@@ -43,7 +43,7 @@ const s = StyleSheet.create({
   btn: {
     alignItems: "center", justifyContent: "center", gap: 10,
     minWidth: 92, paddingVertical: 16, paddingHorizontal: 12,
-    borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderRadius: 16, borderWidth: 1, borderColor: Glass.lineBorderCard,
   },
   iw: {
     width: 44, height: 44, borderRadius: 12,

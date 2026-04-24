@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { Sparkline } from "./Sparkline";
 import { IS_WIDE, webOnly } from "./types";
@@ -11,10 +11,10 @@ type Props = {
 };
 
 // Claude Design KPI: glass card, top accent stripe, icon chip with soft glow,
-// tight mono value + delta chip + mini sparkline.
+// tight mono value + delta chip + mini sparkline. Bg/ink swap per theme.
 export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, spark, onPress }: Props) {
   const webCard = webOnly({
-    background: "rgba(14,18,40,0.55)",
+    background: Glass.card,
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
     transition: "all 0.3s cubic-bezier(0.3, 0, 0.2, 1)",
@@ -69,7 +69,7 @@ const s = StyleSheet.create({
   card: {
     backgroundColor: Colors.bg3, borderRadius: 18,
     paddingHorizontal: 18, paddingVertical: 16,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1, borderColor: Glass.lineBorderCard,
     flex: 1, minWidth: IS_WIDE ? 160 : "45%" as any, margin: 5,
     overflow: "hidden" as any,
   },
@@ -85,7 +85,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   lb: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 1.1, fontWeight: "700", flex: 1 },
-  val: { fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined), fontSize: 22, fontWeight: "700", color: "#fff", letterSpacing: -0.4, marginBottom: 10 },
+  val: { fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined), fontSize: 22, fontWeight: "700", color: Colors.ink, letterSpacing: -0.4, marginBottom: 10 },
   foot: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 },
   delta: { fontSize: 11, fontWeight: "700", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
 });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { useSalesAnalytics, useProductsRanking } from "@/hooks/useSalesAnalytics";
 import { fmtK, fmt, webOnly } from "./types";
 
@@ -31,7 +31,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
   if (!isLoading && totalSales === 0 && totalRevenue === 0 && period === "month" && !topProducts.length) return null;
 
   const webCard = webOnly({
-    background: "rgba(14,18,40,0.55)",
+    background: Glass.card,
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
   });
@@ -117,8 +117,8 @@ const s = StyleSheet.create({
   sub: { fontSize: 10, color: Colors.ink3, letterSpacing: 0.5, marginTop: 2, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   periodBar: {
     flexDirection: "row", padding: 3,
-    backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 10,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: Glass.lineWhisper, borderRadius: 10,
+    borderWidth: 1, borderColor: Glass.lineSoft,
   },
   periodBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7 },
   periodBtnActive: { backgroundColor: Colors.violet, shadowColor: Colors.violet, shadowOpacity: 0.4 as any, shadowRadius: 8 },
@@ -126,20 +126,20 @@ const s = StyleSheet.create({
   periodTextActive: { color: "#fff", fontWeight: "700" },
   card: {
     backgroundColor: Colors.bg3, borderRadius: 20, padding: 20,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", marginBottom: 24,
+    borderWidth: 1, borderColor: Glass.lineBorderCard, marginBottom: 24,
   },
   kpiRow: { gap: 12, marginBottom: 12 },
-  kpiMain: { alignItems: "center", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)" },
+  kpiMain: { alignItems: "center", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: Glass.lineSoft },
   kpiMainValue: { fontSize: 28, fontWeight: "800", color: Colors.green, letterSpacing: -0.5, textShadowColor: "rgba(52,211,153,0.3)" as any, textShadowRadius: Platform.OS === "web" ? 10 : 0 as any, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   kpiMainLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: "700", marginTop: 4 },
   kpiSide: { flexDirection: "row", justifyContent: "space-around" },
   kpiSmall: { alignItems: "center", flex: 1 },
   kpiSmallValue: { fontSize: 18, fontWeight: "800", color: Colors.ink, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   kpiSmallLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 3, fontWeight: "700" },
-  kpiDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.05)", marginHorizontal: 4 },
+  kpiDivider: { width: 1, backgroundColor: Glass.lineSoft, marginHorizontal: 4 },
   emptyPeriod: { alignItems: "center", paddingVertical: 16 },
   emptyText: { fontSize: 12, color: Colors.ink3 },
-  topSection: { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.05)", paddingTop: 14, marginTop: 4 },
+  topSection: { borderTopWidth: 1, borderTopColor: Glass.lineSoft, paddingTop: 14, marginTop: 4 },
   topTitle: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
   topRank: {
@@ -152,6 +152,6 @@ const s = StyleSheet.create({
   topName: { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "600" },
   topQty: { fontSize: 11, color: Colors.ink3, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   topRev: { fontSize: 12, color: Colors.green, fontWeight: "700", minWidth: 70, textAlign: "right", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
-  footer: { alignItems: "center", paddingTop: 12, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.05)", marginTop: 10 },
+  footer: { alignItems: "center", paddingTop: 12, borderTopWidth: 1, borderTopColor: Glass.lineSoft, marginTop: 10 },
   footerText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
 });
