@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 FECHADO + W1-02 imagens R2)
+// AURA. — PatientHub (W1-01 FECHADO + W1-02 imagens R2 + W2-01 portal)
 // Drill-down do paciente com 9/9 sub-tabs totalmente wiradas.
 //
 // Sub-tabs:
@@ -12,6 +12,8 @@
 //   Orcamentos   - treatment-plans?customer_id filter
 //   Cobrancas    - billing/patient/:pid
 //   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal
+//
+// Header actions: Portal (W2-01), Editar, Fechar.
 //
 // Renderizado como Modal full-screen sobreposto a OdontoScreen.
 // ============================================================
@@ -35,6 +37,7 @@ import { ProntuarioTimeline } from '@/components/verticals/odonto/ProntuarioTime
 import { AddPerioExamModal } from '@/components/verticals/odonto/AddPerioExamModal';
 import { AddSpecialtyFormModal } from '@/components/verticals/odonto/AddSpecialtyFormModal';
 import { AddClinicalImageModal } from '@/components/verticals/odonto/AddClinicalImageModal';
+import { PortalShareModal } from '@/components/verticals/odonto/PortalShareModal';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -730,6 +733,7 @@ function FichasTab({ patient }: { patient: PatientLite }) {
 // ────────────────────────────────────────────────────────────
 export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
   const [activeTab, setActiveTab] = useState('dados');
+  const [portalOpen, setPortalOpen] = useState(false);
 
   if (!patient) return null;
 
@@ -749,6 +753,7 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
   };
 
   return (
+    <>
     <Modal
       visible={visible}
       animationType="slide"
@@ -772,6 +777,12 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
             </View>
           </View>
           <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setPortalOpen(true)}
+              style={[styles.iconBtn, styles.iconBtnPortal]}
+            >
+              <Text style={styles.iconBtnTextPortal}>Portal</Text>
+            </Pressable>
             {onEdit && (
               <Pressable onPress={() => onEdit(patient)} style={styles.iconBtn}>
                 <Text style={styles.iconBtnText}>Editar</Text>
@@ -788,6 +799,16 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
         <View style={styles.content}>{renderTab()}</View>
       </View>
     </Modal>
+
+    {/* W2-01: Modal de compartilhamento de portal */}
+    <PortalShareModal
+      visible={portalOpen}
+      patientId={patient.id}
+      patientName={patient.full_name || patient.name}
+      patientPhone={patient.phone || undefined}
+      onClose={() => setPortalOpen(false)}
+    />
+    </>
   );
 }
 
@@ -813,9 +834,11 @@ const styles = StyleSheet.create({
   headerInfo: { flex: 1 },
   headerName: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   headerMeta: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
-  headerActions: { flexDirection: 'row', gap: 8 },
-  iconBtn: { paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#1E293B', borderRadius: 8 },
+  headerActions: { flexDirection: 'row', gap: 6 },
+  iconBtn: { paddingHorizontal: 10, paddingVertical: 7, backgroundColor: '#1E293B', borderRadius: 8 },
   iconBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  iconBtnPortal: { backgroundColor: 'rgba(167,139,250,0.15)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.4)' },
+  iconBtnTextPortal: { color: '#a78bfa', fontSize: 12, fontWeight: '700' },
   content: { flex: 1 },
   tabContent: { flex: 1, padding: 16 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
