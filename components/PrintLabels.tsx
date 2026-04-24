@@ -6,8 +6,8 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
-import { buildLabelHtml, buildLabelName } from "@/components/screens/estoque/labels/buildLabelHtml";
-import type { LabelItem } from "@/components/screens/estoque/labels/buildLabelHtml";
+import { buildLabelHtml, buildLabelName, validateLabelItems } from "@/components/screens/estoque/labels/buildLabelHtml";
+import type { LabelItem, InvalidCodeItem } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
 
 type Props = {
@@ -75,6 +75,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // variantes selecionadas - permite "imprimir etiqueta do pai E etiquetas
   // das variantes" simultaneamente.
   var [includeParentInPrint, setIncludeParentInPrint] = useState<Record<string, boolean>>({});
+  // Lista de codigos invalidos detectados pre-impressao. Se nao vazia,
+  // bloqueia o clique de imprimir e mostra modal pra corrigir.
+  var [invalidCodes, setInvalidCodes] = useState<InvalidCodeItem[]>([]);
   var isWeb = Platform.OS === "web";
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
 
@@ -172,6 +175,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   function handlePrint() {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
+    // Reset painel de erros anteriores antes de tentar imprimir de novo
+    setInvalidCodes([]);
     var items: LabelItem[] = [];
     selectedIds.forEach(function(id) {
       var p = products.find(function(pr) { return pr.id === id; });
@@ -202,6 +207,17 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       }
     });
     if (items.length === 0) { toast.error("Nenhum item selecionado. Marque o produto pai ou pelo menos uma variante."); return; }
+
+    // Validacao pre-impressao: bloqueia codigos placeholder ("...", "-", vazios,
+    // muito curtos). Em 23/abr/2026 a Finesse imprimiu etiquetas com code "..."
+    // que viraram barcodes ilegiveis no scanner. O bloqueio evita reincidencia.
+    var invalid = validateLabelItems(items);
+    if (invalid.length > 0) {
+      setInvalidCodes(invalid);
+      toast.error(invalid.length + " produto(s) com c\u00f3digo inv\u00e1lido \u2014 corrija antes de imprimir");
+      return;
+    }
+
     var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -388,6 +404,35 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         })}
       </ScrollView>
 
+      {/* Alerta de codigos invalidos detectados no clique "Imprimir" */}
+      {invalidCodes.length > 0 && (
+        <View style={s.invalidPanel}>
+          <View style={s.invalidHeader}>
+            <Icon name="alert" size={16} color={Colors.red} />
+            <Text style={s.invalidTitle}>
+              {invalidCodes.length} produto{invalidCodes.length > 1 ? "s" : ""} sem codigo valido - corrija antes de imprimir
+            </Text>
+            <Pressable onPress={function() { setInvalidCodes([]); }} style={s.invalidClose}>
+              <Icon name="x" size={14} color={Colors.ink3} />
+            </Pressable>
+          </View>
+          <Text style={s.invalidHint}>
+            Codigos como "...", "-", "0000" ou muito curtos geram barras ilegiveis no scanner. Edite o produto no Estoque e cadastre um SKU real.
+          </Text>
+          <ScrollView style={s.invalidList} nestedScrollEnabled>
+            {invalidCodes.map(function(item, idx) {
+              return (
+                <View key={idx} style={s.invalidRow}>
+                  <Text style={s.invalidName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={s.invalidCode}>{item.code}</Text>
+                  <Text style={s.invalidReason}>{item.reason}</Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       <Pressable onPress={handlePrint} style={[s.printBtn, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
         <Icon name="file_text" size={16} color="#fff" />
         <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
@@ -458,6 +503,17 @@ var s = StyleSheet.create({
   printBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   setupHint: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
   setupText: { fontSize: 10, color: Colors.amber, flex: 1, lineHeight: 16 },
+  // Painel de codigos invalidos
+  invalidPanel: { backgroundColor: Colors.redD, borderRadius: 12, borderWidth: 1, borderColor: Colors.red + "44", padding: 12, gap: 8 },
+  invalidHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  invalidTitle: { fontSize: 13, color: Colors.red, fontWeight: "700", flex: 1 },
+  invalidClose: { padding: 4, borderRadius: 6 },
+  invalidHint: { fontSize: 11, color: Colors.ink2, lineHeight: 16 },
+  invalidList: { maxHeight: 160, borderRadius: 8, backgroundColor: Colors.bg, padding: 4 },
+  invalidRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  invalidName: { fontSize: 11, color: Colors.ink, fontWeight: "600", flex: 1 },
+  invalidCode: { fontSize: 10, color: Colors.red, fontFamily: "monospace" as any, fontWeight: "700", backgroundColor: Colors.redD, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  invalidReason: { fontSize: 10, color: Colors.ink3, flex: 1.5 },
 });
 
 export default PrintLabels;
