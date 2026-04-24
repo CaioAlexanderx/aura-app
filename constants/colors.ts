@@ -89,6 +89,11 @@ export var IS_LIGHT_MODE = !IS_DARK;
 // computed at module load (same pattern as `Colors`) and stable per session.
 // Dark uses near-black rgba with white inks; Light uses near-white rgba with
 // violet-tinted inks so the glass reads correctly on the pale violet page bg.
+//
+// heroGrad / cartHeadGrad — gradientes violeta dos cards "hero" (HeroCard do
+// Painel e header do CartPanel). Em light precisam ficar DENSOS pra carregar
+// texto branco; em dark ficam mais sutis pra glassmorphism casar com o bg
+// quase preto.
 export var Glass = IS_DARK ? {
   card:             "rgba(14,18,40,0.55)",
   cardMid:          "rgba(9,12,26,0.55)",
@@ -96,6 +101,7 @@ export var Glass = IS_DARK ? {
   pop:              "rgba(11,15,34,0.96)",
   heroGrad:         "linear-gradient(135deg, rgba(124,58,237,0.22), rgba(79,91,213,0.05))",
   heroGradSoft:     "linear-gradient(135deg, rgba(124,58,237,0.20), rgba(79,91,213,0.06))",
+  cartHeadGrad:     "linear-gradient(135deg, rgba(124,58,237,0.35), rgba(79,91,213,0.15))",
   merchantGrad:     "linear-gradient(135deg, rgba(124,58,237,0.14), rgba(14,18,40,0.7))",
   line:             "rgba(255,255,255,0.06)",
   lineStrong:       "rgba(255,255,255,0.1)",
@@ -117,8 +123,10 @@ export var Glass = IS_DARK ? {
   cardMid:          "rgba(255,255,255,0.9)",
   cardDeep:         "rgba(248,245,255,0.85)",
   pop:              "rgba(255,255,255,0.98)",
-  heroGrad:         "linear-gradient(135deg, rgba(124,58,237,0.16), rgba(139,92,246,0.06))",
-  heroGradSoft:     "linear-gradient(135deg, rgba(124,58,237,0.14), rgba(139,92,246,0.05))",
+  // Light: gradientes DENSOS pra texto branco aparecer
+  heroGrad:         "linear-gradient(135deg, rgba(109,40,217,0.95), rgba(79,91,213,0.78))",
+  heroGradSoft:     "linear-gradient(135deg, rgba(124,58,237,0.88), rgba(139,92,246,0.70))",
+  cartHeadGrad:     "linear-gradient(135deg, rgba(109,40,217,0.96), rgba(79,91,213,0.85))",
   merchantGrad:     "linear-gradient(135deg, rgba(124,58,237,0.10), rgba(245,243,255,0.70))",
   line:             "rgba(109,40,217,0.10)",
   lineStrong:       "rgba(109,40,217,0.16)",
