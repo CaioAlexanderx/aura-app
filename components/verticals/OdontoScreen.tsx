@@ -1,24 +1,23 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View } from 'react-native';
 import { VerticalShell } from '@/components/verticals/VerticalShell';
-import { DentalFunnel } from '@/components/verticals/odonto/DentalFunnel';
-import { BillingDashboard } from '@/components/verticals/odonto/BillingDashboard';
-import { RepasseDentista } from '@/components/verticals/odonto/RepasseDentista';
-import { AutomationConfig } from '@/components/verticals/odonto/AutomationConfig';
-import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
-import { AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab } from '@/components/verticals/odonto/OdontoClinicTabs';
-import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab } from '@/components/verticals/odonto/OdontoAdminTabs';
-import { DentalSettings } from '@/components/verticals/odonto/DentalSettings';
-import { LabTab } from '@/components/verticals/odonto/LabTab';
-import { RetornoTab } from '@/components/verticals/odonto/RetornoTab';
+import { OdontoSubNav } from '@/components/verticals/odonto/OdontoSubNav';
+import { ALL_SECTIONS, SECTION_LABELS, getSection } from '@/components/verticals/odonto/sections';
 import type { VerticalConfig } from '@/components/verticals/VerticalShell';
 
 // ============================================================
-// OdontoScreen — Orchestrator for the Odontologia vertical
-// 16 tabs wired to real API-connected components.
-// ODT-15 (23/04): +2 tabs "Laboratorio" e "Retorno" da Camada 4b.
-//   - Laboratorio: pedidos a laboratorios externos (proteses/trabalhos)
-//   - Retorno: recall de pacientes + historico de faltas (2 sub-tabs)
+// OdontoScreen — Orchestrator da vertical Odontologia
+//
+// W2-01 (24/04): reagrupamento das 16 tabs flat em 6 secoes +
+// Painel. Top-level usa VerticalShell com SECTION_LABELS como
+// tabs. Dentro de cada secao, OdontoSubNav renderiza chips
+// horizontais pras sub-tabs internas (quando ha mais de 1).
+//
+// Estado:
+//   sectionLabel     -> qual das 7 secoes esta ativa (Painel + 6)
+//   subTabsBySection -> mapa { sectionLabel: activeSubTabId }
+//                       preserva sub-tab selecionada ao trocar
+//                       de secao e voltar (melhor UX)
 // ============================================================
 
 const CONFIG: VerticalConfig = {
@@ -29,45 +28,56 @@ const CONFIG: VerticalConfig = {
   professional: 'Dr. Nome \u2014 CRO-SP 00000',
 };
 
-const TABS = [
-  'Dashboard', 'Agenda', 'Pacientes', 'Funil', 'Odontograma',
-  'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses', 'Laboratorio',
-  'Automacoes', 'Retorno', 'Convenios', 'Check-in', 'Espera', 'Configuracoes',
-];
-
-const TAB_COMPONENTS: Record<string, React.FC> = {
-  Dashboard:      OdontoDashboard,
-  Agenda:         AgendaTab,
-  Pacientes:      PacientesTab,
-  Funil:          DentalFunnel,
-  Odontograma:    OdontogramaTab,
-  Orcamentos:     OrcamentosTab,
-  Prontuario:     ProntuarioTab,
-  Cobrancas:      BillingDashboard,
-  Repasses:       RepasseDentista,
-  Laboratorio:    LabTab,
-  Automacoes:     AutomationConfig,
-  Retorno:        RetornoTab,
-  Convenios:      ConveniosTab,
-  'Check-in':     CheckinTab,
-  Espera:         EsperaTab,
-  Configuracoes:  DentalSettings,
-};
-
 export default function OdontoScreen() {
-  const [tab, setTab] = useState('Dashboard');
-  const Component = TAB_COMPONENTS[tab] || OdontoDashboard;
+  const [sectionLabel, setSectionLabel] = useState<string>('Painel');
+  const [subTabsBySection, setSubTabsBySection] = useState<Record<string, string>>({});
+
+  const section = useMemo(() => getSection(sectionLabel), [sectionLabel]);
+
+  // Sub-tab ativa: respeita selecao anterior ou volta pra primeira
+  const activeSubTabId = useMemo(() => {
+    if (!section) return null;
+    const saved = subTabsBySection[sectionLabel];
+    if (saved && section.tabs.some((t) => t.id === saved)) return saved;
+    return section.tabs[0]?.id || null;
+  }, [section, sectionLabel, subTabsBySection]);
+
+  const activeSubTab = useMemo(
+    () => section?.tabs.find((t) => t.id === activeSubTabId),
+    [section, activeSubTabId]
+  );
+
+  const Component = activeSubTab?.component || (() => null);
+
+  function handleSubTabChange(id: string) {
+    setSubTabsBySection((prev) => ({ ...prev, [sectionLabel]: id }));
+  }
+
+  // Se a secao tem mais de 1 sub-tab, renderiza OdontoSubNav.
+  // Senao, so o componente direto (Painel tem 1 so).
+  const showSubNav = section && section.tabs.length > 1;
 
   return (
     <VerticalShell
       config={CONFIG}
-      tabs={TABS}
-      activeTab={tab}
-      onTabChange={setTab}
+      tabs={SECTION_LABELS}
+      activeTab={sectionLabel}
+      onTabChange={setSectionLabel}
       kpis={[]}
       flowSteps={[]}
       flowTitle=""
     >
+      {showSubNav && activeSubTabId && (
+        <View style={{ marginHorizontal: -16, marginTop: -16, marginBottom: 12 }}>
+          {/* Margens negativas compensam padding do contentCard do VerticalShell
+              pra SubNav ocupar toda largura visual da secao */}
+          <OdontoSubNav
+            tabs={section!.tabs}
+            activeId={activeSubTabId}
+            onChange={handleSubTabChange}
+          />
+        </View>
+      )}
       <Component />
     </VerticalShell>
   );
