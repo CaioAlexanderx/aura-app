@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
@@ -34,7 +34,7 @@ export function TopSellersCard({ onSeeAll }: Props) {
 
   var top3 = data.ranking.slice(0, 3);
   const webCard = webOnly({
-    background: "rgba(14,18,40,0.55)",
+    background: Glass.card,
     backdropFilter: "blur(14px)",
     WebkitBackdropFilter: "blur(14px)",
   });
@@ -58,7 +58,7 @@ export function TopSellersCard({ onSeeAll }: Props) {
         var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
         var trendArrow = emp.trend_pct > 0 ? "\u25B2" : emp.trend_pct < 0 ? "\u25BC" : "";
         return (
-          <View key={i} style={[s.row, i < top3.length - 1 && { borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)" }]}>
+          <View key={i} style={[s.row, i < top3.length - 1 && { borderBottomWidth: 1, borderBottomColor: Glass.lineFaint }]}>
             <Text style={s.medal}>{emoji}</Text>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.name} numberOfLines={1}>{emp.full_name}</Text>
@@ -78,7 +78,7 @@ export function TopSellersCard({ onSeeAll }: Props) {
 var s = StyleSheet.create({
   card: {
     backgroundColor: Colors.bg3, borderRadius: 20, padding: 18,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1, borderColor: Glass.lineBorderCard,
     marginBottom: 22,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
