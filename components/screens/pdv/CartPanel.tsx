@@ -158,7 +158,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               <Icon name="cart" size={30} color={Colors.violet3} />
             </View>
             <Text style={s.emptyTxt}>Carrinho vazio</Text>
-            <Text style={[s.emptyTxt, { marginTop: 4, fontWeight: "400" }]}>
+            <Text style={[s.emptyTxt, { marginTop: 4, fontWeight: "400", color: Colors.ink3 }]}>
               {emptyCta || "Clique em um produto para adicionar"}
             </Text>
           </View>
@@ -190,8 +190,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             const isActive = activePay === m.key;
             const webChip = webOnly({
               background: isActive ? "rgba(124,58,237,0.22)" : Glass.lineFaint,
-              border: isActive ? "1px solid rgba(124,58,237,0.4)" : "1px solid " + Glass.lineBorderCard,
-              color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink3,
+              border: isActive ? "1px solid rgba(124,58,237,0.5)" : "1px solid " + Glass.lineBorderCard,
+              color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink2,
               transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
               cursor: "pointer",
               boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
@@ -206,7 +206,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                   Platform.OS === "web" ? (webChip as any) : null,
                 ] as any}
               >
-                <Icon name={m.icon as any} size={16} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink3} />
+                <Icon name={m.icon as any} size={16} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
                 <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
               </Pressable>
             );
@@ -227,7 +227,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           </Text>
         </View>
         <View style={[s.sumRow, s.sumRowTotal]}>
-          <Text style={{ fontSize: 13, color: Colors.ink3, fontWeight: "600" }}>Total</Text>
+          <Text style={{ fontSize: 13, color: Colors.ink2, fontWeight: "700" }}>Total</Text>
           <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>
         </View>
 
@@ -443,12 +443,12 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   emptyTxt: {
-    color: Colors.ink3,
+    color: Colors.ink2,
     fontSize: 12,
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    fontWeight: "600",
+    fontWeight: "700",
     textAlign: "center",
   },
   item: {
@@ -548,7 +548,7 @@ const s = StyleSheet.create({
   },
   payLabel: {
     fontSize: 10,
-    color: Colors.ink3,
+    color: Colors.ink2,
     fontWeight: "600",
   },
   sumRow: {
@@ -562,11 +562,11 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Glass.lineSoft,
   },
-  sumK: { fontSize: 12, color: Colors.ink3 },
+  sumK: { fontSize: 12, color: Colors.ink2, fontWeight: "500" },
   sumV: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     color: Colors.ink,
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
   },
   hintsBox: {
