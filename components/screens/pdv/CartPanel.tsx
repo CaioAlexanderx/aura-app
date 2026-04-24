@@ -2,10 +2,11 @@
 // AURA. -- PDV/Caixa · Cart panel (header + body + foot)
 // Violet glass hero with big total, items list with qty controls,
 // payment chips, summary rows, and Limpar/Orçamento/Finalizar CTAs.
+// 24/04 · theme-aware bg + inks (cards legíveis em modo claro e escuro).
 // ============================================================
 import { forwardRef } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt } from "./types";
 
@@ -43,6 +44,13 @@ type Props = {
   headerSubtitle?: string | null;
 };
 
+// Texts over the violet gradient header stay white in both themes — the
+// gradient is dense enough to carry white type in light mode too.
+const HEAD_INK = "#ffffff";
+const HEAD_INK_SOFT = "rgba(255,255,255,0.9)";
+const HEAD_INK_DIM = "rgba(255,255,255,0.55)";
+const HEAD_INK_DIMMER = "rgba(255,255,255,0.45)";
+
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
     orderNumber,
@@ -74,10 +82,10 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         s.cart,
         Platform.OS === "web"
           ? ({
-              background: "rgba(9,12,26,0.55)",
+              background: Glass.cardMid,
               backdropFilter: "blur(20px) saturate(150%)",
               WebkitBackdropFilter: "blur(20px) saturate(150%)",
-              borderLeft: "1px solid rgba(255,255,255,0.06)",
+              borderLeft: "1px solid " + Glass.lineBorderCard,
             } as any)
           : { backgroundColor: Colors.bg2, borderLeftWidth: 1, borderLeftColor: Colors.border },
       ]}
@@ -90,10 +98,10 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           Platform.OS === "web"
             ? ({
                 background:
-                  "linear-gradient(135deg, rgba(124,58,237,0.22), rgba(79,91,213,0.05))",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                  "linear-gradient(135deg, rgba(124,58,237,0.35), rgba(79,91,213,0.15))",
+                borderBottom: "1px solid " + Glass.lineBorderCard,
               } as any)
-            : { backgroundColor: Colors.violetD, borderBottomWidth: 1, borderBottomColor: Colors.border },
+            : { backgroundColor: Colors.violet, borderBottomWidth: 1, borderBottomColor: Colors.border },
         ]}
       >
         {IS_WEB && (
@@ -106,7 +114,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               width: "80%",
               height: "200%",
               background:
-                "radial-gradient(ellipse, rgba(167,139,250,0.35), transparent 60%)",
+                "radial-gradient(ellipse, rgba(167,139,250,0.45), transparent 60%)",
               animation: "caixaHeroShift 12s ease-in-out infinite",
               pointerEvents: "none",
             } as any}
@@ -130,13 +138,13 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           </View>
           <View>
             <Text style={s.metaK}>Desconto</Text>
-            <Text style={[s.metaV, { color: discountAmount > 0 ? Colors.green : "#fff" }]}>
+            <Text style={[s.metaV, { color: discountAmount > 0 ? "#b9f6ca" : HEAD_INK }]}>
               {discountAmount > 0 ? "− " + fmtCurrency(discountAmount) : "R$ 0,00"}
             </Text>
           </View>
           <View>
             <Text style={s.metaK}>Pagamento</Text>
-            <Text style={[s.metaV, { color: Colors.violet3, textTransform: "uppercase" }]}>{activePay}</Text>
+            <Text style={[s.metaV, { color: "#e9d5ff", textTransform: "uppercase" }]}>{activePay}</Text>
           </View>
         </View>
         {headerSubtitle ? <Text style={s.subtitle}>{headerSubtitle}</Text> : null}
@@ -147,7 +155,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         {items.length === 0 ? (
           <View style={s.empty}>
             <View style={s.emptyIco}>
-              <Icon name="cart" size={30} color="#a78bfa" />
+              <Icon name="cart" size={30} color={Colors.violet3} />
             </View>
             <Text style={s.emptyTxt}>Carrinho vazio</Text>
             <Text style={[s.emptyTxt, { marginTop: 4, fontWeight: "400" }]}>
@@ -172,7 +180,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         style={[
           s.foot,
           Platform.OS === "web"
-            ? ({ background: "rgba(5,6,15,0.6)", borderTop: "1px solid rgba(255,255,255,0.06)" } as any)
+            ? ({ background: Glass.cardDeep, borderTop: "1px solid " + Glass.lineBorderCard } as any)
             : { backgroundColor: Colors.bg, borderTopWidth: 1, borderTopColor: Colors.border },
         ]}
       >
@@ -181,9 +189,9 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           {payMethods.map(m => {
             const isActive = activePay === m.key;
             const webChip = webOnly({
-              background: isActive ? "rgba(124,58,237,0.18)" : "rgba(255,255,255,0.03)",
-              border: isActive ? "1px solid rgba(124,58,237,0.4)" : "1px solid rgba(255,255,255,0.07)",
-              color: isActive ? "#fff" : "rgba(170,160,235,0.65)",
+              background: isActive ? "rgba(124,58,237,0.22)" : Glass.lineFaint,
+              border: isActive ? "1px solid rgba(124,58,237,0.4)" : "1px solid " + Glass.lineBorderCard,
+              color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink3,
               transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
               cursor: "pointer",
               boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
@@ -198,8 +206,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                   Platform.OS === "web" ? (webChip as any) : null,
                 ] as any}
               >
-                <Icon name={m.icon as any} size={16} color={isActive ? "#fff" : Colors.ink3} />
-                <Text style={[s.payLabel, isActive && { color: "#fff" }]}>{m.label}</Text>
+                <Icon name={m.icon as any} size={16} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink3} />
+                <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
               </Pressable>
             );
           })}
@@ -359,13 +367,13 @@ const s = StyleSheet.create({
   headLabel: {
     fontSize: 9,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.5)",
+    color: HEAD_INK_DIM,
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
   headOrd: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    color: Colors.violet3,
+    color: "#e9d5ff",
     fontSize: 10,
     letterSpacing: 0.6,
   },
@@ -377,23 +385,23 @@ const s = StyleSheet.create({
   },
   cur: {
     fontSize: 22,
-    color: "#fff",
-    opacity: 0.55,
+    color: HEAD_INK,
+    opacity: 0.65,
     marginRight: 6,
     lineHeight: 44,
     fontWeight: "400",
   },
   totalInt: {
     fontSize: 46,
-    color: "#fff",
-    fontWeight: "600",
+    color: HEAD_INK,
+    fontWeight: "700",
     letterSpacing: -1,
     lineHeight: 48,
   },
   cents: {
     fontSize: 22,
-    color: "#fff",
-    opacity: 0.6,
+    color: HEAD_INK,
+    opacity: 0.7,
     lineHeight: 44,
     fontWeight: "500",
   },
@@ -403,23 +411,23 @@ const s = StyleSheet.create({
     paddingTop: 14,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
+    borderTopColor: "rgba(255,255,255,0.18)",
   },
   metaK: {
     fontSize: 9,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.45)",
+    color: HEAD_INK_DIMMER,
     letterSpacing: 1,
     textTransform: "uppercase",
   },
   metaV: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 12,
-    color: "#fff",
+    color: HEAD_INK,
     fontWeight: "600",
     marginTop: 3,
   },
-  subtitle: { fontSize: 10, color: "rgba(255,255,255,0.45)", marginTop: 10 },
+  subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
   body: { flex: 1 },
   empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
   emptyIco: {
@@ -449,7 +457,7 @@ const s = StyleSheet.create({
     gap: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.04)",
+    borderBottomColor: Glass.lineFaint,
   },
   itemImg: {
     width: 42,
@@ -461,8 +469,10 @@ const s = StyleSheet.create({
   },
   itemLetter: {
     fontSize: 16,
-    color: "rgba(255,255,255,0.9)",
+    color: "#ffffff",
     fontWeight: "700",
+    textShadowColor: "rgba(0,0,0,0.25)" as any,
+    textShadowRadius: Platform.OS === "web" ? 4 : 0 as any,
   },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   itemMeta: {
@@ -477,22 +487,22 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     padding: 2,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: Glass.lineSoft,
     borderRadius: 8,
   },
   qtyBtn: {
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: Glass.lineFaint,
     alignItems: "center",
     justifyContent: "center",
   },
-  qtyBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
   qtyVal: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 13,
-    color: "#fff",
+    color: Colors.ink,
     fontWeight: "700",
     minWidth: 18,
     textAlign: "center",
@@ -550,7 +560,7 @@ const s = StyleSheet.create({
     paddingTop: 10,
     marginTop: 6,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
+    borderTopColor: Glass.lineSoft,
   },
   sumK: { fontSize: 12, color: Colors.ink3 },
   sumV: {
@@ -581,9 +591,9 @@ const s = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: Glass.lineFaint,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: Glass.lineBorderCard,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -596,7 +606,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: Glass.lineFaint,
     borderWidth: 1,
     borderColor: "rgba(124,58,237,0.3)",
   },
