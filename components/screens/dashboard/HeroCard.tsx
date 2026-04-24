@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Sparkline } from "./Sparkline";
 import { IS_WIDE, fmt, webOnly, GRAD } from "./types";
 
@@ -45,7 +45,7 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
   const deltaColor = isPositive ? Colors.green : Colors.red;
 
   const webCard = webOnly({
-    background: "linear-gradient(135deg, rgba(124,58,237,0.20), rgba(79,91,213,0.06))",
+    background: Glass.heroGrad,
     backdropFilter: "blur(18px) saturate(150%)",
     WebkitBackdropFilter: "blur(18px) saturate(150%)",
     boxShadow: "0 20px 50px -20px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
@@ -93,14 +93,14 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
           </View>
 
           <View style={s.valueRow}>
-            <Text style={[s.cur, { color: isPositive ? "#fff" : deltaColor }]}>R$ </Text>
-            <Text style={[s.valueBig, { color: isPositive ? "#fff" : deltaColor }]}>{isPositive ? "" : "-"}{intPart}</Text>
-            <Text style={[s.cents, { color: isPositive ? "#fff" : deltaColor }]}>,{cents}</Text>
+            <Text style={[s.cur, { color: isPositive ? "#fff" : "#ffb4b4" }]}>R$ </Text>
+            <Text style={[s.valueBig, { color: isPositive ? "#fff" : "#ffb4b4" }]}>{isPositive ? "" : "-"}{intPart}</Text>
+            <Text style={[s.cents, { color: isPositive ? "#fff" : "#ffb4b4" }]}>,{cents}</Text>
           </View>
 
           {typeof netDelta === "number" && Math.abs(netDelta) > 0.0001 && (
-            <View style={[s.deltaChip, { backgroundColor: netDelta >= 0 ? "rgba(52,211,153,0.14)" : "rgba(248,113,113,0.14)", borderColor: netDelta >= 0 ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)" }]}>
-              <Text style={{ color: netDelta >= 0 ? Colors.green : Colors.red, fontSize: 11, fontWeight: "700" }}>
+            <View style={[s.deltaChip, { backgroundColor: netDelta >= 0 ? "rgba(52,211,153,0.2)" : "rgba(255,180,180,0.22)", borderColor: netDelta >= 0 ? "rgba(52,211,153,0.4)" : "rgba(255,180,180,0.45)" }]}>
+              <Text style={{ color: netDelta >= 0 ? "#b9f6ca" : "#ffb4b4", fontSize: 11, fontWeight: "700" }}>
                 {netDelta >= 0 ? "+" : ""}{netDelta.toFixed(1)}% vs. mes anterior
               </Text>
             </View>
@@ -122,7 +122,7 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
             {typeof projection === "number" && projection > 0 && (
               <View style={s.metaItem}>
                 <Text style={s.metaK}>Projecao fim do mes</Text>
-                <Text style={[s.metaV, { color: Colors.violet3 }]}>{fmt(projection)}</Text>
+                <Text style={[s.metaV, { color: "#e9d5ff" }]}>{fmt(projection)}</Text>
               </View>
             )}
           </View>
@@ -145,24 +145,27 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
   );
 }
 
+// Hero ink stays WHITE in both themes because Glass.heroGrad is a dense
+// violet gradient in both modes. Keeping white ink preserves visual identity
+// of the "saldo" hero across themes.
 const s = StyleSheet.create({
   hero: {
     borderRadius: 22, padding: IS_WIDE ? 28 : 18,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.14)",
     marginBottom: 24,
   },
   grid: { flexDirection: IS_WIDE ? "row" : "column", gap: 24, alignItems: IS_WIDE ? "center" : "stretch", position: "relative", zIndex: 2 },
   labelRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  labelBar: { width: 20, height: 1, backgroundColor: "rgba(255,255,255,0.3)" },
-  label: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.5)", letterSpacing: 1.6, textTransform: "uppercase" },
+  labelBar: { width: 20, height: 1, backgroundColor: "rgba(255,255,255,0.6)" },
+  label: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.82)", letterSpacing: 1.6, textTransform: "uppercase" },
   valueRow: { flexDirection: "row", alignItems: "baseline", marginTop: 12, marginBottom: 14 },
-  cur: { fontSize: IS_WIDE ? 22 : 16, opacity: 0.55, fontWeight: "500" },
+  cur: { fontSize: IS_WIDE ? 22 : 16, opacity: 0.75, fontWeight: "500" },
   valueBig: { fontSize: IS_WIDE ? 52 : 38, fontWeight: "700", letterSpacing: -1.2, lineHeight: IS_WIDE ? 54 : 40 },
-  cents: { fontSize: IS_WIDE ? 24 : 18, opacity: 0.6, fontWeight: "500" },
+  cents: { fontSize: IS_WIDE ? 24 : 18, opacity: 0.8, fontWeight: "500" },
   deltaChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, marginBottom: 16 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 20, marginTop: 4 },
   metaItem: { gap: 3 },
-  metaK: { fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase" },
-  metaV: { fontSize: 13, color: "#fff", fontWeight: "600" },
+  metaK: { fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.7)", letterSpacing: 1.2, textTransform: "uppercase" },
+  metaV: { fontSize: 13, color: "#fff", fontWeight: "700" },
   sparkWrap: { flex: 1, alignItems: IS_WIDE ? "flex-end" : "flex-start", justifyContent: "center" },
 });
