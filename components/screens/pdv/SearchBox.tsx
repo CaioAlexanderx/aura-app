@@ -3,7 +3,7 @@
 // ============================================================
 import { useEffect, useRef } from "react";
 import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
 
@@ -33,10 +33,10 @@ export function SearchBox({ value, onChange, placeholder }: Props) {
   }, []);
 
   const webBox = webOnly({
-    background: "rgba(14,18,40,0.55)",
+    background: Glass.card,
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
-    border: "1px solid rgba(255,255,255,0.07)",
+    border: "1px solid " + Glass.lineBorderCard,
   });
 
   return (
@@ -79,8 +79,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    color: "rgba(170,160,235,0.6)",
+    backgroundColor: Glass.lineFaint,
+    color: Colors.ink3,
   },
 });
 
