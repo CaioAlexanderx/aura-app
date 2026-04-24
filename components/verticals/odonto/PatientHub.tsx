@@ -1,18 +1,16 @@
 // ============================================================
 // AURA. — PatientHub (W1-01)
-// Drill-down do paciente com sub-tabs internas.
-// Substitui o pattern antigo de ter que navegar entre 5 tabs
-// diferentes pra ver dados de UM paciente.
+// Drill-down do paciente com sub-tabs internas wiradas.
 //
-// Sub-tabs:
-//   Dados        - cadastro, contato, plano, ultimas visitas
-//   Anamnese     - AnamneseWizard wirado (GET/PUT real)
-//   Odontograma  - OdontogramaSVG por patient_id (TODO)
-//   Periograma   - Periograma (TODO wire patientId)
-//   Prontuario   - ProntuarioTimeline filtrada (TODO)
-//   Imagens      - ClinicalImages (TODO endpoint R2 upload - W1-02)
-//   Orcamentos   - filtro de orcamentos por customer_id (TODO)
-//   Cobrancas    - filtro de cobrancas por customer_id (TODO)
+// Sub-tabs (TODAS WIRADAS em W1-01 fase 2, 24/04):
+//   Dados        - contato, identificacao, WhatsApp 1-click
+//   Anamnese     - AnamneseWizard + GET/PUT
+//   Odontograma  - OdontogramaSVG + chart GET/POST
+//   Periograma   - Periograma base (TODO: load/save por patientId)
+//   Prontuario   - ProntuarioTimeline filtrado por customer_id
+//   Imagens      - ClinicalImages base (TODO: W1-02 upload R2)
+//   Orcamentos   - dental/treatment-plans?customer_id={pid}
+//   Cobrancas    - dental/billing/patient/:pid (agregados + parcelas)
 //   Fichas       - FichaEspecialidade
 //
 // Renderizado como Modal full-screen sobreposto a OdontoScreen.
@@ -32,6 +30,8 @@ import { AnamneseWizard, type AnamneseData } from '@/components/verticals/odonto
 import { ClinicalImages } from '@/components/verticals/odonto/ClinicalImages';
 import { Periograma } from '@/components/verticals/odonto/Periograma';
 import { FichaEspecialidade } from '@/components/verticals/odonto/FichaEspecialidade';
+import { OdontogramaSVG } from '@/components/verticals/odonto/OdontogramaSVG';
+import { ProntuarioTimeline } from '@/components/verticals/odonto/ProntuarioTimeline';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -53,7 +53,6 @@ interface Props {
   visible: boolean;
   patient: PatientLite | null;
   onClose: () => void;
-  /** Callback opcional pra editar dados do paciente */
   onEdit?: (patient: PatientLite) => void;
 }
 
@@ -71,6 +70,71 @@ const HUB_TABS: SubTab[] = [
   { id: 'cobrancas',   label: 'Cobrancas',     component: () => null },
   { id: 'fichas',      label: 'Fichas',        component: () => null },
 ];
+
+// ────────────────────────────────────────────────────────────
+// Helpers formatacao
+// ────────────────────────────────────────────────────────────
+function formatBRL(v: number): string {
+  if (!isFinite(v)) return '0,00';
+  const fixed = v.toFixed(2);
+  const [intPart, decPart] = fixed.split('.');
+  const withSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${withSep},${decPart}`;
+}
+
+function formatDateBR(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('pt-BR');
+  } catch {
+    return '—';
+  }
+}
+
+function planStatusBg(status: string): string {
+  switch (status) {
+    case 'aprovado':
+    case 'concluido':
+      return 'rgba(16,185,129,0.15)';
+    case 'recusado':
+    case 'cancelado':
+      return 'rgba(239,68,68,0.15)';
+    case 'enviado':
+    case 'em_tratamento':
+      return 'rgba(6,182,212,0.15)';
+    default:
+      return 'rgba(148,163,184,0.15)';
+  }
+}
+
+function planStatusColor(status: string): string {
+  switch (status) {
+    case 'aprovado':
+    case 'concluido':
+      return '#10B981';
+    case 'recusado':
+    case 'cancelado':
+      return '#EF4444';
+    case 'enviado':
+    case 'em_tratamento':
+      return '#06B6D4';
+    default:
+      return '#94A3B8';
+  }
+}
+
+function planStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    rascunho:      'Rascunho',
+    enviado:       'Enviado',
+    aprovado:      'Aprovado',
+    recusado:      'Recusado',
+    em_tratamento: 'Em tratamento',
+    concluido:     'Concluido',
+    cancelado:     'Cancelado',
+  };
+  return map[status] || status;
+}
 
 // ────────────────────────────────────────────────────────────
 // Sub-tab renderers
@@ -120,9 +184,7 @@ function DataTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// AnamneseTab (W1-01): GET/PUT wirado via useQuery + useMutation
-// ────────────────────────────────────────────────────────────
+// ── Anamnese (wirado em fase 1) ─────────────────────────────
 function AnamneseTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -150,13 +212,8 @@ function AnamneseTab({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) {
-    return (
-      <View style={[styles.tabContent, { alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator color="#06B6D4" />
-      </View>
-    );
+    return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
   }
-
   if (error) {
     return (
       <View style={styles.placeholderWrap}>
@@ -168,7 +225,6 @@ function AnamneseTab({ patient }: { patient: PatientLite }) {
     );
   }
 
-  // data.anamnesis e null na primeira vez (wizard comeca vazio)
   const initial = (data as any)?.anamnesis as Partial<AnamneseData> | null;
   const updatedAt = (data as any)?.updated_at;
 
@@ -177,7 +233,7 @@ function AnamneseTab({ patient }: { patient: PatientLite }) {
       {updatedAt && (
         <View style={styles.infoBadge}>
           <Text style={styles.infoBadgeText}>
-            Ultima atualizacao: {new Date(updatedAt).toLocaleDateString('pt-BR')}
+            Ultima atualizacao: {formatDateBR(updatedAt)}
           </Text>
         </View>
       )}
@@ -195,55 +251,331 @@ function AnamneseTab({ patient }: { patient: PatientLite }) {
   );
 }
 
+// ── Odontograma (wirado em fase 2) ──────────────────────────
 function OdontogramaTabContent({ patient }: { patient: PatientLite }) {
-  return <Placeholder title="Odontograma" message={`Odontograma de ${patient.name} sera wirado em W1-01 (fase 2).`} />;
+  const cid = useAuthStore().company?.id;
+  const qc = useQueryClient();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dental-chart', cid, patient.id],
+    queryFn: () => request(`/companies/${cid}/dental/patients/${patient.id}/chart`),
+    enabled: !!cid && !!patient.id,
+    staleTime: 15000,
+  });
+
+  const statusMut = useMutation({
+    mutationFn: (p: { tooth: number; status: string }) =>
+      request(`/companies/${cid}/dental/patients/${patient.id}/chart`, {
+        method: 'POST',
+        body: { tooth_number: p.tooth, status: p.status },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dental-chart', cid, patient.id] });
+    },
+    onError: (err: any) => {
+      Alert.alert('Erro', err?.message || 'Nao foi possivel atualizar o dente');
+    },
+  });
+
+  if (isLoading) {
+    return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
+  }
+  if (error) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+        <Text style={styles.placeholderMessage}>
+          {(error as any)?.message || 'Nao foi possivel carregar o odontograma.'}
+        </Text>
+      </View>
+    );
+  }
+
+  // Shape do backend: { teeth: [{ tooth, faces: [{ face, status }] }] }
+  // Shape do OdontogramaSVG: { number, status, faces: { M, D, O, V, L } }
+  const teethRaw = ((data as any)?.teeth) || [];
+  const teeth = teethRaw.map((t: any) => {
+    const faces: any = { M: null, D: null, O: null, V: null, L: null };
+    (t.faces || []).forEach((f: any) => {
+      if (f.face && faces.hasOwnProperty(f.face)) faces[f.face] = f.status || null;
+    });
+    return {
+      number: t.tooth,
+      status: (t.faces && t.faces[0]?.status) || 'higido',
+      faces,
+    };
+  });
+
+  return (
+    <ScrollView style={styles.tabContent}>
+      <OdontogramaSVG
+        teeth={teeth}
+        onStatusChange={(toothNum: number, status: string) =>
+          statusMut.mutate({ tooth: toothNum, status })
+        }
+      />
+    </ScrollView>
+  );
 }
 
-function PeriogramaTab({ patient }: { patient: PatientLite }) {
+// ── Periograma (base wirada, load/save TODO fase 3) ─────────
+function PeriogramaTab({ patient: _patient }: { patient: PatientLite }) {
   return (
-    <View style={styles.tabContent}>
+    <ScrollView style={styles.tabContent}>
       <Periograma />
-    </View>
+    </ScrollView>
   );
 }
 
+// ── Prontuario (wirado em fase 2) ───────────────────────────
 function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
-  return <Placeholder title="Prontuario" message={`Timeline filtrada de ${patient.name} - W1-01 (fase 2).`} />;
+  const cid = useAuthStore().company?.id;
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dental-prescriptions', cid, patient.id],
+    queryFn: () => request(`/companies/${cid}/dental/patients/${patient.id}/prescriptions`),
+    enabled: !!cid && !!patient.id,
+    staleTime: 15000,
+  });
+
+  if (isLoading) {
+    return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
+  }
+  if (error) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+        <Text style={styles.placeholderMessage}>
+          {(error as any)?.message || 'Nao foi possivel carregar o prontuario.'}
+        </Text>
+      </View>
+    );
+  }
+
+  const entries = (((data as any)?.prescriptions) || []).map((p: any) => ({
+    id:           p.id,
+    type:         p.doc_type || 'receituario',
+    date:         p.issued_at,
+    description:  p.content,
+    professional: '',
+  }));
+
+  if (!entries.length) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Sem registros</Text>
+        <Text style={styles.placeholderMessage}>
+          Nenhuma prescricao, atestado ou receituario registrado ate o momento.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.tabContent}>
+      <ProntuarioTimeline entries={entries} patientName={patient.full_name || patient.name} />
+    </ScrollView>
+  );
 }
 
-function ImagensTab({ patient }: { patient: PatientLite }) {
+// ── Imagens (base, TODO W1-02 upload R2) ────────────────────
+function ImagensTab({ patient: _patient }: { patient: PatientLite }) {
   return (
-    <View style={styles.tabContent}>
+    <ScrollView style={styles.tabContent}>
       <ClinicalImages />
-    </View>
+    </ScrollView>
   );
 }
 
+// ── Orcamentos (wirado em fase 2) ───────────────────────────
 function OrcamentosTabContent({ patient }: { patient: PatientLite }) {
-  return <Placeholder title="Orcamentos" message={`Orcamentos de ${patient.name} - filtro a wirar.`} />;
-}
+  const cid = useAuthStore().company?.id;
 
-function CobrancasTabContent({ patient }: { patient: PatientLite }) {
-  return <Placeholder title="Cobrancas" message={`Parcelas e cobrancas de ${patient.name} - filtro a wirar.`} />;
-}
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dental-plans-patient', cid, patient.id],
+    queryFn: () => request(`/companies/${cid}/dental/treatment-plans?customer_id=${patient.id}`),
+    enabled: !!cid && !!patient.id,
+    staleTime: 30000,
+  });
 
-function FichasTab({ patient }: { patient: PatientLite }) {
+  if (isLoading) {
+    return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
+  }
+  if (error) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+        <Text style={styles.placeholderMessage}>
+          {(error as any)?.message || 'Nao foi possivel carregar os orcamentos.'}
+        </Text>
+      </View>
+    );
+  }
+
+  const plans = ((data as any)?.plans) || [];
+
+  if (!plans.length) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Sem orcamentos</Text>
+        <Text style={styles.placeholderMessage}>
+          Nenhum orcamento criado ate o momento. Crie um novo pela aba Financeiro {'>'} Orcamentos.
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.tabContent}>
-      <FichaEspecialidade />
-    </View>
+    <ScrollView style={styles.tabContent}>
+      {plans.map((p: any) => {
+        const total = parseFloat(p.total) || 0;
+        const itemsCount = parseInt(p.items_count) || 0;
+        const itemsDone = parseInt(p.items_done) || 0;
+        return (
+          <View key={p.id} style={styles.planCard}>
+            <View style={styles.planCardHeader}>
+              <Text style={styles.planNumber}>#{p.plan_number || p.id.slice(0, 8)}</Text>
+              <View style={[styles.statusChip, { backgroundColor: planStatusBg(p.status) }]}>
+                <Text style={[styles.statusChipText, { color: planStatusColor(p.status) }]}>
+                  {planStatusLabel(p.status)}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.planTotal}>R$ {formatBRL(total)}</Text>
+            <Text style={styles.planMeta}>
+              {itemsCount} procedimento{itemsCount !== 1 ? 's' : ''}
+              {itemsCount > 0 && ` • ${itemsDone} concluido${itemsDone !== 1 ? 's' : ''}`}
+            </Text>
+            <Text style={styles.planDate}>
+              Criado em {formatDateBR(p.created_at)}
+              {p.valid_until && ` • Validade ${formatDateBR(p.valid_until)}`}
+            </Text>
+          </View>
+        );
+      })}
+    </ScrollView>
   );
 }
 
-function Placeholder({ title, message }: { title: string; message: string }) {
+// ── Cobrancas (wirado em fase 2) ────────────────────────────
+function CobrancasTabContent({ patient }: { patient: PatientLite }) {
+  const cid = useAuthStore().company?.id;
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dental-billing-patient', cid, patient.id],
+    queryFn: () => request(`/companies/${cid}/dental/billing/patient/${patient.id}`),
+    enabled: !!cid && !!patient.id,
+    staleTime: 30000,
+  });
+
+  if (isLoading) {
+    return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
+  }
+  if (error) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+        <Text style={styles.placeholderMessage}>
+          {(error as any)?.message || 'Nao foi possivel carregar as cobrancas.'}
+        </Text>
+      </View>
+    );
+  }
+
+  const installments = ((data as any)?.installments) || [];
+  const totalPending = parseFloat((data as any)?.total_pending) || 0;
+  const totalOverdue = parseFloat((data as any)?.total_overdue) || 0;
+  const totalPaid    = parseFloat((data as any)?.total_paid)    || 0;
+
+  if (!installments.length) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Sem parcelas</Text>
+        <Text style={styles.placeholderMessage}>
+          Nenhuma parcela registrada. Parcelas sao geradas quando um orcamento e aprovado.
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.placeholderWrap}>
-      <Text style={styles.placeholderTitle}>{title}</Text>
-      <Text style={styles.placeholderMessage}>{message}</Text>
-      <Text style={styles.placeholderHint}>
-        Esta sub-tab esta no backlog. Veja docs/ODT_BACKLOG_V2.md.
-      </Text>
-    </View>
+    <ScrollView style={styles.tabContent}>
+      {/* Summary */}
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Em aberto</Text>
+          <Text style={[styles.summaryValue, { color: '#F59E0B' }]}>
+            R$ {formatBRL(totalPending)}
+          </Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Vencido</Text>
+          <Text style={[styles.summaryValue, { color: '#EF4444' }]}>
+            R$ {formatBRL(totalOverdue)}
+          </Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Pago</Text>
+          <Text style={[styles.summaryValue, { color: '#10B981' }]}>
+            R$ {formatBRL(totalPaid)}
+          </Text>
+        </View>
+      </View>
+
+      {/* Lista de parcelas */}
+      {installments.map((p: any) => {
+        const isPaid = p.status === 'paid';
+        const daysOverdue = parseInt(p.days_overdue) || 0;
+        const isOverdue = !isPaid && daysOverdue > 0;
+        const amount = parseFloat(p.amount) || 0;
+
+        let dateText = '';
+        if (isPaid) {
+          dateText = `Pago em ${formatDateBR(p.paid_at)}`;
+        } else if (isOverdue) {
+          dateText = `Venceu ha ${daysOverdue} dia${daysOverdue !== 1 ? 's' : ''} (${formatDateBR(p.due_date)})`;
+        } else {
+          dateText = `Vence em ${formatDateBR(p.due_date)}`;
+        }
+
+        return (
+          <View
+            key={p.payment_id}
+            style={[
+              styles.installmentCard,
+              isOverdue && styles.installmentCardOverdue,
+              isPaid && styles.installmentCardPaid,
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.installmentNumber}>
+                Parcela {p.installment_number}
+                {p.plan_number ? ` • Orc. #${p.plan_number}` : ''}
+              </Text>
+              <Text style={styles.installmentDate}>{dateText}</Text>
+            </View>
+            <Text
+              style={[
+                styles.installmentAmount,
+                isPaid && { color: '#10B981' },
+                isOverdue && { color: '#EF4444' },
+              ]}
+            >
+              R$ {formatBRL(amount)}
+            </Text>
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ── Fichas ──────────────────────────────────────────────────
+function FichasTab({ patient: _patient }: { patient: PatientLite }) {
+  return (
+    <ScrollView style={styles.tabContent}>
+      <FichaEspecialidade />
+    </ScrollView>
   );
 }
 
@@ -351,9 +683,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  headerInfo: {
-    flex: 1,
-  },
+  headerInfo: { flex: 1 },
   headerName: {
     color: '#FFFFFF',
     fontSize: 16,
@@ -379,16 +709,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  content: {
-    flex: 1,
-  },
+  content: { flex: 1 },
   tabContent: {
     flex: 1,
     padding: 16,
   },
-  dataSection: {
-    marginBottom: 20,
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
   },
+
+  // DataTab
+  dataSection: { marginBottom: 20 },
   sectionTitle: {
     color: '#94A3B8',
     fontSize: 11,
@@ -430,6 +764,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+
+  // Anamnese
   infoBadge: {
     marginBottom: 12,
     padding: 8,
@@ -456,6 +792,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+
+  // Placeholder states (vazio ou erro)
   placeholderWrap: {
     flex: 1,
     padding: 32,
@@ -475,10 +813,113 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
   },
-  placeholderHint: {
+
+  // Orcamentos (plans)
+  planCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 0.5,
+    borderColor: '#334155',
+  },
+  planCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  planNumber: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  planTotal: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginVertical: 4,
+  },
+  planMeta: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  planDate: {
     color: '#64748B',
     fontSize: 11,
-    fontStyle: 'italic',
+    marginTop: 4,
+  },
+
+  // Cobrancas (summary + installments)
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: '#1E293B',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: '#334155',
+  },
+  summaryLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  installmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 0.5,
+    borderColor: '#334155',
+    gap: 10,
+  },
+  installmentCardOverdue: {
+    borderColor: 'rgba(239,68,68,0.4)',
+    backgroundColor: 'rgba(239,68,68,0.06)',
+  },
+  installmentCardPaid: {
+    opacity: 0.6,
+  },
+  installmentNumber: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  installmentDate: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  installmentAmount: {
+    color: '#E2E8F0',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 
