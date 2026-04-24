@@ -48,8 +48,8 @@ type Props = {
 // gradient is dense enough to carry white type in light mode too.
 const HEAD_INK = "#ffffff";
 const HEAD_INK_SOFT = "rgba(255,255,255,0.9)";
-const HEAD_INK_DIM = "rgba(255,255,255,0.55)";
-const HEAD_INK_DIMMER = "rgba(255,255,255,0.45)";
+const HEAD_INK_DIM = "rgba(255,255,255,0.65)";
+const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
@@ -97,8 +97,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           s.head,
           Platform.OS === "web"
             ? ({
-                background:
-                  "linear-gradient(135deg, rgba(124,58,237,0.35), rgba(79,91,213,0.15))",
+                background: Glass.cartHeadGrad,
                 borderBottom: "1px solid " + Glass.lineBorderCard,
               } as any)
             : { backgroundColor: Colors.violet, borderBottomWidth: 1, borderBottomColor: Colors.border },
@@ -386,7 +385,7 @@ const s = StyleSheet.create({
   cur: {
     fontSize: 22,
     color: HEAD_INK,
-    opacity: 0.65,
+    opacity: 0.75,
     marginRight: 6,
     lineHeight: 44,
     fontWeight: "400",
@@ -401,7 +400,7 @@ const s = StyleSheet.create({
   cents: {
     fontSize: 22,
     color: HEAD_INK,
-    opacity: 0.7,
+    opacity: 0.8,
     lineHeight: 44,
     fontWeight: "500",
   },
@@ -411,7 +410,7 @@ const s = StyleSheet.create({
     paddingTop: 14,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.18)",
+    borderTopColor: "rgba(255,255,255,0.22)",
   },
   metaK: {
     fontSize: 9,
@@ -424,7 +423,7 @@ const s = StyleSheet.create({
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 12,
     color: HEAD_INK,
-    fontWeight: "600",
+    fontWeight: "700",
     marginTop: 3,
   },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
