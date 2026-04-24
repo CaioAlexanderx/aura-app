@@ -9,12 +9,16 @@ import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
 import { AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab } from '@/components/verticals/odonto/OdontoClinicTabs';
 import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab } from '@/components/verticals/odonto/OdontoAdminTabs';
 import { DentalSettings } from '@/components/verticals/odonto/DentalSettings';
+import { LabTab } from '@/components/verticals/odonto/LabTab';
+import { RetornoTab } from '@/components/verticals/odonto/RetornoTab';
 import type { VerticalConfig } from '@/components/verticals/VerticalShell';
 
 // ============================================================
 // OdontoScreen — Orchestrator for the Odontologia vertical
-// 14 tabs wired to real API-connected components.
-// D-FIX #1+#6: aba "Configuracoes" adicionada (cadeiras + dentistas)
+// 16 tabs wired to real API-connected components.
+// ODT-15 (23/04): +2 tabs "Laboratorio" e "Retorno" da Camada 4b.
+//   - Laboratorio: pedidos a laboratorios externos (proteses/trabalhos)
+//   - Retorno: recall de pacientes + historico de faltas (2 sub-tabs)
 // ============================================================
 
 const CONFIG: VerticalConfig = {
@@ -27,8 +31,8 @@ const CONFIG: VerticalConfig = {
 
 const TABS = [
   'Dashboard', 'Agenda', 'Pacientes', 'Funil', 'Odontograma',
-  'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses',
-  'Automacoes', 'Convenios', 'Check-in', 'Espera', 'Configuracoes',
+  'Orcamentos', 'Prontuario', 'Cobrancas', 'Repasses', 'Laboratorio',
+  'Automacoes', 'Retorno', 'Convenios', 'Check-in', 'Espera', 'Configuracoes',
 ];
 
 const TAB_COMPONENTS: Record<string, React.FC> = {
@@ -41,7 +45,9 @@ const TAB_COMPONENTS: Record<string, React.FC> = {
   Prontuario:     ProntuarioTab,
   Cobrancas:      BillingDashboard,
   Repasses:       RepasseDentista,
+  Laboratorio:    LabTab,
   Automacoes:     AutomationConfig,
+  Retorno:        RetornoTab,
   Convenios:      ConveniosTab,
   'Check-in':     CheckinTab,
   Espera:         EsperaTab,
