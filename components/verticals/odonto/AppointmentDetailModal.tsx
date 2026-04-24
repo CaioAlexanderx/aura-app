@@ -3,10 +3,12 @@
 // Acoes: Confirmar, Iniciar atendimento, Concluir, Cancelar
 // PATCH /companies/:id/dental/appointments/:aid
 //
-// W1-04: botao "Coletar assinatura" adicional quando status =
-// em_atendimento. Alternativa a "Concluir consulta" — paciente
-// assina no proprio celular via QR/WhatsApp, WS handler do BE
-// transiciona automaticamente pra concluido.
+// W1-04: botao "Coletar assinatura" visivel em todos os status
+// nao-terminais (qualquer coisa exceto concluido/cancelado/faltou).
+// Faz sentido pedir TCLE/assinatura na chegada (status agendado),
+// confirmacao (confirmado), aprovado, em avaliacao, ou durante o
+// atendimento. Apos coletar, WS handler do BE transiciona pra
+// concluido automaticamente.
 // ============================================================
 import { useState } from "react";
 import { Modal, View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
@@ -34,6 +36,9 @@ const STATUS_LABELS: Record<string, string> = {
   confirmado: "Confirmado",
 };
 
+// Status terminais — botao de assinatura nao aparece nesses
+const TERMINAL_STATUSES = new Set(["concluido", "cancelado", "faltou"]);
+
 export function AppointmentDetailModal({ visible, appointmentId, onClose }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -59,6 +64,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
 
   const appt = (data as any)?.appointment;
   const status = appt?.status || "agendado";
+  const canSign = !TERMINAL_STATUSES.has(status);
 
   function canTransitionTo(target: string): boolean {
     const transitions: Record<string, string[]> = {
@@ -141,8 +147,8 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                   {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Iniciar atendimento</Text>}
                 </Pressable>
               )}
-              {/* W1-04: coletar assinatura e alternativa a concluir diretamente */}
-              {status === "em_atendimento" && (
+              {/* W1-04: assinatura disponivel em todos status nao-terminais */}
+              {canSign && (
                 <Pressable
                   onPress={() => setSignatureOpen(true)}
                   style={[s.btn, s.btnSignature]}
@@ -162,7 +168,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                   <Text style={s.btnDangerText}>Cancelar</Text>
                 </Pressable>
               )}
-              {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && status !== "em_atendimento" && (
+              {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && !canSign && (
                 <Pressable onPress={onClose} style={[s.btn, s.btnGhost]}>
                   <Text style={s.btnGhostText}>Fechar</Text>
                 </Pressable>
