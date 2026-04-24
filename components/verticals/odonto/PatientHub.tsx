@@ -1,17 +1,17 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 FECHADO - fase 3 completa)
-// Drill-down do paciente com sub-tabs internas wiradas.
+// AURA. — PatientHub (W1-01 FECHADO + W1-02 imagens R2)
+// Drill-down do paciente com 9/9 sub-tabs totalmente wiradas.
 //
-// Sub-tabs (9/9 TODAS WIRADAS):
+// Sub-tabs:
 //   Dados        - contato, identificacao, WhatsApp 1-click
-//   Anamnese     - AnamneseWizard + GET/PUT (fase 1)
-//   Odontograma  - OdontogramaSVG + chart GET/POST (fase 2)
-//   Periograma   - Periograma + GET/POST + AddPerioExamModal (fase 3)
-//   Prontuario   - ProntuarioTimeline filtrado (fase 2)
-//   Imagens      - ClinicalImages base (TODO W1-02 upload R2)
-//   Orcamentos   - treatment-plans?customer_id filter (fase 2)
-//   Cobrancas    - billing/patient/:pid (fase 2)
-//   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal (fase 3)
+//   Anamnese     - AnamneseWizard + GET/PUT
+//   Odontograma  - OdontogramaSVG + chart GET/POST
+//   Periograma   - Periograma + GET/POST + AddPerioExamModal
+//   Prontuario   - ProntuarioTimeline filtrado
+//   Imagens      - ClinicalImages + GET/POST/DELETE + AddClinicalImageModal (W1-02)
+//   Orcamentos   - treatment-plans?customer_id filter
+//   Cobrancas    - billing/patient/:pid
+//   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal
 //
 // Renderizado como Modal full-screen sobreposto a OdontoScreen.
 // ============================================================
@@ -34,6 +34,7 @@ import { OdontogramaSVG } from '@/components/verticals/odonto/OdontogramaSVG';
 import { ProntuarioTimeline } from '@/components/verticals/odonto/ProntuarioTimeline';
 import { AddPerioExamModal } from '@/components/verticals/odonto/AddPerioExamModal';
 import { AddSpecialtyFormModal } from '@/components/verticals/odonto/AddSpecialtyFormModal';
+import { AddClinicalImageModal } from '@/components/verticals/odonto/AddClinicalImageModal';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ const HUB_TABS: SubTab[] = [
   { id: 'odontograma', label: 'Odontograma',   component: () => null },
   { id: 'periograma',  label: 'Periograma',    component: () => null, badge: 'novo' },
   { id: 'prontuario',  label: 'Prontuario',    component: () => null },
-  { id: 'imagens',     label: 'Imagens',       component: () => null, badge: 'beta' },
+  { id: 'imagens',     label: 'Imagens',       component: () => null },
   { id: 'orcamentos',  label: 'Orcamentos',    component: () => null },
   { id: 'cobrancas',   label: 'Cobrancas',     component: () => null },
   { id: 'fichas',      label: 'Fichas',        component: () => null },
@@ -289,7 +290,7 @@ function OdontogramaTabContent({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Periograma (fase 3 — WIRADO) ────────────────────────────
+// ── Periograma (fase 3) ─────────────────────────────────────
 function PeriogramaTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -399,9 +400,95 @@ function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Imagens (base, TODO W1-02 upload R2) ────────────────────
-function ImagensTab({ patient: _patient }: { patient: PatientLite }) {
-  return <ScrollView style={styles.tabContent}><ClinicalImages /></ScrollView>;
+// ── Imagens (W1-02 WIRADA) ──────────────────────────────────
+function ImagensTab({ patient }: { patient: PatientLite }) {
+  const cid = useAuthStore().company?.id;
+  const qc = useQueryClient();
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dental-images', cid, patient.id],
+    queryFn: () => request(`/companies/${cid}/dental/patients/${patient.id}/images`),
+    enabled: !!cid && !!patient.id,
+    staleTime: 30000,
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (imageId: string) =>
+      request(`/companies/${cid}/dental/images/${imageId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dental-images', cid, patient.id] });
+    },
+    onError: (err: any) => {
+      Alert.alert('Erro', err?.message || 'Nao foi possivel excluir a imagem.');
+    },
+  });
+
+  if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
+  if (error) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+        <Text style={styles.placeholderMessage}>
+          {(error as any)?.message || 'Nao foi possivel carregar as imagens.'}
+        </Text>
+      </View>
+    );
+  }
+
+  const images = (((data as any)?.images) || []).map((i: any) => ({
+    id:            i.id,
+    url:           i.url,
+    thumbnail_url: i.thumbnail_url || i.url,
+    tooth_number:  i.tooth_number,
+    image_type:    i.image_type,
+    description:   i.description,
+    taken_at:      i.taken_at,
+    uploaded_at:   i.created_at || i.uploaded_at,
+  }));
+
+  function handleImagePress(img: any) {
+    // Abre URL no browser/sistema — usuario ve a imagem completa
+    Linking.openURL(img.url).catch(() => {
+      Alert.alert('Erro', 'Nao foi possivel abrir a imagem.');
+    });
+  }
+
+  function handleDelete(imageId: string) {
+    Alert.alert(
+      'Excluir imagem?',
+      'Esta acao nao pode ser desfeita. O arquivo sera removido do armazenamento.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => deleteMut.mutate(imageId),
+        },
+      ]
+    );
+  }
+
+  return (
+    <>
+      <ScrollView style={styles.tabContent}>
+        <ClinicalImages
+          images={images}
+          patientName={patient.full_name || patient.name}
+          onUpload={() => setShowAddModal(true)}
+          onImagePress={handleImagePress}
+          onDelete={handleDelete}
+        />
+      </ScrollView>
+      <AddClinicalImageModal
+        visible={showAddModal}
+        patientId={patient.id}
+        patientName={patient.full_name || patient.name}
+        onClose={() => setShowAddModal(false)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ['dental-images', cid, patient.id] })}
+      />
+    </>
+  );
 }
 
 // ── Orcamentos (fase 2) ─────────────────────────────────────
@@ -571,7 +658,7 @@ function CobrancasTabContent({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Fichas (fase 3 — WIRADO) ────────────────────────────────
+// ── Fichas (fase 3) ─────────────────────────────────────────
 function FichasTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
