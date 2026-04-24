@@ -2,6 +2,10 @@
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
 // D-UNIFY + agenda Dia/Semana/Mes com navegacao prev/next.
 // W1-01: PacientesTab agora abre PatientHub drill-down ao clicar paciente.
+// W1-04 fix: removido onNewAppointment passado ao AgendaDental — o botao
+//            "Agendar" violeta no header do AgendaTab ja faz a mesma coisa
+//            e fica visivel em todas as views (dia/semana/mes). Botao
+//            ciano interno do AgendaDental era redundante.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -153,7 +157,6 @@ export function AgendaTab() {
               appointments={appointments}
               chairs={chairs}
               date={anchorDate}
-              onNewAppointment={handleNewAppointment}
               onAppointmentPress={(a) => setDetailId(a.id)}
               onSlotPress={handleSlotPressDay}
             />
