@@ -2,10 +2,12 @@
 // AURA. -- PDV/Caixa · Action Toolbar (4 cards)
 // Scanner · Vendedora · Cliente · Cupom
 // Each card follows the Claude Design "act-btn" pattern from the mockup.
+// 24/04 · theme-aware glass bg + dropdown z-index hardening (popovers
+// agora ficam acima dos cards de produto em ambos os temas).
 // ============================================================
 import { useState, useRef, useEffect } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, ScrollView } from "react-native";
-import { Colors } from "@/constants/colors";
+import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
+import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ScannerInput } from "@/components/ScannerInput";
 import { IS_WEB, webOnly } from "./types";
@@ -27,8 +29,8 @@ function ActCard({
   accent?: string;
 }) {
   const webBox = webOnly({
-    background: active ? "rgba(124,58,237,0.14)" : "rgba(14,18,40,0.55)",
-    border: active ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.07)",
+    background: active ? "rgba(124,58,237,0.14)" : Glass.card,
+    border: active ? "1px solid rgba(124,58,237,0.45)" : "1px solid " + Glass.lineBorderCard,
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
     boxShadow: active ? "0 6px 18px -6px rgba(124,58,237,0.5)" : "none",
@@ -77,7 +79,7 @@ function ActBody({ k, v, isActive, isEmpty }: { k: string; v: string; isActive?:
   return (
     <View style={s.actBody}>
       <Text style={s.actK}>{k}</Text>
-      <Text numberOfLines={1} style={[s.actV, isEmpty && { color: Colors.ink3, fontWeight: "500" }, isActive && { color: "#fff" }]}>
+      <Text numberOfLines={1} style={[s.actV, isEmpty && { color: Colors.ink3, fontWeight: "500" }, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>
         {v}
       </Text>
     </View>
@@ -86,10 +88,10 @@ function ActBody({ k, v, isActive, isEmpty }: { k: string; v: string; isActive?:
 
 function ActIco({ active, children }: { active?: boolean; children: React.ReactNode }) {
   const webBox = webOnly({
-    background: active ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(109,40,217,0.2))" : "rgba(255,255,255,0.04)",
+    background: active ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(109,40,217,0.2))" : Glass.lineFaint,
     border: active ? "1px solid rgba(167,139,250,0.35)" : "none",
   });
-  return <View style={[s.actIco, Platform.OS === "web" ? (webBox as any) : { backgroundColor: active ? Colors.violetD : "rgba(255,255,255,0.04)" }] as any}>{children}</View>;
+  return <View style={[s.actIco, Platform.OS === "web" ? (webBox as any) : { backgroundColor: active ? Colors.violetD : Glass.lineFaint }] as any}>{children}</View>;
 }
 
 function Shortcut({ k }: { k: string }) {
@@ -127,11 +129,15 @@ export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
 
   const active = !!lastCode || scanning;
 
+  // Quando aberto, promove o z-index do container pra ficar acima das irmas
+  // (product grid com transform cria stacking context que conflita).
+  const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
+
   return (
-    <View style={{ position: "relative" }} ref={ref as any}>
+    <View style={wrapStyle} ref={ref as any}>
       <ActCard active={active} empty={!active} scanning={scanning} onClick={() => setOpen(o => !o)}>
         <ActIco active={active}>
-          <Icon name="barcode" size={18} color={active ? "#a78bfa" : "#a0a0b8"} />
+          <Icon name="barcode" size={18} color={active ? "#a78bfa" : Colors.ink3} />
         </ActIco>
         <ActBody k="Leitor · código de barras" v={scanning ? "Escaneando…" : (lastCode || "Aponte ou digite")} isActive={active} isEmpty={!active} />
         <Shortcut k="F1" />
@@ -217,8 +223,10 @@ export function ActPerson({
     ? options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
     : options.slice(0, 10);
 
+  const wrapStyle: any = { position: "relative", opacity: disabled ? 0.5 : 1, zIndex: open ? 500 : 1 };
+
   return (
-    <View style={{ position: "relative", opacity: disabled ? 0.5 : 1 }} ref={ref as any}>
+    <View style={wrapStyle} ref={ref as any}>
       <ActCard
         active={active}
         empty={!active}
@@ -228,7 +236,7 @@ export function ActPerson({
         }}
       >
         <ActIco active={active}>
-          <Icon name={kind === "vendedora" ? "users" : "user_plus"} size={18} color={active ? "#a78bfa" : "#a0a0b8"} />
+          <Icon name={kind === "vendedora" ? "users" : "user_plus"} size={18} color={active ? "#a78bfa" : Colors.ink3} />
         </ActIco>
         <ActBody
           k={label}
@@ -415,12 +423,13 @@ export function ActCoupon({
   }
 
   const active = !!value;
+  const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
   return (
-    <View style={{ position: "relative" }} ref={ref as any}>
+    <View style={wrapStyle} ref={ref as any}>
       <ActCard active={active} empty={!active} onClick={() => setOpen(o => !o)}>
         <ActIco active={active}>
-          <Icon name="tag" size={18} color={active ? "#a78bfa" : "#a0a0b8"} />
+          <Icon name="tag" size={18} color={active ? "#a78bfa" : Colors.ink3} />
         </ActIco>
         <ActBody k="Cupom de desconto" v={value ? value.code : "Inserir código"} isActive={active} isEmpty={!active} />
         <Shortcut k="F4" />
@@ -467,11 +476,13 @@ export function ActCoupon({
 // ─── Popover container ───────────────────────────────────────
 function PopShell({ children }: { children: React.ReactNode }) {
   const webBox = webOnly({
-    background: "rgba(11,15,34,0.96)",
+    background: Glass.pop,
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
     border: "1px solid rgba(124,58,237,0.3)",
-    boxShadow: "0 20px 40px -10px rgba(0,0,0,0.6)",
+    boxShadow: IS_DARK_MODE
+      ? "0 20px 40px -10px rgba(0,0,0,0.6)"
+      : "0 20px 40px -10px rgba(124,58,237,0.25)",
     animation: "caixaFadeUp 0.2s cubic-bezier(0.4,0,0.2,1) both",
   });
   return (
@@ -516,9 +527,10 @@ const s = StyleSheet.create({
   actK: {
     fontSize: 9,
     fontWeight: "700",
-    color: "rgba(170,160,235,0.55)",
+    color: Colors.ink3,
     letterSpacing: 1.1,
     textTransform: "uppercase",
+    opacity: 0.85,
   },
   actV: {
     fontSize: 13,
@@ -532,8 +544,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    color: "rgba(170,160,235,0.55)",
+    backgroundColor: Glass.lineSoft,
+    color: Colors.ink3,
     letterSpacing: 0.4,
   },
 });
@@ -547,12 +559,12 @@ const popS = StyleSheet.create({
     marginTop: 8,
     padding: 14,
     borderRadius: 12,
-    zIndex: 20,
+    zIndex: 999,
   },
   title: {
     fontSize: 10,
     fontWeight: "700",
-    color: "rgba(170,160,235,0.6)",
+    color: Colors.ink3,
     letterSpacing: 1.2,
     textTransform: "uppercase",
     marginBottom: 10,
@@ -561,10 +573,10 @@ const popS = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: "rgba(5,6,15,0.6)",
+    backgroundColor: Glass.bgInput,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    color: "#fff",
+    borderColor: Glass.bgInputBorder,
+    color: Colors.ink,
     fontSize: 13,
     outlineStyle: "none",
     textTransform: "uppercase" as any,
@@ -582,13 +594,13 @@ const popS = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.violetD,
+    backgroundColor: Colors.violet,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   avatarTxt: { fontSize: 11, color: "#fff", fontWeight: "700" },
-  itemName: { fontSize: 13, color: "#fff", fontWeight: "600" },
+  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   itemSub: {
     fontSize: 10,
     color: Colors.ink3,
