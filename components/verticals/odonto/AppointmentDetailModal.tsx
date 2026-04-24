@@ -2,13 +2,20 @@
 // AURA. — D-UNIFY: Detalhes do agendamento odonto
 // Acoes: Confirmar, Iniciar atendimento, Concluir, Cancelar
 // PATCH /companies/:id/dental/appointments/:aid
+//
+// W1-04: botao "Coletar assinatura" adicional quando status =
+// em_atendimento. Alternativa a "Concluir consulta" — paciente
+// assina no proprio celular via QR/WhatsApp, WS handler do BE
+// transiciona automaticamente pra concluido.
 // ============================================================
+import { useState } from "react";
 import { Modal, View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
+import { SignatureRequestModal } from "./SignatureRequestModal";
 
 interface Props {
   visible: boolean;
@@ -30,6 +37,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function AppointmentDetailModal({ visible, appointmentId, onClose }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
+  const [signatureOpen, setSignatureOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-appointment", cid, appointmentId],
@@ -68,7 +76,15 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
     return d.toLocaleString("pt-BR", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
   }
 
+  function handleSigned() {
+    // Assinatura foi capturada pelo WS -> BE ja transicionou pra concluido.
+    // Fecha o modal de assinatura e tambem o modal principal.
+    setSignatureOpen(false);
+    onClose();
+  }
+
   return (
+    <>
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={s.backdrop}>
         <View style={s.sheet}>
@@ -78,7 +94,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
               {status && <View style={s.statusPill}><Text style={s.statusPillText}>{STATUS_LABELS[status] || status}</Text></View>}
             </View>
             <Pressable onPress={onClose} hitSlop={8}>
-              <Icon name="close" size={20} color={Colors.ink3} />
+              <Icon name="x" size={20} color={Colors.ink3} />
             </Pressable>
           </View>
 
@@ -125,6 +141,17 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                   {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Iniciar atendimento</Text>}
                 </Pressable>
               )}
+              {/* W1-04: coletar assinatura e alternativa a concluir diretamente */}
+              {status === "em_atendimento" && (
+                <Pressable
+                  onPress={() => setSignatureOpen(true)}
+                  style={[s.btn, s.btnSignature]}
+                  disabled={statusMut.isPending}
+                >
+                  <Icon name="edit" size={14} color="#fff" />
+                  <Text style={s.btnPrimaryText}>Coletar assinatura</Text>
+                </Pressable>
+              )}
               {canTransitionTo("concluido") && (
                 <Pressable onPress={() => statusMut.mutate("concluido")} style={[s.btn, s.btnSuccess]} disabled={statusMut.isPending}>
                   {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Concluir consulta</Text>}
@@ -135,7 +162,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                   <Text style={s.btnDangerText}>Cancelar</Text>
                 </Pressable>
               )}
-              {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && (
+              {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && status !== "em_atendimento" && (
                 <Pressable onPress={onClose} style={[s.btn, s.btnGhost]}>
                   <Text style={s.btnGhostText}>Fechar</Text>
                 </Pressable>
@@ -145,6 +172,17 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
         </View>
       </View>
     </Modal>
+
+    {/* W1-04 overlay — modal de coleta de assinatura */}
+    <SignatureRequestModal
+      visible={signatureOpen}
+      appointmentId={appointmentId}
+      patientName={appt?.patient_name}
+      patientPhone={appt?.patient_phone}
+      onClose={() => setSignatureOpen(false)}
+      onSigned={handleSigned}
+    />
+    </>
   );
 }
 
@@ -178,10 +216,11 @@ const s = StyleSheet.create({
   totalValue: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
   hint: { fontSize: 12, color: Colors.ink3 },
   footer: { flexDirection: "row", gap: 8, padding: 16, borderTopWidth: 1, borderTopColor: Colors.border, flexWrap: "wrap" },
-  btn: { flex: 1, minWidth: 120, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  btn: { flex: 1, minWidth: 120, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   btnPrimary: { backgroundColor: Colors.violet || "#6d28d9" },
   btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   btnSuccess: { backgroundColor: "#10B981" },
+  btnSignature: { backgroundColor: "#06B6D4" },
   btnDanger: { backgroundColor: "transparent", borderWidth: 1, borderColor: "#EF4444" },
   btnDangerText: { color: "#EF4444", fontSize: 13, fontWeight: "600" },
   btnGhost: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
