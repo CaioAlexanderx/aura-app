@@ -7,7 +7,7 @@
 // ============================================================
 import { useRef } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from "./types";
 
@@ -61,10 +61,10 @@ function ProdCard({ product, qty, index, onAdd }: { product: GridProduct; qty: n
   }
 
   const webCard = webOnly({
-    background: "rgba(14,18,40,0.55)",
+    background: Glass.card,
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
-    border: "1px solid rgba(255,255,255,0.07)",
+    border: "1px solid " + Glass.lineBorderCard,
     overflow: "hidden",
     animation: "caixaFadeUp 0.5s cubic-bezier(0.4,0,0.2,1) both",
     animationDelay: 0.05 + index * 0.04 + "s",
@@ -207,9 +207,11 @@ const s = StyleSheet.create({
     position: "relative",
     zIndex: 2,
     fontSize: 34,
-    color: "rgba(255,255,255,0.9)",
+    color: "rgba(255,255,255,0.92)",
     fontWeight: "700",
     letterSpacing: -0.5,
+    textShadowColor: "rgba(0,0,0,0.25)" as any,
+    textShadowRadius: Platform.OS === "web" ? 6 : 0 as any,
   },
   name: {
     fontSize: 13,

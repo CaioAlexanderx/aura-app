@@ -4,16 +4,16 @@
 // so logo configuration stays centralized (no duplicate upload).
 // ============================================================
 import { View, StyleSheet, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { BrandBanner } from "@/components/BrandBanner";
 import { IS_WEB, webOnly } from "./types";
 
 type Props = { height?: number };
 
-export function MerchantBanner({ height = 140 }: Props) {
+export function MerchantBanner({ height = 180 }: Props) {
   const webBox = webOnly({
-    background: "linear-gradient(135deg, rgba(124,58,237,0.14), rgba(14,18,40,0.7))",
-    border: "1px solid rgba(124,58,237,0.25)",
+    background: Glass.merchantGrad,
+    border: "1px solid " + Glass.lineBorderCard,
     backdropFilter: "blur(14px)",
     WebkitBackdropFilter: "blur(14px)",
     overflow: "hidden",
