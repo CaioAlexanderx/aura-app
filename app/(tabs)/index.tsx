@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { TrialBanner } from "@/components/TrialBanner";
 import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
@@ -312,8 +312,8 @@ var s = StyleSheet.create({
   cn: { fontSize: 11, color: Colors.ink3, fontWeight: "500", letterSpacing: 0.6, textTransform: "uppercase", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   lo: {
     paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1, borderColor: Glass.lineBorderCard,
+    backgroundColor: Glass.lineWhisper,
   },
   lt: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
 
@@ -322,7 +322,7 @@ var s = StyleSheet.create({
   secTitle: { fontSize: 17, color: Colors.ink, fontWeight: "600", letterSpacing: -0.2 },
   secCount: {
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: Glass.lineFaint,
   },
   secCountText: { fontSize: 10, color: Colors.ink3, letterSpacing: 0.5, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   secCta: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
@@ -334,9 +334,9 @@ var s = StyleSheet.create({
 
   panel: {
     backgroundColor: Colors.bg3, borderRadius: 20, padding: 16,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1, borderColor: Glass.lineBorderCard,
     marginBottom: 24,
-    ...(Platform.OS === "web" ? (webOnly({ backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", background: "rgba(14,18,40,0.55)" }) as any) : null),
+    ...(Platform.OS === "web" ? (webOnly({ backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", background: Glass.card }) as any) : null),
   },
   panelFoot: { paddingTop: 12, alignItems: "center" },
   panelFootText: { fontSize: 10, color: Colors.ink3, letterSpacing: 0.3 },
