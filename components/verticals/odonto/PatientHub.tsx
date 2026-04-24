@@ -6,13 +6,13 @@
 //
 // Sub-tabs:
 //   Dados        - cadastro, contato, plano, ultimas visitas
-//   Anamnese     - AnamneseWizard wirado (TODO endpoint salvar)
-//   Odontograma  - OdontogramaSVG por patient_id
+//   Anamnese     - AnamneseWizard wirado (GET/PUT real)
+//   Odontograma  - OdontogramaSVG por patient_id (TODO)
 //   Periograma   - Periograma (TODO wire patientId)
-//   Prontuario   - ProntuarioTimeline filtrada
+//   Prontuario   - ProntuarioTimeline filtrada (TODO)
 //   Imagens      - ClinicalImages (TODO endpoint R2 upload - W1-02)
-//   Orcamentos   - filtro de orcamentos por customer_id
-//   Cobrancas    - filtro de cobrancas por customer_id
+//   Orcamentos   - filtro de orcamentos por customer_id (TODO)
+//   Cobrancas    - filtro de cobrancas por customer_id (TODO)
 //   Fichas       - FichaEspecialidade
 //
 // Renderizado como Modal full-screen sobreposto a OdontoScreen.
@@ -21,10 +21,14 @@
 import { useState } from 'react';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Linking, Platform, Pressable,
+  StyleSheet, Linking, Platform, Pressable, Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { request } from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
 import { OdontoSubNav } from '@/components/verticals/odonto/OdontoSubNav';
-import { AnamneseWizard } from '@/components/verticals/odonto/AnamneseWizard';
+import { AnamneseWizard, type AnamneseData } from '@/components/verticals/odonto/AnamneseWizard';
 import { ClinicalImages } from '@/components/verticals/odonto/ClinicalImages';
 import { Periograma } from '@/components/verticals/odonto/Periograma';
 import { FichaEspecialidade } from '@/components/verticals/odonto/FichaEspecialidade';
@@ -116,28 +120,86 @@ function DataTab({ patient }: { patient: PatientLite }) {
   );
 }
 
+// ────────────────────────────────────────────────────────────
+// AnamneseTab (W1-01): GET/PUT wirado via useQuery + useMutation
+// ────────────────────────────────────────────────────────────
 function AnamneseTab({ patient }: { patient: PatientLite }) {
-  // TODO W1-01: integrar com endpoint GET/PUT /dental/patients/:id/anamnese
-  // Por agora, AnamneseWizard standalone com console.log no save.
+  const cid = useAuthStore().company?.id;
+  const qc = useQueryClient();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dental-anamnesis', cid, patient.id],
+    queryFn: () => request(`/companies/${cid}/dental/patients/${patient.id}/anamnesis`),
+    enabled: !!cid && !!patient.id,
+    staleTime: 60000,
+  });
+
+  const saveMut = useMutation({
+    mutationFn: (anamnesisData: AnamneseData) =>
+      request(`/companies/${cid}/dental/patients/${patient.id}/anamnesis`, {
+        method: 'PUT',
+        body: { data: anamnesisData },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dental-anamnesis', cid, patient.id] });
+      Alert.alert('Anamnese salva', 'Dados registrados com sucesso.');
+    },
+    onError: (err: any) => {
+      Alert.alert('Erro', err?.message || 'Nao foi possivel salvar a anamnese.');
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <View style={[styles.tabContent, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color="#06B6D4" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.placeholderWrap}>
+        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+        <Text style={styles.placeholderMessage}>
+          {(error as any)?.message || 'Nao foi possivel carregar a anamnese.'}
+        </Text>
+      </View>
+    );
+  }
+
+  // data.anamnesis e null na primeira vez (wizard comeca vazio)
+  const initial = (data as any)?.anamnesis as Partial<AnamneseData> | null;
+  const updatedAt = (data as any)?.updated_at;
+
   return (
     <View style={styles.tabContent}>
+      {updatedAt && (
+        <View style={styles.infoBadge}>
+          <Text style={styles.infoBadgeText}>
+            Ultima atualizacao: {new Date(updatedAt).toLocaleDateString('pt-BR')}
+          </Text>
+        </View>
+      )}
       <AnamneseWizard
-        onComplete={(data) => {
-          console.log('TODO: salvar anamnese de', patient.id, data);
-        }}
+        initialData={initial || undefined}
+        onComplete={(data) => saveMut.mutate(data)}
       />
+      {saveMut.isPending && (
+        <View style={styles.savingOverlay}>
+          <ActivityIndicator color="#06B6D4" />
+          <Text style={styles.savingText}>Salvando...</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 function OdontogramaTabContent({ patient }: { patient: PatientLite }) {
-  // TODO: OdontogramaSVG precisa receber patientId. Verificar signature
-  // e wirar com /dental/odontograma/:patient_id quando atacarmos W1-01.
-  return <Placeholder title="Odontograma" message={`Odontograma do paciente ${patient.name} sera wirado em W1-01.`} />;
+  return <Placeholder title="Odontograma" message={`Odontograma de ${patient.name} sera wirado em W1-01 (fase 2).`} />;
 }
 
 function PeriogramaTab({ patient }: { patient: PatientLite }) {
-  // TODO W1-01: wrapper que carrega/salva periograma por patient_id
   return (
     <View style={styles.tabContent}>
       <Periograma />
@@ -146,15 +208,10 @@ function PeriogramaTab({ patient }: { patient: PatientLite }) {
 }
 
 function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
-  // TODO: wrapper de ProntuarioTimeline filtrado por customer_id
-  return <Placeholder title="Prontuario" message={`Timeline filtrada do paciente ${patient.name} - W1-01.`} />;
+  return <Placeholder title="Prontuario" message={`Timeline filtrada de ${patient.name} - W1-01 (fase 2).`} />;
 }
 
 function ImagensTab({ patient }: { patient: PatientLite }) {
-  // TODO W1-02: integrar upload R2 e listagem real.
-  // ClinicalImages e puramente apresentacional, precisa de:
-  //   - hook useClinicalImages(patient.id) que faz GET /dental/patients/:id/images
-  //   - handler de upload via expo-image-picker + POST multipart pro endpoint
   return (
     <View style={styles.tabContent}>
       <ClinicalImages />
@@ -163,17 +220,14 @@ function ImagensTab({ patient }: { patient: PatientLite }) {
 }
 
 function OrcamentosTabContent({ patient }: { patient: PatientLite }) {
-  // TODO: filtro do OrcamentosTab por customer_id
-  return <Placeholder title="Orcamentos" message={`Orcamentos do paciente ${patient.name} - filtro a wirar.`} />;
+  return <Placeholder title="Orcamentos" message={`Orcamentos de ${patient.name} - filtro a wirar.`} />;
 }
 
 function CobrancasTabContent({ patient }: { patient: PatientLite }) {
-  // TODO: filtro de BillingDashboard por customer_id
-  return <Placeholder title="Cobrancas" message={`Parcelas e cobrancas do paciente ${patient.name} - filtro a wirar.`} />;
+  return <Placeholder title="Cobrancas" message={`Parcelas e cobrancas de ${patient.name} - filtro a wirar.`} />;
 }
 
 function FichasTab({ patient }: { patient: PatientLite }) {
-  // FichaEspecialidade ja existe — wirar quando definir prop signature
   return (
     <View style={styles.tabContent}>
       <FichaEspecialidade />
@@ -181,7 +235,6 @@ function FichasTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// Placeholder reusavel pras sub-tabs nao-wiradas
 function Placeholder({ title, message }: { title: string; message: string }) {
   return (
     <View style={styles.placeholderWrap}>
@@ -202,8 +255,6 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
 
   if (!patient) return null;
 
-  // Reset tab quando trocar de paciente
-  // (visible toggle ja faz unmount via Modal, mas defensivo)
   const renderTab = () => {
     switch (activeTab) {
       case 'dados':       return <DataTab patient={patient} />;
@@ -227,7 +278,6 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
     >
       <View style={styles.modal}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.avatar}>
@@ -255,10 +305,8 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
           </View>
         </View>
 
-        {/* Sub-tabs */}
         <OdontoSubNav tabs={HUB_TABS} activeId={activeTab} onChange={setActiveTab} />
 
-        {/* Content */}
         <View style={styles.content}>{renderTab()}</View>
       </View>
     </Modal>
@@ -381,6 +429,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  infoBadge: {
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: 'rgba(6,182,212,0.08)',
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: 'rgba(6,182,212,0.2)',
+  },
+  infoBadgeText: {
+    color: '#06B6D4',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  savingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(15,23,42,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  savingText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   placeholderWrap: {
     flex: 1,
