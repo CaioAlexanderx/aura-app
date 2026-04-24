@@ -28,6 +28,13 @@ function getContext(path: string): string {
   return "geral";
 }
 
+// No Caixa (/pdv) o FAB padrao (bottom-right) sobrepoe o botao "Finalizar venda"
+// do CartPanel. Movemos ele pro canto inferior esquerdo quando a rota e /pdv,
+// pra manter o agente acessivel sem atrapalhar o fluxo de checkout.
+function isPdvRoute(path: string): boolean {
+  return path.startsWith("/pdv");
+}
+
 var CONTEXT_LABELS: Record<string, string> = {
   geral: "Geral",
   financeiro: "Financeiro",
@@ -53,6 +60,7 @@ export function ChatFAB() {
 
   var context = getContext(pathname);
   var contextLabel = CONTEXT_LABELS[context] || "Geral";
+  var onPdv = isPdvRoute(pathname);
 
   var chatMut = useMutation({
     mutationFn: function() {
@@ -90,16 +98,26 @@ export function ChatFAB() {
   // Don't show on agentes page (already has chat)
   if (pathname.includes("agentes")) return null;
 
+  // Posicionamento: no Caixa (/pdv) o FAB fica no canto inferior esquerdo,
+  // fora do caminho do botao Finalizar venda (que mora no canto direito).
+  // Em outras rotas continua no canto inferior direito.
+  var fabPos = onPdv
+    ? { left: 20, right: "auto" as any }
+    : { right: 20, left: "auto" as any };
+  var panelPos = onPdv
+    ? { left: 20, right: "auto" as any }
+    : { right: 20, left: "auto" as any };
+
   if (!open) {
     return (
-      <Pressable onPress={function() { setOpen(true); }} style={s.fab}>
+      <Pressable onPress={function() { setOpen(true); }} style={[s.fab, fabPos] as any}>
         <Icon name="chat" size={22} color="#fff" />
       </Pressable>
     );
   }
 
   return (
-    <View style={s.panel}>
+    <View style={[s.panel, panelPos] as any}>
       <View style={s.panelHeader}>
         <View style={{ flex: 1 }}>
           <Text style={s.panelTitle}>Agente IA</Text>
@@ -160,7 +178,6 @@ var s = StyleSheet.create({
   fab: {
     position: "fixed" as any,
     bottom: isWeb ? 24 : 80,
-    right: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -173,7 +190,6 @@ var s = StyleSheet.create({
   panel: {
     position: "fixed" as any,
     bottom: isWeb ? 24 : 80,
-    right: 20,
     width: 360,
     maxWidth: "90%",
     height: 480,

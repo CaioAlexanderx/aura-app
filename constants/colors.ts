@@ -78,6 +78,65 @@ var Light = {
 
 export var Colors = IS_DARK ? { ...Dark } : { ...Light };
 
+// IS_DARK_MODE / IS_LIGHT_MODE — module-level booleans for conditional rgba
+// values inside `webOnly(...)` style helpers. Theme toggle triggers a full
+// page reload (see `toggle()` below), so module-level capture is safe.
+export var IS_DARK_MODE = IS_DARK;
+export var IS_LIGHT_MODE = !IS_DARK;
+
+// Glass — theme-aware tokens for translucent card backgrounds, borders and
+// divider lines used by the "Claude Design" glassmorphism palette. Values are
+// computed at module load (same pattern as `Colors`) and stable per session.
+// Dark uses near-black rgba with white inks; Light uses near-white rgba with
+// violet-tinted inks so the glass reads correctly on the pale violet page bg.
+export var Glass = IS_DARK ? {
+  card:             "rgba(14,18,40,0.55)",
+  cardMid:          "rgba(9,12,26,0.55)",
+  cardDeep:         "rgba(5,6,15,0.6)",
+  pop:              "rgba(11,15,34,0.96)",
+  heroGrad:         "linear-gradient(135deg, rgba(124,58,237,0.22), rgba(79,91,213,0.05))",
+  heroGradSoft:     "linear-gradient(135deg, rgba(124,58,237,0.20), rgba(79,91,213,0.06))",
+  merchantGrad:     "linear-gradient(135deg, rgba(124,58,237,0.14), rgba(14,18,40,0.7))",
+  line:             "rgba(255,255,255,0.06)",
+  lineStrong:       "rgba(255,255,255,0.1)",
+  lineSoft:         "rgba(255,255,255,0.05)",
+  lineFaint:        "rgba(255,255,255,0.04)",
+  lineWhisper:      "rgba(255,255,255,0.03)",
+  lineBorderCard:   "rgba(255,255,255,0.07)",
+  lineBorderStrong: "rgba(255,255,255,0.08)",
+  textDim:          "rgba(255,255,255,0.5)",
+  textDimmer:       "rgba(255,255,255,0.45)",
+  textDimmest:      "rgba(255,255,255,0.4)",
+  inkOnCard:        "#ffffff",
+  inkOnCardSoft:    "rgba(255,255,255,0.9)",
+  bgInput:          "rgba(5,6,15,0.6)",
+  bgInputBorder:    "rgba(255,255,255,0.1)",
+  shine:            "rgba(255,255,255,0.25)",
+} : {
+  card:             "rgba(255,255,255,0.82)",
+  cardMid:          "rgba(255,255,255,0.9)",
+  cardDeep:         "rgba(248,245,255,0.85)",
+  pop:              "rgba(255,255,255,0.98)",
+  heroGrad:         "linear-gradient(135deg, rgba(124,58,237,0.16), rgba(139,92,246,0.06))",
+  heroGradSoft:     "linear-gradient(135deg, rgba(124,58,237,0.14), rgba(139,92,246,0.05))",
+  merchantGrad:     "linear-gradient(135deg, rgba(124,58,237,0.10), rgba(245,243,255,0.70))",
+  line:             "rgba(109,40,217,0.10)",
+  lineStrong:       "rgba(109,40,217,0.16)",
+  lineSoft:         "rgba(109,40,217,0.07)",
+  lineFaint:        "rgba(109,40,217,0.05)",
+  lineWhisper:      "rgba(109,40,217,0.04)",
+  lineBorderCard:   "rgba(109,40,217,0.12)",
+  lineBorderStrong: "rgba(109,40,217,0.16)",
+  textDim:          "rgba(26,26,46,0.65)",
+  textDimmer:       "rgba(26,26,46,0.55)",
+  textDimmest:      "rgba(26,26,46,0.5)",
+  inkOnCard:        "#1a1a2e",
+  inkOnCardSoft:    "rgba(26,26,46,0.9)",
+  bgInput:          "rgba(245,243,255,0.9)",
+  bgInputBorder:    "rgba(109,40,217,0.18)",
+  shine:            "rgba(124,58,237,0.18)",
+};
+
 type ThemeState = {
   isDark: boolean;
   toggle: () => void;

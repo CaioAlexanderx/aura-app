@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — BrandBanner (redesign 22/04)
+// AURA. — BrandBanner (redesign 22/04 · logo ampliado 24/04)
 // Componente que exibe a logo do cliente (empresa) em 3 modes.
 // Adaptativo: logo quadrada (icon-style) e horizontal (wordmark)
 // sao suportadas automaticamente via CSS `width: auto + objectFit`.
@@ -20,9 +20,11 @@ type Props = {
 
 // Tamanhos por mode — altura fixa, largura adapta ao aspect real da imagem
 // (pro web: height + width:auto). Fallback usa lado quadrado do `fallbackSize`.
+// 24/04: bumped header/block sizes — pedido do Caio (logo ficou muito pequena
+// no header do Painel e no banner do Caixa).
 var SIZES = {
-  header:  { imageHeight: 52,  maxImageWidth: 200, fallbackSize: 48  },
-  block:   { imageHeight: 88,  maxImageWidth: 520, fallbackSize: 100 },
+  header:  { imageHeight: 72,  maxImageWidth: 300, fallbackSize: 62  },
+  block:   { imageHeight: 120, maxImageWidth: 620, fallbackSize: 128 },
   compact: { imageHeight: 42,  maxImageWidth: 160, fallbackSize: 40  },
 } as const;
 
@@ -149,25 +151,23 @@ export function BrandBanner({ mode = "block" }: Props) {
 var s = StyleSheet.create({
   blockWrap: {
     alignSelf: "center",
-    maxWidth: 600,
+    maxWidth: 680,
     width: "100%",
-    minHeight: 128,
-    backgroundColor: Colors.bg3,
+    minHeight: 160,
+    backgroundColor: "transparent",
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 20,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 20,
+    marginBottom: 4,
   },
   headerWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 100,
-    minHeight: 52,
+    minWidth: 120,
+    minHeight: 72,
   },
   compactWrap: {
     alignItems: "center",
