@@ -1,12 +1,29 @@
 import { Colors } from "@/constants/colors";
-import { Dimensions } from "react-native";
+import { Dimensions, Platform } from "react-native";
 
+export const IS_WEB = Platform.OS === "web";
 export const IS_WIDE = typeof window !== "undefined" ? window.innerWidth > 768 : Dimensions.get("window").width > 768;
 
 export const fmt = (n: number) => `R$ ${(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 export const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : fmt(n);
+export const fmtInt = (n: number) => (n || 0).toLocaleString("pt-BR");
 export function greeting() { const h = new Date().getHours(); return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite"; }
 export function currentMonth() { return new Date().toLocaleString("pt-BR", { month: "long" }).replace(/^\w/, c => c.toUpperCase()); }
+
+// Claude Design gradient tokens — used by inline SVG paints on web.
+export const GRAD = {
+  violet1: "#4f5bd5",
+  violet2: "#8b5cf6",
+  violet3: "#a78bfa",
+  pink: "#d62976",
+  violetDeep: "#6d28d9",
+  violet: "#7c3aed",
+};
+
+// Helper — returns web-only style object (inline CSS), otherwise empty. Lets us
+// use backdrop-filter, conic-gradient, drop-shadow, transitions in web output
+// while keeping native rendering safe.
+export const webOnly = (s: any): any => (IS_WEB ? s : {});
 
 export const MOCK_DASHBOARD = {
   revenue: 18420, expenses: 7840, net: 10580, salesToday: 1250, avgTicket: 391.91, newCustomers: 12,

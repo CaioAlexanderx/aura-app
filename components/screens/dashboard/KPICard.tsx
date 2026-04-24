@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { Sparkline } from "./Sparkline";
-import { IS_WIDE } from "./types";
+import { IS_WIDE, webOnly } from "./types";
 
 type Props = {
   ic: string; iconColor: string; label: string; value: string;
@@ -10,35 +10,82 @@ type Props = {
   spark?: number[]; onPress?: () => void;
 };
 
+// Claude Design KPI: glass card, top accent stripe, icon chip with soft glow,
+// tight mono value + delta chip + mini sparkline.
 export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, spark, onPress }: Props) {
+  const webCard = webOnly({
+    background: "rgba(14,18,40,0.55)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    transition: "all 0.3s cubic-bezier(0.3, 0, 0.2, 1)",
+    cursor: "pointer",
+    position: "relative",
+    overflow: "hidden",
+  });
+  const webAccent = webOnly({
+    content: "",
+    position: "absolute", top: 0, left: 0, right: 0, height: 2,
+    background: `linear-gradient(90deg, transparent, ${iconColor}, transparent)`,
+    opacity: 0.7,
+  });
+  const webChip = webOnly({
+    background: `color-mix(in srgb, ${iconColor} 18%, transparent)`,
+    borderColor: `color-mix(in srgb, ${iconColor} 30%, transparent)`,
+    transition: "transform 0.35s cubic-bezier(0.3, 0, 0.2, 1)",
+    position: "relative",
+  });
+
   return (
-    <Pressable style={[s.card, large && s.large]} onPress={onPress}>
+    <Pressable
+      style={[s.card, large && s.large, Platform.OS === "web" ? (webCard as any) : { backgroundColor: Colors.bg3 }]}
+      onPress={onPress}
+    >
+      {Platform.OS === "web" && <span style={webAccent as any} />}
+
       <View style={s.header}>
-        <View style={[s.ic, { backgroundColor: iconColor + "22", borderColor: iconColor + "44" }]}>
-          <Icon name={ic as any} size={20} color={iconColor} />
+        <View style={[s.ic, Platform.OS === "web" ? (webChip as any) : { backgroundColor: iconColor + "22", borderColor: iconColor + "44" }]}>
+          <Icon name={ic as any} size={18} color={iconColor} />
         </View>
+        <Text style={s.lb}>{label}</Text>
+      </View>
+
+      <Text style={[s.val, large && { fontSize: 26 }]}>{value}</Text>
+
+      <View style={s.foot}>
+        {delta ? (
+          <Text style={[s.delta, { color: deltaUp ? Colors.green : Colors.red }]}>
+            {deltaUp ? "\u25B2" : "\u25BC"} {delta}
+          </Text>
+        ) : <View />}
         {spark && spark.length >= 2 && (
-          <View style={{ opacity: 0.7 }}><Sparkline data={spark} color={iconColor} height={36} /></View>
+          <Sparkline data={spark} color={iconColor} width={56} height={20} strokeWidth={1.5} />
         )}
       </View>
-      <Text style={[s.val, large && { fontSize: 28 }]}>{value}</Text>
-      <Text style={s.lb}>{label}</Text>
-      {delta && (
-        <View style={[s.db, { backgroundColor: deltaUp ? Colors.greenD : Colors.redD }]}>
-          <Text style={[s.dt, { color: deltaUp ? Colors.green : Colors.red }]}>{deltaUp ? "+" : "-"} {delta}</Text>
-        </View>
-      )}
     </Pressable>
   );
 }
+
 const s = StyleSheet.create({
-  // P0 #9 fix: overflow hidden prevents sparkline from bleeding outside card
-  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: IS_WIDE ? 160 : "45%" as any, margin: 5, overflow: "hidden" as any },
-  large: { borderColor: Colors.border2, backgroundColor: Colors.bg4, borderWidth: 1.5, minWidth: IS_WIDE ? 260 : "100%" as any, flex: IS_WIDE ? 2 : undefined },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
-  ic: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  val: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5, marginBottom: 4 },
-  lb: { fontSize: 11, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 },
-  db: { alignSelf: "flex-start", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  dt: { fontSize: 10, fontWeight: "600" },
+  card: {
+    backgroundColor: Colors.bg3, borderRadius: 18,
+    paddingHorizontal: 18, paddingVertical: 16,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    flex: 1, minWidth: IS_WIDE ? 160 : "45%" as any, margin: 5,
+    overflow: "hidden" as any,
+  },
+  large: {
+    borderColor: "rgba(124,58,237,0.25)",
+    minWidth: IS_WIDE ? 260 : "100%" as any,
+    flex: IS_WIDE ? 2 : undefined,
+  },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12, zIndex: 2 },
+  ic: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
+  lb: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 1.1, fontWeight: "700", flex: 1 },
+  val: { fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined), fontSize: 22, fontWeight: "700", color: "#fff", letterSpacing: -0.4, marginBottom: 10 },
+  foot: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 },
+  delta: { fontSize: 11, fontWeight: "700", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
 });

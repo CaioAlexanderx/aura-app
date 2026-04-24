@@ -3,18 +3,13 @@ import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
-
-var isWeb = Platform.OS === "web";
+import { webOnly } from "./types";
 
 type RankedEmployee = {
   position: number; full_name: string; job_role: string;
   total_sales: number; total_revenue: number; trend_pct: number; medal: string | null;
 };
-
-type RankingData = {
-  total_revenue: number; total_employees: number;
-  ranking: RankedEmployee[];
-};
+type RankingData = { total_revenue: number; total_employees: number; ranking: RankedEmployee[] };
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
 var MEDAL_EMOJI: Record<string, string> = { gold: "\uD83E\uDD47", silver: "\uD83E\uDD48", bronze: "\uD83E\uDD49" };
@@ -38,22 +33,34 @@ export function TopSellersCard({ onSeeAll }: Props) {
   if (!isNegocio || !data || data.ranking.length === 0) return null;
 
   var top3 = data.ranking.slice(0, 3);
+  const webCard = webOnly({
+    background: "rgba(14,18,40,0.55)",
+    backdropFilter: "blur(14px)",
+    WebkitBackdropFilter: "blur(14px)",
+  });
 
   return (
-    <View style={s.card}>
+    <View style={[s.card, Platform.OS === "web" ? (webCard as any) : null]}>
       <View style={s.headerRow}>
-        <Text style={s.title}>Top vendedores do mes</Text>
-        {onSeeAll && <Pressable onPress={onSeeAll}><Text style={s.seeAll}>Ver ranking</Text></Pressable>}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={s.bar} />
+          <Text style={s.title}>Top vendedores do mes</Text>
+        </View>
+        {onSeeAll && (
+          <Pressable onPress={onSeeAll}>
+            <Text style={s.seeAll}>Ver ranking  -  </Text>
+          </Pressable>
+        )}
       </View>
       {top3.map(function(emp, i) {
         var medal = emp.medal || "";
         var emoji = MEDAL_EMOJI[medal] || String(emp.position);
         var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
-        var trendArrow = emp.trend_pct > 0 ? "\u2191" : emp.trend_pct < 0 ? "\u2193" : "";
+        var trendArrow = emp.trend_pct > 0 ? "\u25B2" : emp.trend_pct < 0 ? "\u25BC" : "";
         return (
-          <View key={i} style={[s.row, i < top3.length - 1 && { borderBottomWidth: 1, borderBottomColor: Colors.border }]}>
+          <View key={i} style={[s.row, i < top3.length - 1 && { borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)" }]}>
             <Text style={s.medal}>{emoji}</Text>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.name} numberOfLines={1}>{emp.full_name}</Text>
               <Text style={s.role}>{emp.total_sales} vendas</Text>
             </View>
@@ -69,17 +76,22 @@ export function TopSellersCard({ onSeeAll }: Props) {
 }
 
 var s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  title: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+  card: {
+    backgroundColor: Colors.bg3, borderRadius: 20, padding: 18,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    marginBottom: 22,
+  },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  bar: { width: 4, height: 16, borderRadius: 2, backgroundColor: Colors.violet },
+  title: { fontSize: 15, color: Colors.ink, fontWeight: "600" },
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
-  medal: { fontSize: 18, width: 28, textAlign: "center" },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+  medal: { fontSize: 20, width: 32, textAlign: "center" },
   name: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  role: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
+  role: { fontSize: 10, color: Colors.ink3, marginTop: 2, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined), letterSpacing: 0.3 },
   right: { alignItems: "flex-end" },
-  revenue: { fontSize: 13, color: Colors.green, fontWeight: "700" },
-  trend: { fontSize: 10, fontWeight: "600" },
+  revenue: { fontSize: 13, color: Colors.green, fontWeight: "700", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
+  trend: { fontSize: 10, fontWeight: "700", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
 });
 
 export default TopSellersCard;
