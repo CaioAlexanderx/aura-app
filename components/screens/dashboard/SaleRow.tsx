@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { fmt, webOnly } from "./types";
 
@@ -57,7 +57,7 @@ const s = StyleSheet.create({
   row: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10,
-    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
+    borderBottomWidth: 1, borderBottomColor: Glass.lineFaint,
   },
   chip: {
     width: 36, height: 36, borderRadius: 10, borderWidth: 1,
