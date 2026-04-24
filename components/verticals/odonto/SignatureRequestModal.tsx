@@ -199,7 +199,7 @@ export function SignatureRequestModal({
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={10}>
-              <Icon name="close" size={20} color={Colors.ink3} />
+              <Icon name="x" size={20} color={Colors.ink3} />
             </Pressable>
           </View>
 
