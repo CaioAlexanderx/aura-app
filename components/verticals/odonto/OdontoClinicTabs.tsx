@@ -1,6 +1,7 @@
 // ============================================================
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
 // D-UNIFY + agenda Dia/Semana/Mes com navegacao prev/next.
+// W1-01: PacientesTab agora abre PatientHub drill-down ao clicar paciente.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -19,6 +20,7 @@ import { NewPatientModal } from "@/components/verticals/odonto/NewPatientModal";
 import { NewAppointmentModal } from "@/components/verticals/odonto/NewAppointmentModal";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
 import { AppointmentsList } from "@/components/verticals/odonto/AppointmentsList";
+import { PatientHub, type PatientLite } from "@/components/verticals/odonto/PatientHub";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
 
 function useCompanyId() { return useAuthStore().company?.id; }
@@ -44,7 +46,6 @@ export function AgendaTab() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [initialDateTime, setInitialDateTime] = useState<string | undefined>(undefined);
 
-  // Range da query depende da view
   const { start: rangeStart, end: rangeEnd } = agendaRangeFor(agendaView, anchorDate);
 
   const { data, isLoading } = useQuery({
@@ -71,7 +72,6 @@ export function AgendaTab() {
   const settings = settingsData?.settings;
   const practitioners = practitionersData?.practitioners || [];
 
-  // Lista de cadeiras (usada so na view Dia)
   let chairs: string[] | undefined;
   if (settings) {
     chairs = [];
@@ -114,7 +114,6 @@ export function AgendaTab() {
     setShowNew(true);
   }
 
-  // Click em dia no calendario do mes -> vai pra view Dia naquele dia
   function handleDayPressMonth(d: Date) {
     setAnchorDate(d);
     setAgendaView("day");
@@ -122,7 +121,6 @@ export function AgendaTab() {
 
   return (
     <View style={{ gap: 12 }}>
-      {/* Toggle Calendario | Lista */}
       <View style={v.toggleRow}>
         <Pressable onPress={() => setViewMode("calendar")} style={[v.toggleBtn, viewMode === "calendar" && v.toggleBtnActive]}>
           <Icon name="calendar" size={13} color={viewMode === "calendar" ? "#fff" : Colors.ink3} />
@@ -197,10 +195,14 @@ export function AgendaTab() {
   );
 }
 
+// ──────────────────────────────────────────────────────────
+// PacientesTab (W1-01): card clicavel -> abre PatientHub
+// ──────────────────────────────────────────────────────────
 export function PacientesTab() {
   const cid = useCompanyId();
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<PatientLite | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-patients", cid, search],
@@ -238,18 +240,38 @@ export function PacientesTab() {
           </View>
         )}
         {patients.map((p: any) => (
-          <View key={p.id} style={z.patientCard}>
+          <Pressable
+            key={p.id}
+            onPress={() => setSelectedPatient({
+              id: p.id,
+              name: p.full_name || p.name,
+              full_name: p.full_name,
+              phone: p.phone,
+              email: p.email,
+              cpf: p.cpf_cnpj || p.cpf,
+              birthday: p.birth_date,
+              notes: p.notes,
+              is_patient: true,
+            })}
+            style={z.patientCard}
+          >
             <View style={{ flex: 1 }}>
               <Text style={z.patientName}>{p.full_name}</Text>
               <Text style={z.patientMeta}>{p.phone || ""}{p.email ? " | " + p.email : ""}</Text>
               {p.insurance_name && <Text style={z.patientInsurance}>{p.insurance_name}</Text>}
             </View>
             {p.lgpd_consent && <View style={z.lgpdBadge}><Text style={z.lgpdText}>LGPD</Text></View>}
-          </View>
+            <Icon name="arrow_right" size={14} color={Colors.ink3} />
+          </Pressable>
         ))}
       </View>
 
       <NewPatientModal visible={showNew} onClose={() => setShowNew(false)} />
+      <PatientHub
+        visible={!!selectedPatient}
+        patient={selectedPatient}
+        onClose={() => setSelectedPatient(null)}
+      />
     </>
   );
 }
