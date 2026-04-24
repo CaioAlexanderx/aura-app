@@ -18,6 +18,7 @@
 // ║    - Fonte, cor, peso do texto (nao do barcode)                        ║
 // ║    - Margem interna, gap                                               ║
 // ║    - QR code (modo alternativo, nao critico pra POS fisico)            ║
+// ║    - Preview bar / guia visual pre-impressao (livre, so tela)          ║
 // ║                                                                        ║
 // ║  Se ALTERAR BARCODE_OPTS: imprimir UMA etiqueta, escanear com pistola, ║
 // ║  confirmar leitura em CODE128, EAN13, EAN8 e UPC (4 formatos) ANTES    ║
@@ -41,6 +42,46 @@ const BARCODE_OPTS = {
   background:   "#ffffff",
   lineColor:    "#000000",
 };
+// -----------------------------------------------------------------
+
+// ----- Validacao de codigo de barras -----
+// Placeholders conhecidos que nao devem virar etiqueta real:
+// "..." e variacoes apareceram em cadastros recentes da Finesse (abr/2026)
+// gerando barcode com 3 barras grossas - ilegivel no scanner.
+const BARCODE_PLACEHOLDERS = new Set([
+  "", "...", "....", ".....", "-", "--", "---",
+  "0", "00", "000", "N/A", "n/a", "NA", "na",
+  "sem codigo", "SEM CODIGO", "null", "undefined", "?", "??", "???",
+]);
+const BARCODE_MIN_LENGTH = 4;
+
+export function isValidBarcode(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const trimmed = String(code).trim();
+  if (trimmed.length < BARCODE_MIN_LENGTH) return false;
+  if (BARCODE_PLACEHOLDERS.has(trimmed)) return false;
+  if (BARCODE_PLACEHOLDERS.has(trimmed.toLowerCase())) return false;
+  // Rejeita so pontos/traços/espaços (ex: ".....", "-----", "     ")
+  if (/^[.\-\s_]+$/.test(trimmed)) return false;
+  // Rejeita todos iguais (ex: "0000", "aaaa")
+  if (/^(.)\1+$/.test(trimmed)) return false;
+  return true;
+}
+
+export type InvalidCodeItem = { name: string; code: string; reason: string };
+
+export function validateLabelItems(items: Array<{ name: string; barcode: string }>): InvalidCodeItem[] {
+  const invalid: InvalidCodeItem[] = [];
+  items.forEach(function(item) {
+    const code = String(item.barcode || "").trim();
+    if (!code) { invalid.push({ name: item.name, code: "(vazio)", reason: "Sem codigo cadastrado" }); return; }
+    if (code.length < BARCODE_MIN_LENGTH) { invalid.push({ name: item.name, code: code, reason: "Codigo muito curto (minimo " + BARCODE_MIN_LENGTH + " caracteres)" }); return; }
+    if (BARCODE_PLACEHOLDERS.has(code) || BARCODE_PLACEHOLDERS.has(code.toLowerCase())) { invalid.push({ name: item.name, code: code, reason: "Codigo placeholder \u2014 substitua por SKU real" }); return; }
+    if (/^[.\-\s_]+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo invalido (so pontos/traços)" }); return; }
+    if (/^(.)\1+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo repetido (ex: 0000)" }); return; }
+  });
+  return invalid;
+}
 // -----------------------------------------------------------------
 
 export function buildLabelName(name: string, size: string, color: string): string {
@@ -154,18 +195,58 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.qr-inner .name{font-size:5.5pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
   html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
 
-  // Preview bar (so na tela, escondida na impressao)
+  // ===== GUIA VISUAL PRE-IMPRESSAO (livre, so tela) =====
+  // Checklist obrigatoria antes de liberar Ctrl+P. Nao afeta a impressao.
+  html += '.setup-guide{position:fixed;top:0;left:0;right:0;background:#fef2f2;border-bottom:3px solid #dc2626;padding:14px 20px;z-index:1000;font-family:-apple-system,"Segoe UI",sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.1)}';
+  html += '.setup-guide h2{color:#991b1b;font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}';
+  html += '.setup-guide h2::before{content:"\u26a0\ufe0f";font-size:18px}';
+  html += '.setup-guide .steps{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:10px}';
+  html += '.setup-guide .step{display:flex;align-items:center;gap:8px;font-size:12px;color:#7f1d1d;font-weight:600}';
+  html += '.setup-guide .step b{background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-weight:800;letter-spacing:0.3px}';
+  html += '.setup-guide .confirm-row{display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px dashed #fca5a5}';
+  html += '.setup-guide .confirm-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#991b1b;font-weight:700}';
+  html += '.setup-guide .confirm-row input[type=checkbox]{width:18px;height:18px;accent-color:#dc2626;cursor:pointer}';
+  html += '.setup-guide.ready{background:#f0fdf4;border-bottom-color:#16a34a}';
+  html += '.setup-guide.ready h2{color:#166534}.setup-guide.ready h2::before{content:"\u2705"}';
+  html += '.setup-guide.ready .step{color:#14532d}.setup-guide.ready .step b{background:#16a34a}';
+  html += '.setup-guide.ready .confirm-row{border-top-color:#86efac}.setup-guide.ready .confirm-row label{color:#166534}';
+  // Preview bar (rodape)
   html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
   html += '.preview-bar span{color:#a78bfa;font-size:12px}.preview-bar b{color:#e2e8f0;font-size:13px}';
   html += '.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}';
-  html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-bottom:80px}';
+  html += '.preview-bar button:disabled{background:#4b5563;color:#9ca3af;cursor:not-allowed;opacity:0.7}';
+  html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-top:170px;padding-bottom:80px}';
   html += '.preview-wrap table{border:1px dashed #ccc}.preview-wrap .cell{border:1px dashed #eee}';
-  html += '@media print{.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
+  html += '@media print{.setup-guide{display:none!important}.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
   html += '</style></head><body>';
+
+  // Guia visual no topo - checklist obrigatoria pra liberar o botao Imprimir
+  html += '<div class="setup-guide" id="setupGuide">';
+  html += '<h2>Antes de imprimir \u2014 confira o setup da impressora</h2>';
+  html += '<div class="steps">';
+  html += '<div class="step"><b>1</b> Papel: <b>99 x 21 mm</b> (bobina 3 etiquetas)</div>';
+  html += '<div class="step"><b>2</b> Margens: <b>Nenhuma</b></div>';
+  html += '<div class="step"><b>3</b> Escala: <b>100%</b> (n\u00e3o usar "Ajustar \u00e0 p\u00e1gina")</div>';
+  html += '<div class="step"><b>4</b> Cabe\u00e7alho/Rodap\u00e9: <b>Desligados</b></div>';
+  html += '</div>';
+  html += '<div class="confirm-row"><label><input type="checkbox" id="confirmSetup"> Confirmo que o setup acima est\u00e1 correto</label></div>';
+  html += '</div>';
+
   html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
   html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "Codigo de barras") + ')</span><br>';
   html += '<b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + items.length + ' produto' + (items.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
-  html += '<button onclick="window.print()">Imprimir</button></div>';
+  html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirma\u00e7\u00e3o acima</button></div>';
+
+  // Liga o checkbox ao botao imprimir (bloqueio ate o usuario confirmar setup)
+  html += '<script>(function(){';
+  html += 'var cb=document.getElementById("confirmSetup");';
+  html += 'var btn=document.getElementById("printBtn");';
+  html += 'var guide=document.getElementById("setupGuide");';
+  html += 'cb.addEventListener("change",function(){';
+  html += 'if(cb.checked){btn.disabled=false;btn.textContent="Imprimir";guide.classList.add("ready");}';
+  html += 'else{btn.disabled=true;btn.textContent="Marque a confirma\u00e7\u00e3o acima";guide.classList.remove("ready");}';
+  html += '});';
+  html += '})();</scr' + 'ipt>';
 
   if (!isQR) {
     // ===== LOCKED — parametros do JsBarcode =====
