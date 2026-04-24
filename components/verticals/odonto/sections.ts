@@ -7,7 +7,7 @@
 import type { ComponentType } from 'react';
 import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
 import { AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab } from '@/components/verticals/odonto/OdontoClinicTabs';
-import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab } from '@/components/verticals/odonto/OdontoAdminTabs';
+import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab, AgendaOnlineTab } from '@/components/verticals/odonto/OdontoAdminTabs';
 import { DentalFunnel } from '@/components/verticals/odonto/DentalFunnel';
 import { BillingDashboard } from '@/components/verticals/odonto/BillingDashboard';
 import { RepasseDentista } from '@/components/verticals/odonto/RepasseDentista';
@@ -48,7 +48,7 @@ export const SECTIONS: Section[] = [
     icon: '\uD83D\uDCC5',
     tabs: [
       { id: 'agenda-dia', label: 'Hoje e proximos', component: AgendaTab },
-      // futuro W2-03: drag-and-drop
+      { id: 'agenda-online', label: 'Agendamento online', component: AgendaOnlineTab, badge: 'novo' },
     ],
   },
   {
@@ -100,7 +100,7 @@ export const SECTIONS: Section[] = [
     icon: '\u2699\uFE0F',
     tabs: [
       { id: 'clinica-config', label: 'Clinica e cadeiras', component: DentalSettings },
-      // futuro: procedimentos, horarios, agendamento online publico (W1-03)
+      // futuro: procedimentos, horarios
     ],
   },
 ];
