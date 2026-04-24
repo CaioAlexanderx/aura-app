@@ -357,10 +357,11 @@ export default function CaixaScreen() {
               <SearchBox value={query} onChange={setQuery} />
             </View>
 
-            <MerchantBanner height={140} />
+            <MerchantBanner height={200} />
 
-            {/* Action toolbar: 4 cards */}
-            <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 } as any)]}>
+            {/* Action toolbar: 4 cards
+                z-index 50 > ProductGrid stacking contexts, so popovers layer above cards. */}
+            <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, position: "relative", zIndex: 50 } as any)]}>
               <ActBarcode onScan={handleScan} />
               <ActPerson
                 kind="vendedora"
@@ -484,9 +485,9 @@ export default function CaixaScreen() {
           <SearchBox value={query} onChange={setQuery} />
         </View>
 
-        <MerchantBanner height={120} />
+        <MerchantBanner height={160} />
 
-        <View style={{ gap: 10, marginBottom: 16 }}>
+        <View style={[{ gap: 10, marginBottom: 16 }, IS_WEB && ({ position: "relative", zIndex: 50 } as any)]}>
           <ActBarcode onScan={handleScan} />
           <ActPerson
             kind="vendedora"
