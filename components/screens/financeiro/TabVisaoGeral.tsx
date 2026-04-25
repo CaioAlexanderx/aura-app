@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SmartBalance } from "./SmartBalance";
 import { SparklineBar } from "./SparklineBar";
 import { PendingCards } from "./PendingCards";
+import { IncomeDetail } from "./IncomeDetail";
 import { ExpenseDetail } from "./ExpenseDetail";
 import { CashFlowCard } from "./CashFlowCard";
 import { AIFinancialInsights } from "./AIFinancialInsights";
@@ -43,6 +44,8 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
       <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={period} customStart={customStart} customEnd={customEnd} previousSummary={previousSummary} />
       <SparklineBar transactions={transactions} />
       <PendingCards transactions={transactions} />
+      {/* Visualizacao detalhada de receitas (categorias, top, tendencia diaria, a receber timeline, formas de recebimento) */}
+      <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
       {/* Visualizacao detalhada de despesas (categorias, top, tendencia diaria, a pagar timeline, formas de pgto) */}
       <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
       <CashFlowCard />
