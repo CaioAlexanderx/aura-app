@@ -1,6 +1,6 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE + W2-05 IA + W3 Implantes)
-// Drill-down do paciente com 10/10 sub-tabs totalmente wiradas.
+// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE + W2-05 IA + W3 Implantes + W3 Ortodontia)
+// Drill-down do paciente com 11/11 sub-tabs totalmente wiradas.
 //
 // Sub-tabs:
 //   Dados        - contato, identificacao, WhatsApp 1-click
@@ -12,7 +12,8 @@
 //   Orcamentos   - treatment-plans?customer_id filter
 //   Cobrancas    - billing/patient/:pid
 //   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal
-//   Implantes    - ImplantWorkflow (W3 Sprint 1 F3)
+//   Implantes    - ImplantWorkflow (W3 Sprint 1)
+//   Ortodontia   - OrthoWorkflow (W3 Sprint 2)
 //
 // Header actions:
 //   IA     (W2-05) — chat IA com contexto profundo do paciente (Expansao only)
@@ -47,6 +48,7 @@ import { PortalShareModal } from '@/components/verticals/odonto/PortalShareModal
 import { ConsentCollectModal } from '@/components/verticals/odonto/ConsentCollectModal';
 import { DentalAiChat } from '@/components/verticals/odonto/DentalAiChat';
 import { ImplantWorkflow } from '@/components/verticals/odonto/ImplantWorkflow';
+import { OrthoWorkflow } from '@/components/verticals/odonto/OrthoWorkflow';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -85,6 +87,7 @@ const HUB_TABS: SubTab[] = [
   { id: 'cobrancas',   label: 'Cobrancas',     component: () => null },
   { id: 'fichas',      label: 'Fichas',        component: () => null },
   { id: 'implantes',   label: 'Implantes',     component: () => null },
+  { id: 'ortodontia',  label: 'Ortodontia',    component: () => null },
 ];
 
 // ────────────────────────────────────────────────────────────
@@ -188,7 +191,7 @@ function DataTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Anamnese (fase 1) ───────────────────────────────────────
+// ── Anamnese ────────────────────────────────────────────────
 function AnamneseTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -213,16 +216,12 @@ function AnamneseTab({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar a anamnese.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const initial = (data as any)?.anamnesis as Partial<AnamneseData> | null;
   const updatedAt = (data as any)?.updated_at;
@@ -245,7 +244,7 @@ function AnamneseTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Odontograma (fase 2) ────────────────────────────────────
+// ── Odontograma ─────────────────────────────────────────────
 function OdontogramaTabContent({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -267,16 +266,12 @@ function OdontogramaTabContent({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar o odontograma.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const teethRaw = ((data as any)?.teeth) || [];
   const teeth = teethRaw.map((t: any) => {
@@ -284,26 +279,20 @@ function OdontogramaTabContent({ patient }: { patient: PatientLite }) {
     (t.faces || []).forEach((f: any) => {
       if (f.face && faces.hasOwnProperty(f.face)) faces[f.face] = f.status || null;
     });
-    return {
-      number: t.tooth,
-      status: (t.faces && t.faces[0]?.status) || 'higido',
-      faces,
-    };
+    return { number: t.tooth, status: (t.faces && t.faces[0]?.status) || 'higido', faces };
   });
 
   return (
     <ScrollView style={styles.tabContent}>
       <OdontogramaSVG
         teeth={teeth}
-        onStatusChange={(toothNum: number, status: string) =>
-          statusMut.mutate({ tooth: toothNum, status })
-        }
+        onStatusChange={(toothNum: number, status: string) => statusMut.mutate({ tooth: toothNum, status })}
       />
     </ScrollView>
   );
 }
 
-// ── Periograma (fase 3) ─────────────────────────────────────
+// ── Periograma ──────────────────────────────────────────────
 function PeriogramaTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -317,27 +306,18 @@ function PeriogramaTab({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar os exames periodontais.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const charts = (((data as any)?.charts) || []).map((c: any) => ({
-    id:              c.id,
-    exam_date:       c.exam_date,
-    measurements:    c.measurements || {},
-    bleeding_sites:  c.bleeding_sites || 0,
-    total_sites:     c.total_sites || 0,
-    bleeding_index:  c.bleeding_index || 0,
-    plaque_index:    c.plaque_index || 0,
-    diagnosis:       c.diagnosis,
-    notes:           c.notes,
+    id: c.id, exam_date: c.exam_date, measurements: c.measurements || {},
+    bleeding_sites: c.bleeding_sites || 0, total_sites: c.total_sites || 0,
+    bleeding_index: c.bleeding_index || 0, plaque_index: c.plaque_index || 0,
+    diagnosis: c.diagnosis, notes: c.notes,
   }));
 
   return (
@@ -347,10 +327,7 @@ function PeriogramaTab({ patient }: { patient: PatientLite }) {
           charts={charts}
           patientName={patient.full_name || patient.name}
           onAddExam={() => setShowAddModal(true)}
-          onViewChart={(chartId) => {
-            // TODO(fase 4): abrir modal de detalhe do exame
-            console.log('view chart', chartId);
-          }}
+          onViewChart={(chartId) => console.log('view chart', chartId)}
         />
       </ScrollView>
       <AddPerioExamModal
@@ -364,7 +341,7 @@ function PeriogramaTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Prontuario (fase 2) ─────────────────────────────────────
+// ── Prontuario ──────────────────────────────────────────────
 function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
 
@@ -376,35 +353,24 @@ function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar o prontuario.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const entries = (((data as any)?.prescriptions) || []).map((p: any) => ({
-    id:           p.id,
-    type:         p.doc_type || 'receituario',
-    date:         p.issued_at,
-    description:  p.content,
-    professional: '',
+    id: p.id, type: p.doc_type || 'receituario', date: p.issued_at,
+    description: p.content, professional: '',
   }));
 
-  if (!entries.length) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Sem registros</Text>
-        <Text style={styles.placeholderMessage}>
-          Nenhuma prescricao, atestado ou receituario registrado ate o momento.
-        </Text>
-      </View>
-    );
-  }
+  if (!entries.length) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Sem registros</Text>
+      <Text style={styles.placeholderMessage}>Nenhuma prescricao registrada.</Text>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.tabContent}>
@@ -413,7 +379,7 @@ function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Imagens (W1-02 WIRADA) ──────────────────────────────────
+// ── Imagens ─────────────────────────────────────────────────
 function ImagensTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -429,57 +395,24 @@ function ImagensTab({ patient }: { patient: PatientLite }) {
   const deleteMut = useMutation({
     mutationFn: (imageId: string) =>
       request(`/companies/${cid}/dental/images/${imageId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['dental-images', cid, patient.id] });
-    },
-    onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Nao foi possivel excluir a imagem.');
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dental-images', cid, patient.id] }),
+    onError: (err: any) => Alert.alert('Erro', err?.message || 'Nao foi possivel excluir.'),
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar as imagens.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const images = (((data as any)?.images) || []).map((i: any) => ({
-    id:            i.id,
-    url:           i.url,
-    thumbnail_url: i.thumbnail_url || i.url,
-    tooth_number:  i.tooth_number,
-    image_type:    i.image_type,
-    description:   i.description,
-    taken_at:      i.taken_at,
-    uploaded_at:   i.created_at || i.uploaded_at,
+    id: i.id, url: i.url, thumbnail_url: i.thumbnail_url || i.url,
+    tooth_number: i.tooth_number, image_type: i.image_type,
+    description: i.description, taken_at: i.taken_at,
+    uploaded_at: i.created_at || i.uploaded_at,
   }));
-
-  function handleImagePress(img: any) {
-    Linking.openURL(img.url).catch(() => {
-      Alert.alert('Erro', 'Nao foi possivel abrir a imagem.');
-    });
-  }
-
-  function handleDelete(imageId: string) {
-    Alert.alert(
-      'Excluir imagem?',
-      'Esta acao nao pode ser desfeita. O arquivo sera removido do armazenamento.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: () => deleteMut.mutate(imageId),
-        },
-      ]
-    );
-  }
 
   return (
     <>
@@ -488,8 +421,13 @@ function ImagensTab({ patient }: { patient: PatientLite }) {
           images={images}
           patientName={patient.full_name || patient.name}
           onUpload={() => setShowAddModal(true)}
-          onImagePress={handleImagePress}
-          onDelete={handleDelete}
+          onImagePress={(img: any) => Linking.openURL(img.url).catch(() => {})}
+          onDelete={(imageId: string) => {
+            Alert.alert('Excluir imagem?', 'Esta acao nao pode ser desfeita.', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Excluir', style: 'destructive', onPress: () => deleteMut.mutate(imageId) },
+            ]);
+          }}
         />
       </ScrollView>
       <AddClinicalImageModal
@@ -503,7 +441,7 @@ function ImagensTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Orcamentos (fase 2) ─────────────────────────────────────
+// ── Orcamentos ──────────────────────────────────────────────
 function OrcamentosTabContent({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
 
@@ -515,29 +453,21 @@ function OrcamentosTabContent({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar os orcamentos.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const plans = ((data as any)?.plans) || [];
 
-  if (!plans.length) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Sem orcamentos</Text>
-        <Text style={styles.placeholderMessage}>
-          Nenhum orcamento criado ate o momento. Crie um novo pela aba Financeiro {'>'} Orcamentos.
-        </Text>
-      </View>
-    );
-  }
+  if (!plans.length) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Sem orcamentos</Text>
+      <Text style={styles.placeholderMessage}>Nenhum orcamento criado.</Text>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.tabContent}>
@@ -571,7 +501,7 @@ function OrcamentosTabContent({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Cobrancas (fase 2) ──────────────────────────────────────
+// ── Cobrancas ───────────────────────────────────────────────
 function CobrancasTabContent({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
 
@@ -583,32 +513,24 @@ function CobrancasTabContent({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar as cobrancas.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const installments = ((data as any)?.installments) || [];
   const totalPending = parseFloat((data as any)?.total_pending) || 0;
   const totalOverdue = parseFloat((data as any)?.total_overdue) || 0;
   const totalPaid    = parseFloat((data as any)?.total_paid)    || 0;
 
-  if (!installments.length) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Sem parcelas</Text>
-        <Text style={styles.placeholderMessage}>
-          Nenhuma parcela registrada. Parcelas sao geradas quando um orcamento e aprovado.
-        </Text>
-      </View>
-    );
-  }
+  if (!installments.length) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Sem parcelas</Text>
+      <Text style={styles.placeholderMessage}>Parcelas sao geradas quando um orcamento e aprovado.</Text>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.tabContent}>
@@ -626,43 +548,32 @@ function CobrancasTabContent({ patient }: { patient: PatientLite }) {
           <Text style={[styles.summaryValue, { color: '#10B981' }]}>R$ {formatBRL(totalPaid)}</Text>
         </View>
       </View>
-
       {installments.map((p: any) => {
         const isPaid = p.status === 'paid';
         const daysOverdue = parseInt(p.days_overdue) || 0;
         const isOverdue = !isPaid && daysOverdue > 0;
         const amount = parseFloat(p.amount) || 0;
-
         let dateText = '';
         if (isPaid) dateText = `Pago em ${formatDateBR(p.paid_at)}`;
         else if (isOverdue) dateText = `Venceu ha ${daysOverdue} dia${daysOverdue !== 1 ? 's' : ''} (${formatDateBR(p.due_date)})`;
         else dateText = `Vence em ${formatDateBR(p.due_date)}`;
-
         return (
-          <View
-            key={p.payment_id}
-            style={[
-              styles.installmentCard,
-              isOverdue && styles.installmentCardOverdue,
-              isPaid && styles.installmentCardPaid,
-            ]}
-          >
+          <View key={p.payment_id} style={[
+            styles.installmentCard,
+            isOverdue && styles.installmentCardOverdue,
+            isPaid && styles.installmentCardPaid,
+          ]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.installmentNumber}>
-                Parcela {p.installment_number}
-                {p.plan_number ? ` • Orc. #${p.plan_number}` : ''}
+                Parcela {p.installment_number}{p.plan_number ? ` • Orc. #${p.plan_number}` : ''}
               </Text>
               <Text style={styles.installmentDate}>{dateText}</Text>
             </View>
-            <Text
-              style={[
-                styles.installmentAmount,
-                isPaid && { color: '#10B981' },
-                isOverdue && { color: '#EF4444' },
-              ]}
-            >
-              R$ {formatBRL(amount)}
-            </Text>
+            <Text style={[
+              styles.installmentAmount,
+              isPaid && { color: '#10B981' },
+              isOverdue && { color: '#EF4444' },
+            ]}>R$ {formatBRL(amount)}</Text>
           </View>
         );
       })}
@@ -670,7 +581,7 @@ function CobrancasTabContent({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ── Fichas (fase 3) ─────────────────────────────────────────
+// ── Fichas ──────────────────────────────────────────────────
 function FichasTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -685,25 +596,17 @@ function FichasTab({ patient }: { patient: PatientLite }) {
   });
 
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
-  if (error) {
-    return (
-      <View style={styles.placeholderWrap}>
-        <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
-        <Text style={styles.placeholderMessage}>
-          {(error as any)?.message || 'Nao foi possivel carregar as fichas.'}
-        </Text>
-      </View>
-    );
-  }
+  if (error) return (
+    <View style={styles.placeholderWrap}>
+      <Text style={styles.placeholderTitle}>Erro ao carregar</Text>
+      <Text style={styles.placeholderMessage}>{(error as any)?.message}</Text>
+    </View>
+  );
 
   const forms = (((data as any)?.forms) || []).map((f: any) => ({
-    id:              f.id,
-    patient_id:      f.patient_id || f.customer_id,
-    specialty:       f.specialty,
-    form_data:       f.form_data || {},
-    professional_id: f.professional_id,
-    notes:           f.notes,
-    created_at:      f.created_at,
+    id: f.id, patient_id: f.patient_id || f.customer_id,
+    specialty: f.specialty, form_data: f.form_data || {},
+    professional_id: f.professional_id, notes: f.notes, created_at: f.created_at,
   }));
 
   return (
@@ -712,14 +615,8 @@ function FichasTab({ patient }: { patient: PatientLite }) {
         <FichaEspecialidade
           forms={forms}
           patientName={patient.full_name || patient.name}
-          onAddForm={(specialty) => {
-            setInitialSpecialty(specialty);
-            setShowAddModal(true);
-          }}
-          onViewForm={(formId) => {
-            // TODO(fase 4): abrir modal de detalhe da ficha
-            console.log('view form', formId);
-          }}
+          onAddForm={(specialty) => { setInitialSpecialty(specialty); setShowAddModal(true); }}
+          onViewForm={(formId) => console.log('view form', formId)}
         />
       </ScrollView>
       <AddSpecialtyFormModal
@@ -727,10 +624,7 @@ function FichasTab({ patient }: { patient: PatientLite }) {
         patientId={patient.id}
         patientName={patient.full_name || patient.name}
         initialSpecialty={initialSpecialty}
-        onClose={() => {
-          setShowAddModal(false);
-          setInitialSpecialty(undefined);
-        }}
+        onClose={() => { setShowAddModal(false); setInitialSpecialty(undefined); }}
         onSaved={() => qc.invalidateQueries({ queryKey: ['dental-specialty-forms', cid, patient.id] })}
       />
     </>
@@ -761,6 +655,7 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       case 'cobrancas':   return <CobrancasTabContent patient={patient} />;
       case 'fichas':      return <FichasTab patient={patient} />;
       case 'implantes':   return <ImplantWorkflow patient={patient} />;
+      case 'ortodontia':  return <OrthoWorkflow patient={patient} />;
       default:            return <DataTab patient={patient} />;
     }
   };
@@ -795,22 +690,13 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
             </View>
           </View>
           <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => setAiOpen(true)}
-              style={[styles.iconBtn, styles.iconBtnAi]}
-            >
+            <Pressable onPress={() => setAiOpen(true)} style={[styles.iconBtn, styles.iconBtnAi]}>
               <Text style={styles.iconBtnTextAi}>{'✨'} IA</Text>
             </Pressable>
-            <Pressable
-              onPress={() => setConsentOpen(true)}
-              style={[styles.iconBtn, styles.iconBtnConsent]}
-            >
+            <Pressable onPress={() => setConsentOpen(true)} style={[styles.iconBtn, styles.iconBtnConsent]}>
               <Text style={styles.iconBtnTextConsent}>TCLE</Text>
             </Pressable>
-            <Pressable
-              onPress={() => setPortalOpen(true)}
-              style={[styles.iconBtn, styles.iconBtnPortal]}
-            >
+            <Pressable onPress={() => setPortalOpen(true)} style={[styles.iconBtn, styles.iconBtnPortal]}>
               <Text style={styles.iconBtnTextPortal}>Portal</Text>
             </Pressable>
             {onEdit && (
@@ -825,12 +711,10 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
         </View>
 
         <OdontoSubNav tabs={HUB_TABS} activeId={activeTab} onChange={setActiveTab} />
-
         <View style={styles.content}>{renderTab()}</View>
       </View>
     </Modal>
 
-    {/* W2-01: Modal de compartilhamento de portal */}
     <PortalShareModal
       visible={portalOpen}
       patientId={patient.id}
@@ -838,8 +722,6 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       patientPhone={patient.phone || undefined}
       onClose={() => setPortalOpen(false)}
     />
-
-    {/* W2-04: Modal de coleta de TCLE (template -> form -> assinatura) */}
     <ConsentCollectModal
       visible={consentOpen}
       patientId={patient.id}
@@ -848,8 +730,6 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       onClose={() => setConsentOpen(false)}
       onSigned={handleConsentSigned}
     />
-
-    {/* W2-05: IA Odonto com contexto profundo do paciente (Expansao only) */}
     <DentalAiChat
       visible={aiOpen}
       onClose={() => setAiOpen(false)}
@@ -874,10 +754,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  avatar: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#06B6D4',
-    alignItems: 'center', justifyContent: 'center',
-  },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#06B6D4', alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
   headerInfo: { flex: 1 },
   headerName: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
@@ -894,84 +771,35 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   tabContent: { flex: 1, padding: 16 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-
-  // DataTab
   dataSection: { marginBottom: 20 },
-  sectionTitle: {
-    color: '#94A3B8', fontSize: 11, fontWeight: '700',
-    letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8,
-  },
+  sectionTitle: { color: '#94A3B8', fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   fieldRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
   fieldLabel: { color: '#64748B', fontSize: 11, marginBottom: 2 },
   fieldValue: { color: '#E2E8F0', fontSize: 14, fontWeight: '500' },
   notesText: { color: '#CBD5E1', fontSize: 13, lineHeight: 20 },
-  waButton: {
-    marginTop: 12, backgroundColor: '#10B981',
-    paddingVertical: 10, paddingHorizontal: 16,
-    borderRadius: 8, alignItems: 'center',
-  },
+  waButton: { marginTop: 12, backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center' },
   waButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-
-  // Anamnese
-  infoBadge: {
-    marginBottom: 12, padding: 8,
-    backgroundColor: 'rgba(6,182,212,0.08)', borderRadius: 6,
-    borderWidth: 0.5, borderColor: 'rgba(6,182,212,0.2)',
-  },
+  infoBadge: { marginBottom: 12, padding: 8, backgroundColor: 'rgba(6,182,212,0.08)', borderRadius: 6, borderWidth: 0.5, borderColor: 'rgba(6,182,212,0.2)' },
   infoBadgeText: { color: '#06B6D4', fontSize: 11, fontWeight: '600' },
-  savingOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(15,23,42,0.7)',
-    alignItems: 'center', justifyContent: 'center', gap: 12,
-  },
+  savingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.7)', alignItems: 'center', justifyContent: 'center', gap: 12 },
   savingText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-
-  // Placeholder
   placeholderWrap: { flex: 1, padding: 32, alignItems: 'center', justifyContent: 'center' },
   placeholderTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginBottom: 8 },
   placeholderMessage: { color: '#94A3B8', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-
-  // Orcamentos
-  planCard: {
-    backgroundColor: '#1E293B', borderRadius: 12, padding: 14,
-    marginBottom: 10, borderWidth: 0.5, borderColor: '#334155',
-  },
-  planCardHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 6,
-  },
+  planCard: { backgroundColor: '#1E293B', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 0.5, borderColor: '#334155' },
+  planCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   planNumber: { color: '#E2E8F0', fontSize: 13, fontWeight: '700' },
   statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  statusChipText: {
-    fontSize: 10, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
+  statusChipText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   planTotal: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginVertical: 4 },
   planMeta: { color: '#94A3B8', fontSize: 12 },
   planDate: { color: '#64748B', fontSize: 11, marginTop: 4 },
-
-  // Cobrancas
   summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  summaryCard: {
-    flex: 1, backgroundColor: '#1E293B', borderRadius: 10,
-    padding: 10, alignItems: 'center',
-    borderWidth: 0.5, borderColor: '#334155',
-  },
-  summaryLabel: {
-    color: '#94A3B8', fontSize: 10, fontWeight: '600',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
-  },
+  summaryCard: { flex: 1, backgroundColor: '#1E293B', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 0.5, borderColor: '#334155' },
+  summaryLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   summaryValue: { fontSize: 15, fontWeight: '700' },
-  installmentCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1E293B', borderRadius: 10,
-    padding: 12, marginBottom: 8,
-    borderWidth: 0.5, borderColor: '#334155', gap: 10,
-  },
-  installmentCardOverdue: {
-    borderColor: 'rgba(239,68,68,0.4)',
-    backgroundColor: 'rgba(239,68,68,0.06)',
-  },
+  installmentCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 0.5, borderColor: '#334155', gap: 10 },
+  installmentCardOverdue: { borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.06)' },
   installmentCardPaid: { opacity: 0.6 },
   installmentNumber: { color: '#E2E8F0', fontSize: 13, fontWeight: '600' },
   installmentDate: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
