@@ -1,6 +1,6 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE + W2-05 IA)
-// Drill-down do paciente com 9/9 sub-tabs totalmente wiradas.
+// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE + W2-05 IA + W3 Implantes)
+// Drill-down do paciente com 10/10 sub-tabs totalmente wiradas.
 //
 // Sub-tabs:
 //   Dados        - contato, identificacao, WhatsApp 1-click
@@ -12,6 +12,7 @@
 //   Orcamentos   - treatment-plans?customer_id filter
 //   Cobrancas    - billing/patient/:pid
 //   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal
+//   Implantes    - ImplantWorkflow (W3 Sprint 1 F3)
 //
 // Header actions:
 //   IA     (W2-05) — chat IA com contexto profundo do paciente (Expansao only)
@@ -45,6 +46,7 @@ import { AddClinicalImageModal } from '@/components/verticals/odonto/AddClinical
 import { PortalShareModal } from '@/components/verticals/odonto/PortalShareModal';
 import { ConsentCollectModal } from '@/components/verticals/odonto/ConsentCollectModal';
 import { DentalAiChat } from '@/components/verticals/odonto/DentalAiChat';
+import { ImplantWorkflow } from '@/components/verticals/odonto/ImplantWorkflow';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ const HUB_TABS: SubTab[] = [
   { id: 'orcamentos',  label: 'Orcamentos',    component: () => null },
   { id: 'cobrancas',   label: 'Cobrancas',     component: () => null },
   { id: 'fichas',      label: 'Fichas',        component: () => null },
+  { id: 'implantes',   label: 'Implantes',     component: () => null },
 ];
 
 // ────────────────────────────────────────────────────────────
@@ -164,7 +167,7 @@ function DataTab({ patient }: { patient: PatientLite }) {
         <Field label="Email"         value={patient.email} />
         {patient.phone && (
           <TouchableOpacity onPress={openWhatsApp} style={styles.waButton}>
-            <Text style={styles.waButtonText}>{'\u{1F4AC}'} Conversar no WhatsApp</Text>
+            <Text style={styles.waButtonText}>{'💬'} Conversar no WhatsApp</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -458,7 +461,6 @@ function ImagensTab({ patient }: { patient: PatientLite }) {
   }));
 
   function handleImagePress(img: any) {
-    // Abre URL no browser/sistema — usuario ve a imagem completa
     Linking.openURL(img.url).catch(() => {
       Alert.alert('Erro', 'Nao foi possivel abrir a imagem.');
     });
@@ -758,12 +760,12 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       case 'orcamentos':  return <OrcamentosTabContent patient={patient} />;
       case 'cobrancas':   return <CobrancasTabContent patient={patient} />;
       case 'fichas':      return <FichasTab patient={patient} />;
+      case 'implantes':   return <ImplantWorkflow patient={patient} />;
       default:            return <DataTab patient={patient} />;
     }
   };
 
   function handleConsentSigned() {
-    // Invalida queries que poderiam mostrar TCLE no historico
     qc.invalidateQueries({ queryKey: ['dental-consent-docs', patient!.id] });
     qc.invalidateQueries({ queryKey: ['dental-prescriptions', patient!.id] });
   }
@@ -797,7 +799,7 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
               onPress={() => setAiOpen(true)}
               style={[styles.iconBtn, styles.iconBtnAi]}
             >
-              <Text style={styles.iconBtnTextAi}>{'\u2728'} IA</Text>
+              <Text style={styles.iconBtnTextAi}>{'✨'} IA</Text>
             </Pressable>
             <Pressable
               onPress={() => setConsentOpen(true)}
