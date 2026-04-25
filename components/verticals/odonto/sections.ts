@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Odonto Sections (W2-01 + W2-02 TISS)
+// AURA. — Odonto Sections (W2-01 + W2-02 TISS + W2-03 NFS-e)
 // Reagrupa 16 tabs flat em 6 secoes com sub-tabs internas.
 // Estrutura referenciada pelo OdontoScreen + OdontoSubNav.
 // ============================================================
@@ -16,6 +16,7 @@ import { AutomationConfig } from '@/components/verticals/odonto/AutomationConfig
 import { RetornoTab } from '@/components/verticals/odonto/RetornoTab';
 import { DentalSettings } from '@/components/verticals/odonto/DentalSettings';
 import { TissTab } from '@/components/verticals/odonto/TissTab';
+import { NfseTab } from '@/components/verticals/odonto/NfseTab';
 
 export interface SubTab {
   id: string;
@@ -80,6 +81,7 @@ export const SECTIONS: Section[] = [
     tabs: [
       { id: 'orcamentos', label: 'Orcamentos', component: OrcamentosTab },
       { id: 'cobrancas', label: 'Cobrancas', component: BillingDashboard },
+      { id: 'nfse', label: 'NFS-e', component: NfseTab, badge: 'novo' }, // W2-03
       { id: 'tiss', label: 'TISS', component: TissTab, badge: 'novo' }, // W2-02
       { id: 'repasses', label: 'Repasses', component: RepasseDentista },
       { id: 'convenios', label: 'Convenios (legado)', component: ConveniosTab },
