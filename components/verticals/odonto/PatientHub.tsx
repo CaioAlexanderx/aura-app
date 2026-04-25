@@ -1,6 +1,9 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 + W1-02 + W2 + W3 + GAP-01 Documentos)
-// Drill-down do paciente com 11/11 sub-tabs + botao Doc no header.
+// AURA. — PatientHub (W1+W2+W3+GAP-01+GAP-02+GAP-04)
+// 11 sub-tabs + header: IA | Exame | Doc | TCLE | Portal
+//
+// GAP-02: botao 'Voz' no Prontuario -> VoiceEvolution modal
+// GAP-04: botao 'Exame' no header -> ExamRequestPanel modal
 // ============================================================
 
 import { useState } from 'react';
@@ -28,6 +31,8 @@ import { DentalAiChat } from '@/components/verticals/odonto/DentalAiChat';
 import { ImplantWorkflow } from '@/components/verticals/odonto/ImplantWorkflow';
 import { OrthoWorkflow } from '@/components/verticals/odonto/OrthoWorkflow';
 import { DocumentEmitter } from '@/components/verticals/odonto/DocumentEmitter';
+import { VoiceEvolution } from '@/components/verticals/odonto/VoiceEvolution';       // GAP-02
+import { ExamRequestPanel } from '@/components/verticals/odonto/ExamRequestPanel'; // GAP-04
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 export interface PatientLite {
@@ -93,7 +98,7 @@ function planStatusLabel(s: string) {
   return m[s] || s;
 }
 
-// ── Sub-tabs ─────────────────────────────────────────────────
+// ── Sub-tab components ────────────────────────────────────────
 function DataTab({ patient }: { patient: PatientLite }) {
   const Field = ({ label, value }: { label: string; value?: string | null }) => (
     <View style={styles.fieldRow}>
@@ -113,7 +118,7 @@ function DataTab({ patient }: { patient: PatientLite }) {
             onPress={() => Linking.openURL(`https://wa.me/55${patient.phone!.replace(/\D/g,'')}`).catch(()=>{})}
             style={styles.waButton}
           >
-            <Text style={styles.waButtonText}>{'💬'} Conversar no WhatsApp</Text>
+            <Text style={styles.waButtonText}>{'\uD83D\uDCAC'} Conversar no WhatsApp</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -206,7 +211,8 @@ function PeriogramaTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
+// GAP-02: aceita onVoice para abrir VoiceEvolution
+function ProntuarioTabContent({ patient, onVoice }: { patient: PatientLite; onVoice?: () => void }) {
   const cid = useAuthStore().company?.id;
   const { data, isLoading } = useQuery({
     queryKey: ['dental-prescriptions', cid, patient.id],
@@ -215,8 +221,20 @@ function ProntuarioTabContent({ patient }: { patient: PatientLite }) {
   });
   if (isLoading) return <View style={styles.loadingWrap}><ActivityIndicator color="#06B6D4" /></View>;
   const entries = ((data as any)?.prescriptions||[]).map((p: any) => ({ id:p.id,type:p.doc_type||'receituario',date:p.issued_at,description:p.content,professional:'' }));
-  if (!entries.length) return <View style={styles.placeholderWrap}><Text style={styles.placeholderTitle}>Sem registros</Text></View>;
-  return <ScrollView style={styles.tabContent}><ProntuarioTimeline entries={entries} patientName={patient.full_name||patient.name} /></ScrollView>;
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Botao de ditado por voz (GAP-02) */}
+      {onVoice && (
+        <TouchableOpacity onPress={onVoice} style={styles.voiceBtn}>
+          <Text style={styles.voiceBtnText}>{'🎤'} Registrar por voz</Text>
+        </TouchableOpacity>
+      )}
+      {!entries.length
+        ? <View style={styles.placeholderWrap}><Text style={styles.placeholderTitle}>Sem registros</Text><Text style={styles.placeholderMessage}>Use o botao de voz acima para registrar evoluções por ditado, ou salve documentos pela aba Doc</Text></View>
+        : <ScrollView style={styles.tabContent}><ProntuarioTimeline entries={entries} patientName={patient.full_name||patient.name} /></ScrollView>
+      }
+    </View>
+  );
 }
 
 function ImagensTab({ patient }: { patient: PatientLite }) {
@@ -243,7 +261,7 @@ function ImagensTab({ patient }: { patient: PatientLite }) {
       <ScrollView style={styles.tabContent}>
         <ClinicalImages images={images} patientName={patient.full_name||patient.name} onUpload={()=>setShowAdd(true)}
           onImagePress={(img: any)=>Linking.openURL(img.url).catch(()=>{})}
-          onDelete={(id: string)=>Alert.alert('Excluir?','Ação irreversível.',[{text:'Cancelar',style:'cancel'},{text:'Excluir',style:'destructive',onPress:()=>delMut.mutate(id)}])}
+          onDelete={(id: string)=>Alert.alert('Excluir?','Acao irreversivel.',[{text:'Cancelar',style:'cancel'},{text:'Excluir',style:'destructive',onPress:()=>delMut.mutate(id)}])}
         />
       </ScrollView>
       <AddClinicalImageModal visible={showAdd} patientId={patient.id} patientName={patient.full_name||patient.name} onClose={()=>setShowAdd(false)} onSaved={()=>qc.invalidateQueries({queryKey:['dental-images',cid,patient.id]})} />
@@ -299,7 +317,7 @@ function CobrancasTabContent({ patient }: { patient: PatientLite }) {
         const isPaid=p.status==='paid', days=parseInt(p.days_overdue)||0, isOvd=!isPaid&&days>0, amt=parseFloat(p.amount)||0;
         return (
           <View key={p.payment_id} style={[styles.installmentCard,isOvd&&styles.installmentCardOverdue,isPaid&&styles.installmentCardPaid]}>
-            <View style={{flex:1}}><Text style={styles.installmentNumber}>Parcela {p.installment_number}</Text><Text style={styles.installmentDate}>{isPaid?`Pago em ${formatDateBR(p.paid_at)}`:isOvd?`Venceu há ${days}d`:`Vence em ${formatDateBR(p.due_date)}`}</Text></View>
+            <View style={{flex:1}}><Text style={styles.installmentNumber}>Parcela {p.installment_number}</Text><Text style={styles.installmentDate}>{isPaid?`Pago em ${formatDateBR(p.paid_at)}`:isOvd?`Venceu ha ${days}d`:`Vence em ${formatDateBR(p.due_date)}`}</Text></View>
             <Text style={[styles.installmentAmount,isPaid&&{color:'#10B981'},isOvd&&{color:'#EF4444'}]}>R$ {formatBRL(amt)}</Text>
           </View>
         );
@@ -344,6 +362,8 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
   const [consentOpen, setConsentOpen] = useState(false);
   const [aiOpen,      setAiOpen]      = useState(false);
   const [docOpen,     setDocOpen]     = useState(false);
+  const [voiceOpen,   setVoiceOpen]   = useState(false); // GAP-02
+  const [examOpen,    setExamOpen]    = useState(false); // GAP-04
 
   if (!patient) return null;
 
@@ -353,7 +373,7 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       case 'anamnese':    return <AnamneseTab patient={patient} />;
       case 'odontograma': return <OdontogramaTabContent patient={patient} />;
       case 'periograma':  return <PeriogramaTab patient={patient} />;
-      case 'prontuario':  return <ProntuarioTabContent patient={patient} />;
+      case 'prontuario':  return <ProntuarioTabContent patient={patient} onVoice={() => setVoiceOpen(true)} />;
       case 'imagens':     return <ImagensTab patient={patient} />;
       case 'orcamentos':  return <OrcamentosTabContent patient={patient} />;
       case 'cobrancas':   return <CobrancasTabContent patient={patient} />;
@@ -376,19 +396,27 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
               </View>
               <View style={styles.headerInfo}>
                 <Text style={styles.headerName}>{patient.full_name||patient.name}</Text>
-                <Text style={styles.headerMeta}>{patient.phone||'Sem telefone'}{patient.is_patient===false?' • Lead':''}</Text>
+                <Text style={styles.headerMeta}>{patient.phone||'Sem telefone'}{patient.is_patient===false?' \u2022 Lead':''}</Text>
               </View>
             </View>
             <View style={styles.headerActions}>
+              {/* IA */}
               <Pressable onPress={()=>setAiOpen(true)} style={[styles.iconBtn,styles.iconBtnAi]}>
-                <Text style={styles.iconBtnTextAi}>✨ IA</Text>
+                <Text style={styles.iconBtnTextAi}>\u2728 IA</Text>
               </Pressable>
+              {/* Exame (GAP-04) */}
+              <Pressable onPress={()=>setExamOpen(true)} style={[styles.iconBtn,styles.iconBtnExam]}>
+                <Text style={styles.iconBtnTextExam}>\uD83D\uDD2C Exame</Text>
+              </Pressable>
+              {/* Doc (GAP-01) */}
               <Pressable onPress={()=>setDocOpen(true)} style={[styles.iconBtn,styles.iconBtnDoc]}>
-                <Text style={styles.iconBtnTextDoc}>📄 Doc</Text>
+                <Text style={styles.iconBtnTextDoc}>\uD83D\uDCC4 Doc</Text>
               </Pressable>
+              {/* TCLE */}
               <Pressable onPress={()=>setConsentOpen(true)} style={[styles.iconBtn,styles.iconBtnConsent]}>
                 <Text style={styles.iconBtnTextConsent}>TCLE</Text>
               </Pressable>
+              {/* Portal */}
               <Pressable onPress={()=>setPortalOpen(true)} style={[styles.iconBtn,styles.iconBtnPortal]}>
                 <Text style={styles.iconBtnTextPortal}>Portal</Text>
               </Pressable>
@@ -401,10 +429,34 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
         </View>
       </Modal>
 
+      {/* Modals overlay */}
       <PortalShareModal visible={portalOpen} patientId={patient.id} patientName={patient.full_name||patient.name} patientPhone={patient.phone||undefined} onClose={()=>setPortalOpen(false)} />
       <ConsentCollectModal visible={consentOpen} patientId={patient.id} patientName={patient.full_name||patient.name} patientPhone={patient.phone||undefined} onClose={()=>setConsentOpen(false)} onSigned={()=>{ qc.invalidateQueries({queryKey:['dental-consent-docs',patient.id]}); }} />
       <DentalAiChat visible={aiOpen} onClose={()=>setAiOpen(false)} initialPatientId={patient.id} initialPatientName={patient.full_name||patient.name} />
       <DocumentEmitter visible={docOpen} patient={patient} onClose={()=>setDocOpen(false)} />
+
+      {/* GAP-02: VoiceEvolution — abre sobre o PatientHub */}
+      <Modal visible={voiceOpen} animationType="slide" onRequestClose={()=>setVoiceOpen(false)}
+        presentationStyle={Platform.OS==='ios'?'pageSheet':'fullScreen'}>
+        <VoiceEvolution
+          patient={patient}
+          onClose={()=>setVoiceOpen(false)}
+          onSaved={()=>{
+            setVoiceOpen(false);
+            qc.invalidateQueries({queryKey:['dental-prescriptions',patient.id]});
+          }}
+        />
+      </Modal>
+
+      {/* GAP-04: ExamRequestPanel — abre sobre o PatientHub */}
+      <Modal visible={examOpen} animationType="slide" onRequestClose={()=>setExamOpen(false)}
+        presentationStyle={Platform.OS==='ios'?'pageSheet':'fullScreen'}>
+        <ExamRequestPanel
+          patient={patient}
+          onClose={()=>setExamOpen(false)}
+          onSaved={()=>setExamOpen(false)}
+        />
+      </Modal>
     </>
   );
 }
@@ -418,7 +470,7 @@ const styles = StyleSheet.create({
   headerInfo: { flex:1 },
   headerName: { color:'#FFFFFF', fontSize:16, fontWeight:'700' },
   headerMeta: { color:'#94A3B8', fontSize:12, marginTop:2 },
-  headerActions: { flexDirection:'row', gap:5, flexWrap:'wrap', justifyContent:'flex-end', maxWidth:220 },
+  headerActions: { flexDirection:'row', gap:5, flexWrap:'wrap', justifyContent:'flex-end', maxWidth:240 },
   iconBtn: { paddingHorizontal:8, paddingVertical:6, backgroundColor:'#1E293B', borderRadius:8 },
   iconBtnText: { color:'#94A3B8', fontSize:11, fontWeight:'600' },
   iconBtnPortal: { backgroundColor:'rgba(167,139,250,0.15)', borderWidth:1, borderColor:'rgba(167,139,250,0.4)' },
@@ -429,6 +481,10 @@ const styles = StyleSheet.create({
   iconBtnTextAi: { color:'#FFFFFF', fontSize:11, fontWeight:'700' },
   iconBtnDoc: { backgroundColor:'rgba(245,158,11,0.15)', borderWidth:1, borderColor:'rgba(245,158,11,0.4)' },
   iconBtnTextDoc: { color:'#F59E0B', fontSize:11, fontWeight:'700' },
+  iconBtnExam: { backgroundColor:'rgba(16,185,129,0.15)', borderWidth:1, borderColor:'rgba(16,185,129,0.4)' }, // GAP-04
+  iconBtnTextExam: { color:'#10B981', fontSize:11, fontWeight:'700' },
+  voiceBtn: { flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'#4C1D95', paddingHorizontal:14, paddingVertical:9, borderRadius:10, margin:16, marginBottom:8, alignSelf:'flex-start' }, // GAP-02
+  voiceBtnText: { color:'#FFFFFF', fontSize:13, fontWeight:'700' },
   content: { flex:1 },
   tabContent: { flex:1, padding:16 },
   loadingWrap: { flex:1, alignItems:'center', justifyContent:'center', padding:32 },
