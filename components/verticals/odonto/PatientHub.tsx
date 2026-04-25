@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 FECHADO + W1-02 imagens R2 + W2-01 portal)
+// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE)
 // Drill-down do paciente com 9/9 sub-tabs totalmente wiradas.
 //
 // Sub-tabs:
@@ -13,7 +13,11 @@
 //   Cobrancas    - billing/patient/:pid
 //   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal
 //
-// Header actions: Portal (W2-01), Editar, Fechar.
+// Header actions:
+//   Portal (W2-01) — gera link de portal pra paciente acompanhar
+//   TCLE   (W2-04) — coleta termo de consentimento assinado
+//   Editar         — edita dados do paciente
+//   Fechar         — fecha o hub
 //
 // Renderizado como Modal full-screen sobreposto a OdontoScreen.
 // ============================================================
@@ -38,6 +42,7 @@ import { AddPerioExamModal } from '@/components/verticals/odonto/AddPerioExamMod
 import { AddSpecialtyFormModal } from '@/components/verticals/odonto/AddSpecialtyFormModal';
 import { AddClinicalImageModal } from '@/components/verticals/odonto/AddClinicalImageModal';
 import { PortalShareModal } from '@/components/verticals/odonto/PortalShareModal';
+import { ConsentCollectModal } from '@/components/verticals/odonto/ConsentCollectModal';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -732,8 +737,10 @@ function FichasTab({ patient }: { patient: PatientLite }) {
 // Main component
 // ────────────────────────────────────────────────────────────
 export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState('dados');
   const [portalOpen, setPortalOpen] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
 
   if (!patient) return null;
 
@@ -751,6 +758,12 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       default:            return <DataTab patient={patient} />;
     }
   };
+
+  function handleConsentSigned() {
+    // Invalida queries que poderiam mostrar TCLE no historico
+    qc.invalidateQueries({ queryKey: ['dental-consent-docs', patient!.id] });
+    qc.invalidateQueries({ queryKey: ['dental-prescriptions', patient!.id] });
+  }
 
   return (
     <>
@@ -777,6 +790,12 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
             </View>
           </View>
           <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setConsentOpen(true)}
+              style={[styles.iconBtn, styles.iconBtnConsent]}
+            >
+              <Text style={styles.iconBtnTextConsent}>TCLE</Text>
+            </Pressable>
             <Pressable
               onPress={() => setPortalOpen(true)}
               style={[styles.iconBtn, styles.iconBtnPortal]}
@@ -807,6 +826,16 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       patientName={patient.full_name || patient.name}
       patientPhone={patient.phone || undefined}
       onClose={() => setPortalOpen(false)}
+    />
+
+    {/* W2-04: Modal de coleta de TCLE (template -> form -> assinatura) */}
+    <ConsentCollectModal
+      visible={consentOpen}
+      patientId={patient.id}
+      patientName={patient.full_name || patient.name}
+      patientPhone={patient.phone || undefined}
+      onClose={() => setConsentOpen(false)}
+      onSigned={handleConsentSigned}
     />
     </>
   );
@@ -839,6 +868,8 @@ const styles = StyleSheet.create({
   iconBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
   iconBtnPortal: { backgroundColor: 'rgba(167,139,250,0.15)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.4)' },
   iconBtnTextPortal: { color: '#a78bfa', fontSize: 12, fontWeight: '700' },
+  iconBtnConsent: { backgroundColor: 'rgba(6,182,212,0.15)', borderWidth: 1, borderColor: 'rgba(6,182,212,0.4)' },
+  iconBtnTextConsent: { color: '#06B6D4', fontSize: 12, fontWeight: '700' },
   content: { flex: 1 },
   tabContent: { flex: 1, padding: 16 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
