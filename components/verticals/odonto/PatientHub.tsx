@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE)
+// AURA. — PatientHub (W1-01 + W1-02 + W2-01 portal + W2-04 TCLE + W2-05 IA)
 // Drill-down do paciente com 9/9 sub-tabs totalmente wiradas.
 //
 // Sub-tabs:
@@ -14,8 +14,9 @@
 //   Fichas       - FichaEspecialidade + GET/POST + AddSpecialtyFormModal
 //
 // Header actions:
-//   Portal (W2-01) — gera link de portal pra paciente acompanhar
+//   IA     (W2-05) — chat IA com contexto profundo do paciente (Expansao only)
 //   TCLE   (W2-04) — coleta termo de consentimento assinado
+//   Portal (W2-01) — gera link de portal pra paciente acompanhar
 //   Editar         — edita dados do paciente
 //   Fechar         — fecha o hub
 //
@@ -43,6 +44,7 @@ import { AddSpecialtyFormModal } from '@/components/verticals/odonto/AddSpecialt
 import { AddClinicalImageModal } from '@/components/verticals/odonto/AddClinicalImageModal';
 import { PortalShareModal } from '@/components/verticals/odonto/PortalShareModal';
 import { ConsentCollectModal } from '@/components/verticals/odonto/ConsentCollectModal';
+import { DentalAiChat } from '@/components/verticals/odonto/DentalAiChat';
 import type { SubTab } from '@/components/verticals/odonto/sections';
 
 // ────────────────────────────────────────────────────────────
@@ -741,6 +743,7 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
   const [activeTab, setActiveTab] = useState('dados');
   const [portalOpen, setPortalOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   if (!patient) return null;
 
@@ -791,6 +794,12 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
           </View>
           <View style={styles.headerActions}>
             <Pressable
+              onPress={() => setAiOpen(true)}
+              style={[styles.iconBtn, styles.iconBtnAi]}
+            >
+              <Text style={styles.iconBtnTextAi}>{'\u2728'} IA</Text>
+            </Pressable>
+            <Pressable
               onPress={() => setConsentOpen(true)}
               style={[styles.iconBtn, styles.iconBtnConsent]}
             >
@@ -837,6 +846,14 @@ export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
       onClose={() => setConsentOpen(false)}
       onSigned={handleConsentSigned}
     />
+
+    {/* W2-05: IA Odonto com contexto profundo do paciente (Expansao only) */}
+    <DentalAiChat
+      visible={aiOpen}
+      onClose={() => setAiOpen(false)}
+      initialPatientId={patient.id}
+      initialPatientName={patient.full_name || patient.name}
+    />
     </>
   );
 }
@@ -870,6 +887,8 @@ const styles = StyleSheet.create({
   iconBtnTextPortal: { color: '#a78bfa', fontSize: 12, fontWeight: '700' },
   iconBtnConsent: { backgroundColor: 'rgba(6,182,212,0.15)', borderWidth: 1, borderColor: 'rgba(6,182,212,0.4)' },
   iconBtnTextConsent: { color: '#06B6D4', fontSize: 12, fontWeight: '700' },
+  iconBtnAi: { backgroundColor: '#7c3aed', borderWidth: 1, borderColor: '#a78bfa' },
+  iconBtnTextAi: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   content: { flex: 1 },
   tabContent: { flex: 1, padding: 16 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
