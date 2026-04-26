@@ -1,3 +1,4 @@
+import { Fragment, ReactNode } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -7,8 +8,13 @@ import { Icon } from "@/components/Icon";
 
 // ============================================================
 // AURA. — OdontoDashboard
-// Consome GET /dental/dashboard (endpoint agregado do BE).
+//
+// Consome GET /dental/dashboard (endpoint agregado do BE):
 // 10 KPIs em UM request, status PT-BR, TZ SP, D-UNIFY ok.
+//
+// Aceita sectionsOrder (opcional) para reordenar as 6 secoes
+// por persona (PR4 — Fase 3, 2026-04-26). Sem prop = ordem
+// historica preservada.
 // ============================================================
 
 const fmt = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -24,6 +30,15 @@ const STAGE_LABELS: Record<string, string> = {
   in_treatment:         "Em tratamento",
 };
 
+export type SectionKey = "agenda" | "financeiro" | "cobranca" | "pacientes" | "funil" | "topProcs";
+
+const DEFAULT_ORDER: SectionKey[] = ["agenda", "financeiro", "cobranca", "pacientes", "funil", "topProcs"];
+
+interface Props {
+  sectionsOrder?: SectionKey[];
+  hideTitle?: boolean;
+}
+
 function KpiCard({ value, label, color, icon, sublabel }: { value: string; label: string; color: string; icon: string; sublabel?: string }) {
   return (
     <View style={z.kpi}>
@@ -37,7 +52,7 @@ function KpiCard({ value, label, color, icon, sublabel }: { value: string; label
   );
 }
 
-export function OdontoDashboard() {
+export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = false }: Props = {}) {
   const { company } = useAuthStore();
 
   const { data, isLoading, error } = useQuery({
@@ -60,11 +75,12 @@ export function OdontoDashboard() {
   const pipelineTotal = d.pipeline_total || 0;
   const procs: Array<{ nome: string; qtd: number; receita: number }> = d.top_procedimentos_mes || [];
 
-  // Conversao: orcamento_aprovado / orcamento_enviado (estimativa simples)
   const budgetSent = funil.find(f => f.stage === "budget_sent")?.qtd || 0;
   const budgetApproved = funil.find(f => f.stage === "budget_approved")?.qtd || 0;
   const inTreatment = funil.find(f => f.stage === "in_treatment")?.qtd || 0;
-  const conversionRate = budgetSent > 0 ? ((budgetApproved + inTreatment) / (budgetSent + budgetApproved + inTreatment)) * 100 : 0;
+  const conversionRate = budgetSent > 0
+    ? ((budgetApproved + inTreatment) / (budgetSent + budgetApproved + inTreatment)) * 100
+    : 0;
 
   if (isLoading) {
     return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>;
@@ -74,63 +90,75 @@ export function OdontoDashboard() {
     return (
       <View style={z.errorBox}>
         <Icon name="alert" size={16} color={Colors.red} />
-        <Text style={z.errorText}>
-          Nao foi possivel carregar o dashboard odonto. Tente recarregar a pagina.
-        </Text>
+        <Text style={z.errorText}>Nao foi possivel carregar o dashboard odonto. Tente recarregar a pagina.</Text>
       </View>
     );
   }
 
-  return (
-    <ScrollView showsVerticalScrollIndicator={false}>
-      <Text style={z.title}>Dashboard Odonto</Text>
+  // ============================================================
+  // SECTIONS — cada chave renderiza um bloco. Ordem definida via
+  // prop sectionsOrder permite que o consumidor (ex: hoje.tsx) reorder
+  // por persona sem que o dashboard precise saber sobre persona.
+  // ============================================================
+  const SECTIONS: Record<SectionKey, () => ReactNode> = {
+    agenda: () => (
+      <Fragment>
+        <Text style={z.section}>Agenda</Text>
+        <View style={z.row}>
+          <KpiCard value={String(hoje.total || 0)} label="Consultas hoje" color="#06B6D4" icon="calendar"
+            sublabel={hoje.confirmados > 0 ? `${hoje.confirmados} confirmadas` : undefined} />
+          <KpiCard value={String(hoje.pendentes || 0)} label="A confirmar" color="#F59E0B" icon="clock" />
+          <KpiCard value={String(hoje.concluidos || 0)} label="Concluidas" color={Colors.green || "#10B981"} icon="check" />
+          <KpiCard value={String(hoje.faltas || 0)} label="Faltas" color={Colors.red || "#EF4444"} icon="alert" />
+        </View>
+        <View style={z.row}>
+          <KpiCard value={String(semana.ativos || 0)} label="Proximos 7 dias" color="#06B6D4" icon="calendar"
+            sublabel={`${semana.total || 0} no total`} />
+        </View>
+      </Fragment>
+    ),
 
-      {/* Agenda do dia */}
-      <Text style={z.section}>Agenda</Text>
-      <View style={z.row}>
-        <KpiCard value={String(hoje.total || 0)} label="Consultas hoje" color="#06B6D4" icon="calendar"
-          sublabel={hoje.confirmados > 0 ? `${hoje.confirmados} confirmadas` : undefined} />
-        <KpiCard value={String(hoje.pendentes || 0)} label="A confirmar" color="#F59E0B" icon="clock" />
-        <KpiCard value={String(hoje.concluidos || 0)} label="Concluidas" color={Colors.green || "#10B981"} icon="check" />
-        <KpiCard value={String(hoje.faltas || 0)} label="Faltas" color={Colors.red || "#EF4444"} icon="alert" />
-      </View>
-      <View style={z.row}>
-        <KpiCard value={String(semana.ativos || 0)} label="Proximos 7 dias" color="#06B6D4" icon="calendar"
-          sublabel={`${semana.total || 0} no total`} />
-      </View>
+    financeiro: () => (
+      <Fragment>
+        <Text style={z.section}>Financeiro do mes</Text>
+        <View style={z.row}>
+          <KpiCard value={fmt(fat.realizado)} label="Realizado" color={Colors.green || "#10B981"} icon="wallet"
+            sublabel="Atendimentos concluidos" />
+          <KpiCard value={fmt(fat.previsto)} label="Previsto" color="#06B6D4" icon="trending_up"
+            sublabel="Na agenda" />
+          <KpiCard value={fmt(repasse.a_pagar)} label="Repasse a pagar" color={Colors.amber || "#F59E0B"} icon="dollar"
+            sublabel={fmt(repasse.pago) + " ja pago"} />
+        </View>
+      </Fragment>
+    ),
 
-      {/* Financeiro */}
-      <Text style={z.section}>Financeiro do mes</Text>
-      <View style={z.row}>
-        <KpiCard value={fmt(fat.realizado)} label="Realizado" color={Colors.green || "#10B981"} icon="wallet"
-          sublabel="Atendimentos concluidos" />
-        <KpiCard value={fmt(fat.previsto)} label="Previsto" color="#06B6D4" icon="trending_up"
-          sublabel="Na agenda" />
-        <KpiCard value={fmt(repasse.a_pagar)} label="Repasse a pagar" color={Colors.amber || "#F59E0B"} icon="dollar"
-          sublabel={fmt(repasse.pago) + " ja pago"} />
-      </View>
+    cobranca: () => (
+      <Fragment>
+        <Text style={z.section}>Cobranca</Text>
+        <View style={z.row}>
+          <KpiCard value={fmt(parcVenc.valor)} label="Parcelas vencidas" color={Colors.red || "#EF4444"} icon="alert"
+            sublabel={`${parcVenc.qtd} parcela${parcVenc.qtd !== 1 ? "s" : ""}`} />
+          <KpiCard value={fmt(parc7d.valor)} label="Vencem em 7 dias" color={Colors.amber || "#F59E0B"} icon="clock"
+            sublabel={`${parc7d.qtd} parcela${parc7d.qtd !== 1 ? "s" : ""}`} />
+        </View>
+      </Fragment>
+    ),
 
-      {/* Cobranca */}
-      <Text style={z.section}>Cobranca</Text>
-      <View style={z.row}>
-        <KpiCard value={fmt(parcVenc.valor)} label="Parcelas vencidas" color={Colors.red || "#EF4444"} icon="alert"
-          sublabel={`${parcVenc.qtd} parcela${parcVenc.qtd !== 1 ? "s" : ""}`} />
-        <KpiCard value={fmt(parc7d.valor)} label="Vencem em 7 dias" color={Colors.amber || "#F59E0B"} icon="clock"
-          sublabel={`${parc7d.qtd} parcela${parc7d.qtd !== 1 ? "s" : ""}`} />
-      </View>
+    pacientes: () => (
+      <Fragment>
+        <Text style={z.section}>Pacientes</Text>
+        <View style={z.row}>
+          <KpiCard value={String(pacientes.total || 0)} label="Base ativa" color="#06B6D4" icon="users"
+            sublabel={`+${pacientes.novos_mes || 0} este mes`} />
+          <KpiCard value={String(recall)} label="Recall pendente" color={Colors.violet3 || "#a78bfa"} icon="phone"
+            sublabel="Sem visita ha 150+ dias" />
+        </View>
+      </Fragment>
+    ),
 
-      {/* Pacientes */}
-      <Text style={z.section}>Pacientes</Text>
-      <View style={z.row}>
-        <KpiCard value={String(pacientes.total || 0)} label="Base ativa" color="#06B6D4" icon="users"
-          sublabel={`+${pacientes.novos_mes || 0} este mes`} />
-        <KpiCard value={String(recall)} label="Recall pendente" color={Colors.violet3 || "#a78bfa"} icon="phone"
-          sublabel="Sem visita ha 150+ dias" />
-      </View>
-
-      {/* Funil */}
-      {pipelineTotal > 0 && (
-        <>
+    funil: () => (
+      pipelineTotal > 0 ? (
+        <Fragment>
           <Text style={z.section}>Funil comercial</Text>
           <View style={z.funnelCard}>
             <View style={z.funnelHeader}>
@@ -156,12 +184,13 @@ export function OdontoDashboard() {
               <Text style={z.empty}>Nenhum lead ativo no funil.</Text>
             )}
           </View>
-        </>
-      )}
+        </Fragment>
+      ) : null
+    ),
 
-      {/* Top procedimentos */}
-      {procs.length > 0 && (
-        <>
+    topProcs: () => (
+      procs.length > 0 ? (
+        <Fragment>
           <Text style={z.section}>Top procedimentos do mes</Text>
           <View style={z.procsCard}>
             {procs.map((p, idx) => (
@@ -173,10 +202,17 @@ export function OdontoDashboard() {
               </View>
             ))}
           </View>
-        </>
-      )}
+        </Fragment>
+      ) : null
+    ),
+  };
 
-      {/* Info IA */}
+  return (
+    <ScrollView showsVerticalScrollIndicator={false}>
+      {!hideTitle && <Text style={z.title}>Dashboard Odonto</Text>}
+      {sectionsOrder.map((key) => (
+        <Fragment key={key}>{SECTIONS[key]()}</Fragment>
+      ))}
       <View style={z.infoCard}>
         <Icon name="star" size={12} color={Colors.violet3 || "#a78bfa"} />
         <Text style={z.infoText}>
