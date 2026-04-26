@@ -1,17 +1,27 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
+import { MarkPaymentPaidModal, type PendingPayment } from "@/components/dental/MarkPaymentPaidModal";
+
+// ============================================================
+// AURA. — BillingDashboard
+//
+// PR11 (2026-04-26): adiciona botao Receber em cada parcela vencida
+// + modal MarkPaymentPaidModal. Backend (068) cria transaction
+// automaticamente quando paid_at sai de NULL.
+// ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
 
 export function BillingDashboard() {
   var { company } = useAuthStore();
   var qc = useQueryClient();
+  var [paymentToMark, setPaymentToMark] = useState<PendingPayment | null>(null);
 
   var { data: dashboard, isLoading: loadingDash } = useQuery({
     queryKey: ["dental-billing-dash", company?.id],
@@ -71,15 +81,24 @@ export function BillingDashboard() {
           {overdueList.map(function(p: any) {
             return (
               <View key={p.payment_id} style={z.overdueCard}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={z.overdueName}>{p.patient_name}</Text>
                   <Text style={z.overdueMeta}>{fmt(parseFloat(p.amount))} | Vencida ha {p.days_overdue} dia{p.days_overdue > 1 ? "s" : ""}</Text>
                   {p.patient_phone && <Text style={z.overdueMeta}>{p.patient_phone}</Text>}
                 </View>
-                <Pressable onPress={function() { reminderMut.mutate(p.payment_id); }} style={z.cobrBtn} disabled={reminderMut.isPending}>
-                  <Icon name="phone" size={12} color={Colors.violet3} />
-                  <Text style={z.cobrBtnText}>Cobrar</Text>
-                </Pressable>
+                <View style={z.actionsRow}>
+                  <Pressable onPress={function() { reminderMut.mutate(p.payment_id); }} style={z.cobrBtn} disabled={reminderMut.isPending}>
+                    <Icon name="phone" size={12} color={Colors.violet3} />
+                    <Text style={z.cobrBtnText}>Cobrar</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={function() { setPaymentToMark({ payment_id: p.payment_id, patient_name: p.patient_name, amount: parseFloat(p.amount) }); }}
+                    style={z.recvBtn}
+                  >
+                    <Icon name="check" size={12} color="#fff" />
+                    <Text style={z.recvBtnText}>Receber</Text>
+                  </Pressable>
+                </View>
               </View>
             );
           })}
@@ -93,6 +112,11 @@ export function BillingDashboard() {
           <Text style={z.emptyHint}>Todos os pagamentos estao em dia.</Text>
         </View>
       )}
+
+      <MarkPaymentPaidModal
+        payment={paymentToMark}
+        onClose={function() { setPaymentToMark(null); }}
+      />
     </View>
   );
 }
@@ -105,11 +129,14 @@ var z = StyleSheet.create({
   kpiLabel: { fontSize: 8, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   overdueHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
   overdueTitle: { fontSize: 14, fontWeight: "700", color: Colors.red },
-  overdueCard: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.redD, marginBottom: 6, gap: 10 },
+  overdueCard: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.redD, marginBottom: 6, gap: 10, flexWrap: "wrap" },
   overdueName: { fontSize: 14, fontWeight: "700", color: Colors.ink },
   overdueMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  actionsRow: { flexDirection: "row", gap: 6, alignItems: "center" },
   cobrBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border2 },
   cobrBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  recvBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#06B6D4", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  recvBtnText: { fontSize: 11, color: "#fff", fontWeight: "700" },
   empty: { alignItems: "center", paddingVertical: 40, gap: 8 },
   emptyText: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
   emptyHint: { fontSize: 12, color: Colors.ink3 },
