@@ -8,6 +8,7 @@ import { DentalMBar } from "@/components/dental/DentalMBar";
 import { MigrationBanner } from "@/components/dental/MigrationBanner";
 import { DentalShortcutsHelp } from "@/components/dental/DentalShortcutsHelp";
 import { useDentalShortcuts } from "@/components/dental/useDentalShortcuts";
+import { DentalOnboardingWizard } from "@/components/dental/onboarding/DentalOnboardingWizard";
 import { DentalColors, DentalGradients } from "@/constants/dental-tokens";
 
 // ============================================================
@@ -22,12 +23,13 @@ import { DentalColors, DentalGradients } from "@/constants/dental-tokens";
 //   3. Native: View + ScrollView + DentalMBar (overlay "Mais"
 //      do MBar nao funciona em native — limitacao conhecida).
 //
-// PR8 (2026-04-26): integra atalhos de teclado (web only),
-// banner de boas-vindas e modal de ajuda dos atalhos.
+// PR8: integra atalhos de teclado, banner de boas-vindas e modal
+// de ajuda.
+// PR9 (2026-04-26): integra DentalOnboardingWizard. Roda apos
+// PortalTransition fechar, na primeira sessao do device. Web only.
 //
 // NAO reusa o (tabs)/_layout porque queremos isolar 100% do
-// shell PDV/ERP. Usuario odonto nunca ve Caixa/NF-e/Folha
-// no menu.
+// shell PDV/ERP.
 // ============================================================
 
 function useScreenWidth() {
@@ -75,6 +77,7 @@ export function DentalShell({ children }: { children?: ReactNode }) {
           </div>
           <DentalMBar />
           <DentalShortcutsHelp open={helpOpen} onClose={closeHelp} />
+          <DentalOnboardingWizard />
         </div>
       </ErrorBoundary>
     );
@@ -104,6 +107,7 @@ export function DentalShell({ children }: { children?: ReactNode }) {
             </div>
           </div>
           <DentalShortcutsHelp open={helpOpen} onClose={closeHelp} />
+          <DentalOnboardingWizard />
         </div>
       </ErrorBoundary>
     );
@@ -111,7 +115,7 @@ export function DentalShell({ children }: { children?: ReactNode }) {
 
   // ============================================================
   // NATIVE — layout column com ScrollView + MBar.
-  // (Sem MigrationBanner / shortcuts — web only.)
+  // (Sem MigrationBanner / shortcuts / onboarding wizard — web only.)
   // ============================================================
   return (
     <ErrorBoundary>

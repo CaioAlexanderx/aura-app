@@ -15,26 +15,30 @@ import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
 // Contabilidade/Canal/Agentes) NAO aparecem aqui. Usuario que
 // quiser acessar entra via deep-link em /(tabs) ou pelo botao
 // "Aura Negocio" no rodape do sidebar.
+//
+// PR9 (2026-04-26): cada item de navegacao agora tem atributo
+// data-tour (web only) pra ser localizavel pelo SpotlightTour
+// do onboarding wizard.
 // ============================================================
 
-interface DentalNavItem { route: string; label: string; icon: string; }
+interface DentalNavItem { route: string; label: string; icon: string; tourKey: string; }
 interface DentalNavSection { label: string; items: DentalNavItem[]; }
 
 const DENTAL_NAV: DentalNavSection[] = [
   { label: "Operacao", items: [
-    { route: "/dental/(clinic)/hoje",        label: "Hoje",        icon: "clock" },
-    { route: "/dental/(clinic)/pacientes",   label: "Pacientes",   icon: "users" },
-    { route: "/dental/(clinic)/atendimento", label: "Atendimento", icon: "tooth" },
-    { route: "/dental/(clinic)/agenda",      label: "Agenda",      icon: "calendar" },
-    { route: "/dental/(clinic)/tratamentos", label: "Tratamentos", icon: "clipboard" },
+    { route: "/dental/(clinic)/hoje",        label: "Hoje",        icon: "clock",     tourKey: "hoje" },
+    { route: "/dental/(clinic)/pacientes",   label: "Pacientes",   icon: "users",     tourKey: "pacientes" },
+    { route: "/dental/(clinic)/atendimento", label: "Atendimento", icon: "tooth",     tourKey: "atendimento" },
+    { route: "/dental/(clinic)/agenda",      label: "Agenda",      icon: "calendar",  tourKey: "agenda" },
+    { route: "/dental/(clinic)/tratamentos", label: "Tratamentos", icon: "clipboard", tourKey: "tratamentos" },
   ]},
   { label: "Negocio", items: [
-    { route: "/dental/(clinic)/faturamento", label: "Faturamento", icon: "wallet" },
-    { route: "/dental/(clinic)/materiais",   label: "Materiais",   icon: "package" },
-    { route: "/dental/(clinic)/comunicacao", label: "Comunicacao", icon: "message" },
+    { route: "/dental/(clinic)/faturamento", label: "Faturamento", icon: "wallet",   tourKey: "faturamento" },
+    { route: "/dental/(clinic)/materiais",   label: "Materiais",   icon: "package",  tourKey: "materiais" },
+    { route: "/dental/(clinic)/comunicacao", label: "Comunicacao", icon: "message",  tourKey: "comunicacao" },
   ]},
   { label: "Configuracoes", items: [
-    { route: "/dental/(clinic)/clinica",     label: "Clinica",     icon: "settings" },
+    { route: "/dental/(clinic)/clinica",     label: "Clinica",     icon: "settings", tourKey: "clinica" },
   ]},
 ];
 
@@ -113,11 +117,14 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
             {collapsed && <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 4, marginHorizontal: 4 }} />}
             {section.items.map((item) => {
               const active = routeMatches(pathname, item.route);
+              const webExtras = Platform.OS === "web"
+                ? { title: item.label, "data-tour": `dental-nav-${item.tourKey}` } as any
+                : {};
               return (
                 <Pressable
                   key={item.route}
                   onPress={() => router.push(item.route as any)}
-                  {...(Platform.OS === "web" ? { title: item.label } : {})}
+                  {...webExtras}
                   style={[
                     { flexDirection: "row", alignItems: "center", gap: collapsed ? 0 : 10,
                       paddingVertical: 9, paddingHorizontal: collapsed ? 0 : 12,
