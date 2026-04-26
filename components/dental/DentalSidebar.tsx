@@ -14,7 +14,7 @@ import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
 // FONTE UNICA: modulos genericos do Aura (PDV/Cupons/NF-e/Folha/
 // Contabilidade/Canal/Agentes) NAO aparecem aqui. Usuario que
 // quiser acessar entra via deep-link em /(tabs) ou pelo botao
-// "Aura ERP" no rodape do sidebar.
+// "Aura Negocio" no rodape do sidebar.
 // ============================================================
 
 interface DentalNavItem { route: string; label: string; icon: string; }
@@ -152,7 +152,7 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
 
       <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 6 }} />
 
-      {/* USER FOOTER + escape pra Aura ERP */}
+      {/* USER FOOTER + escape pra Aura Negocio */}
       <View style={{ paddingTop: 6, gap: 4, flexShrink: 0 }}>
         {!collapsed ? (
           <>
@@ -166,9 +166,9 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               </View>
             </View>
             <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
-              {...(Platform.OS === "web" ? { title: "Acessar modulos genericos do Aura ERP" } : {})}>
+              {...(Platform.OS === "web" ? { title: "Acessar modulos genericos do Aura Negocio" } : {})}>
               <Icon name="grid" size={12} color={DentalColors.ink3} />
-              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Aura ERP</Text>
+              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Aura Negocio</Text>
             </Pressable>
             <Pressable onPress={logout} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}>
               <Icon name="logout" size={12} color={DentalColors.ink3} />
@@ -182,7 +182,7 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>{(user?.name || "A").charAt(0).toUpperCase()}</Text>
             </View>
             <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
-              {...(Platform.OS === "web" ? { title: "Aura ERP" } : {})}>
+              {...(Platform.OS === "web" ? { title: "Aura Negocio" } : {})}>
               <Icon name="grid" size={13} color={DentalColors.ink3} />
             </Pressable>
             <Pressable onPress={logout} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}

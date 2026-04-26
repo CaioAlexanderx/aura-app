@@ -1,4 +1,5 @@
 import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import { Redirect } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
 import { useAuthStore } from '@/stores/auth';
@@ -10,6 +11,10 @@ import FoodScreen from '@/components/verticals/FoodScreen';
 // Vertical Tab — Roteia para a tela da vertical ativa.
 // Fonte da verdade: company.vertical_active (vem do /auth/me + login).
 // Ativacao feita pelo admin via Gestao Aura > Clientes > slide-over.
+//
+// Odonto NAO renderiza mais aqui — tem porta dedicada em
+// /dental/(clinic)/hoje (decisao 2026-04-25). Bookmarks antigos
+// ou deep-links que apontem pra /vertical sao redirecionados.
 // ============================================================
 
 // Labels das 6 verticais. Apenas 3 tem tela implementada;
@@ -24,14 +29,16 @@ const VERTICAL_NAMES: Record<string, string> = {
   academia: 'Academia',
 };
 
-const READY_VERTICALS = ['odonto', 'barber', 'food'];
+const READY_VERTICALS = ['barber', 'food'];
 
 export default function VerticalTab() {
   const { company } = useAuthStore();
-  // company.vertical_active vem do backend — typed no LoginResponse,
-  // mas cast pra 'as any' pra evitar problema com declaracao de tipo em
-  // arquivos que ainda referenciam o shape antigo do store.
   const activeVertical = (company as any)?.vertical_active ?? null;
+
+  // Odonto tem porta dedicada — redireciona pra la.
+  if (activeVertical === 'odonto') {
+    return <Redirect href="/dental/(clinic)/hoje" />;
+  }
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
@@ -40,13 +47,12 @@ export default function VerticalTab() {
         subtitle={activeVertical ? 'Funcionalidades especializadas do seu segmento' : 'Ative um modulo vertical pela equipe Aura'}
       />
 
-      {activeVertical === 'odonto' && <OdontoScreen />}
       {activeVertical === 'barber' && <BarberScreen />}
       {activeVertical === 'food' && <FoodScreen />}
 
       {!activeVertical && (
         <View style={s.noVertical}>
-          <Text style={s.noIcon}>\uD83D\uDD12</Text>
+          <Text style={s.noIcon}>🔒</Text>
           <Text style={s.noTitle}>Nenhum modulo vertical ativo</Text>
           <Text style={s.noText}>Modulos verticais sao ativados pela equipe Aura no setup do seu negocio. Disponiveis: Odontologia, Barbearia/Salao, Food Service, Estetica, Pet Shop e Academia.</Text>
           <Text style={s.noContact}>Entre em contato com seu Analista de Negocios para ativar.</Text>
@@ -55,7 +61,7 @@ export default function VerticalTab() {
 
       {activeVertical && !READY_VERTICALS.includes(activeVertical) && (
         <View style={s.noVertical}>
-          <Text style={s.noIcon}>\uD83D\uDEA7</Text>
+          <Text style={s.noIcon}>🚧</Text>
           <Text style={s.noTitle}>Modulo em desenvolvimento</Text>
           <Text style={s.noText}>O modulo {VERTICAL_NAMES[activeVertical] || activeVertical} esta sendo preparado. Em breve estara disponivel para uso.</Text>
         </View>
