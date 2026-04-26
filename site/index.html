@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aura — Tecnologia para Negócios</title>
+<link rel="icon" type="image/svg+xml" href="assets/aura-icon.svg">
+<link rel="apple-touch-icon" href="assets/aura-icon.svg">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/site.css?v=2">
+<link rel="stylesheet" href="css/verticals.css?v=2">
+</head>
+<body data-screen-label="01 Home">
+
+<!-- ============== NAV ============== -->
+<nav class="site-nav" data-cursor="hover">
+  <a href="index.html" class="brand">
+    <span class="glyph"></span>
+    <span class="brand-name">Aura</span>
+  </a>
+  <div class="nav-links">
+    <a href="index.html">Início</a>
+    <div class="nav-dropdown">
+      <button>Verticais ▾</button>
+      <div class="nav-dropdown-panel">
+        <a class="nav-dropdown-item" href="negocio.html" style="--v-accent:#7c3aed; --v-glow:rgba(124,58,237,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4l8 16H4z"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/></svg></span>
+          <span><div class="v-name">Aura Negócio</div><div class="v-tag">Carro-chefe · varejo geral</div></span>
+        </a>
+        <a class="nav-dropdown-item" href="odonto.html" style="--v-accent:#06B6D4; --v-glow:rgba(6,182,212,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4c-3 0-5 1.5-7 1.5C4 5.5 4 7 4 8c0 5 1.5 11 3 12 .8 1 1.5 0 2-1.5l.5-3c.2-.7.7-1 1.5-1h2c.8 0 1.3.3 1.5 1l.5 3c.5 1.5 1.2 2.5 2 1.5 1.5-1 3-7 3-12 0-1 0-2.5-1-2.5-2 0-4-1.5-7-1.5z"/></svg></span>
+          <span><div class="v-name">Aura Odonto</div><div class="v-tag">Clínicas e consultórios</div></span>
+        </a>
+        <a class="nav-dropdown-item" href="beauty.html" style="--v-accent:#F472B6; --v-glow:rgba(244,114,182,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c-1.5 4.5-6 6-6 10.5 0 3.8 2.7 7.5 6 7.5s6-3.7 6-7.5C18 9 13.5 7.5 12 3z"/><circle cx="10" cy="14" r="1" fill="currentColor"/></svg></span>
+          <span><div class="v-name">Aura Beauty</div><div class="v-tag">Salões, barbearias, estúdios</div></span>
+        </a>
+        <a class="nav-dropdown-item" href="food.html" style="--v-accent:#F97316; --v-glow:rgba(249,115,22,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c-2.5 3-4 5-4 9 0 3 1.5 5 4 7 2.5-2 4-4 4-7 0-4-1.5-6-4-9z"/></svg></span>
+          <span><div class="v-name">Aura Food</div><div class="v-tag">Restaurantes, bares, deliveries</div></span>
+        </a>
+        <a class="nav-dropdown-item" href="pet.html" style="--v-accent:#10B981; --v-glow:rgba(16,185,129,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="1.6"/><circle cx="16" cy="9" r="1.6"/><circle cx="6" cy="14" r="1.4"/><circle cx="18" cy="14" r="1.4"/><path d="M12 13c-3 0-5.5 2.5-5.5 4.8 0 1.5 1 2.2 2.5 2.2h6c1.5 0 2.5-.7 2.5-2.2 0-2.3-2.5-4.8-5.5-4.8z"/></svg></span>
+          <span><div class="v-name">Aura Pet</div><div class="v-tag">Pet shops, banho e tosa, vets</div></span>
+        </a>
+        <a class="nav-dropdown-item" href="planos.html" style="--v-accent:#a78bfa; --v-glow:rgba(167,139,250,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 11h16M9 6V4M15 6V4"/></svg></span>
+          <span><div class="v-name">Comparar verticais</div><div class="v-tag">Veja todas lado a lado</div></span>
+        </a>
+      </div>
+    </div>
+    <a href="planos.html">Planos</a>
+    <a href="sobre.html">Sobre</a>
+    <a href="#contato">Contato</a>
+    <span class="nav-cta-row">
+      <a href="https://app.getaura.com.br" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Entrar</a>
+      <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Criar conta</a>
+    </span>
+  </div>
+  <button class="nav-mobile-toggle" aria-label="Menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+  </button>
+</nav>
+
+<!-- ============== HERO ============== -->
+<section class="section dark deep" style="padding-top: 160px;" data-screen-label="hero">
+  <div class="orbs">
+    <div class="orb violet" style="width: 600px; height: 600px; top: -100px; left: -150px;"></div>
+    <div class="orb indigo" style="width: 500px; height: 500px; top: 200px; right: -100px;"></div>
+    <div class="orb pink" style="width: 400px; height: 400px; bottom: -100px; left: 30%; opacity: 0.35;"></div>
+  </div>
+  <div class="grain"></div>
+
+  <div class="container">
+    <div class="hero-grid" style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center;">
+      <div class="stack-lg">
+        <div class="row" data-reveal>
+          <span class="eyebrow">Tecnologia para Negócios · pt-BR</span>
+        </div>
+        <h1 class="display" data-typein>O sistema do seu <span class="acc">negócio</span>, com a <em>alma</em> do seu setor.</h1>
+        <p class="lead" data-reveal data-reveal-delay="2">Cinco verticais especialistas — Negócio, Odonto, Beauty, Food e Pet — sob uma única plataforma. PDV, financeiro, fiscal, agenda, estoque e IA, tudo no mesmo lugar.</p>
+        <div class="row" data-reveal data-reveal-delay="3">
+          <a href="https://wa.me/5511956305269?text=Quero%20conhecer%20a%20Aura" target="_blank" rel="noopener" class="btn btn-whatsapp btn-lg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 14.2c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.8.9-.9 1.1-.2.2-.3.2-.6.1-.3-.1-1.2-.4-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.7.4-.3.3-.9.9-.9 2.2 0 1.3.9 2.5 1.1 2.7.1.2 1.8 2.7 4.3 3.8.6.3 1.1.4 1.4.5.6.2 1.1.2 1.6.1.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.5-.3z"/><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.1-1.3c1.4.8 3.1 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2zm0 18.3c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.2.8.8-3.1-.2-.3C3.8 15 3.3 13.5 3.3 12c0-4.8 3.9-8.7 8.7-8.7s8.7 3.9 8.7 8.7-3.9 8.3-8.7 8.3z"/></svg>
+            Chamar no WhatsApp
+            <span class="arrow">→</span>
+          </a>
+          <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" class="btn btn-ghost btn-lg">Criar conta</a>
+        </div>
+        <div class="row" style="gap: 32px; margin-top: 16px;" data-reveal data-reveal-delay="4">
+          <div class="stack-sm">
+            <div class="label">5</div>
+            <div style="font-size: 13px; color: rgba(220,215,255,0.6);">verticais especialistas</div>
+          </div>
+          <div style="width: 1px; height: 40px; background: rgba(255,255,255,0.1);"></div>
+          <div class="stack-sm">
+            <div class="label">PDV → NF-e</div>
+            <div style="font-size: 13px; color: rgba(220,215,255,0.6);">tudo na mesma tela</div>
+          </div>
+          <div style="width: 1px; height: 40px; background: rgba(255,255,255,0.1);"></div>
+          <div class="stack-sm">
+            <div class="label">IA Aura</div>
+            <div style="font-size: 13px; color: rgba(220,215,255,0.6);">analista incluído</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero phones cluster -->
+      <div class="hero-phones" style="position: relative; height: 580px;" data-reveal data-reveal-delay="2">
+        <!-- Back: violeta -->
+        <div data-vertical="negocio" style="position: absolute; left: 50%; top: 30px; transform: translateX(-58%);">
+          <div class="phone levitate" style="--pw: 240px; opacity: 0.85;">
+            <div class="phone-screen">
+              <div class="ps-pad">
+                <div class="ps-orb" style="width: 160px; height: 160px; background: #7c3aed; opacity: 0.4; top: -40px; left: -40px;"></div>
+                <div class="ps-orb" style="width: 180px; height: 180px; background: #a78bfa; opacity: 0.3; bottom: -60px; right: -60px;"></div>
+                <div class="ps-header">
+                  <div class="ps-brand"><span class="dot-mark"></span>Aura<span class="acc">.</span></div>
+                  <div class="ps-bell">⋯</div>
+                </div>
+                <div class="ps-h">Bom dia,<br>Caio.</div>
+                <div class="ps-card">
+                  <div style="font-size: 8px; opacity: 0.6; letter-spacing: 0.1em;">SALDO HOJE</div>
+                  <div class="ps-num" style="font-size: 22px; font-weight: 700; margin-top: 4px;">R$ 18.420</div>
+                  <div style="height: 30px; margin-top: 8px; display: flex; align-items: flex-end; gap: 3px;">
+                    <div style="flex:1; height: 40%; background: #7c3aed; border-radius: 2px;"></div>
+                    <div style="flex:1; height: 65%; background: #7c3aed; border-radius: 2px;"></div>
+                    <div style="flex:1; height: 30%; background: #7c3aed; opacity: 0.6; border-radius: 2px;"></div>
+                    <div style="flex:1; height: 80%; background: #a78bfa; border-radius: 2px;"></div>
+                    <div style="flex:1; height: 95%; background: #a78bfa; border-radius: 2px;"></div>
+                  </div>
+                </div>
+                <div class="ps-card ps-row" style="justify-content: space-between;">
+                  <div>
+                    <div style="font-size: 9px; opacity: 0.55;">12 vendas</div>
+                    <div class="ps-num" style="font-weight: 700;">+ R$ 4.280</div>
+                  </div>
+                  <span class="ps-pill-accent">Venda #128</span>
+                </div>
+                <div class="ps-tabbar">
+                  <div class="ti active">●</div><div class="ti">$</div><div class="ti">▤</div><div class="ti">⊕</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Front: food -->
+        <div data-vertical="food" style="position: absolute; left: 8%; top: 100px; z-index: 3;">
+          <div class="phone levitate" style="--pw: 220px; animation-delay: -2s;">
+            <div class="phone-screen">
+              <div class="ps-pad">
+                <div class="ps-orb" style="width: 140px; height: 140px; background: #F97316; opacity: 0.5; top: -30px; right: -30px;"></div>
+                <div class="ps-orb" style="width: 160px; height: 160px; background: #EF4444; opacity: 0.3; bottom: -40px; left: -40px;"></div>
+                <div class="ps-header">
+                  <div class="ps-brand"><span class="dot-mark"></span>Aura <span class="acc">Food</span></div>
+                  <span class="ps-pill-accent">3 NOVOS</span>
+                </div>
+                <div class="ps-h" style="font-size: 16px;">Cozinha<br>ao vivo.</div>
+                <div class="ps-card" style="border-left: 2px solid #F97316;">
+                  <div style="display: flex; justify-content: space-between; font-size: 9px;">
+                    <span style="color: rgba(255,255,255,0.7);">Mesa 04</span>
+                    <span style="color: #F97316; font-weight: 700;">02:14</span>
+                  </div>
+                  <div style="font-size: 11px; margin-top: 4px;">2× Burger Aura</div>
+                  <div style="font-size: 9px; opacity: 0.55;">+ batata, sem cebola</div>
+                </div>
+                <div class="ps-card" style="border-left: 2px solid #EF4444;">
+                  <div style="display: flex; justify-content: space-between; font-size: 9px;">
+                    <span style="color: rgba(255,255,255,0.7);">iFood #2891</span>
+                    <span style="color: #EF4444; font-weight: 700;">FILA</span>
+                  </div>
+                  <div style="font-size: 11px; margin-top: 4px;">1× Combo família</div>
+                </div>
+                <div class="ps-cta">Liberar comanda</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Right: beauty -->
+        <div data-vertical="beauty" style="position: absolute; right: 0; top: 60px; z-index: 2;">
+          <div class="phone levitate tilt-r" style="--pw: 230px; animation-delay: -4s;">
+            <div class="phone-screen">
+              <div class="ps-pad">
+                <div class="ps-orb" style="width: 160px; height: 160px; background: #F472B6; opacity: 0.5; top: -40px; left: -30px;"></div>
+                <div class="ps-orb" style="width: 180px; height: 180px; background: #D4A574; opacity: 0.3; bottom: -50px; right: -40px;"></div>
+                <div class="ps-header">
+                  <div class="ps-brand"><span class="dot-mark"></span>Aura <span class="acc">Beauty</span></div>
+                  <div class="ps-bell">⏰</div>
+                </div>
+                <div class="ps-h" style="font-size: 16px; font-style: italic;">Sua agenda,<br>seu palco.</div>
+                <div class="ps-card">
+                  <div class="ps-row" style="justify-content: space-between;">
+                    <div style="font-size: 9px; opacity: 0.6;">14:30 · Camila</div>
+                    <span style="color: #F472B6; font-size: 9px;">●</span>
+                  </div>
+                  <div style="font-size: 11px; margin-top: 4px;">Escova + corte</div>
+                </div>
+                <div class="ps-card">
+                  <div class="ps-row" style="justify-content: space-between;">
+                    <div style="font-size: 9px; opacity: 0.6;">15:15 · Júlia</div>
+                    <span style="color: #F472B6; font-size: 9px;">●</span>
+                  </div>
+                  <div style="font-size: 11px; margin-top: 4px;">Coloração</div>
+                </div>
+                <div class="ps-card" style="background: rgba(244,114,182,0.12); border-color: #F472B6;">
+                  <div style="font-size: 9px; opacity: 0.6;">16:00 · NOVO</div>
+                  <div style="font-size: 11px; margin-top: 2px; font-weight: 600;">Confirmar</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== MARQUEE — verticais ============== -->
+<section class="section dark" style="padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06);">
+  <div class="container" style="margin-bottom: 24px; padding: 0 clamp(20px, 5vw, 80px);">
+    <div class="label text-center">Uma plataforma · cinco identidades</div>
+  </div>
+  <div class="marquee">
+    <div class="marquee-track">
+      <span style="font-family: var(--font-heading); font-size: 56px; letter-spacing: -0.03em; color: rgba(220,215,255,0.5);">Aura<span style="color:#7c3aed">.</span> Negócio</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; color: rgba(124,58,237,0.4);">&#10022;</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; letter-spacing: -0.03em; color: rgba(220,215,255,0.5);">Aura<span style="color:#06B6D4">.</span> Odonto</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; color: rgba(6,182,212,0.4);">&#10022;</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; letter-spacing: -0.03em; color: rgba(220,215,255,0.5);">Aura<span style="color:#F472B6">.</span> Beauty</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; color: rgba(244,114,182,0.4);">&#10022;</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; letter-spacing: -0.03em; color: rgba(220,215,255,0.5);">Aura<span style="color:#F97316">.</span> Food</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; color: rgba(249,115,22,0.4);">&#10022;</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; letter-spacing: -0.03em; color: rgba(220,215,255,0.5);">Aura<span style="color:#10B981">.</span> Pet</span>
+      <span style="font-family: var(--font-heading); font-size: 56px; color: rgba(16,185,129,0.4);">&#10022;</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============== VERTICAIS GRID ============== -->
+<section class="section light" data-screen-label="verticais">
+  <div class="container">
+    <div class="section-intro-grid" style="display: grid; grid-template-columns: 1fr 1.6fr; gap: 64px; align-items: end; margin-bottom: 64px;">
+      <div data-reveal>
+        <div class="eyebrow" style="margin-bottom: 16px;">Verticais</div>
+        <h2 class="h1" style="margin-bottom: 0;">Cinco produtos.<br><em style="color:#7c3aed;">Uma alma de marca.</em></h2>
+      </div>
+      <div data-reveal data-reveal-delay="1">
+        <p class="lead" style="margin-left: auto;">Cada Aura é um produto especialista no seu setor — com paleta, mood, tom de voz e fluxos próprios — mas todas compartilham a mesma plataforma e a mesma promessa: <strong>tecnologia que entende o seu jeito de operar.</strong></p>
+      </div>
+    </div>
+
+    <div class="verticais-grid">
+      <!-- Row 1: Odonto + Food (lançadas) -->
+      <a href="odonto.html" class="vertical-card tilt" data-vertical="odonto" data-reveal data-cursor="hover">
+        <div class="tilt-inner">
+          <div class="v-mark-lg"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M16 6c-4 0-7 2-9 2-1.5 0-2 1-2 2.5C5 16 7 24 9 26c1 1 2 0 2.5-2l1-4c.3-1 1-1.5 2-1.5h3c1 0 1.7.5 2 1.5l1 4c.5 2 1.5 3 2.5 2 2-2 4-10 4-15.5 0-1.5-.5-2.5-2-2.5-2 0-5-2-9-2z"/></svg></div>
+          <h3>Aura <span class="acc">Odonto</span></h3>
+          <div class="v-tagline">Sua clínica em ordem, seu paciente seguro.</div>
+          <div class="v-features">
+            <span>Prontuário</span><span>Odontograma</span><span>Convênios</span>
+          </div>
+          <div class="v-cta">Conhecer <span class="arrow">→</span></div>
+        </div>
+      </a>
+
+      <a href="food.html" class="vertical-card tilt" data-vertical="food" data-reveal data-reveal-delay="1" data-cursor="hover">
+        <div class="tilt-inner">
+          <div class="v-mark-lg"><svg viewBox="0 0 32 32" fill="none"><path d="M16 4c-3 4-5 7-5 11 0 4 2 7 5 9 3-2 5-5 5-9 0-4-2-7-5-11z" fill="white" opacity="0.9"/><path d="M14 16c0-2 1-3 2-4 1 1 2 2 2 4 0 1.5-1 3-2 4-1-1-2-2.5-2-4z" fill="#F97316"/></svg></div>
+          <h3>Aura <span class="acc">Food</span></h3>
+          <div class="v-tagline">Do balcão ao iFood, sem fricção.</div>
+          <div class="v-features">
+            <span>PDV</span><span>iFood</span><span>Cardápio digital</span><span>Fila ao vivo</span>
+          </div>
+          <div class="v-cta">Conhecer <span class="arrow">→</span></div>
+        </div>
+      </a>
+
+      <!-- Row 2: Beauty + Pet (em breve) -->
+      <a href="beauty.html" class="vertical-card tilt" data-vertical="beauty" data-coming-soon data-reveal data-cursor="hover">
+        <span class="coming-soon-badge">Em breve</span>
+        <div class="tilt-inner">
+          <div class="v-mark-lg"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M16 4c-2 6-8 8-8 14 0 5 4 10 8 10s8-5 8-10c0-6-6-8-8-14z"/><circle cx="13" cy="20" r="1.5" fill="currentColor"/></svg></div>
+          <h3>Aura <span class="acc">Beauty</span></h3>
+          <div class="v-tagline">Agenda cheia, marca lembrada.</div>
+          <div class="v-features">
+            <span>Booking</span><span>Comissões</span><span>Fidelidade</span>
+          </div>
+          <div class="v-cta">Conhecer <span class="arrow">→</span></div>
+        </div>
+      </a>
+
+      <a href="pet.html" class="vertical-card tilt" data-vertical="pet" data-coming-soon data-reveal data-reveal-delay="1" data-cursor="hover">
+        <span class="coming-soon-badge">Em breve</span>
+        <div class="tilt-inner">
+          <div class="v-mark-lg"><svg viewBox="0 0 32 32" fill="none"><circle cx="11" cy="12" r="2.5" fill="currentColor"/><circle cx="21" cy="12" r="2.5" fill="currentColor"/><circle cx="8" cy="18" r="2" fill="currentColor"/><circle cx="24" cy="18" r="2" fill="currentColor"/><path d="M16 16c-4 0-7 3-7 6 0 2 1.5 3 3.5 3h7c2 0 3.5-1 3.5-3 0-3-3-6-7-6z" fill="currentColor"/></svg></div>
+          <h3>Aura <span class="acc">Pet</span></h3>
+          <div class="v-tagline">Todo bicho tem ficha. Todo tutor, histórico.</div>
+          <div class="v-features">
+            <span>Ficha do pet</span><span>Banho e tosa</span><span>Vacinas</span><span>Prontuário vet</span>
+          </div>
+          <div class="v-cta">Conhecer <span class="arrow">→</span></div>
+        </div>
+      </a>
+
+      <!-- Row 3: Negócio em destaque (anchor / mother brand) -->
+      <a href="negocio.html" class="vertical-card vertical-card-featured tilt" data-vertical="negocio" data-reveal data-cursor="hover">
+        <span class="featured-tag">A identidade-mãe</span>
+        <div class="tilt-inner">
+          <div class="featured-col-left">
+            <div class="v-mark-lg"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"><path d="M16 5L26 25H6L16 5z" fill="rgba(255,255,255,0.18)"/><circle cx="16" cy="18" r="2" fill="currentColor"/></svg></div>
+            <h3>Aura <span class="acc">Negócio</span></h3>
+            <div class="v-tagline">Atrás de toda Aura especialista, a plataforma-base. Multipropósito por design — pra quem opera o negócio inteiro.</div>
+            <div class="v-cta">Conhecer Aura Negócio <span class="arrow">→</span></div>
+          </div>
+          <div class="v-features">
+            <span>PDV</span><span>Estoque</span><span>NF-e</span><span>Financeiro</span><span>Folha</span><span>Fiscal</span>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FEATURES — o que tem em todas ============== -->
+<section class="section dark deep" data-screen-label="recursos">
+  <div class="orbs">
+    <div class="orb violet" style="width: 500px; height: 500px; top: 20%; right: -100px;"></div>
+    <div class="orb indigo" style="width: 400px; height: 400px; bottom: 10%; left: -50px; opacity: 0.4;"></div>
+  </div>
+  <div class="container">
+    <div class="text-center stack-md" style="margin: 0 auto 80px; max-width: 720px;" data-reveal>
+      <div class="eyebrow center">Plataforma</div>
+      <h2 class="h1">Tudo do seu negócio,<br>em <span style="color:#a78bfa;">paz</span>.</h2>
+      <p class="lead" style="margin: 0 auto;">Seis pilares que toda Aura entrega. Em cima disso, cada vertical adiciona o que é específico do seu setor.</p>
+    </div>
+
+    <div class="features-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+      <div class="tilt" data-reveal style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 28px;">
+        <div class="tilt-inner">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(124,58,237,0.18); display: grid; place-items: center; color: #a78bfa; margin-bottom: 20px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h12"/></svg>
+          </div>
+          <h3 class="h3" style="margin-bottom: 8px;">PDV / Caixa</h3>
+          <p class="body">Frente de loja rápida, atalhos por teclado, integração de TEF, recibo e NFC-e. Funciona online e offline.</p>
+        </div>
+      </div>
+
+      <div class="tilt" data-reveal data-reveal-delay="1" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 28px;">
+        <div class="tilt-inner">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(52,211,153,0.18); display: grid; place-items: center; color: #34d399; margin-bottom: 20px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M21 7v6h-6"/></svg>
+          </div>
+          <h3 class="h3" style="margin-bottom: 8px;">Financeiro</h3>
+          <p class="body">DRE, fluxo de caixa, conciliação bancária e categorização automática por IA. O contador adora — e seu bolso também.</p>
+        </div>
+      </div>
+
+      <div class="tilt" data-reveal data-reveal-delay="2" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 28px;">
+        <div class="tilt-inner">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(251,191,36,0.18); display: grid; place-items: center; color: #fbbf24; margin-bottom: 20px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3v4a1 1 0 001 1h4M5 21V5a2 2 0 012-2h7l5 5v13a2 2 0 01-2 2H7a2 2 0 01-2-2z"/><path d="M9 12h6M9 16h6"/></svg>
+          </div>
+          <h3 class="h3" style="margin-bottom: 8px;">NF-e / Fiscal</h3>
+          <p class="body">Emissão de NF-e, NFC-e, NFS-e e SAT em um clique. Apoio contábil informativo embutido.</p>
+        </div>
+      </div>
+
+      <div class="tilt" data-reveal style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 28px;">
+        <div class="tilt-inner">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(167,139,250,0.18); display: grid; place-items: center; color: #c4b5fd; margin-bottom: 20px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+          </div>
+          <h3 class="h3" style="margin-bottom: 8px;">Agenda</h3>
+          <p class="body">Booking online, lembretes por WhatsApp, comissões e gestão de equipe. Ideal para serviços.</p>
+        </div>
+      </div>
+
+      <div class="tilt" data-reveal data-reveal-delay="1" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 28px;">
+        <div class="tilt-inner">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(6,182,212,0.18); display: grid; place-items: center; color: #06b6d4; margin-bottom: 20px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.7l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.7l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.3 7l8.7 5 8.7-5M12 22V12"/></svg>
+          </div>
+          <h3 class="h3" style="margin-bottom: 8px;">Estoque</h3>
+          <p class="body">Entrada, saída, lotes, validade, balanço. Integra com PDV em tempo real.</p>
+        </div>
+      </div>
+
+      <div class="tilt" data-reveal data-reveal-delay="2" style="background: linear-gradient(135deg, rgba(124,58,237,0.18), rgba(167,139,250,0.08)); border: 1px solid rgba(167,139,250,0.3); border-radius: 20px; padding: 28px; position: relative; overflow: hidden;">
+        <div class="tilt-inner">
+          <div class="aura-radar" style="position: absolute; top: 28px; right: 28px; width: 36px; height: 36px; color: rgba(167,139,250,0.7);">
+            <span class="ring"></span><span class="ring"></span><span class="ring"></span>
+          </div>
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #7c3aed, #a78bfa); display: grid; place-items: center; color: white; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(124,58,237,0.4);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+          </div>
+          <span class="label" style="font-size: 9px; color: #c4b5fd; padding: 3px 8px; background: rgba(124,58,237,0.18); border-radius: 999px; display: inline-block; margin-bottom: 12px;">IA INCLUSA</span>
+          <h3 class="h3" style="margin-bottom: 8px;">Seu Analista</h3>
+          <p class="body">Agente de IA que conhece seu negócio. Pergunte o que quiser sobre vendas, custos, sazonalidade.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== PLANOS PREVIEW ============== -->
+<section class="section cream" data-screen-label="planos-preview">
+  <div class="container">
+    <div class="text-center stack-md" style="margin: 0 auto 64px; max-width: 720px;" data-reveal>
+      <div class="eyebrow center">Planos</div>
+      <h2 class="h1">Escolha pelo seu <em style="color:#7c3aed">tamanho</em>.<br>Pague pelo que <em style="color:#7c3aed">usa</em>.</h2>
+      <p class="lead" style="margin: 0 auto;">Três planos. Negócio e Expansão incluem a camada vertical do seu setor — Odonto, Beauty, Food ou Pet — sem custo adicional.</p>
+    </div>
+
+    <div class="plans-preview-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 920px; margin: 0 auto; padding-top: 20px;">
+      <!-- Essencial -->
+      <div data-reveal style="background: white; border: 1px solid rgba(109,40,217,0.10); border-radius: 20px; padding: 28px; display: flex; flex-direction: column;">
+        <div class="label" style="margin-bottom: 12px;">Essencial</div>
+        <div style="font-family: var(--font-heading); font-size: 48px; line-height: 1; letter-spacing: -0.02em; color: #1a1330;">R$ <span>89</span><span style="font-size: 18px; color: #756a93;">/mês</span></div>
+        <div style="font-size: 13px; color: #756a93; margin-top: 10px; line-height: 1.5;">Pra começar com o pé direito.</div>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" style="margin-top: auto; padding-top: 24px; color: #7c3aed; font-weight: 600; font-size: 13px;">Criar conta →</a>
+      </div>
+
+      <!-- Negócio — destaque -->
+      <div data-reveal data-reveal-delay="1" style="background: linear-gradient(160deg, #7c3aed, #6d28d9); color: white; border-radius: 20px; padding: 28px; display: flex; flex-direction: column; box-shadow: 0 24px 48px rgba(124,58,237,0.3); position: relative;">
+        <div style="position: absolute; inset: 0; background: radial-gradient(circle at 100% 0%, rgba(255,255,255,0.15), transparent 50%); pointer-events: none;"></div>
+        <div style="position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: #fbbf24; color: #1a1330; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; padding: 6px 14px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;">Mais escolhido</div>
+        <div style="position: relative; display: flex; flex-direction: column; height: 100%;">
+          <div style="display: flex; gap: 6px; margin-bottom: 14px; margin-top: 8px;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #06B6D4; box-shadow: 0 0 6px #06B6D4;"></span>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #F472B6; box-shadow: 0 0 6px #F472B6;"></span>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #F97316; box-shadow: 0 0 6px #F97316;"></span>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #10B981; box-shadow: 0 0 6px #10B981;"></span>
+          </div>
+          <div class="label" style="margin-bottom: 8px; color: rgba(255,255,255,0.7);">Negócio</div>
+          <div style="font-family: var(--font-heading); font-size: 48px; line-height: 1; letter-spacing: -0.02em;">R$ <span>169</span><span style="font-size: 18px; opacity: 0.7;">/mês</span></div>
+          <div style="font-size: 13px; opacity: 0.85; margin-top: 10px; line-height: 1.5;">Operação completa + camada do seu setor: Odonto, Beauty, Food ou Pet.</div>
+          <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" style="margin-top: auto; padding-top: 24px; color: white; font-weight: 600; font-size: 13px;">Criar conta →</a>
+        </div>
+      </div>
+
+      <!-- Expansão -->
+      <div data-reveal data-reveal-delay="2" style="background: white; border: 1px solid rgba(109,40,217,0.12); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; position: relative;">
+        <div style="display: flex; gap: 6px; margin-bottom: 14px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #06B6D4;"></span>
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #F472B6;"></span>
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #F97316;"></span>
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span>
+        </div>
+        <div class="label" style="margin-bottom: 12px;">Expansão</div>
+        <div style="font-family: var(--font-heading); font-size: 48px; line-height: 1; letter-spacing: -0.02em; color: #1a1330;">R$ <span>269</span><span style="font-size: 18px; color: #756a93;">/mês</span></div>
+        <div style="font-size: 13px; color: #756a93; margin-top: 10px; line-height: 1.5;">Hub social, automações, agentes de IA + vertical completa do seu setor.</div>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" style="margin-top: auto; padding-top: 24px; color: #7c3aed; font-weight: 600; font-size: 13px;">Criar conta →</a>
+      </div>
+    </div>
+
+    <div class="text-center" style="margin-top: 48px;" data-reveal>
+      <a href="planos.html" class="btn btn-primary btn-lg">Ver todos os planos <span class="arrow">→</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ============== CONTATO ============== -->
+<section class="section dark deep" id="contato" data-screen-label="contato">
+  <div class="orbs">
+    <div class="orb violet" style="width: 500px; height: 500px; top: -100px; left: 30%;"></div>
+    <div class="orb indigo" style="width: 400px; height: 400px; bottom: -100px; right: 10%; opacity: 0.4;"></div>
+  </div>
+  <div class="container">
+    <div class="contact-grid" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 64px; align-items: start;">
+      <div data-reveal>
+        <div class="eyebrow" style="margin-bottom: 16px;">Fale com a gente</div>
+        <h2 class="h1" style="margin-bottom: 24px;">Bora <em style="color: #a78bfa;">conversar?</em></h2>
+        <p class="lead" style="margin-bottom: 32px;">A gente entende a sua operação antes de propor qualquer coisa. Manda os detalhes — voltamos no mesmo dia útil.</p>
+
+        <a href="https://wa.me/5511956305269?text=Quero%20conhecer%20a%20Aura" target="_blank" rel="noopener" class="btn btn-whatsapp btn-lg" style="margin-bottom: 24px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 14.2c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.8.9-.9 1.1-.2.2-.3.2-.6.1-.3-.1-1.2-.4-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.7.4-.3.3-.9.9-.9 2.2 0 1.3.9 2.5 1.1 2.7.1.2 1.8 2.7 4.3 3.8.6.3 1.1.4 1.4.5.6.2 1.1.2 1.6.1.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.5-.3z"/><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.1-1.3c1.4.8 3.1 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2zm0 18.3c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.2.8.8-3.1-.2-.3C3.8 15 3.3 13.5 3.3 12c0-4.8 3.9-8.7 8.7-8.7s8.7 3.9 8.7 8.7-3.9 8.3-8.7 8.3z"/></svg>
+          (11) 95630-5269 <span class="arrow">→</span>
+        </a>
+        <div style="font-size: 13px; color: rgba(220,215,255,0.55); line-height: 1.6;">
+          Resposta no <strong style="color: #fff;">mesmo dia útil.</strong><br>
+          Atendimento humano, em português, sem chatbot.
+        </div>
+      </div>
+
+      <form class="form-card" data-reveal data-reveal-delay="1" onsubmit="event.preventDefault(); this.querySelector('button[type=submit]').textContent = 'Enviado! Voltamos em breve ✓';">
+        <div class="form-grid">
+          <div class="field"><label>Nome</label><input type="text" placeholder="Caio Alexander" required></div>
+          <div class="field"><label>Cargo</label><input type="text" placeholder="Sócio fundador"></div>
+          <div class="field full"><label>Empresa</label><input type="text" placeholder="Nome do seu negócio"></div>
+          <div class="field full">
+            <label>Vertical de interesse</label>
+            <select>
+              <option>Aura Negócio — varejo geral</option>
+              <option>Aura Odonto — clínicas e consultórios</option>
+              <option>Aura Beauty — salões, barbearias, estúdios</option>
+              <option>Aura Food — restaurantes, bares, delivery</option>
+              <option>Aura Pet — pet shops, banho e tosa, vets</option>
+              <option>Ainda não sei</option>
+            </select>
+          </div>
+          <div class="field"><label>Telefone</label><input type="tel" placeholder="(11) 99999-9999" required></div>
+          <div class="field"><label>E-mail</label><input type="email" placeholder="voce@empresa.com.br" required></div>
+          <div class="field full"><label>Mensagem</label><textarea placeholder="Conta um pouco do seu negócio: quantas lojas, quantos profissionais, o que você usa hoje..."></textarea></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 20px; justify-content: center;">Enviar mensagem <span class="arrow">→</span></button>
+        <div style="font-size: 11px; color: rgba(220,215,255,0.45); margin-top: 12px; text-align: center; font-style: italic;">A gente nunca compartilha seus dados.</div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FOOTER ============== -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+          <img src="assets/aura-icon.svg" alt="Aura" style="width: 36px; height: 36px; border-radius: 9px; box-shadow: 0 6px 18px rgba(124,58,237,0.4);" />
+          <span style="font-family: var(--font-heading); font-size: 26px; color: white; letter-spacing: -0.02em;">Aura<span style="color: #a78bfa;">.</span></span>
+        </div>
+        <p style="font-size: 14px; line-height: 1.6; color: rgba(196,181,253,0.7); max-width: 280px;">Tecnologia para Negócios. Cinco verticais especialistas, uma plataforma única, feita no Brasil.</p>
+        <p style="font-family: var(--font-heading); font-style: italic; font-size: 17px; line-height: 1.4; color: #fff; max-width: 300px; margin-top: 20px; letter-spacing: -0.01em;">&ldquo;Aura, a plataforma do empreendedor brasileiro.&rdquo;</p>
+        <div style="margin-top: 24px; display: flex; gap: 10px;">
+          <a href="https://instagram.com/aura_tecnologia" target="_blank" rel="noopener" aria-label="Instagram" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; background: rgba(124,58,237,0.18); display: grid; place-items: center; color: #c4b5fd;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.8" fill="currentColor"/></svg>
+          </a>
+          <a href="https://tiktok.com/@aura_tecnologia" target="_blank" rel="noopener" aria-label="TikTok" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; background: rgba(124,58,237,0.18); display: grid; place-items: center; color: #c4b5fd;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 6.7c-1.7-.4-3-1.6-3.6-3.2-.1-.4-.2-.7-.2-1H12v13.4c0 1.6-1.3 2.9-2.9 2.9s-2.9-1.3-2.9-2.9 1.3-2.9 2.9-2.9c.3 0 .6 0 .9.1V8.5c-.3 0-.6-.1-.9-.1-3.7 0-6.7 3-6.7 6.7s3 6.7 6.7 6.7 6.7-3 6.7-6.7V9.5c1.4 1 3 1.6 4.7 1.6V7.3c-.3 0-.6-.2-.9-.6z"/></svg>
+          </a>
+          <a href="https://wa.me/5511956305269" target="_blank" rel="noopener" aria-label="WhatsApp" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; background: rgba(37,211,102,0.18); display: grid; place-items: center; color: #6ee7a8;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.1-1.3c1.4.8 3.1 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+          </a>
+        </div>
+      </div>
+      <div>
+        <h5>Verticais</h5>
+        <a href="negocio.html">Aura Negócio</a>
+        <a href="odonto.html">Aura Odonto</a>
+        <a href="beauty.html">Aura Beauty</a>
+        <a href="food.html">Aura Food</a>
+        <a href="pet.html">Aura Pet</a>
+      </div>
+      <div>
+        <h5>Produto</h5>
+        <a href="planos.html">Planos</a>
+        <a href="https://app.getaura.com.br" target="_blank" rel="noopener">Entrar</a>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener">Criar conta</a>
+        <a href="sobre.html">Sobre a Aura</a>
+      </div>
+      <div>
+        <h5>Contato</h5>
+        <a href="https://wa.me/5511956305269" target="_blank" rel="noopener">(11) 95630-5269</a>
+        <a href="#contato">Formulário</a>
+        <a href="https://instagram.com/aura_tecnologia" target="_blank" rel="noopener">@aura_tecnologia</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>&copy; 2026 Aura Tecnologia</div>
+      <div class="row" style="gap: 24px;">
+        <a href="#" style="opacity: 0.6;">Termos</a>
+        <a href="#" style="opacity: 0.6;">Privacidade</a>
+        <a href="#" style="opacity: 0.6;">LGPD</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ============== WHATSAPP FLOAT ============== -->
+<a href="https://wa.me/5511956305269?text=Vim%20pelo%20site%20da%20Aura" target="_blank" rel="noopener" class="wa-float" aria-label="WhatsApp">
+  <span class="wa-icon">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 14.2c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.8.9-.9 1.1-.2.2-.3.2-.6.1-.3-.1-1.2-.4-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.7.4-.3.3-.9.9-.9 2.2 0 1.3.9 2.5 1.1 2.7.1.2 1.8 2.7 4.3 3.8.6.3 1.1.4 1.4.5.6.2 1.1.2 1.6.1.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.5-.3z"/><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.1-1.3c1.4.8 3.1 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+  </span>
+  <span class="wa-num">(11) 95630-5269</span>
+</a>
+
+<script src="js/site.js"></script>
+</body>
+</html>

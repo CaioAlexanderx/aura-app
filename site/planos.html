@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planos · Aura — Escolha pelo seu tamanho.</title>
+<link rel="icon" type="image/svg+xml" href="assets/aura-icon.svg">
+<link rel="apple-touch-icon" href="assets/aura-icon.svg">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/site.css?v=2">
+<link rel="stylesheet" href="css/verticals.css?v=2">
+<style>
+  /* Planos page */
+  .plan-hero { padding: 140px 0 80px; position: relative; overflow: hidden; }
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 48px;
+  }
+  @media (max-width: 1100px) { .plan-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px)  { .plan-grid { grid-template-columns: 1fr; } }
+
+  .plan-card {
+    background: white;
+    border: 1px solid rgba(109,40,217,0.10);
+    border-radius: 24px;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .plan-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 24px 48px rgba(124,58,237,0.12);
+    border-color: rgba(109,40,217,0.25);
+  }
+  .plan-card.featured {
+    background: linear-gradient(160deg, #7c3aed, #6d28d9);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 32px 60px rgba(124,58,237,0.35);
+  }
+  .plan-card.featured::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 24px;
+    background: radial-gradient(circle at 100% 0%, rgba(255,255,255,0.18), transparent 50%);
+    pointer-events: none;
+  }
+  .plan-card.featured .plan-feat-list li::before { background: rgba(255,255,255,0.85); }
+  .plan-card.featured .plan-feat-list li { color: rgba(255,255,255,0.92); }
+
+  .plan-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #756a93;
+    margin-bottom: 16px;
+  }
+  .plan-card.featured .plan-name { color: rgba(255,255,255,0.7); }
+  .plan-tagline {
+    font-size: 14px;
+    color: #756a93;
+    line-height: 1.4;
+    margin-bottom: 24px;
+    min-height: 40px;
+  }
+  .plan-card.featured .plan-tagline { color: rgba(255,255,255,0.85); }
+
+  .plan-price {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    color: #1a1330;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .plan-price .amt { font-size: 56px; }
+  .plan-price .cents { font-size: 22px; opacity: 0.6; }
+  .plan-price .per { font-size: 14px; color: #756a93; margin-left: 4px; }
+  .plan-card.featured .plan-price { color: white; }
+  .plan-card.featured .plan-price .per { color: rgba(255,255,255,0.7); }
+
+  .plan-vertical-dots {
+    display: flex; gap: 6px; margin-bottom: 16px;
+  }
+  .plan-vertical-dots span {
+    width: 9px; height: 9px; border-radius: 50%;
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  .plan-feat-list {
+    list-style: none;
+    padding: 0;
+    margin: 28px 0 0;
+    display: grid;
+    gap: 12px;
+  }
+  .plan-feat-list li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #2a1f48;
+  }
+  .plan-feat-list li::before {
+    content: "";
+    width: 14px; height: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='%237c3aed' stroke-width='2'%3E%3Cpath d='M3 7l3 3 5-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: contain;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+  .plan-card.featured .plan-feat-list li::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M3 7l3 3 5-6'/%3E%3C/svg%3E");
+  }
+
+  .plan-cta {
+    margin-top: 32px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid #7c3aed;
+    color: #7c3aed;
+    background: transparent;
+  }
+  .plan-cta:hover { background: #7c3aed; color: white; }
+  .plan-card.featured .plan-cta {
+    background: white;
+    color: #7c3aed;
+    border-color: white;
+  }
+  .plan-card.featured .plan-cta:hover { background: rgba(255,255,255,0.9); }
+
+  .plan-popular {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fbbf24;
+    color: #1a1330;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 6px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .v-picker {
+    margin-top: 20px;
+    padding: 14px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 12px;
+  }
+  .v-picker-title {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .v-picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .v-picker-grid button {
+    padding: 8px 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+  }
+  .v-picker-grid button[disabled] { opacity: 0.55; cursor: not-allowed; }
+  .v-picker-grid button:not([disabled]):hover { background: rgba(255,255,255,0.18); transform: translateY(-1px); }
+  .v-picker-grid button .vd { width: 8px; height: 8px; border-radius: 50%; }
+  .v-picker-grid button .em-breve {
+    font-size: 8px; letter-spacing: 0.1em;
+    background: rgba(251,191,36,0.25);
+    color: #fbbf24;
+    padding: 2px 4px; border-radius: 4px;
+    margin-left: 2px;
+  }
+
+  /* Compare table */
+  .compare-section { padding: 100px 0; background: #faf8f4; }
+  .compare-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: white;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+  }
+  .compare-table th, .compare-table td {
+    padding: 16px 18px;
+    text-align: left;
+    border-bottom: 1px solid rgba(109,40,217,0.08);
+    font-size: 13px;
+  }
+  .compare-table thead th {
+    background: #f5f0ea;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #756a93;
+    position: sticky; top: 0;
+    z-index: 1;
+  }
+  .compare-table thead th:first-child { color: #1a1330; }
+  .compare-table thead th.featured { background: #7c3aed; color: white; }
+  .compare-table tr.cat td {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    color: #1a1330;
+    background: #f5f0ea;
+    font-weight: 400;
+  }
+  .compare-table tbody td { color: #1a1330; }
+  .compare-table td:first-child { color: #2a1f48; font-weight: 500; }
+  .compare-table td.feat-yes::before { content: "●"; color: #7c3aed; font-size: 14px; }
+  .compare-table td.feat-no::before  { content: "—"; color: #c4baee; font-weight: 700; }
+  .compare-table td { text-align: center; }
+  .compare-table td:first-child { text-align: left; }
+
+  /* FAQ */
+  .faq-section { padding: 100px 0; background: #0B0B0B; color: white; position: relative; overflow: hidden; }
+  .faq-list { max-width: 760px; margin: 48px auto 0; }
+  .faq-item {
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 24px 0;
+    cursor: pointer;
+  }
+  .faq-q {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 400;
+    color: #fff;
+  }
+  .faq-q .ic {
+    width: 28px; height: 28px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 14px;
+    transition: transform 0.3s ease, background 0.3s ease;
+  }
+  .faq-item.open .faq-q .ic { transform: rotate(45deg); background: #7c3aed; border-color: #7c3aed; }
+  .faq-a {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.4s ease;
+    color: rgba(220,215,255,0.7);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .faq-item.open .faq-a { max-height: 300px; padding-top: 14px; }
+</style>
+</head>
+<body data-screen-label="Planos">
+<div data-mount="nav"></div>
+
+<section class="section dark deep plan-hero" data-screen-label="hero">
+  <div class="orbs">
+    <div class="orb violet" style="width: 600px; height: 600px; top: -100px; right: -150px;"></div>
+    <div class="orb indigo" style="width: 400px; height: 400px; bottom: -100px; left: 10%;"></div>
+  </div>
+  <div class="grain"></div>
+  <div class="container">
+    <div class="text-center stack-md" style="max-width: 760px; margin: 0 auto 32px;" data-reveal>
+      <div class="eyebrow center">Planos · transparente</div>
+      <h1 class="display" data-typein>Pague pelo que <em>usa.</em><br>Cresça quando <em>quiser.</em></h1>
+      <p class="lead" style="margin: 0 auto;">Três planos. A camada vertical do seu setor — Odonto, Beauty, Food ou Pet — já está incluída no Negócio e no Expansão. Sem fidelidade. Sem letras miúdas.</p>
+    </div>
+
+    <!-- Billing toggle -->
+    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 32px;" data-reveal>
+      <span id="lbl-monthly" style="font-size: 15px; color: #fff; font-weight: 600; transition: color 0.2s;">Mensal</span>
+      <button id="billing-toggle" onclick="toggleBilling()" aria-pressed="false"
+        style="position: relative; width: 52px; height: 28px; border-radius: 999px; background: rgba(124,58,237,0.3); border: 1px solid rgba(124,58,237,0.5); cursor: pointer; transition: background 0.25s; flex-shrink: 0;">
+        <span id="toggle-thumb"
+          style="position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: white; transition: transform 0.25s; box-shadow: 0 2px 6px rgba(0,0,0,0.3); display: block;"></span>
+      </button>
+      <span id="lbl-annual" style="font-size: 15px; color: rgba(220,215,255,0.6); font-weight: 600; transition: color 0.2s; display: flex; align-items: center; gap: 6px;">
+        Anual
+        <span style="display: inline-flex; align-items: center; padding: 2px 8px; background: rgba(251,191,36,0.18); color: #fbbf24; border: 1px solid rgba(251,191,36,0.35); border-radius: 999px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.08em;">−20%</span>
+      </span>
+    </div>
+
+    <div class="plan-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <!-- Essencial -->
+      <div class="plan-card" id="essencial" data-reveal>
+        <div class="plan-name">Essencial</div>
+        <div class="plan-price"><span class="amt">R$ 89</span><span class="per">/mês</span></div>
+        <div class="plan-tagline">Pra começar com o pé direito.</div>
+        <ul class="plan-feat-list">
+          <li>PDV simples + recibo digital</li>
+          <li>Cadastro de clientes e produtos</li>
+          <li>Controle de caixa diário</li>
+          <li>Relatórios básicos</li>
+          <li>1 usuário</li>
+          <li>Suporte por chat</li>
+        </ul>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" class="plan-cta">Criar conta grátis</a>
+      </div>
+
+      <!-- Negócio — featured -->
+      <div class="plan-card featured" id="negocio" data-reveal data-reveal-delay="1">
+        <div class="plan-popular">Mais escolhido</div>
+        <div class="plan-vertical-dots">
+          <span style="background:#06B6D4; color:#06B6D4;"></span>
+          <span style="background:#F472B6; color:#F472B6;"></span>
+          <span style="background:#F97316; color:#F97316;"></span>
+          <span style="background:#10B981; color:#10B981;"></span>
+        </div>
+        <div class="plan-name">Negócio</div>
+        <div class="plan-price"><span class="amt">R$ 169</span><span class="per">/mês</span></div>
+        <div class="plan-tagline">Operação completa + camada do seu setor.</div>
+        <ul class="plan-feat-list">
+          <li>Tudo do Essencial</li>
+          <li>Financeiro completo (DRE, fluxo)</li>
+          <li>Estoque com baixa automática</li>
+          <li>NF-e, NFC-e e SAT</li>
+          <li>Boletos, Pix e cartão (gateway)</li>
+          <li>Até 3 usuários</li>
+          <li>Seu Analista (IA) — básico</li>
+          <li>Camada vertical do seu setor inclusa</li>
+        </ul>
+        <div class="v-picker">
+          <div class="v-picker-title">Escolha sua vertical</div>
+          <div class="v-picker-grid">
+            <button onclick="window.location='odonto.html'"><span class="vd" style="background:#06B6D4;"></span>Odonto</button>
+            <button onclick="window.location='food.html'"><span class="vd" style="background:#F97316;"></span>Food</button>
+            <button onclick="window.location='beauty.html'"><span class="vd" style="background:#F472B6;"></span>Beauty <span class="em-breve">EM BREVE</span></button>
+            <button onclick="window.location='pet.html'"><span class="vd" style="background:#10B981;"></span>Pet <span class="em-breve">EM BREVE</span></button>
+          </div>
+        </div>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" class="plan-cta">Criar conta grátis</a>
+      </div>
+
+      <!-- Expansão -->
+      <div class="plan-card" id="expansao" data-reveal data-reveal-delay="2">
+        <div class="plan-vertical-dots">
+          <span style="background:#06B6D4; color:#06B6D4;"></span>
+          <span style="background:#F472B6; color:#F472B6;"></span>
+          <span style="background:#F97316; color:#F97316;"></span>
+          <span style="background:#10B981; color:#10B981;"></span>
+        </div>
+        <div class="plan-name">Expansão</div>
+        <div class="plan-price"><span class="amt">R$ 269</span><span class="per">/mês</span></div>
+        <div class="plan-tagline">Hub social, automações e agentes de IA + vertical completa.</div>
+        <ul class="plan-feat-list">
+          <li>Tudo do Negócio</li>
+          <li>Hub de redes sociais integrado</li>
+          <li>Automações de marketing e atendimento</li>
+          <li>Agentes de IA dedicados ao seu negócio</li>
+          <li>Multi-loja (até 5 unidades)</li>
+          <li>Centro de custos e DRE consolidado</li>
+          <li>API + integrações ilimitadas</li>
+          <li>Usuários ilimitados · Suporte prioritário</li>
+          <li>Camada vertical completa inclusa</li>
+        </ul>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" class="plan-cta">Criar conta grátis</a>
+      </div>
+    </div>
+
+    <div class="text-center" style="margin-top: 40px; font-size: 13px; color: rgba(220,215,255,0.55);" data-reveal>
+      Todos os planos: <a href="https://wa.me/5511956305269?text=Quero%20come%C3%A7ar%20o%20per%C3%ADodo%20gr%C3%A1tis%20na%20Aura" target="_blank" rel="noopener" style="color: #a78bfa; font-weight: 600;">7 dias grátis via WhatsApp</a> · onboarding humano · cancele quando quiser.
+    </div>
+  </div>
+</section>
+
+<!-- ============== COMPARE ============== -->
+<section class="compare-section" data-screen-label="Comparar">
+  <div class="container">
+    <div class="text-center stack-md" style="max-width: 720px; margin: 0 auto 32px;" data-reveal>
+      <div class="eyebrow center" style="color: #7c3aed;">Comparativo</div>
+      <h2 class="h1" style="color: #1a1330;">Lado a lado, <em style="color:#7c3aed;">sem ginástica.</em></h2>
+    </div>
+
+    <div style="overflow-x: auto;" data-reveal data-reveal-delay="1">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Recurso</th>
+            <th>Essencial</th>
+            <th class="featured">Negócio</th>
+            <th>Expansão</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="cat"><td colspan="6">PDV &amp; vendas</td></tr>
+          <tr><td>Frente de caixa (PDV)</td><td class="feat-yes"></td><td class="feat-yes"></td><td class="feat-yes"></td></tr>
+          <tr><td>Boletos · Pix · cartão</td><td class="feat-no"></td><td class="feat-yes"></td><td class="feat-yes"></td></tr>
+          <tr><td>NF-e · NFC-e · SAT</td><td class="feat-no"></td><td class="feat-yes"></td><td class="feat-yes"></td></tr>
+
+          <tr class="cat"><td colspan="4">Financeiro</td></tr>
+          <tr><td>Caixa diário</td><td class="feat-yes"></td><td class="feat-yes"></td><td class="feat-yes"></td></tr>
+          <tr><td>Fluxo de caixa · DRE</td><td class="feat-no"></td><td class="feat-yes"></td><td class="feat-yes"></td></tr>
+          <tr><td>Centro de custos</td><td class="feat-no"></td><td class="feat-no"></td><td class="feat-yes"></td></tr>
+
+          <tr class="cat"><td colspan="4">Camada vertical</td></tr>
+          <tr><td>Camada vertical do setor</td><td class="feat-no"></td><td class="feat-yes"></td><td class="feat-yes"></td></tr>
+          <tr><td>Hub social + automações</td><td class="feat-no"></td><td class="feat-no"></td><td class="feat-yes"></td></tr>
+          <tr><td>Agentes de IA</td><td class="feat-no"></td><td>Básico</td><td>Avançado</td></tr>
+
+          <tr class="cat"><td colspan="4">Escala</td></tr>
+          <tr><td>Usuários</td><td>1</td><td>3</td><td>Ilimitado</td></tr>
+          <tr><td>Multi-loja</td><td class="feat-no"></td><td class="feat-no"></td><td>5 lojas</td></tr>
+          <tr><td>API · integrações</td><td class="feat-no"></td><td class="feat-no"></td><td class="feat-yes"></td></tr>
+          <tr><td>Customer Success</td><td class="feat-no"></td><td class="feat-no"></td><td>Prioritário</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FAQ ============== -->
+<section class="faq-section" data-screen-label="FAQ">
+  <div class="orbs">
+    <div class="orb violet" style="width: 500px; height: 500px; top: 0; left: -150px; opacity: 0.3;"></div>
+  </div>
+  <div class="container">
+    <div class="text-center stack-md" style="max-width: 700px; margin: 0 auto;" data-reveal>
+      <div class="eyebrow center">Perguntas frequentes</div>
+      <h2 class="h1">Sem letras <em style="color:#a78bfa;">miúdas.</em></h2>
+    </div>
+
+    <div class="faq-list" data-reveal data-reveal-delay="1">
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Posso trocar de plano depois?<span class="ic">+</span></div>
+        <div class="faq-a">Sim. Você sobe ou desce de plano a qualquer momento, sem multa. Pagamentos são feitos por mês corrente — proporcional ao tempo usado.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Tem fidelidade ou multa de cancelamento?<span class="ic">+</span></div>
+        <div class="faq-a">Não. A Aura é mensal, sem fidelidade. Cancela quando quiser, levando seus dados em export padrão.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">O que muda entre Negócio e Expansão?<span class="ic">+</span></div>
+        <div class="faq-a">Ambos incluem a camada vertical do seu setor. O Expansão acrescenta hub de redes sociais, automações de marketing, agentes de IA avançados, multi-loja e API ilimitada — ideal pra quem quer escalar.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Quando ficam prontos os planos Beauty e Pet?<span class="ic">+</span></div>
+        <div class="faq-a">Beauty e Pet estão em desenvolvimento e devem entrar em 2026. Você pode entrar na lista de espera nas páginas das verticais — avisamos antes de qualquer pessoa.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Como funciona o teste grátis?<span class="ic">+</span></div>
+        <div class="faq-a">7 dias com acesso completo. A gente faz uma conversa rápida pelo WhatsApp pra entender seu negócio antes de liberar o teste — assim, configuramos do jeito certo desde o primeiro dia. Se não te servir, é só não assinar.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Atendem em todo o Brasil?<span class="ic">+</span></div>
+        <div class="faq-a">Sim. A Aura é 100% em nuvem, em português. Funciona em qualquer lugar com internet — celular, tablet, computador.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Preciso de hardware fiscal?<span class="ic">+</span></div>
+        <div class="faq-a">Para NFC-e basta um computador ou tablet. Para SAT (em SP), o equipamento é separado — recomendamos modelos compatíveis e ajudamos no setup.</div>
+      </div>
+    </div>
+
+    <div class="text-center" style="margin-top: 64px;" data-reveal data-reveal-delay="2">
+      <p style="font-size: 16px; color: rgba(220,215,255,0.7); margin-bottom: 16px;">Ainda tem dúvida? Manda um zap.</p>
+      <a href="https://wa.me/5511956305269?text=Tenho%20uma%20duvida%20sobre%20os%20planos" target="_blank" rel="noopener" class="btn btn-whatsapp btn-lg">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.1-1.3c1.4.8 3.1 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+        (11) 95630-5269 <span class="arrow">→</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<div data-mount="footer"></div>
+<div data-mount="wa"></div>
+<script src="js/chrome.js"></script>
+<script src="js/site.js"></script>
+<script>
+var billingMode = 'monthly';
+var PRICES = {
+  essencial: { monthly: 'R$ 89', annual: 'R$ 71' },
+  negocio:   { monthly: 'R$ 169', annual: 'R$ 135' },
+  expansao:  { monthly: 'R$ 269', annual: 'R$ 215' }
+};
+function toggleBilling() {
+  billingMode = (billingMode === 'monthly') ? 'annual' : 'monthly';
+  var isAnnual = billingMode === 'annual';
+  var thumb = document.getElementById('toggle-thumb');
+  var btn   = document.getElementById('billing-toggle');
+  var lblM  = document.getElementById('lbl-monthly');
+  var lblA  = document.getElementById('lbl-annual');
+  if (thumb) thumb.style.transform = isAnnual ? 'translateX(24px)' : 'translateX(0)';
+  if (btn)   { btn.setAttribute('aria-pressed', isAnnual); btn.style.background = isAnnual ? 'rgba(124,58,237,0.65)' : 'rgba(124,58,237,0.3)'; }
+  if (lblM)  lblM.style.color = isAnnual ? 'rgba(220,215,255,0.5)' : '#fff';
+  if (lblA)  lblA.style.color = isAnnual ? '#fff' : 'rgba(220,215,255,0.5)';
+  Object.keys(PRICES).forEach(function(plan) {
+    var card = document.getElementById(plan);
+    if (!card) return;
+    var amtEl = card.querySelector('.amt');
+    var perEl = card.querySelector('.per');
+    if (amtEl) amtEl.textContent = PRICES[plan][billingMode];
+    if (perEl) perEl.textContent = isAnnual ? '/mês (cobrado anualmente)' : '/mês';
+  });
+}
+</script>
+</body>
+</html>
