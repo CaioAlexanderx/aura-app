@@ -23,6 +23,9 @@ type NavSection = { s: string; i: NavItem[] };
 // dinamicamente quando company.vertical_active esta setado. Sem isso, a tela
 // /vertical existe mas fica orfa — sem link no menu = usuario nao vai ver.
 // Icones: ver components/Icon.tsx (tooth/scissors/utensils/sparkles/paw/dumbbell).
+//
+// EXCECAO odonto: ver buildRawNav abaixo. Odonto tem porta dedicada e NAO
+// aparece nessa secao.
 const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
   odonto:   { label: "Odontologia",    icon: "tooth" },
   barber:   { label: "Barber / Salao", icon: "scissors" },
@@ -92,7 +95,10 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
     }),
   })).filter(section => section.i.length > 0);
 
-  if (activeVertical) {
+  // Odonto NAO aparece em "Meu Segmento": tem porta dedicada
+  // /dental/(clinic)/hoje (decisao 2026-04-25, ver memory:
+  // plano_aura_odonto_portal). Outras verticais continuam aqui.
+  if (activeVertical && activeVertical !== "odonto") {
     const meta = VERTICAL_NAV[activeVertical] || { label: "Modulo Vertical", icon: "star" };
     const verticalSection: NavSection = {
       s: "Meu Segmento",
