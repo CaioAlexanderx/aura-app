@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
+import { invalidateDentalFinancials } from "@/lib/dentalQueryHelpers";
 
 // ============================================================
 // AURA. — RepasseDentista
@@ -17,6 +18,12 @@ import { Icon } from "@/components/Icon";
 //                                 conflitar com dentalPractitioners.js)
 //   PATCH /dental/repasse-config/:pid
 // Pos-D-UNIFY: usa dental_practitioners (cro/specialty) em vez de employees.
+//
+// PR7 (2026-04-26): markPaidMut agora invalida queries financeiras
+// cruzadas (transactions, dre, dashboard) porque marcar repasse como
+// pago dispara trigger backend (064_dental_to_transactions_p0) que
+// cria transaction (expense, repasse_dentista). Sem isso, /financeiro
+// genericos mostra dado stale por ate 30s.
 // ============================================================
 
 const fmt = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -61,7 +68,12 @@ export function RepasseDentista() {
     mutationFn: (rid: string) =>
       request<any>(`/companies/${company!.id}/dental/repasses/${rid}/status`, { method: "PATCH", body: { status: "paid" } }),
     onSuccess: () => {
+      // Repasse marcado como pago dispara trigger backend que cria
+      // transaction (expense, repasse_dentista). Invalidamos tanto a
+      // query dental original quanto as queries financeiras cruzadas
+      // pra UI de /financeiro e DRE atualizarem instantaneamente.
       qc.invalidateQueries({ queryKey: ["dental-repasses"] });
+      invalidateDentalFinancials(qc);
       toast.success("Marcado como pago");
     },
   });
@@ -88,11 +100,11 @@ export function RepasseDentista() {
     <ScrollView showsVerticalScrollIndicator={false}>
       <View style={z.header}>
         <Pressable onPress={() => changeMonth(-1)} style={z.monthBtn} hitSlop={8}>
-          <Text style={z.monthBtnText}>{"\u2039"}</Text>
+          <Text style={z.monthBtnText}>{"‹"}</Text>
         </Pressable>
         <Text style={z.monthLabel}>{monthLabel}</Text>
         <Pressable onPress={() => changeMonth(1)} style={z.monthBtn} hitSlop={8}>
-          <Text style={z.monthBtnText}>{"\u203A"}</Text>
+          <Text style={z.monthBtnText}>{"›"}</Text>
         </Pressable>
         <Pressable onPress={() => calcMut.mutate()} style={z.calcBtn} disabled={calcMut.isPending}>
           <Icon name="refresh" size={14} color={Colors.violet3 || "#a78bfa"} />
@@ -133,7 +145,7 @@ export function RepasseDentista() {
               <View style={{ flex: 1 }}>
                 <Text style={z.practName}>{p.name}</Text>
                 <Text style={z.practRole}>
-                  {p.specialty || "Dentista"}{p.cro ? " \u2022 " + p.cro : ""} \u2022 {p.repasse_pct}%
+                  {p.specialty || "Dentista"}{p.cro ? " • " + p.cro : ""} • {p.repasse_pct}%
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -204,7 +216,7 @@ export function RepasseDentista() {
               <View style={{ flex: 1 }}>
                 <Text style={z.configName}>{pr.name}</Text>
                 <Text style={z.configMeta}>
-                  {pr.specialty || "Dentista"}{pr.cro ? " \u2022 " + pr.cro : ""}
+                  {pr.specialty || "Dentista"}{pr.cro ? " • " + pr.cro : ""}
                 </Text>
               </View>
               <View style={z.configPctRow}>
