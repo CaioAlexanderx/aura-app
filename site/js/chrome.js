@@ -63,7 +63,7 @@
           <span style="font-family: var(--font-heading); font-size: 26px; color: white; letter-spacing: -0.02em;">Aura<span style="color: #a78bfa;">.</span></span>
         </div>
         <p style="font-size: 14px; line-height: 1.6; color: rgba(196,181,253,0.7); max-width: 280px;">Tecnologia para Negócios. Cinco verticais especialistas, uma plataforma única, feita no Brasil.</p>
-        <p style="font-family: var(--font-heading); font-style: italic; font-size: 17px; line-height: 1.4; color: #fff; max-width: 300px; margin-top: 20px; letter-spacing: -0.01em;">&ldquo;Aura, a plataforma do empreendedor brasileiro.&rdquo;</p>
+        <p style="font-family: var(--font-heading); font-style: italic; font-size: 17px; line-height: 1.4; color: #fff; max-width: 300px; margin-top: 20px; letter-spacing: -0.01em;">"Aura, a plataforma do empreendedor brasileiro."</p>
         <div style="margin-top: 24px; display: flex; gap: 10px;">
           <a href="https://instagram.com/aura_tecnologia" target="_blank" rel="noopener" aria-label="Instagram" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; background: rgba(124,58,237,0.18); display: grid; place-items: center; color: #c4b5fd;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.8" fill="currentColor"/></svg>
@@ -94,12 +94,12 @@
       <div>
         <h5>Contato</h5>
         <a href="https://wa.me/5511956305269" target="_blank" rel="noopener">(11) 95630-5269</a>
-        <a href="index.html#contato">Formulário</a>
+        <a href="index.html#contato">Fale Conosco</a>
         <a href="https://instagram.com/aura_tecnologia" target="_blank" rel="noopener">@aura_tecnologia</a>
       </div>
     </div>
     <div class="footer-bottom">
-      <div>&copy; 2026 Aura Tecnologia</div>
+      <div>© 2026 Aura Tecnologia</div>
       <div class="row" style="gap: 24px;">
         <a href="#" style="opacity: 0.6;">Termos</a>
         <a href="#" style="opacity: 0.6;">Privacidade</a>
