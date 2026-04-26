@@ -60,12 +60,24 @@ function AuthGuard() {
     const onCheckout = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
 
-    // Paginas publicas — nenhum redirect, nenhum guard.
-    // Portal do paciente (rota /dental/portal/:token) precisa ser acessivel
-    // por qualquer pessoa com o link, sem login.
-    const onInvite = segments[0] === "invite";
-    const onPublicDental = segments[0] === "dental";
+    // Paginas publicas dental — agendamento e portal do paciente sao
+    // acessiveis sem login. (clinic) e auth-required entao NAO entra aqui.
+    const onInvite       = segments[0] === "invite";
+    const onPublicDental = segments[0] === "dental" && (segments[1] === "book" || segments[1] === "portal");
     if (onInvite || onPublicDental) return;
+
+    // Shell dental autenticado (qualquer rota /dental/* que NAO seja publica).
+    // expo-router omite groups (parenteses) na pathname, entao /dental/(clinic)/hoje
+    // aparece como segments=["dental", "hoje"]. Como ja excluimos book/portal acima,
+    // qualquer outro segments[0]="dental" eh shell autenticado.
+    const onDentalClinic = segments[0] === "dental";
+
+    // Vertical odonto: redirect /(tabs) -> /dental/(clinic)/hoje.
+    // Decisao 2026-04-25 (memory: plano_aura_odonto_portal):
+    // odonto vira porta dedicada. Modulos genericos do Aura ERP
+    // continuam acessiveis via deep-link, mas o roteamento default
+    // leva ao shell dental.
+    const isOdonto = (company as any)?.vertical_active === "odonto";
 
     // 1. Not logged in → login
     if (!token && !inAuth) {
@@ -79,17 +91,27 @@ function AuthGuard() {
       return;
     }
 
-    // 3. Logged in + verified → bounce out of auth pages
+    // 3. Logged in + verified → bounce out of auth pages.
+    //    Odonto vai pro shell dental, demais vao pro (tabs).
     if (token && (emailVerified || isDemo) && inAuth && !onVerify) {
-      router.replace("/(tabs)");
+      router.replace(isOdonto ? "/dental/(clinic)/hoje" : "/(tabs)");
       return;
     }
     if (token && emailVerified && onVerify) {
-      router.replace("/(tabs)");
+      router.replace(isOdonto ? "/dental/(clinic)/hoje" : "/(tabs)");
       return;
     }
 
-    // 4. Billing gate (ver comentario original)
+    // 3.5 Odonto navegando em /(tabs) → redireciona pro shell dental.
+    //     Excecao: /(tabs)/checkout precisa continuar funcionando para
+    //     billing gate (passo 4) atender odonto tambem.
+    if (token && (emailVerified || isDemo) && isOdonto && inTabs && !onCheckout) {
+      router.replace("/dental/(clinic)/hoje");
+      return;
+    }
+
+    // 4. Billing gate. Aplica em (tabs) E em /dental/(clinic) — usuario
+    //    odonto sem billing ativo tambem precisa passar pelo checkout.
     const billingStatus  = (company as any)?.billing_status;
     const hasActiveBilling = billingStatus === "active" || trialActive;
 
@@ -98,7 +120,7 @@ function AuthGuard() {
 
     const needsCheckout = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
 
-    if (token && needsCheckout && inTabs && !onCheckout) {
+    if (token && needsCheckout && (inTabs || onDentalClinic) && !onCheckout) {
       router.replace("/(tabs)/checkout");
       return;
     }
