@@ -60,6 +60,12 @@ function AuthGuard() {
     const onCheckout = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
 
+    // Contas @getaura.com.br sao internas Aura. Ja sao detectadas como
+    // is_staff=true em useAuthStore (bypassa billing gate). Aqui bypassam
+    // tambem o verify-email gate — sao confiaveis por construcao e exigir
+    // verificacao so prende contas de teste internas.
+    const isInternalAura = ((user?.email || "") as string).toLowerCase().endsWith("@getaura.com.br");
+
     // Paginas publicas dental — agendamento e portal do paciente sao
     // acessiveis sem login. (clinic) e auth-required entao NAO entra aqui.
     const onInvite       = segments[0] === "invite";
@@ -86,18 +92,19 @@ function AuthGuard() {
     }
 
     // 2. Logged in but email not verified → verify-email
-    if (token && !isDemo && user && !emailVerified && !onVerify) {
+    //    Bypass para contas internas Aura (@getaura.com.br).
+    if (token && !isDemo && user && !emailVerified && !isInternalAura && !onVerify) {
       router.replace("/(auth)/verify-email");
       return;
     }
 
-    // 3. Logged in + verified → bounce out of auth pages.
+    // 3. Logged in + verified (ou interno) → bounce out of auth pages.
     //    Odonto vai pro shell dental, demais vao pro (tabs).
-    if (token && (emailVerified || isDemo) && inAuth && !onVerify) {
+    if (token && (emailVerified || isDemo || isInternalAura) && inAuth && !onVerify) {
       router.replace(isOdonto ? "/dental/(clinic)/hoje" : "/(tabs)");
       return;
     }
-    if (token && emailVerified && onVerify) {
+    if (token && (emailVerified || isInternalAura) && onVerify) {
       router.replace(isOdonto ? "/dental/(clinic)/hoje" : "/(tabs)");
       return;
     }
@@ -105,13 +112,14 @@ function AuthGuard() {
     // 3.5 Odonto navegando em /(tabs) → redireciona pro shell dental.
     //     Excecao: /(tabs)/checkout precisa continuar funcionando para
     //     billing gate (passo 4) atender odonto tambem.
-    if (token && (emailVerified || isDemo) && isOdonto && inTabs && !onCheckout) {
+    if (token && (emailVerified || isDemo || isInternalAura) && isOdonto && inTabs && !onCheckout) {
       router.replace("/dental/(clinic)/hoje");
       return;
     }
 
     // 4. Billing gate. Aplica em (tabs) E em /dental/(clinic) — usuario
     //    odonto sem billing ativo tambem precisa passar pelo checkout.
+    //    isStaff (que inclui @getaura.com.br) ja bypassa needsCheckout.
     const billingStatus  = (company as any)?.billing_status;
     const hasActiveBilling = billingStatus === "active" || trialActive;
 
