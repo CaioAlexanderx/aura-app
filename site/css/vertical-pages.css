@@ -1,0 +1,148 @@
+/* =========================================================
+   AURA SITE — Vertical page sections (light/dark mixed)
+   Used by all 5 vertical pages
+   ========================================================= */
+
+/* Vertical hero — full bleed with conic gradient signature */
+.v-hero {
+  position: relative;
+  min-height: 92vh;
+  padding: 160px clamp(20px, 5vw, 80px) 100px;
+  overflow: hidden;
+  background: var(--v-bg-deep);
+  color: white;
+  isolation: isolate;
+}
+.v-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 70% 30%, var(--v-glow), transparent 55%),
+    radial-gradient(ellipse at 10% 90%, rgba(124,58,237,0.18), transparent 55%);
+  z-index: -1;
+}
+.v-hero::after {
+  content: "";
+  position: absolute;
+  top: -200px; right: -200px;
+  width: 700px; height: 700px;
+  background: conic-gradient(from 200deg at 50% 50%, var(--v-accent), #7c3aed 200deg, transparent 360deg);
+  filter: blur(80px);
+  opacity: 0.45;
+  z-index: -1;
+  animation: heroConicSpin 24s linear infinite;
+}
+@keyframes heroConicSpin { to { transform: rotate(360deg); } }
+
+.v-hero-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 64px;
+  align-items: center;
+  max-width: 1280px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+.v-hero h1 {
+  font-family: var(--font-heading);
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  margin: 16px 0 24px;
+}
+.v-hero h1 em { font-style: italic; color: var(--v-accent); }
+.v-hero .lead { color: rgba(255,255,255,0.75); max-width: 56ch; }
+.v-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px 8px 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.85);
+}
+.v-hero-eyebrow .v-mark-sm {
+  width: 24px; height: 24px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--v-accent), #7c3aed);
+  display: grid; place-items: center;
+  color: white;
+  box-shadow: 0 4px 12px var(--v-glow);
+}
+.v-hero-eyebrow .v-mark-sm svg { width: 14px; height: 14px; }
+
+.v-hero-phones {
+  position: relative;
+  height: 580px;
+}
+
+/* Vertical features — light section */
+.v-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.v-feature {
+  background: white;
+  border: 1px solid var(--section-border);
+  border-radius: 20px;
+  padding: 28px;
+  transition: all 0.3s var(--ease);
+}
+.v-feature:hover {
+  border-color: var(--v-accent);
+  box-shadow: 0 16px 32px var(--v-glow);
+  transform: translateY(-3px);
+}
+.v-feature .v-icon {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--v-accent), color-mix(in oklab, var(--v-accent), #7c3aed 35%));
+  color: white;
+  display: grid; place-items: center;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 20px var(--v-glow);
+}
+.v-feature .v-icon svg { width: 22px; height: 22px; }
+.v-feature h3 { font-family: var(--font-heading); font-size: 22px; letter-spacing: -0.01em; margin-bottom: 8px; }
+.v-feature p { font-size: 14px; line-height: 1.55; color: var(--section-ink-2); }
+
+/* Vertical breadcrumbs (other verticals carousel) */
+.v-others {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.v-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 10px;
+  border-radius: 999px;
+  background: var(--section-card);
+  border: 1px solid var(--section-border);
+  transition: all 0.2s var(--ease);
+}
+.v-other:hover { transform: translateY(-2px); border-color: var(--violet); }
+.v-other .vm {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--ov-accent, #7c3aed), #7c3aed);
+  display: grid; place-items: center;
+  color: white;
+  box-shadow: 0 4px 10px var(--ov-glow, rgba(124,58,237,0.3));
+}
+.v-other .vm svg { width: 14px; height: 14px; }
+.v-other span { font-size: 14px; font-weight: 500; }
+
+@media (max-width: 880px) {
+  .v-hero-grid, .v-features-grid { grid-template-columns: 1fr; }
+  .v-hero-phones { height: 520px; }
+}

@@ -1,0 +1,145 @@
+/* =========================================================
+   AURA DESIGN SYSTEM — Colors & Typography
+   Sourced from aura-app/constants/colors.ts + fonts.ts
+   Default theme is DARK (per app.json userInterfaceStyle).
+   ========================================================= */
+
+/* ---- Webfonts (Google) ---- */
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap");
+
+:root {
+  /* ======== BRAND / VIOLET SCALE ======== */
+  --violet:        #7c3aed;   /* primary action */
+  --violet-2:      #8b5cf6;   /* hover / light primary */
+  --violet-3:      #a78bfa;   /* accent ink on dark */
+  --violet-4:      #c4b5fd;   /* softest tint */
+  --violet-deep:   #6d28d9;   /* deep — brand source */
+  --violet-ink:    #5b21b6;   /* darkest — used in light mode */
+  --violet-wash:   rgba(109, 40, 217, 0.14);  /* violetD */
+  --violet-wash-lt:rgba(109, 40, 217, 0.06);
+
+  /* ======== DARK (default) ======== */
+  --bg:            #060816;
+  --bg-2:          #090c1a;
+  --bg-3:          #0e1228;
+  --bg-4:          #141830;
+
+  --ink:           #f0edff;
+  --ink-2:         rgba(220,215,255,0.75);
+  --ink-3:         rgba(170,160,235,0.65);
+
+  --border:        rgba(255,255,255,0.07);
+  --border-2:      rgba(120,100,240,0.22);
+
+  /* ======== SEMANTIC ======== */
+  --green:         #34d399;
+  --green-wash:    rgba(52,211,153,0.10);
+  --red:           #f87171;
+  --red-wash:      rgba(248,113,113,0.10);
+  --amber:         #fbbf24;
+  --amber-wash:    rgba(251,191,36,0.10);
+
+  /* ======== BACKGROUND WASH (app shell) ======== */
+  --shell-grad:
+    radial-gradient(ellipse at 20% 0%,  rgba(109,40,217,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.08) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 50%, rgba(91,140,255,0.05) 0%, transparent 60%),
+    var(--bg);
+
+  /* ======== TYPE ======== */
+  --font-heading:  'Instrument Serif', Georgia, serif;
+  --font-body:     'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:     'DM Mono', 'SF Mono', Menlo, monospace;
+
+  /* Sizes (px — matches react-native Typography) */
+  --fs-h1: 28px;
+  --fs-h2: 22px;
+  --fs-h3: 18px;
+  --fs-body: 14px;
+  --fs-caption: 12px;
+  --fs-label: 11px;
+  --fs-mono: 13px;
+
+  /* ======== SPACING ======== */
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 10px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 20px;
+  --sp-8: 24px;
+  --sp-9: 32px;
+  --sp-10: 48px;
+
+  /* ======== RADIUS ======== */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  --r-2xl: 14px;
+  --r-3xl: 16px;
+  --r-pill: 999px;
+
+  /* ======== SHADOWS (violet-tinted elevation) ======== */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(124,58,237,0.18);
+  --shadow-lg: 0 8px 20px rgba(124,58,237,0.20);
+  --shadow-hover: 0 6px 12px rgba(124,58,237,0.25);
+
+  /* ======== MOTION ======== */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 0.15s;
+  --t-med:  0.2s;
+  --t-slow: 0.25s;
+}
+
+/* ---- LIGHT THEME (opt-in via [data-theme="light"]) ---- */
+[data-theme="light"] {
+  --bg:            #f5f3ff;
+  --bg-2:          #ffffff;
+  --bg-3:          #ffffff;
+  --bg-4:          #f0edf8;
+
+  --ink:           #1a1a2e;
+  --ink-2:         #3d3660;
+  --ink-3:         #6b6193;
+
+  --border:        rgba(109,40,217,0.10);
+  --border-2:      rgba(120,100,240,0.15);
+
+  --violet-3:      #6d28d9;   /* darker ink tone for light bg */
+  --violet-4:      #5b21b6;
+  --violet-wash:   rgba(109, 40, 217, 0.06);
+
+  --green:         #059669;
+  --green-wash:    rgba(5,150,105,0.08);
+  --red:           #dc2626;
+  --red-wash:      rgba(220,38,38,0.06);
+  --amber:         #d97706;
+  --amber-wash:    rgba(217,119,6,0.06);
+
+  --shell-grad:
+    radial-gradient(ellipse at 20% 0%,  rgba(109,40,217,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.04) 0%, transparent 45%),
+    var(--bg);
+}
+
+/* =========================================================
+   SEMANTIC TYPE CLASSES
+   ========================================================= */
+.aura-h1 { font-family: var(--font-heading); font-size: var(--fs-h1); font-weight: 400; color: var(--ink); letter-spacing: -0.5px; line-height: 1.15; }
+.aura-h2 { font-family: var(--font-heading); font-size: var(--fs-h2); font-weight: 400; color: var(--ink); letter-spacing: -0.3px; line-height: 1.2; }
+.aura-h3 { font-family: var(--font-heading); font-size: var(--fs-h3); font-weight: 400; color: var(--ink); line-height: 1.25; }
+.aura-body { font-family: var(--font-body); font-size: var(--fs-body); font-weight: 400; color: var(--ink-2); line-height: 1.5; }
+.aura-body-bold { font-family: var(--font-body); font-size: var(--fs-body); font-weight: 700; color: var(--ink); }
+.aura-caption { font-family: var(--font-body); font-size: var(--fs-caption); font-weight: 500; color: var(--ink-3); }
+.aura-label { font-family: var(--font-body); font-size: var(--fs-label); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.5px; }
+.aura-mono { font-family: var(--font-mono); font-size: var(--fs-mono); font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Brand wordmark (always: serif + trailing violet period) */
+.aura-wordmark { font-family: var(--font-heading); font-weight: 400; color: var(--ink); letter-spacing: -0.5px; }
+.aura-wordmark::after { content: "."; color: var(--violet); }
+
+/* Reusable utilities */
+.aura-num { font-variant-numeric: tabular-nums; }
