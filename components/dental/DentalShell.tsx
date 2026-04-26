@@ -5,6 +5,9 @@ import { ToastContainer } from "@/components/Toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DentalSidebar } from "@/components/dental/DentalSidebar";
 import { DentalMBar } from "@/components/dental/DentalMBar";
+import { MigrationBanner } from "@/components/dental/MigrationBanner";
+import { DentalShortcutsHelp } from "@/components/dental/DentalShortcutsHelp";
+import { useDentalShortcuts } from "@/components/dental/useDentalShortcuts";
 import { DentalColors, DentalGradients } from "@/constants/dental-tokens";
 
 // ============================================================
@@ -18,6 +21,9 @@ import { DentalColors, DentalGradients } from "@/constants/dental-tokens";
 //      a barra. Padding 16 sem max-width.
 //   3. Native: View + ScrollView + DentalMBar (overlay "Mais"
 //      do MBar nao funciona em native — limitacao conhecida).
+//
+// PR8 (2026-04-26): integra atalhos de teclado (web only),
+// banner de boas-vindas e modal de ajuda dos atalhos.
 //
 // NAO reusa o (tabs)/_layout porque queremos isolar 100% do
 // shell PDV/ERP. Usuario odonto nunca ve Caixa/NF-e/Folha
@@ -42,6 +48,9 @@ export function DentalShell({ children }: { children?: ReactNode }) {
   const isNarrow = screenW <= 768;
   const [collapsed, setCollapsed] = useState(false);
 
+  // Atalhos de teclado (g + tecla, ?, Esc). Sem efeito em native.
+  const { helpOpen, closeHelp } = useDentalShortcuts();
+
   // ============================================================
   // MOBILE WEB — column layout com MBar dedicada no rodape.
   // ============================================================
@@ -61,9 +70,11 @@ export function DentalShell({ children }: { children?: ReactNode }) {
             minHeight: 0, minWidth: 0,
             padding: 16,
           } as any}>
+            <MigrationBanner />
             {children ?? <Slot />}
           </div>
           <DentalMBar />
+          <DentalShortcutsHelp open={helpOpen} onClose={closeHelp} />
         </div>
       </ErrorBoundary>
     );
@@ -88,9 +99,11 @@ export function DentalShell({ children }: { children?: ReactNode }) {
           } as any}>
             <ToastContainer />
             <div style={{ padding: 24, maxWidth: 1320, margin: "0 auto" } as any}>
+              <MigrationBanner />
               {children ?? <Slot />}
             </div>
           </div>
+          <DentalShortcutsHelp open={helpOpen} onClose={closeHelp} />
         </div>
       </ErrorBoundary>
     );
@@ -98,6 +111,7 @@ export function DentalShell({ children }: { children?: ReactNode }) {
 
   // ============================================================
   // NATIVE — layout column com ScrollView + MBar.
+  // (Sem MigrationBanner / shortcuts — web only.)
   // ============================================================
   return (
     <ErrorBoundary>

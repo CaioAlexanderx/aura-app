@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dentalConfigApi, type DentalPractitioner, type DentalChairSettings } from "@/services/dentalConfigApi";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { usePortalTransition } from "@/stores/portalTransition";
 
 // ============================================================
 // AURA. — DentalSettings tab (D-FIX #1 + #6)
@@ -19,6 +20,9 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 // Card 2: Dentistas (CRUD com nome, CRO, especialidade, cor)
 //         - Owner cadastrado automaticamente no primeiro acesso
 //         - Owner nao pode ser deletado
+//
+// Card 3: Personalizacao (PR8 — polimento Fase 5)
+//         - Botao reproduzir animacao de boas-vindas
 // ============================================================
 
 const PRESET_COLORS = [
@@ -128,6 +132,7 @@ export function DentalSettings() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DentalPractitioner | null>(null);
+  const resetPortal = usePortalTransition((s) => s.reset);
 
   // Settings query
   const { data: settingsData, isLoading: loadingSettings } = useQuery({
@@ -228,6 +233,11 @@ export function DentalSettings() {
   function cancelForm() {
     setShowForm(false);
     setEditingId(null);
+  }
+
+  function handleReplayIntro() {
+    resetPortal();
+    toast.success('A animação de boas-vindas vai aparecer na próxima navegação');
   }
 
   if (loadingSettings || loadingPractitioners) {
@@ -337,7 +347,7 @@ export function DentalSettings() {
                   {p.is_owner && <View style={s.ownerBadge}><Text style={s.ownerBadgeText}>RESPONSAVEL</Text></View>}
                 </View>
                 <Text style={s.practMeta}>
-                  {p.cro || 'Sem CRO'}{p.specialty ? ' \u00b7 ' + p.specialty : ''}
+                  {p.cro || 'Sem CRO'}{p.specialty ? ' · ' + p.specialty : ''}
                 </Text>
               </View>
               <Pressable onPress={() => startEdit(p)} style={s.iconBtn} hitSlop={8}>
@@ -353,6 +363,33 @@ export function DentalSettings() {
           {practitioners.length === 0 && (
             <Text style={s.emptyText}>Nenhum dentista cadastrado.</Text>
           )}
+        </View>
+      </View>
+
+      {/* Card 3: Personalizacao (PR8 — polimento Fase 5) */}
+      <View style={s.card}>
+        <View style={s.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.cardTitle}>Personalização</Text>
+            <Text style={s.cardSub}>
+              Ajustes da experiência visual. Estes controles não afetam dados.
+            </Text>
+          </View>
+        </View>
+
+        <View style={s.replayRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.replayTitle}>Animação de boas-vindas</Text>
+            <Text style={s.replayMeta}>
+              Aquela animação que você viu ao entrar pela primeira vez.
+              Reproduzir agora vai mostrá-la novamente na próxima navegação
+              dentro do shell dental.
+            </Text>
+          </View>
+          <Pressable onPress={handleReplayIntro} style={s.replayBtn}>
+            <Icon name="refresh" size={12} color={Colors.violet3} />
+            <Text style={s.replayBtnText}>Reproduzir intro</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -416,6 +453,13 @@ const s = StyleSheet.create({
   ownerBadgeText: { fontSize: 7, color: Colors.violet3, fontWeight: '800', letterSpacing: 0.4 },
   iconBtn: { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: 'center', paddingVertical: 16, fontStyle: 'italic' as any },
+
+  // Personalizacao (PR8)
+  replayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border },
+  replayTitle: { fontSize: 13, fontWeight: '600', color: Colors.ink, marginBottom: 3 },
+  replayMeta: { fontSize: 11, color: Colors.ink3, lineHeight: 15 },
+  replayBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border2, flexShrink: 0 },
+  replayBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: '600' },
 });
 
 export default DentalSettings;
