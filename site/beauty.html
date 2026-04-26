@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aura Beauty — Em breve.</title>
+<link rel="icon" type="image/svg+xml" href="assets/aura-icon.svg">
+<link rel="apple-touch-icon" href="assets/aura-icon.svg">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/site.css?v=2">
+<link rel="stylesheet" href="css/verticals.css?v=2">
+<link rel="stylesheet" href="css/vertical-pages.css?v=2">
+<style>
+  .cs-hero {
+    min-height: 92vh;
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 120px 24px 80px;
+    background: radial-gradient(ellipse at top, rgba(244,114,182,0.18), transparent 60%), #0B0B0B;
+  }
+  .cs-hero::before, .cs-hero::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+  }
+  .cs-hero::before { width: 500px; height: 500px; background: rgba(244,114,182,0.25); top: -100px; left: -100px; animation: orb1 14s ease-in-out infinite; }
+  .cs-hero::after { width: 600px; height: 600px; background: rgba(192,132,252,0.18); bottom: -150px; right: -100px; animation: orb2 18s ease-in-out infinite; }
+  .cs-content { position: relative; z-index: 2; text-align: center; max-width: 720px; }
+  .cs-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(244,114,182,0.15);
+    border: 1px solid rgba(244,114,182,0.4);
+    color: #fbcfe8;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .cs-badge .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #F472B6;
+    box-shadow: 0 0 12px #F472B6;
+    animation: cspulse 1.6s ease-in-out infinite;
+  }
+  .cs-title {
+    font-family: var(--font-display);
+    font-size: clamp(56px, 8vw, 120px);
+    font-weight: 200;
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    color: #fff;
+    margin-bottom: 24px;
+  }
+  .cs-title em { font-style: italic; color: #F472B6; }
+  .cs-lead {
+    font-size: 20px;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.75);
+    margin: 0 auto 40px;
+    max-width: 560px;
+  }
+  .cs-glyph {
+    width: 160px; height: 160px;
+    margin: 0 auto 48px;
+    position: relative;
+  }
+  .cs-glyph svg {
+    width: 100%; height: 100%;
+    color: #F472B6;
+    filter: drop-shadow(0 0 30px rgba(244,114,182,0.5));
+    animation: floatG 6s ease-in-out infinite;
+  }
+  @keyframes floatG {
+    0%,100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-12px) rotate(2deg); }
+  }
+  .cs-form {
+    display: flex; gap: 12px;
+    max-width: 480px; margin: 0 auto;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(244,114,182,0.3);
+    border-radius: 999px;
+    padding: 6px;
+    backdrop-filter: blur(12px);
+  }
+  .cs-form input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 14px 20px;
+    color: #fff;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    outline: none;
+  }
+  .cs-form input::placeholder { color: rgba(255,255,255,0.4); }
+  .cs-form button {
+    padding: 14px 28px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg, #F472B6, #EC4899);
+    color: #fff;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+  .cs-form button:hover { transform: translateX(2px); }
+  .cs-form.sent input { display: none; }
+  .cs-form.sent button { background: linear-gradient(135deg, #10B981, #059669); pointer-events: none; }
+
+  .cs-preview {
+    padding: 100px 24px;
+    background: #f4f1ec;
+  }
+  .cs-preview-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+  }
+  @media (max-width: 768px) { .cs-preview-grid { grid-template-columns: 1fr; gap: 40px; } }
+  .cs-prev-list { list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 18px; }
+  .cs-prev-list li {
+    display: flex; gap: 14px; align-items: flex-start;
+    font-size: 16px;
+    color: #1a1a1a;
+  }
+  .cs-prev-list li::before {
+    content: "";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #F472B6;
+    margin-top: 9px;
+    flex-shrink: 0;
+  }
+  .cs-prev-list li b { font-weight: 600; }
+  .cs-prev-list li span { color: rgba(0,0,0,0.55); }
+</style>
+</head>
+<body data-vertical="beauty" data-screen-label="Beauty (Em breve)">
+<div data-mount="nav"></div>
+
+<section class="cs-hero">
+  <div class="cs-content">
+    <div class="cs-badge"><span class="pulse"></span>Em breve · 2026</div>
+    <div class="cs-glyph">
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M50 12c-8 22-26 28-26 50 0 14 11 26 26 26s26-12 26-26c0-22-18-28-26-50z"/>
+        <path d="M50 32c-4 12-14 16-14 28 0 8 6 14 14 14s14-6 14-14c0-12-10-16-14-28z" opacity="0.5"/>
+        <circle cx="50" cy="62" r="4" opacity="0.7"/>
+      </svg>
+    </div>
+    <h1 class="cs-title">Beauty <em>está chegando.</em></h1>
+    <p class="cs-lead">A Aura Beauty está em desenvolvimento. Salões, clínicas estéticas, barbearias — uma camada inteira pra você. Entre na lista pra avisarmos primeiro.</p>
+    <form class="cs-form" onsubmit="event.preventDefault(); this.classList.add('sent'); this.querySelector('button').textContent='✓ Inscrito!';">
+      <input type="email" placeholder="seu@email.com" required>
+      <button type="submit">Quero ser avisado</button>
+    </form>
+  </div>
+</section>
+
+<section class="cs-preview">
+  <div class="cs-preview-grid">
+    <div data-reveal>
+      <div class="eyebrow" style="color: #DB2777; margin-bottom: 16px;">O que vem aí</div>
+      <h2 class="h1" style="color: #1a1a1a; margin-bottom: 8px;">Pra quem cuida de <em style="color:#EC4899;">cada detalhe.</em></h2>
+      <p class="body" style="color: rgba(0,0,0,0.65); margin-top: 16px;">Pensada com salões, clínicas estéticas e barbearias. Profissional como protagonista, cliente como história contínua.</p>
+      <ul class="cs-prev-list">
+        <li><span><b>Ficha de cliente</b> — histórico de procedimentos, fotos antes/depois, alergias e contraindicações.</span></li>
+        <li><span><b>Agenda por profissional</b> — comissão automática, repasse, controle de horário em tempo real.</span></li>
+        <li><span><b>Pacotes e fidelidade</b> — venda de pacotes, controle de saldo de sessões, programa de pontos.</span></li>
+        <li><span><b>Estoque de produtos</b> — cosméticos, esmaltes, materiais. Baixa automática por procedimento.</span></li>
+        <li><span><b>WhatsApp + lembretes</b> — confirmação automática, redução de no-show.</span></li>
+      </ul>
+    </div>
+    <div data-reveal data-reveal-delay="1" style="position: relative; height: 560px;">
+      <div class="phone levitate" style="--pw: 320px; position: absolute; right: 0; top: 0;">
+        <div class="phone-screen" style="background: linear-gradient(160deg, #1a0d18, #2a0f1f);">
+          <div class="ps-pad">
+            <div class="ps-orb" style="width: 220px; height: 220px; background: #F472B6; opacity: 0.45; top: -60px; left: -50px;"></div>
+            <div class="ps-orb" style="width: 240px; height: 240px; background: #C084FC; opacity: 0.3; bottom: -80px; right: -60px;"></div>
+            <div class="ps-header"><div class="ps-brand"><span class="dot-mark" style="background:#F472B6;"></span>Aura <span class="acc" style="color:#FBCFE8;">Beauty</span></div><div class="ps-bell">⏵</div></div>
+            <div class="ps-h" style="font-size: 11px; opacity: 0.7;">Sofia · 15:00</div>
+            <div class="ps-card" style="border-color: rgba(244,114,182,0.3);">
+              <div style="font-size: 9px; opacity: 0.55; letter-spacing: 0.1em;">SERVIÇO</div>
+              <div style="font-size: 13px; margin-top: 4px; font-weight: 600;">Coloração + corte</div>
+              <div style="font-size: 10px; opacity: 0.6; margin-top: 4px;">com Bia · 1h30</div>
+            </div>
+            <div class="ps-card" style="border-color: rgba(244,114,182,0.3);">
+              <div style="font-size: 9px; opacity: 0.55; letter-spacing: 0.1em; margin-bottom: 8px;">PACOTE · 6 sessões</div>
+              <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;">
+                <div style="aspect-ratio:1; background:#F472B6; border-radius:4px;"></div>
+                <div style="aspect-ratio:1; background:#F472B6; border-radius:4px;"></div>
+                <div style="aspect-ratio:1; background:#F472B6; border-radius:4px;"></div>
+                <div style="aspect-ratio:1; background:#F472B6; border-radius:4px; opacity:0.6;"></div>
+                <div style="aspect-ratio:1; background:rgba(255,255,255,0.1); border-radius:4px;"></div>
+                <div style="aspect-ratio:1; background:rgba(255,255,255,0.1); border-radius:4px;"></div>
+              </div>
+              <div style="font-size: 10px; opacity: 0.7; margin-top: 8px;">3 de 6 sessões usadas</div>
+            </div>
+            <div class="ps-cta" style="background: linear-gradient(135deg, #F472B6, #EC4899);">Iniciar atendimento</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section dark">
+  <div class="container container-narrow text-center">
+    <div data-reveal>
+      <div class="eyebrow center" style="color: #FBCFE8; margin-bottom: 16px;">Enquanto isso</div>
+      <h2 class="h1">Comece com <em style="color:#F472B6;">Negócio</em>.</h2>
+      <p class="lead" style="margin: 24px auto; max-width: 560px;">A camada base da Aura já cuida de financeiro, estoque, vendas e fiscal. Migre para Beauty quando estiver pronta.</p>
+      <div class="row" style="justify-content: center; margin-top: 32px;">
+        <a href="negocio.html" class="btn btn-primary btn-lg">Conhecer Negócio <span class="arrow">→</span></a>
+        <a href="planos.html" class="btn btn-ghost btn-lg">Ver planos</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div data-mount="footer"></div>
+<div data-mount="wa"></div>
+<script src="js/chrome.js"></script>
+<script src="js/site.js"></script>
+</body>
+</html>

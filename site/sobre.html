@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sobre · Aura — A tecnologia mora no detalhe.</title>
+<link rel="icon" type="image/svg+xml" href="assets/aura-icon.svg">
+<link rel="apple-touch-icon" href="assets/aura-icon.svg">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/site.css?v=2">
+<link rel="stylesheet" href="css/verticals.css?v=2">
+<style>
+  /* ---- Sobre page ---- */
+  .sobre-hero {
+    padding: 160px 0 100px;
+    position: relative;
+    overflow: hidden;
+  }
+  .sobre-hero h1 {
+    font-family: var(--font-heading);
+    font-size: clamp(56px, 9vw, 140px);
+    line-height: 0.92;
+    letter-spacing: -0.04em;
+    font-weight: 200;
+    color: white;
+    margin: 0;
+  }
+  .sobre-hero h1 em { font-style: italic; color: #a78bfa; }
+
+  .sobre-manifest {
+    padding: 100px 0;
+    background: #f4f1ec;
+    position: relative;
+  }
+  .manifest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 80px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .manifest-grid { grid-template-columns: 1fr; gap: 32px; } }
+  .manifest-text p {
+    font-family: var(--font-heading);
+    font-size: 28px;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: #1a1330;
+    font-weight: 400;
+    margin-bottom: 32px;
+  }
+  .manifest-text p em { color: #7c3aed; font-style: italic; }
+  .manifest-text p:last-child { margin-bottom: 0; }
+  .manifest-eyebrow {
+    position: sticky; top: 120px;
+  }
+
+  /* Pillars — editorial list */
+  .pillars-section {
+    padding: 120px 0 140px;
+    background: #0B0B0B;
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+  .pillars-list {
+    max-width: 1080px;
+    margin: 80px auto 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .pillar-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 48px;
+    align-items: start;
+    padding: 56px 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+  }
+  .pillar-row:last-child { border-bottom: 1px solid rgba(255,255,255,0.08); }
+  @media (max-width: 768px) {
+    .pillar-row { grid-template-columns: 1fr; gap: 16px; padding: 40px 0; }
+  }
+  .pillar-num {
+    font-family: var(--font-heading);
+    font-style: italic;
+    font-size: clamp(80px, 10vw, 140px);
+    line-height: 0.85;
+    color: #a78bfa;
+    letter-spacing: -0.04em;
+    font-weight: 400;
+    transition: transform 0.6s var(--ease), color 0.4s ease;
+  }
+  .pillar-row:hover .pillar-num {
+    transform: translateX(8px);
+    color: #c4b5fd;
+  }
+  .pillar-body { padding-top: 12px; }
+  .pillar-body h3 {
+    font-family: var(--font-heading);
+    font-size: clamp(32px, 4vw, 44px);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 20px;
+    color: white;
+    max-width: 600px;
+  }
+  .pillar-body h3 em {
+    font-style: italic;
+    color: #c4b5fd;
+  }
+  .pillar-body p {
+    font-size: 17px;
+    line-height: 1.6;
+    color: rgba(230,225,255,0.82);
+    margin: 0;
+    max-width: 620px;
+  }
+
+  /* Numbers strip */
+  .nums-section {
+    padding: 80px 0;
+    background: linear-gradient(180deg, #0B0B0B, #150a26);
+    color: white;
+  }
+  .nums-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    text-align: center;
+  }
+  @media (max-width: 768px) { .nums-grid { grid-template-columns: repeat(2, 1fr); } }
+  .num-cell .n {
+    font-family: var(--font-heading);
+    font-size: clamp(56px, 8vw, 96px);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: #a78bfa;
+    font-weight: 300;
+  }
+  .num-cell .l {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(220,215,255,0.6);
+    margin-top: 8px;
+  }
+
+  /* Timeline */
+  .tl-section { padding: 100px 0; background: #f4f1ec; }
+  .tl-list { max-width: 760px; margin: 64px auto 0; position: relative; }
+  .tl-list::before {
+    content: "";
+    position: absolute;
+    left: 11px; top: 8px; bottom: 8px;
+    width: 1px;
+    background: linear-gradient(180deg, #7c3aed, rgba(124,58,237,0.1));
+  }
+  .tl-item {
+    position: relative;
+    padding-left: 48px;
+    margin-bottom: 40px;
+  }
+  .tl-item::before {
+    content: "";
+    position: absolute;
+    left: 5px; top: 8px;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #7c3aed;
+    box-shadow: 0 0 0 4px rgba(124,58,237,0.15);
+  }
+  .tl-item.now::before {
+    background: #7c3aed;
+    animation: tlpulse 2s ease-in-out infinite;
+  }
+  @keyframes tlpulse {
+    0%,100% { box-shadow: 0 0 0 4px rgba(124,58,237,0.15); }
+    50%     { box-shadow: 0 0 0 10px rgba(124,58,237,0.05); }
+  }
+  .tl-year {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #7c3aed;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .tl-title {
+    font-family: var(--font-heading);
+    font-size: 26px;
+    line-height: 1.2;
+    color: #1a1330;
+    margin: 0 0 8px;
+    font-weight: 400;
+  }
+  .tl-desc { font-size: 15px; line-height: 1.55; color: rgba(26,19,48,0.7); }
+
+  /* Founder */
+  .founder-section {
+    padding: 120px 0;
+    background: linear-gradient(160deg, #5b21b6, #6d28d9 50%, #4c1d95);
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+  .founder-section::before, .founder-section::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(100px);
+  }
+  .founder-section::before { width: 500px; height: 500px; background: rgba(167,139,250,0.4); top: -100px; right: -100px; }
+  .founder-section::after { width: 600px; height: 600px; background: rgba(192,132,252,0.25); bottom: -150px; left: -100px; }
+  .founder-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 64px;
+    align-items: center;
+    position: relative;
+  }
+  @media (max-width: 800px) { .founder-grid { grid-template-columns: 1fr; gap: 40px; } }
+  .founder-photo {
+    aspect-ratio: 1;
+    border-radius: 24px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05));
+    border: 1px solid rgba(255,255,255,0.2);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .founder-photo svg {
+    width: 60%; height: 60%;
+    color: rgba(255,255,255,0.8);
+  }
+  .founder-quote {
+    font-family: var(--font-heading);
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: white;
+    font-weight: 300;
+    margin-bottom: 24px;
+  }
+  .founder-quote em { font-style: italic; color: #f0abfc; }
+  .founder-name {
+    font-size: 14px;
+    color: rgba(255,255,255,0.8);
+    font-weight: 600;
+  }
+  .founder-role {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    margin-top: 4px;
+  }
+
+  /* Closing CTA */
+  .closing-section {
+    padding: 120px 0;
+    background: #0B0B0B;
+    color: white;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .closing-section h2 {
+    font-family: var(--font-heading);
+    font-size: clamp(56px, 8vw, 120px);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    font-weight: 200;
+    margin: 0 0 24px;
+  }
+  .closing-section h2 em { font-style: italic; color: #a78bfa; }
+</style>
+</head>
+<body data-screen-label="Sobre">
+<div data-mount="nav"></div>
+
+<!-- ============== HERO ============== -->
+<section class="section dark deep sobre-hero" data-screen-label="hero">
+  <div class="orbs">
+    <div class="orb violet" style="width: 700px; height: 700px; top: -100px; left: -200px;"></div>
+    <div class="orb indigo" style="width: 500px; height: 500px; top: 50%; right: -150px; opacity: 0.4;"></div>
+  </div>
+  <div class="grain"></div>
+  <div class="container">
+    <div style="max-width: 920px;" data-reveal>
+      <div class="eyebrow" style="margin-bottom: 32px;">Sobre · Aura</div>
+      <h1 data-typein>A tecnologia mora <em>no detalhe.</em></h1>
+      <p class="lead" style="margin-top: 32px; max-width: 680px;" data-reveal data-reveal-delay="2">
+        A Aura nasceu de uma convicção simples: software empresarial não precisa ser feio, lento e genérico. Cada negócio tem seu jeito — e a tecnologia tem que ter alma pra isso.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== MANIFESTO ============== -->
+<section class="sobre-manifest" data-screen-label="Manifesto">
+  <div class="container">
+    <div class="manifest-grid">
+      <div class="manifest-eyebrow" data-reveal>
+        <div class="eyebrow" style="color: #7c3aed; margin-bottom: 16px;">Manifesto</div>
+        <h2 class="h2" style="color: #1a1330; margin: 0;">O que move<br>a Aura.</h2>
+      </div>
+      <div class="manifest-text" data-reveal data-reveal-delay="1">
+        <p>A gente acredita que <em>operar um negócio não pode ser uma tortura.</em> Que planilha não substitui sistema. Que ERP de 2008 não cabe em 2026.</p>
+        <p>A gente acredita que <em>cada setor merece um produto pensado pra ele</em> — não um genérico maquiado. O dentista quer odontograma. O restaurante quer KDS. O salão quer ficha de cliente. Cada um, do seu jeito.</p>
+        <p>E a gente acredita que <em>tecnologia bonita é tecnologia que respeita.</em> Respeita o tempo de quem usa. Respeita o dinheiro que custa. Respeita a inteligência de quem confia.</p>
+        <p>Por isso a Aura é cinco. Mas é uma só.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== PILARES ============== -->
+<section class="pillars-section" data-screen-label="Pilares">
+  <div class="orbs">
+    <div class="orb violet" style="width: 600px; height: 600px; top: 80px; right: -150px; opacity: 0.25;"></div>
+    <div class="orb violet" style="width: 400px; height: 400px; bottom: 100px; left: -120px; opacity: 0.18;"></div>
+  </div>
+  <div class="container">
+    <div class="text-center stack-md" style="max-width: 720px; margin: 0 auto;" data-reveal>
+      <div class="eyebrow center">Pilares</div>
+      <h2 class="h1">Três coisas que <em style="color:#a78bfa;">não negociamos</em>.</h2>
+    </div>
+    <div class="pillars-list">
+      <div class="pillar-row" data-reveal>
+        <div class="pillar-num">01</div>
+        <div class="pillar-body">
+          <h3>Especialização <em>real</em>.</h3>
+          <p>Cada vertical é construída com pessoas do setor. Dentista, garçom, gerente de salão, técnico veterinário — eles desenham, a gente programa. Nada de feature genérica empurrada pra todo mundo.</p>
+        </div>
+      </div>
+      <div class="pillar-row" data-reveal data-reveal-delay="1">
+        <div class="pillar-num">02</div>
+        <div class="pillar-body">
+          <h3>Identidade <em>sentida</em>.</h3>
+          <p>Cada Aura tem paleta, tom de voz, mood, micro-interações próprias. Não é skin trocada — é produto inteiro pensado pra quem usa, pra que a ferramenta encaixe na rotina sem atrito.</p>
+        </div>
+      </div>
+      <div class="pillar-row" data-reveal data-reveal-delay="2">
+        <div class="pillar-num">03</div>
+        <div class="pillar-body">
+          <h3>Plataforma <em>única</em>.</h3>
+          <p>Atrás dos cinco produtos, uma única plataforma: financeiro, fiscal, IA, infraestrutura compartilhada. Você cresce, troca, escala — sem migrar de sistema, sem perder histórico, sem retreinar time.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== NUMBERS ============== -->
+<section class="nums-section" data-screen-label="Números">
+  <div class="container">
+    <div class="nums-grid">
+      <div class="num-cell" data-reveal>
+        <div class="n">5</div>
+        <div class="l">Verticais especialistas</div>
+      </div>
+      <div class="num-cell" data-reveal data-reveal-delay="1">
+        <div class="n">100%</div>
+        <div class="l">Em português · Brasil</div>
+      </div>
+      <div class="num-cell" data-reveal data-reveal-delay="2">
+        <div class="n">0</div>
+        <div class="l">Fidelidade · multas</div>
+      </div>
+      <div class="num-cell" data-reveal data-reveal-delay="3">
+        <div class="n">7d</div>
+        <div class="l">Grátis · via WhatsApp</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== CLOSING ============== -->
+<section class="closing-section" data-screen-label="CTA Final">
+  <div class="orbs">
+    <div class="orb violet" style="width: 600px; height: 600px; top: -100px; left: 50%; transform: translateX(-50%);"></div>
+  </div>
+  <div class="container">
+    <div data-reveal>
+      <h2>Bora <em>começar?</em></h2>
+      <p class="lead" style="max-width: 540px; margin: 0 auto 40px;">7 dias grátis. Falamos com você antes pra entender seu negócio. Sem fidelidade, sem letras miúdas.</p>
+      <div class="row" style="justify-content: center;">
+        <a href="https://wa.me/5511956305269?text=Quero%20conhecer%20a%20Aura" target="_blank" rel="noopener" class="btn btn-whatsapp btn-lg">Falar no WhatsApp <span class="arrow">→</span></a>
+        <a href="https://app.getaura.com.br/cadastro" target="_blank" rel="noopener" class="btn btn-outline btn-lg">Criar conta</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div data-mount="footer"></div>
+<div data-mount="wa"></div>
+<script src="js/chrome.js"></script>
+<script src="js/site.js"></script>
+</body>
+</html>
