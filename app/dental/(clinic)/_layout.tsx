@@ -1,6 +1,8 @@
 import { Redirect } from "expo-router";
 import { DentalShell } from "@/components/dental/DentalShell";
+import { PortalTransition } from "@/components/dental/PortalTransition";
 import { useAuthStore } from "@/stores/auth";
+import { usePortalTransition } from "@/stores/portalTransition";
 
 // ============================================================
 // Layout da experiencia Aura Odonto autenticada.
@@ -17,10 +19,15 @@ import { useAuthStore } from "@/stores/auth";
 // Aguardamos isHydrated antes de decidir: sem isso, o primeiro
 // render (com company=null vindo do storage async) jogaria todo
 // mundo pra /(tabs) antes do auth terminar de carregar.
+//
+// PortalTransition: anima 3s de entrada uma vez por sessao
+// (estado em-memory em usePortalTransition). Reset natural a
+// cada hard reload.
 // ============================================================
 
 export default function DentalClinicLayout() {
   const { company, isHydrated } = useAuthStore();
+  const { shown, markShown } = usePortalTransition();
 
   if (!isHydrated) return null;
 
@@ -28,5 +35,10 @@ export default function DentalClinicLayout() {
     return <Redirect href="/(tabs)" />;
   }
 
-  return <DentalShell />;
+  return (
+    <>
+      <DentalShell />
+      {!shown && <PortalTransition onComplete={markShown} />}
+    </>
+  );
 }
