@@ -16,7 +16,7 @@ import type { Transaction, PeriodKey } from "./types";
 
 var isWeb = Platform.OS === "web";
 
-type Summary = { income: number; expenses: number; balance: number; gap?: number };
+type Summary = { income: number; expenses: number; balance: number };
 
 type Props = {
   transactions: Transaction[];
@@ -50,7 +50,6 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         customStart={customStart}
         customEnd={customEnd}
         previousSummary={previousSummary}
-        gap={summary.gap}
       />
       <SparklineBar transactions={transactions} />
       <PendingCards transactions={transactions} />
