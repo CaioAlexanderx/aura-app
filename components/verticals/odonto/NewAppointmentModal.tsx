@@ -3,10 +3,11 @@
 // POST /companies/:id/dental/appointments
 //
 // Melhorias:
-// - Date input: <input type="date"> na web, TextInput mask mobile.
-// - Time input: <input type="time"> na web, TextInput mask mobile.
-// - Seletor de cadeira (via settings + practitioners) -> practitioner_id.
-// - ISO com TZ explicito (evita interpretacao UTC pelo BE).
+// - Modal centrado com fundo desfocado (fade + backdrop blur web)
+// - Cadastro rápido de paciente integrado
+// - Seletor de duração manual ao lado das pills
+// - Label "Observações" em vez de "Queixa principal"
+// - Formulário compacto (padding 14, gap 8)
 // ============================================================
 import { useState, useEffect, createElement } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -17,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
 import { localDateTimeToISO } from "@/utils/mask";
+import { NewPatientModal } from "./NewPatientModal";
 
 interface Props {
   visible: boolean;
@@ -34,9 +36,13 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState("60");
+  const [customDuration, setCustomDuration] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [practitionerId, setPractitionerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showNewPatient, setShowNewPatient] = useState(false);
+
+  const webBlur = Platform.OS === "web" ? { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" } as any : {};
 
   useEffect(() => {
     if (!visible) return;
@@ -76,11 +82,11 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
   const settings = settingsData?.settings;
   const practitioners = practitionersData?.practitioners || [];
   if (settings) {
-    settings.chairs_active.forEach((active, idx) => {
+    settings.chairs_active.forEach((active: boolean, idx: number) => {
       if (!active) return;
       const pid = settings.chair_practitioner_ids[idx];
       if (!pid) return;
-      const p = practitioners.find(x => x.id === pid);
+      const p = practitioners.find((x: any) => x.id === pid);
       if (!p) return;
       chairOptions.push({ idx, practitionerId: pid, practitionerName: p.name, label: `Cadeira ${idx + 1} - ${p.name}` });
     });
@@ -96,7 +102,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
 
   function reset() {
     setPatientId(null); setPatientName(""); setSearch("");
-    setDate(""); setTime(""); setDuration("60"); setChiefComplaint("");
+    setDate(""); setTime(""); setDuration("60"); setCustomDuration(""); setChiefComplaint("");
     setPractitionerId(null); setError(null);
   }
 
@@ -140,108 +146,148 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
   const patients = (patientsData as any)?.patients || [];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
-      <View style={s.backdrop}>
-        <View style={s.sheet}>
-          <View style={s.header}>
-            <Text style={s.title}>Novo agendamento</Text>
-            <Pressable onPress={handleClose} hitSlop={8}>
-              <Icon name="close" size={20} color={Colors.ink3} />
-            </Pressable>
-          </View>
-
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
-            {/* Paciente */}
-            <Text style={s.sectionLabel}>Paciente *</Text>
-            {patientId ? (
-              <View style={s.selectedPatient}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.selectedPatientName}>{patientName}</Text>
-                  <Text style={s.selectedPatientHint}>Paciente selecionado</Text>
-                </View>
-                <Pressable onPress={() => { setPatientId(null); setPatientName(""); }}>
-                  <Text style={s.changeLink}>Trocar</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                <View style={s.searchBox}>
-                  <Icon name="search" size={14} color={Colors.ink3} />
-                  <TextInput style={s.searchInput} placeholder="Buscar paciente..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
-                </View>
-                {patients.slice(0, 6).map((p: any) => (
-                  <Pressable key={p.id} onPress={() => { setPatientId(p.id); setPatientName(p.full_name || p.name); }} style={s.patientItem}>
-                    <Text style={s.patientItemName}>{p.full_name || p.name}</Text>
-                    <Text style={s.patientItemMeta}>{p.phone || ""}</Text>
-                  </Pressable>
-                ))}
-                {patients.length === 0 && search && <Text style={s.hint}>Nenhum paciente encontrado</Text>}
-                {patients.length === 0 && !search && <Text style={s.hint}>Comece a digitar para buscar</Text>}
-              </>
-            )}
-
-            {/* Cadeira */}
-            {chairOptions.length > 0 && (
-              <>
-                <Text style={[s.sectionLabel, { marginTop: 16 }]}>Cadeira *</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {chairOptions.map(opt => (
-                    <Pressable
-                      key={opt.practitionerId}
-                      onPress={() => setPractitionerId(opt.practitionerId)}
-                      style={[s.chairPill, practitionerId === opt.practitionerId && s.chairPillActive]}
-                    >
-                      <Text style={[s.chairPillText, practitionerId === opt.practitionerId && s.chairPillTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-            {chairOptions.length === 0 && (
-              <View style={s.warnBox}>
-                <Text style={s.warnText}>
-                  Nenhuma cadeira configurada. Acesse Configuracoes do modulo odonto para ativar cadeiras e alocar dentistas.
-                </Text>
-              </View>
-            )}
-
-            {/* Data/hora/duracao */}
-            <Text style={[s.sectionLabel, { marginTop: 16 }]}>Data e horario *</Text>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <NativeDateInput label="Data" value={date} onChange={setDate} style={{ flex: 2 }} />
-              <NativeTimeInput label="Hora" value={time} onChange={setTime} style={{ flex: 1 }} />
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={s.fieldLabel}>Duracao</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 3 }}>
-                  {["30", "60", "90"].map(d => (
-                    <Pressable key={d} onPress={() => setDuration(d)} style={[s.durPill, duration === d && s.durPillActive]}>
-                      <Text style={[s.durPillText, duration === d && s.durPillTextActive]}>{d}m</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
+    <>
+      <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={handleClose}>
+        <View style={[s.backdrop, webBlur]}>
+          <View style={s.sheet}>
+            <View style={s.header}>
+              <Text style={s.title}>Novo agendamento</Text>
+              <Pressable onPress={handleClose} hitSlop={8}>
+                <Icon name="close" size={20} color={Colors.ink3} />
+              </Pressable>
             </View>
 
-            {/* Queixa */}
-            <Text style={[s.sectionLabel, { marginTop: 16 }]}>Detalhes</Text>
-            <Field label="Queixa principal" value={chiefComplaint} onChangeText={setChiefComplaint} placeholder="Ex: Dor no dente 36, avaliacao, limpeza..." multiline />
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
+              {/* Paciente */}
+              <Text style={s.sectionLabel}>Paciente *</Text>
+              {patientId ? (
+                <View style={s.selectedPatient}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.selectedPatientName}>{patientName}</Text>
+                    <Text style={s.selectedPatientHint}>Paciente selecionado</Text>
+                  </View>
+                  <Pressable onPress={() => { setPatientId(null); setPatientName(""); }}>
+                    <Text style={s.changeLink}>Trocar</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <View style={s.searchBox}>
+                    <Icon name="search" size={14} color={Colors.ink3} />
+                    <TextInput style={s.searchInput} placeholder="Buscar paciente..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+                  </View>
+                  {patients.slice(0, 6).map((p: any) => (
+                    <Pressable key={p.id} onPress={() => { setPatientId(p.id); setPatientName(p.full_name || p.name); }} style={s.patientItem}>
+                      <Text style={s.patientItemName}>{p.full_name || p.name}</Text>
+                      <Text style={s.patientItemMeta}>{p.phone || ""}</Text>
+                    </Pressable>
+                  ))}
+                  {patients.length === 0 && search.trim() && (
+                    <>
+                      <Text style={s.hint}>Nenhum paciente encontrado</Text>
+                      <Pressable onPress={() => setShowNewPatient(true)} style={s.quickRegBtn}>
+                        <Icon name="plus" size={13} color="#06B6D4" />
+                        <Text style={s.quickRegText}>Cadastrar "{search}" como novo paciente</Text>
+                      </Pressable>
+                    </>
+                  )}
+                  {patients.length === 0 && !search.trim() && <Text style={s.hint}>Comece a digitar para buscar</Text>}
+                </>
+              )}
 
-            {error && <Text style={s.error}>{error}</Text>}
-          </ScrollView>
+              {/* Cadeira */}
+              {chairOptions.length > 0 && (
+                <>
+                  <Text style={[s.sectionLabel, { marginTop: 16 }]}>Cadeira *</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {chairOptions.map(opt => (
+                      <Pressable
+                        key={opt.practitionerId}
+                        onPress={() => setPractitionerId(opt.practitionerId)}
+                        style={[s.chairPill, practitionerId === opt.practitionerId && s.chairPillActive]}
+                      >
+                        <Text style={[s.chairPillText, practitionerId === opt.practitionerId && s.chairPillTextActive]}>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
+              {chairOptions.length === 0 && (
+                <View style={s.warnBox}>
+                  <Text style={s.warnText}>
+                    Nenhuma cadeira configurada. Acesse Configuracoes do modulo odonto para ativar cadeiras e alocar dentistas.
+                  </Text>
+                </View>
+              )}
 
-          <View style={s.footer}>
-            <Pressable onPress={handleClose} style={[s.btn, s.btnGhost]} disabled={createMut.isPending}>
-              <Text style={s.btnGhostText}>Cancelar</Text>
-            </Pressable>
-            <Pressable onPress={handleSubmit} style={[s.btn, s.btnPrimary, createMut.isPending && { opacity: 0.6 }]} disabled={createMut.isPending}>
-              {createMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Agendar</Text>}
-            </Pressable>
+              {/* Data/hora/duracao */}
+              <Text style={[s.sectionLabel, { marginTop: 16 }]}>Data e horario *</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <NativeDateInput label="Data" value={date} onChange={setDate} style={{ flex: 2 }} />
+                <NativeTimeInput label="Hora" value={time} onChange={setTime} style={{ flex: 1 }} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={s.fieldLabel}>Duração</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                    {["30", "60", "90"].map(d => (
+                      <Pressable key={d} onPress={() => { setDuration(d); setCustomDuration(""); }}
+                        style={[s.durPill, duration === d && !customDuration && s.durPillActive]}>
+                        <Text style={[s.durPillText, duration === d && !customDuration && s.durPillTextActive]}>{d}m</Text>
+                      </Pressable>
+                    ))}
+                    {Platform.OS === "web" ? (
+                      createElement("input", {
+                        type: "number", min: "5", step: "5", placeholder: "min",
+                        value: customDuration,
+                        onChange: (e: any) => { setCustomDuration(e.target.value); if (e.target.value) setDuration(e.target.value); },
+                        style: {
+                          width: 56, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: customDuration ? Colors.violet3 : Colors.border,
+                          borderRadius: 6, padding: "5px 8px", fontSize: 12, color: Colors.ink, fontFamily: "inherit",
+                          colorScheme: "dark",
+                        },
+                      })
+                    ) : (
+                      <TextInput
+                        value={customDuration}
+                        onChangeText={(v) => { setCustomDuration(v); if (v) setDuration(v); }}
+                        placeholder="min" keyboardType="numeric"
+                        style={[s.durPill, { width: 48, textAlign: "center" as any, ...(customDuration ? { borderColor: Colors.violet3 } : {}) }]}
+                      />
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* Observações */}
+              <Text style={[s.sectionLabel, { marginTop: 16 }]}>Detalhes</Text>
+              <Field label="Observações" value={chiefComplaint} onChangeText={setChiefComplaint} placeholder="Ex: avaliação, limpeza, retorno pós-procedimento..." multiline />
+
+              {error && <Text style={s.error}>{error}</Text>}
+            </ScrollView>
+
+            <View style={s.footer}>
+              <Pressable onPress={handleClose} style={[s.btn, s.btnGhost]} disabled={createMut.isPending}>
+                <Text style={s.btnGhostText}>Cancelar</Text>
+              </Pressable>
+              <Pressable onPress={handleSubmit} style={[s.btn, s.btnPrimary, createMut.isPending && { opacity: 0.6 }]} disabled={createMut.isPending}>
+                {createMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Agendar</Text>}
+              </Pressable>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      <NewPatientModal
+        visible={showNewPatient}
+        onClose={() => setShowNewPatient(false)}
+        onCreated={(p: any) => {
+          setPatientId(p.id);
+          setPatientName(p.full_name || p.name);
+          setShowNewPatient(false);
+        }}
+      />
+    </>
   );
 }
 
@@ -312,11 +358,11 @@ function NativeTimeInput({ label, value, onChange, style }: any) {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: Colors.bg2 || "#0f0f1e", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "88%", borderWidth: 1, borderColor: Colors.border, borderBottomWidth: 0 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "center", alignItems: "center", padding: 20 },
+  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 520, maxHeight: "88%", borderWidth: 1, borderColor: Colors.border } as any,
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
-  form: { padding: 20, gap: 10, paddingBottom: 30 },
+  form: { padding: 14, gap: 8, paddingBottom: 24 },
   sectionLabel: { fontSize: 11, fontWeight: "700", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.6 },
   fieldLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   input: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink } as any,
@@ -341,8 +387,10 @@ const s = StyleSheet.create({
   durPillText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
   durPillTextActive: { color: "#fff" },
   hint: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 12 },
+  quickRegBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: "#06B6D4", borderStyle: "dashed", backgroundColor: "rgba(6,182,212,0.06)" },
+  quickRegText: { fontSize: 12, color: "#06B6D4", flex: 1 },
   error: { color: "#EF4444", fontSize: 12, textAlign: "center", marginTop: 6 },
-  footer: { flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: Colors.border },
+  footer: { flexDirection: "row", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: Colors.border },
   btn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   btnGhost: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   btnGhostText: { color: Colors.ink, fontSize: 13, fontWeight: "600" },

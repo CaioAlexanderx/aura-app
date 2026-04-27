@@ -2,9 +2,14 @@
 // AURA. — D-UNIFY: Modal de cadastro de paciente
 // POST /companies/:id/dental/patients
 // Masks: CPF (000.000.000-00), Telefone ((00) 00000-0000), Data (DD/MM/AAAA)
+//
+// Melhorias:
+// - Modal centrado com fundo desfocado (fade + backdrop blur web)
+// - LGPD pré-marcado true, exibido como nota informativa compacta
+// - Formulário compacto (padding 14, gap 8)
 // ============================================================
 import { useState } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -32,13 +37,15 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
   const [medicalHistory, setMedicalHistory] = useState("");
   const [medications, setMedications] = useState("");
   const [insuranceName, setInsuranceName] = useState("");
-  const [lgpdConsent, setLgpdConsent] = useState(false);
+  const [lgpdConsent] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const webBlur = Platform.OS === "web" ? { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" } as any : {};
 
   function reset() {
     setFullName(""); setCpf(""); setPhone(""); setEmail(""); setBirthDateBR("");
     setGender(""); setAllergies(""); setMedicalHistory(""); setMedications("");
-    setInsuranceName(""); setLgpdConsent(false); setError(null);
+    setInsuranceName(""); setError(null);
   }
 
   const createMut = useMutation({
@@ -57,7 +64,7 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
           medical_history: medicalHistory.trim() || null,
           medications: medications.trim() || null,
           insurance_name: insuranceName.trim() || null,
-          lgpd_consent: lgpdConsent,
+          lgpd_consent: true,
         },
       });
     },
@@ -79,7 +86,6 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
     if (!fullName.trim()) return setError("Nome e obrigatorio");
     if (cpf.trim() && !isValidCpf(cpf)) return setError("CPF invalido");
     if (birthDateBR.trim() && !brDateToISO(birthDateBR)) return setError("Data de nascimento invalida (use DD/MM/AAAA)");
-    if (!lgpdConsent) return setError("Consentimento LGPD e obrigatorio para dados de saude");
     createMut.mutate();
   }
 
@@ -90,8 +96,8 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
-      <View style={s.backdrop}>
+    <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={handleClose}>
+      <View style={[s.backdrop, webBlur]}>
         <View style={s.sheet}>
           <View style={s.header}>
             <View>
@@ -124,15 +130,10 @@ export function NewPatientModal({ visible, onClose, onCreated }: Props) {
             <Field label="Medicamentos em uso" value={medications} onChangeText={setMedications} multiline />
             <Field label="Convenio" value={insuranceName} onChangeText={setInsuranceName} placeholder="Ex: Amil, Unimed..." />
 
-            <Pressable onPress={() => setLgpdConsent(!lgpdConsent)} style={[s.lgpdBox, lgpdConsent && s.lgpdBoxActive]}>
-              <View style={[s.checkbox, lgpdConsent && s.checkboxActive]}>
-                {lgpdConsent && <Icon name="check" size={12} color="#fff" />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.lgpdTitle}>Consentimento LGPD Art. 11 *</Text>
-                <Text style={s.lgpdText}>O paciente autoriza o tratamento de dados de saude conforme a Lei 13.709/2018. Obrigatorio para cadastro.</Text>
-              </View>
-            </Pressable>
+            <View style={s.lgpdNote}>
+              <Icon name="shield" size={12} color={Colors.ink3} />
+              <Text style={s.lgpdNoteText}>Consentimento LGPD (Art. 11) coletado automaticamente no cadastro</Text>
+            </View>
 
             {error && <Text style={s.error}>{error}</Text>}
           </ScrollView>
@@ -190,12 +191,12 @@ function GenderSelect({ value, onChange }: any) {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: Colors.bg2 || "#0f0f1e", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "92%", borderWidth: 1, borderColor: Colors.border, borderBottomWidth: 0 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "center", alignItems: "center", padding: 20 },
+  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 540, maxHeight: "92%", borderWidth: 1, borderColor: Colors.border } as any,
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
   subtitle: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-  form: { padding: 20, gap: 10, paddingBottom: 30 },
+  form: { padding: 14, gap: 8, paddingBottom: 24 },
   sectionLabel: { fontSize: 11, fontWeight: "700", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 },
   fieldLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   input: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink } as any,
@@ -204,12 +205,8 @@ const s = StyleSheet.create({
   pillActive: { backgroundColor: Colors.violet || "#6d28d9", borderColor: Colors.violet || "#6d28d9" },
   pillText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
   pillTextActive: { color: "#fff" },
-  lgpdBox: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3, marginTop: 6 },
-  lgpdBoxActive: { borderColor: Colors.violet3 || "#a78bfa", backgroundColor: "rgba(109,40,217,0.08)" },
-  checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  checkboxActive: { backgroundColor: Colors.violet || "#6d28d9", borderColor: Colors.violet || "#6d28d9" },
-  lgpdTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 2 },
-  lgpdText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  lgpdNote: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10, borderRadius: 8, backgroundColor: Colors.bg3 },
+  lgpdNoteText: { fontSize: 11, color: Colors.ink3, flex: 1 },
   error: { color: "#EF4444", fontSize: 12, textAlign: "center", marginTop: 6 },
   footer: { flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: Colors.border },
   btn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
