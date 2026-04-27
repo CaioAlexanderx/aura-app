@@ -5,23 +5,28 @@
 // procedimento agendado, alertas (alergias, condicoes) e
 // pre-check de materiais.
 //
-// Padrao de design: vide mockup-modo-consulta-v3.html.
-// IA real (com brief gerado por LLM) entra em PR18 via
-// useAiAccess. Aqui mostramos so dados estaticos do paciente
-// + alertas extraidos do prontuario.
+// PR19: dispara brief automatico na IA quando access.canUseAi.
+// Renderiza card adicional "BRIEF GERADO PELA IA" com a resposta.
+// onBriefReady propaga o texto pra ConsultaShell -> ConsultaAiPanel
+// usar como mensagem inicial do chat.
 // ============================================================
 
-import { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { DentalColors } from "@/constants/dental-tokens";
+import { useAiAccess } from "@/hooks/useAiAccess";
+import { useDentalAiConsulta } from "@/hooks/useDentalAiConsulta";
 import type { ConsultaAppointment, ConsultaPatient } from "@/lib/dentalConsultaTypes";
 
 interface Props {
   patient: ConsultaPatient | null;
   appointment: ConsultaAppointment | null;
+  appointmentId: string;
+  patientId: string;
   onStart: () => void;
   onCancel: () => void;
   loading?: boolean;
+  onBriefReady?: (briefText: string) => void;
 }
 
 interface BriefItem {
@@ -70,9 +75,37 @@ const LEVEL_COLOR: Record<BriefItem["level"], string> = {
   info:   DentalColors.cyan,
 };
 
-export function ConsultaIntro({ patient, appointment, onStart, onCancel, loading }: Props) {
+export function ConsultaIntro({ patient, appointment, appointmentId, patientId, onStart, onCancel, loading, onBriefReady }: Props) {
   const briefItems = buildBriefItems(patient);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+
+  const access = useAiAccess();
+  const briefMut = useDentalAiConsulta();
+  const firedRef = useRef(false);
+  const [aiBriefText, setAiBriefText] = useState<string | null>(null);
+  const [aiBriefError, setAiBriefError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (firedRef.current) return;
+    if (!access.canUseAi) return;
+    if (!appointmentId || !patientId) return;
+    firedRef.current = true;
+    briefMut.mutate(
+      { intent: "brief", appointmentId, patientId },
+      {
+        onSuccess: (res) => {
+          setAiBriefText(res.text);
+          onBriefReady?.(res.text);
+        },
+        onError: (err: any) => {
+          const msg = err?.data?.error || err?.message || "Falha ao gerar brief";
+          setAiBriefError(msg);
+        },
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [access.canUseAi, appointmentId, patientId]);
+
   const initials = (patient?.name || "?")
     .split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
@@ -139,6 +172,28 @@ export function ConsultaIntro({ patient, appointment, onStart, onCancel, loading
             ))}
           </View>
         </View>
+
+        {access.canUseAi ? (
+          <View style={[cardStyle, { borderColor: "rgba(124,58,237,0.30)", backgroundColor: "rgba(124,58,237,0.04)" }]}>
+            <Text style={[cardTitleStyle, { color: DentalColors.violet }]}>✨ BRIEF GERADO PELA IA</Text>
+            {briefMut.isPending ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 8 }}>
+                <ActivityIndicator color={DentalColors.violet} size="small" />
+                <Text style={{ fontSize: 11, color: DentalColors.ink2 }}>
+                  Aura analisando o paciente...
+                </Text>
+              </View>
+            ) : aiBriefError ? (
+              <Text style={{ fontSize: 11, color: DentalColors.amber, lineHeight: 16 }}>
+                ⚠️ {aiBriefError}
+              </Text>
+            ) : aiBriefText ? (
+              <Text style={{ fontSize: 12, color: DentalColors.ink, lineHeight: 18, padding: 4 }}>
+                {aiBriefText}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={cardStyle}>
           <Text style={cardTitleStyle}>📦 PRE-CHECK MATERIAIS</Text>
