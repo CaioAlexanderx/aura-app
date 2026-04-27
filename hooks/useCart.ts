@@ -8,10 +8,10 @@ export type CartItem = { productId: string; name: string; price: number; qty: nu
 export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string; sellerName?: string; couponCode?: string; couponDiscount?: number; manualDiscount?: number };
 
 export const PAYMENTS = [
-  { key: "pix", label: "Pix" },
   { key: "dinheiro", label: "Dinheiro" },
-  { key: "cartao", label: "Cartao" },
-  { key: "debito", label: "Debito" },
+  { key: "pix",     label: "PIX" },
+  { key: "debito",  label: "Débito" },
+  { key: "cartao",  label: "Crédito" },
 ];
 
 const MAX_DISCOUNT_PCT = 50;
