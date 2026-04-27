@@ -15,6 +15,10 @@ import { DentalColors } from "@/constants/dental-tokens";
 // (filtra cancelados, concluidos e faltas). Ordenado por horario
 // crescente, max 6 linhas visiveis com CTA pra agenda completa.
 //
+// Cada item agendado/confirmado/em_atendimento tem botao
+// "▶ Iniciar" que vai pra /dental/consulta/[appointmentId]
+// (Modo Consulta fullscreen — PR17).
+//
 // Endpoint: GET /companies/:id/dental/appointments?from=YYYY-MM-DD&to=YYYY-MM-DD
 // (mesmo do AppointmentsList)
 //
@@ -173,6 +177,21 @@ export function HojeAppointmentsPanel() {
                     {meta.label}
                   </Text>
                 </View>
+                {a.status === "agendado" || a.status === "confirmado" || a.status === "em_atendimento" ? (
+                  <Pressable
+                    onPress={() => router.push(`/dental/consulta/${a.id}` as any)}
+                    style={{
+                      backgroundColor: DentalColors.cyan,
+                      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
+                      flexDirection: "row", alignItems: "center", gap: 4,
+                    }}
+                    accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}
+                  >
+                    <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>
+                      ▶ Iniciar
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             );
           })}
