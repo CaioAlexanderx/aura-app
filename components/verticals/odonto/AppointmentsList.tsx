@@ -5,8 +5,12 @@
 //
 // Permite visualizar agendamentos passados, futuros e de periodos
 // amplos — complementa a visao de grade (dia atual) do AgendaDental.
+//
+// PR20 (2026-04-27): botao "▶ Iniciar" pra agendamento/aprovado/
+// em_atendimento — leva direto pra /dental/consulta/[id].
 // ============================================================
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -20,10 +24,10 @@ type StatusFilter = "all" | "agendado" | "em_atendimento" | "concluido" | "cance
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
   agendado:       { label: "Agendado",        color: "#06B6D4", bg: "rgba(6,182,212,0.12)" },
-  avaliacao:      { label: "Em avaliacao",    color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+  avaliacao:      { label: "Em avaliação",    color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
   aprovado:       { label: "Aprovado",        color: "#10B981", bg: "rgba(16,185,129,0.12)" },
   em_atendimento: { label: "Em atendimento",  color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
-  concluido:      { label: "Concluido",       color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+  concluido:      { label: "Concluído",       color: "#10B981", bg: "rgba(16,185,129,0.12)" },
   cancelado:      { label: "Cancelado",       color: "#9CA3AF", bg: "rgba(156,163,175,0.08)" },
   faltou:         { label: "Faltou",          color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
   confirmado:     { label: "Confirmado",      color: "#10B981", bg: "rgba(16,185,129,0.12)" },
@@ -44,6 +48,7 @@ function periodDates(p: Period): { from?: string; to?: string } {
 export function AppointmentsList() {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
+  const router = useRouter();
 
   const [period, setPeriod] = useState<Period>("future");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -93,7 +98,7 @@ export function AppointmentsList() {
     { v: "all",            l: "Todos" },
     { v: "agendado",       l: "Agendado" },
     { v: "em_atendimento", l: "Em atendimento" },
-    { v: "concluido",      l: "Concluido" },
+    { v: "concluido",      l: "Concluído" },
     { v: "cancelado",      l: "Cancelado" },
   ];
 
@@ -126,7 +131,7 @@ export function AppointmentsList() {
         {!isLoading && appointments.length === 0 && (
           <View style={s.empty}>
             <Icon name="calendar" size={24} color={Colors.ink3} />
-            <Text style={s.emptyText}>Nenhum agendamento no periodo selecionado</Text>
+            <Text style={s.emptyText}>Nenhum agendamento no período selecionado</Text>
           </View>
         )}
 
@@ -152,6 +157,15 @@ export function AppointmentsList() {
                 </View>
               </View>
               <View style={s.actions}>
+                {(a.status === "agendado" || a.status === "aprovado" || a.status === "em_atendimento") && (
+                  <Pressable
+                    onPress={() => router.push(`/dental/consulta/${a.id}` as any)}
+                    style={[s.btn, s.btnPrimary]}
+                    accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}
+                  >
+                    <Text style={[s.btnText, { color: "#fff" }]}>▶ Iniciar</Text>
+                  </Pressable>
+                )}
                 <Pressable onPress={() => setDetailId(a.id)} style={[s.btn, s.btnGhost]}>
                   <Icon name="eye" size={12} color={Colors.ink} />
                   <Text style={s.btnText}>Ver</Text>
@@ -180,7 +194,7 @@ export function AppointmentsList() {
           <View style={s.confirmBox}>
             <Text style={s.confirmTitle}>Excluir agendamento?</Text>
             <Text style={s.confirmText}>
-              Esta acao nao pode ser desfeita. Se o agendamento ja ocorreu ou foi cancelado, prefira manter o registro para historico.
+              Esta ação não pode ser desfeita. Se o agendamento já ocorreu ou foi cancelado, prefira manter o registro para histórico.
             </Text>
             <View style={s.confirmActions}>
               <Pressable onPress={() => setDeleteId(null)} style={[s.btn, s.btnGhost, { flex: 1 }]} disabled={deleteMut.isPending}>
@@ -230,6 +244,7 @@ const s = StyleSheet.create({
   statusText: { fontSize: 10, fontWeight: "700" },
   actions: { flexDirection: "row", gap: 6, justifyContent: "flex-end", borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10 },
   btn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
+  btnPrimary:    { backgroundColor: "#06B6D4", borderWidth: 0 },
   btnGhost: { backgroundColor: "transparent", borderColor: Colors.border },
   btnDanger: { backgroundColor: "transparent", borderColor: "#EF4444" },
   btnDangerSolid: { backgroundColor: "#EF4444", borderColor: "#EF4444" },
