@@ -19,7 +19,6 @@ function mapApiTransaction(t: any): Transaction {
     due_date: t.due_date || null,
     created_at: t.created_at || null,
     paid_at: t.paid_at || null,
-    // Sessao 22-23/04: campos novos (vem do backend ddb07f5)
     payment_method: t.payment_method || null,
     employee_id: t.employee_id || null,
     employee_name: t.employee_name || null,
@@ -49,7 +48,6 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { start: toISODate(range.start), end: toISODate(range.end) };
   }, [period, customStart, customEnd]);
 
-  // F-10: periodo anterior pra comparativo
   var prevRange = useMemo(function() {
     var p = period || "month";
     var prev = getPreviousPeriodRange(p, customStart, customEnd);
@@ -57,10 +55,6 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { start: toISODate(prev.start), end: toISODate(prev.end) };
   }, [period, customStart, customEnd]);
 
-  // Mes vigente — calculado independente do filtro selecionado.
-  // Usado pelo MonthExpensesBanner pra avisar quando ha despesas no
-  // mes atual escondidas pelo filtro (ex: cliente esta vendo "Dia"
-  // ou "Semana" e nao percebe que tem 5 contas a vencer este mes).
   var currentMonthRange = useMemo(function() {
     var range = getPeriodRange("month");
     return { start: toISODate(range.start), end: toISODate(range.end) };
@@ -76,7 +70,6 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     retry: 1, staleTime: 30000,
   });
 
-  // F-10: buscar resumo do periodo anterior
   var { data: apiPrevTx } = useQuery({
     queryKey: ["transactions-prev", companyId, prevRange?.start, prevRange?.end],
     queryFn: function() {
@@ -87,13 +80,10 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     retry: 1, staleTime: 120000,
   });
 
-  // Query do mes vigente — sempre ativa, INDEPENDENTE do filtro.
-  // Otimizacao: se period === "month" reutiliza apiTx (mesmo range).
   var monthQueryEnabled = !!companyId && !!token && !isDemo && period !== "month";
   var { data: apiCurrentMonth } = useQuery({
     queryKey: ["current-month-expenses", companyId, currentMonthRange.start, currentMonthRange.end],
     queryFn: function() {
-      // Pede so as despesas pra economizar payload (limit=1 + summary cobre tudo)
       var params = "limit=1&type=expense&start=" + currentMonthRange.start + "&end=" + currentMonthRange.end;
       return companiesApi.transactions(companyId!, params);
     },
@@ -131,10 +121,11 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
   var summary = useMemo(function() {
     var income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0);
     var expenses = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0);
-    return { income: income, expenses: expenses, balance: income - expenses };
+    // gap: vendas sem lancamento correspondente (backend calcula, exposto para aviso visual)
+    var gap = apiTx?.summary?.gap != null ? parseFloat(apiTx.summary.gap) : 0;
+    return { income: income, expenses: expenses, balance: income - expenses, gap: gap };
   }, [apiTx, transactions]);
 
-  // F-10: resumo do periodo anterior
   var previousSummary = useMemo(function() {
     if (!apiPrevTx?.summary) return null;
     var income = parseFloat(apiPrevTx.summary.income) || 0;
@@ -142,15 +133,11 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { income: income, expenses: expenses, balance: income - expenses };
   }, [apiPrevTx]);
 
-  // Despesas do mes vigente — usado pelo banner.
-  // Quando period === "month" reutiliza apiTx (mesmo dado, evita query extra).
   var currentMonthExpenses = useMemo(function() {
     if (period === "month") {
-      // Usa os dados que ja temos
       var exp = transactions.filter(function(t) { return t.type === "expense"; });
       return { count: exp.length, total: exp.reduce(function(s, t) { return s + t.amount; }, 0) };
     }
-    // Usa a query separada do mes
     var total = parseFloat(apiCurrentMonth?.summary?.expenses) || 0;
     var count = apiCurrentMonth?.total || 0;
     return { count: count, total: total };
@@ -220,7 +207,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
 
   return {
     transactions: transactions, summary: summary, previousSummary: previousSummary,
-    currentMonthExpenses: currentMonthExpenses, // Tarefa C — banner
+    currentMonthExpenses: currentMonthExpenses,
     dreData: dreData, withdrawalData: withdrawalData,
     isLoading: isLoadingTx && !isDemo, isDemo: isDemo,
     createTransaction: createTransaction, deleteTransaction: deleteTransaction,

@@ -21,6 +21,8 @@ type Props = {
   customEnd?: string;
   previousSummary?: Summary | null;
   transactions?: Transaction[];
+  /** Diferenca entre faturamento (sales) e lancamentos (transactions). Exibe aviso se > 0.50 */
+  gap?: number;
 };
 
 function delta(cur: number, prev: number): number | null {
@@ -34,7 +36,7 @@ function DeltaBadge({ value, invert }: { value: number | null; invert?: boolean 
   var up = invert ? value < 0 : value > 0;
   var color = up ? Colors.green : value === 0 ? Colors.ink3 : Colors.red;
   var bg = up ? Colors.greenD : value === 0 ? Colors.bg4 : Colors.redD;
-  var arrow = value > 0 ? "\u2191" : value < 0 ? "\u2193" : "";
+  var arrow = value > 0 ? "↑" : value < 0 ? "↓" : "";
   return (
     <View style={[ds.badge, { backgroundColor: bg }]}>
       <Text style={[ds.badgeText, { color: color }]}>{arrow}{Math.abs(value)}% vs anterior</Text>
@@ -47,7 +49,6 @@ var ds = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: "700" },
 });
 
-// F-11: Mini sparkline — ultimos 7 dias de receita vs despesa
 function MiniSparkline({ transactions }: { transactions: Transaction[] }) {
   var days = useMemo(function() {
     var result: { income: number; expense: number; label: string }[] = [];
@@ -104,7 +105,7 @@ var sk = StyleSheet.create({
   label: { fontSize: 9, color: Colors.ink3, fontWeight: "500" },
 });
 
-export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary, transactions }: Props) {
+export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary, transactions, gap }: Props) {
   const healthy = balance > 0;
   const pct = income > 0 ? Math.round((expenses / income) * 100) : 0;
   const barWidth = Math.min(pct, 100);
@@ -118,6 +119,9 @@ export function SmartBalance({ income, expenses, balance, txCount, period, custo
   var revDelta = previousSummary ? delta(income, previousSummary.income) : null;
   var expDelta = previousSummary ? delta(expenses, previousSummary.expenses) : null;
   var balDelta = previousSummary ? delta(balance, previousSummary.balance) : null;
+
+  // Aviso de gap: mostra apenas quando diferenca significativa (> R$0,50)
+  var hasGap = typeof gap === "number" && gap > 0.50;
 
   return (
     <View style={[s.card, isWeb && { transition: "all 0.3s ease" } as any]}>
@@ -157,7 +161,6 @@ export function SmartBalance({ income, expenses, balance, txCount, period, custo
         <Text style={s.barHint}>despesas / receitas</Text>
       </View>
 
-      {/* F-11: Sparkline */}
       {transactions && transactions.length > 0 && period !== "all" && <MiniSparkline transactions={transactions} />}
 
       <View style={s.statsRow}>
@@ -182,6 +185,17 @@ export function SmartBalance({ income, expenses, balance, txCount, period, custo
           </Text>
         </View>
       </View>
+
+      {/* Aviso de gap: vendas do caixa sem lancamento financeiro correspondente */}
+      {hasGap && (
+        <View style={s.gapBanner}>
+          <Text style={s.gapIcon}>⚠️</Text>
+          <View style={s.gapText}>
+            <Text style={s.gapTitle}>{fmt(gap!)} em vendas sem registro</Text>
+            <Text style={s.gapHint}>Algumas vendas do caixa nao geraram lancamento financeiro automaticamente. Verifique em Lancamentos ou contate o suporte.</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -209,6 +223,12 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 },
   statValue: { fontSize: 15, fontWeight: "800", color: Colors.ink },
   statCount: { fontSize: 9, color: Colors.ink3, marginTop: 2 },
+  // Gap banner
+  gapBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 14, backgroundColor: Colors.amberD, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.amber + "44" },
+  gapIcon: { fontSize: 16, lineHeight: 20 },
+  gapText: { flex: 1 },
+  gapTitle: { fontSize: 12, color: Colors.amber, fontWeight: "700", marginBottom: 3 },
+  gapHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
 });
 
 export default SmartBalance;

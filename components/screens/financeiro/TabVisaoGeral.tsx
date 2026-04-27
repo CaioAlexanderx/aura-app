@@ -16,7 +16,7 @@ import type { Transaction, PeriodKey } from "./types";
 
 var isWeb = Platform.OS === "web";
 
-type Summary = { income: number; expenses: number; balance: number };
+type Summary = { income: number; expenses: number; balance: number; gap?: number };
 
 type Props = {
   transactions: Transaction[];
@@ -41,12 +41,20 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
 
   return (
     <View>
-      <SmartBalance income={summary.income} expenses={summary.expenses} balance={summary.balance} txCount={transactions.length} period={period} customStart={customStart} customEnd={customEnd} previousSummary={previousSummary} />
+      <SmartBalance
+        income={summary.income}
+        expenses={summary.expenses}
+        balance={summary.balance}
+        txCount={transactions.length}
+        period={period}
+        customStart={customStart}
+        customEnd={customEnd}
+        previousSummary={previousSummary}
+        gap={summary.gap}
+      />
       <SparklineBar transactions={transactions} />
       <PendingCards transactions={transactions} />
-      {/* Visualizacao detalhada de receitas (categorias, top, tendencia diaria, a receber timeline, formas de recebimento) */}
       <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
-      {/* Visualizacao detalhada de despesas (categorias, top, tendencia diaria, a pagar timeline, formas de pgto) */}
       <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
       <CashFlowCard />
       <AIFinancialInsights summary={summary} txCount={transactions.length} />
