@@ -10,6 +10,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
+import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { useProductCategories } from "@/hooks/useProductCategories";
 import type { Product } from "./types";
 import { UNITS } from "./types";
@@ -21,6 +22,11 @@ const PRESET_COLORS = [
   "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
   "#ffffff", "#1f2937", "#6b7280", "#92400e",
 ];
+
+// Fix 7: helper para inicializar campo mascarado a partir de número
+function amountToMask(n: number): string {
+  return maskCurrency(String(Math.round(n * 100)));
+}
 
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -42,8 +48,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const qc = useQueryClient();
   const { categories: managedCategories } = useProductCategories();
 
-  // Merge: categorias cadastradas (primeiro) + categorias derivadas dos produtos existentes
-  // que ainda nao foram cadastradas (ficam no final como legado).
   const mergedCategoryList = useMemo(() => {
     const managed = managedCategories.map(c => c.name);
     const managedSet = new Set(managed.map(n => n.toLowerCase()));
@@ -61,8 +65,9 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [code, setCode]         = useState(editProduct?.code || "");
   const [barcode, setBarcode]   = useState(editProduct?.barcode || "");
   const [category, setCategory] = useState(editProduct?.category || mergedCategoryList[0] || "");
-  const [price, setPrice]       = useState(editProduct ? String(editProduct.price) : "");
-  const [cost, setCost]         = useState(editProduct ? String(editProduct.cost) : "");
+  // Fix 7: inicializa com máscara de moeda
+  const [price, setPrice]       = useState(editProduct ? amountToMask(editProduct.price) : "");
+  const [cost, setCost]         = useState(editProduct ? amountToMask(editProduct.cost) : "");
   const [stock, setStock]       = useState(editProduct ? String(editProduct.stock) : "");
   const [minStock, setMinStock] = useState(editProduct ? String(editProduct.minStock) : "");
   const [unit, setUnit]         = useState(editProduct?.unit || "un");
@@ -72,18 +77,15 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
 
-  // Estoque colapsavel: aberto no edit quando ja tem estoque/min; fechado no create.
-  const initialShowStock = isEdit && (
-    (parseInt(editProduct?.stock as any) || 0) > 0 ||
-    (parseInt(editProduct?.minStock as any) || 0) > 0
-  );
+  // Fix 10: estoque sempre aberto no CREATE; no EDIT segue lógica anterior
+  const initialShowStock = isEdit
+    ? ((parseInt(editProduct?.stock as any) || 0) > 0 || (parseInt(editProduct?.minStock as any) || 0) > 0)
+    : true;
   const [showStock, setShowStock] = useState(initialShowStock);
 
-  // Fase A: duplicate detection com debounce
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [checkingDup, setCheckingDup] = useState(false);
 
-  // Default category quando a primeira categoria cadastrada chega e ainda nao ha selecao
   useEffect(() => {
     if (!isEdit && !category && mergedCategoryList.length > 0) {
       setCategory(mergedCategoryList[0]);
@@ -110,12 +112,9 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     return () => clearTimeout(timer);
   }, [name, company?.id, editProduct?.id]);
 
-  // Query pra detectar se produto tem variacoes (sistema novo v2)
-  // usada pra decidir se mostra ou esconde os campos simples de cor/tamanho
   const { data: variationsData } = useQuery({
     queryKey: ["productVariations", company?.id, editProduct?.id],
     queryFn: () => {
-      // importa dinamicamente pra nao criar ciclo
       return import("@/services/productsVariationsApi").then(m =>
         m.productsVariationsApi.get(company!.id, editProduct!.id)
       );
@@ -123,37 +122,26 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     enabled: isEdit && !!editProduct?.id && !!company?.id,
     staleTime: 30000,
   });
-  const hasVariations = !!(variationsData && variationsData.mode !== 'none');
+  const hasVariations = !!(variationsData && variationsData.mode !== "none");
 
   function generateCode() {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
     setCode(prefix + "-" + String(Math.floor(Math.random() * 999) + 1).padStart(3, "0"));
   }
 
-  function openColorPicker() {
-    if (Platform.OS !== "web") return;
-    try {
-      const input = document.createElement("input");
-      input.type = "color";
-      input.value = color || "#6d28d9";
-      input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
-      document.body.appendChild(input);
-      input.addEventListener("change", (e: any) => { setColor(e.target.value); document.body.removeChild(input); });
-      input.addEventListener("blur", () => { try { document.body.removeChild(input); } catch {} });
-      input.click();
-    } catch {}
-  }
-
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome do produto"); return; }
     if (!price.trim()) { toast.error("Preencha o preco de venda"); return; }
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
+    // Fix 7: parsear valores mascarados
+    const parsedPrice = parseInt(unmaskNumber(price) || "0") / 100;
+    const parsedCost  = parseInt(unmaskNumber(cost)  || "0") / 100;
     onSave({
       id: editProduct?.id || Date.now().toString(),
       name: name.trim(), code: code.trim() || "---", barcode: barcode.trim(),
       category: finalCategory || "Produtos",
-      price: parseFloat(price.replace(",", ".")) || 0,
-      cost: parseFloat(cost.replace(",", ".")) || 0,
+      price: parsedPrice,
+      cost: parsedCost,
       stock: parseInt(stock) || 0, minStock: parseInt(minStock) || 0,
       abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0,
       unit, brand: editProduct?.brand || "",
@@ -173,7 +161,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Pomada modeladora" placeholderTextColor={Colors.ink3} />
       </FormField>
 
-      {/* Fase A: aviso de duplicatas */}
       {duplicates.length > 0 && (
         <View style={s.dupBanner}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -186,20 +173,16 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           <View style={{ marginTop: 10, gap: 6 }}>
             {duplicates.slice(0, 5).map((d, i) => (
               <View key={d.id || i} style={s.dupRow}>
-                {d.color && (
-                  <View style={[s.dupColorDot, { backgroundColor: d.color }]} />
-                )}
+                {d.color && <View style={[s.dupColorDot, { backgroundColor: d.color }]} />}
                 <Text style={s.dupRowText} numberOfLines={1}>
-                  {d.color ? hexToName(d.color) : ""}{d.color && (d.size || d.barcode) ? " \u00b7 " : ""}
-                  {d.size ? "T: " + d.size : ""}{d.size && d.barcode ? " \u00b7 " : ""}
+                  {d.color ? hexToName(d.color) : ""}{d.color && (d.size || d.barcode) ? " · " : ""}
+                  {d.size ? "T: " + d.size : ""}{d.size && d.barcode ? " · " : ""}
                   {d.barcode ? d.barcode.slice(-8) : ""}
                 </Text>
                 <Text style={s.dupStock}>{d.stock_qty} un</Text>
               </View>
             ))}
-            {duplicates.length > 5 && (
-              <Text style={s.dupMore}>+ {duplicates.length - 5} outros</Text>
-            )}
+            {duplicates.length > 5 && <Text style={s.dupMore}>+ {duplicates.length - 5} outros</Text>}
           </View>
           <Text style={s.dupHint}>
             Dica: depois de salvar, use a ferramenta &quot;Unificar duplicatas&quot; na tela de Estoque.
@@ -207,7 +190,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </View>
       )}
 
-      {/* P1 #1: Image upload — only in edit mode (product needs an ID for upload endpoint) */}
       {isEdit && editProduct?.id && (
         <ImageUploadSection
           productId={editProduct.id}
@@ -228,7 +210,11 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <View style={{ flex: 1 }}>
           <FormField label="Unidade">
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 4 }}>
-              {UNITS.map(u => <Pressable key={u} onPress={() => setUnit(u)} style={[s.chip, unit === u && s.chipActive]}><Text style={[s.chipText, unit === u && s.chipTextActive]}>{u}</Text></Pressable>)}
+              {UNITS.map(u => (
+                <Pressable key={u} onPress={() => setUnit(u)} style={[s.chip, unit === u && s.chipActive]}>
+                  <Text style={[s.chipText, unit === u && s.chipTextActive]}>{u}</Text>
+                </Pressable>
+              ))}
             </ScrollView>
           </FormField>
         </View>
@@ -240,11 +226,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
             const selected = category === c && !showNewCat;
             const chipColor = managedColorByName[c];
             return (
-              <Pressable
-                key={c}
-                onPress={() => { setCategory(c); setShowNewCat(false); }}
-                style={[s.chip, selected && s.chipActive]}
-              >
+              <Pressable key={c} onPress={() => { setCategory(c); setShowNewCat(false); }} style={[s.chip, selected && s.chipActive]}>
                 {chipColor ? <View style={[s.chipDot, { backgroundColor: chipColor }]} /> : null}
                 <Text style={[s.chipText, selected && s.chipTextActive]}>{c}</Text>
               </Pressable>
@@ -260,12 +242,35 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
 
       <View style={s.divider} />
 
+      {/* Fix 7: campos de preço/custo com máscara de moeda */}
       <View style={s.row2}>
-        <View style={{ flex: 1 }}><FormField label="Preco de venda" required><TextInput style={s.input} value={price} onChangeText={setPrice} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></FormField></View>
-        <View style={{ flex: 1 }}><FormField label="Custo"><TextInput style={s.input} value={cost} onChangeText={setCost} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></FormField></View>
+        <View style={{ flex: 1 }}>
+          <FormField label="Preco de venda" required>
+            <TextInput
+              style={s.input}
+              value={price}
+              onChangeText={v => setPrice(maskCurrency(v))}
+              placeholder="0,00"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="number-pad"
+            />
+          </FormField>
+        </View>
+        <View style={{ flex: 1 }}>
+          <FormField label="Custo">
+            <TextInput
+              style={s.input}
+              value={cost}
+              onChangeText={v => setCost(maskCurrency(v))}
+              placeholder="0,00"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="number-pad"
+            />
+          </FormField>
+        </View>
       </View>
 
-      {/* Bloco de estoque: escondido quando produto tem variacoes v2 (o estoque vira soma) */}
+      {/* Fix 10: estoque aberto por padrão no create */}
       {!hasVariations && (
         <>
           <Pressable onPress={() => setShowStock(!showStock)} style={s.stockToggle}>
@@ -289,7 +294,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </>
       )}
 
-      {/* Aviso quando ja tem variacoes: estoque vira soma */}
       {hasVariations && (
         <View style={s.stockVariantHint}>
           <Icon name="info" size={13} color={Colors.violet3} />
@@ -301,24 +305,34 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
 
       <View style={s.divider} />
 
-      {/* Campos simples de cor/tamanho do produto pai:
-          - Mostrados apenas no CREATE (produto novo) como atalho rapido
-          - No EDIT sao ESCONDIDOS porque a secao Cores e Tamanhos abaixo
-            substitui completamente (evita confusao e duplicacao) */}
+      {/* Fix 8: campo de cor usando <input type="color"> inline no web (não bloqueia) */}
       {!isEdit && (
         <View style={s.row2}>
           <View style={{ flex: 1 }}>
             <FormField label="Cor principal (opcional)">
               {Platform.OS === "web" ? (
-                <Pressable onPress={openColorPicker} style={s.colorRow}>
+                <View style={[s.colorRow, { position: "relative" as any }]}>
                   <View style={[s.colorSwatch, { backgroundColor: color || Colors.bg4, borderStyle: color ? "solid" : "dashed" }]} />
-                  <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>{color ? (hexToName(color) + " \u00b7 " + color) : "Toque para escolher"}</Text>
+                  <Text style={[s.colorText, !color && { color: Colors.ink3 }]}>
+                    {color ? (hexToName(color) + " · " + color) : "Toque para escolher"}
+                  </Text>
+                  {/* Input nativo de cor — cobre toda a área, opacity 0, sem bloquear */}
+                  <input
+                    type="color"
+                    value={color || "#6d28d9"}
+                    onChange={(e: any) => setColor(e.target.value)}
+                    style={{
+                      position: "absolute", inset: 0, opacity: 0,
+                      cursor: "pointer", width: "100%", height: "100%", border: "none",
+                    } as any}
+                  />
                   {color && (
-                    <Pressable onPress={(e) => { e.stopPropagation?.(); setColor(""); }}>
+                    <Pressable onPress={(e: any) => { e?.stopPropagation?.(); setColor(""); }}
+                      style={{ zIndex: 2 }}>
                       <Text style={{ fontSize: 11, color: Colors.red }}>Remover</Text>
                     </Pressable>
                   )}
-                </Pressable>
+                </View>
               ) : (
                 <View>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -327,7 +341,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
                         style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: c, borderWidth: color === c ? 3 : 1.5, borderColor: color === c ? Colors.violet : Colors.border }} />
                     ))}
                   </View>
-                  {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{hexToName(color)} \u00b7 {color}</Text>}
+                  {color && <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 6 }}>{hexToName(color)} · {color}</Text>}
                 </View>
               )}
             </FormField>
@@ -340,15 +354,24 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </View>
       )}
 
+      {/* Fix 10: aviso de variantes mais visível no create */}
       {!isEdit && (
-        <Text style={s.createHint}>
-          Salve o produto e abra ele novamente para adicionar mais cores e tamanhos com estoque proprio.
-        </Text>
+        <View style={s.variantsHintBox}>
+          <Icon name="layers" size={14} color={Colors.violet3} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.variantsHintTitle}>Cores e tamanhos com estoque proprio</Text>
+            <Text style={s.variantsHintDesc}>Salve o produto para liberar o cadastro de variantes com estoque individual por cor/tamanho.</Text>
+          </View>
+        </View>
       )}
 
-      <BarcodeQRSection code={barcode} productName={name} price={parseFloat(price.replace(",", ".")) || 0} onCodeChange={setBarcode} />
+      <BarcodeQRSection
+        code={barcode}
+        productName={name}
+        price={parseInt(unmaskNumber(price) || "0") / 100}
+        onCodeChange={setBarcode}
+      />
 
-      {/* Novo sistema de variacoes v2 - substitui VariantsSection antigo */}
       {isEdit && editProduct?.id && (
         <ProductVariationsSection
           productId={editProduct.id}
@@ -388,24 +411,27 @@ const s = StyleSheet.create({
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
   categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
-  createHint: { fontSize: 11, color: Colors.ink3, marginBottom: 14, marginTop: -6, fontStyle: "italic" as any, paddingHorizontal: 4 },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10 },
   colorSwatch: { width: 36, height: 36, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border },
   colorText: { fontSize: 12, color: Colors.ink, fontWeight: "500", flex: 1 },
-  // Estoque colapsavel
+  // Estoque colapsável
   stockToggle: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
   stockToggleTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   stockToggleSub: { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
   stockVariantHint: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border2, marginBottom: 10 },
   stockVariantHintText: { fontSize: 11, color: Colors.violet3, flex: 1, lineHeight: 15, fontWeight: "500" },
+  // Fix 10: aviso de variantes
+  variantsHintBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
+  variantsHintTitle: { fontSize: 12, color: Colors.violet3, fontWeight: "700", marginBottom: 2 },
+  variantsHintDesc: { fontSize: 11, color: Colors.ink3, lineHeight: 15 },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 8 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   saveBtn: { backgroundColor: Colors.violet, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
   saveText: { fontSize: 13, color: "#fff", fontWeight: "700" },
-  // Fase A: banner de duplicatas
+  // Duplicatas
   dupBanner: {
     backgroundColor: "#fef3c7",
     borderLeftWidth: 4,
