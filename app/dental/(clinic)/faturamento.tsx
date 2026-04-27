@@ -1,28 +1,23 @@
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
-import { ConveniosTab } from "@/components/verticals/odonto/OdontoAdminTabs";
+import { ConvêniosTab } from "@/components/verticals/odonto/OdontoAdminTabs";
 import { BillingDashboard } from "@/components/verticals/odonto/BillingDashboard";
 import { RepasseDentista } from "@/components/verticals/odonto/RepasseDentista";
-import { TissTab } from "@/components/verticals/odonto/TissTab";
+import { TissUnifiedTab } from "@/components/verticals/odonto/TissUnifiedTab";
 import { NfseTab } from "@/components/verticals/odonto/NfseTab";
-import { TissReconcilePanel } from "@/components/dental/TissReconcilePanel";
 import { DentalColors } from "@/constants/dental-tokens";
 
 // Faturamento — fonte unica financeira da clinica dental.
-// SUBSTITUI o /financeiro generico para usuarios com vertical=odonto.
-// Decisao 2026-04-25 (memory: plano_aura_odonto_portal).
-//
-// PR13 (2026-04-26): nova tab "Reconciliar TISS" entre TISS e Repasses.
-// Ordem reflete fluxo: criar guias → reconciliar pagamento recebido →
-// ver impacto em Cobranças/Repasses.
+// PR20 (2026-04-27): TISS e Reconciliar TISS colapsados em uma tab
+// unica que tem sub-nav interna (Convênios | Guias | Lotes | Reconciliar).
+// Reduz overload visual e remove modal full-screen do TissDashboard antigo.
 
 const TABS = [
-  { id: "cobrancas",  label: "Cobranças",         Component: BillingDashboard },
-  { id: "nfse",       label: "NFS-e",             Component: NfseTab },
-  { id: "tiss",       label: "TISS",              Component: TissTab },
-  { id: "tiss-recon", label: "Reconciliar TISS",  Component: TissReconcilePanel },
-  { id: "repasses",   label: "Repasses",          Component: RepasseDentista },
-  { id: "convenios",  label: "Convênios (legado)", Component: ConveniosTab },
+  { id: "cobranças",  label: "Cobranças",          Component: BillingDashboard },
+  { id: "nfse",       label: "NFS-e",              Component: NfseTab },
+  { id: "tiss",       label: "TISS",               Component: TissUnifiedTab },
+  { id: "repasses",   label: "Repasses",           Component: RepasseDentista },
+  { id: "convênios",  label: "Convênios (legado)", Component: ConvêniosTab },
 ];
 
 export default function FaturamentoScreen() {
