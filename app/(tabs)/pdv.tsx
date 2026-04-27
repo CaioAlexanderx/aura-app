@@ -447,6 +447,7 @@ export default function CaixaScreen() {
               onPay={setPayment}
               onInc={id => updateQty(id, 1)}
               onDec={id => updateQty(id, -1)}
+              onSetQty={setQty}
               onRemove={removeItem}
               onClear={() => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); }}
               onFinalize={handleFinalize}
@@ -559,6 +560,7 @@ export default function CaixaScreen() {
             onPay={setPayment}
             onInc={id => updateQty(id, 1)}
             onDec={id => updateQty(id, -1)}
+            onSetQty={setQty}
             onRemove={removeItem}
             onClear={() => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); }}
             onFinalize={handleFinalize}
