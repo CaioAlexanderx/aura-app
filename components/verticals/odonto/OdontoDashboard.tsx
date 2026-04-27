@@ -15,6 +15,7 @@ import { DentalSectionHeader } from "@/components/dental/DentalSectionHeader";
 // Aceita sectionsOrder pra reordenar por persona (PR4).
 // PR16 (2026-04-27): KPI cards e section headers tokenizados
 // com DentalColors, padrao visual rico do shell negocio.
+// Item 4 (2026-04-27): Widget de aniversarios proximos 7 dias.
 // ============================================================
 
 const fmt = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -30,9 +31,9 @@ const STAGE_LABELS: Record<string, string> = {
   in_treatment:         "Em tratamento",
 };
 
-export type SectionKey = "agenda" | "financeiro" | "cobranca" | "pacientes" | "funil" | "topProcs";
+export type SectionKey = "agenda" | "birthdays" | "financeiro" | "cobranca" | "pacientes" | "funil" | "topProcs";
 
-const DEFAULT_ORDER: SectionKey[] = ["agenda", "financeiro", "cobranca", "pacientes", "funil", "topProcs"];
+const DEFAULT_ORDER: SectionKey[] = ["agenda", "birthdays", "financeiro", "cobranca", "pacientes", "funil", "topProcs"];
 
 interface Props {
   sectionsOrder?: SectionKey[];
@@ -53,6 +54,14 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
     enabled: !!company?.id,
     staleTime: 30000,
   });
+
+  const { data: bdayData } = useQuery({
+    queryKey: ["dental-patient-birthdays", company?.id],
+    queryFn: () => request<any>(`/companies/${company!.id}/dental/patients/birthdays?days=7`),
+    enabled: !!company?.id,
+    staleTime: 3600000,
+  });
+  const birthdays: Array<{ id: string; full_name: string; birth_date: string; days_until: number }> = bdayData?.patients || [];
 
   const d = (data as any) || {};
   const hoje = d.consultas_hoje || {};
@@ -103,6 +112,40 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
             sublabel={`${semana.total || 0} no total`} />
         </View>
       </Fragment>
+    ),
+
+    birthdays: () => (
+      birthdays.length > 0 ? (
+        <Fragment>
+          <DentalSectionHeader title="Aniversarios" chip="Proximos 7 dias" />
+          <View style={z.glassCard}>
+            {birthdays.map(p => {
+              const today = p.days_until === 0;
+              const dtLabel = today ? "Hoje!" : `${p.birth_date.substring(8, 10)}/${p.birth_date.substring(5, 7)}`;
+              const initials = p.full_name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
+              return (
+                <View key={p.id} style={z.bdayRow}>
+                  <View style={[z.bdayAvatar, today && z.bdayAvatarToday]}>
+                    <Text style={[z.bdayInitials, today && z.bdayInitialsToday]}>{initials}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={z.bdayName}>{p.full_name}</Text>
+                    <Text style={z.bdaySub}>{dtLabel}</Text>
+                  </View>
+                  {today && (
+                    <View style={z.bdayTodayBadge}>
+                      <Text style={z.bdayTodayBadgeText}>Hoje!</Text>
+                    </View>
+                  )}
+                  {!today && (
+                    <Text style={z.bdayDays}>em {p.days_until}d</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        </Fragment>
+      ) : null
     ),
 
     financeiro: () => (
@@ -235,6 +278,17 @@ const z = StyleSheet.create({
   procName:    { flex: 1, fontSize: 12, color: DentalColors.ink, fontWeight: "500" },
   procQtd:     { fontSize: 11, color: DentalColors.cyan, fontWeight: "700", minWidth: 30, textAlign: "right" },
   procValue:   { fontSize: 12, color: DentalColors.green, fontWeight: "700", minWidth: 90, textAlign: "right" },
+
+  bdayRow:           { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: DentalColors.border },
+  bdayAvatar:        { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(6,182,212,0.15)", alignItems: "center", justifyContent: "center" },
+  bdayAvatarToday:   { backgroundColor: "rgba(245,158,11,0.2)" },
+  bdayInitials:      { fontSize: 12, fontWeight: "700", color: DentalColors.cyan },
+  bdayInitialsToday: { color: "#F59E0B" },
+  bdayName:          { fontSize: 13, fontWeight: "600", color: DentalColors.ink },
+  bdaySub:           { fontSize: 11, color: DentalColors.ink3, marginTop: 1 },
+  bdayTodayBadge:    { backgroundColor: "rgba(245,158,11,0.15)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  bdayTodayBadgeText:{ fontSize: 10, color: "#F59E0B", fontWeight: "700" },
+  bdayDays:          { fontSize: 11, color: DentalColors.ink3, fontWeight: "600" },
 
   empty:       { fontSize: 12, color: DentalColors.ink3, textAlign: "center", paddingVertical: 16 },
 

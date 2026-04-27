@@ -12,13 +12,7 @@
 // 4. Countdown visual da validade (10min)
 // 5. Botao "Cancelar" expira o token (gera um novo no proximo open)
 //
-// O backend ja faz tudo: WS handler, persistencia, status. Esta tela
-// e UI puramente sobre endpoints existentes.
-//
-// Sobre o QR: a URL de assinatura e publica por design (qualquer um
-// com o link assina, esse e o modelo). Usar api.qrserver.com nao
-// vaza informacao adicional. Em paralelo o dentista pode mandar
-// pelo WhatsApp que ja tem da paciente (Linking.openURL).
+// Item 1 (2026-04-27): Modal centrado (fade, backdrop centralizado com blur web).
 // ============================================================
 
 import { useEffect, useState, useRef } from "react";
@@ -154,9 +148,6 @@ export function SignatureRequestModal({
         setTimeout(() => setCopied(false), 2000);
       });
     } else {
-      // Em RN nativo, depender de Clipboard API. Usuario pode nao ter
-      // expo-clipboard. Fallback: mostra prompt selecionavel (a URL ja
-      // aparece em textInput selecionavel acima).
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -183,13 +174,16 @@ export function SignatureRequestModal({
     tokenMut.mutate();
   }
 
-  // ── Render ──
-
   const expired = secondsLeft === 0 && !signed;
 
+  const backdropWebBlur = Platform.OS === "web" ? {
+    backdropFilter: "blur(4px)",
+    WebkitBackdropFilter: "blur(4px)",
+  } as any : {};
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={s.backdrop}>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <View style={[s.backdrop, backdropWebBlur]}>
         <View style={s.sheet}>
           <View style={s.header}>
             <View style={{ flex: 1 }}>
@@ -326,13 +320,15 @@ export function SignatureRequestModal({
 
 const s = StyleSheet.create({
   backdrop: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end",
+    flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "center", alignItems: "center", padding: 20,
   },
   sheet: {
     backgroundColor: Colors.bg2 || "#0f0f1e",
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderRadius: 20,
+    width: "100%",
+    maxWidth: 480,
     maxHeight: "90%",
-    borderWidth: 1, borderColor: Colors.border, borderBottomWidth: 0,
+    borderWidth: 1, borderColor: Colors.border,
   },
   header: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",

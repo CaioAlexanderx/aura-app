@@ -3,15 +3,15 @@
 // Acoes: Confirmar, Iniciar atendimento, Concluir, Cancelar
 // PATCH /companies/:id/dental/appointments/:aid
 //
-// W1-04: botao "Coletar assinatura" visivel em todos os status
-// nao-terminais (qualquer coisa exceto concluido/cancelado/faltou).
-// Faz sentido pedir TCLE/assinatura na chegada (status agendado),
-// confirmacao (confirmado), aprovado, em avaliacao, ou durante o
-// atendimento. Apos coletar, WS handler do BE transiciona pra
-// concluido automaticamente.
+// Item 1  (2026-04-27): Modal centrado (fade, backdrop escuro centralizado).
+// Item 10 (2026-04-27): Assinatura vinculada ao fim do atendimento.
+//   - "Concluir consulta" abre SignatureRequestModal.
+//   - Se paciente assinar -> BE transiciona pra concluido automaticamente.
+//   - Se fechar sem assinar -> so fecha o drawer, nao conclui.
+//   - Botao avulso "Coletar assinatura" removido.
 // ============================================================
 import { useState } from "react";
-import { Modal, View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { Modal, View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -35,9 +35,6 @@ const STATUS_LABELS: Record<string, string> = {
   faltou: "Faltou",
   confirmado: "Confirmado",
 };
-
-// Status terminais — botao de assinatura nao aparece nesses
-const TERMINAL_STATUSES = new Set(["concluido", "cancelado", "faltou"]);
 
 export function AppointmentDetailModal({ visible, appointmentId, onClose }: Props) {
   const cid = useAuthStore().company?.id;
@@ -64,7 +61,6 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
 
   const appt = (data as any)?.appointment;
   const status = appt?.status || "agendado";
-  const canSign = !TERMINAL_STATUSES.has(status);
 
   function canTransitionTo(target: string): boolean {
     const transitions: Record<string, string[]> = {
@@ -89,10 +85,22 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
     onClose();
   }
 
+  function handleConcluirClick() {
+    // Abre assinatura vinculada ao documento gerado.
+    // Se o paciente assinar -> handleSigned fecha tudo.
+    // Se fechar sem assinar -> apenas fecha a assinatura (nao conclui).
+    setSignatureOpen(true);
+  }
+
+  const backdropWebBlur = Platform.OS === "web" ? {
+    backdropFilter: "blur(4px)",
+    WebkitBackdropFilter: "blur(4px)",
+  } as any : {};
+
   return (
     <>
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View style={s.backdrop}>
+    <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={onClose}>
+      <View style={[s.backdrop, backdropWebBlur]}>
         <View style={s.sheet}>
           <View style={s.header}>
             <View>
@@ -139,47 +147,43 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
             </ScrollView>
           )}
 
-          {/* Acoes conforme status atual */}
           {appt && !isLoading && (
-            <View style={s.footer}>
-              {canTransitionTo("em_atendimento") && (
-                <Pressable onPress={() => statusMut.mutate("em_atendimento")} style={[s.btn, s.btnPrimary]} disabled={statusMut.isPending}>
-                  {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Iniciar atendimento</Text>}
-                </Pressable>
-              )}
-              {/* W1-04: assinatura disponivel em todos status nao-terminais */}
-              {canSign && (
-                <Pressable
-                  onPress={() => setSignatureOpen(true)}
-                  style={[s.btn, s.btnSignature]}
-                  disabled={statusMut.isPending}
-                >
-                  <Icon name="edit" size={14} color="#fff" />
-                  <Text style={s.btnPrimaryText}>Coletar assinatura</Text>
-                </Pressable>
-              )}
+            <View style={s.footerWrap}>
               {canTransitionTo("concluido") && (
-                <Pressable onPress={() => statusMut.mutate("concluido")} style={[s.btn, s.btnSuccess]} disabled={statusMut.isPending}>
-                  {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Concluir consulta</Text>}
-                </Pressable>
+                <View style={s.concludeNote}>
+                  <Icon name="edit" size={12} color={Colors.ink3} />
+                  <Text style={s.concludeNoteText}>A assinatura do paciente sera coletada ao concluir</Text>
+                </View>
               )}
-              {canTransitionTo("cancelado") && (
-                <Pressable onPress={() => statusMut.mutate("cancelado")} style={[s.btn, s.btnDanger]} disabled={statusMut.isPending}>
-                  <Text style={s.btnDangerText}>Cancelar</Text>
-                </Pressable>
-              )}
-              {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && !canSign && (
-                <Pressable onPress={onClose} style={[s.btn, s.btnGhost]}>
-                  <Text style={s.btnGhostText}>Fechar</Text>
-                </Pressable>
-              )}
+              <View style={s.footer}>
+                {canTransitionTo("em_atendimento") && (
+                  <Pressable onPress={() => statusMut.mutate("em_atendimento")} style={[s.btn, s.btnPrimary]} disabled={statusMut.isPending}>
+                    {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Iniciar atendimento</Text>}
+                  </Pressable>
+                )}
+                {canTransitionTo("concluido") && (
+                  <Pressable onPress={handleConcluirClick} style={[s.btn, s.btnSuccess]} disabled={statusMut.isPending}>
+                    <Icon name="edit" size={14} color="#fff" />
+                    <Text style={s.btnPrimaryText}>Concluir + Coletar Assinatura</Text>
+                  </Pressable>
+                )}
+                {canTransitionTo("cancelado") && (
+                  <Pressable onPress={() => statusMut.mutate("cancelado")} style={[s.btn, s.btnDanger]} disabled={statusMut.isPending}>
+                    <Text style={s.btnDangerText}>Cancelar</Text>
+                  </Pressable>
+                )}
+                {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && (
+                  <Pressable onPress={onClose} style={[s.btn, s.btnGhost]}>
+                    <Text style={s.btnGhostText}>Fechar</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           )}
         </View>
       </View>
     </Modal>
 
-    {/* W1-04 overlay — modal de coleta de assinatura */}
     <SignatureRequestModal
       visible={signatureOpen}
       appointmentId={appointmentId}
@@ -202,8 +206,8 @@ function Row({ label, value, highlight }: any) {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: Colors.bg2 || "#0f0f1e", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%", borderWidth: 1, borderColor: Colors.border, borderBottomWidth: 0 },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "center", alignItems: "center", padding: 20 },
+  sheet: { backgroundColor: Colors.bg2 || "#0f0f1e", borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "85%", borderWidth: 1, borderColor: Colors.border },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 12 },
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
   statusPill: { alignSelf: "flex-start", backgroundColor: "rgba(6,182,212,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 6 },
@@ -221,12 +225,14 @@ const s = StyleSheet.create({
   totalLabel: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   totalValue: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
   hint: { fontSize: 12, color: Colors.ink3 },
-  footer: { flexDirection: "row", gap: 8, padding: 16, borderTopWidth: 1, borderTopColor: Colors.border, flexWrap: "wrap" },
+  footerWrap: { borderTopWidth: 1, borderTopColor: Colors.border },
+  concludeNote: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
+  concludeNoteText: { fontSize: 11, color: Colors.ink3 },
+  footer: { flexDirection: "row", gap: 8, padding: 16, flexWrap: "wrap" },
   btn: { flex: 1, minWidth: 120, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   btnPrimary: { backgroundColor: Colors.violet || "#6d28d9" },
   btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   btnSuccess: { backgroundColor: "#10B981" },
-  btnSignature: { backgroundColor: "#06B6D4" },
   btnDanger: { backgroundColor: "transparent", borderWidth: 1, borderColor: "#EF4444" },
   btnDangerText: { color: "#EF4444", fontSize: 13, fontWeight: "600" },
   btnGhost: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
