@@ -7,22 +7,17 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dentalConfigApi, type DentalPractitioner, type DentalChairSettings } from "@/services/dentalConfigApi";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { usePortalTransition } from "@/stores/portalTransition";
 
 // ============================================================
 // AURA. — DentalSettings tab (D-FIX #1 + #6)
 //
 // Card 1: Cadeiras (toggle ativo + dentista alocado por cadeira)
-//         - Plano negocio: 2 cadeiras
-//         - Plano expansao: 4 cadeiras
-//         - 1 sempre ativa minimo
-//
 // Card 2: Dentistas (CRUD com nome, CRO, especialidade, cor)
-//         - Owner cadastrado automaticamente no primeiro acesso
-//         - Owner nao pode ser deletado
 //
-// Card 3: Personalizacao (PR8 — polimento Fase 5)
-//         - Botao reproduzir animacao de boas-vindas
+// PR14 (2026-04-27): card "Personalização" (com botão Reproduzir
+// intro) removido. Feedback do cliente: "não tem porque o
+// profissional querer ver isso". Reset da intro continua disponível
+// via useDentalOnboarding.getState().reset() pra debug.
 // ============================================================
 
 const PRESET_COLORS = [
@@ -41,7 +36,6 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );
 }
 
-// ─── Form de adicao/edicao de dentista ───
 function PractitionerForm({
   initial, onSave, onCancel, saving,
 }: {
@@ -125,16 +119,13 @@ function PractitionerForm({
   );
 }
 
-// ─── Componente principal ───
 export function DentalSettings() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DentalPractitioner | null>(null);
-  const resetPortal = usePortalTransition((s) => s.reset);
 
-  // Settings query
   const { data: settingsData, isLoading: loadingSettings } = useQuery({
     queryKey: ['dental-settings', company?.id],
     queryFn: () => dentalConfigApi.getSettings(company!.id),
@@ -142,7 +133,6 @@ export function DentalSettings() {
     staleTime: 30000,
   });
 
-  // Practitioners query
   const { data: practitionersData, isLoading: loadingPractitioners } = useQuery({
     queryKey: ['dental-practitioners', company?.id],
     queryFn: () => dentalConfigApi.listPractitioners(company!.id),
@@ -155,7 +145,6 @@ export function DentalSettings() {
   const practitioners = practitionersData?.practitioners || [];
   const editingPractitioner = practitioners.find(p => p.id === editingId);
 
-  // Save settings mutation
   const saveSettingsMut = useMutation({
     mutationFn: (newSettings: DentalChairSettings) => dentalConfigApi.saveSettings(company!.id, newSettings),
     onSuccess: () => {
@@ -166,7 +155,6 @@ export function DentalSettings() {
     onError: (err: any) => toast.error(err?.message || 'Erro ao salvar'),
   });
 
-  // Practitioner mutations
   const createMut = useMutation({
     mutationFn: (body: any) => dentalConfigApi.createPractitioner(company!.id, body),
     onSuccess: () => {
@@ -199,7 +187,6 @@ export function DentalSettings() {
     onError: (err: any) => toast.error(err?.data?.error || err?.message || 'Erro ao remover'),
   });
 
-  // Handlers
   function toggleChair(idx: number) {
     if (!settings) return;
     const chairs_active = [...settings.chairs_active];
@@ -209,7 +196,7 @@ export function DentalSettings() {
       return;
     }
     const chair_practitioner_ids = [...settings.chair_practitioner_ids];
-    if (!chairs_active[idx]) chair_practitioner_ids[idx] = null;  // limpa alocacao se desativou
+    if (!chairs_active[idx]) chair_practitioner_ids[idx] = null;
     saveSettingsMut.mutate({ chairs_active, chair_practitioner_ids });
   }
 
@@ -233,11 +220,6 @@ export function DentalSettings() {
   function cancelForm() {
     setShowForm(false);
     setEditingId(null);
-  }
-
-  function handleReplayIntro() {
-    resetPortal();
-    toast.success('A animação de boas-vindas vai aparecer na próxima navegação');
   }
 
   if (loadingSettings || loadingPractitioners) {
@@ -366,33 +348,6 @@ export function DentalSettings() {
         </View>
       </View>
 
-      {/* Card 3: Personalizacao (PR8 — polimento Fase 5) */}
-      <View style={s.card}>
-        <View style={s.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.cardTitle}>Personalização</Text>
-            <Text style={s.cardSub}>
-              Ajustes da experiência visual. Estes controles não afetam dados.
-            </Text>
-          </View>
-        </View>
-
-        <View style={s.replayRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.replayTitle}>Animação de boas-vindas</Text>
-            <Text style={s.replayMeta}>
-              Aquela animação que você viu ao entrar pela primeira vez.
-              Reproduzir agora vai mostrá-la novamente na próxima navegação
-              dentro do shell dental.
-            </Text>
-          </View>
-          <Pressable onPress={handleReplayIntro} style={s.replayBtn}>
-            <Icon name="refresh" size={12} color={Colors.violet3} />
-            <Text style={s.replayBtnText}>Reproduzir intro</Text>
-          </Pressable>
-        </View>
-      </View>
-
       <ConfirmDialog
         visible={!!confirmDelete}
         title="Excluir dentista?"
@@ -412,7 +367,6 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.ink },
   cardSub: { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
 
-  // Cadeiras
   chairRow: { backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   chairHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chairDot: { width: 10, height: 10, borderRadius: 5 },
@@ -425,11 +379,9 @@ const s = StyleSheet.create({
   assignChipDot: { width: 8, height: 8, borderRadius: 4 },
   assignChipText: { fontSize: 11, color: Colors.ink, fontWeight: '500' },
 
-  // Adicionar btn
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   addBtnText: { fontSize: 11, color: '#fff', fontWeight: '700' },
 
-  // Form
   form: { backgroundColor: Colors.bg4, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: Colors.border2, marginBottom: 12 },
   formTitle: { fontSize: 13, fontWeight: '700', color: Colors.ink, marginBottom: 12 },
   formField: { marginBottom: 10 },
@@ -444,7 +396,6 @@ const s = StyleSheet.create({
   saveBtn: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 8, backgroundColor: Colors.violet, minWidth: 100, alignItems: 'center' },
   saveText: { fontSize: 11, color: '#fff', fontWeight: '700' },
 
-  // Practitioner list
   practRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border },
   practDot: { width: 10, height: 10, borderRadius: 5 },
   practName: { fontSize: 13, fontWeight: '600', color: Colors.ink },
@@ -453,13 +404,6 @@ const s = StyleSheet.create({
   ownerBadgeText: { fontSize: 7, color: Colors.violet3, fontWeight: '800', letterSpacing: 0.4 },
   iconBtn: { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: 'center', paddingVertical: 16, fontStyle: 'italic' as any },
-
-  // Personalizacao (PR8)
-  replayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border },
-  replayTitle: { fontSize: 13, fontWeight: '600', color: Colors.ink, marginBottom: 3 },
-  replayMeta: { fontSize: 11, color: Colors.ink3, lineHeight: 15 },
-  replayBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border2, flexShrink: 0 },
-  replayBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: '600' },
 });
 
 export default DentalSettings;
