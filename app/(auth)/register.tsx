@@ -371,7 +371,10 @@ export default function RegisterScreen() {
   if (isWeb) {
     return (
       <div style={{
-        minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden",
+        minHeight: "100vh", width: "100%", position: "relative",
+        // FIX: overflow-x hidden para conter orbs/partículas lateralmente,
+        // mas overflow-y auto permite scroll em viewports pequenas.
+        overflowX: "hidden", overflowY: "auto",
         background: `
           radial-gradient(ellipse at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 55%),
           radial-gradient(ellipse at 80% 70%, rgba(139,92,246,0.10) 0%, transparent 50%),
@@ -412,7 +415,9 @@ export default function RegisterScreen() {
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px", position: "relative", zIndex: 2 } as any}>
+          // FIX: layout narrow agora usa padding vertical em vez de justify-content: center,
+          // para que o card seja acessível mesmo quando maior que a viewport.
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "60px 20px 60px", position: "relative", zIndex: 2 } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
             {card}
           </div>
@@ -421,8 +426,14 @@ export default function RegisterScreen() {
     );
   }
 
+  // FIX: flex:1 garante que o ScrollView ocupa toda a tela no mobile nativo,
+  // permitindo scroll quando o teclado abre ou o conteúdo ultrapassa a viewport.
   return (
-    <ScrollView contentContainerStyle={s.mobileContainer}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={s.mobileContainer}
+      keyboardShouldPersistTaps="handled"
+    >
       <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY }], width: "100%", alignItems: "center" }}>
         {card}
       </Animated.View>
