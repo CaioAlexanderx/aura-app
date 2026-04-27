@@ -1,7 +1,13 @@
 // ============================================================
 // AURA. — Odonto Admin Tab Wrappers (operational)
-// OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab, AgendaOnlineTab
+// OrçamentosTab, ConvêniosTab, CheckinTab, EsperaTab, AgendaOnlineTab
 // Extracted from OdontoTabWrappers.tsx
+//
+// PR20 (2026-04-27):
+// - Novo orçamento (Caixa) agora vai pra /dental/(clinic)/tratamentos
+//   (rota /pdv não existe no shell dental, fallback caía no Dashboard)
+// - AgendaOnlineTab ganhou updateConfigMut pra salvar mudanças do form
+// - Acentuação corrigida em strings UI
 // ============================================================
 import { useMemo } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, Alert, Platform } from "react-native";
@@ -21,19 +27,19 @@ import { AgendaOnline, type BookingConfig as AOConfig, type BookingRequest as AO
 function useCompanyId() { return useAuthStore().company?.id; }
 function Loader() { return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>; }
 
-// D-FIX #5: CTA reutilizavel pra criar orcamento pelo Caixa.
-// Redireciona pra aba /pdv onde o dentista adiciona produtos/procedimentos
-// ao carrinho e clica em "Orcamento" pra gerar o PDF.
+// CTA reutilizavel pra criar orçamento. PR20: era /pdv (rota
+// inexistente no shell dental → fallback Dashboard). Agora vai
+// pra /dental/(clinic)/tratamentos onde dentista monta o plano.
 function NovoOrcamentoCTA() {
   return (
-    <Pressable onPress={function() { router.push("/pdv"); }} style={z.ctaBtn}>
+    <Pressable onPress={function() { router.push("/dental/(clinic)/tratamentos" as any); }} style={z.ctaBtn}>
       <Icon name="file_text" size={14} color="#fff" />
-      <Text style={z.ctaText}>Novo orcamento (Caixa)</Text>
+      <Text style={z.ctaText}>Novo orçamento</Text>
     </Pressable>
   );
 }
 
-export function OrcamentosTab() {
+export function OrçamentosTab() {
   var cid = useCompanyId();
   var { data, isLoading } = useQuery({
     queryKey: ["dental-treatment-plans", cid],
@@ -46,19 +52,19 @@ export function OrcamentosTab() {
     return (
       <View style={z.empty}>
         <Icon name="file_text" size={24} color={Colors.ink3} />
-        <Text style={z.emptyText}>Nenhum orcamento criado</Text>
-        <Text style={z.hintText}>Crie orcamentos pelo Caixa ou pelas abas Pacientes / Odontograma.</Text>
+        <Text style={z.emptyText}>Nenhum orçamento criado</Text>
+        <Text style={z.hintText}>Crie orçamentos pela aba Tratamentos ou pelo Hub do paciente.</Text>
         <View style={{ marginTop: 12 }}><NovoOrcamentoCTA /></View>
       </View>
     );
   }
   var funnelData = plans.map(function(p: any) {
-    return { id: p.id, patient_name: p.patient_name || "", title: p.title || "Orcamento", total_amount: parseFloat(p.total_amount) || 0, status: p.status || "pending", items_done: parseInt(p.items_done) || 0, items_total: parseInt(p.items_total) || 0, created_at: p.created_at };
+    return { id: p.id, patient_name: p.patient_name || "", title: p.title || "Orçamento", total_amount: parseFloat(p.total_amount) || 0, status: p.status || "pending", items_done: parseInt(p.items_done) || 0, items_total: parseInt(p.items_total) || 0, created_at: p.created_at };
   });
   return (
     <View style={{ gap: 12 }}>
       <View style={z.headerRow}>
-        <Text style={z.headerTitle}>{plans.length} orcamento{plans.length > 1 ? "s" : ""}</Text>
+        <Text style={z.headerTitle}>{plans.length} orçamento{plans.length > 1 ? "s" : ""}</Text>
         <NovoOrcamentoCTA />
       </View>
       <OrcamentoFunnel plans={funnelData} />
@@ -66,7 +72,7 @@ export function OrcamentosTab() {
   );
 }
 
-export function ConveniosTab() {
+export function ConvêniosTab() {
   var cid = useCompanyId();
   var { data, isLoading } = useQuery({
     queryKey: ["dental-insurance", cid],
@@ -79,9 +85,6 @@ export function ConveniosTab() {
     enabled: !!cid, staleTime: 60000,
   });
   if (isLoading) return <Loader />;
-  // BUG #8 fix: backend retorna { insurance: rows } (singular), frontend
-  // estava lendo `insurances` (plural) -> sempre vazio -> tela em branco.
-  // Tambem aceita `insurances` por compatibilidade caso o backend mude.
   var insurances = ((data as any)?.insurance) || ((data as any)?.insurances) || [];
   var tissList = ((guides as any)?.guides) || [];
 
@@ -89,8 +92,8 @@ export function ConveniosTab() {
     return (
       <View style={z.empty}>
         <Icon name="shield" size={24} color={Colors.ink3} />
-        <Text style={z.emptyText}>Nenhum convenio cadastrado</Text>
-        <Text style={z.hintText}>Cadastre convenios e tabelas TUSS para faturamento via planos de saude.</Text>
+        <Text style={z.emptyText}>Nenhum convênio cadastrado</Text>
+        <Text style={z.hintText}>Cadastre convênios e tabelas TUSS para faturamento via planos de saúde.</Text>
       </View>
     );
   }
@@ -128,24 +131,7 @@ export function EsperaTab() {
 }
 
 // ────────────────────────────────────────────────────────────
-// AgendaOnlineTab (W1-03)
-// ────────────────────────────────────────────────────────────
-//
-// Conecta o componente AgendaOnline.tsx aos endpoints do
-// dentalBookingAdmin.js. Faz toda a normalizacao necessaria:
-//
-// - Backend usa status pendente|aprovado|rejeitado
-//   FE original espera pendente|confirmado|recusado
-//   -> map nos dois sentidos
-//
-// - bookingUrl montado a partir de window.location.origin no web
-//   ou fallback https://app.getaura.com.br no nativo
-//
-// - Toggle ativar/desativar = PUT { is_active }
-// - Convert = POST /booking/requests/:rid/convert (sem body extra,
-//   backend usa preferred_date+time da propria request, duration
-//   default 60min, sem practitioner_id)
-// - Reject = POST /booking/requests/:rid/reject
+// AgendaOnlineTab (W1-03 + PR20 update)
 // ────────────────────────────────────────────────────────────
 
 function buildBookingUrl(slug?: string | null): string | undefined {
@@ -156,7 +142,6 @@ function buildBookingUrl(slug?: string | null): string | undefined {
   return `https://app.getaura.com.br/dental/book/${slug}`;
 }
 
-// Backend status -> componente status
 function mapReqStatus(beStatus: string): 'pendente' | 'confirmado' | 'recusado' {
   if (beStatus === 'aprovado') return 'confirmado';
   if (beStatus === 'rejeitado') return 'recusado';
@@ -167,25 +152,22 @@ export function AgendaOnlineTab() {
   var cid = useCompanyId();
   var qc = useQueryClient();
 
-  // Config (cria default no GET se nao existir)
   var { data: configData, isLoading: loadingConfig } = useQuery({
     queryKey: ["dental-booking-config", cid],
     queryFn: function() { return request("/companies/" + cid + "/dental/booking/config"); },
     enabled: !!cid, staleTime: 60000,
   });
 
-  // Requests (todos os status, ordenados pendentes primeiro)
   var { data: reqsData, isLoading: loadingReqs } = useQuery({
     queryKey: ["dental-booking-requests", cid],
     queryFn: function() { return request("/companies/" + cid + "/dental/booking/requests"); },
     enabled: !!cid, staleTime: 15000,
-    refetchInterval: 30000,  // polling a cada 30s pra trazer requests novos
+    refetchInterval: 30000,
   });
 
   var configRaw = (configData as any)?.config;
   var requestsRaw = ((reqsData as any)?.requests) || [];
 
-  // Normaliza config pro shape do componente AgendaOnline
   var config: AOConfig | null = useMemo(function() {
     if (!configRaw) return null;
     return {
@@ -202,7 +184,6 @@ export function AgendaOnlineTab() {
     };
   }, [configRaw]);
 
-  // Normaliza requests pro shape do componente
   var requests: AOReq[] = useMemo(function() {
     return requestsRaw.map(function(r: any) {
       return {
@@ -221,7 +202,6 @@ export function AgendaOnlineTab() {
 
   var bookingUrl = buildBookingUrl(config?.slug);
 
-  // ── Mutations ──
   var toggleActiveMut = useMutation({
     mutationFn: function(active: boolean) {
       return request("/companies/" + cid + "/dental/booking/config", {
@@ -232,7 +212,21 @@ export function AgendaOnlineTab() {
       qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Nao foi possivel atualizar o status.");
+      Alert.alert("Erro", err?.message || "Não foi possível atualizar o status.");
+    },
+  });
+
+  var updateConfigMut = useMutation({
+    mutationFn: function(patch: Partial<AOConfig>) {
+      return request("/companies/" + cid + "/dental/booking/config", {
+        method: "PUT", body: patch,
+      });
+    },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });
+    },
+    onError: function(err: any) {
+      Alert.alert("Erro", err?.message || "Não foi possível salvar a configuração.");
     },
   });
 
@@ -243,13 +237,13 @@ export function AgendaOnlineTab() {
       });
     },
     onSuccess: function() {
-      Alert.alert("Confirmado", "Solicitacao convertida em agendamento. Veja na aba Agenda.");
+      Alert.alert("Confirmado", "Solicitação convertida em agendamento. Veja na aba Agenda.");
       qc.invalidateQueries({ queryKey: ["dental-booking-requests", cid] });
-      qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });  // booked_slots muda
-      qc.invalidateQueries({ queryKey: ["dental-agenda"] });  // agenda da aba Agenda
+      qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });
+      qc.invalidateQueries({ queryKey: ["dental-agenda"] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Nao foi possivel converter a solicitacao.");
+      Alert.alert("Erro", err?.message || "Não foi possível converter a solicitação.");
     },
   });
 
@@ -263,17 +257,16 @@ export function AgendaOnlineTab() {
       qc.invalidateQueries({ queryKey: ["dental-booking-requests", cid] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Nao foi possivel recusar a solicitacao.");
+      Alert.alert("Erro", err?.message || "Não foi possível recusar a solicitação.");
     },
   });
 
   if (loadingConfig || loadingReqs) return <Loader />;
 
-  // Confirmacao antes de converter (cria appointment + paciente, irreversivel)
   function handleConfirm(requestId: string) {
     Alert.alert(
       "Confirmar agendamento?",
-      "Isso vai criar um agendamento na agenda e cadastrar o paciente (se ainda nao existir). Voce pode editar depois pela aba Agenda.",
+      "Isso vai criar um agendamento na agenda e cadastrar o paciente (se ainda não existir). Você pode editar depois pela aba Agenda.",
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Confirmar", onPress: function() { convertMut.mutate(requestId); } },
@@ -283,8 +276,8 @@ export function AgendaOnlineTab() {
 
   function handleReject(requestId: string) {
     Alert.alert(
-      "Recusar solicitacao?",
-      "Esta acao e irreversivel. O paciente nao sera notificado automaticamente.",
+      "Recusar solicitação?",
+      "Esta ação é irreversível. O paciente não será notificado automaticamente.",
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Recusar", style: "destructive", onPress: function() { rejectMut.mutate(requestId); } },
@@ -297,7 +290,9 @@ export function AgendaOnlineTab() {
       config={config}
       requests={requests}
       bookingUrl={bookingUrl}
+      saving={updateConfigMut.isPending}
       onToggleActive={function(active) { toggleActiveMut.mutate(active); }}
+      onUpdateConfig={function(patch: Partial<AOConfig>) { updateConfigMut.mutate(patch); }}
       onConfirmRequest={handleConfirm}
       onRejectRequest={handleReject}
     />
