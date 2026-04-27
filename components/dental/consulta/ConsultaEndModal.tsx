@@ -9,6 +9,9 @@
 //      - chart entries ja foram persistidos via popover; aqui so
 //        confirma o appointment.
 //   3. Sucesso → toast + chama onDone (que faz router.back()).
+//
+// PR19: Botao "Gerar resumo com IA" (intent=summarize) preenche
+// o campo de procedimento com texto clinico estruturado.
 // ============================================================
 
 import { useState } from "react";
@@ -18,14 +21,17 @@ import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { DentalColors } from "@/constants/dental-tokens";
+import { useAiAccess } from "@/hooks/useAiAccess";
+import { useDentalAiConsulta } from "@/hooks/useDentalAiConsulta";
 import type { ToothChange, VoiceSegment } from "@/lib/dentalConsultaTypes";
 
 interface Props {
   open: boolean;
   appointmentId: string | null;
+  patientId: string | null;
   toothChanges: ToothChange[];
   transcript: VoiceSegment[];
-  procedureSeed: string; // ex: chief_complaint
+  procedureSeed: string;
   patientName?: string;
   onClose: () => void;
   onDone: () => void;
@@ -45,11 +51,14 @@ function buildTranscriptSummary(segments: VoiceSegment[]): string {
 }
 
 export function ConsultaEndModal({
-  open, appointmentId, toothChanges, transcript,
+  open, appointmentId, patientId, toothChanges, transcript,
   procedureSeed, patientName, onClose, onDone,
 }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
+
+  const access = useAiAccess();
+  const summarizeMut = useDentalAiConsulta();
 
   const [evolution, setEvolution] = useState(
     procedureSeed ? `Procedimento: ${procedureSeed}.\n\nSem intercorrencias. Paciente respondeu bem.` : "Procedimento realizado conforme planejado. Sem intercorrencias.",
@@ -59,6 +68,33 @@ export function ConsultaEndModal({
   const [whatsappDraft, setWhatsappDraft] = useState(
     `Ola${patientName ? " " + patientName.split(/\s+/)[0] : ""}! Sua consulta foi concluida. Qualquer duvida ou desconforto, entre em contato. Bom dia!`,
   );
+
+  function handleSummarize() {
+    if (!appointmentId || !patientId || !access.canUseAi) return;
+    summarizeMut.mutate(
+      {
+        intent: "summarize",
+        appointmentId,
+        patientId,
+        context: {
+          transcripts: transcript.map((s) => s.text),
+          toothChanges: toothChanges.map((c) => ({
+            tooth_number: c.tooth_number,
+            prev_status: c.prev_status || null,
+            status: c.status,
+            notes: c.notes || null,
+          })),
+        },
+      },
+      {
+        onSuccess: (res) => {
+          setEvolution(res.text);
+          toast.success("Resumo gerado pela IA · " + res.tokens_in + "+" + res.tokens_out + " tokens");
+        },
+        onError: (e: any) => toast.error(e?.data?.error || "Erro ao gerar resumo"),
+      }
+    );
+  }
 
   const saveMut = useMutation({
     mutationFn: () => {
@@ -99,6 +135,27 @@ export function ConsultaEndModal({
 
           <ScrollView style={{ maxHeight: 460 }}>
             <SummaryCard title="📋 Procedimento realizado">
+              {access.canUseAi ? (
+                <Pressable
+                  onPress={handleSummarize}
+                  disabled={summarizeMut.isPending}
+                  style={{
+                    alignSelf: "flex-start", marginBottom: 8,
+                    backgroundColor: "rgba(124,58,237,0.12)",
+                    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
+                    borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5,
+                    flexDirection: "row", alignItems: "center", gap: 6,
+                  }}>
+                  {summarizeMut.isPending ? (
+                    <ActivityIndicator size="small" color={DentalColors.violet} />
+                  ) : (
+                    <Text style={{ fontSize: 11 }}>✨</Text>
+                  )}
+                  <Text style={{ color: DentalColors.violet, fontSize: 10, fontWeight: "700" }}>
+                    {summarizeMut.isPending ? "Gerando..." : "Gerar resumo com IA"}
+                  </Text>
+                </Pressable>
+              ) : null}
               <TextInput
                 value={evolution} onChangeText={setEvolution}
                 multiline placeholderTextColor={DentalColors.ink3}
