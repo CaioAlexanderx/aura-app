@@ -8,30 +8,33 @@ import { DentalColors } from "@/constants/dental-tokens";
 import { MarkTissGuidePaidModal, type PendingTissGuide } from "@/components/dental/MarkTissGuidePaidModal";
 
 // ============================================================
-// TissReconcilePanel — lista guias TISS pendentes de reconciliacao
-// (status enviada/autorizada/pendente_auth) e permite marcar paga.
+// TissReconcilePanel — lista guias TISS pendentes de reconciliação
+// (status enviada/autorizada/paga_parcial) e permite marcar paga.
 //
-// Renderizado como tab "Reconciliar TISS" em
-// app/dental/(clinic)/faturamento.tsx.
+// PR20 (2026-04-27): pendente_auth removido (não existe no enum
+// dental_tiss_guide_status, causava 500). Substituído por
+// paga_parcial. retry: false no useQuery pra parar loop em erro.
 //
 // Modal MarkTissGuidePaidModal cuida do fluxo de pagamento.
 // Trigger 067 cria transaction (receita_tiss) automaticamente.
 // ============================================================
 
-type StatusFilter = "autorizada" | "enviada" | "pendente_auth" | "all_pending";
+type StatusFilter = "autorizada" | "enviada" | "paga_parcial" | "all_pending";
 
 const STATUS_OPTS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
   { value: "autorizada",    label: "Autorizadas" },
   { value: "enviada",       label: "Enviadas" },
-  { value: "pendente_auth", label: "Pendentes auth" },
+  { value: "paga_parcial",  label: "Pagas parcial" },
   { value: "all_pending",   label: "Todas pendentes" },
 ];
 
 const STATUS_BADGE_META: Record<string, { color: string; bg: string; label: string }> = {
   autorizada:    { color: "#10B981", bg: "rgba(16,185,129,0.14)", label: "Autorizada" },
   enviada:       { color: "#06B6D4", bg: "rgba(6,182,212,0.14)",  label: "Enviada" },
-  pendente_auth: { color: "#F59E0B", bg: "rgba(245,158,11,0.14)", label: "Pendente auth" },
+  paga_parcial:  { color: "#F59E0B", bg: "rgba(245,158,11,0.14)", label: "Paga parcial" },
   rascunho:      { color: "#9CA3AF", bg: "rgba(156,163,175,0.14)", label: "Rascunho" },
+  negada:        { color: "#EF4444", bg: "rgba(239,68,68,0.14)",  label: "Negada" },
+  paga:          { color: "#10B981", bg: "rgba(16,185,129,0.14)", label: "Paga" },
 };
 
 function fmtBRL(n: number): string {
@@ -49,16 +52,18 @@ export function TissReconcilePanel() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["tiss-guides-pending", cid, filter],
     queryFn: () => request<{ guides: any[]; stats: any[] }>(
-      `/companies/${cid}/dental/tiss/guides${queryStatusParam}`
+      `/companies/${cid}/dental/tiss/guides${queryStatusParam}`,
+      { retry: 0 }
     ),
     enabled: !!cid,
     staleTime: 30000,
+    retry: false,
   });
 
   const allGuides = data?.guides || [];
   const guides = filter === "all_pending"
     ? allGuides.filter((g: any) =>
-        ["autorizada", "enviada", "pendente_auth"].includes(g.status))
+        ["autorizada", "enviada", "paga_parcial"].includes(g.status))
     : allGuides;
 
   return (

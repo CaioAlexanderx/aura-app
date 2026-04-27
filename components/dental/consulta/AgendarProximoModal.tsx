@@ -4,8 +4,11 @@
 // Le agenda dos proximos 14 dias via:
 //   GET /companies/:cid/dental/agenda?start=ISO&end=ISO
 //
-// Computa slots livres CLIENT-SIDE baseado em janela default
-// (08:00-18:00, slots de 30min) excluindo agendamentos confirmados.
+// PR20 (2026-04-27): janela horária dinâmica vinda de
+//   GET /companies/:cid/dental/booking/config (start_hour, end_hour,
+//   slot_duration_min, available_days). Antes era hardcoded 8-18.
+//   Suporta janela 0-24h e qualquer combinação de dias da semana.
+//
 // Quando dentista escolhe slot e confirma, cria appointment via:
 //   POST /companies/:cid/dental/appointments
 // ============================================================
@@ -37,20 +40,34 @@ interface Props {
   onScheduled?: (appointmentId: string) => void;
 }
 
-const SLOT_MIN = 30;
-const DAY_START_H = 8;
-const DAY_END_H = 18;
 const DAYS_AHEAD = 14;
 
 interface DaySlots {
-  iso: string;       // YYYY-MM-DD
-  label: string;     // "qua, 30/abr"
-  weekday: number;   // 0-6
-  free: string[];    // ISO strings
+  iso: string;
+  label: string;
+  weekday: number;
+  free: string[];
   used: number;
 }
 
-function buildDays(now: Date, busy: BusyAppt[], practitionerId?: string | null): DaySlots[] {
+interface BookingConfigLite {
+  start_hour: number;
+  end_hour: number;
+  slot_duration_min: number;
+  available_days: number[];
+}
+
+function buildDays(
+  now: Date,
+  busy: BusyAppt[],
+  practitionerId?: string | null,
+  cfg?: BookingConfigLite,
+): DaySlots[] {
+  const startH = cfg?.start_hour ?? 8;
+  const endH = cfg?.end_hour ?? 18;
+  const slotMin = cfg?.slot_duration_min || 30;
+  const allowedDays = new Set(cfg?.available_days || [1, 2, 3, 4, 5, 6]); // default seg-sáb
+
   const out: DaySlots[] = [];
   const busyByDay: Record<string, Array<{ start: number; end: number }>> = {};
   for (const a of busy) {
@@ -59,25 +76,25 @@ function buildDays(now: Date, busy: BusyAppt[], practitionerId?: string | null):
     const d = new Date(a.scheduled_at);
     const key = d.toISOString().slice(0, 10);
     const start = d.getTime();
-    const end = start + (a.duration_min || 30) * 60 * 1000;
+    const end = start + (a.duration_min || slotMin) * 60 * 1000;
     (busyByDay[key] = busyByDay[key] || []).push({ start, end });
   }
 
   for (let i = 1; i <= DAYS_AHEAD; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    if (d.getDay() === 0) continue; // pula domingo
+    if (!allowedDays.has(d.getDay())) continue;
     const key = d.toISOString().slice(0, 10);
     const free: string[] = [];
     const dayBusy = busyByDay[key] || [];
-    for (let h = DAY_START_H; h < DAY_END_H; h++) {
-      for (let m = 0; m < 60; m += SLOT_MIN) {
+    for (let h = startH; h < endH; h++) {
+      for (let m = 0; m < 60; m += slotMin) {
         const slot = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0);
         const ts = slot.getTime();
-        const conflict = dayBusy.some((b) => ts < b.end && ts + SLOT_MIN * 60 * 1000 > b.start);
+        const conflict = dayBusy.some((b) => ts < b.end && ts + slotMin * 60 * 1000 > b.start);
         if (!conflict) free.push(slot.toISOString());
       }
     }
-    const wkLabel = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"][d.getDay()];
+    const wkLabel = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][d.getDay()];
     out.push({
       iso: key,
       label: `${wkLabel}, ${String(d.getDate()).padStart(2, "0")}/${d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}`,
@@ -116,11 +133,22 @@ export function AgendarProximoModal({
     staleTime: 30000,
   });
 
-  const days = useMemo(() => buildDays(new Date(), data?.appointments || [], practitionerId), [data, practitionerId]);
+  const { data: cfgData } = useQuery({
+    queryKey: ["dental-booking-config", cid],
+    queryFn: () => request<{ config: BookingConfigLite }>(`/companies/${cid}/dental/booking/config`),
+    enabled: !!cid && open,
+    staleTime: 60000,
+  });
+  const bookingCfg: BookingConfigLite | undefined = (cfgData as any)?.config;
+
+  const days = useMemo(
+    () => buildDays(new Date(), data?.appointments || [], practitionerId, bookingCfg),
+    [data, practitionerId, bookingCfg]
+  );
 
   const confirmMut = useMutation({
     mutationFn: () => {
-      if (!selectedSlot) throw new Error("Escolha um horario");
+      if (!selectedSlot) throw new Error("Escolha um horário");
       return request<{ appointment: { id: string } }>(`/companies/${cid}/dental/appointments`, {
         method: "POST",
         body: {
@@ -159,15 +187,15 @@ export function AgendarProximoModal({
           maxHeight: "90%", padding: 18,
         }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
-            📅 Agendar proxima consulta
+            📅 Agendar próxima consulta
           </Text>
           <Text style={{ fontSize: 11, color: DentalColors.ink3, marginBottom: 14 }}>
-            Selecione dia e horario livre. Janela 08h-18h, slots de 30min.
+            {`Selecione dia e horário livre. Janela ${bookingCfg?.start_hour ?? 8}h-${bookingCfg?.end_hour ?? 18}h, slots de ${bookingCfg?.slot_duration_min || 30}min.`}
           </Text>
 
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 9, color: DentalColors.ink3, marginBottom: 4, fontWeight: "700", letterSpacing: 1 }}>DURACAO (MIN)</Text>
+              <Text style={{ fontSize: 9, color: DentalColors.ink3, marginBottom: 4, fontWeight: "700", letterSpacing: 1 }}>DURAÇÃO (MIN)</Text>
               <TextInput
                 value={duration} onChangeText={setDuration}
                 keyboardType="numeric" placeholder="60"
@@ -179,7 +207,7 @@ export function AgendarProximoModal({
               <Text style={{ fontSize: 9, color: DentalColors.ink3, marginBottom: 4, fontWeight: "700", letterSpacing: 1 }}>QUEIXA / PROCEDIMENTO</Text>
               <TextInput
                 value={complaint} onChangeText={setComplaint}
-                placeholder="Ex: Restauracao 13 mesial"
+                placeholder="Ex: Restauração 13 mesial"
                 placeholderTextColor={DentalColors.ink3}
                 style={inputStyle}
               />
@@ -197,7 +225,7 @@ export function AgendarProximoModal({
                     <Text style={{ fontSize: 9, color: DentalColors.ink3 }}>· {d.free.length} slots livres · {d.used} ocupado(s)</Text>
                   </View>
                   {d.free.length === 0 ? (
-                    <Text style={{ fontSize: 10, color: DentalColors.ink3, fontStyle: "italic" }}>Sem horarios livres</Text>
+                    <Text style={{ fontSize: 10, color: DentalColors.ink3, fontStyle: "italic" }}>Sem horários livres</Text>
                   ) : (
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>
                       {d.free.map((iso) => {

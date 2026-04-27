@@ -8,7 +8,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 // DentalMBar — Bottom navigation bar do shell Aura Odonto
 // para telas estreitas (mobile web e native).
 //
-// 4 tabs fixas (Hoje/Agenda/Pacientes/Atendimento) escolhidas
+// 4 tabs fixas (Geral/Agenda/Pacientes/Atendimento) escolhidas
 // pelo criterio "operacao do dia-a-dia". As outras 5 areas vivem
 // no overlay "Mais".
 //
@@ -25,7 +25,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 interface MTabItem { route: string; label: string; icon: string; }
 
 const FIXED_TABS: MTabItem[] = [
-  { route: "/dental/(clinic)/hoje",        label: "Hoje",        icon: "clock" },
+  { route: "/dental/(clinic)/hoje",        label: "Geral",       icon: "clock" },
   { route: "/dental/(clinic)/agenda",      label: "Agenda",      icon: "calendar" },
   { route: "/dental/(clinic)/pacientes",   label: "Pacientes",   icon: "users" },
   { route: "/dental/(clinic)/atendimento", label: "Atendim.",    icon: "tooth" },
@@ -35,8 +35,8 @@ const MORE_ITEMS: MTabItem[] = [
   { route: "/dental/(clinic)/tratamentos", label: "Tratamentos", icon: "clipboard" },
   { route: "/dental/(clinic)/faturamento", label: "Faturamento", icon: "wallet" },
   { route: "/dental/(clinic)/materiais",   label: "Materiais",   icon: "package" },
-  { route: "/dental/(clinic)/comunicacao", label: "Comunicacao", icon: "message" },
-  { route: "/dental/(clinic)/clinica",     label: "Clinica",     icon: "settings" },
+  { route: "/dental/(clinic)/comunicacao", label: "Comunicação", icon: "message" },
+  { route: "/dental/(clinic)/clinica",     label: "Clínica",     icon: "settings" },
 ];
 
 function routeMatches(pathname: string, route: string): boolean {

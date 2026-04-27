@@ -9,7 +9,7 @@ import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
 //
 // Substitui o sidebar generico de (tabs)/_layout quando o usuario
 // navega sob /dental/(clinic)/. Mostra apenas as 8 areas dentais
-// (Operacao + Negocio) + Configuracoes.
+// (Operação + Negocio) + Configurações.
 //
 // FONTE UNICA: modulos genericos do Aura (PDV/Cupons/NF-e/Folha/
 // Contabilidade/Canal/Agentes) NAO aparecem aqui. Usuario que
@@ -19,26 +19,28 @@ import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
 // PR9 (2026-04-26): cada item de navegacao agora tem atributo
 // data-tour (web only) pra ser localizavel pelo SpotlightTour
 // do onboarding wizard.
+//
+// PR20 (2026-04-27): "Hoje" renomeado para "Visão geral".
 // ============================================================
 
 interface DentalNavItem { route: string; label: string; icon: string; tourKey: string; }
 interface DentalNavSection { label: string; items: DentalNavItem[]; }
 
 const DENTAL_NAV: DentalNavSection[] = [
-  { label: "Operacao", items: [
-    { route: "/dental/(clinic)/hoje",        label: "Hoje",        icon: "clock",     tourKey: "hoje" },
+  { label: "Operação", items: [
+    { route: "/dental/(clinic)/hoje",        label: "Visão geral", icon: "clock",     tourKey: "hoje" },
     { route: "/dental/(clinic)/pacientes",   label: "Pacientes",   icon: "users",     tourKey: "pacientes" },
     { route: "/dental/(clinic)/atendimento", label: "Atendimento", icon: "tooth",     tourKey: "atendimento" },
     { route: "/dental/(clinic)/agenda",      label: "Agenda",      icon: "calendar",  tourKey: "agenda" },
     { route: "/dental/(clinic)/tratamentos", label: "Tratamentos", icon: "clipboard", tourKey: "tratamentos" },
   ]},
-  { label: "Negocio", items: [
+  { label: "Negócio", items: [
     { route: "/dental/(clinic)/faturamento", label: "Faturamento", icon: "wallet",   tourKey: "faturamento" },
     { route: "/dental/(clinic)/materiais",   label: "Materiais",   icon: "package",  tourKey: "materiais" },
-    { route: "/dental/(clinic)/comunicacao", label: "Comunicacao", icon: "message",  tourKey: "comunicacao" },
+    { route: "/dental/(clinic)/comunicacao", label: "Comunicação", icon: "message",  tourKey: "comunicacao" },
   ]},
-  { label: "Configuracoes", items: [
-    { route: "/dental/(clinic)/clinica",     label: "Clinica",     icon: "settings", tourKey: "clinica" },
+  { label: "Configurações", items: [
+    { route: "/dental/(clinic)/clinica",     label: "Clínica",     icon: "settings", tourKey: "clinica" },
   ]},
 ];
 
@@ -173,9 +175,9 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               </View>
             </View>
             <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
-              {...(Platform.OS === "web" ? { title: "Acessar modulos genericos do Aura Negocio" } : {})}>
+              {...(Platform.OS === "web" ? { title: "Acessar módulos genéricos do Aura Negócio" } : {})}>
               <Icon name="grid" size={12} color={DentalColors.ink3} />
-              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Aura Negocio</Text>
+              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Aura Negócio</Text>
             </Pressable>
             <Pressable onPress={logout} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}>
               <Icon name="logout" size={12} color={DentalColors.ink3} />
@@ -189,7 +191,7 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>{(user?.name || "A").charAt(0).toUpperCase()}</Text>
             </View>
             <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
-              {...(Platform.OS === "web" ? { title: "Aura Negocio" } : {})}>
+              {...(Platform.OS === "web" ? { title: "Aura Negócio" } : {})}>
               <Icon name="grid" size={13} color={DentalColors.ink3} />
             </Pressable>
             <Pressable onPress={logout} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
