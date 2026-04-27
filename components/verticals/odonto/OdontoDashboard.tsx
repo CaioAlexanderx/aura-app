@@ -1,20 +1,20 @@
 import { Fragment, ReactNode } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
-import { Colors } from "@/constants/colors";
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Platform } from "react-native";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { Icon } from "@/components/Icon";
+import { DentalColors } from "@/constants/dental-tokens";
+import { DentalKpiCard } from "@/components/dental/DentalKpiCard";
+import { DentalSectionHeader } from "@/components/dental/DentalSectionHeader";
 
 // ============================================================
 // AURA. — OdontoDashboard
 //
-// Consome GET /dental/dashboard (endpoint agregado do BE):
-// 10 KPIs em UM request, status PT-BR, TZ SP, D-UNIFY ok.
-//
-// Aceita sectionsOrder (opcional) para reordenar as 6 secoes
-// por persona (PR4 — Fase 3, 2026-04-26). Sem prop = ordem
-// historica preservada.
+// Consome GET /dental/dashboard (endpoint agregado do BE).
+// Aceita sectionsOrder pra reordenar por persona (PR4).
+// PR16 (2026-04-27): KPI cards e section headers tokenizados
+// com DentalColors, padrao visual rico do shell negocio.
 // ============================================================
 
 const fmt = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -39,17 +39,9 @@ interface Props {
   hideTitle?: boolean;
 }
 
-function KpiCard({ value, label, color, icon, sublabel }: { value: string; label: string; color: string; icon: string; sublabel?: string }) {
-  return (
-    <View style={z.kpi}>
-      <View style={[z.kpiIcon, { backgroundColor: color + "18" }]}>
-        <Icon name={icon as any} size={14} color={color} />
-      </View>
-      <Text style={[z.kpiValue, { color }]}>{value}</Text>
-      <Text style={z.kpiLabel}>{label}</Text>
-      {sublabel && <Text style={z.kpiSub}>{sublabel}</Text>}
-    </View>
-  );
+function currentMonthChip(): string {
+  const m = new Date().toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
+  return m;
 }
 
 export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = false }: Props = {}) {
@@ -83,36 +75,31 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
     : 0;
 
   if (isLoading) {
-    return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>;
+    return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={DentalColors.cyan} /></View>;
   }
 
   if (error) {
     return (
       <View style={z.errorBox}>
-        <Icon name="alert" size={16} color={Colors.red} />
+        <Icon name="alert" size={16} color={DentalColors.red} />
         <Text style={z.errorText}>Nao foi possivel carregar o dashboard odonto. Tente recarregar a pagina.</Text>
       </View>
     );
   }
 
-  // ============================================================
-  // SECTIONS — cada chave renderiza um bloco. Ordem definida via
-  // prop sectionsOrder permite que o consumidor (ex: hoje.tsx) reorder
-  // por persona sem que o dashboard precise saber sobre persona.
-  // ============================================================
   const SECTIONS: Record<SectionKey, () => ReactNode> = {
     agenda: () => (
       <Fragment>
-        <Text style={z.section}>Agenda</Text>
+        <DentalSectionHeader title="Agenda" chip="Hoje" />
         <View style={z.row}>
-          <KpiCard value={String(hoje.total || 0)} label="Consultas hoje" color="#06B6D4" icon="calendar"
+          <DentalKpiCard value={String(hoje.total || 0)} label="Consultas hoje" color={DentalColors.cyan} icon="calendar"
             sublabel={hoje.confirmados > 0 ? `${hoje.confirmados} confirmadas` : undefined} />
-          <KpiCard value={String(hoje.pendentes || 0)} label="A confirmar" color="#F59E0B" icon="clock" />
-          <KpiCard value={String(hoje.concluidos || 0)} label="Concluidas" color={Colors.green || "#10B981"} icon="check" />
-          <KpiCard value={String(hoje.faltas || 0)} label="Faltas" color={Colors.red || "#EF4444"} icon="alert" />
+          <DentalKpiCard value={String(hoje.pendentes || 0)} label="A confirmar" color={DentalColors.amber} icon="clock" />
+          <DentalKpiCard value={String(hoje.concluidos || 0)} label="Concluidas" color={DentalColors.green} icon="check" />
+          <DentalKpiCard value={String(hoje.faltas || 0)} label="Faltas" color={DentalColors.red} icon="alert" />
         </View>
-        <View style={z.row}>
-          <KpiCard value={String(semana.ativos || 0)} label="Proximos 7 dias" color="#06B6D4" icon="calendar"
+        <View style={[z.row, { marginTop: 8 }]}>
+          <DentalKpiCard value={String(semana.ativos || 0)} label="Proximos 7 dias" color={DentalColors.cyan} icon="calendar"
             sublabel={`${semana.total || 0} no total`} />
         </View>
       </Fragment>
@@ -120,13 +107,13 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
 
     financeiro: () => (
       <Fragment>
-        <Text style={z.section}>Financeiro do mes</Text>
+        <DentalSectionHeader title="Financeiro do mes" chip={currentMonthChip()} />
         <View style={z.row}>
-          <KpiCard value={fmt(fat.realizado)} label="Realizado" color={Colors.green || "#10B981"} icon="wallet"
+          <DentalKpiCard value={fmt(fat.realizado)} label="Realizado" color={DentalColors.green} icon="wallet"
             sublabel="Atendimentos concluidos" />
-          <KpiCard value={fmt(fat.previsto)} label="Previsto" color="#06B6D4" icon="trending_up"
+          <DentalKpiCard value={fmt(fat.previsto)} label="Previsto" color={DentalColors.cyan} icon="trending_up"
             sublabel="Na agenda" />
-          <KpiCard value={fmt(repasse.a_pagar)} label="Repasse a pagar" color={Colors.amber || "#F59E0B"} icon="dollar"
+          <DentalKpiCard value={fmt(repasse.a_pagar)} label="Repasse a pagar" color={DentalColors.amber} icon="dollar"
             sublabel={fmt(repasse.pago) + " ja pago"} />
         </View>
       </Fragment>
@@ -134,11 +121,11 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
 
     cobranca: () => (
       <Fragment>
-        <Text style={z.section}>Cobranca</Text>
+        <DentalSectionHeader title="Cobranca" />
         <View style={z.row}>
-          <KpiCard value={fmt(parcVenc.valor)} label="Parcelas vencidas" color={Colors.red || "#EF4444"} icon="alert"
+          <DentalKpiCard value={fmt(parcVenc.valor)} label="Parcelas vencidas" color={DentalColors.red} icon="alert"
             sublabel={`${parcVenc.qtd} parcela${parcVenc.qtd !== 1 ? "s" : ""}`} />
-          <KpiCard value={fmt(parc7d.valor)} label="Vencem em 7 dias" color={Colors.amber || "#F59E0B"} icon="clock"
+          <DentalKpiCard value={fmt(parc7d.valor)} label="Vencem em 7 dias" color={DentalColors.amber} icon="clock"
             sublabel={`${parc7d.qtd} parcela${parc7d.qtd !== 1 ? "s" : ""}`} />
         </View>
       </Fragment>
@@ -146,11 +133,11 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
 
     pacientes: () => (
       <Fragment>
-        <Text style={z.section}>Pacientes</Text>
+        <DentalSectionHeader title="Pacientes" />
         <View style={z.row}>
-          <KpiCard value={String(pacientes.total || 0)} label="Base ativa" color="#06B6D4" icon="users"
+          <DentalKpiCard value={String(pacientes.total || 0)} label="Base ativa" color={DentalColors.cyan} icon="users"
             sublabel={`+${pacientes.novos_mes || 0} este mes`} />
-          <KpiCard value={String(recall)} label="Recall pendente" color={Colors.violet3 || "#a78bfa"} icon="phone"
+          <DentalKpiCard value={String(recall)} label="Recall pendente" color={DentalColors.violet} icon="phone"
             sublabel="Sem visita ha 150+ dias" />
         </View>
       </Fragment>
@@ -159,8 +146,8 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
     funil: () => (
       pipelineTotal > 0 ? (
         <Fragment>
-          <Text style={z.section}>Funil comercial</Text>
-          <View style={z.funnelCard}>
+          <DentalSectionHeader title="Funil comercial" />
+          <View style={z.glassCard}>
             <View style={z.funnelHeader}>
               <View>
                 <Text style={z.funnelTotal}>{fmt(pipelineTotal)}</Text>
@@ -168,7 +155,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
               </View>
               {conversionRate > 0 && (
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={[z.funnelTotal, { color: Colors.green || "#10B981" }]}>{pct(conversionRate)}</Text>
+                  <Text style={[z.funnelTotal, { color: DentalColors.green }]}>{pct(conversionRate)}</Text>
                   <Text style={z.funnelSub}>de conversao</Text>
                 </View>
               )}
@@ -191,8 +178,8 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
     topProcs: () => (
       procs.length > 0 ? (
         <Fragment>
-          <Text style={z.section}>Top procedimentos do mes</Text>
-          <View style={z.procsCard}>
+          <DentalSectionHeader title="Top procedimentos" chip={currentMonthChip()} />
+          <View style={z.glassCard}>
             {procs.map((p, idx) => (
               <View key={p.nome + idx} style={z.procRow}>
                 <Text style={z.procRank}>#{idx + 1}</Text>
@@ -214,49 +201,48 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
         <Fragment key={key}>{SECTIONS[key]()}</Fragment>
       ))}
       <View style={z.infoCard}>
-        <Icon name="star" size={12} color={Colors.violet3 || "#a78bfa"} />
+        <Icon name="star" size={12} color={DentalColors.violet} />
         <Text style={z.infoText}>
-          O agente IA odonto analisa estes mesmos dados para sugerir acoes. Abra pelo botao flutuante → Odonto.
+          A IA Aura analisa estes mesmos dados pra sugerir acoes durante a consulta. Disponivel no plano Expansao.
         </Text>
       </View>
     </ScrollView>
   );
 }
 
+const glassWeb = Platform.OS === "web" ? {
+  background: "rgba(255,255,255,0.04)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+} as any : {};
+
 const z = StyleSheet.create({
-  title:       { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 6 },
-  section:     { fontSize: 11, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
-  row:         { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  title:       { fontSize: 16, fontWeight: "700", color: DentalColors.ink, marginBottom: 6 },
+  row:         { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 
-  kpi:         { flex: 1, minWidth: "22%", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 3 },
-  kpiIcon:     { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  kpiValue:    { fontSize: 15, fontWeight: "800", marginTop: 2 },
-  kpiLabel:    { fontSize: 8, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center" },
-  kpiSub:      { fontSize: 9, color: Colors.ink3, textAlign: "center", marginTop: 1 },
+  glassCard:   { backgroundColor: DentalColors.bg2, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: DentalColors.border, ...glassWeb },
 
-  funnelCard:  { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
-  funnelHeader:{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  funnelTotal: { fontSize: 18, fontWeight: "800", color: Colors.ink },
-  funnelSub:   { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  funnelHeader:{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: DentalColors.border },
+  funnelTotal: { fontSize: 18, fontWeight: "800", color: DentalColors.ink, letterSpacing: -0.3 },
+  funnelSub:   { fontSize: 10, color: DentalColors.ink3, marginTop: 2 },
   funnelRow:   { flexDirection: "row", alignItems: "center", paddingVertical: 6, gap: 8 },
-  funnelStage: { flex: 1, fontSize: 12, color: Colors.ink },
-  funnelQtd:   { fontSize: 12, color: Colors.violet3 || "#a78bfa", fontWeight: "700", minWidth: 30, textAlign: "right" },
-  funnelValue: { fontSize: 11, color: Colors.ink3, fontWeight: "600", minWidth: 80, textAlign: "right" },
+  funnelStage: { flex: 1, fontSize: 12, color: DentalColors.ink },
+  funnelQtd:   { fontSize: 12, color: DentalColors.cyan, fontWeight: "700", minWidth: 30, textAlign: "right" },
+  funnelValue: { fontSize: 11, color: DentalColors.ink3, fontWeight: "600", minWidth: 90, textAlign: "right" },
 
-  procsCard:   { backgroundColor: Colors.bg3, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: Colors.border },
-  procRow:     { flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingHorizontal: 10, gap: 8 },
-  procRank:    { fontSize: 11, color: Colors.ink3, fontWeight: "700", width: 22 },
-  procName:    { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "500" },
-  procQtd:     { fontSize: 11, color: Colors.violet3 || "#a78bfa", fontWeight: "700", minWidth: 30, textAlign: "right" },
-  procValue:   { fontSize: 12, color: Colors.green || "#10B981", fontWeight: "700", minWidth: 80, textAlign: "right" },
+  procRow:     { flexDirection: "row", alignItems: "center", paddingVertical: 8, gap: 8 },
+  procRank:    { fontSize: 11, color: DentalColors.ink3, fontWeight: "700", width: 22 },
+  procName:    { flex: 1, fontSize: 12, color: DentalColors.ink, fontWeight: "500" },
+  procQtd:     { fontSize: 11, color: DentalColors.cyan, fontWeight: "700", minWidth: 30, textAlign: "right" },
+  procValue:   { fontSize: 12, color: DentalColors.green, fontWeight: "700", minWidth: 90, textAlign: "right" },
 
-  empty:       { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
+  empty:       { fontSize: 12, color: DentalColors.ink3, textAlign: "center", paddingVertical: 16 },
 
-  infoCard:    { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 12, marginTop: 20, borderWidth: 1, borderColor: Colors.border2 },
-  infoText:    { fontSize: 11, color: Colors.violet3 || "#a78bfa", flex: 1, lineHeight: 16 },
+  infoCard:    { flexDirection: "row", gap: 8, backgroundColor: "rgba(124,58,237,0.06)", borderRadius: 10, padding: 12, marginTop: 22, borderWidth: 1, borderColor: "rgba(124,58,237,0.25)" },
+  infoText:    { fontSize: 11, color: DentalColors.violet, flex: 1, lineHeight: 16 },
 
-  errorBox:    { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: Colors.red || "#EF4444" },
-  errorText:   { flex: 1, fontSize: 12, color: Colors.ink },
+  errorBox:    { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: DentalColors.bg2, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: DentalColors.red },
+  errorText:   { flex: 1, fontSize: 12, color: DentalColors.ink },
 });
 
 export default OdontoDashboard;
