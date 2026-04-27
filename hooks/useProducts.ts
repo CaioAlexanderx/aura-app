@@ -106,7 +106,8 @@ export function useProducts() {
   });
 
   function addProduct(product: Product) {
-    if (!companyId) { toast.error("Empresa nao identificada"); return; }
+    // FIX(9): mensagem clara para conta de funcionario sem empresa associada
+    if (!companyId) { toast.error("Sua conta nao esta associada a uma empresa. Contate o administrador."); return; }
     if (isDemo) return;
     addMutation.mutate(buildBody(product));
   }
