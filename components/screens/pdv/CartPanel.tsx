@@ -4,8 +4,8 @@
 // payment chips, summary rows, and Limpar/Orçamento/Finalizar CTAs.
 // 24/04 · theme-aware bg + inks (cards legíveis em modo claro e escuro).
 // ============================================================
-import { forwardRef } from "react";
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from "react-native";
+import { forwardRef, useState } from "react";
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt } from "./types";
@@ -32,6 +32,7 @@ type Props = {
   onPay: (k: string) => void;
   onInc: (id: string) => void;
   onDec: (id: string) => void;
+  onSetQty?: (id: string, qty: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onFinalize: () => void;
@@ -64,6 +65,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     onPay,
     onInc,
     onDec,
+    onSetQty,
     onRemove,
     onClear,
     onFinalize,
@@ -169,6 +171,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onInc={() => onInc(it.productId)}
               onDec={() => onDec(it.productId)}
               onRemove={() => onRemove(it.productId)}
+              onQtySet={qty => onSetQty?.(it.productId, qty)}
             />
           ))
         )}
@@ -270,7 +273,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               <span
                 aria-hidden
                 style={{
-                  content: '""',
+                  content: '"',
                   position: "absolute",
                   top: 0,
                   left: "-100%",
@@ -303,12 +306,31 @@ function CartItem({
   onInc,
   onDec,
   onRemove,
+  onQtySet,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
   onDec: () => void;
   onRemove: () => void;
+  onQtySet: (qty: number) => void;
 }) {
+  const [inputVal, setInputVal] = useState<string | null>(null);
+  const isEditing = inputVal !== null;
+
+  function handleFocus() {
+    setInputVal(String(item.qty));
+  }
+
+  function handleCommit() {
+    if (inputVal !== null) {
+      const n = parseInt(inputVal, 10);
+      if (!isNaN(n) && n > 0 && n !== item.qty) {
+        onQtySet(n);
+      }
+    }
+    setInputVal(null);
+  }
+
   const accent = accentForProduct(item.productBaseId);
   const letter = productLetter(item.name);
   const imgBg = webOnly({
@@ -320,6 +342,7 @@ function CartItem({
       "18)",
     border: "1px solid " + accent + "40",
   });
+
   return (
     <View style={s.item}>
       <View style={[s.itemImg, Platform.OS === "web" ? (imgBg as any) : { backgroundColor: accent + "22", borderWidth: 1, borderColor: accent + "44" }]}>
@@ -337,7 +360,20 @@ function CartItem({
         <Pressable onPress={onDec} style={s.qtyBtn}>
           <Text style={s.qtyBtnTxt}>−</Text>
         </Pressable>
-        <Text style={s.qtyVal}>{item.qty}</Text>
+        <TextInput
+          style={[
+            s.qtyVal,
+            IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
+          ]}
+          value={isEditing ? inputVal! : String(item.qty)}
+          onFocus={handleFocus}
+          onChangeText={v => setInputVal(v.replace(/\D/g, ""))}
+          onBlur={handleCommit}
+          onSubmitEditing={handleCommit}
+          keyboardType="number-pad"
+          selectTextOnFocus
+          maxLength={3}
+        />
         <Pressable onPress={onInc} style={s.qtyBtn}>
           <Text style={s.qtyBtnTxt}>+</Text>
         </Pressable>
