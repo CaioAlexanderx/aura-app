@@ -15,6 +15,10 @@ import { DentalColors } from "@/constants/dental-tokens";
 // (filtra cancelados, concluidos e faltas). Ordenado por horario
 // crescente, max 6 linhas visiveis com CTA pra agenda completa.
 //
+// Cada item agendado/aprovado/em_atendimento tem botao
+// "▶ Iniciar" que vai pra /dental/consulta/[appointmentId]
+// (Modo Consulta fullscreen — PR17).
+//
 // Endpoint: GET /companies/:id/dental/appointments?from=YYYY-MM-DD&to=YYYY-MM-DD
 // (mesmo do AppointmentsList)
 //
@@ -28,7 +32,7 @@ interface DentalAppointment {
   scheduled_at: string;
   duration_min: number;
   chief_complaint?: string;
-  status: "agendado" | "confirmado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
+  status: "agendado" | "avaliacao" | "aprovado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
   chair?: string;
   professional_name?: string;
   professional_color?: string;
@@ -36,12 +40,13 @@ interface DentalAppointment {
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
   agendado:       { label: "Agendado",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)" },
-  confirmado:     { label: "Confirmado",     color: "#10B981", bg: "rgba(16,185,129,0.14)" },
+  aprovado:       { label: "Aprovado",       color: "#10B981", bg: "rgba(16,185,129,0.14)" },
+  avaliacao:      { label: "Avaliacao",      color: "#06B6D4", bg: "rgba(6,182,212,0.14)" },
   em_atendimento: { label: "Em atendimento", color: "#F59E0B", bg: "rgba(245,158,11,0.14)" },
 };
 
 // Status que devem aparecer no panel (foco no que ainda vai acontecer).
-const VISIBLE_STATUSES = new Set(["agendado", "confirmado", "em_atendimento"]);
+const VISIBLE_STATUSES = new Set(["agendado", "aprovado", "em_atendimento"]);
 
 const MAX_ROWS = 6;
 
@@ -173,6 +178,21 @@ export function HojeAppointmentsPanel() {
                     {meta.label}
                   </Text>
                 </View>
+                {a.status === "agendado" || a.status === "aprovado" || a.status === "em_atendimento" ? (
+                  <Pressable
+                    onPress={() => router.push(`/dental/consulta/${a.id}` as any)}
+                    style={{
+                      backgroundColor: DentalColors.cyan,
+                      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
+                      flexDirection: "row", alignItems: "center", gap: 4,
+                    }}
+                    accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}
+                  >
+                    <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>
+                      ▶ Iniciar
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             );
           })}
