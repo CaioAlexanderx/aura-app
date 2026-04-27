@@ -31,14 +31,18 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
     if (nums.length !== 14) { setCnpjPreview(null); setLookupError(false); return; }
     setCnpjLooking(true); setCnpjPreview(null); setLookupError(false);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${nums}`);
+      const res = await fetch(`https://publica.cnpj.ws/cnpj/${nums}`);
       if (!res.ok) throw new Error("not found");
       const d = await res.json();
-      const name = d.nome_fantasia || d.razao_social || "";
+      const est = d.estabelecimento || {};
+      const name = est.nome_fantasia || d.razao_social || "";
+      const city = est.cidade?.nome || "";
+      const state = est.estado?.sigla || "";
+      const cityState = city && state ? `${city}/${state}` : city || state;
+      const cep = est.cep ? `CEP ${est.cep.replace(/(\d{5})(\d{3})/, "$1-$2")}` : "";
       const parts = [
-        d.logradouro, d.numero, d.complemento, d.bairro,
-        d.municipio ? `${d.municipio}/${d.uf}` : d.uf,
-        d.cep ? `CEP ${d.cep.replace(/(\d{5})(\d{3})/, "$1-$2")}` : "",
+        est.logradouro, est.numero, est.complemento, est.bairro,
+        cityState, cep,
       ].filter(Boolean);
       setCnpjPreview({ name, address: parts.join(", ") });
     } catch {
@@ -93,7 +97,7 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
           <View style={s.regDivider} />
           <View style={{ flex: 1 }}>
             <Text style={s.regLabel}>Regime</Text>
-            <Text style={s.regValue}>{regimeLabel(taxRegime) || "\u2014"}</Text>
+            <Text style={s.regValue}>{regimeLabel(taxRegime) || "—"}</Text>
           </View>
           <Icon name="lock" size={14} color={Colors.ink3} />
         </View>
@@ -150,7 +154,7 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
       {lookupError && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
           <Icon name="info" size={13} color={Colors.ink3} />
-          <Text style={sh.fieldHint}>CNPJ nao encontrado na BrasilAPI. Voce pode salvar mesmo assim.</Text>
+          <Text style={sh.fieldHint}>CNPJ nao encontrado na Receita Federal. Voce pode salvar mesmo assim.</Text>
         </View>
       )}
 
