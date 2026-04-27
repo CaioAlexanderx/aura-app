@@ -6,6 +6,9 @@
 //            "Agendar" violeta no header do AgendaTab ja faz a mesma coisa
 //            e fica visivel em todas as views (dia/semana/mes). Botao
 //            ciano interno do AgendaDental era redundante.
+// UX: badge LGPD removida da listagem (consentimento obrigatorio internamente).
+//     Indicador de aniversario (🎂) aparece para pacientes com aniversario
+//     nos proximos 7 dias. Agenda abre em semana por padrao.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
@@ -39,12 +42,30 @@ function chairLabelFor(practitionerId: string | null | undefined, settings: any,
   return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
 }
 
+// Retorna true se o aniversario do paciente cai nos proximos `days` dias
+function isBirthdayWithinDays(birthDate: string | null | undefined, days = 7): boolean {
+  if (!birthDate) return false;
+  try {
+    const birth = new Date(birthDate);
+    const today = new Date();
+    for (let i = 0; i <= days; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      if (d.getMonth() === birth.getMonth() && d.getDate() === birth.getDate()) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 type ViewMode = "calendar" | "list";
 
 export function AgendaTab() {
   const cid = useCompanyId();
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
-  const [agendaView, setAgendaView] = useState<AgendaView>("day");
+  // Item 8: agenda abre em semana por padrao
+  const [agendaView, setAgendaView] = useState<AgendaView>("week");
   const [anchorDate, setAnchorDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -79,10 +100,10 @@ export function AgendaTab() {
   let chairs: string[] | undefined;
   if (settings) {
     chairs = [];
-    settings.chairs_active.forEach((active, idx) => {
+    settings.chairs_active.forEach((active: boolean, idx: number) => {
       if (!active) return;
       const allocId = settings.chair_practitioner_ids[idx];
-      const allocated = practitioners.find(p => p.id === allocId);
+      const allocated = practitioners.find((p: any) => p.id === allocId);
       chairs!.push(allocated ? `Cadeira ${idx + 1} - ${allocated.name}` : `Cadeira ${idx + 1}`);
     });
     if (chairs.length === 0) chairs = ["Cadeira 1"];
@@ -200,6 +221,8 @@ export function AgendaTab() {
 
 // ──────────────────────────────────────────────────────────
 // PacientesTab (W1-01): card clicavel -> abre PatientHub
+// Badge LGPD removida (consentimento obrigatorio para todos).
+// Indicador de aniversario adicionado.
 // ──────────────────────────────────────────────────────────
 export function PacientesTab() {
   const cid = useCompanyId();
@@ -242,31 +265,38 @@ export function PacientesTab() {
             <Text style={z.emptyHint}>Clique em "Novo paciente" para comecar</Text>
           </View>
         )}
-        {patients.map((p: any) => (
-          <Pressable
-            key={p.id}
-            onPress={() => setSelectedPatient({
-              id: p.id,
-              name: p.full_name || p.name,
-              full_name: p.full_name,
-              phone: p.phone,
-              email: p.email,
-              cpf: p.cpf_cnpj || p.cpf,
-              birthday: p.birth_date,
-              notes: p.notes,
-              is_patient: true,
-            })}
-            style={z.patientCard}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={z.patientName}>{p.full_name}</Text>
-              <Text style={z.patientMeta}>{p.phone || ""}{p.email ? " | " + p.email : ""}</Text>
-              {p.insurance_name && <Text style={z.patientInsurance}>{p.insurance_name}</Text>}
-            </View>
-            {p.lgpd_consent && <View style={z.lgpdBadge}><Text style={z.lgpdText}>LGPD</Text></View>}
-            <Icon name="arrow_right" size={14} color={Colors.ink3} />
-          </Pressable>
-        ))}
+        {patients.map((p: any) => {
+          const hasBirthday = isBirthdayWithinDays(p.birth_date, 7);
+          return (
+            <Pressable
+              key={p.id}
+              onPress={() => setSelectedPatient({
+                id: p.id,
+                name: p.full_name || p.name,
+                full_name: p.full_name,
+                phone: p.phone,
+                email: p.email,
+                cpf: p.cpf_cnpj || p.cpf,
+                birthday: p.birth_date,
+                notes: p.notes,
+                is_patient: true,
+              })}
+              style={z.patientCard}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={z.patientName}>{p.full_name}</Text>
+                <Text style={z.patientMeta}>{p.phone || ""}{p.email ? " | " + p.email : ""}</Text>
+                {p.insurance_name && <Text style={z.patientInsurance}>{p.insurance_name}</Text>}
+              </View>
+              {hasBirthday && (
+                <View style={z.bdayDot}>
+                  <Text style={z.bdayDotText}>🎂</Text>
+                </View>
+              )}
+              <Icon name="arrow_right" size={14} color={Colors.ink3} />
+            </Pressable>
+          );
+        })}
       </View>
 
       <NewPatientModal visible={showNew} onClose={() => setShowNew(false)} />
@@ -335,7 +365,7 @@ export function ProntuarioTab() {
   const [patientSearch, setPatientSearch] = useState("");
   const [patientName, setPatientName] = useState("");
   const { data: patientsData } = useQuery({
-    queryKey: ["dental-patients-prontuario", cid, patientSearch],
+    queryKey: ["dental-prontuario-search", cid, patientSearch],
     queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(patientSearch)}&limit=10`),
     enabled: !!cid && !patientId, staleTime: 30000,
   });
@@ -393,8 +423,8 @@ const z = StyleSheet.create({
   patientName: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   patientMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   patientInsurance: { fontSize: 10, color: Colors.violet3, marginTop: 2, fontWeight: "500" },
-  lgpdBadge: { backgroundColor: Colors.greenD, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  lgpdText: { fontSize: 8, color: Colors.green, fontWeight: "700" },
+  bdayDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(245,158,11,0.15)", alignItems: "center", justifyContent: "center" },
+  bdayDotText: { fontSize: 13 },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 },
   backText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
 });
