@@ -13,7 +13,7 @@ type Props = {
 
 // Simple CSV parser (handles quoted fields, BOM, semicolons)
 function parseCSV(text: string): Record<string, string>[] {
-  const clean = text.replace(/^\uFEFF/, ''); // remove BOM
+  const clean = text.replace(/^﻿/, ''); // remove BOM
   const lines = clean.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
 
@@ -47,7 +47,16 @@ export function ServerImport({ entity, onComplete }: Props) {
   };
 
   async function handleImport() {
-    if (!isWeb || !company?.id || !token) return;
+    // FIX(9): erros explicitos em vez de retorno silencioso
+    if (!isWeb) {
+      toast.error("Importacao via CSV disponivel apenas no navegador (web)");
+      return;
+    }
+    if (!company?.id) {
+      toast.error("Sua conta nao esta associada a uma empresa. Contate o administrador.");
+      return;
+    }
+    if (!token) return;
 
     const input = document.createElement('input');
     input.type = 'file';
