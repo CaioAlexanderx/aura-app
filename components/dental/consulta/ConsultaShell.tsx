@@ -9,7 +9,6 @@
 // Fetches (via React Query):
 //   - GET /companies/:cid/dental/appointments/:aid
 //   - GET /companies/:cid/dental/patients/:pid/chart
-//   - GET /companies/:cid/dental/patients/:pid/prescriptions (timeline simples)
 //
 // Mutations:
 //   - POST /companies/:cid/dental/patients/:pid/chart  (ao salvar tooth popover)
@@ -17,6 +16,9 @@
 //
 // Modais filhos: RxTemplateModal, ExamRequestModal,
 // AgendarProximoModal, ConsultaEndModal, ToothPopover.
+//
+// PR19: ConsultaAiPanel real (substituiu Gated). briefSeed propaga
+// resposta do brief auto da Intro pra ser exibida como 1a mensagem.
 // ============================================================
 
 import { useMemo, useReducer, useState } from "react";
@@ -39,7 +41,7 @@ import { ConsultaPatientBar } from "./ConsultaPatientBar";
 import { ConsultaOdontogramaPanel } from "./ConsultaOdontogramaPanel";
 import { ConsultaProntuarioPanel } from "./ConsultaProntuarioPanel";
 import { ConsultaVoicePanel } from "./ConsultaVoicePanel";
-import { ConsultaAiPanelGated } from "./ConsultaAiPanelGated";
+import { ConsultaAiPanel } from "./ConsultaAiPanel";
 import { ToothPopover } from "./ToothPopover";
 import { RxTemplateModal } from "./RxTemplateModal";
 import { ExamRequestModal } from "./ExamRequestModal";
@@ -107,7 +109,6 @@ function buildTeethFromChart(chart?: ChartResp | null, overrides?: Record<number
   return Object.values(byNum);
 }
 
-// reducer
 type Action =
   | { type: "start" }
   | { type: "tooth_change"; change: ToothChange }
@@ -147,8 +148,8 @@ export function ConsultaShell({ appointmentId }: Props) {
   const [selectedTooth, setSelectedTooth] = useState<ToothData | null>(null);
   const [showProntuarioMobile, setShowProntuarioMobile] = useState(false);
   const [openModal, setOpenModal] = useState<"none" | "rx" | "exam" | "agendar">("none");
+  const [briefSeed, setBriefSeed] = useState<string | null>(null);
 
-  // Fetch appointment
   const apptQ = useQuery({
     queryKey: ["dental-appt", cid, appointmentId],
     queryFn: () => request<AppointmentResp>(`/companies/${cid}/dental/appointments/${appointmentId}`),
@@ -178,7 +179,6 @@ export function ConsultaShell({ appointmentId }: Props) {
       }
     : null;
 
-  // Fetch chart
   const chartQ = useQuery({
     queryKey: ["dental-chart", cid, patientId],
     queryFn: () => request<ChartResp>(`/companies/${cid}/dental/patients/${patientId}/chart`),
@@ -186,7 +186,6 @@ export function ConsultaShell({ appointmentId }: Props) {
     staleTime: 30000,
   });
 
-  // tooth overrides apenas pra pintar localmente os just-updated antes do refetch
   const toothOverrides = useMemo(() => {
     const out: Record<number, { status: ToothStatus; notes?: string | null }> = {};
     for (const c of state.toothChanges) {
@@ -197,7 +196,6 @@ export function ConsultaShell({ appointmentId }: Props) {
 
   const teeth = useMemo(() => buildTeethFromChart(chartQ.data, toothOverrides), [chartQ.data, toothOverrides]);
 
-  // Mutation: salvar entrada no chart
   const chartMut = useMutation({
     mutationFn: (input: { tooth_number: number; status: ToothStatus; notes: string | null }) =>
       request(`/companies/${cid}/dental/patients/${patientId}/chart`, {
@@ -243,7 +241,6 @@ export function ConsultaShell({ appointmentId }: Props) {
     else if (kind === "anotar") toast.success("Comando: anotar — clique no dente pra adicionar nota");
   }
 
-  // intro state
   if (state.stage === "intro") {
     return (
       <View style={{ flex: 1, backgroundColor: DentalColors.bg }}>
@@ -256,9 +253,12 @@ export function ConsultaShell({ appointmentId }: Props) {
           <ConsultaIntro
             patient={patient}
             appointment={appointment}
+            appointmentId={appointmentId}
+            patientId={patientId || ""}
             loading={apptQ.isFetching}
             onStart={() => dispatch({ type: "start" })}
             onCancel={() => router.back()}
+            onBriefReady={setBriefSeed}
           />
         )}
       </View>
@@ -285,7 +285,6 @@ export function ConsultaShell({ appointmentId }: Props) {
         ) : null}
       </View>
 
-      {/* bottom area: voz + IA */}
       <View style={{
         height: 200, flexDirection: "row",
         borderTopWidth: 1, borderTopColor: DentalColors.border,
@@ -298,11 +297,10 @@ export function ConsultaShell({ appointmentId }: Props) {
           />
         </View>
         <View style={{ flex: 1 }}>
-          <ConsultaAiPanelGated />
+          <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
         </View>
       </View>
 
-      {/* FAB cluster (right side) */}
       <View style={{
         position: "absolute", bottom: 220, right: 14, zIndex: 40,
         gap: 8,
@@ -312,7 +310,6 @@ export function ConsultaShell({ appointmentId }: Props) {
         <FabBtn label="📅" color={DentalColors.green} onPress={() => setOpenModal("agendar")} />
       </View>
 
-      {/* Mobile FAB pra abrir prontuario */}
       {!isDesktop ? (
         <Pressable
           onPress={() => setShowProntuarioMobile(true)}
@@ -325,7 +322,6 @@ export function ConsultaShell({ appointmentId }: Props) {
         </Pressable>
       ) : null}
 
-      {/* Mobile prontuario drawer */}
       {!isDesktop && showProntuarioMobile ? (
         <View style={{
           position: "absolute", top: 0, right: 0, bottom: 0,
@@ -347,7 +343,6 @@ export function ConsultaShell({ appointmentId }: Props) {
         </View>
       ) : null}
 
-      {/* Modais */}
       <ToothPopover
         tooth={selectedTooth}
         onClose={() => setSelectedTooth(null)}
@@ -380,6 +375,7 @@ export function ConsultaShell({ appointmentId }: Props) {
       <ConsultaEndModal
         open={state.stage === "ended"}
         appointmentId={appointmentId}
+        patientId={patientId || null}
         toothChanges={state.toothChanges}
         transcript={state.transcript}
         procedureSeed={appointment?.chief_complaint || ""}
