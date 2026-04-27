@@ -1,11 +1,14 @@
 // AURA. — speechUtils
-// Helpers da Web Speech API + RecordingDot animado.
-// Extraido de VoiceEvolution.tsx (decomposicao).
+// Helpers da Web Speech API. Re-exporta RecordingDot de ./RecordingDot
+// pra preservar imports antigos (`from './speechUtils'`).
+//
+// Historia: ate 26/04/2026 esse arquivo continha o componente
+// RecordingDot com JSX embutido. Como a extensao e .ts (nao .tsx),
+// o bundler quebrava com SyntaxError quando algum modulo importava
+// speechUtils. Split feito: JSX foi pra ./RecordingDot.tsx; aqui
+// ficaram os helpers TS puros + re-export.
 
-import { useRef, useEffect } from 'react';
-import { Animated, StyleSheet } from 'react-native';
-
-// ─── Web Speech API helpers ───────────────────────────────────
+// ─── Web Speech API helpers ─────────────────────────────
 export function hasSpeechRecognition(): boolean {
   if (typeof window === 'undefined') return false;
   return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -24,24 +27,5 @@ export function createRecognition(): any {
   return rec;
 }
 
-// ─── RecordingDot animado ─────────────────────────────────────
-export function RecordingDot() {
-  const opacity = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.15, duration: 500, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1,    duration: 500, useNativeDriver: true }),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []);
-
-  return <Animated.View style={[st.dot, { opacity }]} />;
-}
-
-const st = StyleSheet.create({
-  dot: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#EF4444' },
-});
+// ─── Re-export pra retrocompat ────────────────────────
+export { RecordingDot } from './RecordingDot';
