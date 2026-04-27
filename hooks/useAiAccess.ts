@@ -1,48 +1,53 @@
 // ============================================================
-// useAiAccess — gating de IA por plano.
+// useAiAccess — gating de IA por plano + opt-in da empresa.
 //
-// Padrao alinhado com o restante do app (pdv.tsx, configuracoes.tsx,
-// AIFinancialInsights.tsx etc): IA disponivel em planos Negocio+
-// (negocio | expansao | personalizado).
+// Alinhado ao backend PR18 (src/routes/dentalConsultaAi.js):
+//   - plano = 'expansao' (estrito, igual aiChat/dentalAi do servidor)
+//   - companies.ai_enabled = true (opt-in via tela de configuracoes)
+//   - companies.ai_consent_at preenchido (LGPD)
 //
-// Usado pelo Modo Consulta pra mostrar painel IA real ou placeholder
-// gated. Quando backend de IA do consulta sair (PR18), este hook
-// continua sendo a fonte unica da verdade.
+// O backend ainda re-checa tudo no DB; este hook apenas decide
+// se o frontend mostra o painel IA real, o placeholder gated, ou
+// o card "ative nas configuracoes".
 //
-// PLANO_IA_PLANO_EXPANSAO.md descreve a feature completa.
+// Doc: PLANO_IA_PLANO_EXPANSAO.md
 // ============================================================
 
 import { useAuthStore } from "@/stores/auth";
 
-export type AiAccessReason = "ok" | "no_company" | "plan_below_required" | "feature_disabled";
-
-const PLANS_WITH_AI = ["negocio", "expansao", "personalizado"] as const;
-type PlanWithAi = (typeof PLANS_WITH_AI)[number];
-
-function isPlanWithAi(plan: string): plan is PlanWithAi {
-  return (PLANS_WITH_AI as readonly string[]).indexOf(plan) >= 0;
-}
+export type AiAccessReason =
+  | "ok"
+  | "no_company"
+  | "plan_below_required"
+  | "ai_not_enabled"
+  | "consent_required";
 
 export function useAiAccess() {
   const company = useAuthStore((s) => s.company) as any;
   const plan = String(company?.plan || "essencial").toLowerCase();
-  const planAllows = isPlanWithAi(plan);
 
-  // Futuramente, quando companies.ai_enabled existir (migration 071),
-  // somar essa checagem aqui. Hoje so o plano gateia.
-  const aiEnabled = planAllows;
+  // Backend hoje exige strict 'expansao' (vide requireConsultaAi
+  // em src/routes/dentalConsultaAi.js). Mantemos a mesma logica
+  // pra nao mostrar IA "disponivel" e backend recusar com 403.
+  const planAllows = plan === "expansao";
+  const aiEnabled  = !!company?.ai_enabled;
+  const consented  = !!company?.ai_consent_at;
 
   let reason: AiAccessReason = "ok";
-  if (!company) reason = "no_company";
+  if (!company)        reason = "no_company";
   else if (!planAllows) reason = "plan_below_required";
-  else if (!aiEnabled) reason = "feature_disabled";
+  else if (!aiEnabled)  reason = "ai_not_enabled";
+  else if (!consented)  reason = "consent_required";
 
   return {
     canUseAi: reason === "ok",
     plan,
-    requiredPlan: "negocio" as const,
-    requiredPlanLabel: "Negócio",
+    requiredPlan: "expansao" as const,
+    requiredPlanLabel: "Expansão",
     reason,
+    aiEnabled,
+    consented,
     upgradeHref: "/(tabs)/configuracoes" as const,
+    aiSettingsHref: "/dental/(clinic)/clinica" as const, // tela de settings IA mora aqui
   };
 }
