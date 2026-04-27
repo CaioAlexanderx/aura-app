@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
@@ -85,6 +85,14 @@ export default function EstoqueScreen() {
   });
   const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
 
+  // Scroll para o topo após o formulário ser renderizado
+  useEffect(() => {
+    if (showAddForm || showServiceForm) {
+      const t = setTimeout(() => scrollRef.current?.scrollTo?.({ y: 0, animated: true }), 80);
+      return () => clearTimeout(t);
+    }
+  }, [showAddForm, showServiceForm]);
+
   // Categorias cadastradas tem prioridade; categorias derivadas dos produtos
   // (legado, ainda nao cadastradas) entram depois para cobrir o que ja existe.
   const allCategories = useMemo(() => {
@@ -119,7 +127,6 @@ export default function EstoqueScreen() {
 
   function handleEdit(product: Product) {
     setEditProduct(product); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0);
-    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
   }
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
@@ -163,7 +170,7 @@ export default function EstoqueScreen() {
           <Text style={s.pageTitle}>Estoque</Text>
         </View>
         <View style={s.headerActions}>
-          <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} style={s.serviceBtn}>
+          <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
             <Icon name="star" size={14} color={Colors.violet3} />
             <Text style={s.serviceBtnText}>+ Servico</Text>
           </Pressable>
@@ -173,7 +180,7 @@ export default function EstoqueScreen() {
               <Text style={s.batchBtnText}>+ Em lote</Text>
             </Pressable>
           )}
-          <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} style={s.addBtn}>
+          <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
             <Icon name="package" size={14} color="#fff" />
             <Text style={s.addBtnText}>+ Produto</Text>
           </Pressable>
@@ -195,7 +202,7 @@ export default function EstoqueScreen() {
             <Text style={s.dupBannerTitle}>{dupGroupsCount} grupo{dupGroupsCount > 1 ? "s" : ""} de produtos duplicados</Text>
             <Text style={s.dupBannerDesc}>Produtos com o mesmo nome podem ser unificados em variantes (cor/tamanho).</Text>
           </View>
-          <View style={s.dupBannerCta}><Text style={s.dupBannerCtaText}>Unificar</Text><Text style={s.dupBannerArrow}>{"\u203a"}</Text></View>
+          <View style={s.dupBannerCta}><Text style={s.dupBannerCtaText}>Unificar</Text><Text style={s.dupBannerArrow}>{"›"}</Text></View>
         </Pressable>
       )}
 
@@ -253,7 +260,7 @@ export default function EstoqueScreen() {
             <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}><Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text></Pressable>
           )}
           {dupGroupsCount > 0 && !bulkMode && !isDemo && (
-            <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBtn}><Text style={s.dupBtnText}>{"\u2691 Unificar " + dupGroupsCount + (dupGroupsCount > 1 ? " grupos" : " grupo")}</Text></Pressable>
+            <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBtn}><Text style={s.dupBtnText}>{"⚑ Unificar " + dupGroupsCount + (dupGroupsCount > 1 ? " grupos" : " grupo")}</Text></Pressable>
           )}
         </View>
       )}
