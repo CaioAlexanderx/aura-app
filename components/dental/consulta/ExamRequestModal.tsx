@@ -1,10 +1,7 @@
 // ============================================================
 // ExamRequestModal — Selecao de exames a solicitar.
 //
-// Le templates `pedido_exame` (seedados em migration 063):
-// RX Periapical, RX Panoramico, Tomografia CBCT, Bite-Wing,
-// Hemograma, Glicemia, Pre-op completo. Multi-select; cada
-// exame selecionado vira um documento via POST /dental/documents.
+// PR34 (2026-04-28): backdrop centrado + sheet com maxWidth.
 // ============================================================
 
 import { useState } from "react";
@@ -106,12 +103,13 @@ export function ExamRequestModal({ open, patientId, appointmentId, practitionerI
   function close() { reset(); onClose(); }
 
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", padding: 20 }}>
+    <Modal visible={open} animationType="fade" transparent onRequestClose={close}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 20 }}>
         <View style={{
           backgroundColor: DentalColors.bg2,
           borderRadius: 16, borderWidth: 1, borderColor: DentalColors.border,
           maxHeight: "90%", padding: 18,
+          width: "100%", maxWidth: 560,
         }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
             🔬 Pedido de exames
