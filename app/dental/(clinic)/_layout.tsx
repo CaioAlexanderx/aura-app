@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Redirect } from "expo-router";
 import { DentalShell } from "@/components/dental/DentalShell";
 import { PortalTransition } from "@/components/dental/PortalTransition";
@@ -27,7 +28,24 @@ import { usePortalTransition } from "@/stores/portalTransition";
 
 export default function DentalClinicLayout() {
   const { company, isHydrated } = useAuthStore();
-  const { shown, markShown } = usePortalTransition();
+  const { shown, markShown, reset: resetPortal } = usePortalTransition();
+  const lastCompanyIdRef = useRef<string | null>(null);
+
+  // PR24 #9: reseta a animacao do portal quando a empresa muda (login fresh,
+  // troca de empresa). Garante que clientes vendo a sessao pela 1a vez
+  // sempre vejam a intro, mesmo se o store em-memory tiver vindo cacheado
+  // por algum efeito de hidratacao do RN web.
+  useEffect(() => {
+    const cid = (company as any)?.id || null;
+    if (lastCompanyIdRef.current !== cid) {
+      if (lastCompanyIdRef.current !== null) {
+        // Empresa trocou de fato (nao primeiro render). Reseta pra
+        // mostrar intro de novo.
+        resetPortal();
+      }
+      lastCompanyIdRef.current = cid;
+    }
+  }, [(company as any)?.id, resetPortal]);
 
   if (!isHydrated) return null;
 
