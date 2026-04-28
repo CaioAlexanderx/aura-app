@@ -62,8 +62,8 @@ export function SaleDetailModal({
     try {
       const result = await cancelSale({ saleId: saleId, reason: cancelReason.trim() });
       toast.success(
-        "Venda cancelada. " + result.items_returned + " item(s) devolvido(s) ao estoque, " +
-        fmt(result.refunded_amount) + " creditado(s) como devolucao."
+        "Venda cancelada. " + result.items_returned + " item(s) devolvido(s) ao estoque e " +
+        fmt(result.refunded_amount) + " removido(s) da receita."
       );
       setConfirmCancel(false);
       setCancelReason("");
@@ -217,7 +217,7 @@ export function SaleDetailModal({
                 <Icon name="info" size={12} color={Colors.red} />
                 <Text style={s.cancelledHintText}>
                   Esta venda foi cancelada em {fmtDateTime(sale.cancelled_at)}.
-                  O estoque foi devolvido e um lancamento de devolucao foi criado no financeiro.
+                  O estoque foi devolvido e o valor saiu da receita.
                 </Text>
               </View>
             )}
@@ -260,9 +260,8 @@ export function SaleDetailModal({
           <View style={s.confirmModal}>
             <Text style={s.confirmTitle}>Cancelar venda?</Text>
             <Text style={s.confirmMsg}>
-              Todos os {items.length} item(s) sao devolvidos ao estoque, a receita eh
-              zerada e um lancamento de devolucao eh criado no financeiro.
-              Esta acao nao pode ser desfeita.
+              Os {items.length} item(s) voltam para o estoque e o valor sai da receita.
+              Esta ação não pode ser desfeita.
             </Text>
             <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
             <TextInput
