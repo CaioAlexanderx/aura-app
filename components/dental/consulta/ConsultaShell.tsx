@@ -19,6 +19,9 @@
 //
 // PR19: ConsultaAiPanel real (substituiu Gated). briefSeed propaga
 // resposta do brief auto da Intro pra ser exibida como 1a mensagem.
+//
+// PR23: patientPhone passado pro ConsultaEndModal pra usar no
+// fluxo de assinatura digital (WhatsApp).
 // ============================================================
 
 import { useMemo, useReducer, useState } from "react";
@@ -380,6 +383,7 @@ export function ConsultaShell({ appointmentId }: Props) {
         transcript={state.transcript}
         procedureSeed={appointment?.chief_complaint || ""}
         patientName={patient?.name}
+        patientPhone={patient?.phone || undefined}
         onClose={() => dispatch({ type: "hide_end" })}
         onDone={() => router.replace("/dental/(clinic)/hoje")}
       />
