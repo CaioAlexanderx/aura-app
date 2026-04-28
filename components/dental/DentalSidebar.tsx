@@ -1,8 +1,16 @@
+import { useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, Platform } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
+import { useThemeStore } from "@/constants/colors";
 import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
+import {
+  useDentalSidebarLayout,
+  applyLayoutToDental,
+  type DentalNavSection,
+} from "@/hooks/useDentalSidebarLayout";
+import { DentalSidebarEditor } from "@/components/dental/DentalSidebarEditor";
 
 // ============================================================
 // DentalSidebar — Sidebar dedicada do shell Aura Odonto.
@@ -21,12 +29,16 @@ import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
 // do onboarding wizard.
 //
 // PR20 (2026-04-27): "Hoje" renomeado para "Visão geral".
+//
+// PR27 (2026-04-28): paridade com shell violeta - toggle modo
+// claro + "Personalizar menu" (reorder + hide). Layout custom
+// persistido em localStorage (useDentalSidebarLayout).
 // ============================================================
 
 interface DentalNavItem { route: string; label: string; icon: string; tourKey: string; }
-interface DentalNavSection { label: string; items: DentalNavItem[]; }
+interface DentalNavSectionLocal { label: string; items: DentalNavItem[]; }
 
-const DENTAL_NAV: DentalNavSection[] = [
+const DENTAL_NAV: DentalNavSectionLocal[] = [
   { label: "Operação", items: [
     { route: "/dental/(clinic)/hoje",        label: "Visão geral", icon: "clock",     tourKey: "hoje" },
     { route: "/dental/(clinic)/pacientes",   label: "Pacientes",   icon: "users",     tourKey: "pacientes" },
@@ -56,7 +68,17 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { isDark, toggle: toggleTheme } = useThemeStore();
+  const { layout } = useDentalSidebarLayout();
+  const [editorOpen, setEditorOpen] = useState(false);
   const sw = collapsed ? 64 : 240;
+
+  // Aplica layout custom (reorder + hidden) em cima do NAV padrao.
+  // Se layout for null, retorna o NAV inalterado.
+  const filteredNav: DentalNavSection[] = useMemo(
+    () => applyLayoutToDental(DENTAL_NAV as DentalNavSection[], layout),
+    [layout]
+  );
 
   return (
     <View style={[
@@ -106,9 +128,9 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
 
       <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 6 }} />
 
-      {/* NAV */}
+      {/* NAV — agora respeita layout custom do cliente */}
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={false}>
-        {DENTAL_NAV.map((section) => (
+        {filteredNav.map((section) => (
           <View key={section.label} style={{ marginBottom: collapsed ? 8 : 16 }}>
             {!collapsed && (
               <Text style={{ fontSize: 9, color: DentalColors.ink3, fontWeight: "600",
@@ -119,8 +141,9 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
             {collapsed && <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 4, marginHorizontal: 4 }} />}
             {section.items.map((item) => {
               const active = routeMatches(pathname, item.route);
+              const tourKey = (item as any).tourKey || "";
               const webExtras = Platform.OS === "web"
-                ? { title: item.label, "data-tour": `dental-nav-${item.tourKey}` } as any
+                ? { title: item.label, "data-tour": tourKey ? `dental-nav-${tourKey}` : undefined } as any
                 : {};
               return (
                 <Pressable
@@ -161,7 +184,7 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
 
       <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 6 }} />
 
-      {/* USER FOOTER + escape pra Aura Negocio */}
+      {/* USER FOOTER + escape pra Aura Negocio + theme + personalizar */}
       <View style={{ paddingTop: 6, gap: 4, flexShrink: 0 }}>
         {!collapsed ? (
           <>
@@ -174,6 +197,21 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
                 <Text style={{ fontSize: 10, color: DentalColors.cyan2, marginTop: 1 }}>Aura Odonto</Text>
               </View>
             </View>
+
+            {/* Personalizar menu (PR27) */}
+            <Pressable onPress={() => setEditorOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
+              {...(Platform.OS === "web" ? { title: "Reordenar e esconder items da sidebar" } : {})}>
+              <Icon name="edit" size={12} color={DentalColors.ink3} />
+              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Personalizar menu</Text>
+            </Pressable>
+
+            {/* Toggle modo claro (PR27) */}
+            <Pressable onPress={toggleTheme} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
+              {...(Platform.OS === "web" ? { title: isDark ? "Trocar para modo claro" : "Trocar para modo escuro" } : {})}>
+              <Icon name={isDark ? "sun" : "moon"} size={12} color={DentalColors.ink3} />
+              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>{isDark ? "Modo claro" : "Modo escuro"}</Text>
+            </Pressable>
+
             <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
               {...(Platform.OS === "web" ? { title: "Acessar módulos genéricos do Aura Negócio" } : {})}>
               <Icon name="grid" size={12} color={DentalColors.ink3} />
@@ -190,6 +228,19 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               {...(Platform.OS === "web" ? { title: user?.name || "Perfil" } : {})}>
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>{(user?.name || "A").charAt(0).toUpperCase()}</Text>
             </View>
+
+            {/* Personalizar menu (collapsed) */}
+            <Pressable onPress={() => setEditorOpen(true)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
+              {...(Platform.OS === "web" ? { title: "Personalizar menu" } : {})}>
+              <Icon name="edit" size={13} color={DentalColors.ink3} />
+            </Pressable>
+
+            {/* Toggle theme (collapsed) */}
+            <Pressable onPress={toggleTheme} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
+              {...(Platform.OS === "web" ? { title: isDark ? "Modo claro" : "Modo escuro" } : {})}>
+              <Icon name={isDark ? "sun" : "moon"} size={13} color={DentalColors.ink3} />
+            </Pressable>
+
             <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
               {...(Platform.OS === "web" ? { title: "Aura Negócio" } : {})}>
               <Icon name="grid" size={13} color={DentalColors.ink3} />
@@ -201,6 +252,9 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
           </>
         )}
       </View>
+
+      {/* Editor modal — sempre montado, controla via prop visible */}
+      <DentalSidebarEditor visible={editorOpen} onClose={() => setEditorOpen(false)} baseNav={DENTAL_NAV as DentalNavSection[]} />
     </View>
   );
 }
