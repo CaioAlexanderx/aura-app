@@ -1,20 +1,6 @@
 // ============================================================
 // ConsultaEndModal — Encerramento da consulta com edicao livre.
-//
-// Fluxo:
-//   1. Mostra resumo (procedimento, mudancas no odontograma,
-//      transcricao breve) editavel via TextInput multiline.
-//   2. Botao "Salvar evolucao" persiste:
-//      - PATCH /dental/appointments/:aid { status: "concluido", clinical_notes }
-//      - chart entries ja foram persistidos via popover; aqui so
-//        confirma o appointment.
-//   3. Sucesso → toast + chama onDone (que faz router.back()).
-//
-// PR19: Botao "Gerar resumo com IA" (intent=summarize) preenche
-// o campo de procedimento com texto clinico estruturado.
-//
-// PR23: Botao opcional "Coletar assinatura digital" abre
-// SignatureRequestModal (fluxo QR/WhatsApp) antes de encerrar.
+// PR34 (2026-04-28): backdrop centrado + sheet com maxWidth.
 // ============================================================
 
 import { useState } from "react";
@@ -65,7 +51,6 @@ export function ConsultaEndModal({
   const access = useAiAccess();
   const summarizeMut = useDentalAiConsulta();
 
-  // PR23: assinatura digital opcional ao final do atendimento
   const [showSignature, setShowSignature] = useState(false);
 
   const [evolution, setEvolution] = useState(
@@ -81,16 +66,13 @@ export function ConsultaEndModal({
     if (!appointmentId || !patientId || !access.canUseAi) return;
     summarizeMut.mutate(
       {
-        intent: "summarize",
-        appointmentId,
-        patientId,
+        intent: "summarize", appointmentId, patientId,
         context: {
           transcripts: transcript.map((s) => s.text),
           toothChanges: toothChanges.map((c) => ({
             tooth_number: c.tooth_number,
             prev_status: c.prev_status || null,
-            status: c.status,
-            notes: c.notes || null,
+            status: c.status, notes: c.notes || null,
           })),
         },
       },
@@ -128,12 +110,13 @@ export function ConsultaEndModal({
 
   return (
     <>
-    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", padding: 16 }}>
+    <Modal visible={open} animationType="fade" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", alignItems: "center", padding: 16 }}>
         <View style={{
           backgroundColor: DentalColors.bg2,
           borderRadius: 16, borderWidth: 1, borderColor: DentalColors.border,
           maxHeight: "92%", padding: 18,
+          width: "100%", maxWidth: 640,
         }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
             Encerrar consulta
@@ -200,7 +183,6 @@ export function ConsultaEndModal({
             </SummaryCard>
           </ScrollView>
 
-          {/* PR23: botao opcional pra coletar assinatura antes de encerrar */}
           {appointmentId && (
             <Pressable
               onPress={() => setShowSignature(true)}
@@ -241,18 +223,13 @@ export function ConsultaEndModal({
       </View>
     </Modal>
 
-    {/* PR23: drawer de assinatura digital — abre via botao opcional */}
     <SignatureRequestModal
       visible={showSignature}
       appointmentId={appointmentId}
       patientName={patientName}
       patientPhone={patientPhone}
       onClose={() => setShowSignature(false)}
-      onSigned={() => {
-        // Apos assinar, fecha o sheet de assinatura. Dentista decide se
-        // ainda quer revisar a evolucao antes de "Salvar evolucao · Encerrar".
-        setShowSignature(false);
-      }}
+      onSigned={() => { setShowSignature(false); }}
     />
     </>
   );
