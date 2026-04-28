@@ -14,6 +14,9 @@
 // PR26 (2026-04-28): AgendaTab.handleAppointmentPress -> ConsultaShell
 // pra status ativos. UAT mostrou que click na agenda caia no modal simples
 // e usuario nunca chegava na tela de atendimento real.
+// PR28 (2026-04-28): PacientesTab agora delega UI pro PatientsList
+// (tela com grid/lista, filtros, bulk actions, importar CSV) seguindo
+// mockup-pacientes-v1 aprovado. Logica de hub/edit/deep-link mantida aqui.
 // ============================================================
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -34,6 +37,7 @@ import { NewAppointmentModal } from "@/components/verticals/odonto/NewAppointmen
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
 import { AppointmentsList } from "@/components/verticals/odonto/AppointmentsList";
 import { PatientHub, type PatientLite } from "@/components/verticals/odonto/PatientHub";
+import { PatientsList } from "@/components/verticals/odonto/PatientsList";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
 
 function useCompanyId() { return useAuthStore().company?.id; }
@@ -48,27 +52,7 @@ function chairLabelFor(practitionerId: string | null | undefined, settings: any,
   return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
 }
 
-// PR26: status que mantem o appointment ativo / em fluxo.
-// Click nesses na agenda -> ConsultaShell (Modo Consulta fullscreen).
-// Status finais (concluido/cancelado/faltou) -> AppointmentDetailModal so-leitura.
 const ACTIVE_STATUSES = new Set(["agendado", "avaliacao", "aprovado", "em_atendimento"]);
-
-// Retorna true se o aniversario do paciente cai nos proximos `days` dias
-function isBirthdayWithinDays(birthDate: string | null | undefined, days = 7): boolean {
-  if (!birthDate) return false;
-  try {
-    const birth = new Date(birthDate);
-    const today = new Date();
-    for (let i = 0; i <= days; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      if (d.getMonth() === birth.getMonth() && d.getDate() === birth.getDate()) return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
-}
 
 type ViewMode = "calendar" | "list";
 
@@ -76,7 +60,6 @@ export function AgendaTab() {
   const cid = useCompanyId();
   const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
-  // Item 8: agenda abre em semana por padrao
   const [agendaView, setAgendaView] = useState<AgendaView>("week");
   const [anchorDate, setAnchorDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [showNew, setShowNew] = useState(false);
@@ -133,11 +116,7 @@ export function AgendaTab() {
     professional_name: a.professional_name,
   }));
 
-  function handleNewAppointment() {
-    setInitialDateTime(undefined);
-    setShowNew(true);
-  }
-
+  function handleNewAppointment() { setInitialDateTime(undefined); setShowNew(true); }
   function handleSlotPressDay(_chair: string, time: string) {
     const dt = new Date(anchorDate);
     const [h, m] = time.split(":");
@@ -145,26 +124,12 @@ export function AgendaTab() {
     setInitialDateTime(dt.toISOString());
     setShowNew(true);
   }
+  function handleSlotPressWeek(dt: Date) { setInitialDateTime(dt.toISOString()); setShowNew(true); }
+  function handleDayPressMonth(d: Date) { setAnchorDate(d); setAgendaView("day"); }
 
-  function handleSlotPressWeek(dt: Date) {
-    setInitialDateTime(dt.toISOString());
-    setShowNew(true);
-  }
-
-  function handleDayPressMonth(d: Date) {
-    setAnchorDate(d);
-    setAgendaView("day");
-  }
-
-  // PR26: click no appointment decide pelo status.
-  // - Status ativo -> abre /dental/consulta/[id] (ConsultaShell fullscreen)
-  // - Status final (concluido/cancelado/faltou) -> AppointmentDetailModal so-leitura
   function handleAppointmentPress(a: { id: string; status: string }) {
-    if (ACTIVE_STATUSES.has(a.status)) {
-      router.push(`/dental/consulta/${a.id}` as any);
-    } else {
-      setDetailId(a.id);
-    }
+    if (ACTIVE_STATUSES.has(a.status)) router.push(`/dental/consulta/${a.id}` as any);
+    else setDetailId(a.id);
   }
 
   return (
@@ -187,86 +152,37 @@ export function AgendaTab() {
 
       {viewMode === "calendar" && (
         <>
-          <AgendaNavigator
-            view={agendaView}
-            date={anchorDate}
-            onViewChange={setAgendaView}
-            onDateChange={setAnchorDate}
-          />
-
+          <AgendaNavigator view={agendaView} date={anchorDate} onViewChange={setAgendaView} onDateChange={setAnchorDate} />
           {isLoading && <Loader />}
-
-          {!isLoading && agendaView === "day" && (
-            <AgendaDental
-              appointments={appointments}
-              chairs={chairs}
-              date={anchorDate}
-              onAppointmentPress={handleAppointmentPress}
-              onSlotPress={handleSlotPressDay}
-            />
-          )}
-
-          {!isLoading && agendaView === "week" && (
-            <AgendaDentalWeek
-              appointments={appointments}
-              anchorDate={anchorDate}
-              onAppointmentPress={handleAppointmentPress}
-              onSlotPress={handleSlotPressWeek}
-            />
-          )}
-
-          {!isLoading && agendaView === "month" && (
-            <AgendaDentalMonth
-              appointments={appointments}
-              anchorDate={anchorDate}
-              onDayPress={handleDayPressMonth}
-              onAppointmentPress={handleAppointmentPress}
-            />
-          )}
+          {!isLoading && agendaView === "day" && <AgendaDental appointments={appointments} chairs={chairs} date={anchorDate} onAppointmentPress={handleAppointmentPress} onSlotPress={handleSlotPressDay} />}
+          {!isLoading && agendaView === "week" && <AgendaDentalWeek appointments={appointments} anchorDate={anchorDate} onAppointmentPress={handleAppointmentPress} onSlotPress={handleSlotPressWeek} />}
+          {!isLoading && agendaView === "month" && <AgendaDentalMonth appointments={appointments} anchorDate={anchorDate} onDayPress={handleDayPressMonth} onAppointmentPress={handleAppointmentPress} />}
         </>
       )}
 
       {viewMode === "list" && <AppointmentsList />}
 
-      <NewAppointmentModal
-        visible={showNew}
-        onClose={() => setShowNew(false)}
-        initialDateTime={initialDateTime}
-      />
-      <AppointmentDetailModal
-        visible={!!detailId}
-        appointmentId={detailId}
-        onClose={() => setDetailId(null)}
-      />
+      <NewAppointmentModal visible={showNew} onClose={() => setShowNew(false)} initialDateTime={initialDateTime} />
+      <AppointmentDetailModal visible={!!detailId} appointmentId={detailId} onClose={() => setDetailId(null)} />
     </View>
   );
 }
 
 // ──────────────────────────────────────────────────────────
-// PacientesTab (W1-01): card clicavel -> abre PatientHub
-// Badge LGPD removida (consentimento obrigatorio para todos).
-// Indicador de aniversario adicionado.
-// PR24: deep-link `?open_patient=ID&tab=prontuario` abre hub direto.
+// PacientesTab
+// PR28: delega UI pro PatientsList (mockup-pacientes-v1 aprovado).
+// Mantem aqui: PatientHub, PatientFormModal, deep-link ?open_patient=ID.
 // ──────────────────────────────────────────────────────────
 export function PacientesTab() {
   const cid = useCompanyId();
   const router = useRouter();
   const params = useLocalSearchParams<{ open_patient?: string; tab?: string }>();
-  const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientLite | null>(null);
   const [editingPatient, setEditingPatient] = useState<PatientLite | null>(null);
   const [hubInitialTab, setHubInitialTab] = useState<string | undefined>(undefined);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["dental-patients", cid, search],
-    queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(search)}&limit=50`),
-    enabled: !!cid, staleTime: 30000,
-  });
-
-  // PR24: deep-link `?open_patient=ID&tab=prontuario` abre hub direto.
-  // Usado pelos botoes "Prontuario" no HojeAppointmentsPanel + AppointmentDetailModal.
-  // Limpa o param apos consumir pra nao re-abrir ao trocar de aba interna.
+  // Deep-link: ?open_patient=ID&tab=prontuario abre o hub diretamente.
   useEffect(() => {
     const openId = params.open_patient;
     if (!openId || !cid) return;
@@ -301,93 +217,22 @@ export function PacientesTab() {
           notes: p.notes,
           created_at: p.created_at,
           is_patient: true,
+          photo_url: p.photo_url || null,
         });
         setHubInitialTab(typeof params.tab === "string" ? params.tab : undefined);
-        // Limpa params da URL pra nao reabrir em re-render
         router.replace("/dental/(clinic)/pacientes" as any);
       } catch {}
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.open_patient, cid]);
-  const patients = ((data as any)?.patients) || [];
 
   return (
     <>
-      <View style={{ gap: 10 }}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <View style={[z.searchBox, { flex: 1 }]}>
-            <Icon name="search" size={14} color={Colors.ink3} />
-            <TextInput
-              style={z.searchInput}
-              placeholder="Buscar paciente..."
-              placeholderTextColor={Colors.ink3}
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
-          <Pressable onPress={() => setShowNew(true)} style={z.newBtn}>
-            <Icon name="plus" size={14} color="#fff" />
-            <Text style={z.newBtnText}>Novo paciente</Text>
-          </Pressable>
-        </View>
-
-        {isLoading && <Loader />}
-        {!isLoading && patients.length === 0 && (
-          <View style={z.empty}>
-            <Icon name="users" size={24} color={Colors.ink3} />
-            <Text style={z.emptyText}>Nenhum paciente cadastrado</Text>
-            <Text style={z.emptyHint}>Clique em "Novo paciente" para comecar</Text>
-          </View>
-        )}
-        {patients.map((p: any) => {
-          const hasBirthday = isBirthdayWithinDays(p.birth_date, 7);
-          return (
-            <Pressable
-              key={p.id}
-              onPress={() => setSelectedPatient({
-                id: p.id,
-                name: p.full_name || p.name,
-                full_name: p.full_name,
-                phone: p.phone,
-                phone_secondary: p.phone_secondary,
-                email: p.email,
-                cpf: p.cpf_cnpj || p.cpf,
-                birthday: p.birth_date,
-                birth_date: p.birth_date,
-                gender: p.gender,
-                postal_code: p.postal_code,
-                street: p.street,
-                address_number: p.address_number,
-                complement: p.complement,
-                neighborhood: p.neighborhood,
-                city: p.city,
-                state: p.state,
-                allergies: p.allergies,
-                medical_history: p.medical_history,
-                medications: p.medications,
-                insurance_name: p.insurance_name,
-                notes: p.notes,
-                created_at: p.created_at,
-                is_patient: true,
-              })}
-              style={z.patientCard}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={z.patientName}>{p.full_name}</Text>
-                <Text style={z.patientMeta}>{p.phone || ""}{p.email ? " | " + p.email : ""}</Text>
-                {p.insurance_name && <Text style={z.patientInsurance}>{p.insurance_name}</Text>}
-              </View>
-              {hasBirthday && (
-                <View style={z.bdayDot}>
-                  <Text style={z.bdayDotText}>🎂</Text>
-                </View>
-              )}
-              <Icon name="arrow_right" size={14} color={Colors.ink3} />
-            </Pressable>
-          );
-        })}
-      </View>
+      <PatientsList
+        onOpenPatient={(p) => setSelectedPatient(p)}
+        onNewPatient={() => setShowNew(true)}
+      />
 
       <PatientFormModal
         visible={showNew || !!editingPatient}
@@ -395,7 +240,6 @@ export function PacientesTab() {
         patient={editingPatient as any}
         onClose={() => { setShowNew(false); setEditingPatient(null); }}
         onSaved={(saved: PatientFormData | undefined) => {
-          // Em edit, refletir mudancas no Hub aberto sem reabrir
           if (editingPatient && saved && selectedPatient && saved.id === selectedPatient.id) {
             setSelectedPatient({
               ...selectedPatient,
