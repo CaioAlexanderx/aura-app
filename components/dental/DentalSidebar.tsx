@@ -14,25 +14,11 @@ import { DentalSidebarEditor } from "@/components/dental/DentalSidebarEditor";
 
 // ============================================================
 // DentalSidebar — Sidebar dedicada do shell Aura Odonto.
+// Ver historico de PRs nos commits.
 //
-// Substitui o sidebar generico de (tabs)/_layout quando o usuario
-// navega sob /dental/(clinic)/. Mostra apenas as 8 areas dentais
-// (Operação + Negocio) + Configurações.
-//
-// FONTE UNICA: modulos genericos do Aura (PDV/Cupons/NF-e/Folha/
-// Contabilidade/Canal/Agentes) NAO aparecem aqui. Usuario que
-// quiser acessar entra via deep-link em /(tabs) ou pelo botao
-// "Aura Negocio" no rodape do sidebar.
-//
-// PR9 (2026-04-26): cada item de navegacao agora tem atributo
-// data-tour (web only) pra ser localizavel pelo SpotlightTour
-// do onboarding wizard.
-//
-// PR20 (2026-04-27): "Hoje" renomeado para "Visão geral".
-//
-// PR27 (2026-04-28): paridade com shell violeta - toggle modo
-// claro + "Personalizar menu" (reorder + hide). Layout custom
-// persistido em localStorage (useDentalSidebarLayout).
+// PR32 (2026-04-28): adicionado item Contabilidade na secao Negocio,
+// apontando pra /dental/(clinic)/contabilidade que reusa o modulo
+// generico do shell violet (ContabilidadeScreen).
 // ============================================================
 
 interface DentalNavItem { route: string; label: string; icon: string; tourKey: string; }
@@ -47,18 +33,16 @@ const DENTAL_NAV: DentalNavSectionLocal[] = [
     { route: "/dental/(clinic)/tratamentos", label: "Tratamentos", icon: "clipboard", tourKey: "tratamentos" },
   ]},
   { label: "Negócio", items: [
-    { route: "/dental/(clinic)/faturamento", label: "Faturamento", icon: "wallet",   tourKey: "faturamento" },
-    { route: "/dental/(clinic)/materiais",   label: "Materiais",   icon: "package",  tourKey: "materiais" },
-    { route: "/dental/(clinic)/comunicacao", label: "Comunicação", icon: "message",  tourKey: "comunicacao" },
+    { route: "/dental/(clinic)/faturamento",  label: "Faturamento",  icon: "wallet",     tourKey: "faturamento" },
+    { route: "/dental/(clinic)/contabilidade",label: "Contabilidade",icon: "calculator", tourKey: "contabilidade" },
+    { route: "/dental/(clinic)/materiais",    label: "Materiais",    icon: "package",    tourKey: "materiais" },
+    { route: "/dental/(clinic)/comunicacao",  label: "Comunicação",  icon: "message",    tourKey: "comunicacao" },
   ]},
   { label: "Configurações", items: [
     { route: "/dental/(clinic)/clinica",     label: "Clínica",     icon: "settings", tourKey: "clinica" },
   ]},
 ];
 
-// expo-router omite groups (parenteses) na pathname renderizada,
-// entao /dental/(clinic)/hoje vira pathname="/dental/hoje". Comparar
-// removendo o segmento de grupo das rotas declaradas.
 function routeMatches(pathname: string, route: string): boolean {
   const stripped = route.replace(/\/\([^)]+\)/g, "");
   return pathname === stripped || pathname === route || pathname.endsWith(stripped);
@@ -73,8 +57,6 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
   const [editorOpen, setEditorOpen] = useState(false);
   const sw = collapsed ? 64 : 240;
 
-  // Aplica layout custom (reorder + hidden) em cima do NAV padrao.
-  // Se layout for null, retorna o NAV inalterado.
   const filteredNav: DentalNavSection[] = useMemo(
     () => applyLayoutToDental(DENTAL_NAV as DentalNavSection[], layout),
     [layout]
@@ -87,7 +69,6 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
         paddingTop: 16, paddingBottom: 12, paddingHorizontal: collapsed ? 8 : 14, overflow: "hidden" as any },
       { transition: "width 0.25s ease, padding 0.25s ease" } as any,
     ]}>
-      {/* BRAND */}
       <View style={{ flexDirection: "row", alignItems: "center",
         justifyContent: collapsed ? "center" : "space-between",
         paddingHorizontal: collapsed ? 0 : 4, paddingBottom: 14 }}>
@@ -128,7 +109,6 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
 
       <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 6 }} />
 
-      {/* NAV — agora respeita layout custom do cliente */}
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={false}>
         {filteredNav.map((section) => (
           <View key={section.label} style={{ marginBottom: collapsed ? 8 : 16 }}>
@@ -184,7 +164,6 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
 
       <View style={{ height: 1, backgroundColor: DentalColors.border, marginVertical: 6 }} />
 
-      {/* USER FOOTER + escape pra Aura Negocio + theme + personalizar */}
       <View style={{ paddingTop: 6, gap: 4, flexShrink: 0 }}>
         {!collapsed ? (
           <>
@@ -198,14 +177,12 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               </View>
             </View>
 
-            {/* Personalizar menu (PR27) */}
             <Pressable onPress={() => setEditorOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
               {...(Platform.OS === "web" ? { title: "Reordenar e esconder items da sidebar" } : {})}>
               <Icon name="edit" size={12} color={DentalColors.ink3} />
               <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Personalizar menu</Text>
             </Pressable>
 
-            {/* Toggle modo claro (PR27) */}
             <Pressable onPress={toggleTheme} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
               {...(Platform.OS === "web" ? { title: isDark ? "Trocar para modo claro" : "Trocar para modo escuro" } : {})}>
               <Icon name={isDark ? "sun" : "moon"} size={12} color={DentalColors.ink3} />
@@ -229,13 +206,11 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>{(user?.name || "A").charAt(0).toUpperCase()}</Text>
             </View>
 
-            {/* Personalizar menu (collapsed) */}
             <Pressable onPress={() => setEditorOpen(true)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
               {...(Platform.OS === "web" ? { title: "Personalizar menu" } : {})}>
               <Icon name="edit" size={13} color={DentalColors.ink3} />
             </Pressable>
 
-            {/* Toggle theme (collapsed) */}
             <Pressable onPress={toggleTheme} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
               {...(Platform.OS === "web" ? { title: isDark ? "Modo claro" : "Modo escuro" } : {})}>
               <Icon name={isDark ? "sun" : "moon"} size={13} color={DentalColors.ink3} />
@@ -253,7 +228,6 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
         )}
       </View>
 
-      {/* Editor modal — sempre montado, controla via prop visible */}
       <DentalSidebarEditor visible={editorOpen} onClose={() => setEditorOpen(false)} baseNav={DENTAL_NAV as DentalNavSection[]} />
     </View>
   );
