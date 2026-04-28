@@ -27,6 +27,9 @@
 // - FAB cluster ganha 4o botao (camera intraoral) - placeholder via toast
 // - Mobile: voz/IA migra do rodape fixo pra drawer bottom (FAB violeta)
 //   Antes ocupava 200px em mobile sempre-visivel, comendo o odontograma.
+//
+// PR28 (#13): FAB camera intraoral agora abre WebcamCapture (facing
+// environment / traseira) pra registrar fotos durante atendimento.
 // ============================================================
 
 import { useMemo, useReducer, useState } from "react";
@@ -42,6 +45,7 @@ import type {
   ConsultaPatient, ConsultaAppointment, ConsultaState,
   ToothChange, VoiceSegment,
 } from "@/lib/dentalConsultaTypes";
+import { WebcamCapture } from "@/components/verticals/odonto/WebcamCapture";
 
 import { ConsultaIntro } from "./ConsultaIntro";
 import { ConsultaTopbar } from "./ConsultaTopbar";
@@ -158,6 +162,9 @@ export function ConsultaShell({ appointmentId }: Props) {
   const [showVoiceMobile, setShowVoiceMobile] = useState(false);
   const [openModal, setOpenModal] = useState<"none" | "rx" | "exam" | "agendar">("none");
   const [briefSeed, setBriefSeed] = useState<string | null>(null);
+  // PR28 #13: captura intraoral durante consulta
+  const [showCamera, setShowCamera] = useState(false);
+  const [photos, setPhotos] = useState<string[]>([]);
 
   const apptQ = useQuery({
     queryKey: ["dental-appt", cid, appointmentId],
@@ -250,6 +257,13 @@ export function ConsultaShell({ appointmentId }: Props) {
     else if (kind === "anotar") toast.success("Comando: anotar — clique no dente pra adicionar nota");
   }
 
+  // PR28 #13: callback da camera intraoral
+  function onIntraoralCapture(dataUrl: string) {
+    setPhotos((prev) => [...prev, dataUrl]);
+    toast.success(`Foto registrada (${photos.length + 1} no total)`);
+    // TODO: persistir no backend via endpoint de imagens do paciente
+  }
+
   if (state.stage === "intro") {
     return (
       <View style={{ flex: 1, backgroundColor: DentalColors.bg }}>
@@ -275,7 +289,6 @@ export function ConsultaShell({ appointmentId }: Props) {
   }
 
   // PR25 #4: bottom area (voz + IA) so renderiza em desktop.
-  // Em mobile, voz/IA migra pro drawer bottom (FAB violeta).
   const bottomAreaHeight = isDesktop ? 200 : 0;
 
   return (
@@ -316,22 +329,22 @@ export function ConsultaShell({ appointmentId }: Props) {
         </View>
       ) : null}
 
-      {/* FAB cluster — desktop/tablet landscape. Em mobile portrait esconde
-          pra dar espaco aos mobile-fabs (Prontuario + Voz). */}
+      {/* FAB cluster — desktop/tablet landscape */}
       {isDesktop ? (
         <View style={{
           position: "absolute", bottom: bottomAreaHeight + 20, right: 14, zIndex: 40,
           gap: 8,
         }}>
-          <FabBtn label="📷" color={DentalColors.cyan} onPress={() => toast.info("Camera intraoral - em breve")} />
+          {/* PR28 #13: agora abre WebcamCapture com facing=environment (camera traseira intraoral) */}
+          <FabBtn label="📷" color={DentalColors.cyan} onPress={() => setShowCamera(true)}
+            badge={photos.length > 0 ? photos.length : undefined} />
           <FabBtn label="💊" color={DentalColors.violet} onPress={() => setOpenModal("rx")} />
           <FabBtn label="🔬" color={DentalColors.amber} onPress={() => setOpenModal("exam")} />
           <FabBtn label="📅" color={DentalColors.green} onPress={() => setOpenModal("agendar")} />
         </View>
       ) : null}
 
-      {/* Mobile FABs — abre drawers (Prontuario direita, Voz/IA bottom).
-          PR25 #4: agora tambem o Voz/IA tem FAB em mobile (antes era fixo no rodape). */}
+      {/* Mobile FABs */}
       {!isDesktop ? (
         <View style={{
           position: "absolute", bottom: 20, left: 14, right: 14, zIndex: 40,
@@ -379,7 +392,6 @@ export function ConsultaShell({ appointmentId }: Props) {
         </View>
       ) : null}
 
-      {/* PR25 #4: Drawer bottom Voz/IA (mobile only). */}
       {!isDesktop && showVoiceMobile ? (
         <View style={{
           position: "absolute", left: 0, right: 0, bottom: 0,
@@ -455,19 +467,40 @@ export function ConsultaShell({ appointmentId }: Props) {
         onClose={() => dispatch({ type: "hide_end" })}
         onDone={() => router.replace("/dental/(clinic)/hoje")}
       />
+      {/* PR28 #13: camera intraoral durante consulta */}
+      <WebcamCapture
+        visible={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={onIntraoralCapture}
+        title="Camera intraoral"
+        hint="Aproxime o foco da regiao a documentar"
+        facing="environment"
+      />
     </View>
   );
 }
 
-function FabBtn({ label, color, onPress }: { label: string; color: string; onPress: () => void }) {
+function FabBtn({ label, color, onPress, badge }: { label: string; color: string; onPress: () => void; badge?: number }) {
   return (
     <Pressable onPress={onPress} style={{
       width: 44, height: 44, borderRadius: 22,
       backgroundColor: color,
       alignItems: "center", justifyContent: "center",
       shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 8,
+      position: "relative",
     }}>
       <Text style={{ fontSize: 18 }}>{label}</Text>
+      {badge != null && badge > 0 ? (
+        <View style={{
+          position: "absolute", top: -4, right: -4,
+          minWidth: 18, height: 18, borderRadius: 9,
+          backgroundColor: "#fff", paddingHorizontal: 4,
+          alignItems: "center", justifyContent: "center",
+          borderWidth: 2, borderColor: color,
+        }}>
+          <Text style={{ fontSize: 9, fontWeight: "800", color }}>{badge}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
