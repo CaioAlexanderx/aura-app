@@ -10,7 +10,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
-import { DentalForm } from '@/constants/dental-tokens';
+import { DentalForm, DentalColors } from '@/constants/dental-tokens';
 
 // Format ISO date (YYYY-MM-DD or full ISO) to dd/mm/yyyy. Avoids new Date()
 // timezone shift (parsing 'YYYY-MM-DD' as UTC drifts to previous day in GMT-).
@@ -36,14 +36,14 @@ import { AnamneseWizard, type AnamneseData } from './AnamneseWizard';
 import { ClinicalImages } from './ClinicalImages';
 import { Periograma } from './Periograma';
 import { FichaEspecialidade } from './FichaEspecialidade';
-import { OdontogramaSVG } from './OdontogramaSVG';
+import Odontograma2D, { type ToothState } from './Odontograma2D';
 import { ProntuarioTimeline } from './ProntuarioTimeline';
 import { AddPerioExamModal } from './AddPerioExamModal';
 import { AddSpecialtyFormModal } from './AddSpecialtyFormModal';
 import { AddClinicalImageModal } from './AddClinicalImageModal';
 import type { PatientLite } from './PatientHub';
 
-// ─── Helpers ─────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────
 export function formatBRL(v: number): string {
   if (!isFinite(v)) return '0,00';
   const [int, dec] = v.toFixed(2).split('.');
@@ -69,12 +69,12 @@ export function planStatusLabel(s: string) {
   const m: Record<string,string> = {
     rascunho:'Rascunho', enviado:'Enviado', aprovado:'Aprovado',
     recusado:'Recusado', em_tratamento:'Em tratamento',
-    concluido:'Concluido', cancelado:'Cancelado',
+    concluido:'Concluído', cancelado:'Cancelado',
   };
   return m[s] || s;
 }
 
-// ─── DataTab ──────────────────────────────────────────────────
+// ─── DataTab ────────────────────────────────────────────
 export function DataTab({ patient }: { patient: PatientLite }) {
   const Field = ({ label, value }: { label: string; value?: string | null }) => (
     <View style={st.fieldRow}>
@@ -99,16 +99,16 @@ export function DataTab({ patient }: { patient: PatientLite }) {
         )}
       </View>
       <View style={st.section}>
-        <Text style={st.sectionTitle}>Identificacao</Text>
+        <Text style={st.sectionTitle}>Identificação</Text>
         <Field label="CPF" value={patient.cpf} />
         <Field label="Data nascimento" value={fmtBirthDateBR(patient.birthday)} />
-        <Field label="Telefone secundario" value={(patient as any).phone_secondary} />
+        <Field label="Telefone secundário" value={(patient as any).phone_secondary} />
       </View>
 
       {/* Endereco — PR22 */}
       {(patient.postal_code || patient.street || patient.city) && (
         <View style={st.section}>
-          <Text style={st.sectionTitle}>Endereco</Text>
+          <Text style={st.sectionTitle}>Endereço</Text>
           <Field label="CEP" value={fmtCEP(patient.postal_code)} />
           <Field
             label="Logradouro"
@@ -129,7 +129,7 @@ export function DataTab({ patient }: { patient: PatientLite }) {
 
       {patient.notes && (
         <View style={st.section}>
-          <Text style={st.sectionTitle}>Observacoes</Text>
+          <Text style={st.sectionTitle}>Observações</Text>
           <Text style={st.notes}>{patient.notes}</Text>
         </View>
       )}
@@ -137,7 +137,7 @@ export function DataTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ─── AnamneseTab ─────────────────────────────────────────────
+// ─── AnamneseTab ───────────────────────────────────────────
 export function AnamneseTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc  = useQueryClient();
@@ -170,26 +170,21 @@ export function AnamneseTab({ patient }: { patient: PatientLite }) {
 // ─── OdontogramaTab ──────────────────────────────────────────
 export function OdontogramaTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
-  const qc  = useQueryClient();
+  const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ['dental-chart', cid, patient.id],
     queryFn:  () => request(`/companies/${cid}/dental/patients/${patient.id}/chart`),
     enabled: !!cid && !!patient.id, staleTime: 15000,
   });
-  const mut = useMutation({
-    mutationFn: (p: { tooth: number; status: string }) =>
-      request(`/companies/${cid}/dental/patients/${patient.id}/chart`, { method: 'POST', body: { tooth_number: p.tooth, status: p.status } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dental-chart', cid, patient.id] }),
-    onError: (e: any) => Alert.alert('Erro', e?.message),
-  });
   if (isLoading) return <View style={st.center}><ActivityIndicator color="#06B6D4" /></View>;
   if (error) return <View style={st.center}><Text style={st.errTitle}>Erro</Text></View>;
-  const teeth = ((data as any)?.teeth || []).map((t: any) => {
-    const faces: any = { M:null,D:null,O:null,V:null,L:null };
-    (t.faces||[]).forEach((f: any) => { if (f.face && f.face in faces) faces[f.face]=f.status||null; });
-    return { number: t.tooth, status: (t.faces&&t.faces[0]?.status)||'higido', faces };
-  });
-  return <ScrollView style={st.tab}><OdontogramaSVG teeth={teeth} onStatusChange={(n,s)=>mut.mutate({tooth:n,status:s})} /></ScrollView>;
+  // Backend retorna { teeth: ToothState[] } — direto para o Odontograma2D
+  const chart: ToothState[] = (data as any)?.teeth || [];
+  return (
+    <ScrollView style={st.tab}>
+      <Odontograma2D chart={chart} selectedTooth={selectedTooth} onToothSelect={setSelectedTooth} />
+    </ScrollView>
+  );
 }
 
 // ─── PeriogramaTab ───────────────────────────────────────────
@@ -217,7 +212,7 @@ export function PeriogramaTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ─── ProntuarioTab ───────────────────────────────────────────
+// ─── ProntuarioTab ──────────────────────────────────────────
 export function ProntuarioTab({ patient, onVoice }: { patient: PatientLite; onVoice?: () => void }) {
   const cid = useAuthStore().company?.id;
   const { data, isLoading } = useQuery({
@@ -242,7 +237,7 @@ export function ProntuarioTab({ patient, onVoice }: { patient: PatientLite; onVo
   );
 }
 
-// ─── ImagensTab ──────────────────────────────────────────────
+// ─── ImagensTab ───────────────────────────────────────────
 export function ImagensTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc  = useQueryClient();
@@ -270,7 +265,7 @@ export function ImagensTab({ patient }: { patient: PatientLite }) {
           patientName={patient.full_name||patient.name}
           onUpload={() => setShowAdd(true)}
           onImagePress={(img: any) => Linking.openURL(img.url).catch(()=>{})}
-          onDelete={(id: string) => Alert.alert('Excluir?','Acao irreversivel.',[
+          onDelete={(id: string) => Alert.alert('Excluir?','Ação irreversível.',[
             {text:'Cancelar',style:'cancel'},
             {text:'Excluir',style:'destructive',onPress:()=>del.mutate(id)},
           ])}
@@ -281,7 +276,7 @@ export function ImagensTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ─── OrcamentosTab ───────────────────────────────────────────
+// ─── OrcamentosTab ──────────────────────────────────────────
 export function OrcamentosTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const { data, isLoading } = useQuery({
@@ -291,7 +286,7 @@ export function OrcamentosTab({ patient }: { patient: PatientLite }) {
   });
   if (isLoading) return <View style={st.center}><ActivityIndicator color="#06B6D4" /></View>;
   const plans = (data as any)?.plans || [];
-  if (!plans.length) return <View style={st.center}><Text style={st.errTitle}>Sem orcamentos</Text></View>;
+  if (!plans.length) return <View style={st.center}><Text style={st.errTitle}>Sem orçamentos</Text></View>;
   return (
     <ScrollView style={st.tab}>
       {plans.map((p: any) => (
@@ -311,7 +306,7 @@ export function OrcamentosTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ─── CobrancasTab ────────────────────────────────────────────
+// ─── CobrancasTab ───────────────────────────────────────────
 export function CobrancasTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const { data, isLoading } = useQuery({
@@ -338,7 +333,7 @@ export function CobrancasTab({ patient }: { patient: PatientLite }) {
           <View key={p.payment_id} style={[st.installCard,isOvd&&st.installCardOvd,isPaid&&st.installCardPaid]}>
             <View style={{flex:1}}>
               <Text style={st.installNum}>Parcela {p.installment_number}</Text>
-              <Text style={st.installDate}>{isPaid?`Pago em ${formatDateBR(p.paid_at)}`:isOvd?`Venceu ha ${days}d`:`Vence em ${formatDateBR(p.due_date)}`}</Text>
+              <Text style={st.installDate}>{isPaid?`Pago em ${formatDateBR(p.paid_at)}`:isOvd?`Venceu há ${days}d`:`Vence em ${formatDateBR(p.due_date)}`}</Text>
             </View>
             <Text style={[st.installAmt,isPaid&&{color:'#10B981'},isOvd&&{color:'#EF4444'}]}>R$ {formatBRL(amt)}</Text>
           </View>
@@ -348,7 +343,7 @@ export function CobrancasTab({ patient }: { patient: PatientLite }) {
   );
 }
 
-// ─── FichasTab ───────────────────────────────────────────────
+// ─── FichasTab ───────────────────────────────────────────
 export function FichasTab({ patient }: { patient: PatientLite }) {
   const cid = useAuthStore().company?.id;
   const qc  = useQueryClient();
@@ -397,7 +392,7 @@ const st = StyleSheet.create({
   savingText:   { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   voiceBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#4C1D95', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, margin: 16, marginBottom: 8, alignSelf: 'flex-start' },
   voiceBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  planCard:     { backgroundColor: '#1E293B', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 0.5, borderColor: '#334155' },
+  planCard:     { backgroundColor: DentalColors.surface, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 0.5, borderColor: DentalColors.border },
   planRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   planNumber:   { color: '#E2E8F0', fontSize: 13, fontWeight: '700' },
   statusChip:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
@@ -406,10 +401,10 @@ const st = StyleSheet.create({
   planMeta:     { color: '#94A3B8', fontSize: 12 },
   planDate:     { color: '#64748B', fontSize: 11, marginTop: 4 },
   summaryRow:   { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  summaryCard:  { flex: 1, backgroundColor: '#1E293B', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 0.5, borderColor: '#334155' },
+  summaryCard:  { flex: 1, backgroundColor: DentalColors.surface, borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 0.5, borderColor: DentalColors.border },
   summaryLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   summaryValue: { fontSize: 15, fontWeight: '700' },
-  installCard:  { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 0.5, borderColor: '#334155', gap: 10 },
+  installCard:  { flexDirection: 'row', alignItems: 'center', backgroundColor: DentalColors.surface, borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 0.5, borderColor: DentalColors.border, gap: 10 },
   installCardOvd: { borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.06)' },
   installCardPaid:{ opacity: 0.6 },
   installNum:   { color: '#E2E8F0', fontSize: 13, fontWeight: '600' },
