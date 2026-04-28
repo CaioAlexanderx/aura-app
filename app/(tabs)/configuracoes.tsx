@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { MembersSection } from "@/components/MembersSection";
 import { ReferralCard } from "@/components/ReferralCard";
+import { ThemeSwitchCard } from "@/components/ThemeSwitchCard";
 import { ProfileHero } from "@/components/screens/configuracoes/ProfileHero";
 import { CnpjSection } from "@/components/screens/configuracoes/CnpjSection";
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
@@ -148,6 +149,10 @@ export default function ConfiguracoesScreen() {
               <Text style={s.accountNoteText}>Para alterar nome ou e-mail, entre em contato com o suporte.</Text>
             </View>
           </Card>
+
+          {/* APARENCIA — PR25 #11 */}
+          <SectionTitle title="Aparencia" />
+          <ThemeSwitchCard />
 
           {/* SUPORTE */}
           <SectionTitle title="Suporte" />
