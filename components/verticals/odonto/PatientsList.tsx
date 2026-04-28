@@ -10,12 +10,10 @@
 //  - Bulk bar: aparece quando ha selecao multipla
 //  - Grid (cards com avatar + tags) ou Lista (tabela compacta)
 //
-// Filtros que dependem de backend novo (convenio, ultima visita,
-// importar CSV, exportar, etiquetas) abrem toast "em breve".
-// Filtros client-side: search por nome, has-alergias.
-//
-// Mantem a logica de abrir PatientHub ao clicar e o deep-link
-// ?open_patient=ID do PR24 (parent component cuida).
+// PR31 (2026-04-28): filtros agora sao server-side via query params
+// (has_allergies, has_insurance, inactive_days). Backend PR30 ja
+// retorna last_visit_at + next_appointment_at. Bulk actions e
+// importar CSV continuam placeholders ate ter backend dedicado.
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -31,9 +29,7 @@ import type { PatientLite } from "@/components/verticals/odonto/PatientHub";
 type ViewMode = "grid" | "list";
 
 interface Props {
-  /** Quando user clica num paciente, abre o hub. Parent (OdontoClinicTabs) controla. */
   onOpenPatient: (p: PatientLite) => void;
-  /** Quando user clica em "Novo paciente". */
   onNewPatient: () => void;
 }
 
@@ -133,7 +129,10 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  // PR31: filtros server-side
   const [filterAlergias, setFilterAlergias] = useState(false);
+  const [filterConvenio, setFilterConvenio] = useState(false);
+  const [filterInactive, setFilterInactive] = useState(false); // 100+ dias sem visita
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
 
@@ -143,15 +142,26 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
     return () => clearTimeout(t);
   }, [search]);
 
+  // PR31: monta query string com filtros server-side
+  const qs = useMemo(() => {
+    const params: string[] = [`limit=100`];
+    if (debouncedSearch) params.push(`search=${encodeURIComponent(debouncedSearch)}`);
+    if (filterAlergias) params.push(`has_allergies=1`);
+    if (filterConvenio) params.push(`has_insurance=1`);
+    if (filterInactive) params.push(`inactive_days=100`);
+    return params.join("&");
+  }, [debouncedSearch, filterAlergias, filterConvenio, filterInactive]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["dental-patients", cid, debouncedSearch],
-    queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(debouncedSearch)}&limit=100`),
+    queryKey: ["dental-patients", cid, qs],
+    queryFn: () => request(`/companies/${cid}/dental/patients?${qs}`),
     enabled: !!cid, staleTime: 30000,
   });
 
   const allPatients: BackendPatient[] = ((data as any)?.patients) || [];
 
-  // Stats client-side (a partir do que ja veio carregado)
+  // Stats client-side a partir do que veio (filtrado). Pra stats globais
+  // precisaria endpoint dedicado /dental/patients/stats - fica pra futuro.
   const stats = useMemo(() => {
     const total = allPatients.length;
     const aniversariantes = allPatients.filter((p) => isBirthdayWithin(p.birth_date, 7)).length;
@@ -160,12 +170,8 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
     return { total, aniversariantes, semRetorno, comConvenio };
   }, [allPatients]);
 
-  // Aplica filtros client-side adicionais
-  const filtered = useMemo(() => {
-    let list = allPatients;
-    if (filterAlergias) list = list.filter((p) => !!(p.allergies && p.allergies.trim()));
-    return list;
-  }, [allPatients, filterAlergias]);
+  // Filtros client-side ja foram delegados ao backend - lista vem filtrada
+  const filtered = allPatients;
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -187,6 +193,8 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
     toast.info(`${label} - em breve`);
   }
 
+  const anyFilterActive = filterAlergias || filterConvenio || filterInactive;
+
   return (
     <View style={{ gap: 16 }}>
       {/* HEADER */}
@@ -195,7 +203,8 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
           <Text style={s.eyebrow}>OPERAÇÃO</Text>
           <Text style={s.h1}>Pacientes</Text>
           <Text style={s.sub}>
-            {stats.total} pacientes ativos
+            {stats.total} pacientes
+            {anyFilterActive ? " (com filtros aplicados)" : " ativos"}
             {stats.aniversariantes > 0 ? ` · ${stats.aniversariantes} aniversariantes nesta semana` : ""}
           </Text>
         </View>
@@ -231,11 +240,17 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
             onChangeText={setSearch}
           />
         </View>
-        <Pressable onPress={() => notImplemented("Filtro convenio")} style={s.chip}>
-          <Text style={s.chipText}>Convenio: Todos</Text>
+        {/* PR31: Convenio agora e toggle real (has_insurance) */}
+        <Pressable onPress={() => setFilterConvenio((v) => !v)} style={[s.chip, filterConvenio && s.chipActive]}>
+          <Text style={[s.chipText, filterConvenio && s.chipTextActive]}>
+            {filterConvenio ? "Com convenio ✓" : "Convenio: Todos"}
+          </Text>
         </Pressable>
-        <Pressable onPress={() => notImplemented("Filtro ultima visita")} style={s.chip}>
-          <Text style={s.chipText}>Ultima visita: Qualquer</Text>
+        {/* PR31: Ultima visita agora e toggle Inativos 100+d */}
+        <Pressable onPress={() => setFilterInactive((v) => !v)} style={[s.chip, filterInactive && s.chipActive]}>
+          <Text style={[s.chipText, filterInactive && s.chipTextActive]}>
+            {filterInactive ? "Inativos 100+d ✓" : "Ultima visita: Qualquer"}
+          </Text>
         </Pressable>
         <Pressable onPress={() => setFilterAlergias((v) => !v)} style={[s.chip, filterAlergias && s.chipActive]}>
           <Text style={[s.chipText, filterAlergias && s.chipTextActive]}>
@@ -282,8 +297,8 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
       ) : filtered.length === 0 ? (
         <View style={s.empty}>
           <Icon name="users" size={28} color={DentalColors.ink3} />
-          <Text style={s.emptyText}>{search || filterAlergias ? "Nenhum paciente encontrado" : "Nenhum paciente cadastrado"}</Text>
-          <Text style={s.emptyHint}>{search ? "Ajuste a busca ou os filtros" : 'Clique em "Novo paciente" para começar'}</Text>
+          <Text style={s.emptyText}>{search || anyFilterActive ? "Nenhum paciente encontrado" : "Nenhum paciente cadastrado"}</Text>
+          <Text style={s.emptyHint}>{search || anyFilterActive ? "Ajuste a busca ou os filtros" : 'Clique em "Novo paciente" para começar'}</Text>
         </View>
       ) : viewMode === "grid" ? (
         <View style={s.grid}>
@@ -330,9 +345,6 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
   );
 }
 
-// ============================================================
-// PatientCard — 1 paciente em grid view
-// ============================================================
 function PatientCard({ patient, selected, onToggleSelect, onOpen }: { patient: BackendPatient; selected: boolean; onToggleSelect: () => void; onOpen: () => void }) {
   const initials = (patient.full_name || patient.name || "?").split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   const hasBday = isBirthdayWithin(patient.birth_date, 7);
@@ -342,10 +354,7 @@ function PatientCard({ patient, selected, onToggleSelect, onOpen }: { patient: B
   const photoUrl = (patient as any).photo_url as string | null | undefined;
 
   return (
-    <Pressable
-      onPress={onOpen}
-      style={[s.card, selected && s.cardSelected]}
-    >
+    <Pressable onPress={onOpen} style={[s.card, selected && s.cardSelected]}>
       <Pressable
         onPress={(e: any) => { e.stopPropagation?.(); onToggleSelect(); }}
         style={[s.cardCheck, selected && s.cardCheckOn]}
@@ -409,9 +418,6 @@ function PatientCard({ patient, selected, onToggleSelect, onOpen }: { patient: B
   );
 }
 
-// ============================================================
-// PatientRow — list view
-// ============================================================
 function PatientRow({ patient, selected, onToggleSelect, onOpen }: { patient: BackendPatient; selected: boolean; onToggleSelect: () => void; onOpen: () => void }) {
   const initials = (patient.full_name || patient.name || "?").split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   const lastVisitDays = daysBetween(patient.last_visit_at);
@@ -446,9 +452,6 @@ function PatientRow({ patient, selected, onToggleSelect, onOpen }: { patient: Ba
   );
 }
 
-// ============================================================
-// Sub-components
-// ============================================================
 function Stat({ label, value, delta, accent }: { label: string; value: string; delta: string | null; accent: "cyan" | "amber" | "violet" }) {
   const accentColor = accent === "cyan" ? DentalColors.cyan : accent === "amber" ? DentalColors.amber : DentalColors.violet;
   return (
@@ -475,9 +478,6 @@ function Tag({ kind, children }: { kind: "alergia" | "bday" | "convenio" | "vip"
   );
 }
 
-// ============================================================
-// ImportCsvModal — placeholder coming-soon
-// ============================================================
 function ImportCsvModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -513,7 +513,6 @@ function ImportCsvModal({ visible, onClose }: { visible: boolean; onClose: () =>
 }
 
 const s = StyleSheet.create({
-  // HEADER
   pageHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" },
   eyebrow: { fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: "600" },
   h1: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5, color: DentalColors.ink, marginTop: 4 },
@@ -524,14 +523,12 @@ const s = StyleSheet.create({
   btnSecondary: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: DentalColors.border },
   btnSecondaryText: { color: DentalColors.ink2, fontSize: 12, fontWeight: "600" },
 
-  // STATS
   statsRow: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
   stat: { flex: 1, minWidth: 140, padding: 14, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: DentalColors.border, borderRadius: 12 },
   statLabel: { fontSize: 9, color: DentalColors.ink3, letterSpacing: 1, textTransform: "uppercase", fontWeight: "700" },
   statValue: { fontSize: 22, fontWeight: "700", color: DentalColors.ink, marginTop: 4 },
   statDelta: { fontSize: 10, color: DentalColors.green, marginTop: 2, fontWeight: "600" },
 
-  // TOOLBAR
   toolbar: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: DentalColors.border, borderRadius: 14, flexWrap: "wrap" },
   searchBox: { flex: 1, minWidth: 200, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: DentalColors.bg2, borderWidth: 1, borderColor: DentalColors.border, borderRadius: 10 },
   searchInput: { flex: 1, color: DentalColors.ink, fontSize: 13 } as any,
@@ -545,7 +542,6 @@ const s = StyleSheet.create({
   viewBtnText: { fontSize: 11, color: DentalColors.ink3, fontWeight: "600" },
   viewBtnTextActive: { color: "#fff" },
 
-  // BULK
   bulkBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 12, backgroundColor: DentalColors.cyanDim, borderWidth: 1, borderColor: DentalColors.cyanBorder, borderRadius: 14, gap: 10, flexWrap: "wrap" },
   bulkCount: { paddingHorizontal: 10, paddingVertical: 4, backgroundColor: DentalColors.cyan, borderRadius: 999 },
   bulkCountText: { color: "#fff", fontSize: 12, fontWeight: "700" },
@@ -553,12 +549,10 @@ const s = StyleSheet.create({
   bulkBtnText: { fontSize: 11, color: DentalColors.ink2, fontWeight: "600" },
   bulkBtnDanger: { borderColor: "rgba(239,68,68,0.35)" },
 
-  // EMPTY
   empty: { padding: 40, alignItems: "center", gap: 8 },
   emptyText: { fontSize: 14, color: DentalColors.ink2, fontWeight: "600" },
   emptyHint: { fontSize: 12, color: DentalColors.ink3 },
 
-  // GRID
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   card: { flexBasis: 260, flexGrow: 1, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: DentalColors.border, borderRadius: 14, padding: 16, gap: 10, position: "relative" },
   cardSelected: { borderColor: DentalColors.cyan, backgroundColor: DentalColors.cyanGhost },
@@ -577,11 +571,9 @@ const s = StyleSheet.create({
   nextAppt: { padding: 8, borderRadius: 8, backgroundColor: DentalColors.cyanGhost, borderLeftWidth: 3, borderLeftColor: DentalColors.cyan },
   nextApptText: { fontSize: 10, color: DentalColors.ink2 },
 
-  // TAG
   tag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   tagText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.4 },
 
-  // LIST
   listHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 10, backgroundColor: DentalColors.bg2, borderRadius: 8 },
   listHeaderText: { fontSize: 9, color: DentalColors.ink3, letterSpacing: 1.2, fontWeight: "700", textTransform: "uppercase" },
   listRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 10, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: DentalColors.border, borderRadius: 10 },
@@ -595,7 +587,6 @@ const s = StyleSheet.create({
   listMeta: { fontSize: 10, color: DentalColors.ink3, marginTop: 2 },
   listText: { fontSize: 11, color: DentalColors.ink2 },
 
-  // MODAL
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", padding: 20 },
   modal: { width: "100%", maxWidth: 520, backgroundColor: DentalColors.bg2, borderWidth: 1, borderColor: DentalColors.border, borderRadius: 16, padding: 24 },
   uploadZone: { borderWidth: 2, borderStyle: "dashed", borderColor: "rgba(255,255,255,0.14)", borderRadius: 12, padding: 32, alignItems: "center", justifyContent: "center" },
