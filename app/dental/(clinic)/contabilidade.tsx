@@ -5,11 +5,14 @@
 // PR37: pluga DentalComplianceConfigCard.
 // PR38: lista obligations odonto (cnae=saude) com botao "Gerar
 // relatorio Aura" pra cada - aciona POST /obligations/:code/report.
+// PR40: adiciona DentalTissRetentionsCard - retencoes IRRF/ISS/PCC
+// dos convenios pro mes (compensacao tributaria).
 // ============================================================
 
 import { ScrollView, View, Text, ActivityIndicator } from "react-native";
 import ContabilidadeScreen from "@/app/(tabs)/contabilidade";
 import { DentalComplianceConfigCard } from "@/components/dental/DentalComplianceConfigCard";
+import { DentalTissRetentionsCard } from "@/components/dental/DentalTissRetentionsCard";
 import { ObligationReportTrigger } from "@/components/screens/contabilidade/ObligationReportModal";
 import { useObligations } from "@/hooks/useObligations";
 import { DentalColors } from "@/constants/dental-tokens";
@@ -28,9 +31,14 @@ export default function DentalContabilidadeScreen() {
           <DentalComplianceConfigCard />
         </View>
 
-        {/* 2. Relatorios Aura (obligations odonto) */}
+        {/* 2. Retencoes TISS no mes */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+          <DentalTissRetentionsCard />
+        </View>
+
+        {/* 3. Relatorios Aura (obligations odonto) */}
         {saudeObligations.length > 0 && (
-          <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
             <View style={{
               backgroundColor: "rgba(255,255,255,0.04)",
               borderWidth: 1, borderColor: DentalColors.border,
@@ -85,7 +93,7 @@ export default function DentalContabilidadeScreen() {
           </View>
         )}
 
-        {/* 3. ContabilidadeScreen padrao (DAS, PGDAS, etc) */}
+        {/* 4. ContabilidadeScreen padrao (DAS, PGDAS, etc) */}
         <ContabilidadeScreen />
       </ScrollView>
     </View>
