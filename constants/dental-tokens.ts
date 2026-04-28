@@ -47,6 +47,36 @@ export const DentalGradients = {
 } as const;
 
 // ============================================================
+// FORM TOKENS — labels, inputs e helpers de formulario dental.
+//
+// PR21 (2026-04-27): unificacao de labels de formulario apos UAT.
+// Antes: cada modal/tab tinha seu fieldLabel proprio (fontSize 11,
+// color ink3 em opacidade 0.4 = baixo contraste). Reclamacao do
+// usuario foi de legibilidade.
+//
+// Novos defaults: fontSize 12 + color em opacidade 0.72 + fontWeight 600.
+// Mantido compacto (modal dental tem espaco premium) mas legivel.
+// ============================================================
+export const DentalForm = {
+  label: {
+    fontSize: 12,
+    color: "rgba(250,250,250,0.72)",
+    fontWeight: "600" as const,
+    letterSpacing: 0.2,
+    marginBottom: 5,
+  },
+  labelStrong: {
+    // Para labels de secao/header (caps lock-style)
+    fontSize: 10,
+    color: "rgba(250,250,250,0.85)",
+    fontWeight: "700" as const,
+    letterSpacing: 1.2,
+    textTransform: "uppercase" as const,
+    marginBottom: 6,
+  },
+} as const;
+
+// ============================================================
 // COPY APROVADO
 // Brand, tagline e headlines vem de aura-identidade-verticais.html.
 // Mudar so com aprovacao explicita.
