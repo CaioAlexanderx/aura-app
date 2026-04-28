@@ -10,6 +10,17 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { DentalForm } from '@/constants/dental-tokens';
+
+// Format ISO date (YYYY-MM-DD or full ISO) to dd/mm/yyyy. Avoids new Date()
+// timezone shift (parsing 'YYYY-MM-DD' as UTC drifts to previous day in GMT-).
+function fmtBirthDateBR(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const dateOnly = iso.slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
 import { AnamneseWizard, type AnamneseData } from './AnamneseWizard';
 import { ClinicalImages } from './ClinicalImages';
 import { Periograma } from './Periograma';
@@ -79,7 +90,7 @@ export function DataTab({ patient }: { patient: PatientLite }) {
       <View style={st.section}>
         <Text style={st.sectionTitle}>Identificacao</Text>
         <Field label="CPF" value={patient.cpf} />
-        <Field label="Data nascimento" value={patient.birthday} />
+        <Field label="Data nascimento" value={fmtBirthDateBR(patient.birthday)} />
       </View>
       {patient.notes && (
         <View style={st.section}>
@@ -340,7 +351,7 @@ const st = StyleSheet.create({
   section:      { marginBottom: 20 },
   sectionTitle: { color: '#94A3B8', fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   fieldRow:     { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-  fieldLabel:   { color: '#64748B', fontSize: 11, marginBottom: 2 },
+  fieldLabel:   { ...DentalForm.label },
   fieldValue:   { color: '#E2E8F0', fontSize: 14, fontWeight: '500' },
   notes:        { color: '#CBD5E1', fontSize: 13, lineHeight: 20 },
   waBtn:        { marginTop: 12, backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center' },

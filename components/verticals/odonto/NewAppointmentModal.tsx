@@ -12,6 +12,7 @@
 import { useState, useEffect, createElement } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { DentalForm } from "@/constants/dental-tokens";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -364,7 +365,7 @@ const s = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
   form: { padding: 14, gap: 8, paddingBottom: 24 },
   sectionLabel: { fontSize: 11, fontWeight: "700", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.6 },
-  fieldLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  fieldLabel: { ...DentalForm.label },
   input: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink } as any,
   inputMultiline: { minHeight: 60, textAlignVertical: "top" } as any,
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },

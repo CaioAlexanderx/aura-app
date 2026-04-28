@@ -525,7 +525,7 @@ export function AgendaDental({
   onMoveAppointment,
   onResizeAppointment,
 }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>("semana");
+  const [viewMode, setViewMode] = useState<ViewMode>("dia");
   const anchor = date || new Date();
 
   const displayDate = anchor.toLocaleDateString("pt-BR", {
@@ -572,20 +572,9 @@ export function AgendaDental({
       <View style={s.header}>
         <Text style={s.dateTitle}>{displayDate}</Text>
         <View style={s.headerRight}>
-          {/* View toggle */}
-          <View style={s.viewToggle}>
-            {(["dia", "semana"] as ViewMode[]).map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => setViewMode(m)}
-                style={[s.viewBtn, viewMode === m && s.viewBtnActive]}
-              >
-                <Text style={[s.viewBtnText, viewMode === m && s.viewBtnTextActive]}>
-                  {m === "dia" ? "Dia" : "Semana"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {/* PR21 #7: viewToggle interno removido (duplicava AgendaNavigator
+              externo de OdontoClinicTabs). AgendaDental agora so renderiza
+              o dia que o pai escolheu. */}
           {onNewAppointment && (
             <Pressable onPress={onNewAppointment} style={s.addBtn}>
               <Text style={s.addBtnText}>+ Agendar</Text>
