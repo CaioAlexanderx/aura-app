@@ -1,35 +1,10 @@
 // ============================================================
 // ConsultaShell — Orquestrador do Modo Consulta.
+// Ver historico de PRs nos commits.
 //
-// Estados:
-//   - intro:  brief pre-consulta + botao "Iniciar"
-//   - active: stage com odontograma + prontuario + voz + IA + FABs
-//   - ended:  modal de encerramento aberto
-//
-// Fetches (via React Query):
-//   - GET /companies/:cid/dental/appointments/:aid
-//   - GET /companies/:cid/dental/patients/:pid/chart
-//
-// Mutations:
-//   - POST /companies/:cid/dental/patients/:pid/chart  (ao salvar tooth popover)
-//   - PATCH /companies/:cid/dental/appointments/:aid (no end modal)
-//
-// Modais filhos: RxTemplateModal, ExamRequestModal,
-// AgendarProximoModal, ConsultaEndModal, ToothPopover.
-//
-// PR19: ConsultaAiPanel real (substituiu Gated). briefSeed propaga
-// resposta do brief auto da Intro pra ser exibida como 1a mensagem.
-//
-// PR23: patientPhone passado pro ConsultaEndModal pra usar no
-// fluxo de assinatura digital (WhatsApp).
-//
-// PR25 (#4): alinhamento final com mockup v3.
-// - FAB cluster ganha 4o botao (camera intraoral) - placeholder via toast
-// - Mobile: voz/IA migra do rodape fixo pra drawer bottom (FAB violeta)
-//   Antes ocupava 200px em mobile sempre-visivel, comendo o odontograma.
-//
-// PR28 (#13): FAB camera intraoral agora abre WebcamCapture (facing
-// environment / traseira) pra registrar fotos durante atendimento.
+// PR32 #6 (2026-04-28): botao "Anotar" do ConsultaVoicePanel agora
+// abre VoiceTranscription real (Web Speech API). Texto transcrito vai
+// pro transcript da consulta.
 // ============================================================
 
 import { useMemo, useReducer, useState } from "react";
@@ -59,34 +34,23 @@ import { RxTemplateModal } from "./RxTemplateModal";
 import { ExamRequestModal } from "./ExamRequestModal";
 import { AgendarProximoModal } from "./AgendarProximoModal";
 import { ConsultaEndModal } from "./ConsultaEndModal";
+import { VoiceTranscription } from "./VoiceTranscription";
 
-interface Props {
-  appointmentId: string;
-}
+interface Props { appointmentId: string; }
 
 interface AppointmentResp {
   appointment: {
-    id: string;
-    patient_id: string;
-    customer_id: string;
-    scheduled_at: string;
-    duration_min: number;
-    chief_complaint: string | null;
-    status: string;
-    practitioner_id: string | null;
-    professional_name: string | null;
-    patient_name: string;
-    patient_phone: string | null;
-    insurance_name: string | null;
-    allergies: string | null;
+    id: string; patient_id: string; customer_id: string;
+    scheduled_at: string; duration_min: number;
+    chief_complaint: string | null; status: string;
+    practitioner_id: string | null; professional_name: string | null;
+    patient_name: string; patient_phone: string | null;
+    insurance_name: string | null; allergies: string | null;
   };
 }
 interface ChartResp {
   patient_id: string;
-  teeth: Array<{
-    tooth: number;
-    faces: Array<{ status: string; face: string | null; notes: string | null }>;
-  }>;
+  teeth: Array<{ tooth: number; faces: Array<{ status: string; face: string | null; notes: string | null }>; }>;
 }
 
 const UPPER_TEETH = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
@@ -162,15 +126,15 @@ export function ConsultaShell({ appointmentId }: Props) {
   const [showVoiceMobile, setShowVoiceMobile] = useState(false);
   const [openModal, setOpenModal] = useState<"none" | "rx" | "exam" | "agendar">("none");
   const [briefSeed, setBriefSeed] = useState<string | null>(null);
-  // PR28 #13: captura intraoral durante consulta
   const [showCamera, setShowCamera] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
+  // PR32 #6: estado da janela de transcricao por voz
+  const [showVoiceTranscript, setShowVoiceTranscript] = useState(false);
 
   const apptQ = useQuery({
     queryKey: ["dental-appt", cid, appointmentId],
     queryFn: () => request<AppointmentResp>(`/companies/${cid}/dental/appointments/${appointmentId}`),
-    enabled: !!cid && !!appointmentId,
-    staleTime: 15000,
+    enabled: !!cid && !!appointmentId, staleTime: 15000,
   });
   const appointment: ConsultaAppointment | null = apptQ.data?.appointment
     ? {
@@ -181,8 +145,7 @@ export function ConsultaShell({ appointmentId }: Props) {
         status: apptQ.data.appointment.status,
         practitioner_id: apptQ.data.appointment.practitioner_id,
         professional_name: apptQ.data.appointment.professional_name,
-      }
-    : null;
+      } : null;
 
   const patientId = apptQ.data?.appointment?.customer_id || apptQ.data?.appointment?.patient_id || null;
   const patient: ConsultaPatient | null = apptQ.data?.appointment
@@ -192,14 +155,12 @@ export function ConsultaShell({ appointmentId }: Props) {
         phone: apptQ.data.appointment.patient_phone,
         insurance_name: apptQ.data.appointment.insurance_name,
         allergies: apptQ.data.appointment.allergies,
-      }
-    : null;
+      } : null;
 
   const chartQ = useQuery({
     queryKey: ["dental-chart", cid, patientId],
     queryFn: () => request<ChartResp>(`/companies/${cid}/dental/patients/${patientId}/chart`),
-    enabled: !!cid && !!patientId,
-    staleTime: 30000,
+    enabled: !!cid && !!patientId, staleTime: 30000,
   });
 
   const toothOverrides = useMemo(() => {
@@ -216,30 +177,18 @@ export function ConsultaShell({ appointmentId }: Props) {
     mutationFn: (input: { tooth_number: number; status: ToothStatus; notes: string | null }) =>
       request(`/companies/${cid}/dental/patients/${patientId}/chart`, {
         method: "POST",
-        body: {
-          appointment_id: appointmentId,
-          tooth_number: input.tooth_number,
-          status: input.status,
-          notes: input.notes,
-        },
+        body: { appointment_id: appointmentId, tooth_number: input.tooth_number, status: input.status, notes: input.notes },
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dental-chart", cid, patientId] });
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["dental-chart", cid, patientId] }); },
     onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar dente"),
   });
 
-  function onToothSelect(t: ToothData) {
-    setSelectedTooth(t);
-  }
+  function onToothSelect(t: ToothData) { setSelectedTooth(t); }
   function onToothPopoverSave({ status, notes }: { status: ToothStatus; notes: string | null }) {
     if (!selectedTooth) return;
     const prev = selectedTooth.status;
     const change: ToothChange = {
-      tooth_number: selectedTooth.number,
-      prev_status: prev,
-      status,
-      notes,
+      tooth_number: selectedTooth.number, prev_status: prev, status, notes,
       added_at: new Date().toISOString(),
     };
     dispatch({ type: "tooth_change", change });
@@ -254,14 +203,21 @@ export function ConsultaShell({ appointmentId }: Props) {
     if (text) dispatch({ type: "transcript_command", segment: { id: Date.now() + "_cmd", text, ts: new Date().toISOString() } });
     if (kind === "prescrever") setOpenModal("rx");
     else if (kind === "marcar") toast.success("Comando: marcar dente — clique no dente desejado");
-    else if (kind === "anotar") toast.success("Comando: anotar — clique no dente pra adicionar nota");
+    else if (kind === "anotar") setShowVoiceTranscript(true); // PR32 #6: abre transcricao real
   }
 
-  // PR28 #13: callback da camera intraoral
   function onIntraoralCapture(dataUrl: string) {
     setPhotos((prev) => [...prev, dataUrl]);
     toast.success(`Foto registrada (${photos.length + 1} no total)`);
-    // TODO: persistir no backend via endpoint de imagens do paciente
+  }
+
+  // PR32 #6: callback quando transcricao termina, adiciona ao transcript
+  function onVoiceTranscript(text: string) {
+    dispatch({ type: "transcript_append", segment: {
+      id: Date.now() + "_tr",
+      text,
+      ts: new Date().toISOString(),
+    }});
   }
 
   if (state.stage === "intro") {
@@ -274,21 +230,16 @@ export function ConsultaShell({ appointmentId }: Props) {
           </View>
         ) : (
           <ConsultaIntro
-            patient={patient}
-            appointment={appointment}
-            appointmentId={appointmentId}
-            patientId={patientId || ""}
-            loading={apptQ.isFetching}
+            patient={patient} appointment={appointment} appointmentId={appointmentId}
+            patientId={patientId || ""} loading={apptQ.isFetching}
             onStart={() => dispatch({ type: "start" })}
-            onCancel={() => router.back()}
-            onBriefReady={setBriefSeed}
+            onCancel={() => router.back()} onBriefReady={setBriefSeed}
           />
         )}
       </View>
     );
   }
 
-  // PR25 #4: bottom area (voz + IA) so renderiza em desktop.
   const bottomAreaHeight = isDesktop ? 200 : 0;
 
   return (
@@ -298,11 +249,8 @@ export function ConsultaShell({ appointmentId }: Props) {
 
       <View style={{ flex: 1, flexDirection: "row" }}>
         <View style={{ flex: 1.3, borderRightWidth: isDesktop ? 1 : 0, borderRightColor: DentalColors.border }}>
-          <ConsultaOdontogramaPanel
-            teeth={teeth}
-            onToothSelect={onToothSelect}
-            highlightTeeth={state.toothChanges.map((c) => c.tooth_number)}
-          />
+          <ConsultaOdontogramaPanel teeth={teeth} onToothSelect={onToothSelect}
+            highlightTeeth={state.toothChanges.map((c) => c.tooth_number)} />
         </View>
         {isDesktop ? (
           <View style={{ flex: 1 }}>
@@ -312,16 +260,9 @@ export function ConsultaShell({ appointmentId }: Props) {
       </View>
 
       {isDesktop ? (
-        <View style={{
-          height: bottomAreaHeight, flexDirection: "row",
-          borderTopWidth: 1, borderTopColor: DentalColors.border,
-        }}>
+        <View style={{ height: bottomAreaHeight, flexDirection: "row", borderTopWidth: 1, borderTopColor: DentalColors.border }}>
           <View style={{ flex: 1.1, borderRightWidth: 1, borderRightColor: DentalColors.border }}>
-            <ConsultaVoicePanel
-              transcript={state.transcript}
-              onAppendSegment={onVoiceSegment}
-              onCommand={onVoiceCommand}
-            />
+            <ConsultaVoicePanel transcript={state.transcript} onAppendSegment={onVoiceSegment} onCommand={onVoiceCommand} />
           </View>
           <View style={{ flex: 1 }}>
             <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
@@ -329,13 +270,8 @@ export function ConsultaShell({ appointmentId }: Props) {
         </View>
       ) : null}
 
-      {/* FAB cluster — desktop/tablet landscape */}
       {isDesktop ? (
-        <View style={{
-          position: "absolute", bottom: bottomAreaHeight + 20, right: 14, zIndex: 40,
-          gap: 8,
-        }}>
-          {/* PR28 #13: agora abre WebcamCapture com facing=environment (camera traseira intraoral) */}
+        <View style={{ position: "absolute", bottom: bottomAreaHeight + 20, right: 14, zIndex: 40, gap: 8 }}>
           <FabBtn label="📷" color={DentalColors.cyan} onPress={() => setShowCamera(true)}
             badge={photos.length > 0 ? photos.length : undefined} />
           <FabBtn label="💊" color={DentalColors.violet} onPress={() => setOpenModal("rx")} />
@@ -344,45 +280,20 @@ export function ConsultaShell({ appointmentId }: Props) {
         </View>
       ) : null}
 
-      {/* Mobile FABs */}
       {!isDesktop ? (
-        <View style={{
-          position: "absolute", bottom: 20, left: 14, right: 14, zIndex: 40,
-          flexDirection: "row", gap: 8, justifyContent: "space-between",
-        }}>
-          <Pressable
-            onPress={() => setShowProntuarioMobile(true)}
-            style={{
-              flex: 1, backgroundColor: DentalColors.violet,
-              paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12,
-              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-            }}>
+        <View style={{ position: "absolute", bottom: 20, left: 14, right: 14, zIndex: 40, flexDirection: "row", gap: 8, justifyContent: "space-between" }}>
+          <Pressable onPress={() => setShowProntuarioMobile(true)} style={{ flex: 1, backgroundColor: DentalColors.violet, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
             <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>📋 Prontuario</Text>
           </Pressable>
-          <Pressable
-            onPress={() => setShowVoiceMobile(true)}
-            style={{
-              flex: 1, backgroundColor: DentalColors.red,
-              paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12,
-              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-            }}>
+          <Pressable onPress={() => setShowVoiceMobile(true)} style={{ flex: 1, backgroundColor: DentalColors.red, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
             <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>🎙 Voz / IA</Text>
           </Pressable>
         </View>
       ) : null}
 
       {!isDesktop && showProntuarioMobile ? (
-        <View style={{
-          position: "absolute", top: 0, right: 0, bottom: 0,
-          width: "85%", maxWidth: 380, zIndex: 100,
-          backgroundColor: DentalColors.bg2,
-          borderLeftWidth: 1, borderLeftColor: DentalColors.border,
-          shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24,
-        }}>
-          <View style={{
-            flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-            padding: 14, borderBottomWidth: 1, borderBottomColor: DentalColors.border,
-          }}>
+        <View style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "85%", maxWidth: 380, zIndex: 100, backgroundColor: DentalColors.bg2, borderLeftWidth: 1, borderLeftColor: DentalColors.border, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
             <Text style={{ color: DentalColors.ink, fontSize: 13, fontWeight: "700" }}>📋 Prontuario</Text>
             <Pressable onPress={() => setShowProntuarioMobile(false)}>
               <Text style={{ color: DentalColors.ink2, fontSize: 14 }}>✕</Text>
@@ -393,19 +304,8 @@ export function ConsultaShell({ appointmentId }: Props) {
       ) : null}
 
       {!isDesktop && showVoiceMobile ? (
-        <View style={{
-          position: "absolute", left: 0, right: 0, bottom: 0,
-          height: "70%", zIndex: 100,
-          backgroundColor: DentalColors.bg2,
-          borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          borderTopWidth: 1, borderTopColor: DentalColors.border,
-          shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24,
-          flexDirection: "column",
-        }}>
-          <View style={{
-            flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-            padding: 14, borderBottomWidth: 1, borderBottomColor: DentalColors.border,
-          }}>
+        <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "70%", zIndex: 100, backgroundColor: DentalColors.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderTopColor: DentalColors.border, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24, flexDirection: "column" }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
             <Text style={{ color: DentalColors.ink, fontSize: 13, fontWeight: "700" }}>🎙 Voz + IA Aura</Text>
             <Pressable onPress={() => setShowVoiceMobile(false)}>
               <Text style={{ color: DentalColors.ink2, fontSize: 14 }}>✕</Text>
@@ -413,11 +313,7 @@ export function ConsultaShell({ appointmentId }: Props) {
           </View>
           <View style={{ flex: 1, flexDirection: "column" }}>
             <View style={{ flex: 1, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
-              <ConsultaVoicePanel
-                transcript={state.transcript}
-                onAppendSegment={onVoiceSegment}
-                onCommand={onVoiceCommand}
-              />
+              <ConsultaVoicePanel transcript={state.transcript} onAppendSegment={onVoiceSegment} onCommand={onVoiceCommand} />
             </View>
             <View style={{ flex: 1 }}>
               <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
@@ -426,55 +322,19 @@ export function ConsultaShell({ appointmentId }: Props) {
         </View>
       ) : null}
 
-      <ToothPopover
-        tooth={selectedTooth}
-        onClose={() => setSelectedTooth(null)}
-        onSave={onToothPopoverSave}
-      />
-      <RxTemplateModal
-        open={openModal === "rx"}
-        patientId={patientId}
-        appointmentId={appointmentId}
-        practitionerId={appointment?.practitioner_id || null}
-        patientName={patient?.name}
-        onClose={() => setOpenModal("none")}
-      />
-      <ExamRequestModal
-        open={openModal === "exam"}
-        patientId={patientId}
-        appointmentId={appointmentId}
-        practitionerId={appointment?.practitioner_id || null}
-        patientName={patient?.name}
-        onClose={() => setOpenModal("none")}
-      />
-      <AgendarProximoModal
-        open={openModal === "agendar"}
-        patientId={patientId}
-        patientName={patient?.name}
-        practitionerId={appointment?.practitioner_id || null}
-        defaultDurationMin={appointment?.duration_min || 60}
-        onClose={() => setOpenModal("none")}
-      />
-      <ConsultaEndModal
-        open={state.stage === "ended"}
-        appointmentId={appointmentId}
-        patientId={patientId || null}
-        toothChanges={state.toothChanges}
-        transcript={state.transcript}
-        procedureSeed={appointment?.chief_complaint || ""}
-        patientName={patient?.name}
-        patientPhone={patient?.phone || undefined}
-        onClose={() => dispatch({ type: "hide_end" })}
-        onDone={() => router.replace("/dental/(clinic)/hoje")}
-      />
-      {/* PR28 #13: camera intraoral durante consulta */}
-      <WebcamCapture
-        visible={showCamera}
-        onClose={() => setShowCamera(false)}
-        onCapture={onIntraoralCapture}
-        title="Camera intraoral"
-        hint="Aproxime o foco da regiao a documentar"
-        facing="environment"
+      <ToothPopover tooth={selectedTooth} onClose={() => setSelectedTooth(null)} onSave={onToothPopoverSave} />
+      <RxTemplateModal open={openModal === "rx"} patientId={patientId} appointmentId={appointmentId} practitionerId={appointment?.practitioner_id || null} patientName={patient?.name} onClose={() => setOpenModal("none")} />
+      <ExamRequestModal open={openModal === "exam"} patientId={patientId} appointmentId={appointmentId} practitionerId={appointment?.practitioner_id || null} patientName={patient?.name} onClose={() => setOpenModal("none")} />
+      <AgendarProximoModal open={openModal === "agendar"} patientId={patientId} patientName={patient?.name} practitionerId={appointment?.practitioner_id || null} defaultDurationMin={appointment?.duration_min || 60} onClose={() => setOpenModal("none")} />
+      <ConsultaEndModal open={state.stage === "ended"} appointmentId={appointmentId} patientId={patientId || null} toothChanges={state.toothChanges} transcript={state.transcript} procedureSeed={appointment?.chief_complaint || ""} patientName={patient?.name} patientPhone={patient?.phone || undefined} onClose={() => dispatch({ type: "hide_end" })} onDone={() => router.replace("/dental/(clinic)/hoje")} />
+      <WebcamCapture visible={showCamera} onClose={() => setShowCamera(false)} onCapture={onIntraoralCapture} title="Camera intraoral" hint="Aproxime o foco da regiao a documentar" facing="environment" />
+      {/* PR32 #6: transcricao por voz */}
+      <VoiceTranscription
+        visible={showVoiceTranscript}
+        onClose={() => setShowVoiceTranscript(false)}
+        onTranscript={onVoiceTranscript}
+        title="Anotar via voz"
+        hint={patient?.name ? `Atendimento de ${patient.name} - fale sua observacao` : "Fale sua observacao"}
       />
     </View>
   );
