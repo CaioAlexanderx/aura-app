@@ -119,11 +119,15 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
   }, [apiTx, isDemo]);
 
   var summary = useMemo(function() {
-    var income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0);
-    var expenses = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    var income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : transactions.filter(function(t) { return t.type === "income" && t.status === "confirmed"; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    var expenses = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : transactions.filter(function(t) { return t.type === "expense" && t.status === "confirmed"; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    // Pending exposto separadamente pelo backend (PR aura-backend#3 mergeado 27/04 noite).
+    // Frontend exibe como badge "X em pendentes" sem inflar o saldo.
+    var pendingIncome = apiTx?.summary?.pending_income != null ? parseFloat(apiTx.summary.pending_income) : transactions.filter(function(t) { return t.type === "income" && t.status === "pending"; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    var pendingExpenses = apiTx?.summary?.pending_expenses != null ? parseFloat(apiTx.summary.pending_expenses) : transactions.filter(function(t) { return t.type === "expense" && t.status === "pending"; }).reduce(function(s, t) { return s + t.amount; }, 0);
     // gap: vendas sem lancamento correspondente (backend calcula, exposto para aviso visual)
     var gap = apiTx?.summary?.gap != null ? parseFloat(apiTx.summary.gap) : 0;
-    return { income: income, expenses: expenses, balance: income - expenses, gap: gap };
+    return { income: income, expenses: expenses, balance: income - expenses, gap: gap, pendingIncome: pendingIncome, pendingExpenses: pendingExpenses };
   }, [apiTx, transactions]);
 
   var previousSummary = useMemo(function() {
