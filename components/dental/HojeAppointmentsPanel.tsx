@@ -12,10 +12,14 @@ import { DentalColors } from "@/constants/dental-tokens";
 // PR19 (2026-04-27): bug fix — status 'confirmado' nao existe no
 // enum dental_appointment_status. Substituido por aprovado +
 // avaliacao (valores reais).
+// PR24 (2026-04-28): botao "Prontuario" ao lado do "Iniciar"
+// abre PatientHub na aba prontuario via deep-link.
 // ============================================================
 
 interface DentalAppointment {
   id: string;
+  patient_id?: string;       // PR24: pra atalho de prontuario (BE retorna c.id AS patient_id)
+  customer_id?: string;      // PR24: alias do patient_id
   patient_name: string;
   patient_phone?: string;
   scheduled_at: string;
@@ -155,9 +159,16 @@ export function HojeAppointmentsPanel() {
                   </Text>
                 </View>
                 {a.status === "agendado" || a.status === "aprovado" || a.status === "em_atendimento" ? (
-                  <Pressable onPress={() => router.push(`/dental/consulta/${a.id}` as any)} style={{ backgroundColor: DentalColors.cyan, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 }} accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}>
-                    <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>▶ Iniciar</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    {(a.customer_id || a.patient_id) ? (
+                      <Pressable onPress={() => router.push(`/dental/(clinic)/pacientes?open_patient=${a.customer_id || a.patient_id}&tab=prontuario` as any)} style={{ backgroundColor: "rgba(124,58,237,0.12)", borderWidth: 1, borderColor: "rgba(124,58,237,0.30)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 }} accessibilityLabel={`Abrir prontuario de ${a.patient_name || "paciente"}`}>
+                        <Text style={{ color: DentalColors.violet, fontSize: 10, fontWeight: "700" }}>📋 Prontuario</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable onPress={() => router.push(`/dental/consulta/${a.id}` as any)} style={{ backgroundColor: DentalColors.cyan, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 }} accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}>
+                      <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>▶ Iniciar</Text>
+                    </Pressable>
+                  </View>
                 ) : null}
               </View>
             );
