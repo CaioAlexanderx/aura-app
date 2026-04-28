@@ -1,16 +1,7 @@
 // ============================================================
 // AgendarProximoModal — Calendario de slots para proximo agend.
 //
-// Le agenda dos proximos 14 dias via:
-//   GET /companies/:cid/dental/agenda?start=ISO&end=ISO
-//
-// PR20 (2026-04-27): janela horária dinâmica vinda de
-//   GET /companies/:cid/dental/booking/config (start_hour, end_hour,
-//   slot_duration_min, available_days). Antes era hardcoded 8-18.
-//   Suporta janela 0-24h e qualquer combinação de dias da semana.
-//
-// Quando dentista escolhe slot e confirma, cria appointment via:
-//   POST /companies/:cid/dental/appointments
+// PR34 (2026-04-28): backdrop centrado + sheet com maxWidth.
 // ============================================================
 
 import { useMemo, useState } from "react";
@@ -66,7 +57,7 @@ function buildDays(
   const startH = cfg?.start_hour ?? 8;
   const endH = cfg?.end_hour ?? 18;
   const slotMin = cfg?.slot_duration_min || 30;
-  const allowedDays = new Set(cfg?.available_days || [1, 2, 3, 4, 5, 6]); // default seg-sáb
+  const allowedDays = new Set(cfg?.available_days || [1, 2, 3, 4, 5, 6]);
 
   const out: DaySlots[] = [];
   const busyByDay: Record<string, Array<{ start: number; end: number }>> = {};
@@ -179,12 +170,13 @@ export function AgendarProximoModal({
   function close() { reset(); onClose(); }
 
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", padding: 20 }}>
+    <Modal visible={open} animationType="fade" transparent onRequestClose={close}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 20 }}>
         <View style={{
           backgroundColor: DentalColors.bg2,
           borderRadius: 16, borderWidth: 1, borderColor: DentalColors.border,
           maxHeight: "90%", padding: 18,
+          width: "100%", maxWidth: 600,
         }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
             📅 Agendar próxima consulta
