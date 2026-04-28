@@ -16,7 +16,7 @@ import type { Transaction, PeriodKey } from "./types";
 
 var isWeb = Platform.OS === "web";
 
-type Summary = { income: number; expenses: number; balance: number };
+type Summary = { income: number; expenses: number; balance: number; pendingIncome?: number; pendingExpenses?: number };
 
 type Props = {
   transactions: Transaction[];
@@ -45,6 +45,8 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         income={summary.income}
         expenses={summary.expenses}
         balance={summary.balance}
+        pendingIncome={summary.pendingIncome}
+        pendingExpenses={summary.pendingExpenses}
         txCount={transactions.length}
         period={period}
         customStart={customStart}
