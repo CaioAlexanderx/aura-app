@@ -2,7 +2,7 @@
 // 11 sub-tabs + header: IA | Exame | Doc | TCLE | Portal
 // Decomposicao: PatientHubSubTabs (9 sub-tabs) + modais separados
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal, View, Text, StyleSheet,
   Platform, Pressable,
@@ -57,6 +57,8 @@ interface Props {
   patient: PatientLite | null;
   onClose: () => void;
   onEdit?: (patient: PatientLite) => void;
+  /** Tab inicial ao abrir. Default: 'dados'. PR24: usado por atalho de prontuario na agenda. */
+  initialTab?: string;
 }
 
 const HUB_TABS: SubTab[] = [
@@ -73,9 +75,16 @@ const HUB_TABS: SubTab[] = [
   { id: 'ortodontia',  label: 'Ortodontia',  component: () => null },
 ];
 
-export function PatientHub({ visible, patient, onClose, onEdit }: Props) {
+export function PatientHub({ visible, patient, onClose, onEdit, initialTab }: Props) {
   const qc = useQueryClient();
-  const [activeTab,   setActiveTab]   = useState('dados');
+  const [activeTab,   setActiveTab]   = useState(initialTab || 'dados');
+
+  // PR24: re-aplica initialTab quando o modal reabre com tab diferente
+  // (pra deep-link `?tab=prontuario` funcionar quando hub ja foi aberto antes).
+  // useState so usa o valor inicial no primeiro mount; ao reabrir precisa setState.
+  useEffect(() => {
+    if (visible && initialTab) setActiveTab(initialTab);
+  }, [visible, initialTab]);
   const [portalOpen,  setPortalOpen]  = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [aiOpen,      setAiOpen]      = useState(false);

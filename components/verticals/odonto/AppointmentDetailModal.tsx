@@ -9,8 +9,10 @@
 //   - Se paciente assinar -> BE transiciona pra concluido automaticamente.
 //   - Se fechar sem assinar -> so fecha o drawer, nao conclui.
 //   - Botao avulso "Coletar assinatura" removido.
+// PR24 (2026-04-28): atalho "Abrir prontuario" no footer.
 // ============================================================
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { Modal, View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -39,6 +41,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function AppointmentDetailModal({ visible, appointmentId, onClose }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
+  const router = useRouter();
   const [signatureOpen, setSignatureOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -154,6 +157,18 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                   <Icon name="edit" size={12} color={Colors.ink3} />
                   <Text style={s.concludeNoteText}>A assinatura do paciente sera coletada ao concluir</Text>
                 </View>
+              )}
+              {/* PR24: atalho pro prontuario do paciente */}
+              {(appt.customer_id || appt.patient_id) && (
+                <Pressable
+                  onPress={() => {
+                    onClose();
+                    router.push(`/dental/(clinic)/pacientes?open_patient=${appt.customer_id || appt.patient_id}&tab=prontuario` as any);
+                  }}
+                  style={[s.btn, { backgroundColor: "rgba(124,58,237,0.12)", borderWidth: 1, borderColor: "rgba(124,58,237,0.30)", flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", marginHorizontal: 16, marginTop: 10, marginBottom: 4 }]}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.violet3 || "#a78bfa" }}>📋 Abrir prontuario</Text>
+                </Pressable>
               )}
               <View style={s.footer}>
                 {canTransitionTo("em_atendimento") && (
