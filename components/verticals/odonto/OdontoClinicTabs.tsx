@@ -23,7 +23,7 @@ import { AgendaDentalMonth } from "@/components/verticals/odonto/AgendaDentalMon
 import { AgendaNavigator, agendaRangeFor, type AgendaView } from "@/components/verticals/odonto/AgendaNavigator";
 import { OdontogramaSVG } from "@/components/verticals/odonto/OdontogramaSVG";
 import { ProntuarioTimeline } from "@/components/verticals/odonto/ProntuarioTimeline";
-import { NewPatientModal } from "@/components/verticals/odonto/NewPatientModal";
+import { PatientFormModal, type PatientFormData } from "@/components/verticals/odonto/PatientFormModal";
 import { NewAppointmentModal } from "@/components/verticals/odonto/NewAppointmentModal";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
 import { AppointmentsList } from "@/components/verticals/odonto/AppointmentsList";
@@ -229,6 +229,7 @@ export function PacientesTab() {
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientLite | null>(null);
+  const [editingPatient, setEditingPatient] = useState<PatientLite | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-patients", cid, search],
@@ -275,10 +276,25 @@ export function PacientesTab() {
                 name: p.full_name || p.name,
                 full_name: p.full_name,
                 phone: p.phone,
+                phone_secondary: p.phone_secondary,
                 email: p.email,
                 cpf: p.cpf_cnpj || p.cpf,
                 birthday: p.birth_date,
+                birth_date: p.birth_date,
+                gender: p.gender,
+                postal_code: p.postal_code,
+                street: p.street,
+                address_number: p.address_number,
+                complement: p.complement,
+                neighborhood: p.neighborhood,
+                city: p.city,
+                state: p.state,
+                allergies: p.allergies,
+                medical_history: p.medical_history,
+                medications: p.medications,
+                insurance_name: p.insurance_name,
                 notes: p.notes,
+                created_at: p.created_at,
                 is_patient: true,
               })}
               style={z.patientCard}
@@ -299,11 +315,46 @@ export function PacientesTab() {
         })}
       </View>
 
-      <NewPatientModal visible={showNew} onClose={() => setShowNew(false)} />
+      <PatientFormModal
+        visible={showNew || !!editingPatient}
+        mode={editingPatient ? "edit" : "create"}
+        patient={editingPatient as any}
+        onClose={() => { setShowNew(false); setEditingPatient(null); }}
+        onSaved={(saved: PatientFormData | undefined) => {
+          // Em edit, refletir mudancas no Hub aberto sem reabrir
+          if (editingPatient && saved && selectedPatient && saved.id === selectedPatient.id) {
+            setSelectedPatient({
+              ...selectedPatient,
+              name:           saved.full_name || selectedPatient.name,
+              full_name:      saved.full_name || selectedPatient.full_name,
+              phone:          saved.phone ?? null,
+              phone_secondary: saved.phone_secondary ?? null,
+              email:          saved.email ?? null,
+              cpf:            saved.cpf ?? null,
+              birthday:       saved.birth_date ?? null,
+              birth_date:     saved.birth_date ?? null,
+              gender:         saved.gender ?? null,
+              postal_code:    saved.postal_code ?? null,
+              street:         saved.street ?? null,
+              address_number: saved.address_number ?? null,
+              complement:     saved.complement ?? null,
+              neighborhood:   saved.neighborhood ?? null,
+              city:           saved.city ?? null,
+              state:          saved.state ?? null,
+              allergies:      saved.allergies ?? null,
+              medical_history: saved.medical_history ?? null,
+              medications:    saved.medications ?? null,
+              insurance_name: saved.insurance_name ?? null,
+            });
+          }
+          setShowNew(false); setEditingPatient(null);
+        }}
+      />
       <PatientHub
         visible={!!selectedPatient}
         patient={selectedPatient}
         onClose={() => setSelectedPatient(null)}
+        onEdit={(p) => setEditingPatient(p)}
       />
     </>
   );

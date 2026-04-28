@@ -28,11 +28,28 @@ export interface PatientLite {
   name: string;
   full_name?: string;
   phone?: string | null;
+  phone_secondary?: string | null;
   email?: string | null;
   cpf?: string | null;
-  birthday?: string | null;
+  birthday?: string | null; // ISO YYYY-MM-DD (alias historico de birth_date)
+  birth_date?: string | null;
+  gender?: string | null;
+  // Endereco (PR22 — para NF-e)
+  postal_code?: string | null;
+  street?: string | null;
+  address_number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  // Clinico
+  allergies?: string | null;
+  medical_history?: string | null;
+  medications?: string | null;
+  insurance_name?: string | null;
   notes?: string | null;
   is_patient?: boolean;
+  created_at?: string;
 }
 
 interface Props {

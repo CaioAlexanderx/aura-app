@@ -21,6 +21,17 @@ function fmtBirthDateBR(iso: string | null | undefined): string {
   if (!m) return iso;
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
+
+function fmtCEP(s: string | null | undefined): string {
+  if (!s) return '';
+  const d = String(s).replace(/\D/g, '').slice(0, 8);
+  return d.length === 8 ? d.slice(0, 5) + '-' + d.slice(5) : (s as string);
+}
+
+function fmtCreatedAt(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return '—'; }
+}
 import { AnamneseWizard, type AnamneseData } from './AnamneseWizard';
 import { ClinicalImages } from './ClinicalImages';
 import { Periograma } from './Periograma';
@@ -91,7 +102,31 @@ export function DataTab({ patient }: { patient: PatientLite }) {
         <Text style={st.sectionTitle}>Identificacao</Text>
         <Field label="CPF" value={patient.cpf} />
         <Field label="Data nascimento" value={fmtBirthDateBR(patient.birthday)} />
+        <Field label="Telefone secundario" value={(patient as any).phone_secondary} />
       </View>
+
+      {/* Endereco — PR22 */}
+      {(patient.postal_code || patient.street || patient.city) && (
+        <View style={st.section}>
+          <Text style={st.sectionTitle}>Endereco</Text>
+          <Field label="CEP" value={fmtCEP(patient.postal_code)} />
+          <Field
+            label="Logradouro"
+            value={[patient.street, patient.address_number, patient.complement].filter(Boolean).join(', ')}
+          />
+          <Field label="Bairro" value={patient.neighborhood} />
+          <Field
+            label="Cidade / UF"
+            value={[patient.city, patient.state].filter(Boolean).join(' / ')}
+          />
+        </View>
+      )}
+
+      <View style={st.section}>
+        <Text style={st.sectionTitle}>Registro</Text>
+        <Field label="Cadastrado em" value={fmtCreatedAt(patient.created_at)} />
+      </View>
+
       {patient.notes && (
         <View style={st.section}>
           <Text style={st.sectionTitle}>Observacoes</Text>
