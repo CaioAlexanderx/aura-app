@@ -15,8 +15,8 @@
 import React, { useState } from "react";
 import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/authStore";
-import { apiClient } from "@/services/apiClient";
+import { useAuthStore } from "@/stores/auth";
+import { request } from "@/services/api";
 import { DentalColors } from "@/constants/dental-tokens";
 
 type RetentionsResponse = {
@@ -66,12 +66,10 @@ export function DentalTissRetentionsCard() {
 
   const { data, isLoading } = useQuery<RetentionsResponse>({
     queryKey: ["dental-tiss-retentions", companyId, from, to],
-    queryFn: async () => {
-      const r = await apiClient.get(
+    queryFn: () =>
+      request<RetentionsResponse>(
         `/companies/${companyId}/dental/tiss/retentions/summary?from=${from}&to=${to}`
-      );
-      return r.data;
-    },
+      ),
     enabled: !!companyId,
   });
 
