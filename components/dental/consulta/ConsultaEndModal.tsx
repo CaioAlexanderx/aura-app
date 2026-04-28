@@ -12,6 +12,9 @@
 //
 // PR19: Botao "Gerar resumo com IA" (intent=summarize) preenche
 // o campo de procedimento com texto clinico estruturado.
+//
+// PR23: Botao opcional "Coletar assinatura digital" abre
+// SignatureRequestModal (fluxo QR/WhatsApp) antes de encerrar.
 // ============================================================
 
 import { useState } from "react";
@@ -24,6 +27,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 import { useAiAccess } from "@/hooks/useAiAccess";
 import { useDentalAiConsulta } from "@/hooks/useDentalAiConsulta";
 import type { ToothChange, VoiceSegment } from "@/lib/dentalConsultaTypes";
+import { SignatureRequestModal } from "@/components/verticals/odonto/SignatureRequestModal";
 
 interface Props {
   open: boolean;
@@ -33,6 +37,7 @@ interface Props {
   transcript: VoiceSegment[];
   procedureSeed: string;
   patientName?: string;
+  patientPhone?: string;
   onClose: () => void;
   onDone: () => void;
 }
@@ -52,13 +57,16 @@ function buildTranscriptSummary(segments: VoiceSegment[]): string {
 
 export function ConsultaEndModal({
   open, appointmentId, patientId, toothChanges, transcript,
-  procedureSeed, patientName, onClose, onDone,
+  procedureSeed, patientName, patientPhone, onClose, onDone,
 }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
 
   const access = useAiAccess();
   const summarizeMut = useDentalAiConsulta();
+
+  // PR23: assinatura digital opcional ao final do atendimento
+  const [showSignature, setShowSignature] = useState(false);
 
   const [evolution, setEvolution] = useState(
     procedureSeed ? `Procedimento: ${procedureSeed}.\n\nSem intercorrencias. Paciente respondeu bem.` : "Procedimento realizado conforme planejado. Sem intercorrencias.",
@@ -119,6 +127,7 @@ export function ConsultaEndModal({
   });
 
   return (
+    <>
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", padding: 16 }}>
         <View style={{
@@ -191,6 +200,24 @@ export function ConsultaEndModal({
             </SummaryCard>
           </ScrollView>
 
+          {/* PR23: botao opcional pra coletar assinatura antes de encerrar */}
+          {appointmentId && (
+            <Pressable
+              onPress={() => setShowSignature(true)}
+              style={{
+                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+                marginTop: 14,
+                paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8,
+                borderWidth: 1, borderColor: "rgba(6,182,212,0.40)",
+                backgroundColor: "rgba(6,182,212,0.10)",
+              }}>
+              <Text style={{ fontSize: 14 }}>📝</Text>
+              <Text style={{ color: DentalColors.cyan, fontSize: 12, fontWeight: "700" }}>
+                Coletar assinatura digital (opcional)
+              </Text>
+            </Pressable>
+          )}
+
           <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
             <Pressable onPress={onClose} style={btnGhostStyle}>
               <Text style={{ color: DentalColors.ink2, fontSize: 11, fontWeight: "600" }}>Cancelar</Text>
@@ -213,6 +240,21 @@ export function ConsultaEndModal({
         </View>
       </View>
     </Modal>
+
+    {/* PR23: drawer de assinatura digital — abre via botao opcional */}
+    <SignatureRequestModal
+      visible={showSignature}
+      appointmentId={appointmentId}
+      patientName={patientName}
+      patientPhone={patientPhone}
+      onClose={() => setShowSignature(false)}
+      onSigned={() => {
+        // Apos assinar, fecha o sheet de assinatura. Dentista decide se
+        // ainda quer revisar a evolucao antes de "Salvar evolucao · Encerrar".
+        setShowSignature(false);
+      }}
+    />
+    </>
   );
 }
 
