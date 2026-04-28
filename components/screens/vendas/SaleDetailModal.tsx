@@ -260,9 +260,8 @@ export function SaleDetailModal({
           <View style={s.confirmModal}>
             <Text style={s.confirmTitle}>Cancelar venda?</Text>
             <Text style={s.confirmMsg}>
-              Todos os {items.length} item(s) sao devolvidos ao estoque, a receita eh
-              zerada e um lancamento de devolucao eh criado no financeiro.
-              Esta acao nao pode ser desfeita.
+              Os {items.length} item(s) voltam para o estoque e o valor sai da receita.
+              Esta ação não pode ser desfeita.
             </Text>
             <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
             <TextInput
