@@ -8,11 +8,29 @@ import { getMEIObligations, getSNObligations } from "@/components/screens/contab
 
 const STORAGE_KEY = "aura_obl_completed";
 
-// N6 fix: normaliza qualquer valor de regime para 'mei' | 'simples'
-// DB pode ter: 'mei', 'simples', 'simples_nacional', 'lucro_presumido', 'lucro_real'
-function normalizeRegime(raw: string | null | undefined): 'mei' | 'simples' {
-  if ((raw || '').toLowerCase().trim() === 'mei') return 'mei';
-  return 'simples'; // trata SN, lucro presumido, etc. como SN
+// PR36 (2026-04-28): regime cobre 5 valores reais (MEI / Simples / Lucro Presumido /
+// Lucro Real / Pessoa Fisica). Antes colapsava tudo em 'simples'. Backend
+// migrations 075-076 seedam obrigacoes desses regimes - frontend agora as exibe.
+export type FiscalRegime = 'mei' | 'simples' | 'lucro_presumido' | 'lucro_real' | 'pessoa_fisica';
+
+function normalizeRegime(raw: string | null | undefined): FiscalRegime {
+  const v = (raw || '').toLowerCase().trim();
+  if (v === 'mei') return 'mei';
+  if (v === 'lucro_presumido' || v === 'presumido') return 'lucro_presumido';
+  if (v === 'lucro_real' || v === 'real') return 'lucro_real';
+  if (v === 'pessoa_fisica' || v === 'autonomo') return 'pessoa_fisica';
+  // simples_nacional, simples, ou desconhecido => Simples Nacional como default seguro
+  return 'simples';
+}
+
+function regimeLabelOf(r: FiscalRegime): string {
+  switch (r) {
+    case 'mei': return 'MEI';
+    case 'simples': return 'Simples Nacional';
+    case 'lucro_presumido': return 'Lucro Presumido';
+    case 'lucro_real': return 'Lucro Real';
+    case 'pessoa_fisica': return 'Pessoa Fisica (Autonomo)';
+  }
 }
 
 function loadCompleted(): Set<string> {
@@ -32,7 +50,6 @@ export function useObligations() {
 
   const [localCompleted, setLocalCompleted] = useState<Set<string>>(loadCompleted);
 
-  // Query principal: calendario de obrigacoes
   const { data: calendarData, isLoading: calendarLoading } = useQuery<CalendarResponse>({
     queryKey: ["obligations-calendar", companyId],
     queryFn: () => companiesApi.obligationsCalendar?.(companyId!) || companiesApi.obligations?.(companyId!),
@@ -41,23 +58,16 @@ export function useObligations() {
     staleTime: 60000,
   });
 
-  // N6 fix: fallback query para perfil da empresa (sempre inclui tax_regime)
-  // O endpoint /companies/:id/profile retorna tax_regime com fallback 'simples' no backend
   const { data: profileData, isLoading: profileLoading } = useQuery<any>({
     queryKey: ["company-profile", companyId],
     queryFn: () => companiesApi.getProfile(companyId!),
     enabled: !!companyId && !!token && !isDemo,
-    staleTime: 5 * 60 * 1000, // 5 min — regime muda raramente
+    staleTime: 5 * 60 * 1000,
   });
 
   const isLoading = calendarLoading || profileLoading;
 
   const result = useMemo(() => {
-    // N6 fix: cadeia de fallback robusta + normalizacao
-    // 1. API calendar (pode retornar tax_regime)
-    // 2. API profile (sempre retorna — backend tem fallback 'simples')
-    // 3. Auth store (nao tem tax_regime hoje, mas por seguranca)
-    // 4. Ultimo fallback: 'simples' (mais seguro que 'mei' para desconhecido)
     const rawRegime =
       calendarData?.company?.tax_regime ||
       profileData?.tax_regime ||
@@ -65,17 +75,22 @@ export function useObligations() {
       null;
 
     const regime = normalizeRegime(rawRegime);
-    const regimeLabel = regime === "mei" ? "MEI" : "Simples Nacional";
+    const regimeLabel = regimeLabelOf(regime);
     const hasEmployee = calendarData?.company?.has_employee || profileData?.has_employee || false;
 
     let obligations: Obligation[];
     if (calendarData?.calendar?.length) {
+      // Backend ja retornou calendario (incluindo Lucro Presumido/Real/Saude se aplicavel).
       obligations = calendarData.calendar;
     } else {
-      obligations = regime === "mei" ? getMEIObligations() : getSNObligations(hasEmployee);
+      // Fallback hardcoded so cobre MEI e Simples. Pra Presumido/Real/PF, sem fallback -
+      // se backend nao responder, lista fica vazia (esperado, pois nao temos hardcode pra esses).
+      // PR36 TODO: remover fallback completamente apos validar backend resolver.
+      if (regime === 'mei') obligations = getMEIObligations();
+      else if (regime === 'simples') obligations = getSNObligations(hasEmployee);
+      else obligations = []; // Lucro Presumido/Real/PF: depende do backend
     }
 
-    // Aplicar conclusoes persistidas
     obligations = obligations.map(o => {
       if (localCompleted.has(o.code) && o.status !== "done") {
         return { ...o, status: "done" as const, checkpoint_done: o.checkpoint_total };
