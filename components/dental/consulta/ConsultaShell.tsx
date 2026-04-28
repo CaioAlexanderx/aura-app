@@ -22,6 +22,11 @@
 //
 // PR23: patientPhone passado pro ConsultaEndModal pra usar no
 // fluxo de assinatura digital (WhatsApp).
+//
+// PR25 (#4): alinhamento final com mockup v3.
+// - FAB cluster ganha 4o botao (camera intraoral) - placeholder via toast
+// - Mobile: voz/IA migra do rodape fixo pra drawer bottom (FAB violeta)
+//   Antes ocupava 200px em mobile sempre-visivel, comendo o odontograma.
 // ============================================================
 
 import { useMemo, useReducer, useState } from "react";
@@ -150,6 +155,7 @@ export function ConsultaShell({ appointmentId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [selectedTooth, setSelectedTooth] = useState<ToothData | null>(null);
   const [showProntuarioMobile, setShowProntuarioMobile] = useState(false);
+  const [showVoiceMobile, setShowVoiceMobile] = useState(false);
   const [openModal, setOpenModal] = useState<"none" | "rx" | "exam" | "agendar">("none");
   const [briefSeed, setBriefSeed] = useState<string | null>(null);
 
@@ -268,6 +274,10 @@ export function ConsultaShell({ appointmentId }: Props) {
     );
   }
 
+  // PR25 #4: bottom area (voz + IA) so renderiza em desktop.
+  // Em mobile, voz/IA migra pro drawer bottom (FAB violeta).
+  const bottomAreaHeight = isDesktop ? 200 : 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: DentalColors.bg }}>
       <ConsultaTopbar onEnd={() => dispatch({ type: "show_end" })} onMinimize={() => router.back()} />
@@ -288,41 +298,64 @@ export function ConsultaShell({ appointmentId }: Props) {
         ) : null}
       </View>
 
-      <View style={{
-        height: 200, flexDirection: "row",
-        borderTopWidth: 1, borderTopColor: DentalColors.border,
-      }}>
-        <View style={{ flex: 1.1, borderRightWidth: 1, borderRightColor: DentalColors.border }}>
-          <ConsultaVoicePanel
-            transcript={state.transcript}
-            onAppendSegment={onVoiceSegment}
-            onCommand={onVoiceCommand}
-          />
+      {isDesktop ? (
+        <View style={{
+          height: bottomAreaHeight, flexDirection: "row",
+          borderTopWidth: 1, borderTopColor: DentalColors.border,
+        }}>
+          <View style={{ flex: 1.1, borderRightWidth: 1, borderRightColor: DentalColors.border }}>
+            <ConsultaVoicePanel
+              transcript={state.transcript}
+              onAppendSegment={onVoiceSegment}
+              onCommand={onVoiceCommand}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
+      ) : null}
+
+      {/* FAB cluster — desktop/tablet landscape. Em mobile portrait esconde
+          pra dar espaco aos mobile-fabs (Prontuario + Voz). */}
+      {isDesktop ? (
+        <View style={{
+          position: "absolute", bottom: bottomAreaHeight + 20, right: 14, zIndex: 40,
+          gap: 8,
+        }}>
+          <FabBtn label="📷" color={DentalColors.cyan} onPress={() => toast.info("Camera intraoral - em breve")} />
+          <FabBtn label="💊" color={DentalColors.violet} onPress={() => setOpenModal("rx")} />
+          <FabBtn label="🔬" color={DentalColors.amber} onPress={() => setOpenModal("exam")} />
+          <FabBtn label="📅" color={DentalColors.green} onPress={() => setOpenModal("agendar")} />
         </View>
-      </View>
+      ) : null}
 
-      <View style={{
-        position: "absolute", bottom: 220, right: 14, zIndex: 40,
-        gap: 8,
-      }}>
-        <FabBtn label="💊" color={DentalColors.violet} onPress={() => setOpenModal("rx")} />
-        <FabBtn label="🔬" color={DentalColors.amber} onPress={() => setOpenModal("exam")} />
-        <FabBtn label="📅" color={DentalColors.green} onPress={() => setOpenModal("agendar")} />
-      </View>
-
+      {/* Mobile FABs — abre drawers (Prontuario direita, Voz/IA bottom).
+          PR25 #4: agora tambem o Voz/IA tem FAB em mobile (antes era fixo no rodape). */}
       {!isDesktop ? (
-        <Pressable
-          onPress={() => setShowProntuarioMobile(true)}
-          style={{
-            position: "absolute", bottom: 220, left: 14, zIndex: 40,
-            backgroundColor: DentalColors.violet, paddingHorizontal: 12, paddingVertical: 10,
-            borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 6,
-          }}>
-          <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>📋 Prontuario</Text>
-        </Pressable>
+        <View style={{
+          position: "absolute", bottom: 20, left: 14, right: 14, zIndex: 40,
+          flexDirection: "row", gap: 8, justifyContent: "space-between",
+        }}>
+          <Pressable
+            onPress={() => setShowProntuarioMobile(true)}
+            style={{
+              flex: 1, backgroundColor: DentalColors.violet,
+              paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12,
+              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+            <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>📋 Prontuario</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setShowVoiceMobile(true)}
+            style={{
+              flex: 1, backgroundColor: DentalColors.red,
+              paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12,
+              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+            <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>🎙 Voz / IA</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {!isDesktop && showProntuarioMobile ? (
@@ -343,6 +376,41 @@ export function ConsultaShell({ appointmentId }: Props) {
             </Pressable>
           </View>
           <ConsultaProntuarioPanel patient={patient} planItems={[]} timeline={[]} />
+        </View>
+      ) : null}
+
+      {/* PR25 #4: Drawer bottom Voz/IA (mobile only). */}
+      {!isDesktop && showVoiceMobile ? (
+        <View style={{
+          position: "absolute", left: 0, right: 0, bottom: 0,
+          height: "70%", zIndex: 100,
+          backgroundColor: DentalColors.bg2,
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          borderTopWidth: 1, borderTopColor: DentalColors.border,
+          shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24,
+          flexDirection: "column",
+        }}>
+          <View style={{
+            flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+            padding: 14, borderBottomWidth: 1, borderBottomColor: DentalColors.border,
+          }}>
+            <Text style={{ color: DentalColors.ink, fontSize: 13, fontWeight: "700" }}>🎙 Voz + IA Aura</Text>
+            <Pressable onPress={() => setShowVoiceMobile(false)}>
+              <Text style={{ color: DentalColors.ink2, fontSize: 14 }}>✕</Text>
+            </Pressable>
+          </View>
+          <View style={{ flex: 1, flexDirection: "column" }}>
+            <View style={{ flex: 1, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
+              <ConsultaVoicePanel
+                transcript={state.transcript}
+                onAppendSegment={onVoiceSegment}
+                onCommand={onVoiceCommand}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
+            </View>
+          </View>
         </View>
       ) : null}
 
