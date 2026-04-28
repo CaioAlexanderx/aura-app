@@ -20,6 +20,8 @@ type Props = {
   customStart?: string;
   customEnd?: string;
   previousSummary?: Summary | null;
+  pendingIncome?: number;
+  pendingExpenses?: number;
   transactions?: Transaction[];
 };
 
@@ -38,6 +40,18 @@ function DeltaBadge({ value, invert }: { value: number | null; invert?: boolean 
   return (
     <View style={[ds.badge, { backgroundColor: bg }]}>
       <Text style={[ds.badgeText, { color: color }]}>{arrow}{Math.abs(value)}% vs anterior</Text>
+    </View>
+  );
+}
+
+// Badge informativo "X em pendentes" abaixo de Entradas/Saidas.
+// Cor neutra (amber) pra deixar claro que e info, nao parte do saldo.
+function PendingBadge({ amount, kind }: { amount: number; kind: "income" | "expense" }) {
+  if (!amount || amount <= 0) return null;
+  var color = kind === "income" ? Colors.amber : Colors.amber;
+  return (
+    <View style={[ds.badge, { backgroundColor: Colors.amberD, marginTop: 2 }]}>
+      <Text style={[ds.badgeText, { color: color }]}>+{fmtK(amount)} pendente</Text>
     </View>
   );
 }
@@ -103,7 +117,7 @@ var sk = StyleSheet.create({
   label: { fontSize: 9, color: Colors.ink3, fontWeight: "500" },
 });
 
-export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary, transactions }: Props) {
+export function SmartBalance({ income, expenses, balance, txCount, period, customStart, customEnd, previousSummary, pendingIncome, pendingExpenses, transactions }: Props) {
   const healthy = balance > 0;
   const pct = income > 0 ? Math.round((expenses / income) * 100) : 0;
   const barWidth = Math.min(pct, 100);
@@ -165,6 +179,7 @@ export function SmartBalance({ income, expenses, balance, txCount, period, custo
             {NARROW ? fmtK(income) : fmt(income)}
           </Text>
           {revDelta !== null ? <DeltaBadge value={revDelta} /> : <Text style={s.statCount}>{txCount > 0 ? txCount + " lanc." : ""}</Text>}
+          <PendingBadge amount={pendingIncome || 0} kind="income" />
         </View>
         <View style={[s.stat, s.statBorder]}>
           <Text style={s.statLabel}>Saidas</Text>
@@ -172,6 +187,7 @@ export function SmartBalance({ income, expenses, balance, txCount, period, custo
             {NARROW ? fmtK(expenses) : fmt(expenses)}
           </Text>
           {expDelta !== null && <DeltaBadge value={expDelta} invert />}
+          <PendingBadge amount={pendingExpenses || 0} kind="expense" />
         </View>
         <View style={s.stat}>
           <Text style={s.statLabel}>Resultado</Text>
