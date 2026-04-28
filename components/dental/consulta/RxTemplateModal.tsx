@@ -1,14 +1,9 @@
 // ============================================================
 // RxTemplateModal — Receituario express com pre-cadastro.
 //
-// Usa endpoints existentes:
-//   GET  /companies/:cid/dental/documents/templates?doc_type=receituario_simples
-//   POST /companies/:cid/dental/documents/templates  (cadastrar novo)
-//   POST /companies/:cid/dental/documents            (emite documento)
-//
-// Templates seedados em migration 062 (receituario_simples,
-// receituario_controlado). Empresa pode criar customizados
-// (company_id != NULL).
+// PR34 (2026-04-28): backdrop com alignItems:center e sheet com
+// maxWidth:560. Antes ficava fullscreen em desktop (sem maxWidth
+// na sheet interna). animationType slide -> fade.
 // ============================================================
 
 import { useMemo, useState } from "react";
@@ -47,7 +42,6 @@ export function RxTemplateModal({ open, patientId, appointmentId, practitionerId
   const [selected, setSelected] = useState<Template | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
 
-  // Form de novo template
   const [newName, setNewName] = useState("");
   const [newContent, setNewContent] = useState("");
   const [newDocType, setNewDocType] = useState<"receituario_simples" | "receituario_controlado">("receituario_simples");
@@ -119,12 +113,13 @@ export function RxTemplateModal({ open, patientId, appointmentId, practitionerId
   function close() { reset(); onClose(); }
 
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", padding: 20 }}>
+    <Modal visible={open} animationType="fade" transparent onRequestClose={close}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 20 }}>
         <View style={{
           backgroundColor: DentalColors.bg2,
           borderRadius: 16, borderWidth: 1, borderColor: DentalColors.border,
           maxHeight: "90%", padding: 18,
+          width: "100%", maxWidth: 560,
         }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
             💊 Receituario express
