@@ -9,8 +9,11 @@
 // UX: badge LGPD removida da listagem (consentimento obrigatorio internamente).
 //     Indicador de aniversario (🎂) aparece para pacientes com aniversario
 //     nos proximos 7 dias. Agenda abre em semana por padrao.
+// PR24 (2026-04-28): PacientesTab consome ?open_patient=ID&tab=prontuario
+// pra abrir PatientHub via deep-link (botoes "Prontuario" da agenda).
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -223,19 +226,70 @@ export function AgendaTab() {
 // PacientesTab (W1-01): card clicavel -> abre PatientHub
 // Badge LGPD removida (consentimento obrigatorio para todos).
 // Indicador de aniversario adicionado.
+// PR24: deep-link `?open_patient=ID&tab=prontuario` abre hub direto.
 // ──────────────────────────────────────────────────────────
 export function PacientesTab() {
   const cid = useCompanyId();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ open_patient?: string; tab?: string }>();
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientLite | null>(null);
   const [editingPatient, setEditingPatient] = useState<PatientLite | null>(null);
+  const [hubInitialTab, setHubInitialTab] = useState<string | undefined>(undefined);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-patients", cid, search],
     queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(search)}&limit=50`),
     enabled: !!cid, staleTime: 30000,
   });
+
+  // PR24: deep-link `?open_patient=ID&tab=prontuario` abre hub direto.
+  // Usado pelos botoes "Prontuario" no HojeAppointmentsPanel + AppointmentDetailModal.
+  // Limpa o param apos consumir pra nao re-abrir ao trocar de aba interna.
+  useEffect(() => {
+    const openId = params.open_patient;
+    if (!openId || !cid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res: any = await request(`/companies/${cid}/dental/patients/${openId}`);
+        if (cancelled || !res?.patient) return;
+        const p = res.patient;
+        setSelectedPatient({
+          id: p.id,
+          name: p.full_name || p.name,
+          full_name: p.full_name,
+          phone: p.phone,
+          phone_secondary: p.phone_secondary,
+          email: p.email,
+          cpf: p.cpf_cnpj || p.cpf,
+          birthday: p.birth_date,
+          birth_date: p.birth_date,
+          gender: p.gender,
+          postal_code: p.postal_code,
+          street: p.street,
+          address_number: p.address_number,
+          complement: p.complement,
+          neighborhood: p.neighborhood,
+          city: p.city,
+          state: p.state,
+          allergies: p.allergies,
+          medical_history: p.medical_history,
+          medications: p.medications,
+          insurance_name: p.insurance_name,
+          notes: p.notes,
+          created_at: p.created_at,
+          is_patient: true,
+        });
+        setHubInitialTab(typeof params.tab === "string" ? params.tab : undefined);
+        // Limpa params da URL pra nao reabrir em re-render
+        router.replace("/dental/(clinic)/pacientes" as any);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.open_patient, cid]);
   const patients = ((data as any)?.patients) || [];
 
   return (
@@ -353,8 +407,9 @@ export function PacientesTab() {
       <PatientHub
         visible={!!selectedPatient}
         patient={selectedPatient}
-        onClose={() => setSelectedPatient(null)}
+        onClose={() => { setSelectedPatient(null); setHubInitialTab(undefined); }}
         onEdit={(p) => setEditingPatient(p)}
+        initialTab={hubInitialTab}
       />
     </>
   );
