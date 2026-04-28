@@ -8,9 +8,18 @@
 // Agora: cada coluna de dia e um relative container; blocos sao absolute
 // com top = (minutos_inicio/60) * HOUR_PX e height = (duration/60) * HOUR_PX.
 // 120min agora ocupa 2h verticais, claramente distinguivel.
+//
+// PR25 #3 (2026-04-28): drag-drop appointment entre horarios/dias.
+// Implementacao web-only via HTML5 drag-drop nativo. Em mobile/native
+// (sem suporte a drag), o fluxo antigo continua valendo. Backend ja
+// aceita PATCH /companies/:cid/dental/appointments/:id { scheduled_at }.
 // ============================================================
 import { useMemo } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth";
+import { request } from "@/services/api";
+import { toast } from "@/components/Toast";
 import { Colors } from "@/constants/colors";
 import type { DentalAppointment } from "@/components/verticals/odonto/AgendaDental";
 import { startOfWeek } from "@/components/verticals/odonto/AgendaNavigator";
@@ -32,6 +41,8 @@ const STATUS_COLOR: Record<string, string> = {
   agendado: "#06B6D4", confirmado: "#10B981", em_atendimento: "#F59E0B",
   concluido: "#10B981", faltou: "#EF4444", cancelado: "#9CA3AF",
 };
+
+const IS_WEB = Platform.OS === "web";
 
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -75,6 +86,8 @@ function assignLanes(items: Array<{ a: DentalAppointment; startMin: number; endM
 
 export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress, onSlotPress }: Props) {
   const today = new Date(); today.setHours(0,0,0,0);
+  const cid = useAuthStore().company?.id;
+  const qc = useQueryClient();
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -82,6 +95,34 @@ export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress,
       return d;
     });
   }, [weekStart]);
+
+  // PR25 #3: mutation pra mover appointment via drag-drop
+  const moveMut = useMutation({
+    mutationFn: (input: { id: string; scheduled_at: string }) =>
+      request(`/companies/${cid}/dental/appointments/${input.id}`, {
+        method: "PATCH",
+        body: { scheduled_at: input.scheduled_at },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dental-agenda", cid] });
+      toast.success("Agendamento movido");
+    },
+    onError: (e: any) => toast.error(e?.data?.error || "Erro ao mover agendamento"),
+  });
+
+  // Web only — handler de drop num slot. Recebe id do appointment +
+  // dia/hora destino, calcula novo scheduled_at preservando minutos do start
+  // original (drag pra "10:00" mantendo o appt original que era 10:30 -> dropa em 10:30).
+  // Simplificacao: dropa direto na hora cheia clicada (snap to hour).
+  function handleDrop(targetDate: Date, targetHour: number, appointmentId: string) {
+    const apt = appointments.find(a => a.id === appointmentId);
+    if (!apt) return;
+    const original = new Date(apt.scheduled_at);
+    const next = new Date(targetDate);
+    next.setHours(targetHour, original.getMinutes(), 0, 0);
+    if (next.getTime() === original.getTime()) return; // no-op
+    moveMut.mutate({ id: appointmentId, scheduled_at: next.toISOString() });
+  }
 
   // PR21 #2: agrupa por dia e calcula top/height absolutos por bloco
   const byDay = useMemo(() => {
@@ -161,17 +202,32 @@ export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress,
             const blocks = byDay[dayKey(d)] || [];
             return (
               <View key={di} style={[s.dayCol, isToday && s.dayColToday]}>
-                {/* Background hour grid + empty press areas */}
-                {HOURS.map(h => (
-                  <Pressable
-                    key={h}
-                    onPress={() => {
-                      const dt = new Date(d); dt.setHours(h, 0, 0, 0);
-                      onSlotPress?.(dt);
-                    }}
-                    style={[s.hourSlot, { height: HOUR_PX }]}
-                  />
-                ))}
+                {/* Background hour grid + empty press areas (+ drop targets web) */}
+                {HOURS.map(h => {
+                  // PR25 #3: hour slot vira drop target em web.
+                  // Em RN web, props HTML como onDragOver/onDrop nao passam pelo
+                  // Pressable normal; usamos {...({} as any)} pra tipar e
+                  // confiar que a runtime web aceita.
+                  const webDropProps: any = IS_WEB ? {
+                    onDragOver: (ev: any) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; },
+                    onDrop: (ev: any) => {
+                      ev.preventDefault();
+                      const id = ev.dataTransfer.getData("text/appointment-id");
+                      if (id) handleDrop(d, h, id);
+                    },
+                  } : {};
+                  return (
+                    <Pressable
+                      key={h}
+                      onPress={() => {
+                        const dt = new Date(d); dt.setHours(h, 0, 0, 0);
+                        onSlotPress?.(dt);
+                      }}
+                      style={[s.hourSlot, { height: HOUR_PX }]}
+                      {...webDropProps}
+                    />
+                  );
+                })}
                 {/* Appointments absolute */}
                 {blocks.map(({ a, topPx, heightPx, colIdx, colCount }) => {
                   const color = STATUS_COLOR[a.status] || "#06B6D4";
@@ -180,6 +236,16 @@ export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress,
                   // Width split por lane
                   const widthPct = 100 / Math.max(1, colCount);
                   const leftPct = widthPct * colIdx;
+                  // PR25 #3: bloco vira draggable em web. Status que nao podem
+                  // ser movidos (concluido/cancelado/faltou) ficam estaticos.
+                  const draggable = IS_WEB && a.status !== "concluido" && a.status !== "cancelado" && a.status !== "faltou";
+                  const webDragProps: any = draggable ? {
+                    draggable: true,
+                    onDragStart: (ev: any) => {
+                      ev.dataTransfer.setData("text/appointment-id", a.id);
+                      ev.dataTransfer.effectAllowed = "move";
+                    },
+                  } : {};
                   return (
                     <Pressable
                       key={a.id}
@@ -192,7 +258,9 @@ export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress,
                         height: heightPx,
                         borderLeftColor: color,
                         backgroundColor: color + "22",
+                        ...(IS_WEB && draggable ? { cursor: "grab" as any } : {}),
                       }]}
+                      {...webDragProps}
                     >
                       <Text style={s.blockTime}>{time} · {a.duration_min || 60}min</Text>
                       <Text style={s.blockName} numberOfLines={heightPx > 36 ? 2 : 1}>{a.patient_name}</Text>
@@ -204,6 +272,13 @@ export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress,
           })}
         </View>
       </ScrollView>
+
+      {/* Hint sobre drag-drop (web only) */}
+      {IS_WEB ? (
+        <View style={s.hintBar}>
+          <Text style={s.hintText}>💡 Dica: arraste um agendamento pra outro horario pra remarcar.</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -229,6 +304,8 @@ const s = StyleSheet.create({
   block: { borderRadius: 4, padding: 4, borderLeftWidth: 2, overflow: "hidden" },
   blockTime: { fontSize: 9, color: Colors.ink3, fontWeight: "600" },
   blockName: { fontSize: 10, color: Colors.ink, fontWeight: "600", lineHeight: 12 },
+  hintBar: { paddingHorizontal: 14, paddingVertical: 6, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.bg3 },
+  hintText: { fontSize: 10, color: Colors.ink3, fontStyle: "italic" },
 });
 
 export default AgendaDentalWeek;
