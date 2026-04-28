@@ -14,11 +14,15 @@
 // LGPD consent automatico no create (Art.11 coberto pela aceitacao
 // implicita ao cadastrar dados de saude — campo nao precisa ser
 // re-checado em edicao).
+//
+// PR29 (2026-04-28): photo_url + WebcamCapture (3o lugar pedido).
+// Avatar 56px no topo da secao IDENTIFICACAO com botao pra capturar
+// ou trocar foto. Persistido no submit junto com outros campos.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import {
   Animated, Modal, View, Text, TextInput, Pressable, ScrollView,
-  StyleSheet, ActivityIndicator, Platform, useWindowDimensions,
+  StyleSheet, ActivityIndicator, Platform, useWindowDimensions, Image,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { DentalForm } from "@/constants/dental-tokens";
@@ -27,6 +31,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { maskCpf, maskPhone, maskDateBR, brDateToISO, onlyDigits, isValidCpf } from "@/utils/mask";
+import { WebcamCapture } from "@/components/verticals/odonto/WebcamCapture";
 
 export interface PatientFormData {
   id?: string;
@@ -51,6 +56,8 @@ export interface PatientFormData {
   medications?: string | null;
   insurance_name?: string | null;
   notes?: string | null;
+  /** PR29: foto do paciente (data URL ou URL backend) */
+  photo_url?: string | null;
   created_at?: string;
 }
 
@@ -99,6 +106,8 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
   const [medicalHistory, setMedicalHistory] = useState("");
   const [medications, setMedications] = useState("");
   const [insuranceName, setInsuranceName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
 
@@ -117,7 +126,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
     setCep(""); setStreet(""); setAddrNumber(""); setComplement("");
     setNeighborhood(""); setCity(""); setStateUf("");
     setAllergies(""); setMedicalHistory(""); setMedications("");
-    setInsuranceName(""); setError(null);
+    setInsuranceName(""); setPhotoUrl(null); setError(null);
   }
 
   // Prefill em edit ao abrir / trocar paciente
@@ -142,6 +151,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
       setMedicalHistory(patient.medical_history || "");
       setMedications(patient.medications || "");
       setInsuranceName(patient.insurance_name || "");
+      setPhotoUrl(patient.photo_url || null);
       setError(null);
     } else {
       reset();
@@ -189,6 +199,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
         medical_history: medicalHistory.trim() || null,
         medications: medications.trim() || null,
         insurance_name: insuranceName.trim() || null,
+        photo_url: photoUrl || null,
       };
       if (isEdit && patient?.id) {
         return request(`/companies/${cid}/dental/patients/${patient.id}`, { method: "PATCH", body });
@@ -220,6 +231,8 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
     onClose();
   }
 
+  const initials = (fullName || "?").split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+
   return (
     <Modal visible={visible} animationType="none" transparent={true} onRequestClose={handleClose}>
       <Pressable style={s.backdrop} onPress={handleClose}>
@@ -241,6 +254,33 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
             </View>
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
+              {/* PR29: Avatar + botao webcam no topo */}
+              <View style={s.photoBlock}>
+                <View style={s.avatarWrap}>
+                  {photoUrl ? (
+                    <Image source={{ uri: photoUrl }} style={s.avatar} />
+                  ) : (
+                    <View style={[s.avatar, { alignItems: "center", justifyContent: "center", backgroundColor: "#06B6D4" }]}>
+                      <Text style={{ color: "#fff", fontSize: 22, fontWeight: "700" }}>{initials}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={s.photoLabel}>Foto do paciente</Text>
+                  <Text style={s.photoHint}>Opcional. Use a webcam ou selecione uma imagem.</Text>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Pressable onPress={() => setShowCamera(true)} style={s.photoBtn}>
+                      <Text style={s.photoBtnText}>📷 {photoUrl ? "Trocar" : "Tirar foto"}</Text>
+                    </Pressable>
+                    {photoUrl && (
+                      <Pressable onPress={() => setPhotoUrl(null)} style={[s.photoBtn, { backgroundColor: "transparent", borderColor: "rgba(239,68,68,0.35)" }]}>
+                        <Text style={[s.photoBtnText, { color: "#EF4444" }]}>Remover</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              </View>
+
               <Text style={s.sectionLabel}>IDENTIFICAÇÃO</Text>
               <Field label="Nome completo *" value={fullName} onChangeText={setFullName} autoCapitalize="words" />
               <Field
@@ -387,6 +427,15 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
           </Animated.View>
         </Pressable>
       </Pressable>
+
+      <WebcamCapture
+        visible={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={(dataUrl) => setPhotoUrl(dataUrl)}
+        title="Foto do paciente"
+        hint={fullName ? `Capturando foto de ${fullName}` : "Posicione o paciente no enquadramento"}
+        facing="user"
+      />
     </Modal>
   );
 }
@@ -454,6 +503,13 @@ const s = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
   subtitle: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
   form: { padding: 16, gap: 8, paddingBottom: 24 },
+  photoBlock: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, marginBottom: 10, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
+  avatarWrap: { position: "relative" },
+  avatar: { width: 60, height: 60, borderRadius: 30 },
+  photoLabel: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  photoHint: { fontSize: 11, color: Colors.ink3 },
+  photoBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 8, backgroundColor: "#06B6D4", borderWidth: 1, borderColor: "#06B6D4" },
+  photoBtnText: { fontSize: 11, color: "#fff", fontWeight: "700" },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
