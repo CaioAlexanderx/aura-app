@@ -11,6 +11,9 @@
 //     nos proximos 7 dias. Agenda abre em semana por padrao.
 // PR24 (2026-04-28): PacientesTab consome ?open_patient=ID&tab=prontuario
 // pra abrir PatientHub via deep-link (botoes "Prontuario" da agenda).
+// PR26 (2026-04-28): AgendaTab.handleAppointmentPress -> ConsultaShell
+// pra status ativos. UAT mostrou que click na agenda caia no modal simples
+// e usuario nunca chegava na tela de atendimento real.
 // ============================================================
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -45,6 +48,11 @@ function chairLabelFor(practitionerId: string | null | undefined, settings: any,
   return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
 }
 
+// PR26: status que mantem o appointment ativo / em fluxo.
+// Click nesses na agenda -> ConsultaShell (Modo Consulta fullscreen).
+// Status finais (concluido/cancelado/faltou) -> AppointmentDetailModal so-leitura.
+const ACTIVE_STATUSES = new Set(["agendado", "avaliacao", "aprovado", "em_atendimento"]);
+
 // Retorna true se o aniversario do paciente cai nos proximos `days` dias
 function isBirthdayWithinDays(birthDate: string | null | undefined, days = 7): boolean {
   if (!birthDate) return false;
@@ -66,6 +74,7 @@ type ViewMode = "calendar" | "list";
 
 export function AgendaTab() {
   const cid = useCompanyId();
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   // Item 8: agenda abre em semana por padrao
   const [agendaView, setAgendaView] = useState<AgendaView>("week");
@@ -147,6 +156,17 @@ export function AgendaTab() {
     setAgendaView("day");
   }
 
+  // PR26: click no appointment decide pelo status.
+  // - Status ativo -> abre /dental/consulta/[id] (ConsultaShell fullscreen)
+  // - Status final (concluido/cancelado/faltou) -> AppointmentDetailModal so-leitura
+  function handleAppointmentPress(a: { id: string; status: string }) {
+    if (ACTIVE_STATUSES.has(a.status)) {
+      router.push(`/dental/consulta/${a.id}` as any);
+    } else {
+      setDetailId(a.id);
+    }
+  }
+
   return (
     <View style={{ gap: 12 }}>
       <View style={v.toggleRow}>
@@ -181,7 +201,7 @@ export function AgendaTab() {
               appointments={appointments}
               chairs={chairs}
               date={anchorDate}
-              onAppointmentPress={(a) => setDetailId(a.id)}
+              onAppointmentPress={handleAppointmentPress}
               onSlotPress={handleSlotPressDay}
             />
           )}
@@ -190,7 +210,7 @@ export function AgendaTab() {
             <AgendaDentalWeek
               appointments={appointments}
               anchorDate={anchorDate}
-              onAppointmentPress={(a) => setDetailId(a.id)}
+              onAppointmentPress={handleAppointmentPress}
               onSlotPress={handleSlotPressWeek}
             />
           )}
@@ -200,7 +220,7 @@ export function AgendaTab() {
               appointments={appointments}
               anchorDate={anchorDate}
               onDayPress={handleDayPressMonth}
-              onAppointmentPress={(a) => setDetailId(a.id)}
+              onAppointmentPress={handleAppointmentPress}
             />
           )}
         </>
