@@ -71,6 +71,42 @@ function isProductInStock(p: any): boolean {
   return getProductStock(p) > 0;
 }
 
+// ── Search helpers ───────────────────────────────────────────
+// Normaliza texto pra busca: lowercase + strip de acentos (NFD + remove
+// diacriticos). Faz "ÂNGEL" virar "angel", "Stitch" virar "stitch", etc.
+function normalizeText(s: any): string {
+  return String(s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+
+// Concatena os campos relevantes do produto num único haystack normalizado.
+// Ordem é arbitrária — o matcher é AND de termos, então só precisa que
+// os termos da query apareçam em algum lugar.
+function buildProductHaystack(p: any): string {
+  return normalizeText(
+    [p?.name, p?.barcode, p?.sku, p?.code, p?.category, p?.color, p?.size]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+// Match AND multi-palavra: "copo stitch" exige que tanto "copo" quanto
+// "stitch" apareçam no haystack (em qualquer ordem, sem precisar serem
+// contíguos). Antes era includes() simples — só casava substring exata,
+// então "copo stitch" não batia em "COPO TERMICO ... STITCH".
+function matchesQuery(haystack: string, query: string): boolean {
+  if (!query) return true;
+  const terms = normalizeText(query).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+  for (const t of terms) {
+    if (!haystack.includes(t)) return false;
+  }
+  return true;
+}
+
 // Icons for the 4 payment chips (maps backend id -> icon name in Icon set)
 const PAY_ICONS: Record<string, string> = {
   pix: "dollar",
@@ -167,18 +203,31 @@ export default function CaixaScreen() {
     return products.reduce((acc, p) => acc + (isProductInStock(p) ? 0 : 1), 0);
   }, [products]);
 
+  // ── Index de busca: pré-calcula haystack normalizado por produto ─────
+  // Recalcula só quando `products` muda (não a cada keystroke). Importante
+  // pra estoques grandes (Alynne tem 1232 produtos).
+  const productIndex = useMemo(() => {
+    const idx = new Map<string, string>();
+    for (const p of products) idx.set((p as any).id, buildProductHaystack(p));
+    return idx;
+  }, [products]);
+
   // ── Filtered products ─────────────────────────────────────
   // Esconder zerados por padrão (Alynne 28/04/2026). Toggle "Mostrar zerados"
   // libera a visualização de tudo. Produtos com variantes sempre passam
   // (variante tem estoque próprio).
+  // Busca: AND multi-palavra contra haystack (nome + barcode + sku + categoria
+  // + cor + tamanho), tudo normalizado (acentos strip).
   const filtered = useMemo(() => {
+    const normQuery = normalizeText(query);
     return products.filter(p => {
-      const matchSearch = !query || p.name.toLowerCase().includes(query.toLowerCase()) || p.barcode?.includes(query) || p.code?.includes(query);
+      const haystack = productIndex.get((p as any).id) ?? buildProductHaystack(p);
+      const matchSearch = matchesQuery(haystack, normQuery);
       const matchCat = cat === "all" || p.category === cat;
       const matchStock = showOutOfStock || isProductInStock(p);
       return matchSearch && matchCat && matchStock;
     });
-  }, [products, query, cat, showOutOfStock]);
+  }, [products, productIndex, query, cat, showOutOfStock]);
 
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, query + cat + (showOutOfStock ? "1" : "0"));
 
