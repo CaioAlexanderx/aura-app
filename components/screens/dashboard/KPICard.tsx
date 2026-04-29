@@ -17,6 +17,7 @@ export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, sp
     background: Glass.card,
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
+    boxShadow: Glass.cardShadow,
     transition: "all 0.3s cubic-bezier(0.3, 0, 0.2, 1)",
     cursor: "pointer",
     position: "relative",
@@ -54,7 +55,7 @@ export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, sp
       <View style={s.foot}>
         {delta ? (
           <Text style={[s.delta, { color: deltaUp ? Colors.green : Colors.red }]}>
-            {deltaUp ? "\u25B2" : "\u25BC"} {delta}
+            {deltaUp ? "▲" : "▼"} {delta}
           </Text>
         ) : <View />}
         {spark && spark.length >= 2 && (

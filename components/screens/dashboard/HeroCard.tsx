@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
-import { Colors, Glass } from "@/constants/colors";
+import { Colors, Glass, IS_LIGHT_MODE } from "@/constants/colors";
 import { Sparkline } from "./Sparkline";
 import { IS_WIDE, fmt, webOnly, GRAD } from "./types";
 
@@ -44,11 +44,21 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
 
   const deltaColor = isPositive ? Colors.green : Colors.red;
 
+  // Em light, gradiente violeta denso pede borda branca mais forte (30%)
+  // pra não sumir; em dark, 14% mantém o look glássico.
+  const heroBorderColor = IS_LIGHT_MODE ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.14)";
+
+  // Em dark, já há glow violeta inline; em light, soma o cardShadow genérico
+  // pra elevar do fundo cinza-violete.
+  const heroBoxShadow = IS_LIGHT_MODE
+    ? `0 20px 50px -20px rgba(124,58,237,0.55), inset 0 1px 0 rgba(255,255,255,0.18), ${Glass.cardShadow}`
+    : "0 20px 50px -20px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.08)";
+
   const webCard = webOnly({
     background: Glass.heroGrad,
     backdropFilter: "blur(18px) saturate(150%)",
     WebkitBackdropFilter: "blur(18px) saturate(150%)",
-    boxShadow: "0 20px 50px -20px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+    boxShadow: heroBoxShadow,
     overflow: "hidden",
     position: "relative",
   });
@@ -59,7 +69,7 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
   });
 
   return (
-    <View style={[s.hero, Platform.OS === "web" ? (webCard as any) : { backgroundColor: Colors.bg3 }]}>
+    <View style={[s.hero, { borderColor: heroBorderColor }, Platform.OS === "web" ? (webCard as any) : { backgroundColor: Colors.bg3 }]}>
       {Platform.OS === "web" && (
         <>
           <span
@@ -147,11 +157,11 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
 
 // Hero ink stays WHITE in both themes because Glass.heroGrad is a dense
 // violet gradient in both modes. Keeping white ink preserves visual identity
-// of the "saldo" hero across themes.
+// of the "saldo" hero across themes. borderColor agora é theme-aware.
 const s = StyleSheet.create({
   hero: {
     borderRadius: 22, padding: IS_WIDE ? 28 : 18,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
     marginBottom: 24,
   },
   grid: { flexDirection: IS_WIDE ? "row" : "column", gap: 24, alignItems: IS_WIDE ? "center" : "stretch", position: "relative", zIndex: 2 },
