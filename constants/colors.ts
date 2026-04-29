@@ -65,11 +65,14 @@ var Dark = {
   amber: "#fbbf24", amberD: "rgba(251,191,36,0.10)",
 } as const;
 
+// Light: contraste forte. bg da página em cinza-violáceo (#e6e4f0) faz cards
+// brancos #fff parecerem elevados. bg2 ganha tinta violeta sutil pra sidebar
+// se diferenciar dos cards principais. Bordas violeta com opacity ~22% pra
+// separar componentes claramente sem ficar pesado.
 var Light = {
-  // Fundo genuinamente claro — sem tinta roxa pesada
-  bg: "#f4f4f8", bg2: "#ffffff", bg3: "#ffffff", bg4: "#ece9f5",
+  bg: "#e6e4f0", bg2: "#fafbff", bg3: "#ffffff", bg4: "#e3dff0",
   ink: "#18172b", ink2: "#3b3461", ink3: "#6a608e",
-  border: "rgba(109,40,217,0.09)", border2: "rgba(120,100,240,0.14)",
+  border: "rgba(109,40,217,0.22)", border2: "rgba(120,100,240,0.30)",
   violet: "#7c3aed", violet2: "#8b5cf6", violet3: "#6d28d9", violet4: "#5b21b6",
   violetD: "rgba(109,40,217,0.06)",
   green: "#059669", greenD: "rgba(5,150,105,0.08)",
@@ -89,11 +92,16 @@ export var IS_LIGHT_MODE = !IS_DARK;
 // divider lines used by the "Claude Design" glassmorphism palette.
 //
 // DARK: glassmorphism com rgba semi-transparente + backdrop blur contra bg escuro.
-// LIGHT: cards SÓLIDOS (#fff) com bordas suaves — rgba semi-transparente contra
-//        fundo claro resulta em boards acinzentados, portanto light não usa blur.
+// LIGHT: cards SÓLIDOS (#fff) com bordas violeta visíveis e cardShadow forte
+//        pra elevation. Antes era plano demais — agora há hierarquia clara
+//        entre fundo, cards e bordas.
 //
 // heroGrad / cartHeadGrad — gradientes violeta dos cards "hero". Em light ficam
 // densos pra carregar texto branco; em dark ficam sutis pra casar com bg escuro.
+//
+// cardShadow — string CSS multi-layer pra <div> ou webOnly({ boxShadow: ... }).
+// Em light gera elevação visível. Em dark é "none" porque cards já têm
+// efeito de glow via box-shadow violeta inline.
 export var Glass = IS_DARK ? {
   card:             "rgba(14,18,40,0.55)",
   cardMid:          "rgba(9,12,26,0.55)",
@@ -118,34 +126,37 @@ export var Glass = IS_DARK ? {
   bgInput:          "rgba(5,6,15,0.6)",
   bgInputBorder:    "rgba(255,255,255,0.1)",
   shine:            "rgba(255,255,255,0.25)",
+  cardShadow:       "none",
 } : {
-  // Light: cards 100% sólidos — sem transparência, sem neblina acinzentada
+  // Light: cards sólidos com sombra forte pra hierarquia visual
   card:             "#ffffff",
-  cardMid:          "#ffffff",
-  cardDeep:         "#faf9ff",
+  cardMid:          "#fafbff",
+  cardDeep:         "#f4f1fa",
   pop:              "#ffffff",
   // Gradientes densos pra texto branco aparecer nos cards hero
-  heroGrad:         "linear-gradient(135deg, rgba(109,40,217,0.95), rgba(79,91,213,0.78))",
+  heroGrad:         "linear-gradient(135deg, rgba(109,40,217,0.95), rgba(79,91,213,0.82))",
   heroGradSoft:     "linear-gradient(135deg, rgba(124,58,237,0.88), rgba(139,92,246,0.70))",
   cartHeadGrad:     "linear-gradient(135deg, rgba(109,40,217,0.96), rgba(79,91,213,0.85))",
-  merchantGrad:     "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(244,244,248,0.95))",
-  // Divisores: violeta bem suave
-  line:             "rgba(109,40,217,0.08)",
-  lineStrong:       "rgba(109,40,217,0.14)",
-  lineSoft:         "rgba(109,40,217,0.06)",
-  lineFaint:        "rgba(109,40,217,0.04)",
-  lineWhisper:      "rgba(109,40,217,0.03)",
-  lineBorderCard:   "rgba(109,40,217,0.10)",
-  lineBorderStrong: "rgba(109,40,217,0.15)",
+  merchantGrad:     "linear-gradient(135deg, rgba(124,58,237,0.10), rgba(244,244,248,0.95))",
+  // Divisores violeta — opacity dobrada pra separar componentes em fundo claro
+  line:             "rgba(109,40,217,0.16)",
+  lineStrong:       "rgba(109,40,217,0.22)",
+  lineSoft:         "rgba(109,40,217,0.10)",
+  lineFaint:        "rgba(109,40,217,0.06)",
+  lineWhisper:      "rgba(109,40,217,0.04)",
+  lineBorderCard:   "rgba(109,40,217,0.22)",
+  lineBorderStrong: "rgba(109,40,217,0.30)",
   // Texto em cima de card branco: escuro
-  textDim:          "rgba(24,23,43,0.60)",
-  textDimmer:       "rgba(24,23,43,0.50)",
-  textDimmest:      "rgba(24,23,43,0.42)",
+  textDim:          "rgba(24,23,43,0.62)",
+  textDimmer:       "rgba(24,23,43,0.52)",
+  textDimmest:      "rgba(24,23,43,0.44)",
   inkOnCard:        "#18172b",
   inkOnCardSoft:    "rgba(24,23,43,0.88)",
-  bgInput:          "#f4f4f8",
-  bgInputBorder:    "rgba(109,40,217,0.16)",
-  shine:            "rgba(124,58,237,0.12)",
+  bgInput:          "#f0eef7",
+  bgInputBorder:    "rgba(109,40,217,0.22)",
+  shine:            "rgba(124,58,237,0.14)",
+  // Sombra média pra elevation dos cards em light
+  cardShadow:       "0 4px 14px -2px rgba(24,23,43,0.10), 0 2px 6px -1px rgba(24,23,43,0.05)",
 };
 
 type ThemeState = {
