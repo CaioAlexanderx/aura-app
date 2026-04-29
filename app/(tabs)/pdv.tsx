@@ -21,7 +21,7 @@
 // Narrow: scroll unico empilhado.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Platform, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
 import { Colors } from "@/constants/colors";
@@ -55,6 +55,21 @@ import type { Product } from "@/components/screens/estoque/types";
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 
 const PAGE_SIZE = 12;
+
+// Helper: extrai estoque do produto independente do nome do campo
+// (alguns endpoints retornam `stock`, outros `stock_qty`).
+function getProductStock(p: any): number {
+  const v = p?.stock ?? p?.stock_qty ?? 0;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+// Produtos com variantes têm estoque próprio na variante — sempre visíveis
+// no picker, o gate de estoque cai na seleção da variante.
+function isProductInStock(p: any): boolean {
+  if (p?.has_variants === true) return true;
+  return getProductStock(p) > 0;
+}
 
 // Icons for the 4 payment chips (maps backend id -> icon name in Icon set)
 const PAY_ICONS: Record<string, string> = {
@@ -116,6 +131,7 @@ export default function CaixaScreen() {
   const wide = useIsWide();
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<string>("all");
+  const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
@@ -135,16 +151,25 @@ export default function CaixaScreen() {
     ];
   }, [products]);
 
+  // Quantos produtos estão zerados (pra mostrar no toggle)
+  const outOfStockCount = useMemo(() => {
+    return products.reduce((acc, p) => acc + (isProductInStock(p) ? 0 : 1), 0);
+  }, [products]);
+
   // ── Filtered products ─────────────────────────────────────
+  // Esconder zerados por padrão (Alynne 28/04/2026). Toggle "Mostrar zerados"
+  // libera a visualização de tudo. Produtos com variantes sempre passam
+  // (variante tem estoque próprio).
   const filtered = useMemo(() => {
     return products.filter(p => {
       const matchSearch = !query || p.name.toLowerCase().includes(query.toLowerCase()) || p.barcode?.includes(query) || p.code?.includes(query);
       const matchCat = cat === "all" || p.category === cat;
-      return matchSearch && matchCat;
+      const matchStock = showOutOfStock || isProductInStock(p);
+      return matchSearch && matchCat && matchStock;
     });
-  }, [products, query, cat]);
+  }, [products, query, cat, showOutOfStock]);
 
-  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, query + cat);
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, query + cat + (showOutOfStock ? "1" : "0"));
 
   // ── Qty-by-base-id for the grid badges ───────────────────
   const qtyById = useMemo(() => {
@@ -303,6 +328,30 @@ export default function CaixaScreen() {
   // Order number (last 6 chars of demo date or real sale) — for display only
   const orderSuffix = "#" + ((Date.now() % 100000).toString().padStart(5, "0"));
 
+  // Componente do toggle "Mostrar zerados". Renderiza somente quando há
+  // produtos zerados pra esconder — caso contrário polui sem motivo.
+  function StockToggle() {
+    if (outOfStockCount === 0) return null;
+    return (
+      <Pressable
+        onPress={() => setShowOutOfStock(v => !v)}
+        style={[
+          stockToggleStyles.btn,
+          showOutOfStock && stockToggleStyles.btnActive,
+        ]}
+      >
+        <Text style={[
+          stockToggleStyles.txt,
+          showOutOfStock && stockToggleStyles.txtActive,
+        ]}>
+          {showOutOfStock
+            ? "Ocultar zerados (" + outOfStockCount + ")"
+            : "Mostrar zerados (" + outOfStockCount + ")"}
+        </Text>
+      </Pressable>
+    );
+  }
+
   // ── Sale complete fullscreen ─────────────────────────────
   if (lastSale) {
     if (wide) {
@@ -400,7 +449,12 @@ export default function CaixaScreen() {
               />
             </View>
 
-            <CategoryChips items={categories} active={cat} onSelect={setCat} />
+            <View style={s.catRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <CategoryChips items={categories} active={cat} onSelect={setCat} />
+              </View>
+              <StockToggle />
+            </View>
 
             {products.length === 0 ? (
               <EmptyState
@@ -411,7 +465,11 @@ export default function CaixaScreen() {
               />
             ) : filtered.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                <Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text>
+                <Text style={{ fontSize: 13, color: Colors.ink3 }}>
+                  {!showOutOfStock && outOfStockCount > 0
+                    ? "Nenhum produto encontrado com estoque. Tente \"Mostrar zerados\" acima."
+                    : "Nenhum produto encontrado"}
+                </Text>
               </View>
             ) : (
               <>
@@ -521,7 +579,12 @@ export default function CaixaScreen() {
           />
         </View>
 
-        <CategoryChips items={categories} active={cat} onSelect={setCat} />
+        <View style={s.catRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <CategoryChips items={categories} active={cat} onSelect={setCat} />
+          </View>
+          <StockToggle />
+        </View>
 
         {products.length === 0 ? (
           <EmptyState
@@ -532,7 +595,11 @@ export default function CaixaScreen() {
           />
         ) : filtered.length === 0 ? (
           <View style={{ alignItems: "center", paddingVertical: 40 }}>
-            <Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text>
+            <Text style={{ fontSize: 13, color: Colors.ink3 }}>
+              {!showOutOfStock && outOfStockCount > 0
+                ? "Nenhum produto encontrado com estoque. Tente \"Mostrar zerados\" acima."
+                : "Nenhum produto encontrado"}
+            </Text>
           </View>
         ) : (
           <>
@@ -635,6 +702,12 @@ const s = StyleSheet.create({
     marginBottom: 18,
     flexWrap: "wrap",
   },
+  catRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10,
+  },
   demoBanner: {
     alignSelf: "center",
     backgroundColor: Colors.violetD,
@@ -644,4 +717,28 @@ const s = StyleSheet.create({
     marginTop: 16,
   },
   demoTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+});
+
+const stockToggleStyles = StyleSheet.create({
+  btn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "rgba(124,58,237,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.25)",
+    flexShrink: 0,
+  },
+  btnActive: {
+    backgroundColor: "rgba(124,58,237,0.18)",
+    borderColor: "rgba(124,58,237,0.55)",
+  },
+  txt: {
+    fontSize: 11,
+    color: Colors.ink3,
+    fontWeight: "600",
+  },
+  txtActive: {
+    color: "#a78bfa",
+  },
 });
