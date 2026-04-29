@@ -106,6 +106,17 @@ export default function CaixaScreen() {
   const plan = (company?.plan || "essencial").toLowerCase();
   const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
 
+  // Module overrides — Gestão Aura pode liberar/bloquear módulos por empresa
+  // (companies.module_overrides JSONB no backend, retornado pelo /auth/me).
+  // Override booleano vence o plano: true = força-ligar, false = força-desligar,
+  // undefined = cai no padrão do plano. Veja services/modules.js no backend.
+  const moduleOverrides = ((company as any)?.module_overrides ?? {}) as Record<string, boolean>;
+  const isModuleEnabled = (key: string, planDefault: boolean) =>
+    moduleOverrides[key] === true ? true
+    : moduleOverrides[key] === false ? false
+    : planDefault;
+  const clientesEnabled = isModuleEnabled("clientes", isNegocioPlus);
+
   // Employees: fetched only for Negocio+ (API returns 403 for Essencial).
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
@@ -437,9 +448,9 @@ export default function CaixaScreen() {
                 onChange={v => { if (v) selectCustomer(v.id, v.name); else selectCustomer(null, null); }}
                 options={customerOptions}
                 searchable
-                addable={isNegocioPlus}
+                addable={clientesEnabled}
                 onAddNew={() => setShowNewCustomer(true)}
-                disabled={!isNegocioPlus}
+                disabled={!clientesEnabled}
                 disabledHint="Disponível no plano Negócio"
               />
               <ActCoupon
@@ -567,9 +578,9 @@ export default function CaixaScreen() {
             onChange={v => { if (v) selectCustomer(v.id, v.name); else selectCustomer(null, null); }}
             options={customerOptions}
             searchable
-            addable={isNegocioPlus}
+            addable={clientesEnabled}
             onAddNew={() => setShowNewCustomer(true)}
-            disabled={!isNegocioPlus}
+            disabled={!clientesEnabled}
             disabledHint="Disponível no plano Negócio"
           />
           <ActCoupon
