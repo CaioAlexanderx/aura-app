@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
@@ -7,9 +7,17 @@ import { toast } from "@/components/Toast";
 import { BASE_URL } from "@/services/api";
 import { Field, SectionTitle, StatusBadge, COLOR_PRESETS, cs } from "./shared";
 
-type Props = { config: any; saveConfig: (data: any) => Promise<void>; isSaving: boolean; requestDomain: (data: any) => Promise<void>; isRequestingDomain: boolean };
+type Props = {
+  config: any;
+  saveConfig: (data: any) => Promise<void>;
+  isSaving: boolean;
+  requestDomain: (data: any) => Promise<void>;
+  isRequestingDomain: boolean;
+  uploadImage: (data: { type: "logo" | "banner"; content: string; content_type: string }) => Promise<any>;
+  isUploadingImage: boolean;
+};
 
-export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain }: Props) {
+export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage }: Props) {
   const { company } = useAuthStore();
   const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
   const [tagline, setTagline] = useState(config.tagline || "");
@@ -22,6 +30,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [published, setPublished] = useState(config.is_published ?? false);
   const [domainInput, setDomainInput] = useState("");
   const [domainPlan, setDomainPlan] = useState<"1year" | "2years">("1year");
+  const [uploadingType, setUploadingType] = useState<"logo" | "banner" | null>(null);
 
   useEffect(() => {
     if (!config.exists) return;
@@ -44,6 +53,37 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     } catch {}
   }
 
+  function pickImage(type: "logo" | "banner") {
+    if (Platform.OS !== "web") return;
+    try {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp";
+      input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
+      document.body.appendChild(input);
+      input.addEventListener("change", async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        try { document.body.removeChild(input); } catch {}
+        if (file.size > 5 * 1024 * 1024) { toast.error("Imagem muito grande (max 5MB)"); return; }
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const dataUrl = e.target?.result as string;
+          const base64 = dataUrl.split(",")[1];
+          if (!base64) return;
+          setUploadingType(type);
+          try {
+            await uploadImage({ type, content: base64, content_type: file.type });
+          } finally {
+            setUploadingType(null);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+      input.click();
+    } catch {}
+  }
+
   async function handleSave() {
     await saveConfig({ site_name: siteName.trim() || null, tagline: tagline.trim() || null, description: description.trim() || null, phone: phone.trim() || null, whatsapp: whatsapp.trim() || null, instagram: instagram.trim() || null, address: address.trim() || null, primary_color: color, is_published: published });
   }
@@ -57,6 +97,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const slug = config.slug || (siteName || "minha-loja").toLowerCase().replace(/\s+/g, "-").slice(0, 40);
   const storefrontUrl = config.storefront_url || `${BASE_URL}/storefront/${slug}/page`;
   const hasDomain = config.custom_domain && config.custom_domain_status !== "none";
+  const asaasConfigured = !!(company as any)?.asaas_subconta_id;
 
   return (
     <View>
@@ -99,6 +140,93 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           {Platform.OS === "web" && <Pressable onPress={openColorPicker} style={[cs.colorDot, { backgroundColor: color, borderWidth: 2, borderColor: Colors.border2 }]} />}
         </View>
         <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes"}</Text></Pressable>
+      </View>
+
+      <SectionTitle title="Identidade visual" />
+      <View style={cs.card}>
+        <Text style={cs.hint}>Personalize o visual da sua loja com logo e imagem de capa.</Text>
+        <Text style={cs.fieldLabel}>Logo</Text>
+        <View style={s.imgRow}>
+          <View style={s.logoPreview}>
+            {config.logo_url ? (
+              <Image source={{ uri: config.logo_url }} style={{ width: "100%", height: "100%", borderRadius: 12 }} resizeMode="cover" />
+            ) : (
+              <View style={[s.logoPlaceholder, { backgroundColor: color }]}>
+                <Text style={s.logoInitial}>{(siteName || "A").charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+          </View>
+          <View style={{ flex: 1, gap: 8 }}>
+            <Text style={s.imgHint}>Quadrado, min. 200×200px{"\n"}PNG ou JPG, max. 5MB</Text>
+            {Platform.OS === "web" && (
+              <Pressable
+                onPress={() => pickImage("logo")}
+                disabled={isUploadingImage}
+                style={[s.imgBtn, isUploadingImage && uploadingType === "logo" && { opacity: 0.6 }]}
+              >
+                <Icon name="upload" size={13} color={Colors.violet3} />
+                <Text style={s.imgBtnText}>{uploadingType === "logo" ? "Enviando..." : config.logo_url ? "Trocar logo" : "Enviar logo"}</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+        <View style={cs.divider} />
+        <Text style={cs.fieldLabel}>Capa / Banner</Text>
+        <View style={s.bannerPreview}>
+          {config.cover_url ? (
+            <Image source={{ uri: config.cover_url }} style={{ width: "100%", height: "100%", borderRadius: 10 }} resizeMode="cover" />
+          ) : (
+            <View style={[s.bannerPlaceholder, { backgroundColor: color + "22" }]}>
+              <Icon name="image" size={22} color={color} />
+              <Text style={[s.bannerPlaceholderText, { color }]}>Sem capa</Text>
+            </View>
+          )}
+        </View>
+        {Platform.OS === "web" && (
+          <Pressable
+            onPress={() => pickImage("banner")}
+            disabled={isUploadingImage}
+            style={[s.imgBtn, { marginTop: 8 }, isUploadingImage && uploadingType === "banner" && { opacity: 0.6 }]}
+          >
+            <Icon name="upload" size={13} color={Colors.violet3} />
+            <Text style={s.imgBtnText}>{uploadingType === "banner" ? "Enviando..." : config.cover_url ? "Trocar capa" : "Enviar capa"}</Text>
+          </Pressable>
+        )}
+        <Text style={[cs.hint, { marginTop: 8, marginBottom: 0 }]}>Horizontal, min. 1200×400px. PNG ou JPG, max. 5MB</Text>
+      </View>
+
+      <SectionTitle title="Pagamentos" />
+      <View style={cs.card}>
+        <View style={s.pixRow}>
+          <View style={[s.pixIcon, { backgroundColor: asaasConfigured ? Colors.greenD : Colors.amberD }]}>
+            <Text style={{ fontSize: 18 }}>💸</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.pixTitle}>Pix {asaasConfigured ? "via Asaas" : "demo (mock)"}</Text>
+            <Text style={s.pixDesc}>
+              {asaasConfigured
+                ? "Pagamentos Pix reais habilitados. Os clientes pagam diretamente para sua subconta."
+                : "No momento os pedidos usam Pix de demonstracao. Configure o Asaas para receber pagamentos reais."}
+            </Text>
+          </View>
+          <View style={[s.pixBadge, { backgroundColor: asaasConfigured ? Colors.greenD : Colors.amberD }]}>
+            <Text style={[s.pixBadgeText, { color: asaasConfigured ? Colors.green : Colors.amber }]}>
+              {asaasConfigured ? "Ativo" : "Demo"}
+            </Text>
+          </View>
+        </View>
+        {!asaasConfigured && (
+          <>
+            <View style={cs.divider} />
+            <Text style={s.asaasTitle}>Como ativar pagamentos reais</Text>
+            <View style={s.asaasStep}><Text style={s.asaasNum}>1</Text><Text style={s.asaasStepText}>Crie uma conta no Asaas em asaas.com</Text></View>
+            <View style={s.asaasStep}><Text style={s.asaasNum}>2</Text><Text style={s.asaasStepText}>Gere um token de API no painel Asaas</Text></View>
+            <View style={s.asaasStep}><Text style={s.asaasNum}>3</Text><Text style={s.asaasStepText}>Entre em contato com o suporte Aura para configurar sua subconta</Text></View>
+            <Pressable onPress={() => Linking.openURL("https://www.asaas.com")} style={s.asaasBtn}>
+              <Text style={s.asaasBtnText}>Abrir Asaas →</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <SectionTitle title="Dominio personalizado" />
@@ -147,6 +275,28 @@ const s = StyleSheet.create({
   urlText: { flex: 1, fontSize: 11, color: Colors.violet3, fontWeight: "500" },
   urlCopy: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
   urlCopyText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
+  imgRow: { flexDirection: "row", alignItems: "flex-start", gap: 16, marginBottom: 4 },
+  logoPreview: { width: 80, height: 80, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", flexShrink: 0 },
+  logoPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  logoInitial: { fontSize: 28, fontWeight: "800", color: "#fff" },
+  imgHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  imgBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, alignSelf: "flex-start" },
+  imgBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  bannerPreview: { width: "100%", height: 100, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
+  bannerPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 6 },
+  bannerPlaceholderText: { fontSize: 12, fontWeight: "600" },
+  pixRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  pixIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  pixTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 3 },
+  pixDesc: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  pixBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
+  pixBadgeText: { fontSize: 10, fontWeight: "700" },
+  asaasTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink, marginBottom: 10 },
+  asaasStep: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 8 },
+  asaasNum: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.violetD, textAlign: "center", lineHeight: 20, fontSize: 11, fontWeight: "700", color: Colors.violet3, flexShrink: 0 },
+  asaasStepText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18, paddingTop: 1 },
+  asaasBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 11, alignItems: "center", marginTop: 8, borderWidth: 1, borderColor: Colors.border2 },
+  asaasBtnText: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
   domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
   domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },

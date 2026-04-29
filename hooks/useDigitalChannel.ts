@@ -8,6 +8,8 @@ const digitalChannelApi = {
   get: (cid: string) => request<any>(`/companies/${cid}/digital-channel`),
   save: (cid: string, body: any) => request<any>(`/companies/${cid}/digital-channel`, { method: "PUT", body }),
   requestDomain: (cid: string, domain: string, plan: string) => request<any>(`/companies/${cid}/digital-channel/request-domain`, { method: "POST", body: { domain, plan } }),
+  uploadImage: (cid: string, type: "logo" | "banner", content: string, content_type: string) =>
+    request<{ logo_url?: string; cover_url?: string }>(`/companies/${cid}/digital-channel/upload-image?type=${type}`, { method: "POST", body: { content, content_type } }),
 };
 
 export function useDigitalChannel() {
@@ -48,6 +50,16 @@ export function useDigitalChannel() {
     onError: (err: any) => toast.error(err?.message || 'Erro ao solicitar dominio'),
   });
 
+  const uploadImageMutation = useMutation({
+    mutationFn: ({ type, content, content_type }: { type: "logo" | "banner"; content: string; content_type: string }) =>
+      digitalChannelApi.uploadImage(cid!, type, content, content_type),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
+      toast.success('Imagem salva');
+    },
+    onError: (err: any) => toast.error(err?.message || 'Erro ao salvar imagem'),
+  });
+
   const allProducts = productsData?.products || productsData || [];
   const productsList = Array.isArray(allProducts) ? allProducts : [];
 
@@ -59,5 +71,7 @@ export function useDigitalChannel() {
     isSaving: saveMutation.isPending,
     requestDomain: domainMutation.mutateAsync,
     isRequestingDomain: domainMutation.isPending,
+    uploadImage: uploadImageMutation.mutateAsync,
+    isUploadingImage: uploadImageMutation.isPending,
   };
 }

@@ -3,7 +3,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 
 export const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
-export const TABS = ["Meu Site", "Vitrine", "Entrega"];
+export const TABS = ["Meu Site", "Vitrine", "Entrega", "Pedidos"];
 export const COLOR_PRESETS = ["#7c3aed", "#059669", "#dc2626", "#d97706", "#2563eb", "#db2777", "#0891b2", "#374151"];
 
 export function Field({ label, value, onChange, placeholder, multiline }: {
