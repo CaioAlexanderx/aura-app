@@ -1,13 +1,9 @@
 // AURA. — PatientHub — orchestrator
 // 11 sub-tabs + header redesenhado (PR28 mockup v2 aprovado)
 //
-// Header minimalista (cirurgico):
-//   - Avatar 56px com botao webcam pra capturar/atualizar foto
-//   - Nome + meta-linha (idade · genero · paciente desde)
-//   - Max 2 tags clinicas (alergia red, condicao amber)
-//   - 1 botao primario Editar + kebab com acoes secundarias
-//
-// Aba Dados embed inline - substitui DataTab antiga.
+// PR43 (2026-04-29): popup migrado pra FULLSCREEN overlay (100% width/height,
+// sem borderRadius, sem maxWidth, sem padding externo). Antes era um popup
+// centralizado 1100×90% que em mobile parecia "vir de baixo".
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -134,8 +130,6 @@ export function PatientHub({ visible, patient, onClose, onEdit, initialTab }: Pr
   const [kebabOpen, setKebabOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
 
-  // Persiste foto no backend (PATCH /companies/:cid/dental/patients/:id { photo_url }).
-  // Se backend nao aceitar o campo, foto fica volatil ate refresh.
   const photoMut = useMutation({
     mutationFn: (photoUrl: string) =>
       request(`/companies/${cid}/dental/patients/${patient!.id}`, {
@@ -145,9 +139,7 @@ export function PatientHub({ visible, patient, onClose, onEdit, initialTab }: Pr
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dental-patients", cid] });
     },
-    onError: () => {
-      // Silencioso: foto continua refletida visualmente via photoOverride state
-    },
+    onError: () => {},
   });
 
   function handlePhotoCapture(dataUrl: string) {
@@ -182,84 +174,88 @@ export function PatientHub({ visible, patient, onClose, onEdit, initialTab }: Pr
 
   return (
     <>
-      <Modal visible={visible} animationType="fade" onRequestClose={onClose} transparent>
-        <Pressable style={st.backdrop} onPress={onClose}>
-          <Pressable style={st.popup} onPress={() => {}}>
+      <Modal
+        visible={visible}
+        animationType="fade"
+        onRequestClose={onClose}
+        transparent={false}
+        presentationStyle={Platform.OS === 'ios' ? 'fullScreen' : undefined}
+      >
+        <View style={st.fullscreen}>
 
-            {/* Breadcrumb / close */}
-            <View style={st.closeBar}>
-              <Text style={st.breadcrumb}>
-                <Text style={{ color: DentalColors.cyan, fontWeight: "600" }}>Pacientes</Text>
-                {" · "}{patient.full_name || patient.name}
-              </Text>
-              <Pressable onPress={onClose} style={st.closeBtn}>
-                <Text style={{ color: DentalColors.ink2, fontSize: 16 }}>✕</Text>
+          {/* Breadcrumb / close */}
+          <View style={st.closeBar}>
+            <Text style={st.breadcrumb}>
+              <Text style={{ color: DentalColors.cyan, fontWeight: "600" }}>Pacientes</Text>
+              {" · "}{patient.full_name || patient.name}
+            </Text>
+            <Pressable onPress={onClose} style={st.closeBtn}>
+              <Text style={{ color: DentalColors.ink2, fontSize: 16 }}>✕</Text>
+            </Pressable>
+          </View>
+
+          {/* HEADER MINIMALISTA */}
+          <View style={st.header}>
+            <View style={st.avatarWrap}>
+              {photoUrl ? (
+                <Image source={{ uri: photoUrl }} style={st.avatar} />
+              ) : (
+                <View style={[st.avatar, { alignItems: "center", justifyContent: "center" }]}>
+                  <Text style={st.avatarText}>{initials}</Text>
+                </View>
+              )}
+              <Pressable onPress={() => setPhotoOpen(true)} style={st.photoBtn} {...(Platform.OS === "web" ? { title: "Tirar foto / atualizar" } : {})}>
+                <Text style={{ color: "#fff", fontSize: 11 }}>📷</Text>
               </Pressable>
             </View>
 
-            {/* HEADER MINIMALISTA */}
-            <View style={st.header}>
-              <View style={st.avatarWrap}>
-                {photoUrl ? (
-                  <Image source={{ uri: photoUrl }} style={st.avatar} />
-                ) : (
-                  <View style={[st.avatar, { alignItems: "center", justifyContent: "center" }]}>
-                    <Text style={st.avatarText}>{initials}</Text>
+            <View style={st.headerInfo}>
+              <Text style={st.name} numberOfLines={1}>{patient.full_name || patient.name}</Text>
+              <Text style={st.sub}>
+                {age != null ? `${age} anos` : "Idade —"}
+                {genderLabel ? ` · ${genderLabel}` : ""}
+                {patient.created_at ? ` · Paciente desde ${since}` : ""}
+              </Text>
+              <View style={st.tags}>
+                {patient.allergies && patient.allergies.trim() ? (
+                  <View style={[st.tag, st.tagAlergia]}>
+                    <Text style={[st.tagText, { color: DentalColors.red }]}>⚠ Alergia: {patient.allergies.split(",")[0].trim()}</Text>
                   </View>
-                )}
-                <Pressable onPress={() => setPhotoOpen(true)} style={st.photoBtn} {...(Platform.OS === "web" ? { title: "Tirar foto / atualizar" } : {})}>
-                  <Text style={{ color: "#fff", fontSize: 11 }}>📷</Text>
-                </Pressable>
-              </View>
-
-              <View style={st.headerInfo}>
-                <Text style={st.name} numberOfLines={1}>{patient.full_name || patient.name}</Text>
-                <Text style={st.sub}>
-                  {age != null ? `${age} anos` : "Idade —"}
-                  {genderLabel ? ` · ${genderLabel}` : ""}
-                  {patient.created_at ? ` · Paciente desde ${since}` : ""}
-                </Text>
-                <View style={st.tags}>
-                  {patient.allergies && patient.allergies.trim() ? (
-                    <View style={[st.tag, st.tagAlergia]}>
-                      <Text style={[st.tagText, { color: DentalColors.red }]}>⚠ Alergia: {patient.allergies.split(",")[0].trim()}</Text>
-                    </View>
-                  ) : null}
-                  {patient.medical_history && patient.medical_history.trim() ? (
-                    <View style={[st.tag, st.tagCond]}>
-                      <Text style={[st.tagText, { color: DentalColors.amber }]}>● {patient.medical_history.split(",")[0].trim()}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={st.actions}>
-                {onEdit && (
-                  <Pressable onPress={() => onEdit(patient)} style={st.btnPrimary}>
-                    <Text style={st.btnPrimaryText}>✏️ Editar</Text>
-                  </Pressable>
-                )}
-                <View style={{ position: "relative" }}>
-                  <Pressable onPress={() => setKebabOpen((v) => !v)} style={st.kebab}>
-                    <Text style={{ color: DentalColors.ink2, fontSize: 18, lineHeight: 18 }}>⋯</Text>
-                  </Pressable>
-                  {kebabOpen && (
-                    <View style={st.kebabMenu}>
-                      <KebabItem icon="✨" label="IA Aura" onPress={() => { setKebabOpen(false); setAiOpen(true); }} />
-                      <KebabItem icon="🔬" label="Solicitar exame" onPress={() => { setKebabOpen(false); setExamOpen(true); }} />
-                      <KebabItem icon="🗒" label="Emitir documento" onPress={() => { setKebabOpen(false); setDocOpen(true); }} />
-                      <KebabItem icon="📋" label="Coletar TCLE" onPress={() => { setKebabOpen(false); setConsentOpen(true); }} />
-                      <KebabItem icon="🌐" label="Compartilhar portal" onPress={() => { setKebabOpen(false); setPortalOpen(true); }} />
-                    </View>
-                  )}
-                </View>
+                ) : null}
+                {patient.medical_history && patient.medical_history.trim() ? (
+                  <View style={[st.tag, st.tagCond]}>
+                    <Text style={[st.tagText, { color: DentalColors.amber }]}>● {patient.medical_history.split(",")[0].trim()}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
 
-            <OdontoSubNav tabs={HUB_TABS} activeId={activeTab} onChange={setActiveTab} />
-            <View style={{ flex: 1 }}>{renderTab()}</View>
-          </Pressable>
-        </Pressable>
+            <View style={st.actions}>
+              {onEdit && (
+                <Pressable onPress={() => onEdit(patient)} style={st.btnPrimary}>
+                  <Text style={st.btnPrimaryText}>✏️ Editar</Text>
+                </Pressable>
+              )}
+              <View style={{ position: "relative" }}>
+                <Pressable onPress={() => setKebabOpen((v) => !v)} style={st.kebab}>
+                  <Text style={{ color: DentalColors.ink2, fontSize: 18, lineHeight: 18 }}>⋯</Text>
+                </Pressable>
+                {kebabOpen && (
+                  <View style={st.kebabMenu}>
+                    <KebabItem icon="✨" label="IA Aura" onPress={() => { setKebabOpen(false); setAiOpen(true); }} />
+                    <KebabItem icon="🔬" label="Solicitar exame" onPress={() => { setKebabOpen(false); setExamOpen(true); }} />
+                    <KebabItem icon="🗒" label="Emitir documento" onPress={() => { setKebabOpen(false); setDocOpen(true); }} />
+                    <KebabItem icon="📋" label="Coletar TCLE" onPress={() => { setKebabOpen(false); setConsentOpen(true); }} />
+                    <KebabItem icon="🌐" label="Compartilhar portal" onPress={() => { setKebabOpen(false); setPortalOpen(true); }} />
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+          <OdontoSubNav tabs={HUB_TABS} activeId={activeTab} onChange={setActiveTab} />
+          <View style={{ flex: 1 }}>{renderTab()}</View>
+        </View>
       </Modal>
 
       {/* Modais overlay */}
@@ -339,7 +335,7 @@ function DataTabV2({ patient, onEdit }: { patient: PatientLite; onEdit?: () => v
         <View style={{ flex: 1, gap: 14, minWidth: 280 }}>
           <Card title="📊 RESUMO CLÍNICO" accent="cyan">
             <SummaryRow icon="📅" label="Próximo retorno" value={"Sem retorno agendado"} muted />
-            <SummaryRow icon="⏱" label="Última visita" value={patient.created_at ? "Ver historico abaixo" : "—"} muted />
+            <SummaryRow icon="⏱" label="Última visita" value={patient.created_at ? "Ver histórico abaixo" : "—"} muted />
             <SummaryRow icon="🦷" label="Plano de tratamento" value={"Acesse aba Orçamentos"} muted />
           </Card>
 
@@ -405,8 +401,13 @@ function SummaryRow({ icon, label, value, muted }: { icon: string; label: string
 }
 
 const st = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 16 },
-  popup: { width: '100%', maxWidth: 1100, height: '90%', backgroundColor: DentalColors.bg, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: DentalColors.border },
+  // PR43.3: fullscreen overlay (substitui backdrop+popup centralizado)
+  fullscreen: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: DentalColors.bg,
+  },
 
   closeBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 32, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: DentalColors.border, backgroundColor: DentalColors.bg },
   breadcrumb: { fontSize: 12, color: DentalColors.ink3, fontWeight: "500" },
