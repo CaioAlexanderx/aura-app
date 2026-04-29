@@ -1,18 +1,20 @@
 // ============================================================
 // ConsultaShell — Orquestrador do Modo Consulta.
-// Ver historico de PRs nos commits.
-//
-// PR32 #6 (2026-04-28): botao "Anotar" do ConsultaVoicePanel agora
-// abre VoiceTranscription real (Web Speech API). Texto transcrito vai
-// pro transcript da consulta.
+// PR32 #6 (2026-04-28): Anotar via Web Speech API.
+// PR44 #10 #19 (2026-04-29): UAT bugs P0
+//   - state hidratado do useDentalConsultaStore (Zustand) — ao
+//     minimizar, state sobrevive route unmount; ao reentrar, retoma.
+//   - saveEvolutionMut: PATCH apenas clinical_notes sem mudar status.
+//     Botao "Salvar evolucao" na ConsultaTopbar permite salvar parcial.
 // ============================================================
 
-import { useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { useDentalConsultaStore } from "@/stores/dentalConsulta";
 import { toast } from "@/components/Toast";
 import { DentalColors } from "@/constants/dental-tokens";
 import type { ToothData, ToothStatus } from "@/components/verticals/odonto/OdontogramaSVG";
@@ -120,7 +122,21 @@ export function ConsultaShell({ appointmentId }: Props) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
 
-  const [state, dispatch] = useReducer(reducer, initialState);
+  // PR44 #10: hidratacao do estado a partir do store Zustand
+  const consultaStore = useDentalConsultaStore();
+  const [state, dispatch] = useReducer(
+    reducer,
+    appointmentId,
+    (id) => consultaStore.get(id) || initialState
+  );
+
+  // PR44 #10: sincroniza state -> store sempre que muda. Permite minimizar e
+  // voltar sem perder toothChanges/transcript.
+  useEffect(() => {
+    consultaStore.set(appointmentId, state);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, appointmentId]);
+
   const [selectedTooth, setSelectedTooth] = useState<ToothData | null>(null);
   const [showProntuarioMobile, setShowProntuarioMobile] = useState(false);
   const [showVoiceMobile, setShowVoiceMobile] = useState(false);
@@ -128,7 +144,6 @@ export function ConsultaShell({ appointmentId }: Props) {
   const [briefSeed, setBriefSeed] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
-  // PR32 #6: estado da janela de transcricao por voz
   const [showVoiceTranscript, setShowVoiceTranscript] = useState(false);
 
   const apptQ = useQuery({
@@ -183,6 +198,34 @@ export function ConsultaShell({ appointmentId }: Props) {
     onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar dente"),
   });
 
+  // PR44 #19: salvar evolucao parcial sem encerrar consulta
+  const saveEvolutionMut = useMutation({
+    mutationFn: () => {
+      // Compila transcript + toothChanges em texto narrativo. Mesma logica
+      // que o ConsultaEndModal usa, mas SEM mudar status.
+      const transcriptText = state.transcript
+        .filter((t) => !t.isCommand)
+        .map((t) => `[${new Date(t.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}] ${t.text}`)
+        .join("\n");
+      const toothText = state.toothChanges
+        .map((c) => `Dente ${c.tooth_number}: ${c.prev_status} → ${c.status}${c.notes ? ` (${c.notes})` : ""}`)
+        .join("\n");
+      const fullNotes = [
+        transcriptText && `— Transcrição da consulta —\n${transcriptText}`,
+        toothText && `— Alterações no odontograma —\n${toothText}`,
+      ].filter(Boolean).join("\n\n");
+      return request(`/companies/${cid}/dental/appointments/${appointmentId}`, {
+        method: "PATCH",
+        body: { clinical_notes: fullNotes },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dental-appt", cid, appointmentId] });
+      toast.success("Evolução salva");
+    },
+    onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar evolução"),
+  });
+
   function onToothSelect(t: ToothData) { setSelectedTooth(t); }
   function onToothPopoverSave({ status, notes }: { status: ToothStatus; notes: string | null }) {
     if (!selectedTooth) return;
@@ -203,7 +246,7 @@ export function ConsultaShell({ appointmentId }: Props) {
     if (text) dispatch({ type: "transcript_command", segment: { id: Date.now() + "_cmd", text, ts: new Date().toISOString() } });
     if (kind === "prescrever") setOpenModal("rx");
     else if (kind === "marcar") toast.success("Comando: marcar dente — clique no dente desejado");
-    else if (kind === "anotar") setShowVoiceTranscript(true); // PR32 #6: abre transcricao real
+    else if (kind === "anotar") setShowVoiceTranscript(true);
   }
 
   function onIntraoralCapture(dataUrl: string) {
@@ -211,7 +254,6 @@ export function ConsultaShell({ appointmentId }: Props) {
     toast.success(`Foto registrada (${photos.length + 1} no total)`);
   }
 
-  // PR32 #6: callback quando transcricao termina, adiciona ao transcript
   function onVoiceTranscript(text: string) {
     dispatch({ type: "transcript_append", segment: {
       id: Date.now() + "_tr",
@@ -244,7 +286,12 @@ export function ConsultaShell({ appointmentId }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: DentalColors.bg }}>
-      <ConsultaTopbar onEnd={() => dispatch({ type: "show_end" })} onMinimize={() => router.back()} />
+      <ConsultaTopbar
+        onEnd={() => dispatch({ type: "show_end" })}
+        onMinimize={() => router.back()}
+        onSaveEvolution={() => saveEvolutionMut.mutate()}
+        saving={saveEvolutionMut.isPending}
+      />
       <ConsultaPatientBar patient={patient} appointment={appointment} startedAt={state.startedAt} />
 
       <View style={{ flex: 1, flexDirection: "row" }}>
@@ -326,9 +373,19 @@ export function ConsultaShell({ appointmentId }: Props) {
       <RxTemplateModal open={openModal === "rx"} patientId={patientId} appointmentId={appointmentId} practitionerId={appointment?.practitioner_id || null} patientName={patient?.name} onClose={() => setOpenModal("none")} />
       <ExamRequestModal open={openModal === "exam"} patientId={patientId} appointmentId={appointmentId} practitionerId={appointment?.practitioner_id || null} patientName={patient?.name} onClose={() => setOpenModal("none")} />
       <AgendarProximoModal open={openModal === "agendar"} patientId={patientId} patientName={patient?.name} practitionerId={appointment?.practitioner_id || null} defaultDurationMin={appointment?.duration_min || 60} onClose={() => setOpenModal("none")} />
-      <ConsultaEndModal open={state.stage === "ended"} appointmentId={appointmentId} patientId={patientId || null} toothChanges={state.toothChanges} transcript={state.transcript} procedureSeed={appointment?.chief_complaint || ""} patientName={patient?.name} patientPhone={patient?.phone || undefined} onClose={() => dispatch({ type: "hide_end" })} onDone={() => router.replace("/dental/(clinic)/hoje")} />
+      <ConsultaEndModal
+        open={state.stage === "ended"}
+        appointmentId={appointmentId} patientId={patientId || null}
+        toothChanges={state.toothChanges} transcript={state.transcript}
+        procedureSeed={appointment?.chief_complaint || ""} patientName={patient?.name} patientPhone={patient?.phone || undefined}
+        onClose={() => dispatch({ type: "hide_end" })}
+        onDone={() => {
+          // PR44 #10: limpa snapshot ao concluir (libera memoria)
+          consultaStore.clear(appointmentId);
+          router.replace("/dental/(clinic)/hoje");
+        }}
+      />
       <WebcamCapture visible={showCamera} onClose={() => setShowCamera(false)} onCapture={onIntraoralCapture} title="Camera intraoral" hint="Aproxime o foco da regiao a documentar" facing="environment" />
-      {/* PR32 #6: transcricao por voz */}
       <VoiceTranscription
         visible={showVoiceTranscript}
         onClose={() => setShowVoiceTranscript(false)}
