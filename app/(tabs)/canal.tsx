@@ -17,7 +17,13 @@ import { TabPedidos } from "@/components/screens/canal/TabPedidos";
 export default function CanalDigitalScreen() {
   const [tab, setTab] = useState(0);
   const { company } = useAuthStore();
-  const { config, products, isLoading, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage } = useDigitalChannel();
+  const {
+    config, products, isLoading,
+    saveConfig, isSaving,
+    requestDomain, isRequestingDomain,
+    uploadImage, isUploadingImage,
+    setupPix, isSettingUpPix,
+  } = useDigitalChannel();
   const plan = company?.plan || "essencial";
   const hasAccess = ({ essencial: 0, negocio: 1, expansao: 2 }[plan] ?? 0) >= 1;
 
@@ -55,7 +61,19 @@ export default function CanalDigitalScreen() {
       <TabBar tabs={TABS} active={tab} onSelect={setTab} />
       {isLoading ? <ListSkeleton rows={4} /> : (
         <>
-          {tab === 0 && <TabMeuSite config={config} saveConfig={saveConfig} isSaving={isSaving} requestDomain={requestDomain} isRequestingDomain={isRequestingDomain} uploadImage={uploadImage} isUploadingImage={isUploadingImage} />}
+          {tab === 0 && (
+            <TabMeuSite
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+              requestDomain={requestDomain}
+              isRequestingDomain={isRequestingDomain}
+              uploadImage={uploadImage}
+              isUploadingImage={isUploadingImage}
+              setupPix={setupPix}
+              isSettingUpPix={isSettingUpPix}
+            />
+          )}
           {tab === 1 && <TabVitrine config={config} products={products} saveConfig={saveConfig} isSaving={isSaving} />}
           {tab === 2 && <TabEntrega config={config} saveConfig={saveConfig} isSaving={isSaving} />}
           {tab === 3 && <TabPedidos />}

@@ -10,6 +10,8 @@ const digitalChannelApi = {
   requestDomain: (cid: string, domain: string, plan: string) => request<any>(`/companies/${cid}/digital-channel/request-domain`, { method: "POST", body: { domain, plan } }),
   uploadImage: (cid: string, type: "logo" | "banner", content: string, content_type: string) =>
     request<{ logo_url?: string; cover_url?: string }>(`/companies/${cid}/digital-channel/upload-image?type=${type}`, { method: "POST", body: { content, content_type } }),
+  setupPix: (cid: string, body: any) =>
+    request<{ success: boolean; message: string }>(`/companies/${cid}/digital-channel/setup-pix`, { method: "POST", body }),
 };
 
 export function useDigitalChannel() {
@@ -60,6 +62,16 @@ export function useDigitalChannel() {
     onError: (err: any) => toast.error(err?.message || 'Erro ao salvar imagem'),
   });
 
+  const setupPixMutation = useMutation({
+    mutationFn: (body: any) => digitalChannelApi.setupPix(cid!, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['auth'] });
+      qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
+      toast.success('Pix ativado com sucesso!');
+    },
+    onError: (err: any) => toast.error(err?.message || 'Erro ao ativar Pix'),
+  });
+
   const allProducts = productsData?.products || productsData || [];
   const productsList = Array.isArray(allProducts) ? allProducts : [];
 
@@ -73,5 +85,7 @@ export function useDigitalChannel() {
     isRequestingDomain: domainMutation.isPending,
     uploadImage: uploadImageMutation.mutateAsync,
     isUploadingImage: uploadImageMutation.isPending,
+    setupPix: setupPixMutation.mutateAsync,
+    isSettingUpPix: setupPixMutation.isPending,
   };
 }

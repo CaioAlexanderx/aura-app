@@ -15,9 +15,11 @@ type Props = {
   isRequestingDomain: boolean;
   uploadImage: (data: { type: "logo" | "banner"; content: string; content_type: string }) => Promise<any>;
   isUploadingImage: boolean;
+  setupPix: (data: any) => Promise<any>;
+  isSettingUpPix: boolean;
 };
 
-export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage }: Props) {
+export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix }: Props) {
   const { company } = useAuthStore();
   const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
   const [tagline, setTagline] = useState(config.tagline || "");
@@ -31,6 +33,14 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [domainInput, setDomainInput] = useState("");
   const [domainPlan, setDomainPlan] = useState<"1year" | "2years">("1year");
   const [uploadingType, setUploadingType] = useState<"logo" | "banner" | null>(null);
+
+  // Pix setup form
+  const [showPixForm, setShowPixForm] = useState(false);
+  const [pixName, setPixName] = useState("");
+  const [pixCpfCnpj, setPixCpfCnpj] = useState("");
+  const [pixEmail, setPixEmail] = useState("");
+  const [pixPhone, setPixPhone] = useState("");
+  const [pixCompanyType, setPixCompanyType] = useState<"MEI" | "LTDA" | "INDIVIDUAL">("MEI");
 
   useEffect(() => {
     if (!config.exists) return;
@@ -94,10 +104,31 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     await requestDomain({ domain: d, plan: domainPlan }); setDomainInput("");
   }
 
+  async function handleSetupPix() {
+    if (!pixName.trim()) { toast.error("Informe o nome ou razao social"); return; }
+    if (!pixEmail.trim()) { toast.error("Informe o e-mail"); return; }
+    if (!pixCpfCnpj.trim()) { toast.error("Informe o CPF ou CNPJ"); return; }
+    if (!pixPhone.trim()) { toast.error("Informe o celular"); return; }
+    await setupPix({
+      name: pixName.trim(),
+      email: pixEmail.trim(),
+      cpf_cnpj: pixCpfCnpj.trim(),
+      mobile_phone: pixPhone.trim(),
+      company_type: pixCompanyType,
+    });
+    setShowPixForm(false);
+  }
+
   const slug = config.slug || (siteName || "minha-loja").toLowerCase().replace(/\s+/g, "-").slice(0, 40);
   const storefrontUrl = config.storefront_url || `${BASE_URL}/storefront/${slug}/page`;
   const hasDomain = config.custom_domain && config.custom_domain_status !== "none";
   const asaasConfigured = !!(company as any)?.asaas_subconta_id;
+
+  const PIX_TYPES: { value: "MEI" | "LTDA" | "INDIVIDUAL"; label: string }[] = [
+    { value: "MEI", label: "MEI" },
+    { value: "LTDA", label: "Empresa (LTDA/SA)" },
+    { value: "INDIVIDUAL", label: "Pessoa Fisica" },
+  ];
 
   return (
     <View>
@@ -142,9 +173,12 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes"}</Text></Pressable>
       </View>
 
+      {/* Identidade Visual */}
       <SectionTitle title="Identidade visual" />
       <View style={cs.card}>
         <Text style={cs.hint}>Personalize o visual da sua loja com logo e imagem de capa.</Text>
+
+        {/* Logo */}
         <Text style={cs.fieldLabel}>Logo</Text>
         <View style={s.imgRow}>
           <View style={s.logoPreview}>
@@ -157,7 +191,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             )}
           </View>
           <View style={{ flex: 1, gap: 8 }}>
-            <Text style={s.imgHint}>Quadrado, min. 200×200px{"\n"}PNG ou JPG, max. 5MB</Text>
+            <Text style={s.imgHint}>Quadrado, min. 200x200px{"\n"}PNG ou JPG, max. 5MB</Text>
             {Platform.OS === "web" && (
               <Pressable
                 onPress={() => pickImage("logo")}
@@ -170,7 +204,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             )}
           </View>
         </View>
+
         <View style={cs.divider} />
+
+        {/* Banner / Capa */}
         <Text style={cs.fieldLabel}>Capa / Banner</Text>
         <View style={s.bannerPreview}>
           {config.cover_url ? (
@@ -192,9 +229,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             <Text style={s.imgBtnText}>{uploadingType === "banner" ? "Enviando..." : config.cover_url ? "Trocar capa" : "Enviar capa"}</Text>
           </Pressable>
         )}
-        <Text style={[cs.hint, { marginTop: 8, marginBottom: 0 }]}>Horizontal, min. 1200×400px. PNG ou JPG, max. 5MB</Text>
+        <Text style={[cs.hint, { marginTop: 8, marginBottom: 0 }]}>Horizontal, min. 1200x400px. PNG ou JPG, max. 5MB</Text>
       </View>
 
+      {/* Pagamentos / Pix */}
       <SectionTitle title="Pagamentos" />
       <View style={cs.card}>
         <View style={s.pixRow}>
@@ -202,29 +240,103 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             <Text style={{ fontSize: 18 }}>💸</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.pixTitle}>Pix {asaasConfigured ? "via Asaas" : "demo (mock)"}</Text>
+            <Text style={s.pixTitle}>Pix {asaasConfigured ? "ativo" : "nao configurado"}</Text>
             <Text style={s.pixDesc}>
               {asaasConfigured
-                ? "Pagamentos Pix reais habilitados. Os clientes pagam diretamente para sua subconta."
-                : "No momento os pedidos usam Pix de demonstracao. Configure o Asaas para receber pagamentos reais."}
+                ? "Pagamentos Pix habilitados. Clientes pagam diretamente para sua conta."
+                : "Ative o Pix para receber pagamentos reais dos seus clientes."}
             </Text>
           </View>
           <View style={[s.pixBadge, { backgroundColor: asaasConfigured ? Colors.greenD : Colors.amberD }]}>
             <Text style={[s.pixBadgeText, { color: asaasConfigured ? Colors.green : Colors.amber }]}>
-              {asaasConfigured ? "Ativo" : "Demo"}
+              {asaasConfigured ? "Ativo" : "Inativo"}
             </Text>
           </View>
         </View>
+
         {!asaasConfigured && (
           <>
             <View style={cs.divider} />
-            <Text style={s.asaasTitle}>Como ativar pagamentos reais</Text>
-            <View style={s.asaasStep}><Text style={s.asaasNum}>1</Text><Text style={s.asaasStepText}>Crie uma conta no Asaas em asaas.com</Text></View>
-            <View style={s.asaasStep}><Text style={s.asaasNum}>2</Text><Text style={s.asaasStepText}>Gere um token de API no painel Asaas</Text></View>
-            <View style={s.asaasStep}><Text style={s.asaasNum}>3</Text><Text style={s.asaasStepText}>Entre em contato com o suporte Aura para configurar sua subconta</Text></View>
-            <Pressable onPress={() => Linking.openURL("https://www.asaas.com")} style={s.asaasBtn}>
-              <Text style={s.asaasBtnText}>Abrir Asaas →</Text>
-            </Pressable>
+            {!showPixForm ? (
+              <Pressable onPress={() => setShowPixForm(true)} style={s.activatePixBtn}>
+                <Text style={{ fontSize: 16 }}>⚡</Text>
+                <Text style={s.activatePixBtnText}>Ativar Pix agora</Text>
+              </Pressable>
+            ) : (
+              <View style={s.pixForm}>
+                <Text style={s.pixFormTitle}>Dados para ativar o Pix</Text>
+                <Text style={s.pixFormHint}>Usamos esses dados para criar sua conta de recebimentos. Leva menos de 1 minuto.</Text>
+
+                <Text style={cs.fieldLabel}>Tipo</Text>
+                <View style={s.typeRow}>
+                  {PIX_TYPES.map(t => (
+                    <Pressable
+                      key={t.value}
+                      onPress={() => setPixCompanyType(t.value)}
+                      style={[s.typeBtn, pixCompanyType === t.value && s.typeBtnActive]}
+                    >
+                      <Text style={[s.typeBtnText, pixCompanyType === t.value && s.typeBtnTextActive]}>{t.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={cs.fieldLabel}>{pixCompanyType === "INDIVIDUAL" ? "Nome completo" : "Nome / Razao social"}</Text>
+                <TextInput
+                  style={cs.input}
+                  value={pixName}
+                  onChangeText={setPixName}
+                  placeholder={pixCompanyType === "INDIVIDUAL" ? "Joao da Silva" : "Empresa Exemplo Ltda"}
+                  placeholderTextColor={Colors.ink3}
+                />
+
+                <Text style={cs.fieldLabel}>{pixCompanyType === "INDIVIDUAL" ? "CPF" : "CNPJ"}</Text>
+                <TextInput
+                  style={cs.input}
+                  value={pixCpfCnpj}
+                  onChangeText={setPixCpfCnpj}
+                  placeholder={pixCompanyType === "INDIVIDUAL" ? "000.000.000-00" : "00.000.000/0000-00"}
+                  placeholderTextColor={Colors.ink3}
+                  keyboardType="numeric"
+                />
+
+                <Text style={cs.fieldLabel}>E-mail</Text>
+                <TextInput
+                  style={cs.input}
+                  value={pixEmail}
+                  onChangeText={setPixEmail}
+                  placeholder="contato@empresa.com.br"
+                  placeholderTextColor={Colors.ink3}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+
+                <Text style={cs.fieldLabel}>Celular</Text>
+                <TextInput
+                  style={cs.input}
+                  value={pixPhone}
+                  onChangeText={setPixPhone}
+                  placeholder="(11) 99999-0000"
+                  placeholderTextColor={Colors.ink3}
+                  keyboardType="phone-pad"
+                />
+
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+                  <Pressable
+                    onPress={() => setShowPixForm(false)}
+                    style={s.pixCancelBtn}
+                  >
+                    <Text style={s.pixCancelBtnText}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleSetupPix}
+                    disabled={isSettingUpPix}
+                    style={[s.pixConfirmBtn, isSettingUpPix && { opacity: 0.6 }]}
+                  >
+                    <Text style={s.pixConfirmBtnText}>{isSettingUpPix ? "Ativando..." : "Ativar Pix"}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </>
         )}
       </View>
@@ -275,6 +387,7 @@ const s = StyleSheet.create({
   urlText: { flex: 1, fontSize: 11, color: Colors.violet3, fontWeight: "500" },
   urlCopy: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
   urlCopyText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
+  // Identidade visual
   imgRow: { flexDirection: "row", alignItems: "flex-start", gap: 16, marginBottom: 4 },
   logoPreview: { width: 80, height: 80, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", flexShrink: 0 },
   logoPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
@@ -285,18 +398,28 @@ const s = StyleSheet.create({
   bannerPreview: { width: "100%", height: 100, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
   bannerPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 6 },
   bannerPlaceholderText: { fontSize: 12, fontWeight: "600" },
+  // Pagamentos
   pixRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   pixIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   pixTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 3 },
   pixDesc: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   pixBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
   pixBadgeText: { fontSize: 10, fontWeight: "700" },
-  asaasTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink, marginBottom: 10 },
-  asaasStep: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 8 },
-  asaasNum: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.violetD, textAlign: "center", lineHeight: 20, fontSize: 11, fontWeight: "700", color: Colors.violet3, flexShrink: 0 },
-  asaasStepText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18, paddingTop: 1 },
-  asaasBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 11, alignItems: "center", marginTop: 8, borderWidth: 1, borderColor: Colors.border2 },
-  asaasBtnText: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  activatePixBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, marginTop: 4 },
+  activatePixBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  pixForm: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.border2 },
+  pixFormTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
+  pixFormHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 12 },
+  typeRow: { flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" },
+  typeBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  typeBtnActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  typeBtnText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+  typeBtnTextActive: { color: Colors.violet3 },
+  pixCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  pixCancelBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
+  pixConfirmBtn: { flex: 2, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center" },
+  pixConfirmBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  // Dominio
   domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
   domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },
