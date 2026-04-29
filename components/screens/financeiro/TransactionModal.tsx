@@ -87,6 +87,15 @@ var fmtPrice = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",
 // rápido e largo o bastante pra cobrir variações de busca normais.
 var SALE_PICKER_MAX_RESULTS = 50;
 
+// Helper: produto considerado em estoque pra fim de filtro do picker.
+// Produtos com variantes sempre passam (estoque está na variante).
+function productHasStock(p: any): boolean {
+  if (p?.has_variants === true) return true;
+  var raw = p?.stock ?? p?.stock_qty ?? 0;
+  var n = typeof raw === "number" ? raw : parseFloat(raw);
+  return !isNaN(n) && n > 0;
+}
+
 type SaleItem = { cartKey: string; productId: string; variantId?: string; name: string; price: number; qty: number };
 
 export function TransactionModal({ visible, onClose, onSave, onSaleCreated, editTransaction }: {
@@ -129,6 +138,9 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [variantLoading, setVariantLoading] = useState(false);
   var [saleCoupon, setSaleCoupon] = useState("");
   var [recurrence, setRecurrence] = useState("");
+  // Toggle pra mostrar produtos com estoque 0 no picker de venda retroativa.
+  // Padrão = false (esconde). Mesmo padrão do Caixa.
+  var [showSaleOutOfStock, setShowSaleOutOfStock] = useState(false);
 
   var [custSearch, setCustSearch] = useState("");
   var [custId, setCustId] = useState<string | null>(null);
@@ -177,6 +189,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     setCustSearch(""); setCustId(null); setCustName(null); setCustOpen(false);
     setEmpSearch(""); setEmpId(null); setEmpName(null); setEmpOpen(false);
     setSaleCoupon(""); setRecurrence("");
+    setShowSaleOutOfStock(false);
     setUnitPayment(""); setUnitEmpId(null); setUnitEmpName(null); setUnitEmpSearch(""); setUnitEmpOpen(false);
   }
 
@@ -268,8 +281,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   //   - Match por nome OR barcode OR sku/code
   //   - Cap em SALE_PICKER_MAX_RESULTS (50) com aviso visual quando truncar
   //   - Filtra produtos inativos explicitamente
+  //   - Esconde zerados por padrão (toggle "Mostrar zerados" libera);
+  //     produtos com variantes sempre passam (estoque está na variante)
   var saleSearchActive = !!saleSearch && saleSearch.trim().length >= 1;
-  var saleAllMatches = useMemo(function() {
+  // Step 1: matches por texto (sem filtro de estoque) — usado pra contar
+  // quantos zerados existem na busca atual e mostrar no toggle.
+  var saleTextMatches = useMemo(function() {
     if (!saleSearchActive) return [] as any[];
     var q = saleSearch.trim().toLowerCase();
     return products.filter(function(p: any) {
@@ -280,6 +297,14 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       return name.includes(q) || (barcode && barcode.includes(q)) || (sku && sku.includes(q));
     });
   }, [products, saleSearch, saleSearchActive]);
+  var saleZeroStockCount = useMemo(function() {
+    return saleTextMatches.reduce(function(acc, p) { return acc + (productHasStock(p) ? 0 : 1); }, 0);
+  }, [saleTextMatches]);
+  // Step 2: aplica filtro de estoque (se toggle off)
+  var saleAllMatches = useMemo(function() {
+    if (showSaleOutOfStock) return saleTextMatches;
+    return saleTextMatches.filter(productHasStock);
+  }, [saleTextMatches, showSaleOutOfStock]);
   var saleFiltered = saleAllMatches.slice(0, SALE_PICKER_MAX_RESULTS);
   var saleHiddenCount = Math.max(0, saleAllMatches.length - saleFiltered.length);
 
@@ -465,19 +490,45 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
             <View style={{ zIndex: 10 }}><Text style={s.label}>Vendedor(a) (opcional)</Text>{empId ? (<View style={s.selectedChip}><Icon name="user" size={12} color={Colors.violet3} /><Text style={s.selectedChipText} numberOfLines={1}>{empName}</Text><Pressable onPress={function() { setEmpId(null); setEmpName(null); setEmpSearch(""); }} style={s.chipRemove}><Text style={s.chipRemoveText}>x</Text></Pressable></View>) : (<View><TextInput style={s.input} value={empSearch} onChangeText={function(v) { setEmpSearch(v); setEmpOpen(true); }} onFocus={function() { setEmpOpen(true); }} placeholder="Buscar vendedor(a)..." placeholderTextColor={Colors.ink3} />{empOpen && filteredEmployees.length > 0 && (<View style={s.dropdown}>{filteredEmployees.map(function(e: any) { var eName = e.name || e.full_name || "Sem nome"; return (<Pressable key={e.id} onPress={function() { setEmpId(e.id); setEmpName(eName); setEmpSearch(""); setEmpOpen(false); }} style={s.dropdownRow}><Text style={s.srName} numberOfLines={1}>{eName}</Text>{e.role ? <Text style={s.srMeta}>{e.role}</Text> : null}</Pressable>); })}</View>)}</View>)}</View>
             <Text style={s.label}>Produto</Text>
             <TextInput style={s.input} value={saleSearch} onChangeText={setSaleSearch} placeholder="Buscar por nome, código de barras ou SKU..." placeholderTextColor={Colors.ink3} />
+
+            {/* Toggle "Mostrar zerados" — só renderiza quando há matches da
+                busca atual que estão zerados (caso contrário polui a UI à toa).
+                Padrão: esconde zerados. Útil pra venda retroativa de produto
+                que zerou justamente por causa dela. */}
+            {saleSearchActive && saleZeroStockCount > 0 && (
+              <Pressable
+                onPress={function() { setShowSaleOutOfStock(function(v) { return !v; }); }}
+                style={[stockToggle.btn, showSaleOutOfStock && stockToggle.btnActive]}
+              >
+                <Text style={[stockToggle.txt, showSaleOutOfStock && stockToggle.txtActive]}>
+                  {showSaleOutOfStock
+                    ? "Ocultar produtos zerados (" + saleZeroStockCount + ")"
+                    : "Mostrar produtos zerados (" + saleZeroStockCount + ")"}
+                </Text>
+              </Pressable>
+            )}
+
             {saleSearchActive && saleFiltered.length === 0 && !variantPending && (
               <View style={s.searchEmpty}>
-                <Text style={s.searchEmptyText}>Nenhum produto encontrado.</Text>
+                <Text style={s.searchEmptyText}>
+                  {!showSaleOutOfStock && saleZeroStockCount > 0
+                    ? "Nenhum produto com estoque encontrado. Ative \"Mostrar zerados\" acima."
+                    : "Nenhum produto encontrado."}
+                </Text>
               </View>
             )}
             {saleFiltered.length > 0 && !variantPending && (
               <View style={s.searchResults}>
                 {saleFiltered.map(function(p) {
+                  var stockN = parseFloat((p as any).stock ?? (p as any).stock_qty ?? 0) || 0;
+                  var isZero = !p.has_variants && stockN <= 0;
                   return (
                     <Pressable key={p.id} onPress={function() { handleAddSaleProduct(p); }} style={s.searchResultRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.srName} numberOfLines={1}>{p.name}</Text>
-                        <Text style={s.srMeta}>{fmtPrice(p.price)} {"·"} {p.stock} un{p.has_variants ? " · Variantes" : ""}</Text>
+                        <Text style={[s.srMeta, isZero && { color: Colors.red }]}>
+                          {fmtPrice(p.price)} {"·"} {p.stock} un{p.has_variants ? " · Variantes" : ""}{isZero ? " · ZERADO" : ""}
+                        </Text>
                       </View>
                       {p.color && /^#/.test(p.color) && <View style={[s.srColor, { backgroundColor: p.color }]} />}
                     </Pressable>
@@ -536,7 +587,7 @@ var s = StyleSheet.create({
   searchResults: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, maxHeight: 260, overflow: "hidden" },
   searchResultRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
   searchEmpty: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 14, alignItems: "center" },
-  searchEmptyText: { fontSize: 12, color: Colors.ink3 },
+  searchEmptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
   searchTruncatedRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.violetD },
   searchTruncatedText: { fontSize: 10.5, color: Colors.ink3, flex: 1 },
   srName: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
@@ -558,6 +609,24 @@ var s = StyleSheet.create({
   chipRemoveText: { fontSize: 11, color: Colors.ink3, fontWeight: "700" },
   dropdown: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, marginTop: 4, maxHeight: 180, overflow: "hidden" },
   dropdownRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+});
+
+var stockToggle = StyleSheet.create({
+  btn: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "rgba(124,58,237,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.25)",
+  },
+  btnActive: {
+    backgroundColor: "rgba(124,58,237,0.18)",
+    borderColor: "rgba(124,58,237,0.55)",
+  },
+  txt: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
+  txtActive: { color: "#a78bfa" },
 });
 
 export default TransactionModal;
