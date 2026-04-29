@@ -112,6 +112,38 @@ export type ProductCategoryRow = {
   product_count: number;
 };
 
+// Birthday API types (BE-06 — cupom de aniversário + envio WhatsApp)
+export type BirthdayCustomer = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  birth_date: string | null;     // YYYY-MM-DD
+  total_purchases: number;
+  total_spent: number;
+  days_until: number;            // 0 = hoje
+  is_today: boolean;
+  marketing_opt_out?: boolean;
+};
+export type BirthdayCouponDefaults = {
+  discount_type: "percent" | "fixed";
+  discount_value: number;
+  validity_days: number;
+  min_order_value: number;
+  max_uses: number;
+};
+export type BirthdaySettings = {
+  defaults: BirthdayCouponDefaults;
+  template: string;
+  configured: boolean;
+};
+export type BirthdaySentRow = {
+  customer_id: string;
+  sent_at: string;
+  method: "wa_link" | "wa_api" | "sms" | "email";
+  coupon_id: string | null;
+};
+
 // Access Codes (Gestao Aura)
 export type AccessCodeRow = {
   id: string;
@@ -431,11 +463,19 @@ export var companiesApi = {
   updateCustomer: function(companyId: string, custId: string, body: any) { return request<any>("/companies/" + companyId + "/customers/" + custId, { method: "PATCH", body: body }); },
   deleteCustomer: function(companyId: string, custId: string) { return request<any>("/companies/" + companyId + "/customers/" + custId, { method: "DELETE" }); },
   retention: function(companyId: string, period?: string) { return request<any>("/companies/" + companyId + "/customers/retention?period=" + (period || "month")); },
+  // GET /customers/birthdays?days=N — clientes com aniversário em N dias
+  // (days=0 retorna só hoje)
+  birthdays: function(companyId: string, days: number) {
+    return request<{ days: number; total: number; customers: BirthdayCustomer[] }>(
+      "/companies/" + companyId + "/customers/birthdays?days=" + days,
+      { retry: 1 }
+    );
+  },
   reviews: function(companyId: string, rating?: number) { return request<any>("/companies/" + companyId + "/reviews" + (rating ? "?rating=" + rating : "")); },
   requestReview: function(companyId: string, saleId: string, customerId?: string) { return request<any>("/companies/" + companyId + "/reviews/request", { method: "POST", body: { sale_id: saleId, customer_id: customerId } }); },
   members: function(companyId: string) { return request<any>("/companies/" + companyId + "/members"); },
   inviteMember: async function(companyId: string, body: { email: string; role_label?: string }) {
-    var normalizedRole = (body.role_label || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+    var normalizedRole = (body.role_label || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
     var payloads = [
       { invite_email: body.email }, { email: body.email },
       { invite_email: body.email, role_label: normalizedRole }, { email: body.email, role_label: normalizedRole },
@@ -501,13 +541,70 @@ export var pdvApi = {
 };
 
 // Coupons API
-export type CouponValidation = { valid: boolean; coupon_id?: string; code?: string; discount_type?: string; discount_value?: number; discount_amount?: number; final_total?: number; error?: string };
+export type CouponValidation = { valid: boolean; coupon_id?: string; code?: string; discount_type?: string; discount_value?: number; discount_amount?: number; final_total?: number; source?: string; customer_id?: string | null; error?: string };
 export var couponsApi = {
-  list: function(companyId: string) { return request<{ total: number; coupons: any[] }>("/companies/" + companyId + "/coupons"); },
+  list: function(companyId: string, source?: string) {
+    var suffix = source ? "?source=" + encodeURIComponent(source) : "";
+    return request<{ total: number; coupons: any[] }>("/companies/" + companyId + "/coupons" + suffix);
+  },
   create: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/coupons", { method: "POST", body: body }); },
   validate: function(companyId: string, code: string, orderTotal: number) { return request<CouponValidation>("/companies/" + companyId + "/coupons/validate", { method: "POST", body: { code: code, order_total: orderTotal }, retry: 0 }); },
   update: function(companyId: string, couponId: string, body: any) { return request<any>("/companies/" + companyId + "/coupons/" + couponId, { method: "PATCH", body: body }); },
   remove: function(companyId: string, couponId: string) { return request<any>("/companies/" + companyId + "/coupons/" + couponId, { method: "DELETE" }); },
+};
+
+// Birthday API (BE-06 — fluxo cupom de aniversário + WhatsApp)
+// /companies/:id/birthday — settings, create-coupon, send-log, sent-this-year
+export var birthdayApi = {
+  // GET /settings — defaults editáveis + template (com fallback)
+  getSettings: function(companyId: string) {
+    return request<BirthdaySettings>(
+      "/companies/" + companyId + "/birthday/settings",
+      { retry: 1 }
+    );
+  },
+  // PUT /settings — salva defaults e/ou template (owner/admin)
+  saveSettings: function(companyId: string, body: { defaults?: Partial<BirthdayCouponDefaults>; template?: string }) {
+    return request<{ ok: true }>(
+      "/companies/" + companyId + "/birthday/settings",
+      { method: "PUT", body: body, retry: 0 }
+    );
+  },
+  // POST /create-coupon — cria cupom marcado como source='birthday' (owner/admin)
+  createCoupon: function(companyId: string, body: {
+    customer_id: string;
+    code?: string;
+    description?: string;
+    discount_type?: "percent" | "fixed";
+    discount_value?: number;
+    validity_days?: number;
+    min_order_value?: number;
+    max_uses?: number;
+  }) {
+    return request<{ coupon: any; customer: { id: string; name: string; opted_out: boolean } }>(
+      "/companies/" + companyId + "/birthday/create-coupon",
+      { method: "POST", body: body, retry: 0 }
+    );
+  },
+  // POST /send-log — registra envio (idempotente por company+customer+ano)
+  logSent: function(companyId: string, body: {
+    customer_id: string;
+    coupon_id?: string;
+    method?: "wa_link" | "wa_api" | "sms" | "email";
+    message?: string;
+  }) {
+    return request<{ log: any }>(
+      "/companies/" + companyId + "/birthday/send-log",
+      { method: "POST", body: body, retry: 0 }
+    );
+  },
+  // GET /sent-this-year — lista IDs dos clientes já contactados no ano corrente
+  sentThisYear: function(companyId: string) {
+    return request<{ year: number; total: number; sent: BirthdaySentRow[] }>(
+      "/companies/" + companyId + "/birthday/sent-this-year",
+      { retry: 1 }
+    );
+  },
 };
 
 // NF-e API
