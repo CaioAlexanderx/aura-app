@@ -7,7 +7,9 @@ type Props = {
   color?: string;
   height?: number;
   width?: number;
-  // Claude Design multi-color spark (violet1 -> violet2 -> pink).
+  // Claude Design multi-color spark — usado no HeroCard sobre fundo violeta
+  // denso. Stops são branco → creme → pink pra alto contraste (cores violeta
+  // batem com o fundo e somem).
   rainbow?: boolean;
   // Area fill + glowing leading dot.
   glow?: boolean;
@@ -40,6 +42,14 @@ function smoothPath(data: number[], w: number, h: number, pad = 4) {
   return d;
 }
 
+// Cores contrastantes pro modo rainbow. Definidas aqui pra ficar evidente
+// no diff que elas são pareadas com o fundo violeta do HeroCard.
+const RAINBOW_STOPS = {
+  start:  "#ffffff", // branco — alto contraste contra violeta denso
+  middle: "#fde68a", // creme amarelado — quebra a monocromia
+  end:    "#f472b6", // rosa vibrante — destino visual forte
+};
+
 export function Sparkline({
   data,
   color = Colors.violet3,
@@ -62,7 +72,10 @@ export function Sparkline({
   const areaId = `${gradId}-a`;
 
   const strokePaint = rainbow ? `url(#${gradId})` : color;
-  const dotColor = rainbow ? GRAD.pink : color;
+  const dotColor = rainbow ? RAINBOW_STOPS.end : color;
+  // Em rainbow, força stroke um pouco mais grosso (1.4×) — caller passa 2.5
+  // no HeroCard e queremos algo perto de 3.5 sem mudar a API.
+  const effectiveStroke = rainbow ? Math.max(strokeWidth * 1.4, 3) : strokeWidth;
 
   // Leading dot at end
   const min = Math.min(...data);
@@ -75,24 +88,37 @@ export function Sparkline({
   // Area (line down to bottom corners)
   const area = `${line} L ${endX.toFixed(1)} ${height} L 0 ${height} Z`;
 
-  const shadow = glow ? `filter: drop-shadow(0 2px 6px ${GRAD.violet3}88);` : "";
+  // Glow: branco pra rainbow (combina com stroke branco no início), violeta
+  // pro modo simples (mantém o uso original do KPICard).
+  const glowColor = rainbow ? "rgba(255,255,255,0.65)" : `${GRAD.violet3}88`;
+  const shadow = glow ? `filter: drop-shadow(0 1px 8px ${glowColor});` : "";
+
+  // Stops do gradient — branco→creme→pink em rainbow; usual em modo simples
+  const gradStop0 = rainbow ? RAINBOW_STOPS.start  : GRAD.violet1;
+  const gradStop1 = rainbow ? RAINBOW_STOPS.middle : GRAD.violet2;
+  const gradStop2 = rainbow ? RAINBOW_STOPS.end    : GRAD.pink;
+
+  // Fill da área embaixo da linha — branco translúcido em rainbow pra reforçar
+  // o "deslize" visual sem competir com o gradiente do hero.
+  const areaFillColor = rainbow ? "#ffffff" : color;
+  const areaFillStartOp = rainbow ? "0.35" : "0.45";
 
   const svg = `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible">
       <defs>
         <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="${GRAD.violet1}"/>
-          <stop offset="50%" stop-color="${GRAD.violet2}"/>
-          <stop offset="100%" stop-color="${GRAD.pink}"/>
+          <stop offset="0%"  stop-color="${gradStop0}"/>
+          <stop offset="55%" stop-color="${gradStop1}"/>
+          <stop offset="100%" stop-color="${gradStop2}"/>
         </linearGradient>
         <linearGradient id="${areaId}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${rainbow ? GRAD.violet2 : color}" stop-opacity="0.45"/>
-          <stop offset="100%" stop-color="${rainbow ? GRAD.violet2 : color}" stop-opacity="0"/>
+          <stop offset="0%"   stop-color="${areaFillColor}" stop-opacity="${areaFillStartOp}"/>
+          <stop offset="100%" stop-color="${areaFillColor}" stop-opacity="0"/>
         </linearGradient>
       </defs>
       <path d="${area}" fill="url(#${areaId})"/>
-      <path d="${line}" fill="none" stroke="${strokePaint}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" style="${shadow} stroke-dasharray: 1200; stroke-dashoffset: 0; animation: auraDrawLine 1.6s cubic-bezier(0.3, 0, 0.2, 1) both"/>
-      ${glow ? `<circle cx="${endX.toFixed(1)}" cy="${endY.toFixed(1)}" r="3" fill="#fff" style="filter: drop-shadow(0 0 6px ${dotColor})"/>` : ""}
+      <path d="${line}" fill="none" stroke="${strokePaint}" stroke-width="${effectiveStroke}" stroke-linecap="round" stroke-linejoin="round" style="${shadow} stroke-dasharray: 1200; stroke-dashoffset: 0; animation: auraDrawLine 1.6s cubic-bezier(0.3, 0, 0.2, 1) both"/>
+      ${glow ? `<circle cx="${endX.toFixed(1)}" cy="${endY.toFixed(1)}" r="3.5" fill="#fff" style="filter: drop-shadow(0 0 8px ${dotColor})"/>` : ""}
     </svg>
   `;
 
