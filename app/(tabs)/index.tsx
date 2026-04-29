@@ -228,8 +228,6 @@ export default function DashboardScreen() {
             {!isDemo && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
 
             {/* ---- ANIVERSARIANTES (BE-06) ---- */}
-            {/* Card só renderiza se o módulo "clientes" estiver visível;
-                o componente já cuida do gate via module_overrides. */}
             {!isDemo && <BirthdaysCard />}
 
             {/* ---- QUICK ACTIONS ---- */}
@@ -344,7 +342,7 @@ var s = StyleSheet.create({
     backgroundColor: Colors.bg3, borderRadius: 20, padding: 16,
     borderWidth: 1, borderColor: Glass.lineBorderCard,
     marginBottom: 24,
-    ...(Platform.OS === "web" ? (webOnly({ backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", background: Glass.card }) as any) : null),
+    ...(Platform.OS === "web" ? (webOnly({ backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", background: Glass.card, boxShadow: Glass.cardShadow }) as any) : null),
   },
   panelFoot: { paddingTop: 12, alignItems: "center" },
   panelFootText: { fontSize: 10, color: Colors.ink3, letterSpacing: 0.3 },
