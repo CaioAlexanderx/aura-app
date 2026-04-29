@@ -87,6 +87,16 @@ var fmtPrice = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",
 // rápido e largo o bastante pra cobrir variações de busca normais.
 var SALE_PICKER_MAX_RESULTS = 50;
 
+// Normaliza texto pra busca: lowercase + strip de acentos. Mesma lógica
+// do PDV (app/(tabs)/pdv.tsx) — manter idêntico.
+function normalizeSearch(s: any): string {
+  return String(s == null ? "" : s)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+
 // Helper: produto considerado em estoque pra fim de filtro do picker.
 // Produtos com variantes sempre passam (estoque está na variante).
 function productHasStock(p: any): boolean {
@@ -275,12 +285,13 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   }
 
   // Busca de produto pra venda retroativa.
-  // Antes: cap de 8 + match só por nome → cliente com muitos produtos similares
-  // não conseguia achar (Alynne, 346 garrafas, só via 8). Agora:
-  //   - Mín. 1 caractere (igual PDV)
-  //   - Match por nome OR barcode OR sku/code
-  //   - Cap em SALE_PICKER_MAX_RESULTS (50) com aviso visual quando truncar
-  //   - Filtra produtos inativos explicitamente
+  // Lógica idêntica ao PDV (app/(tabs)/pdv.tsx):
+  //   - Mín. 1 caractere
+  //   - AND multi-palavra: split por whitespace, todos os termos têm que
+  //     aparecer no haystack (ordem livre, não precisa serem contíguos).
+  //   - Haystack = nome + barcode + sku + code + categoria + cor + tamanho
+  //   - Normalização Unicode (NFD + strip de diacríticos), case-insensitive
+  //   - Filtra is_active=false
   //   - Esconde zerados por padrão (toggle "Mostrar zerados" libera);
   //     produtos com variantes sempre passam (estoque está na variante)
   var saleSearchActive = !!saleSearch && saleSearch.trim().length >= 1;
@@ -288,13 +299,19 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   // quantos zerados existem na busca atual e mostrar no toggle.
   var saleTextMatches = useMemo(function() {
     if (!saleSearchActive) return [] as any[];
-    var q = saleSearch.trim().toLowerCase();
+    var terms = normalizeSearch(saleSearch).split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return [] as any[];
     return products.filter(function(p: any) {
       if (p.is_active === false) return false;
-      var name = (p.name || "").toLowerCase();
-      var barcode = (p.barcode || "").toLowerCase();
-      var sku = (p.sku || p.code || "").toLowerCase();
-      return name.includes(q) || (barcode && barcode.includes(q)) || (sku && sku.includes(q));
+      var haystack = normalizeSearch(
+        [p.name, p.barcode, p.sku, p.code, p.category, p.color, p.size]
+          .filter(Boolean)
+          .join(" ")
+      );
+      for (var i = 0; i < terms.length; i++) {
+        if (!haystack.includes(terms[i])) return false;
+      }
+      return true;
     });
   }, [products, saleSearch, saleSearchActive]);
   var saleZeroStockCount = useMemo(function() {
