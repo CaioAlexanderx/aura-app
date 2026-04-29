@@ -3,7 +3,8 @@ import { Colors } from "@/constants/colors";
 import { webOnly } from "./types";
 
 // Claude Design: conic-gradient ring spinning around the initial. Pure web CSS
-// does the heavy lifting; native gets a clean violet circle.
+// does the heavy lifting; native gets a clean violet circle. Inner sempre
+// violeta sólido — funciona em light e dark sem chance de "branco em branco".
 export function Avatar({ name, size = 42 }: { name: string; size?: number }) {
   const inner = size - 4;
   const webRing = webOnly({
@@ -25,7 +26,7 @@ export function Avatar({ name, size = 42 }: { name: string; size?: number }) {
             width: inner,
             height: inner,
             borderRadius: inner / 2,
-            backgroundColor: Colors.bg2,
+            backgroundColor: Colors.violet,
           },
         ]}
       >
