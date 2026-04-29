@@ -25,6 +25,7 @@ import { SaleRow } from "@/components/screens/dashboard/SaleRow";
 import { ObligationRow } from "@/components/screens/dashboard/ObligationRow";
 import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalyticsCard";
 import { TopSellersCard } from "@/components/screens/dashboard/TopSellersCard";
+import { BirthdaysCard } from "@/components/screens/dashboard/BirthdaysCard";
 import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
@@ -128,6 +129,8 @@ export default function DashboardScreen() {
     queryClient.invalidateQueries({ queryKey: ["sales-analytics"] });
     queryClient.invalidateQueries({ queryKey: ["products-ranking"] });
     queryClient.invalidateQueries({ queryKey: ["employees-ranking"] });
+    queryClient.invalidateQueries({ queryKey: ["birthdays", company?.id] });
+    queryClient.invalidateQueries({ queryKey: ["birthday-sent", company?.id] });
     setTimeout(function() { setRefreshing(false); }, 600);
   }
 
@@ -223,6 +226,11 @@ export default function DashboardScreen() {
             {/* ---- VENDAS (wired analytics card) ---- */}
             {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
             {!isDemo && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
+
+            {/* ---- ANIVERSARIANTES (BE-06) ---- */}
+            {/* Card só renderiza se o módulo "clientes" estiver visível;
+                o componente já cuida do gate via module_overrides. */}
+            {!isDemo && <BirthdaysCard />}
 
             {/* ---- QUICK ACTIONS ---- */}
             <View style={s.secTitleRow}>
