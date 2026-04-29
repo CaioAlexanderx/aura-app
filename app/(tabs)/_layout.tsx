@@ -266,6 +266,9 @@ function MBar() {
 
   // Items pro menu "Mais" = todos do filteredNav que NAO estao nas tabs fixas.
   // Achata mantendo ordem global do layout.
+  // Configuracoes e injetada manualmente no fim porque nao mora no NAV
+  // (NAV alimenta tambem a Sidebar desktop, e la Configuracoes ja tem botao
+  // fixo dedicado no rodape — duplicaria se entrasse no NAV).
   const filteredMore = useMemo(() => {
     const flat: NavItem[] = [];
     for (const section of filteredNav) {
@@ -273,6 +276,7 @@ function MBar() {
         if (!fixedTabKeys.has(item.r)) flat.push(item);
       }
     }
+    flat.push({ r: "/configuracoes", l: "Configuracoes", ic: "settings" });
     return flat;
   }, [filteredNav]);
 
