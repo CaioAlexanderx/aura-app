@@ -1,12 +1,10 @@
 // ============================================================
 // ConsultaTopbar — header da consulta ativa.
 //
-// Brand mark Aura Odonto + badge "Consulta ativa" pulsando +
-// botao "Encerrar". Inspirado no mockup-modo-consulta-v3.html.
-//
-// Brand mark renderizado via dangerouslySetInnerHTML (mesmo
-// padrao do DentalSidebar/PortalTransition) — Expo web only,
-// nao precisa de react-native-svg.
+// PR44 #19 (2026-04-29): adicionado botao "Salvar evolucao" entre
+// Minimizar e Encerrar. Permite o dentista salvar progresso parcial
+// (clinical_notes) sem encerrar a consulta. Antes, o unico save
+// existente era via ConsultaEndModal que forcava status=concluido.
 // ============================================================
 
 import { useEffect, useRef } from "react";
@@ -16,9 +14,11 @@ import { DentalColors, SMILE_ARC_PATH } from "@/constants/dental-tokens";
 interface Props {
   onEnd: () => void;
   onMinimize?: () => void; // back to (clinic) without ending
+  onSaveEvolution?: () => void; // PR44 #19
+  saving?: boolean;
 }
 
-export function ConsultaTopbar({ onEnd, onMinimize }: Props) {
+export function ConsultaTopbar({ onEnd, onMinimize, onSaveEvolution, saving }: Props) {
   const pulse = useRef(new Animated.Value(1)).current;
   const useNative = Platform.OS !== "web";
 
@@ -79,6 +79,13 @@ export function ConsultaTopbar({ onEnd, onMinimize }: Props) {
             <Text style={{ color: DentalColors.ink2, fontSize: 10, fontWeight: "600" }}>— Minimizar</Text>
           </Pressable>
         )}
+        {onSaveEvolution && (
+          <Pressable onPress={onSaveEvolution} style={btnSaveStyle} disabled={saving}>
+            <Text style={{ color: DentalColors.cyan, fontSize: 10, fontWeight: "700" }}>
+              {saving ? "Salvando..." : "💾 Salvar evolução"}
+            </Text>
+          </Pressable>
+        )}
         <Pressable onPress={onEnd} style={btnDangerStyle}>
           <Text style={{ color: DentalColors.red, fontSize: 10, fontWeight: "700" }}>⏹ Encerrar</Text>
         </Pressable>
@@ -91,6 +98,14 @@ const btnGhostStyle = {
   backgroundColor: DentalColors.surface,
   borderWidth: 1,
   borderColor: DentalColors.border,
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 7,
+};
+const btnSaveStyle = {
+  backgroundColor: DentalColors.cyanDim,
+  borderWidth: 1,
+  borderColor: DentalColors.cyanBorder,
   paddingHorizontal: 10,
   paddingVertical: 5,
   borderRadius: 7,
