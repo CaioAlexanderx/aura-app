@@ -1,14 +1,15 @@
 // ============================================================
-// AURA. — Odontograma 2D v5 (PR42, atualizado 2026-04-28)
+// AURA. — Odontograma 2D v5 (PR42, atualizado 2026-04-29)
 //
 // Anatomia clinica realista (referencia Dentrix/Eaglesoft):
-// - Raizes com curvatura natural e taper (nao mais "tubos paralelos")
-// - CEJ (juncao esmalte-cemento) visivel separando coroa branca de raiz creme
-// - Vista DUAL fixa: vestibular + oclusal por arcada (estilo clinico)
-// - 4 tipos de dente com paths anatomicos especificos sem bolinhas
+// - Raizes com curvatura natural e taper
+// - CEJ visivel separando coroa branca de raiz creme
+// - Vista DUAL fixa: vestibular + oclusal por arcada
+// - 4 tipos de dente com paths anatomicos sem bolinhas
 //
-// Eixos: condition / treatment_planned / treatment_completed
-// API publica: chart, selectedTooth, onToothSelect, editable
+// PR43.7 (2026-04-29): import trocado de react-native-svg pra ./_svgShim
+// (componentes web-only via React.createElement). Destrava build do
+// Cloudflare Pages que estava quebrado por out-of-sync no package-lock.
 // ============================================================
 
 import React, { useMemo } from "react";
@@ -21,7 +22,7 @@ import Svg, {
   RadialGradient,
   Stop,
   Ellipse,
-} from "react-native-svg";
+} from "./_svgShim";
 import { DentalColors } from "@/constants/dental-tokens";
 
 // ============================================================
@@ -408,10 +409,10 @@ function ToothOccDashed() {
 // ============================================================
 // Tooth composite
 // ============================================================
-type View = "vest" | "occ";
+type ToothViewMode = "vest" | "occ";
 type ToothProps = {
   state: ToothState;
-  view: View;
+  view: ToothViewMode;
   selected?: boolean;
   onPress?: () => void;
 };
@@ -486,7 +487,7 @@ export default function Odontograma2D({
     return m;
   }, [chart]);
 
-  const renderRow = (numbers: number[], view: View) => (
+  const renderRow = (numbers: number[], view: ToothViewMode) => (
     <View style={styles.archRow}>
       {numbers.map((n) => {
         const state =
