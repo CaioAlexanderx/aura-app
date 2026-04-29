@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Product } from "./types";
-import { DonutChart } from "@/components/screens/financeiro/TabResumo";
+import { DonutChart } from "@/components/charts/DonutChart";
 
 const ABC_COLORS = ["#10b981", "#fbbf24", "#6b7280"];
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
