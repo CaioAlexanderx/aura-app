@@ -1,16 +1,14 @@
 // ============================================================
-// AURA. — Odontograma 2D (PR42, 2026-04-28)
+// AURA. — Odontograma 2D v5 (PR42, atualizado 2026-04-28)
 //
-// Reescrita do odontograma usando react-native-svg + anatomia premium
-// (incisivo cinzel, canino pentagonal, pre-molar bicuspide, molar 4 cuspides).
-// SEM "bolinhas" sobrepostas — cuspides sugeridas via gradient + sulcos sutis.
+// Anatomia clinica realista (referencia Dentrix/Eaglesoft):
+// - Raizes com curvatura natural e taper (nao mais "tubos paralelos")
+// - CEJ (juncao esmalte-cemento) visivel separando coroa branca de raiz creme
+// - Vista DUAL fixa: vestibular + oclusal por arcada (estilo clinico)
+// - 4 tipos de dente com paths anatomicos especificos sem bolinhas
 //
-// Arquitetura 3 axes:
-//   - condition: estado atual do dente (achados clinicos)
-//   - planned: tratamentos planejados (borda vermelha tracejada pulsante)
-//   - completed: procedimentos realizados nesta consulta (borda azul solida)
-//
-// Notacao FDI completa (32 dentes permanentes).
+// Eixos: condition / treatment_planned / treatment_completed
+// API publica: chart, selectedTooth, onToothSelect, editable
 // ============================================================
 
 import React, { useMemo } from "react";
@@ -20,7 +18,9 @@ import Svg, {
   Rect,
   Defs,
   LinearGradient,
+  RadialGradient,
   Stop,
+  Ellipse,
 } from "react-native-svg";
 import { DentalColors } from "@/constants/dental-tokens";
 
@@ -91,7 +91,7 @@ type Props = {
 };
 
 // ============================================================
-// FDI ordering (clinical order: upper-right then upper-left, lower-right then lower-left)
+// FDI ordering (clinical order)
 // ============================================================
 export const FDI_SUPERIOR: number[] = [
   18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28,
@@ -131,10 +131,10 @@ export function getToothName(num: number): string {
 }
 
 // ============================================================
-// Color palette (alinhada à convenção mundial)
+// Color resolver
 // ============================================================
 const findingFillId: Record<FindingType, string> = {
-  higido: "gradHigido",
+  higido: "enamel",
   carie: "gradCarie",
   restauracao_antiga: "gradRestAnt",
   coroa_antiga: "gradCoroaAnt",
@@ -142,13 +142,13 @@ const findingFillId: Record<FindingType, string> = {
   endodontia_tratada: "gradEndo",
   implante: "gradImplante",
   fratura: "gradFratura",
-  mancha_branca: "gradHigido",
-  mobilidade: "gradHigido",
+  mancha_branca: "enamel",
+  mobilidade: "enamel",
   atrito: "gradErosao",
   abfracao: "gradErosao",
   erosao: "gradErosao",
-  ausente: "gradHigido",
-  nao_erupcionado: "gradHigido",
+  ausente: "enamel",
+  nao_erupcionado: "enamel",
 };
 
 const findingStroke: Record<FindingType, string> = {
@@ -170,15 +170,25 @@ const findingStroke: Record<FindingType, string> = {
 };
 
 // ============================================================
-// SVG Defs (gradientes compartilhados)
+// SVG Defs (gradientes anatomicos premium)
 // ============================================================
 function SvgDefs() {
   return (
     <Defs>
-      <LinearGradient id="gradHigido" x1="0" y1="0" x2="0" y2="1">
+      <LinearGradient id="enamel" x1="0" y1="0" x2="0" y2="1">
         <Stop offset="0%" stopColor="#ffffff" />
-        <Stop offset="60%" stopColor="#f1f5f9" />
-        <Stop offset="100%" stopColor="#cbd5e1" />
+        <Stop offset="40%" stopColor="#f8fafc" />
+        <Stop offset="80%" stopColor="#e8eef5" />
+        <Stop offset="100%" stopColor="#d6dfeb" />
+      </LinearGradient>
+      <RadialGradient id="enamelHi" cx="40%" cy="30%" rx="70%" ry="70%">
+        <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
+        <Stop offset="60%" stopColor="#ffffff" stopOpacity="0.05" />
+      </RadialGradient>
+      <LinearGradient id="root" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset="0%" stopColor="#fef9e7" />
+        <Stop offset="40%" stopColor="#f5e6c0" />
+        <Stop offset="100%" stopColor="#c8a878" />
       </LinearGradient>
       <LinearGradient id="gradCarie" x1="0" y1="0" x2="0" y2="1">
         <Stop offset="0%" stopColor="#fed7aa" />
@@ -214,99 +224,170 @@ function SvgDefs() {
         <Stop offset="0%" stopColor="#94a3b8" />
         <Stop offset="100%" stopColor="#1e293b" />
       </LinearGradient>
-      <LinearGradient id="gradRoot" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0%" stopColor="#cbd5e1" />
-        <Stop offset="100%" stopColor="#475569" />
-      </LinearGradient>
-      <LinearGradient id="gradEnamelHi" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
-        <Stop offset="40%" stopColor="#ffffff" stopOpacity="0.05" />
-      </LinearGradient>
     </Defs>
   );
 }
 
 // ============================================================
-// Tooth SVG paths (anatomia v4 — sem bolinhas)
+// VESTIBULAR PATHS — anatomia v5
 // ============================================================
-type ToothSvgProps = {
-  finding?: FindingType;
-};
+type ToothSvgProps = { finding?: FindingType };
 
-function ToothIncisivoSvg({ finding = "higido" }: ToothSvgProps) {
-  const fillId = findingFillId[finding];
-  const stroke = findingStroke[finding];
+function IncisivoVest({ finding = "higido" }: ToothSvgProps) {
   if (finding === "ausente") return <ToothAusenteSvg />;
   if (finding === "nao_erupcionado") return <ToothNaoErupSvg />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
   return (
     <>
-      <Path d="M11 8 Q11 4 14 4 L36 4 Q39 4 39 8 L37 32 Q35 42 25 42 Q15 42 13 32 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.4" />
-      <Path d="M14 5 Q17 7 20 5 Q23 7 25 5 Q27 7 30 5 Q33 7 36 5" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.5} />
-      <Path d="M13 8 Q13 6 16 6 L34 6 Q37 6 37 8 L36 18 Q25 14 14 18 Z" fill="url(#gradEnamelHi)" opacity={0.4} />
-      <Path d="M14 42 Q25 40 36 42" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.4} />
-      <Path d="M15 42 Q14 50 18 70 Q22 78 25 78 Q28 78 32 70 Q36 50 35 42 Z" fill="url(#gradRoot)" stroke={stroke} strokeWidth="0.8" />
+      <Ellipse cx="25" cy="38" rx="12" ry="3" fill="#000" opacity={0.08} />
+      <Path d="M12 8 Q12 5 15 4 Q20 3 25 3 Q30 3 35 4 Q38 5 38 8 L37 22 Q36 32 33 38 Q29 42 25 42 Q21 42 17 38 Q14 32 13 22 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.3" />
+      <Path d="M12 8 Q12 5 15 4 Q20 3 25 3 Q30 3 35 4 Q38 5 38 8 L37 22 Q25 18 13 22 Z" fill="url(#enamelHi)" opacity={0.7} />
+      <Path d="M16 5 Q19 7 22 5 Q25 7 28 5 Q31 7 34 5" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.4} />
+      <Path d="M14 42 Q17 40 25 40 Q33 40 36 42" fill="none" stroke={stroke} strokeWidth="0.6" opacity={0.5} />
+      <Path d="M14 42 Q13 50 14 60 Q15 75 19 85 Q22 91 25 92 Q28 91 31 85 Q35 75 36 60 Q37 50 36 42 Q33 40 25 40 Q17 40 14 42 Z" fill="url(#root)" stroke={stroke} strokeWidth="0.8" />
+      <Path d="M14 42 Q13 50 14 60 Q15 75 19 85 L18 85 Q14 75 13 60 Q12 50 13 42 Z" fill={stroke} opacity={0.15} />
+      <Path d="M36 42 Q37 50 36 60 Q35 75 31 85 L32 85 Q36 75 37 60 Q38 50 37 42 Z" fill={stroke} opacity={0.15} />
     </>
   );
 }
 
-function ToothCaninoSvg({ finding = "higido" }: ToothSvgProps) {
-  const fillId = findingFillId[finding];
-  const stroke = findingStroke[finding];
+function CaninoVest({ finding = "higido" }: ToothSvgProps) {
   if (finding === "ausente") return <ToothAusenteSvg />;
   if (finding === "nao_erupcionado") return <ToothNaoErupSvg />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
   return (
     <>
-      <Path d="M12 18 L20 6 Q25 3 28 6 L38 14 L36 32 Q33 44 25 44 Q17 44 14 32 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.4" />
-      <Path d="M22 7 Q25 3 28 7 L25 12 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.8" />
-      <Path d="M25 6 L25 36" stroke={stroke} strokeWidth="0.4" opacity={0.35} fill="none" />
-      <Path d="M14 18 L21 8 Q25 5 28 8 L37 16 L34 24 Q25 20 16 24 Z" fill="url(#gradEnamelHi)" opacity={0.4} />
-      <Path d="M15 44 Q25 42 35 44" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.4} />
-      <Path d="M15 44 Q13 52 16 72 Q20 82 25 82 Q30 82 34 72 Q37 52 35 44 Z" fill="url(#gradRoot)" stroke={stroke} strokeWidth="0.8" />
+      <Ellipse cx="25" cy="40" rx="13" ry="3" fill="#000" opacity={0.08} />
+      <Path d="M12 18 Q13 12 16 9 L21 5 Q23 3 25 2.5 Q27 3 29 5 L34 9 Q37 12 38 18 L37 28 Q36 38 32 42 Q28 44 25 44 Q22 44 18 42 Q14 38 13 28 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.3" />
+      <Path d="M14 18 Q15 12 18 9 L23 5 Q25 3 27 5 L32 9 Q35 12 36 18 L35 24 Q25 21 15 24 Z" fill="url(#enamelHi)" opacity={0.7} />
+      <Path d="M25 4 L25 36" fill="none" stroke={stroke} strokeWidth="0.5" opacity={0.3} />
+      <Path d="M14 44 Q18 42 25 42 Q32 42 36 44" fill="none" stroke={stroke} strokeWidth="0.6" opacity={0.5} />
+      <Path d="M14 44 Q12 54 13 66 Q14 80 17 90 Q20 96 25 96 Q30 96 33 90 Q36 80 37 66 Q38 54 36 44 Q32 42 25 42 Q18 42 14 44 Z" fill="url(#root)" stroke={stroke} strokeWidth="0.8" />
+      <Path d="M14 44 Q12 54 13 66 Q14 80 17 90 L16 90 Q12 80 11 66 Q11 54 12 44 Z" fill={stroke} opacity={0.15} />
+      <Path d="M36 44 Q38 54 37 66 Q36 80 33 90 L34 90 Q38 80 39 66 Q39 54 38 44 Z" fill={stroke} opacity={0.15} />
     </>
   );
 }
 
-function ToothPreMolarSvg({ finding = "higido" }: ToothSvgProps) {
-  const fillId = findingFillId[finding];
-  const stroke = findingStroke[finding];
+function PreMolarVest({ finding = "higido" }: ToothSvgProps) {
   if (finding === "ausente") return <ToothAusenteSvg />;
   if (finding === "nao_erupcionado") return <ToothNaoErupSvg />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
   return (
     <>
-      <Path d="M9 12 Q9 4 25 4 Q41 4 41 12 L39 36 Q34 44 25 44 Q16 44 11 36 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.4" />
-      <Path d="M25 6 L25 26" stroke={stroke} strokeWidth="0.7" opacity={0.45} fill="none" />
-      <Path d="M11 12 Q11 6 17 6 L17 24 Q14 24 11 22 Z" fill={stroke} opacity={0.08} />
-      <Path d="M39 12 Q39 6 33 6 L33 24 Q36 24 39 22 Z" fill={stroke} opacity={0.08} />
-      <Path d="M11 12 Q11 5 25 5 Q39 5 39 12 L37 24 Q25 21 13 24 Z" fill="url(#gradEnamelHi)" opacity={0.3} />
-      <Path d="M14 44 Q25 42 36 44" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.4} />
-      <Path d="M16 44 Q15 50 17 68 Q21 76 25 76 Q29 76 33 68 Q35 50 34 44 Z" fill="url(#gradRoot)" stroke={stroke} strokeWidth="0.8" />
+      <Ellipse cx="25" cy="42" rx="14" ry="3" fill="#000" opacity={0.08} />
+      <Path d="M10 14 Q10 6 18 4 Q25 3 32 4 Q40 6 40 14 L38 32 Q36 42 30 44 Q25 45 20 44 Q14 42 12 32 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.3" />
+      <Path d="M11 14 Q11 6 18 5 Q25 4 32 5 Q39 6 39 14 L37 24 Q25 21 13 24 Z" fill="url(#enamelHi)" opacity={0.65} />
+      <Path d="M25 6 L25 30" fill="none" stroke={stroke} strokeWidth="0.5" opacity={0.3} />
+      <Path d="M11 14 Q11 6 18 5 L20 24 Q15 25 11 22 Z" fill={stroke} opacity={0.06} />
+      <Path d="M39 14 Q39 6 32 5 L30 24 Q35 25 39 22 Z" fill={stroke} opacity={0.06} />
+      <Path d="M14 44 Q18 43 25 43 Q32 43 36 44" fill="none" stroke={stroke} strokeWidth="0.6" opacity={0.5} />
+      <Path d="M14 44 Q12 54 14 64 Q15 78 19 86 Q22 90 25 90 Q28 90 31 86 Q35 78 36 64 Q38 54 36 44 Q32 43 25 43 Q18 43 14 44 Z" fill="url(#root)" stroke={stroke} strokeWidth="0.8" />
+      <Path d="M14 44 Q12 54 14 64 Q15 78 19 86 L18 86 Q13 78 12 64 Q11 54 13 44 Z" fill={stroke} opacity={0.15} />
+      <Path d="M36 44 Q38 54 36 64 Q35 78 31 86 L32 86 Q37 78 38 64 Q39 54 37 44 Z" fill={stroke} opacity={0.15} />
     </>
   );
 }
 
-function ToothMolarSvg({ finding = "higido" }: ToothSvgProps) {
-  const fillId = findingFillId[finding];
-  const stroke = findingStroke[finding];
+function MolarVest({ finding = "higido" }: ToothSvgProps) {
   if (finding === "ausente") return <ToothAusenteSvg />;
   if (finding === "nao_erupcionado") return <ToothNaoErupSvg />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
   return (
     <>
-      <Path d="M5 14 Q5 4 25 4 Q45 4 45 14 L43 40 Q39 50 25 50 Q11 50 7 40 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.4" />
-      <Path d="M25 8 L25 46" stroke={stroke} strokeWidth="0.6" opacity={0.5} fill="none" />
-      <Path d="M7 24 L43 24" stroke={stroke} strokeWidth="0.6" opacity={0.5} fill="none" />
-      <Path d="M7 14 Q7 6 14 5 L14 22 Q11 22 7 18 Z" fill={stroke} opacity={0.08} />
-      <Path d="M43 14 Q43 6 36 5 L36 22 Q39 22 43 18 Z" fill={stroke} opacity={0.08} />
-      <Path d="M9 38 Q11 44 14 46 L14 30 Q11 32 9 36 Z" fill={stroke} opacity={0.08} />
-      <Path d="M41 38 Q39 44 36 46 L36 30 Q39 32 41 36 Z" fill={stroke} opacity={0.08} />
-      <Path d="M7 14 Q7 5 25 5 Q43 5 43 14 L41 26 Q25 22 9 26 Z" fill="url(#gradEnamelHi)" opacity={0.3} />
-      <Path d="M11 50 Q25 48 39 50" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.4} />
-      <Path d="M11 50 Q9 56 11 70 Q14 76 18 76 Q19 76 19 50 Z" fill="url(#gradRoot)" stroke={stroke} strokeWidth="0.7" />
-      <Path d="M21 50 Q21 60 22 70 Q24 76 26 76 Q28 76 28 70 Q29 60 29 50 Z" fill="url(#gradRoot)" stroke={stroke} strokeWidth="0.7" />
-      <Path d="M31 50 Q31 56 32 70 Q34 76 38 76 Q40 76 41 70 Q41 56 39 50 Z" fill="url(#gradRoot)" stroke={stroke} strokeWidth="0.7" />
+      <Ellipse cx="25" cy="48" rx="16" ry="3" fill="#000" opacity={0.1} />
+      <Path d="M5 16 Q5 6 14 4 Q25 2 36 4 Q45 6 45 16 L44 36 Q42 46 36 50 Q31 52 25 52 Q19 52 14 50 Q8 46 6 36 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.3" />
+      <Path d="M6 16 Q6 6 14 5 Q25 3 36 5 Q44 6 44 16 L42 28 Q25 25 8 28 Z" fill="url(#enamelHi)" opacity={0.6} />
+      <Path d="M6 36 Q8 46 14 50 L14 38 Z" fill={stroke} opacity={0.08} />
+      <Path d="M44 36 Q42 46 36 50 L36 38 Z" fill={stroke} opacity={0.08} />
+      <Path d="M6 16 Q6 6 14 5 L14 24 Q9 26 6 22 Z" fill={stroke} opacity={0.07} />
+      <Path d="M44 16 Q44 6 36 5 L36 24 Q41 26 44 22 Z" fill={stroke} opacity={0.07} />
+      <Path d="M25 6 L25 24" fill="none" stroke={stroke} strokeWidth="0.4" opacity={0.2} />
+      <Path d="M8 52 Q14 51 25 51 Q36 51 42 52" fill="none" stroke={stroke} strokeWidth="0.6" opacity={0.5} />
+      <Path d="M9 52 Q7 60 8 70 Q9 82 13 90 Q15 94 17 94 Q19 94 19 90 L19 60 Q18 54 16 52 Z" fill="url(#root)" stroke={stroke} strokeWidth="0.7" />
+      <Path d="M21 52 Q21 62 22 74 Q23 86 25 90 Q27 86 28 74 Q29 62 29 52 Q27 51 25 51 Q23 51 21 52 Z" fill="url(#root)" stroke={stroke} strokeWidth="0.7" />
+      <Path d="M31 52 Q32 54 31 60 L31 90 Q31 94 33 94 Q35 94 37 90 Q41 82 42 70 Q43 60 41 52 Z" fill="url(#root)" stroke={stroke} strokeWidth="0.7" />
+      <Path d="M9 52 Q7 60 8 70 L7 70 Q7 60 8 52 Z" fill={stroke} opacity={0.18} />
+      <Path d="M41 52 Q43 60 42 70 L43 70 Q43 60 42 52 Z" fill={stroke} opacity={0.18} />
     </>
   );
 }
 
+// ============================================================
+// OCLUSAL PATHS
+// ============================================================
+function IncisivoOcc({ finding = "higido" }: ToothSvgProps) {
+  if (finding === "ausente" || finding === "nao_erupcionado") return <ToothOccDashed />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
+  return (
+    <>
+      <Ellipse cx="25" cy="25" rx="14" ry="6" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.2" />
+      <Ellipse cx="25" cy="23" rx="13" ry="4" fill="url(#enamelHi)" opacity={0.6} />
+      <Path d="M14 25 Q17 27 19 25 Q21 27 23 25 Q25 27 27 25 Q29 27 31 25 Q33 27 36 25" fill="none" stroke={stroke} strokeWidth="0.5" opacity={0.5} />
+    </>
+  );
+}
+
+function CaninoOcc({ finding = "higido" }: ToothSvgProps) {
+  if (finding === "ausente" || finding === "nao_erupcionado") return <ToothOccDashed />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
+  return (
+    <>
+      <Path d="M14 28 Q14 18 18 14 L25 8 L32 14 Q36 18 36 28 L33 36 Q29 40 25 40 Q21 40 17 36 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.2" />
+      <Path d="M16 26 Q16 18 19 15 L25 11 L31 15 Q34 18 34 24 Q25 22 16 26 Z" fill="url(#enamelHi)" opacity={0.6} />
+      <Ellipse cx="25" cy="11" rx="2" ry="2" fill={stroke} opacity={0.2} />
+      <Path d="M25 11 L20 30 M25 11 L30 30" fill="none" stroke={stroke} strokeWidth="0.5" opacity={0.4} />
+    </>
+  );
+}
+
+function PreMolarOcc({ finding = "higido" }: ToothSvgProps) {
+  if (finding === "ausente" || finding === "nao_erupcionado") return <ToothOccDashed />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
+  return (
+    <>
+      <Path d="M9 16 Q9 10 14 8 Q25 5 36 8 Q41 10 41 16 L40 36 Q34 42 25 42 Q16 42 10 36 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.2" />
+      <Path d="M11 16 Q11 10 16 8 Q21 7 24 9 L24 25 Q19 27 12 25 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.6" opacity={0.5} />
+      <Path d="M12 16 Q12 11 17 9 Q22 8 24 10 L24 22 Q19 24 13 22 Z" fill="url(#enamelHi)" opacity={0.5} />
+      <Path d="M39 16 Q39 10 34 8 Q29 7 26 9 L26 25 Q31 27 38 25 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.6" opacity={0.5} />
+      <Path d="M38 16 Q38 11 33 9 Q28 8 26 10 L26 22 Q31 24 37 22 Z" fill="url(#enamelHi)" opacity={0.5} />
+      <Path d="M25 8 Q24.5 24 25 42" fill="none" stroke={stroke} strokeWidth="0.7" opacity={0.6} />
+    </>
+  );
+}
+
+function MolarOcc({ finding = "higido" }: ToothSvgProps) {
+  if (finding === "ausente" || finding === "nao_erupcionado") return <ToothOccDashed />;
+  const fillId = findingFillId[finding];
+  const stroke = findingStroke[finding];
+  return (
+    <>
+      <Path d="M5 14 Q5 6 13 5 Q25 3 37 5 Q45 6 45 14 L44 38 Q42 44 36 46 Q25 48 14 46 Q8 44 6 38 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="1.2" />
+      <Path d="M6 14 Q6 6 13 5 Q21 5 23 9 L23 24 Q15 26 6 24 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.5" opacity={0.5} />
+      <Path d="M7 14 Q7 7 14 6 Q20 6 22 10 L22 20 Q15 22 8 20 Z" fill="url(#enamelHi)" opacity={0.5} />
+      <Path d="M44 14 Q44 6 37 5 Q29 5 27 9 L27 24 Q35 26 44 24 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.5" opacity={0.5} />
+      <Path d="M43 14 Q43 7 36 6 Q30 6 28 10 L28 20 Q35 22 42 20 Z" fill="url(#enamelHi)" opacity={0.5} />
+      <Path d="M6 38 Q6 44 14 46 Q21 47 23 42 L23 28 Q15 26 6 28 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.5" opacity={0.5} />
+      <Path d="M7 38 Q7 43 14 45 Q20 46 22 41 L22 30 Q15 28 8 30 Z" fill="url(#enamelHi)" opacity={0.5} />
+      <Path d="M44 38 Q44 44 36 46 Q29 47 27 42 L27 28 Q35 26 44 28 Z" fill={`url(#${fillId})`} stroke={stroke} strokeWidth="0.5" opacity={0.5} />
+      <Path d="M43 38 Q43 43 36 45 Q30 46 28 41 L28 30 Q35 28 42 30 Z" fill="url(#enamelHi)" opacity={0.5} />
+      <Path d="M25 4 Q24 14 23 24 Q24 26 25 26 Q26 26 27 24 Q26 14 25 4" fill={stroke} opacity={0.3} />
+      <Path d="M5 25 Q15 26 22 26 Q25 26 28 26 Q35 26 45 25" fill="none" stroke={stroke} strokeWidth="0.7" opacity={0.5} />
+      <Path d="M25 26 L23 46" fill="none" stroke={stroke} strokeWidth="0.6" opacity={0.4} />
+    </>
+  );
+}
+
+// ============================================================
+// Casos especiais
+// ============================================================
 function ToothAusenteSvg() {
   return (
     <>
@@ -320,71 +401,92 @@ function ToothNaoErupSvg() {
   return <Rect x="6" y="6" width="38" height="60" rx="6" fill="none" stroke="#475569" strokeWidth="1.2" strokeDasharray="1 3" />;
 }
 
+function ToothOccDashed() {
+  return <Rect x="6" y="14" width="38" height="22" rx="11" fill="none" stroke="#475569" strokeWidth="1.2" strokeDasharray="2 3" />;
+}
+
 // ============================================================
-// Tooth (composite)
+// Tooth composite
 // ============================================================
+type View = "vest" | "occ";
 type ToothProps = {
   state: ToothState;
+  view: View;
   selected?: boolean;
   onPress?: () => void;
 };
 
-function Tooth({ state, selected, onPress }: ToothProps) {
+function Tooth({ state, view, selected, onPress }: ToothProps) {
   const num = state.tooth;
   const type = getToothType(num);
   const finding = (state.condition[0]?.finding_type as FindingType) || "higido";
   const hasPlanned = state.planned.length > 0;
   const hasCompleted = state.completed.length > 0;
 
-  const ToothInner =
-    type === "incisivo"
-      ? ToothIncisivoSvg
-      : type === "canino"
-      ? ToothCaninoSvg
-      : type === "premolar"
-      ? ToothPreMolarSvg
-      : ToothMolarSvg;
+  const VestComp =
+    type === "incisivo" ? IncisivoVest :
+    type === "canino" ? CaninoVest :
+    type === "premolar" ? PreMolarVest : MolarVest;
+  const OccComp =
+    type === "incisivo" ? IncisivoOcc :
+    type === "canino" ? CaninoOcc :
+    type === "premolar" ? PreMolarOcc : MolarOcc;
+
+  const viewBox = view === "occ" ? "0 0 50 50" : "0 0 50 100";
+  const Comp = view === "occ" ? OccComp : VestComp;
+  const overlayHeight = view === "occ" ? 46 : 96;
 
   return (
-    <Pressable onPress={onPress} style={[styles.tooth, selected && styles.toothSelected]}>
-      <Svg viewBox="0 0 50 86" width="100%" height="100%">
+    <Pressable
+      onPress={onPress}
+      style={[
+        view === "occ" ? styles.toothOcc : styles.toothVest,
+        selected && styles.toothSelected,
+      ]}
+    >
+      <Svg viewBox={viewBox} width="100%" height="100%">
         <SvgDefs />
-        <ToothInner finding={finding} />
+        <Comp finding={finding} />
         {hasPlanned && !hasCompleted && (
-          <Rect x="2" y="2" width="46" height="80" rx="6" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="3 2" opacity={0.85} />
+          <Rect x="2" y="2" width="46" height={overlayHeight} rx="6" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="3 2" opacity={0.85} />
         )}
         {hasCompleted && (
-          <Rect x="2" y="2" width="46" height="80" rx="6" fill="none" stroke="#2563eb" strokeWidth="2" opacity={0.7} />
+          <Rect x="2" y="2" width="46" height={overlayHeight} rx="6" fill="none" stroke="#2563eb" strokeWidth="2" opacity={0.7} />
         )}
       </Svg>
-      <View style={styles.toothNumWrapper}>
-        <Text style={[styles.toothNum, selected && styles.toothNumSelected]}>{num}</Text>
-      </View>
-      {hasPlanned && !hasCompleted && (
-        <View style={[styles.toothBadge, styles.badgePlanned]}>
-          <Text style={styles.toothBadgeText}>!</Text>
-        </View>
-      )}
-      {hasCompleted && (
-        <View style={[styles.toothBadge, styles.badgeCompleted]}>
-          <Text style={styles.toothBadgeText}>✓</Text>
-        </View>
+      {view === "vest" && (
+        <>
+          {hasPlanned && !hasCompleted && (
+            <View style={[styles.toothBadge, styles.badgePlanned]}>
+              <Text style={styles.toothBadgeText}>!</Text>
+            </View>
+          )}
+          {hasCompleted && (
+            <View style={[styles.toothBadge, styles.badgeCompleted]}>
+              <Text style={styles.toothBadgeText}>✓</Text>
+            </View>
+          )}
+        </>
       )}
     </Pressable>
   );
 }
 
 // ============================================================
-// Odontograma2D
+// Odontograma2D — vista DUAL (vestibular + oclusal)
 // ============================================================
-export default function Odontograma2D({ chart, selectedTooth, onToothSelect }: Props) {
+export default function Odontograma2D({
+  chart,
+  selectedTooth,
+  onToothSelect,
+}: Props) {
   const teethById = useMemo(() => {
     const m = new Map<number, ToothState>();
     for (const t of chart) m.set(t.tooth, t);
     return m;
   }, [chart]);
 
-  const renderRow = (numbers: number[]) => (
+  const renderRow = (numbers: number[], view: View) => (
     <View style={styles.archRow}>
       {numbers.map((n) => {
         const state =
@@ -392,8 +494,9 @@ export default function Odontograma2D({ chart, selectedTooth, onToothSelect }: P
           ({ tooth: n, condition: [], planned: [], completed: [] } as ToothState);
         return (
           <Tooth
-            key={n}
+            key={`${view}-${n}`}
             state={state}
+            view={view}
             selected={selectedTooth === n}
             onPress={() => onToothSelect?.(n)}
           />
@@ -402,12 +505,34 @@ export default function Odontograma2D({ chart, selectedTooth, onToothSelect }: P
     </View>
   );
 
+  const renderNumberRow = (numbers: number[]) => (
+    <View style={styles.archRow}>
+      {numbers.map((n) => (
+        <View key={`num-${n}`} style={styles.numCell}>
+          <Text
+            style={[styles.numText, selectedTooth === n && styles.numTextSelected]}
+          >
+            {n}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.archLabel}>SUPERIOR · VESTIBULAR</Text>
-      {renderRow(FDI_SUPERIOR)}
+      {renderRow(FDI_SUPERIOR, "vest")}
+      {renderNumberRow(FDI_SUPERIOR)}
+      {renderRow(FDI_SUPERIOR, "occ")}
+      <Text style={styles.archLabel}>SUPERIOR · OCLUSAL</Text>
+
       <View style={styles.archDivider} />
-      {renderRow(FDI_INFERIOR)}
+
+      <Text style={styles.archLabel}>INFERIOR · OCLUSAL</Text>
+      {renderRow(FDI_INFERIOR, "occ")}
+      {renderNumberRow(FDI_INFERIOR)}
+      {renderRow(FDI_INFERIOR, "vest")}
       <Text style={styles.archLabel}>INFERIOR · VESTIBULAR</Text>
     </View>
   );
@@ -439,8 +564,8 @@ export function buildChartFromEntries(entries: ChartEntry[]): ToothState[] {
 // ============================================================
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 28,
-    paddingHorizontal: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 14,
     backgroundColor: DentalColors.bg,
     borderRadius: 16,
   },
@@ -454,37 +579,41 @@ const styles = StyleSheet.create({
   },
   archRow: {
     flexDirection: "row",
-    gap: 6,
+    gap: 4,
     alignItems: "flex-end",
   },
   archDivider: {
     height: 1,
     backgroundColor: DentalColors.border,
-    marginVertical: 18,
+    marginVertical: 16,
     opacity: 0.4,
   },
-  tooth: {
+  toothVest: {
     flex: 1,
-    aspectRatio: 50 / 86,
+    aspectRatio: 50 / 100,
+    position: "relative",
+    cursor: "pointer" as any,
+  },
+  toothOcc: {
+    flex: 1,
+    aspectRatio: 50 / 50,
     position: "relative",
     cursor: "pointer" as any,
   },
   toothSelected: {
-    transform: [{ translateY: -3 }],
+    transform: [{ translateY: -2 }],
   },
-  toothNumWrapper: {
-    position: "absolute",
-    bottom: -16,
-    left: 0,
-    right: 0,
+  numCell: {
+    flex: 1,
     alignItems: "center",
+    paddingVertical: 6,
   },
-  toothNum: {
+  numText: {
     fontSize: 9,
     color: DentalColors.ink3,
     fontWeight: "600",
   },
-  toothNumSelected: {
+  numTextSelected: {
     color: DentalColors.cyan,
     fontWeight: "800",
   },
