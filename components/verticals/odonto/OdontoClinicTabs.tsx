@@ -2,21 +2,16 @@
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
 // D-UNIFY + agenda Dia/Semana/Mes com navegacao prev/next.
 // W1-01: PacientesTab agora abre PatientHub drill-down ao clicar paciente.
-// W1-04 fix: removido onNewAppointment passado ao AgendaDental — o botao
-//            "Agendar" violeta no header do AgendaTab ja faz a mesma coisa
-//            e fica visivel em todas as views (dia/semana/mes). Botao
-//            ciano interno do AgendaDental era redundante.
+// W1-04 fix: removido onNewAppointment passado ao AgendaDental.
 // UX: badge LGPD removida da listagem (consentimento obrigatorio internamente).
 //     Indicador de aniversario (🎂) aparece para pacientes com aniversario
 //     nos proximos 7 dias. Agenda abre em semana por padrao.
-// PR24 (2026-04-28): PacientesTab consome ?open_patient=ID&tab=prontuario
-// pra abrir PatientHub via deep-link (botoes "Prontuario" da agenda).
-// PR26 (2026-04-28): AgendaTab.handleAppointmentPress -> ConsultaShell
-// pra status ativos. UAT mostrou que click na agenda caia no modal simples
-// e usuario nunca chegava na tela de atendimento real.
-// PR28 (2026-04-28): PacientesTab agora delega UI pro PatientsList
-// (tela com grid/lista, filtros, bulk actions, importar CSV) seguindo
-// mockup-pacientes-v1 aprovado. Logica de hub/edit/deep-link mantida aqui.
+// PR24 (2026-04-28): PacientesTab consome ?open_patient=ID&tab=prontuario.
+// PR26 (2026-04-28): AgendaTab.handleAppointmentPress -> ConsultaShell.
+// PR28 (2026-04-28): PacientesTab agora delega UI pro PatientsList.
+// PR43 (2026-04-29): OdontogramaTab standalone agora usa Odontograma2D v5
+// (vista dual vest+oclusal + anatomia clinica). Backend retorna chart no
+// formato 3-axes direto, sem precisar adapter.
 // ============================================================
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -30,7 +25,7 @@ import { AgendaDental } from "@/components/verticals/odonto/AgendaDental";
 import { AgendaDentalWeek } from "@/components/verticals/odonto/AgendaDentalWeek";
 import { AgendaDentalMonth } from "@/components/verticals/odonto/AgendaDentalMonth";
 import { AgendaNavigator, agendaRangeFor, type AgendaView } from "@/components/verticals/odonto/AgendaNavigator";
-import { OdontogramaSVG } from "@/components/verticals/odonto/OdontogramaSVG";
+import Odontograma2D, { type ToothState } from "@/components/verticals/odonto/Odontograma2D";
 import { ProntuarioTimeline } from "@/components/verticals/odonto/ProntuarioTimeline";
 import { PatientFormModal, type PatientFormData } from "@/components/verticals/odonto/PatientFormModal";
 import { NewAppointmentModal } from "@/components/verticals/odonto/NewAppointmentModal";
@@ -170,8 +165,6 @@ export function AgendaTab() {
 
 // ──────────────────────────────────────────────────────────
 // PacientesTab
-// PR28: delega UI pro PatientsList (mockup-pacientes-v1 aprovado).
-// Mantem aqui: PatientHub, PatientFormModal, deep-link ?open_patient=ID.
 // ──────────────────────────────────────────────────────────
 export function PacientesTab() {
   const cid = useCompanyId();
@@ -182,7 +175,6 @@ export function PacientesTab() {
   const [editingPatient, setEditingPatient] = useState<PatientLite | null>(null);
   const [hubInitialTab, setHubInitialTab] = useState<string | undefined>(undefined);
 
-  // Deep-link: ?open_patient=ID&tab=prontuario abre o hub diretamente.
   useEffect(() => {
     const openId = params.open_patient;
     if (!openId || !cid) return;
@@ -279,11 +271,17 @@ export function PacientesTab() {
   );
 }
 
+// ──────────────────────────────────────────────────────────
+// OdontogramaTab — standalone (PR43: Odontograma2D v5)
+// Backend ja retorna chart no formato {tooth, condition[], planned[], completed[]}
+// apos PR42 F2. Passa direto pro Odontograma2D.
+// ──────────────────────────────────────────────────────────
 export function OdontogramaTab() {
   const cid = useCompanyId();
-  const qc = useQueryClient();
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientSearch, setPatientSearch] = useState("");
+  const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
+
   const { data: patientsData } = useQuery({
     queryKey: ["dental-patients-mini", cid, patientSearch],
     queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(patientSearch)}&limit=10`),
@@ -293,14 +291,6 @@ export function OdontogramaTab() {
     queryKey: ["dental-chart", cid, patientId],
     queryFn: () => request(`/companies/${cid}/dental/patients/${patientId}/chart`),
     enabled: !!cid && !!patientId, staleTime: 15000,
-  });
-  const statusMut = useMutation({
-    mutationFn: (p: { tooth: number; status: string }) =>
-      request(`/companies/${cid}/dental/patients/${patientId}/chart`, {
-        method: "POST",
-        body: { tooth_number: p.tooth, status: p.status },
-      }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["dental-chart"] }); },
   });
 
   if (!patientId) {
@@ -315,16 +305,11 @@ export function OdontogramaTab() {
     );
   }
   if (isLoading) return <Loader />;
-  const teethRaw = ((chartData as any)?.teeth) || [];
-  const teeth = teethRaw.map((t: any) => {
-    const faces: any = { M: null, D: null, O: null, V: null, L: null };
-    (t.faces || []).forEach((f: any) => { if (f.face && faces.hasOwnProperty(f.face)) faces[f.face] = f.status || null; });
-    return { number: t.tooth, status: (t.faces && t.faces[0]?.status) || "higido", faces };
-  });
+  const chart: ToothState[] = ((chartData as any)?.teeth) || [];
   return (
     <View>
       <Pressable onPress={() => setPatientId(null)} style={z.backBtn}><Icon name="arrow_left" size={14} color={Colors.violet3} /><Text style={z.backText}>Trocar paciente</Text></Pressable>
-      <OdontogramaSVG teeth={teeth} onStatusChange={(toothNum, status) => statusMut.mutate({ tooth: toothNum, status })} />
+      <Odontograma2D chart={chart} selectedTooth={selectedTooth} onToothSelect={setSelectedTooth} />
     </View>
   );
 }
