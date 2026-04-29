@@ -1,17 +1,12 @@
 // ============================================================
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
-// D-UNIFY + agenda Dia/Semana/Mes com navegacao prev/next.
-// W1-01: PacientesTab agora abre PatientHub drill-down ao clicar paciente.
-// W1-04 fix: removido onNewAppointment passado ao AgendaDental.
-// UX: badge LGPD removida da listagem (consentimento obrigatorio internamente).
-//     Indicador de aniversario (🎂) aparece para pacientes com aniversario
-//     nos proximos 7 dias. Agenda abre em semana por padrao.
-// PR24 (2026-04-28): PacientesTab consome ?open_patient=ID&tab=prontuario.
-// PR26 (2026-04-28): AgendaTab.handleAppointmentPress -> ConsultaShell.
-// PR28 (2026-04-28): PacientesTab agora delega UI pro PatientsList.
-// PR43 (2026-04-29): OdontogramaTab standalone agora usa Odontograma2D v5
-// (vista dual vest+oclusal + anatomia clinica). Backend retorna chart no
-// formato 3-axes direto, sem precisar adapter.
+// PR43 (2026-04-29): OdontogramaTab standalone usa Odontograma2D v5.
+// PR44 (2026-04-29): UAT bugs P0
+//   - #2 fix drag-drop agenda — passar onMoveAppointment/onResizeAppointment
+//     pra Day/Week/Month (regressao PR21+ ao reescrever AgendaTab).
+//   - #17 fix cancelar consulta — handleAppointmentPress agora sempre abre
+//     AppointmentDetailModal em vez de bypassar pra Modo Consulta. O modal
+//     ja tem botoes Iniciar/Cancelar, agora visiveis em qualquer status.
 // ============================================================
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -47,13 +42,11 @@ function chairLabelFor(practitionerId: string | null | undefined, settings: any,
   return p ? `Cadeira ${idx + 1} - ${p.name}` : `Cadeira ${idx + 1}`;
 }
 
-const ACTIVE_STATUSES = new Set(["agendado", "avaliacao", "aprovado", "em_atendimento"]);
-
 type ViewMode = "calendar" | "list";
 
 export function AgendaTab() {
   const cid = useCompanyId();
-  const router = useRouter();
+  const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [agendaView, setAgendaView] = useState<AgendaView>("week");
   const [anchorDate, setAnchorDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -82,6 +75,24 @@ export function AgendaTab() {
     queryKey: ["dental-practitioners", cid],
     queryFn: () => dentalConfigApi.listPractitioners(cid!),
     enabled: !!cid, staleTime: 30000,
+  });
+
+  // PR44 #2: mutations pra mover/redimensionar agendamento via drag-drop
+  const moveMut = useMutation({
+    mutationFn: (p: { id: string; scheduled_at: string }) =>
+      request(`/companies/${cid}/dental/appointments/${p.id}`, {
+        method: "PATCH",
+        body: { scheduled_at: p.scheduled_at },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dental-agenda"] }),
+  });
+  const resizeMut = useMutation({
+    mutationFn: (p: { id: string; duration_min: number }) =>
+      request(`/companies/${cid}/dental/appointments/${p.id}`, {
+        method: "PATCH",
+        body: { duration_min: p.duration_min },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dental-agenda"] }),
   });
 
   const settings = settingsData?.settings;
@@ -122,9 +133,19 @@ export function AgendaTab() {
   function handleSlotPressWeek(dt: Date) { setInitialDateTime(dt.toISOString()); setShowNew(true); }
   function handleDayPressMonth(d: Date) { setAnchorDate(d); setAgendaView("day"); }
 
+  // PR44 #17: SEMPRE abrir AppointmentDetailModal (antes bypassava direto pro Modo Consulta
+  // pra qualquer status ativo, impedindo cancelamento). O modal ja oferece "Iniciar
+  // atendimento" e "Cancelar" — agora ambos visiveis em qualquer status.
   function handleAppointmentPress(a: { id: string; status: string }) {
-    if (ACTIVE_STATUSES.has(a.status)) router.push(`/dental/consulta/${a.id}` as any);
-    else setDetailId(a.id);
+    setDetailId(a.id);
+  }
+
+  // PR44 #2: handlers pro drag-drop
+  function handleMoveAppointment(id: string, newScheduledAt: string) {
+    moveMut.mutate({ id, scheduled_at: newScheduledAt });
+  }
+  function handleResizeAppointment(id: string, newDurationMin: number) {
+    resizeMut.mutate({ id, duration_min: newDurationMin });
   }
 
   return (
@@ -149,9 +170,35 @@ export function AgendaTab() {
         <>
           <AgendaNavigator view={agendaView} date={anchorDate} onViewChange={setAgendaView} onDateChange={setAnchorDate} />
           {isLoading && <Loader />}
-          {!isLoading && agendaView === "day" && <AgendaDental appointments={appointments} chairs={chairs} date={anchorDate} onAppointmentPress={handleAppointmentPress} onSlotPress={handleSlotPressDay} />}
-          {!isLoading && agendaView === "week" && <AgendaDentalWeek appointments={appointments} anchorDate={anchorDate} onAppointmentPress={handleAppointmentPress} onSlotPress={handleSlotPressWeek} />}
-          {!isLoading && agendaView === "month" && <AgendaDentalMonth appointments={appointments} anchorDate={anchorDate} onDayPress={handleDayPressMonth} onAppointmentPress={handleAppointmentPress} />}
+          {!isLoading && agendaView === "day" && (
+            <AgendaDental
+              appointments={appointments}
+              chairs={chairs}
+              date={anchorDate}
+              onAppointmentPress={handleAppointmentPress}
+              onSlotPress={handleSlotPressDay}
+              onMoveAppointment={handleMoveAppointment}
+              onResizeAppointment={handleResizeAppointment}
+            />
+          )}
+          {!isLoading && agendaView === "week" && (
+            <AgendaDentalWeek
+              appointments={appointments}
+              anchorDate={anchorDate}
+              onAppointmentPress={handleAppointmentPress}
+              onSlotPress={handleSlotPressWeek}
+              onMoveAppointment={handleMoveAppointment}
+              onResizeAppointment={handleResizeAppointment}
+            />
+          )}
+          {!isLoading && agendaView === "month" && (
+            <AgendaDentalMonth
+              appointments={appointments}
+              anchorDate={anchorDate}
+              onDayPress={handleDayPressMonth}
+              onAppointmentPress={handleAppointmentPress}
+            />
+          )}
         </>
       )}
 
@@ -273,8 +320,6 @@ export function PacientesTab() {
 
 // ──────────────────────────────────────────────────────────
 // OdontogramaTab — standalone (PR43: Odontograma2D v5)
-// Backend ja retorna chart no formato {tooth, condition[], planned[], completed[]}
-// apos PR42 F2. Passa direto pro Odontograma2D.
 // ──────────────────────────────────────────────────────────
 export function OdontogramaTab() {
   const cid = useCompanyId();
