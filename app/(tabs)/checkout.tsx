@@ -14,6 +14,8 @@ var PLANS = [
   { key: "essencial", label: "Essencial", monthly: 89, desc: "Base para comecar", features: ["PDV + cupom fiscal", "Cadastro e gestao de produtos", "Financeiro completo", "Relatorios contabeis basicos", "1 usuario"] },
   { key: "negocio", label: "Negocio", monthly: 169, desc: "Operacao completa", popular: true, features: ["Tudo do Essencial", "Estoque completo com baixa automatica e etiquetas", "Emissao de NF-e, NFC-e e NFS-e", "Sua loja online inclusa", "Financeiro completo (DRE + fluxo de caixa)", "Folha salarial", "Relatorios contabeis completos", "Suporte prioritario"] },
   { key: "expansao", label: "Expansao", monthly: 269, desc: "Escala e automacao", features: ["Tudo do Negocio", "Gateway personalizado (use sua maquininha)", "API + integracoes ilimitadas", "Hub social (Instagram e WhatsApp)", "Automacoes avancadas conectadas nas redes sociais", "IA avancada dentro de cada modulo", "Usuarios ilimitados", "Multi CNPJ", "Emissao de NFS-e ilimitadas"] },
+  ];
+
 var ANNUAL_DISCOUNT = 1 / 6;
 
 function fmt(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
