@@ -15,40 +15,38 @@ const PLANS = [
   {
     key: "essencial", name: "Essencial", subtitle: "Para comecar",
     monthly: 89, features: [
-      "Controle de entradas e saidas",
-      "Venda pelo celular ou computador",
-      "Controle de estoque",
-      "Emissao de nota fiscal (ate 50/mes)",
-      "Ajuda com impostos e obrigacoes",
-      "Suporte por chat",
+      "PDV + cupom fiscal",
+      "Cadastro e gestao de produtos",
+      "Financeiro completo",
+      "Relatorios contabeis basicos",
       "1 usuario",
     ],
   },
   {
     key: "negocio", name: "Negocio", subtitle: "Para crescer", popular: true,
-    monthly: 169.90, features: [
-      "Tudo do Essencial +",
-      "Cadastro e historico de clientes",
-      "Mensagens automaticas pelo WhatsApp",
-      "Sua loja online",
-      "Folha de pagamento",
-      "Dicas inteligentes no seu painel",
-      "Nota fiscal ilimitada",
-      "Ate 3 usuarios",
-      "Um especialista disponivel para voce",
+    monthly: 169, features: [
+      "Tudo do Essencial",
+      "Estoque completo com baixa automatica e etiquetas",
+      "Emissao de NF-e, NFC-e e NFS-e",
+      "Sua loja online inclusa",
+      "Financeiro completo (DRE + fluxo de caixa)",
+      "Folha salarial",
+      "Relatorios contabeis completos",
+      "Suporte prioritario",
     ],
   },
   {
     key: "expansao", name: "Expansao", subtitle: "Para escalar",
-    monthly: 269.90, features: [
-      "Tudo do Negocio +",
-      "Assistente inteligente para seu negocio",
-      "Chat rapido em cada tela",
-      "Analise detalhada de custos",
-      "Relatorios avancados",
-      "Aceite pagamentos de varios meios",
+    monthly: 269, features: [
+      "Tudo do Negocio",
+      "Gateway personalizado (use sua maquininha)",
+      "API + integracoes ilimitadas",
+      "HUB social (conecte Instagram e WhatsApp)",
+      "Automacoes avancadas conectadas nas redes sociais",
+      "IA avancada dentro de cada modulo",
       "Usuarios ilimitados",
-      "Suporte prioritario",
+      "Multi CNPJ",
+      "Emissao de NFS-e ilimitadas",
     ],
   },
 ];
@@ -65,7 +63,7 @@ export default function PlanosScreen() {
   const [annual, setAnnual] = useState(false);
   const { company, token, isDemo } = useAuthStore();
   const currentPlan = (company?.plan as string) || "essencial";
-  const discount = 0.15;
+  const discount = 1 / 6;
 
   const { data: billingStatus } = useQuery({
     queryKey: ["billing-status", company?.id],
@@ -100,10 +98,10 @@ export default function PlanosScreen() {
 
       <View style={s.toggleWrap}>
         <Pressable onPress={() => setAnnual(false)} style={[s.toggleBtn, !annual && s.toggleActive]}><Text style={[s.toggleText, !annual && s.toggleTextActive]}>Mensal</Text></Pressable>
-        <Pressable onPress={() => setAnnual(true)} style={[s.toggleBtn, annual && s.toggleActive]}><Text style={[s.toggleText, annual && s.toggleTextActive]}>Anual</Text><View style={s.discountBadge}><Text style={s.discountText}>15% OFF</Text></View></Pressable>
+        <Pressable onPress={() => setAnnual(true)} style={[s.toggleBtn, annual && s.toggleActive]}><Text style={[s.toggleText, annual && s.toggleTextActive]}>Anual</Text><View style={s.discountBadge}><Text style={s.discountText}>2 meses gratis</Text></View></Pressable>
       </View>
 
-      {annual && <Text style={s.savingsHint}>Economize ate {fmtR(savings(269.90))} por ano no plano Expansao</Text>}
+      {annual && <Text style={s.savingsHint}>Economize ate {fmtR(savings(269))} por ano no plano Expansao</Text>}
 
       <View style={s.plansRow}>
         {PLANS.map(plan => {
