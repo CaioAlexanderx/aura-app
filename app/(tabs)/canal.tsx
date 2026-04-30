@@ -7,12 +7,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { TabBar } from "@/components/TabBar";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
-import { BASE_URL } from "@/services/api";
 import { IS_WIDE, TABS } from "@/components/screens/canal/shared";
 import { TabMeuSite } from "@/components/screens/canal/TabMeuSite";
 import { TabVitrine } from "@/components/screens/canal/TabVitrine";
 import { TabEntrega } from "@/components/screens/canal/TabEntrega";
 import { TabPedidos } from "@/components/screens/canal/TabPedidos";
+
+const STOREFRONT_BASE = 'https://loja.getaura.com.br';
 
 export default function CanalDigitalScreen() {
   const [tab, setTab] = useState(0);
@@ -42,6 +43,8 @@ export default function CanalDigitalScreen() {
     );
   }
 
+  const storefrontUrl = config.storefront_url || (config.slug ? `${STOREFRONT_BASE}/${config.slug}` : null);
+
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <PageHeader title="Canal Digital" />
@@ -51,8 +54,8 @@ export default function CanalDigitalScreen() {
           <Text style={s.heroTitle}>Sua loja online em minutos</Text>
           <Text style={s.heroDesc}>Configure sua vitrine, personalize e compartilhe o link.</Text>
         </View>
-        {config.is_published && (
-          <Pressable onPress={() => Linking.openURL(`${BASE_URL}/storefront/${config.slug || "minha-loja"}/page`)} style={s.viewSiteBtn}>
+        {config.is_published && storefrontUrl && (
+          <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn}>
             <Icon name="globe" size={13} color={Colors.violet3} />
             <Text style={s.viewSiteBtnText}>Ver site</Text>
           </Pressable>
