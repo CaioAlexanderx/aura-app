@@ -56,7 +56,7 @@ export function TabVitrine({ config, products, saveConfig, isSaving }: Props) {
                       {Platform.OS === "web" ? <img src={prod.image_url} alt={prod.name} style={{ width: "100%", height: "100%", objectFit: "cover" } as any} /> : <View style={{ width: 40, height: 40, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" }}><Icon name="package" size={18} color={Colors.violet3} /></View>}
                     </View>
                   ) : <View style={[s.prodIcon, { backgroundColor: isFeatured ? Colors.violetD : Colors.bg4 }]}><Icon name="package" size={18} color={isFeatured ? Colors.violet3 : Colors.ink3} /></View>}
-                  <View style={s.prodInfo}><Text style={s.prodName}>{prod.name}</Text><Text style={s.prodMeta}>{showPrices ? `R$ ${(parseFloat(prod.price) || 0).toFixed(2)}` : ""}{prod.category ? ` \u00b7 ${prod.category}` : ""}</Text></View>
+                  <View style={s.prodInfo}><Text style={s.prodName}>{prod.name}</Text><Text style={s.prodMeta}>{showPrices ? `R$ ${(parseFloat(prod.price) || 0).toFixed(2)}` : ""}{prod.category ? ` · ${prod.category}` : ""}</Text></View>
                 </View>
                 <View style={s.prodRight}>
                   <View style={[s.featBadge, { backgroundColor: isFeatured ? Colors.greenD : Colors.bg4 }]}><Text style={[s.featBadgeText, { color: isFeatured ? Colors.green : Colors.ink3 }]}>{isFeatured ? "Visivel" : "Oculto"}</Text></View>
@@ -67,7 +67,9 @@ export function TabVitrine({ config, products, saveConfig, isSaving }: Props) {
           })}
         </View>
       )}
-      {changed && <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar vitrine"}</Text></Pressable>}
+      <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}>
+        <Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar vitrine"}</Text>
+      </Pressable>
     </View>
   );
 }
