@@ -65,7 +65,8 @@ export function useDigitalChannel() {
   const setupPixMutation = useMutation({
     mutationFn: (body: any) => digitalChannelApi.setupPix(cid!, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['auth'] });
+      // Atualiza company no Zustand store para refletir asaas_subconta_id
+      useAuthStore.getState().hydrate();
       qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
       toast.success('Pix ativado com sucesso!');
     },
