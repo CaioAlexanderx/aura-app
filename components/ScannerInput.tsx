@@ -8,6 +8,12 @@
 // - Placeholder direto: "Bipe o codigo ou digite..."
 // - Camera com icone proprio (camera, nao search)
 // - Hint textual substituido por tooltip discreto no info icon
+//
+// fix(câmera): facingMode 'environment' era constraint exato — lançava
+// OverconstrainedError em dispositivos sem câmera traseira (desktops).
+// Trocado por { ideal: 'environment' } para fallback gracioso.
+// fix(scanFrame): usava state `scanning` (stale closure) — loop nunca
+// rodava ao abrir câmera. Substituído por isScanningRef.
 // ============================================================
 import { useState, useRef, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform } from "react-native";
@@ -26,7 +32,6 @@ var isWeb = Platform.OS === 'web';
 export function ScannerInput({ onScan, placeholder }: Props) {
   const [inputValue, setInputValue] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -34,6 +39,8 @@ export function ScannerInput({ onScan, placeholder }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number>(0);
+  // Ref para controlar o loop de scan sem depender de state (evita stale closure)
+  const isScanningRef = useRef(false);
 
   // Handle barcode scanner input (USB scanners type + Enter)
   function handleSubmit() {
@@ -44,36 +51,8 @@ export function ScannerInput({ onScan, placeholder }: Props) {
     inputRef.current?.focus();
   }
 
-  // Camera QR scanning
-  const startCamera = useCallback(async () => {
-    if (!isWeb || typeof navigator === 'undefined') return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
-      });
-      streamRef.current = stream;
-
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.setAttribute('playsinline', 'true');
-      await video.play();
-      videoRef.current = video;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      canvasRef.current = canvas;
-
-      setCameraActive(true);
-      setScanning(true);
-      scanFrame();
-    } catch (err) {
-      toast.error('Nao foi possivel acessar a camera. Verifique as permissoes.');
-    }
-  }, []);
-
   function scanFrame() {
-    if (!videoRef.current || !canvasRef.current || !scanning) return;
+    if (!videoRef.current || !canvasRef.current || !isScanningRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -96,17 +75,57 @@ export function ScannerInput({ onScan, placeholder }: Props) {
           stopCamera();
           return;
         }
-        if (scanning) animRef.current = requestAnimationFrame(scanFrame);
+        if (isScanningRef.current) animRef.current = requestAnimationFrame(scanFrame);
       }).catch(() => {
-        if (scanning) animRef.current = requestAnimationFrame(scanFrame);
+        if (isScanningRef.current) animRef.current = requestAnimationFrame(scanFrame);
       });
     } else {
-      animRef.current = requestAnimationFrame(scanFrame);
+      // BarcodeDetector not supported — keep loop alive so UI stays up
+      if (isScanningRef.current) animRef.current = requestAnimationFrame(scanFrame);
     }
   }
 
+  // Camera QR scanning
+  const startCamera = useCallback(async () => {
+    if (!isWeb || typeof navigator === 'undefined') return;
+    try {
+      // facingMode como "ideal" faz fallback para câmera frontal em desktops
+      // (constraint exato 'environment' lançava OverconstrainedError sem câmera traseira)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      streamRef.current = stream;
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.muted = true;
+      await video.play();
+      videoRef.current = video;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      canvasRef.current = canvas;
+
+      isScanningRef.current = true;
+      setCameraActive(true);
+      scanFrame();
+    } catch (err: any) {
+      const name = err?.name || '';
+      const msg =
+        name === 'OverconstrainedError' ? 'Nenhuma câmera compatível encontrada.' :
+        name === 'NotAllowedError'      ? 'Permissão de câmera negada. Verifique as configurações do navegador.' :
+        name === 'NotFoundError'        ? 'Nenhuma câmera detectada neste dispositivo.' :
+        name === 'NotReadableError'     ? 'Câmera em uso por outro app. Feche e tente novamente.' :
+        'Não foi possível acessar a câmera (' + (name || 'erro desconhecido') + ').';
+      console.warn('[ScannerInput] startCamera error:', name, err?.message);
+      toast.error(msg);
+    }
+  }, []);
+
   function stopCamera() {
-    setScanning(false);
+    isScanningRef.current = false;
     setCameraActive(false);
     if (animRef.current) cancelAnimationFrame(animRef.current);
     if (streamRef.current) {
@@ -133,7 +152,6 @@ export function ScannerInput({ onScan, placeholder }: Props) {
   // Pulse animation for "ready" dot (web only; subtle on native)
   useEffect(() => {
     if (!isWeb || !isFocused) return;
-    // Inject a one-time CSS keyframe for the pulse
     var styleId = 'aura-scanner-pulse-kf';
     if (!document.getElementById(styleId)) {
       var style = document.createElement('style');
