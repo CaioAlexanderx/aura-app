@@ -634,9 +634,35 @@ export var billingApi = {
   tokenize: function(companyId: string, cardData: { card_number: string; card_expiry_month: string; card_expiry_year: string; card_ccv: string; holder_name: string; holder_cpf: string; holder_postal_code?: string; holder_address_number?: string }) {
     return request<TokenizeResponse>("/companies/" + companyId + "/billing/tokenize", { method: "POST", body: cardData, retry: 0, timeout: 15000 });
   },
-  subscribe: function(companyId: string, plan: string, billingType?: string, creditCardToken?: string, cycle?: string, holderName?: string, holderCpf?: string, holderPostalCode?: string, holderAddressNumber?: string) {
-    return request<SubscribeResponse>("/companies/" + companyId + "/billing/subscribe", { method: "POST", body: { plan: plan, billing_type: billingType || "PIX", cycle: cycle || "monthly", credit_card_token: creditCardToken, credit_card_holder_name: holderName, credit_card_holder_cpf: holderCpf, credit_card_holder_postal_code: holderPostalCode, credit_card_holder_address_number: holderAddressNumber } 
-  });
+  subscribe: function(
+  companyId: string,
+  plan: string,
+  billingType?: string,
+  creditCardToken?: string,
+  cycle?: string,
+  holderName?: string,
+  holderCpf?: string,
+  holderPostalCode?: string,
+  holderAddressNumber?: string
+) {
+  return request<SubscribeResponse>(
+    "/companies/" + companyId + "/billing/subscribe",
+    {
+      method: "POST",
+      body: {
+        plan: plan,
+        billing_type: billingType || "PIX",
+        cycle: cycle || "monthly",
+        credit_card_token: creditCardToken,
+        credit_card_holder_name: holderName,
+        credit_card_holder_cpf: holderCpf,
+        credit_card_holder_postal_code: holderPostalCode,
+        credit_card_holder_address_number: holderAddressNumber,
+      },
+    }
+  );
+},
+
   cancel: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/cancel", { method: "POST" }); },
   invoices: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/invoices"); },
   generatePix: function(companyId: string, paymentId: string) { return request<any>("/companies/" + companyId + "/billing/generate-pix/" + paymentId, { method: "POST" }); },
