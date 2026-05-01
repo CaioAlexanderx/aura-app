@@ -51,6 +51,12 @@ function cardBrand(n: string) {
 type Cycle = "monthly" | "annual";
 type Method = "pix" | "card";
 
+function addMonthsIso(base: Date, months: number) {
+  var d = new Date(base);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function CheckoutScreen() {
   var params = useLocalSearchParams<{ plan?: string }>();
   var { company, isDemo, isStaff, trialActive, hydrate, logout } = useAuthStore();
@@ -95,11 +101,13 @@ export default function CheckoutScreen() {
   var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && cardAddressNumber.trim().length >= 1 && cardAddressStreet.trim().length >= 3;
   var brand = cardBrand(cardNumber);
 
+  var annualEndDate = isAnnual ? addMonthsIso(new Date(), 12) : undefined;
+
   async function handlePixSubscribe() {
     if (!company?.id) return;
     setLoading(true);
     try {
-      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", undefined, cycle);
+      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined });
       if (res.pix_qr_code) {
         setPixQr(res.pix_qr_code);
         setPixCopyPaste(res.pix_copy_paste || null);
@@ -127,7 +135,17 @@ export default function CheckoutScreen() {
         holder_address: cardAddressStreet.trim(),
       });
 
-      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""), cardPostalCode.replace(/\D/g, ""), cardAddressNumber.trim(), cardAddressStreet.trim());
+      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", "monthly", {
+        endDate: annualEndDate,
+        totalCycles: isAnnual ? 12 : undefined,
+        creditCardToken: tokenRes.credit_card_token,
+        holderName: cardName,
+        holderCpf: cardCpf.replace(/\D/g, ""),
+        holderPostalCode: cardPostalCode.replace(/\D/g, ""),
+        holderAddressNumber: cardAddressNumber.trim(),
+        holderAddress: cardAddressStreet.trim(),
+      });
+      setSuccess(true);
       toast.success("Assinatura ativada com cartao " + (tokenRes.credit_card_brand || brand) + " final " + (tokenRes.credit_card_last4 || cardDigits.slice(-4)) + "!");
       // Refresh billing_status no store antes de redirecionar,
       // senao o billing gate redirecionaria de volta ao checkout.
