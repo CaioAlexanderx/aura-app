@@ -75,6 +75,7 @@ export default function CheckoutScreen() {
   var [cardCpf, setCardCpf] = useState("");
   var [cardPostalCode, setCardPostalCode] = useState("");
   var [cardAddressNumber, setCardAddressNumber] = useState("");
+  var [cardAddressStreet, setCardAddressStreet] = useState("");
   var [tokenizing, setTokenizing] = useState(false);
 
   // Determine if the user already has an active plan (plan-change scenario vs new-user gate)
@@ -91,7 +92,7 @@ export default function CheckoutScreen() {
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
-  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && cardAddressNumber.trim().length >= 1;
+  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && cardAddressNumber.trim().length >= 1 && cardAddressStreet.trim().length >= 3;
   var brand = cardBrand(cardNumber);
 
   async function handlePixSubscribe() {
@@ -123,10 +124,10 @@ export default function CheckoutScreen() {
         holder_cpf: cardCpf.replace(/\D/g, ""),
         holder_postal_code: cardPostalCode.replace(/\D/g, ""),
         holder_address_number: cardAddressNumber.trim(),
+        holder_address: cardAddressStreet.trim(),
       });
 
-      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""), cardPostalCode.replace(/\D/g, ""), cardAddressNumber.trim());
-      setSuccess(true);
+      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""), cardPostalCode.replace(/\D/g, ""), cardAddressNumber.trim(), cardAddressStreet.trim());
       toast.success("Assinatura ativada com cartao " + (tokenRes.credit_card_brand || brand) + " final " + (tokenRes.credit_card_last4 || cardDigits.slice(-4)) + "!");
       // Refresh billing_status no store antes de redirecionar,
       // senao o billing gate redirecionaria de volta ao checkout.
@@ -308,6 +309,12 @@ export default function CheckoutScreen() {
               placeholder="1234 5678 9012 3456" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={19} />
           </View>
 
+          <View style={z.cardField}>
+            <Text style={z.cardLabel}>Rua do titular</Text>
+            <TextInput style={z.cardInput} value={cardAddressStreet} onChangeText={setCardAddressStreet}
+              placeholder="Rua Exemplo" placeholderTextColor={Colors.ink3} autoCapitalize="words" />
+          </View>
+
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={[z.cardField, { flex: 1 }]}>
               <Text style={z.cardLabel}>Validade</Text>
@@ -346,6 +353,19 @@ export default function CheckoutScreen() {
             </View>
           </View>
 
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>CEP do titular</Text>
+              <TextInput style={z.cardInput} value={cardPostalCode} onChangeText={function(v) { setCardPostalCode(maskPostalCode(v)); }}
+                placeholder="00000-000" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={9} />
+            </View>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>Numero</Text>
+              <TextInput style={z.cardInput} value={cardAddressNumber} onChangeText={setCardAddressNumber}
+                placeholder="123" placeholderTextColor={Colors.ink3} maxLength={10} />
+            </View>
+          </View>
+          
           <View style={z.secureRow}>
             <Icon name="lock" size={12} color={Colors.green} />
             <Text style={z.secureText}>Pagamento seguro. Dados tokenizados via Asaas. Seu cartao nao e armazenado.</Text>
