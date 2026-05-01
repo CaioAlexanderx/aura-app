@@ -73,6 +73,8 @@ export default function CheckoutScreen() {
   var [cardCvv, setCardCvv] = useState("");
   var [cardName, setCardName] = useState("");
   var [cardCpf, setCardCpf] = useState("");
+  var [cardPostalCode, setCardPostalCode] = useState("");
+  var [cardAddressNumber, setCardAddressNumber] = useState("");
   var [tokenizing, setTokenizing] = useState(false);
 
   // Determine if the user already has an active plan (plan-change scenario vs new-user gate)
@@ -89,7 +91,7 @@ export default function CheckoutScreen() {
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
-  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11;
+  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && cardAddressNumber.trim().length >= 1;
   var brand = cardBrand(cardNumber);
 
   async function handlePixSubscribe() {
@@ -119,9 +121,11 @@ export default function CheckoutScreen() {
         card_ccv: cardCvv,
         holder_name: cardName,
         holder_cpf: cardCpf.replace(/\D/g, ""),
+        holder_postal_code: cardPostalCode.replace(/\D/g, ""),
+        holder_address_number: cardAddressNumber.trim(),
       });
 
-      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""));
+      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", tokenRes.credit_card_token, cycle, cardName, cardCpf.replace(/\D/g, ""), cardPostalCode.replace(/\D/g, ""), cardAddressNumber.trim());
       setSuccess(true);
       toast.success("Assinatura ativada com cartao " + (tokenRes.credit_card_brand || brand) + " final " + (tokenRes.credit_card_last4 || cardDigits.slice(-4)) + "!");
       // Refresh billing_status no store antes de redirecionar,
@@ -327,6 +331,19 @@ export default function CheckoutScreen() {
             <Text style={z.cardLabel}>CPF do titular</Text>
             <TextInput style={z.cardInput} value={cardCpf} onChangeText={function(v) { setCardCpf(maskCpf(v)); }}
               placeholder="123.456.789-01" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={14} />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>CEP do titular</Text>
+              <TextInput style={z.cardInput} value={cardPostalCode} onChangeText={function(v) { setCardPostalCode(maskPostalCode(v)); }}
+                placeholder="00000-000" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={9} />
+            </View>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>Numero</Text>
+              <TextInput style={z.cardInput} value={cardAddressNumber} onChangeText={setCardAddressNumber}
+                placeholder="123" placeholderTextColor={Colors.ink3} maxLength={10} />
+            </View>
           </View>
 
           <View style={z.secureRow}>
