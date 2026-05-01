@@ -82,7 +82,10 @@ export default function CheckoutScreen() {
   var [cardPostalCode, setCardPostalCode] = useState("");
   var [cardAddressNumber, setCardAddressNumber] = useState("");
   var [cardAddressStreet, setCardAddressStreet] = useState("");
-  var [tokenizing, setTokenizing] = useState(false);
+  var [cardAddressDistrict, setCardAddressDistrict] = useState("");
+  var [cardAddressCity, setCardAddressCity] = useState("");
+  var [cardAddressState, setCardAddressState] = useState("");
+  var [loadingCep, setLoadingCep] = useState(false);
 
   // Determine if the user already has an active plan (plan-change scenario vs new-user gate)
   var billingStatus    = (company as any)?.billing_status;
@@ -177,6 +180,29 @@ export default function CheckoutScreen() {
 
   useEffect(function() { return function() { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
 
+  useEffect(function() {
+    var cepDigits = cardPostalCode.replace(/\D/g, "");
+    if (cepDigits.length !== 8) return;
+    var cancelled = false;
+
+    async function fetchCep() {
+      setLoadingCep(true);
+      try {
+        var res = await fetch("https://viacep.com.br/ws/" + cepDigits + "/json/");
+        var data = await res.json();
+        if (cancelled || data?.erro) return;
+        if (!cardAddressStreet.trim() && data.logradouro) setCardAddressStreet(String(data.logradouro));
+        if (data.bairro) setCardAddressDistrict(String(data.bairro));
+        if (data.localidade) setCardAddressCity(String(data.localidade));
+        if (data.uf) setCardAddressState(String(data.uf));
+      } catch {}
+      finally { if (!cancelled) setLoadingCep(false); }
+    }
+
+    fetchCep();
+    return function() { cancelled = true; };
+  }, [cardPostalCode]);
+  
   function copyPix() {
     if (!pixCopyPaste) return;
     if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) navigator.clipboard.writeText(pixCopyPaste);
@@ -332,6 +358,28 @@ export default function CheckoutScreen() {
             <TextInput style={z.cardInput} value={cardAddressStreet} onChangeText={setCardAddressStreet}
               placeholder="Rua Exemplo" placeholderTextColor={Colors.ink3} autoCapitalize="words" />
           </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={[z.cardField, { flex: 1 }]}>
+              <Text style={z.cardLabel}>Bairro</Text>
+              <TextInput style={z.cardInput} value={cardAddressDistrict} onChangeText={setCardAddressDistrict}
+                placeholder="Centro" placeholderTextColor={Colors.ink3} autoCapitalize="words" />
+            </View>
+            <View style={[z.cardField, { width: 90 }]}>
+              <Text style={z.cardLabel}>UF</Text>
+              <TextInput style={z.cardInput} value={cardAddressState} onChangeText={function(v){ setCardAddressState(v.toUpperCase().slice(0,2)); }}
+                placeholder="SP" placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={2} />
+            </View>
+          </View>
+
+          <View style={z.cardField}>
+            <Text style={z.cardLabel}>Cidade</Text>
+            <TextInput style={z.cardInput} value={cardAddressCity} onChangeText={setCardAddressCity}
+              placeholder="Sao Paulo" placeholderTextColor={Colors.ink3} autoCapitalize="words" />
+          </View>
+
+          {loadingCep && <Text style={[z.cardLabel, { marginTop: -6, marginBottom: 8 }]}>Buscando endereco pelo CEP...</Text>}
+
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={[z.cardField, { flex: 1 }]}>
