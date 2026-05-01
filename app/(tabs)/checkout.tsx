@@ -107,7 +107,11 @@ export default function CheckoutScreen() {
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
-  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && cardAddressNumber.trim().length >= 1;
+  var holderAddressNumberDigits = cardAddressNumber.replace(/\D/g, "");
+  var holderAddressStreet = cardAddressStreet.trim();
+  var holderAddressNumberDigits = cardAddressNumber.replace(/\D/g, "");
+  var holderAddressStreet = cardAddressStreet.trim();
+  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && holderAddressNumberDigits.length >= 1 && holderAddressStreet.length >= 3;
   var brand = cardBrand(cardNumber);
 
   var annualEndDate = isAnnual ? addMonthsIso(new Date(), 12) : undefined;
@@ -141,7 +145,8 @@ export default function CheckoutScreen() {
         holder_name: cardName,
         holder_cpf: cardCpf.replace(/\D/g, ""),
         holder_postal_code: cardPostalCode.replace(/\D/g, ""),
-        holder_address_number: cardAddressNumber.trim(), // Importante para o erro do Railway
+        holder_address_number: holderAddressNumberDigits,
+        holder_address: holderAddressStreet,
       });
 
       // 2. Assinar
@@ -152,7 +157,8 @@ export default function CheckoutScreen() {
         holderName: cardName,
         holderCpf: cardCpf.replace(/\D/g, ""),
         holderPostalCode: cardPostalCode.replace(/\D/g, ""),
-        holderAddressNumber: cardAddressNumber.trim(),
+        holderAddressNumber: holderAddressNumberDigits,
+        holderAddress: holderAddressStreet,
       });
 
       setSuccess(true);
@@ -328,7 +334,7 @@ export default function CheckoutScreen() {
             </View>
             <View style={[z.cardField, { flex: 1 }]}>
               <Text style={z.cardLabel}>Número</Text>
-              <TextInput style={z.cardInput} value={cardAddressNumber} onChangeText={setCardAddressNumber} placeholder="123" keyboardType="number-pad" />
+              <TextInput style={z.cardInput} value={cardAddressNumber} onChangeText={function (v) { setCardAddressNumber(v.replace(/\D/g, "")); }} placeholder="123" keyboardType="number-pad" />
             </View>
           </View>
 
