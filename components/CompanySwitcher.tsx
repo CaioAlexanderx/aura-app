@@ -111,7 +111,7 @@ export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Prop
           }}
           {...(Platform.OS === "web" ? { title: currentName + " · " + currentPlan } : {})}
         >
-          <Icon name="building" size={16} color={C.ink3} />
+          <Icon name="bag" size={16} color={C.ink3} />
         </Pressable>
         <DropdownModal
           visible={open}
@@ -161,7 +161,7 @@ export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Prop
             justifyContent: "center",
           }}
         >
-          <Icon name={consolidatedView ? "globe" : "building"} size={14} color={C.ink3} />
+          <Icon name={consolidatedView ? "globe" : "bag"} size={14} color={C.ink3} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
@@ -300,7 +300,7 @@ function DropdownModal({
                 justifyContent: "center",
               }}
             >
-              <Icon name="close" size={14} color={C.ink3} />
+              <Icon name="x" size={14} color={C.ink3} />
             </Pressable>
           </View>
 
