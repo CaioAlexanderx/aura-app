@@ -1,7 +1,7 @@
 // ============================================================
-// AURA. — Multi-CNPJ services (M1-05 + M2-04)
+// AURA. — Multi-CNPJ services (M1-05 + M2-03 + M2-04)
 // Wraps backend Multi-CNPJ endpoints (M1-02, M1-03, M1-04,
-// M2-04 DELETE + billing-preview).
+// M2-03 transfer-primary, M2-04 DELETE + billing-preview).
 // Importa o helper `request` do api.ts existente para reusar
 // retry, refresh-token, timeout, etc.
 // ============================================================
@@ -164,9 +164,20 @@ export type RemoveCompanyResponse = {
   note: string;
 };
 
+// M2-03: POST /me/companies/:id/transfer-primary
+export type TransferPrimaryResponse = {
+  transferred: boolean;
+  old_primary: { id: string; name: string };
+  new_primary: { id: string; name: string };
+  asaas_customer_moved: boolean;
+  asaas_subscription_moved: boolean;
+  message: string;
+  next_step: string;
+};
+
 // ── APIs ───────────────────────────────────────────────────
 
-// Endpoints user-level (lista detalhada + criação + remoção)
+// Endpoints user-level (lista detalhada + criação + remoção + transfer)
 export var userCompaniesApi = {
   list: function () {
     return request<FullListResponse>("/me/companies", { retry: 1 });
@@ -190,6 +201,13 @@ export var userCompaniesApi = {
       retry: 0,
       timeout: 15000,
     });
+  },
+  // M2-03: torna outra empresa a principal (atômico no backend)
+  transferPrimary: function (companyId: string) {
+    return request<TransferPrimaryResponse>(
+      "/me/companies/" + companyId + "/transfer-primary",
+      { method: "POST", retry: 0, timeout: 15000 }
+    );
   },
 };
 
