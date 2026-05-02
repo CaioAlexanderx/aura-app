@@ -8,6 +8,13 @@ import {
   type LoginResponse,
   type RegisterBody,
 } from "@/services/api";
+import {
+  authMulticnpjApi,
+  userCompaniesApi,
+  type SwitcherCompany,
+  type CreateCompanyBody,
+  type CreateCompanyResponse,
+} from "@/services/multicnpj";
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
@@ -61,6 +68,11 @@ type AuthState = {
   companyLogo: string | null;
   trialActive: boolean;
   trialEndsAt: string | null;
+  // Multi-CNPJ (M1-05)
+  availableCompanies: SwitcherCompany[];
+  companiesLoading: boolean;
+  consolidatedView: boolean;
+  switching: boolean;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (body: RegisterBody) => Promise<void>;
@@ -68,6 +80,10 @@ type AuthState = {
   setCompanyLogo: (logo: string) => void;
   // Atualiza campos da company no store (usado apos salvar perfil)
   updateCompany: (partial: Partial<Company & { phone?: string; email?: string; address?: string; cnpj?: string }>) => void;
+  // Multi-CNPJ actions (M1-05)
+  loadCompanies: () => Promise<void>;
+  switchCompany: (companyId: string | "all") => Promise<void>;
+  addCompany: (body: CreateCompanyBody) => Promise<CreateCompanyResponse>;
 };
 
 export const useAuthStore = create<AuthState>((set, get) => {
@@ -81,6 +97,18 @@ export const useAuthStore = create<AuthState>((set, get) => {
     }
   });
 
+  // Helper: dispara loadCompanies em background sem bloquear o caller.
+  // Usado em hydrate/login/register para popular o switcher.
+  function backgroundLoadCompanies() {
+    setTimeout(() => {
+      get()
+        .loadCompanies()
+        .catch((err) => {
+          console.warn("[AUTH] background loadCompanies failed:", err?.message || err);
+        });
+    }, 0);
+  }
+
   return {
     token: null,
     refreshToken: null,
@@ -93,6 +121,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
     companyLogo: null,
     trialActive: false,
     trialEndsAt: null,
+    availableCompanies: [],
+    companiesLoading: false,
+    consolidatedView: false,
+    switching: false,
 
     hydrate: async () => {
       const token = await storage.get();
@@ -120,6 +152,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
           trialActive,
           trialEndsAt: trialEnd || null,
         });
+
+        // Carrega lista de empresas em background (Multi-CNPJ)
+        backgroundLoadCompanies();
       } catch {
         await storage.del();
         await refreshStorage.del();
@@ -150,7 +185,12 @@ export const useAuthStore = create<AuthState>((set, get) => {
           isStaff: staff,
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
+          availableCompanies: [],
+          consolidatedView: false,
         });
+
+        // Carrega lista de empresas em background (Multi-CNPJ)
+        backgroundLoadCompanies();
       } catch (err) {
         set({ isLoading: false });
         throw err;
@@ -179,7 +219,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
           isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
+          availableCompanies: [],
+          consolidatedView: false,
         });
+
+        backgroundLoadCompanies();
       } catch (err) {
         set({ isLoading: false });
         throw err;
@@ -211,12 +255,128 @@ export const useAuthStore = create<AuthState>((set, get) => {
         companyLogo: null,
         trialActive: false,
         trialEndsAt: null,
+        availableCompanies: [],
+        companiesLoading: false,
+        consolidatedView: false,
+        switching: false,
       });
       if (Platform.OS === "web" && typeof window !== "undefined") {
         setTimeout(() => {
           try { window.location.href = "/"; } catch {}
         }, 100);
       }
+    },
+
+    // ── Multi-CNPJ actions (M1-05) ────────────────────────
+
+    // GET /auth/companies — alimenta o switcher
+    loadCompanies: async () => {
+      if (!get().token) return;
+      set({ companiesLoading: true });
+      try {
+        const res = await authMulticnpjApi.companies();
+        set({
+          availableCompanies: res.companies || [],
+          consolidatedView: !!res.consolidated_view,
+          companiesLoading: false,
+        });
+      } catch (err) {
+        console.warn("[AUTH] loadCompanies error:", err);
+        set({ companiesLoading: false });
+      }
+    },
+
+    // POST /auth/switch-company — troca contexto e re-emite token
+    // Aceita "all" para modo consolidado.
+    switchCompany: async (companyId: string | "all") => {
+      const state = get();
+      if (!state.token) throw new Error("Não autenticado");
+
+      // Se já está na empresa pedida e não é modo consolidado, no-op
+      if (
+        companyId !== "all" &&
+        state.company?.id === companyId &&
+        !state.consolidatedView
+      ) {
+        return;
+      }
+
+      set({ switching: true });
+      try {
+        const res = await authMulticnpjApi.switchCompany(companyId);
+        const newToken = res.token;
+
+        // Persiste novo access token
+        await storage.set(newToken);
+
+        if (res.consolidated_view) {
+          // Modo "Todas as empresas"
+          set({
+            token: newToken,
+            company: null,
+            consolidatedView: true,
+            switching: false,
+            // Mantém availableCompanies — só atualiza is_current
+            availableCompanies: state.availableCompanies.map((c) => ({
+              ...c,
+              is_current: false,
+            })),
+          });
+        } else {
+          // Modo empresa específica
+          const cc = res.current_company;
+          if (!cc) throw new Error("Resposta inválida do servidor");
+
+          // Monta objeto compatível com type Company (LoginResponse["company"])
+          const newCompany: any = {
+            id: cc.id,
+            name: cc.name,
+            plan: cc.plan,
+            onboarding_step: cc.onboarding_step || "",
+            module_overrides: cc.module_overrides || {},
+            trial_active: cc.trial_active,
+            trial_ends_at: cc.trial_ends_at || undefined,
+            vertical_active: cc.vertical || null,
+            member_role: cc.member_role,
+            billing_status: cc.billing_status,
+            access_code_used: cc.access_code_used,
+          };
+
+          set({
+            token: newToken,
+            company: newCompany,
+            consolidatedView: false,
+            trialActive: cc.trial_active,
+            trialEndsAt: cc.trial_ends_at || null,
+            companyLogo: cc.logo_url || null,
+            switching: false,
+            availableCompanies: state.availableCompanies.map((c) => ({
+              ...c,
+              is_current: c.id === cc.id,
+            })),
+          });
+        }
+
+        // No web, força reload pra garantir estado limpo nas telas que cachearam companyId.
+        // No mobile, o estado atualizado faz subscribers reagirem; navegação volta pra raiz.
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          setTimeout(() => {
+            try { window.location.href = "/"; } catch {}
+          }, 200);
+        }
+      } catch (err) {
+        set({ switching: false });
+        throw err;
+      }
+    },
+
+    // POST /me/companies — cria empresa adicional
+    // Após sucesso, recarrega availableCompanies pra incluir a nova.
+    addCompany: async (body: CreateCompanyBody) => {
+      const res = await userCompaniesApi.create(body);
+      // Recarrega lista (não bloqueia o caller pra UI mostrar sucesso rápido)
+      get().loadCompanies().catch(() => {});
+      return res;
     },
   };
 });
