@@ -16,7 +16,7 @@ var PLANS = [
   { key: "expansao", label: "Expansao", monthly: 269, desc: "Escala e automacao", features: ["Tudo do Negocio", "Gateway personalizado (use sua maquininha)", "API + integracoes ilimitadas", "Hub social (Instagram e WhatsApp)", "Automacoes avancadas conectadas nas redes sociais", "IA avancada dentro de cada modulo", "Usuarios ilimitados", "Multi CNPJ", "Emissao de NFS-e ilimitadas"] },
 ];
 
-var ANNUAL_DISCOUNT = 1 / 6;
+var ANNUAL_DISCOUNT = 1 / 6; // 2 meses grátis
 
 function fmt(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
@@ -37,7 +37,6 @@ function maskCpf(v: string) {
   if (d.length > 3) return d.slice(0, 3) + "." + d.slice(3);
   return d;
 }
-// Adicionada função que faltava
 function maskPostalCode(v: string) {
   var d = v.replace(/\D/g, "").slice(0, 8);
   if (d.length > 5) return d.slice(0, 5) + "-" + d.slice(5);
@@ -70,7 +69,7 @@ export default function CheckoutScreen() {
   var [cycle, setCycle] = useState<Cycle>("monthly");
   var [method, setMethod] = useState<Method>("pix");
   var [loading, setLoading] = useState(false);
-  var [tokenizing, setTokenizing] = useState(false); // Adicionado estado que faltava
+  var [tokenizing, setTokenizing] = useState(false);
   var [success, setSuccess] = useState(false);
 
   // Pix state
@@ -109,8 +108,6 @@ export default function CheckoutScreen() {
   var expiryParts = cardExpiry.split("/");
   var holderAddressNumberDigits = cardAddressNumber.replace(/\D/g, "");
   var holderAddressStreet = cardAddressStreet.trim();
-  var holderAddressNumberDigits = cardAddressNumber.replace(/\D/g, "");
-  var holderAddressStreet = cardAddressStreet.trim();
   var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && holderAddressNumberDigits.length >= 1 && holderAddressStreet.length >= 3;
   var brand = cardBrand(cardNumber);
 
@@ -120,7 +117,7 @@ export default function CheckoutScreen() {
     if (!company?.id) return;
     setLoading(true);
     try {
-      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined });
+      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined });
       if (res.pix_qr_code) {
         setPixQr(res.pix_qr_code);
         setPixCopyPaste(res.pix_copy_paste || null);
@@ -149,8 +146,8 @@ export default function CheckoutScreen() {
         holder_address: holderAddressStreet,
       });
 
-      // 2. Assinar
-      await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", "monthly", {
+      // 2. Assinar — cycle correto: "annual" gera assinatura mensal com endDate 12 meses
+      await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", isAnnual ? "annual" : "monthly", {
         endDate: annualEndDate,
         totalCycles: isAnnual ? 12 : undefined,
         creditCardToken: tokenRes.credit_card_token,
@@ -406,4 +403,3 @@ var z = StyleSheet.create({
   successTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink },
   successSub: { fontSize: 14, color: Colors.ink3 },
 });
-
