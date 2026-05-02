@@ -6,7 +6,7 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
-import { buildLabelHtml, buildLabelName, validateLabelItems } from "@/components/screens/estoque/labels/buildLabelHtml";
+import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13 } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { LabelItem, InvalidCodeItem } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -16,12 +16,11 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
+type EAN13Entry = { name: string; originalCode: string; generated: string };
+
 var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "tam.", "variacao", "variacao", "medida", "numero", "num", "numeracao", "n"]);
 var COLOR_ATTRS = new Set(["cor", "color", "colour"]);
 
-// Extrai size e color dos atributos da variante usando dois passes:
-// Pass 1: match explicito por nome do atributo (Tamanho, Cor)
-// Pass 2: se size ainda vazio, usa primeiro atributo nao-cor como fallback
 function variantSizeColor(v: any): { size: string; color: string } {
   var size = ""; var color = "";
   var attrs = v.attributes || [];
@@ -68,16 +67,15 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
-  // selectedVariants: variantes selecionadas para impressao
   var [selectedVariants, setSelectedVariants] = useState<Record<string, Set<string>>>({});
-  // includeParentInPrint: produtos pai que devem ter sua propria etiqueta
-  // impressa (usando p.color/p.size/p.barcode do pai). Independente das
-  // variantes selecionadas - permite "imprimir etiqueta do pai E etiquetas
-  // das variantes" simultaneamente.
   var [includeParentInPrint, setIncludeParentInPrint] = useState<Record<string, boolean>>({});
-  // Lista de codigos invalidos detectados pre-impressao. Se nao vazia,
-  // bloqueia o clique de imprimir e mostra modal pra corrigir.
   var [invalidCodes, setInvalidCodes] = useState<InvalidCodeItem[]>([]);
+
+  // EAN-13 generation state
+  var [showEan13Panel, setShowEan13Panel] = useState(false);
+  var [ean13GenList, setEan13GenList] = useState<EAN13Entry[]>([]);
+  var [pendingPrintItems, setPendingPrintItems] = useState<LabelItem[]>([]);
+
   var isWeb = Platform.OS === "web";
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
 
@@ -103,11 +101,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
       setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
       if (active.length > 0) {
-        // Auto-seleciona TODAS as variantes ao expandir
         var varIds = new Set(active.map(function(v: any) { return v.id; }));
         setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
-        // Pai NAO eh auto-selecionado pra impressao (so as variantes).
-        // Usuario marca explicitamente se quiser tambem etiqueta do pai.
         var newQtys: Record<string, number> = {};
         active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = Math.max(1, stock); });
         setQuantities(function(prev) { return { ...prev, ...newQtys }; });
@@ -127,8 +122,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     }
   }
 
-  // Toggle do checkbox de impressao do pai (quando ele tem variantes).
-  // Quando produto NAO tem variantes, o "selectedIds" ja controla a impressao.
   function toggleIncludeParent(productId: string) {
     setIncludeParentInPrint(function(prev) { return { ...prev, [productId]: !prev[productId] }; });
   }
@@ -161,22 +154,17 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var variants = variantCache[id] || []; var selVars = selectedVariants[id];
       var hasAnyVariant = variants.length > 0;
       if (hasAnyVariant) {
-        // Soma variantes selecionadas
         if (selVars && selVars.size > 0) { selVars.forEach(function(vid) { total += getQty(id + "__" + vid); }); }
-        // Soma o pai SE marcado pra incluir
         if (includeParentInPrint[id]) { total += getQty(id); }
       } else {
-        // Produto sem variantes: sempre soma o pai
         total += getQty(id);
       }
     });
     return total;
   }, [selectedIds, quantities, selectedVariants, variantCache, includeParentInPrint]);
 
-  function handlePrint() {
-    if (!isWeb || !company?.id || !token || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
-    // Reset painel de erros anteriores antes de tentar imprimir de novo
-    setInvalidCodes([]);
+  // Monta a lista de LabelItems a partir da selecao atual
+  function buildItems(): LabelItem[] | null {
     var items: LabelItem[] = [];
     selectedIds.forEach(function(id) {
       var p = products.find(function(pr) { return pr.id === id; });
@@ -185,47 +173,93 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var hasAnyVariant = variants.length > 0;
 
       if (hasAnyVariant) {
-        // Inclui o PAI SE marcado (com seus proprios size/color do produto base)
         if (includeParentInPrint[id]) {
           items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
         }
-        // Inclui variantes selecionadas
         if (selVars && selVars.size > 0) {
           variants.forEach(function(v: any) {
             if (!selVars.has(v.id)) return;
             var sc = variantSizeColor(v);
             var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
             var effectiveBarcode = v.barcode || p.barcode || p.code;
-            // FIX: nao faz fallback para p.size/p.color quando eh variante.
-            // Cada variante usa APENAS seu proprio size/color (evita unificar todas as etiquetas no size do pai).
             items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id) });
           });
         }
       } else {
-        // Produto sem variantes
         items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
       }
     });
-    if (items.length === 0) { toast.error("Nenhum item selecionado. Marque o produto pai ou pelo menos uma variante."); return; }
+    return items;
+  }
 
-    // Validacao pre-impressao: bloqueia codigos placeholder ("...", "-", vazios,
-    // muito curtos). Em 23/abr/2026 a Finesse imprimiu etiquetas com code "..."
-    // que viraram barcodes ilegiveis no scanner. O bloqueio evita reincidencia.
-    var invalid = validateLabelItems(items);
-    if (invalid.length > 0) {
-      setInvalidCodes(invalid);
-      toast.error(invalid.length + " produto(s) com c\u00f3digo inv\u00e1lido \u2014 corrija antes de imprimir");
-      return;
-    }
-
+  // Executa a impressao com os itens ja prontos (barcodes validos EAN-13)
+  function doPrint(items: LabelItem[]) {
     var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
-      if (!w) { var w2 = window.open("", "_blank"); if (w2) { w2.document.write(html); w2.document.close(); } else { toast.error("Popup bloqueado \u2014 permita popups para app.getaura.com.br"); return; } }
+      if (!w) { var w2 = window.open("", "_blank"); if (w2) { w2.document.write(html); w2.document.close(); } else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; } }
       toast.success(totalLabels + " etiqueta(s) abertas para impressao");
     } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
+  }
+
+  function handlePrint() {
+    if (!isWeb || !company?.id || !token || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
+
+    // Reset paineis anteriores
+    setInvalidCodes([]);
+    setShowEan13Panel(false);
+
+    var items = buildItems();
+    if (!items || items.length === 0) { toast.error("Nenhum item selecionado. Marque o produto pai ou pelo menos uma variante."); return; }
+
+    // 1. Validacao: codigos placeholder/vazios — bloqueia impressao
+    var invalid = validateLabelItems(items);
+    if (invalid.length > 0) {
+      setInvalidCodes(invalid);
+      toast.error(invalid.length + " produto(s) com código inválido — corrija antes de imprimir");
+      return;
+    }
+
+    // 2. Verificacao EAN-13: produtos sem EAN-13 valido recebem codigo gerado
+    var noEan13 = items.filter(function(item) { return !isValidEAN13(item.barcode); });
+    if (noEan13.length > 0) {
+      // Gera EAN-13 deterministico para cada codigo unico sem EAN-13
+      var seen = new Set<string>();
+      var genList: EAN13Entry[] = [];
+      noEan13.forEach(function(item) {
+        if (seen.has(item.barcode)) return;
+        seen.add(item.barcode);
+        genList.push({
+          name: buildLabelName(item.name, item.size, item.color),
+          originalCode: item.barcode,
+          generated: generateEAN13(item.barcode || item.name),
+        });
+      });
+      setPendingPrintItems(items);
+      setEan13GenList(genList);
+      setShowEan13Panel(true);
+      return;
+    }
+
+    // Todos tem EAN-13 valido — imprime direto
+    doPrint(items);
+  }
+
+  // Confirma a geracao de EAN-13 e imprime substituindo os codigos
+  function handleConfirmEan13() {
+    var codeMap: Record<string, string> = {};
+    ean13GenList.forEach(function(g) { codeMap[g.originalCode] = g.generated; });
+
+    var resolvedItems = pendingPrintItems.map(function(item) {
+      if (isValidEAN13(item.barcode)) return item;
+      var gen = codeMap[item.barcode];
+      return gen ? { ...item, barcode: gen } : item;
+    });
+
+    setShowEan13Panel(false);
+    doPrint(resolvedItems);
   }
 
   function renderColorIndicator(colorVal: string) {
@@ -235,17 +269,30 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     return <Text style={s.colorBadge}>{colorVal}</Text>;
   }
 
+  // Indicador visual de validade EAN-13 para exibir na lista
+  function renderEan13Badge(code: string) {
+    if (!code) return null;
+    var valid = isValidEAN13(code);
+    return (
+      <View style={[s.ean13Badge, valid ? s.ean13BadgeOk : s.ean13BadgeWarn]}>
+        <Text style={[s.ean13BadgeText, valid ? s.ean13BadgeTextOk : s.ean13BadgeTextWarn]}>
+          {valid ? "EAN-13" : "Sem EAN-13"}
+        </Text>
+      </View>
+    );
+  }
+
   var allSelected = filtered.length > 0 && filtered.every(function(p) { return selectedIds.includes(p.id); });
 
   return (
     <View style={s.container}>
       <View style={s.header}>
         <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={s.title}>Etiquetas 33x21mm (3 colunas)</Text>
-          <Text style={s.hint}>Selecione os produtos. Produtos com variantes mostram as variantes para selecao individual + opcao de etiqueta do pai.</Text>
+          <Text style={s.title}>Etiquetas 33x21mm — Padrão EAN-13</Text>
+          <Text style={s.hint}>Selecione os produtos. Produtos sem EAN-13 válido receberão um código interno gerado automaticamente antes da impressão.</Text>
         </View>
         <View style={s.modeToggle}>
-          <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>Cod. barras</Text></Pressable>
+          <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>EAN-13</Text></Pressable>
           <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}><Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text></Pressable>
         </View>
       </View>
@@ -275,11 +322,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           var selVars = selectedVariants[p.id] || new Set();
           var allVarsSelected = hasVariants && variants.every(function(v: any) { return selVars.has(v.id); });
           var parentChecked = !!includeParentInPrint[p.id];
+          var productCode = p.barcode || p.code;
 
           if (!hasVariants) {
             var qty = getQty(p.id);
-            // FIX nomenclatura: usa buildLabelName (mesmo padrao do label final)
-            // pra preview ficar identico - "Vestido flor | U | Nude"
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
             return (
               <View key={p.id} style={[s.item, sel && s.itemSelected]}>
@@ -291,9 +337,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       {p.has_variants && <Text style={s.varBadge}>V</Text>}
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                      <Text style={s.itemCode} numberOfLines={1}>{p.barcode || p.code} | {p.stock} un</Text>
+                      <Text style={s.itemCode} numberOfLines={1}>{productCode} | {p.stock} un</Text>
                       {renderColorIndicator(p.color)}
                       {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
+                      {renderEan13Badge(productCode)}
                     </View>
                   </View>
                   <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
@@ -302,7 +349,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                   <View style={s.qtyRow}>
                     <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
                     <TextInput style={s.qtyInput} value={String(qty)} onChangeText={function(v) { var n = parseInt(v); if (!isNaN(n)) setQty(p.id, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
-                    <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
+                    <Pressable onPress={function() { setQty(p.id, qty + 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
                     <Text style={s.qtyLabel}>etiq.</Text>
                   </View>
                 )}
@@ -310,16 +357,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             );
           }
 
-          // Produto pai COM variantes - layout com checkboxes independentes:
-          // - Linha do pai: checkbox proprio (etiqueta do pai vai impressa SE marcado)
-          // - Linhas das variantes: checkbox de cada variante (independente)
-          // FIX nomenclatura: tambem usa buildLabelName no preview do pai
           var parentLabelPreview = buildLabelName(p.name, p.size || "", p.color || "");
           var parentQty = getQty(p.id);
           return (
             <View key={p.id} style={[s.item, s.itemSelected]}>
               <View style={s.parentRow}>
-                {/* Checkbox de SELECAO do produto (marca/desmarca o produto inteiro) */}
                 <Pressable onPress={function() { toggleSelect(p.id); }} style={{ marginRight: 8 }}>
                   <View style={[s.checkbox, s.checkboxSelected]}><Icon name="check" size={10} color="#fff" /></View>
                 </Pressable>
@@ -337,7 +379,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 </Pressable>
               </View>
 
-              {/* Linha do PAI como item imprimivel separado (toggle independente) */}
               <View style={[s.variantRow, parentChecked && s.variantRowSelected, s.parentSelfRow]}>
                 <Pressable onPress={function() { toggleIncludeParent(p.id); }} style={s.variantLeft}>
                   <View style={[s.checkboxSmall, parentChecked && s.checkboxSmallSelected]}>{parentChecked && <Icon name="check" size={8} color="#fff" />}</View>
@@ -348,7 +389,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       <Text style={s.parentSelfBadge}>PAI</Text>
                       {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                     </View>
-                    <Text style={s.variantMeta}>{p.barcode || p.code} | {p.stock} un</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                      <Text style={s.variantMeta}>{productCode} | {p.stock} un</Text>
+                      {renderEan13Badge(productCode)}
+                    </View>
                   </View>
                   <Text style={s.variantPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
                 </Pressable>
@@ -356,7 +400,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                   <View style={s.qtyRowVariant}>
                     <Pressable onPress={function() { setQty(p.id, parentQty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
                     <TextInput style={s.qtyInputSmall} value={String(parentQty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(p.id, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
-                    <Pressable onPress={function() { setQty(p.id, parentQty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
+                    <Pressable onPress={function() { setQty(p.id, parentQty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
                     <Text style={s.qtyLabel}>etiq.</Text>
                   </View>
                 )}
@@ -367,8 +411,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 var vkey = p.id + "__" + v.id;
                 var vqty = getQty(vkey);
                 var sc = variantSizeColor(v);
-                // FIX nomenclatura: usa buildLabelName tbm pra variantes
-                // (antes usava variantLabel que junta com " · " - fora do padrao)
                 var vlabel = buildLabelName(p.name, sc.size, sc.color);
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
                 var vBarcode = v.barcode || p.barcode || p.code;
@@ -384,7 +426,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                           <Text style={s.variantName} numberOfLines={1}>{vlabel}</Text>
                           {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
                         </View>
-                        <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                          <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
+                          {renderEan13Badge(vBarcode)}
+                        </View>
                       </View>
                       <Text style={s.variantPrice}>R$ {effectivePrice.toFixed(2).replace(".", ",")}</Text>
                     </Pressable>
@@ -392,7 +437,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       <View style={s.qtyRowVariant}>
                         <Pressable onPress={function() { setQty(vkey, vqty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
                         <TextInput style={s.qtyInputSmall} value={String(vqty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(vkey, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
-                        <Pressable onPress={function() { setQty(vkey, vqty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"\u203A"}</Text></Pressable>
+                        <Pressable onPress={function() { setQty(vkey, vqty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
                         <Text style={s.qtyLabel}>etiq.</Text>
                       </View>
                     )}
@@ -404,7 +449,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         })}
       </ScrollView>
 
-      {/* Alerta de codigos invalidos detectados no clique "Imprimir" */}
+      {/* Painel: codigos placeholder invalidos */}
       {invalidCodes.length > 0 && (
         <View style={s.invalidPanel}>
           <View style={s.invalidHeader}>
@@ -430,6 +475,45 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
               );
             })}
           </ScrollView>
+        </View>
+      )}
+
+      {/* Painel: geracao de EAN-13 para produtos sem codigo valido */}
+      {showEan13Panel && (
+        <View style={s.ean13Panel}>
+          <View style={s.ean13Header}>
+            <Icon name="alert" size={16} color={Colors.amber} />
+            <Text style={s.ean13Title}>
+              {ean13GenList.length} produto{ean13GenList.length > 1 ? "s" : ""} sem EAN-13 valido
+            </Text>
+            <Pressable onPress={function() { setShowEan13Panel(false); }} style={s.invalidClose}>
+              <Icon name="x" size={14} color={Colors.ink3} />
+            </Pressable>
+          </View>
+          <Text style={s.ean13Hint}>
+            Um EAN-13 interno sera gerado automaticamente (prefixo 200 — uso interno GS1, sem registro). O mesmo produto sempre gera o mesmo codigo.
+          </Text>
+          <ScrollView style={s.ean13List} nestedScrollEnabled>
+            {ean13GenList.map(function(entry, idx) {
+              return (
+                <View key={idx} style={s.ean13Row}>
+                  <Text style={s.ean13ItemName} numberOfLines={1}>{entry.name}</Text>
+                  <Text style={s.ean13OldCode} numberOfLines={1}>{entry.originalCode || "(sem codigo)"}</Text>
+                  <Text style={s.ean13Arrow}>{"→"}</Text>
+                  <Text style={s.ean13NewCode}>{entry.generated}</Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+          <View style={s.ean13Actions}>
+            <Pressable onPress={function() { setShowEan13Panel(false); }} style={s.ean13CancelBtn}>
+              <Text style={s.ean13CancelText}>Cancelar</Text>
+            </Pressable>
+            <Pressable onPress={handleConfirmEan13} style={s.ean13ConfirmBtn}>
+              <Icon name="file_text" size={14} color="#fff" />
+              <Text style={s.ean13ConfirmText}>Usar estes codigos e Imprimir</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -503,7 +587,7 @@ var s = StyleSheet.create({
   printBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   setupHint: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
   setupText: { fontSize: 10, color: Colors.amber, flex: 1, lineHeight: 16 },
-  // Painel de codigos invalidos
+  // Painel codigos invalidos (placeholder)
   invalidPanel: { backgroundColor: Colors.redD, borderRadius: 12, borderWidth: 1, borderColor: Colors.red + "44", padding: 12, gap: 8 },
   invalidHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   invalidTitle: { fontSize: 13, color: Colors.red, fontWeight: "700", flex: 1 },
@@ -514,6 +598,29 @@ var s = StyleSheet.create({
   invalidName: { fontSize: 11, color: Colors.ink, fontWeight: "600", flex: 1 },
   invalidCode: { fontSize: 10, color: Colors.red, fontFamily: "monospace" as any, fontWeight: "700", backgroundColor: Colors.redD, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   invalidReason: { fontSize: 10, color: Colors.ink3, flex: 1.5 },
+  // Badge EAN-13 na lista
+  ean13Badge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
+  ean13BadgeOk: { backgroundColor: "rgba(34,197,94,0.12)" },
+  ean13BadgeWarn: { backgroundColor: "rgba(245,158,11,0.15)" },
+  ean13BadgeText: { fontSize: 8, fontWeight: "700" },
+  ean13BadgeTextOk: { color: Colors.green },
+  ean13BadgeTextWarn: { color: Colors.amber },
+  // Painel geracao EAN-13
+  ean13Panel: { backgroundColor: Colors.amberD, borderRadius: 12, borderWidth: 1, borderColor: Colors.amber + "55", padding: 12, gap: 8 },
+  ean13Header: { flexDirection: "row", alignItems: "center", gap: 8 },
+  ean13Title: { fontSize: 13, color: Colors.amber, fontWeight: "700", flex: 1 },
+  ean13Hint: { fontSize: 11, color: Colors.ink2, lineHeight: 16 },
+  ean13List: { maxHeight: 150, borderRadius: 8, backgroundColor: Colors.bg, padding: 4 },
+  ean13Row: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  ean13ItemName: { fontSize: 11, color: Colors.ink, fontWeight: "600", flex: 1.5, minWidth: 0 },
+  ean13OldCode: { fontSize: 10, color: Colors.ink3, fontFamily: "monospace" as any, flex: 1, minWidth: 0 },
+  ean13Arrow: { fontSize: 12, color: Colors.ink3 },
+  ean13NewCode: { fontSize: 10, color: Colors.green, fontFamily: "monospace" as any, fontWeight: "700", backgroundColor: "rgba(34,197,94,0.1)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  ean13Actions: { flexDirection: "row", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" },
+  ean13CancelBtn: { backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
+  ean13CancelText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+  ean13ConfirmBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9 },
+  ean13ConfirmText: { fontSize: 12, color: "#fff", fontWeight: "700" },
 });
 
 export default PrintLabels;
