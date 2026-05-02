@@ -1,6 +1,7 @@
 // ============================================================
-// AURA. — Multi-CNPJ services (M1-05)
-// Wraps backend Multi-CNPJ endpoints (M1-02, M1-03, M1-04).
+// AURA. — Multi-CNPJ services (M1-05 + M2-04)
+// Wraps backend Multi-CNPJ endpoints (M1-02, M1-03, M1-04,
+// M2-04 DELETE + billing-preview).
 // Importa o helper `request` do api.ts existente para reusar
 // retry, refresh-token, timeout, etc.
 // ============================================================
@@ -77,6 +78,9 @@ export type BillingPreview = {
   extras_price: number;
   new_total_monthly: number;
   note: string;
+  // M2-02: status do sync com Asaas
+  asaas_synced?: boolean;
+  asaas_reason?: string | null;
 };
 
 export type CreateCompanyResponse = {
@@ -124,9 +128,45 @@ export type SwitchCompanyResponse = {
   message?: string;
 };
 
+// M2-04: GET /me/companies/billing-preview — usado antes de criar
+// pra mostrar "sua mensalidade vai de R$X pra R$Y"
+export type BillingPreviewResponse = {
+  current: {
+    primary_id: string;
+    plan: string;
+    base_price: number;
+    extra_unit_price: number;
+    included_in_plan: number;
+    total_companies: number;
+    extra_cnpjs: number;
+    extras_value: number;
+    total_monthly: number;
+  };
+  if_add_one: {
+    total_companies: number;
+    extra_cnpjs: number;
+    new_total_monthly: number;
+    delta_monthly: number;
+  };
+  can_add: boolean;
+  block_reason: string | null;
+};
+
+// M2-04: DELETE /me/companies/:id
+export type RemoveCompanyResponse = {
+  removed: boolean;
+  company_id: string;
+  company_name: string;
+  billing_after: {
+    total_companies: number;
+    new_total_monthly: number;
+  } | null;
+  note: string;
+};
+
 // ── APIs ───────────────────────────────────────────────────
 
-// Endpoints user-level (lista detalhada + criação)
+// Endpoints user-level (lista detalhada + criação + remoção)
 export var userCompaniesApi = {
   list: function () {
     return request<FullListResponse>("/me/companies", { retry: 1 });
@@ -135,6 +175,18 @@ export var userCompaniesApi = {
     return request<CreateCompanyResponse>("/me/companies", {
       method: "POST",
       body: body,
+      retry: 0,
+      timeout: 15000,
+    });
+  },
+  // M2-04: preview antes de criar
+  billingPreview: function () {
+    return request<BillingPreviewResponse>("/me/companies/billing-preview", { retry: 1 });
+  },
+  // M2-04: soft-delete + sync Asaas
+  remove: function (companyId: string) {
+    return request<RemoveCompanyResponse>("/me/companies/" + companyId, {
+      method: "DELETE",
       retry: 0,
       timeout: 15000,
     });
@@ -160,10 +212,12 @@ export var authMulticnpjApi = {
 };
 
 // ── Helpers de pricing (espelha tabela do backend) ────────
+// IMPORTANTE: valores idênticos ao billing.js + multicnpjBilling.js
+// no backend. Se mudar aqui, mudar lá.
 export var PLAN_PRICES: Record<string, number> = {
   essencial: 89,
-  negocio: 169,
-  expansao: 269,
+  negocio: 169.90,
+  expansao: 269.90,
 };
 export var EXTRA_PRICES: Record<string, number> = {
   essencial: 45,
@@ -207,4 +261,10 @@ export function maskCnpj(raw: string | null | undefined): string {
     "-" +
     nums.slice(12, 14)
   );
+}
+
+// Helper: formata BRL
+export function formatBRL(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return "R$ " + value.toFixed(2).replace(".", ",");
 }
