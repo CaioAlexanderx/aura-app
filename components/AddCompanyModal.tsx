@@ -250,7 +250,7 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                 opacity: loading || switching ? 0.4 : 1,
               }}
             >
-              <Icon name="close" size={14} color={C.ink3} />
+              <Icon name="x" size={14} color={C.ink3} />
             </Pressable>
           </View>
 
