@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
@@ -20,6 +20,7 @@ import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
+import { LinkProductModal } from "@/components/LinkProductModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -30,6 +31,7 @@ import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
+import { productLinksApi, type AggregatedProduct } from "@/services/productLinks";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const PAGE_SIZE = 20;
@@ -53,10 +55,173 @@ function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) =>
 
 type CategoriesModalState = { open: boolean; initialType?: CategoryType };
 
+// ────────────────────────────────────────────────────────────
+// MSL-06: View AGREGADA (modo "Todas as empresas")
+//
+// Quando o user troca pra "Todas as empresas" via switcher,
+// company === null no auth store e useProducts() não tem
+// companyId pra chamar. Em vez de mostrar tela vazia, usamos
+// productLinksApi.aggregated() que soma estoque por master_sku
+// e lista produtos não-vinculados como linhas individuais.
+//
+// Ações destrutivas (editar/excluir/vincular) são desabilitadas
+// nesse modo — user precisa abrir uma empresa específica pra
+// agir. Modo é puramente leitura/análise.
+// ────────────────────────────────────────────────────────────
+function AggregatedView() {
+  const [search, setSearch] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["productsAggregated", refreshKey],
+    queryFn: () => productLinksApi.aggregated(),
+    staleTime: 30000,
+  });
+
+  const groups = data?.products || [];
+  const filtered = useMemo(() => {
+    if (!search) return groups;
+    const q = search.toLowerCase();
+    return groups.filter((g: AggregatedProduct) =>
+      g.name.toLowerCase().includes(q) ||
+      (g.barcode || "").toLowerCase().includes(q) ||
+      (g.sku || "").toLowerCase().includes(q) ||
+      (g.master_sku || "").toLowerCase().includes(q)
+    );
+  }, [groups, search]);
+
+  const linkedCount = groups.filter((g: AggregatedProduct) => g.is_linked).length;
+  const totalUnits = groups.reduce((acc: number, g: AggregatedProduct) => acc + g.total_stock, 0);
+
+  if (isLoading) return <ListSkeleton rows={4} showCards />;
+
+  if (error) {
+    return (
+      <View style={agg.errorBox}>
+        <Text style={agg.errorText}>Erro ao carregar produtos agregados.</Text>
+        <Pressable onPress={() => setRefreshKey((k) => k + 1)} style={agg.retryBtn}>
+          <Text style={agg.retryText}>Tentar novamente</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {/* Banner explicativo do modo */}
+      <View style={agg.banner}>
+        <Icon name="bag" size={16} color="#7c3aed" />
+        <View style={{ flex: 1 }}>
+          <Text style={agg.bannerTitle}>Visão consolidada — todas suas empresas</Text>
+          <Text style={agg.bannerDesc}>
+            Estoque somado entre CNPJs vinculados via código mestre. Para editar produtos, troque para uma empresa específica no switcher.
+          </Text>
+        </View>
+      </View>
+
+      {/* Resumo */}
+      <View style={s.summaryRow}>
+        <SummaryCard label="GRUPOS" value={String(groups.length)} sub={`${linkedCount} vinculados entre empresas`} />
+        <SummaryCard label="UNIDADES TOTAIS" value={String(Math.round(totalUnits))} />
+        <SummaryCard label="EMPRESAS" value={String(data?.searched_companies ?? 0)} />
+      </View>
+
+      <TextInput
+        style={s.searchInput}
+        placeholder="Buscar por nome, código mestre, SKU ou código de barras..."
+        placeholderTextColor={Colors.ink3}
+        value={search}
+        onChangeText={setSearch}
+      />
+
+      {filtered.length === 0 && (
+        <View style={{ alignItems: "center", paddingVertical: 40 }}>
+          <Text style={{ fontSize: 13, color: Colors.ink3 }}>
+            {search ? "Nenhum produto encontrado" : "Nenhum produto cadastrado em nenhuma empresa"}
+          </Text>
+        </View>
+      )}
+
+      <View style={s.listCard}>
+        {filtered.map((g: AggregatedProduct) => (
+          <View key={g.group_key} style={agg.row}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={agg.nameLine}>
+                <Text style={agg.name} numberOfLines={1}>{g.name}</Text>
+                {g.is_linked && (
+                  <View style={agg.linkedBadge}>
+                    <Text style={agg.linkedBadgeText}>{"\uD83D\uDD17 " + g.company_count + " CNPJs"}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={agg.meta}>
+                {g.master_sku ? "Código: " + g.master_sku : (g.sku || g.barcode || "Sem código")}
+                {g.category ? " · " + g.category : ""}
+              </Text>
+              {g.is_linked && (
+                <View style={agg.itemsList}>
+                  {g.items.map((item) => (
+                    <View key={item.product_id} style={agg.itemChip}>
+                      <Text style={agg.itemChipText}>
+                        {item.company_name}: {Math.round(item.stock_qty)} un
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={agg.rightCol}>
+              <Text style={agg.totalStock}>{Math.round(g.total_stock)}</Text>
+              <Text style={agg.totalStockLabel}>{g.unit || "un"}</Text>
+              <Text style={agg.price}>{fmt(g.avg_price)}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const agg = StyleSheet.create({
+  banner: {
+    flexDirection: "row", gap: 12, alignItems: "flex-start",
+    backgroundColor: "#7c3aed12", borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
+  },
+  bannerTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  bannerDesc: { fontSize: 11, color: Colors.ink3, marginTop: 4, lineHeight: 16 },
+  errorBox: { alignItems: "center", padding: 32, gap: 12 },
+  errorText: { fontSize: 13, color: Colors.red },
+  retryBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  retryText: { fontSize: 12, color: "#fff", fontWeight: "700" },
+  row: {
+    flexDirection: "row", gap: 12, paddingVertical: 14, paddingHorizontal: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.border, alignItems: "flex-start",
+  },
+  nameLine: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  name: { fontSize: 13, color: Colors.ink, fontWeight: "700", flexShrink: 1 },
+  linkedBadge: {
+    backgroundColor: "#7c3aed20", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2,
+    borderWidth: 1, borderColor: "#7c3aed40",
+  },
+  linkedBadgeText: { fontSize: 10, color: "#7c3aed", fontWeight: "700" },
+  meta: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
+  itemsList: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 },
+  itemChip: {
+    backgroundColor: Colors.bg4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  itemChipText: { fontSize: 10, color: Colors.ink3, fontWeight: "500" },
+  rightCol: { alignItems: "flex-end", gap: 2, minWidth: 70 },
+  totalStock: { fontSize: 18, fontWeight: "800", color: Colors.ink, lineHeight: 22 },
+  totalStockLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
+  price: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
+});
+
 export default function EstoqueScreen() {
   const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useProducts();
   const { categoryNames: managedCategoryNames } = useProductCategories();
-  const { company } = useAuthStore();
+  const { company, availableCompanies, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
 
@@ -77,10 +242,17 @@ export default function EstoqueScreen() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
+  // M-STOCKLINK: produto selecionado pra abrir modal de vínculo Multi-CNPJ.
+  // Só faz sentido quando user tem 2+ empresas e está em uma específica
+  // (não no modo consolidado — sem company.id pra chamar API).
+  const [linkTarget, setLinkTarget] = useState<Product | null>(null);
+  const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
+  const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
+
   const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
     queryKey: ["duplicateGroups", company?.id],
     queryFn: () => companiesApi.duplicateGroups(company!.id),
-    enabled: !!company?.id && !isDemo,
+    enabled: !!company?.id && !isDemo && !consolidatedView,
     staleTime: 60000,
   });
   const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
@@ -162,6 +334,22 @@ export default function EstoqueScreen() {
     refetchDupGroups();
   }
 
+  // ── MODO CONSOLIDADO: renderiza view agregada e retorna ───
+  // Não há company.id, useProducts() está vazio, todas as ações
+  // de escrita são bloqueadas. Usa apenas a view agregada.
+  if (consolidatedView) {
+    return (
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
+        <View style={s.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.pageTitle}>Estoque consolidado</Text>
+          </View>
+        </View>
+        <AggregatedView />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
       {/* Header with three action buttons: servico, lote, produto */}
@@ -186,6 +374,17 @@ export default function EstoqueScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Hint Multi-CNPJ: aparece quando user tem 2+ CNPJs e ainda
+          não vinculou produtos, lembrando da feature. */}
+      {canLinkProducts && products.length > 0 && (
+        <View style={s.multicnpjHint}>
+          <Icon name="bag" size={14} color="#7c3aed" />
+          <Text style={s.multicnpjHintText}>
+            Você tem {availableCompanies.length} CNPJs. Toque em qualquer produto e use "🔗 Vincular CNPJ" para somar estoque entre lojas.
+          </Text>
+        </View>
+      )}
 
       {products.length > 0 && (
         <View style={s.summaryRow}>
@@ -279,7 +478,16 @@ export default function EstoqueScreen() {
           <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
           <View style={s.listCard}>
             {paginated.map(p => (
-              <ProductRow key={p.id} product={p} showAbc={!bulkMode} onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined} onEdit={!isDemo && !bulkMode ? handleEdit : undefined} isSelected={bulkSelected.has(p.id)} onSelect={bulkMode ? toggleBulkSelect : undefined} />
+              <ProductRow
+                key={p.id}
+                product={p}
+                showAbc={!bulkMode}
+                onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
+                onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
+                onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
+                isSelected={bulkSelected.has(p.id)}
+                onSelect={bulkMode ? toggleBulkSelect : undefined}
+              />
             ))}
             {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
           </View>
@@ -293,7 +501,14 @@ export default function EstoqueScreen() {
           <AbcSummary products={products} />
           <View style={[s.listCard, { marginTop: 20 }]}>
             {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => (
-              <ProductRow key={p.id} product={p} showAbc onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined} onEdit={!isDemo ? handleEdit : undefined} />
+              <ProductRow
+                key={p.id}
+                product={p}
+                showAbc
+                onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
+                onEdit={!isDemo ? handleEdit : undefined}
+                onLink={canLinkProducts ? (prod) => setLinkTarget(prod) : undefined}
+              />
             ))}
           </View>
         </View>
@@ -311,6 +526,20 @@ export default function EstoqueScreen() {
         initialType={categoriesModal.initialType}
         onClose={() => setCategoriesModal({ open: false })}
       />
+      {/* M-STOCKLINK: modal de vínculo Multi-CNPJ */}
+      {linkTarget && company?.id && (
+        <LinkProductModal
+          visible={!!linkTarget}
+          companyId={company.id}
+          productId={linkTarget.id}
+          onClose={() => setLinkTarget(null)}
+          onLinked={() => {
+            // Invalida produtos pra refetch (master_sku mudou)
+            qc.invalidateQueries({ queryKey: ["products", company?.id] });
+            qc.invalidateQueries({ queryKey: ["productsAggregated"] });
+          }}
+        />
+      )}
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
   );
@@ -370,4 +599,10 @@ const s = StyleSheet.create({
   dupBannerCta: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f59e0b", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   dupBannerCtaText: { fontSize: 12, color: "#fff", fontWeight: "700" },
   dupBannerArrow: { fontSize: 14, color: "#fff", fontWeight: "800" },
+  multicnpjHint: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "#7c3aed10", borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
+  },
+  multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
 });
