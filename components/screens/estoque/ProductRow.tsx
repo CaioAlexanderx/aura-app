@@ -31,13 +31,16 @@ function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
 }
 
 export function ProductRow({
-  product, showAbc, onDelete, onEdit,
+  product, showAbc, onDelete, onEdit, onLink,
   isSelected, onSelect,
 }: {
   product: Product;
   showAbc?: boolean;
   onDelete?: (id: string) => void;
   onEdit?: (product: Product) => void;
+  // M-STOCKLINK MSL-05: callback opcional pra abrir modal de vínculo
+  // Multi-CNPJ. Só passar quando user tem 2+ empresas no switcher.
+  onLink?: (product: Product) => void;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
 }) {
@@ -51,6 +54,10 @@ export function ProductRow({
   const colorName = product.color ? hexToName(product.color) : "";
   const hasVariant = !!(product.color || product.size);
   const hasImage = !!product.image_url;
+
+  // M-STOCKLINK: vínculo Multi-CNPJ não faz sentido pra serviços
+  // (não há "estoque do mesmo serviço em outra empresa" pra somar).
+  const showLinkBtn = !!onLink && !isService;
 
   return (
     <View>
@@ -145,6 +152,11 @@ export function ProductRow({
           {product.notes ? <Text style={s.notesText}>{product.notes}</Text> : null}
           <View style={s.actionsRow}>
             {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>{isService ? "Editar servico" : "Editar produto"}</Text></Pressable>}
+            {showLinkBtn && (
+              <Pressable onPress={() => onLink!(product)} style={s.linkBtn}>
+                <Text style={s.linkBtnText}>{"\uD83D\uDD17 Vincular CNPJ"}</Text>
+              </Pressable>
+            )}
             {onDelete && <Pressable onPress={() => onDelete(product.id)} style={s.deleteBtn}><Text style={s.deleteBtnText}>Excluir</Text></Pressable>}
           </View>
         </View>
@@ -196,9 +208,11 @@ const s = StyleSheet.create({
   barcodeLabel: { fontSize: 11, color: Colors.ink3 },
   barcodeValue: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   notesText: { fontSize: 11, color: Colors.ink3, marginTop: 6, fontStyle: "italic" },
-  actionsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
-  editBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center" },
+  actionsRow: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
+  editBtn: { flex: 1, minWidth: 100, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center" },
   editBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  linkBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, backgroundColor: "#7c3aed15", borderWidth: 1, borderColor: "#7c3aed40", alignItems: "center" },
+  linkBtnText: { fontSize: 12, color: "#7c3aed", fontWeight: "700" },
   deleteBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "33", alignItems: "center" },
   deleteBtnText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 });
