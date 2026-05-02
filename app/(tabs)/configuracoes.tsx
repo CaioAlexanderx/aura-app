@@ -46,11 +46,12 @@ const g = StyleSheet.create({
 });
 
 export default function ConfiguracoesScreen() {
-  const { user, company, isDemo } = useAuthStore();
+  const { user, company, isDemo, availableCompanies } = useAuthStore();
   const profile = useConfigProfile();
   const plan    = company?.plan || "essencial";
   const planDat = PLANS[plan] || PLANS.essencial;
   const isEssencial = plan === "essencial";
+  const totalCompanies = availableCompanies?.length || 1;
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -119,6 +120,31 @@ export default function ConfiguracoesScreen() {
               </Pressable>
             </View>
           </Card>
+
+          {/* MINHAS EMPRESAS — gestao Multi-CNPJ (M1-07) */}
+          {/* Sempre visivel: mesmo com 1 empresa o user precisa achar onde
+              adicionar a 2a. No Essencial o link continua ali, e a tela
+              mostra o bloqueio + CTA de upgrade. */}
+          <SectionTitle title="Empresas" />
+          <Pressable onPress={() => router.push("/empresas")} style={s.linkCard}>
+            <View style={s.linkCardIcon}>
+              <Icon name="bag" size={18} color={Colors.violet3} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.linkCardTitle}>Minhas empresas</Text>
+              <Text style={s.linkCardDesc}>
+                {totalCompanies > 1
+                  ? `${totalCompanies} CNPJs cadastrados — gerenciar, trocar ou adicionar`
+                  : "Adicione mais um CNPJ ou gerencie o atual"}
+              </Text>
+            </View>
+            {totalCompanies > 1 && (
+              <View style={s.countBadge}>
+                <Text style={s.countBadgeText}>{totalCompanies}</Text>
+              </View>
+            )}
+            <Icon name="chevron_right" size={16} color={Colors.ink3} />
+          </Pressable>
 
           {/* VENDAS — politicas do caixa + cupons */}
           <SectionTitle title="Vendas" />
@@ -221,6 +247,8 @@ const s = StyleSheet.create({
   linkCardIcon:   { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   linkCardTitle:  { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   linkCardDesc:   { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  countBadge:     { backgroundColor: Colors.violet, borderRadius: 999, minWidth: 22, height: 22, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  countBadgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
   accountNote:    { flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 4, marginBottom: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   accountNoteText:{ fontSize: 11, color: Colors.ink3, flex: 1 },
   supportRow:     { flexDirection: "row", gap: 10, marginBottom: 4, flexWrap: "wrap" },
