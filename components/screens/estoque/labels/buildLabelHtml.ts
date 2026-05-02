@@ -32,8 +32,8 @@ import { hexToName } from "@/utils/colorNames";
 // ----- LOCKED: parametros do barcode (validados por Finesse) -----
 // Alterar isso quebra a leitura do scanner. Testar SEMPRE com POS fisico.
 const BARCODE_OPTS = {
-  width:        1.3,      // largura de cada barra em px (NAO mudar)
-  height:       28,       // altura do barcode em px (NAO mudar)
+  width:        1.0,      // largura de cada barra em px (NAO mudar)
+  height:       24,       // altura do barcode em px (NAO mudar)
   margin:       1,        // margem interna do canvas
   displayValue: true,     // mostrar digitos embaixo
   fontSize:     7,        // fonte dos digitos (NAO aumentar)
