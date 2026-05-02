@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Tela "Minhas Empresas" (Multi-CNPJ M1-07)
+// AURA. — Tela "Minhas Empresas" (Multi-CNPJ M1-07 + M2-03)
 // Rota /empresas — gestão completa de CNPJs do owner.
 // Acessível via Configurações > Empresas.
 //
@@ -7,6 +7,7 @@
 //   - Lista todas as empresas do user (primary + extras)
 //   - Cobrança consolidada (R$ X/mês total) no topo
 //   - Trocar pra qualquer uma (mesmo fluxo do switcher)
+//   - Tornar principal (M2-03 transfer-primary, recarrega após)
 //   - Remover empresa secundária (não a primary)
 //   - Adicionar nova empresa (abre AddCompanyModal)
 // ============================================================
@@ -53,7 +54,7 @@ function planBadgeColor(plan: string) {
 export default function MinhasEmpresasScreen() {
   const C = useColors();
   const router = useRouter();
-  const { company: currentCompany, switchCompany, switching, loadCompanies } = useAuthStore();
+  const { company: currentCompany, switchCompany, switching, loadCompanies, logout } = useAuthStore();
 
   const [companies, setCompanies] = useState<FullCompany[]>([]);
   const [billing, setBilling] = useState<BillingPreviewResponse | null>(null);
@@ -62,6 +63,9 @@ export default function MinhasEmpresasScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<FullCompany | null>(null);
+  // M2-03 transfer-primary
+  const [transferringId, setTransferringId] = useState<string | null>(null);
+  const [confirmTransfer, setConfirmTransfer] = useState<FullCompany | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -132,6 +136,40 @@ export default function MinhasEmpresasScreen() {
     }
   }
 
+  // M2-03: transfer-primary precisa que o user re-autentique pra que
+  // o JWT venha com o novo company_id como primary. No web fazemos
+  // reload pra forçar refetch de tudo; no mobile fazemos logout
+  // (mais seguro do que tentar re-issue de token).
+  async function handleTransferPrimary(c: FullCompany) {
+    if (transferringId) return;
+    setTransferringId(c.id);
+    try {
+      const res = await userCompaniesApi.transferPrimary(c.id);
+      toast.success(res.message || `${res.new_primary.name} agora é a principal`);
+      setConfirmTransfer(null);
+
+      // Pequeno delay pra usuário ver o toast antes do reload/logout
+      setTimeout(() => {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.location.reload();
+        } else {
+          // Mobile: logout pra forçar novo JWT na próxima sessão
+          logout();
+        }
+      }, 1500);
+    } catch (err: any) {
+      const data = err?.data;
+      if (data?.error === "ALREADY_PRIMARY") {
+        toast.info("Esta empresa já é a principal");
+      } else if (data?.error === "NOT_ENOUGH_COMPANIES") {
+        toast.error("Você precisa de pelo menos 2 empresas pra fazer isso");
+      } else {
+        toast.error(err?.message || "Erro ao tornar principal");
+      }
+      setTransferringId(null);
+    }
+  }
+
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: C.bg }}>
@@ -139,8 +177,6 @@ export default function MinhasEmpresasScreen() {
       </View>
     );
   }
-
-  const isWeb = Platform.OS === "web";
 
   return (
     <ScrollView
@@ -265,6 +301,8 @@ export default function MinhasEmpresasScreen() {
       {companies.map((c) => {
         const isCurrent = c.id === currentCompany?.id;
         const isRemoving = removingId === c.id;
+        const isTransferring = transferringId === c.id;
+        const hasMultipleCompanies = companies.length >= 2;
         return (
           <View
             key={c.id}
@@ -275,7 +313,7 @@ export default function MinhasEmpresasScreen() {
               marginBottom: 10,
               borderWidth: 1,
               borderColor: isCurrent ? "#7c3aed" : C.border,
-              opacity: isRemoving ? 0.5 : 1,
+              opacity: isRemoving || isTransferring ? 0.5 : 1,
             }}
           >
             <View style={{ flexDirection: "row", gap: 12 }}>
@@ -381,14 +419,16 @@ export default function MinhasEmpresasScreen() {
                 paddingTop: 12,
                 borderTopWidth: 1,
                 borderTopColor: C.border,
+                flexWrap: "wrap",
               }}
             >
               {!isCurrent && (
                 <Pressable
                   onPress={() => handleSwitchTo(c)}
-                  disabled={switching || isRemoving}
+                  disabled={switching || isRemoving || isTransferring}
                   style={{
                     flex: 1,
+                    minWidth: 100,
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
@@ -411,10 +451,40 @@ export default function MinhasEmpresasScreen() {
                   )}
                 </Pressable>
               )}
+              {/* M2-03: botão "Tornar principal" — só aparece em não-primárias */}
+              {!c.is_primary && hasMultipleCompanies && (
+                <Pressable
+                  onPress={() => setConfirmTransfer(c)}
+                  disabled={isTransferring || isRemoving || switching}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 9,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: "#7c3aed40",
+                    backgroundColor: "#7c3aed10",
+                  }}
+                >
+                  {isTransferring ? (
+                    <ActivityIndicator size="small" color="#7c3aed" />
+                  ) : (
+                    <>
+                      <Icon name="star" size={12} color="#7c3aed" />
+                      <Text style={{ fontSize: 12, color: "#7c3aed", fontWeight: "700" }}>
+                        Tornar principal
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
               {!c.is_primary && (
                 <Pressable
                   onPress={() => setConfirmRemove(c)}
-                  disabled={isRemoving || switching}
+                  disabled={isRemoving || switching || isTransferring}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -495,6 +565,114 @@ export default function MinhasEmpresasScreen() {
           {billing.block_reason}
         </Text>
       )}
+
+      {/* Modal de confirmação de TRANSFER PRIMARY (M2-03) */}
+      <Modal
+        visible={!!confirmTransfer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmTransfer(null)}
+      >
+        <Pressable
+          onPress={() => setConfirmTransfer(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 16,
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              backgroundColor: C.bg2,
+              borderRadius: 16,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: C.border,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                backgroundColor: "#7c3aed20",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 12,
+              }}
+            >
+              <Icon name="star" size={20} color="#7c3aed" />
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: C.ink, marginBottom: 8 }}>
+              Tornar {confirmTransfer?.name || confirmTransfer?.legal_name} principal?
+            </Text>
+            <Text style={{ fontSize: 13, color: C.ink3, lineHeight: 19, marginBottom: 8 }}>
+              Esta empresa passará a ser sua "principal". A empresa principal atual continuará ativa, mas vira secundária.
+            </Text>
+            <View
+              style={{
+                backgroundColor: "#f59e0b15",
+                borderRadius: 10,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "#f59e0b40",
+                marginBottom: 16,
+                flexDirection: "row",
+                gap: 8,
+              }}
+            >
+              <Icon name="alert" size={14} color="#f59e0b" />
+              <Text style={{ fontSize: 12, color: "#f59e0b", flex: 1, lineHeight: 17 }}>
+                {Platform.OS === "web"
+                  ? "A página será recarregada para aplicar a mudança."
+                  : "Você precisará fazer login novamente."}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                onPress={() => setConfirmTransfer(null)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ fontSize: 13, color: C.ink, fontWeight: "600" }}>
+                  Cancelar
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => confirmTransfer && handleTransferPrimary(confirmTransfer)}
+                disabled={!!transferringId}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  backgroundColor: "#7c3aed",
+                  alignItems: "center",
+                  opacity: transferringId ? 0.5 : 1,
+                }}
+              >
+                {transferringId ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ fontSize: 13, color: "#fff", fontWeight: "700" }}>
+                    Sim, tornar principal
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Modal de confirmação de remoção */}
       <Modal
