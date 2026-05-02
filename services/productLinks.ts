@@ -2,17 +2,16 @@
 // AURA. — Product Links service (Multi-CNPJ M-STOCKLINK MSL-05)
 //
 // Wraps endpoints de vinculação de produtos entre CNPJs:
-//   - matchSuggestions(productId)   → sugere produtos similares
-//   - linkProduct(productId, sku)   → vincula a master_sku
-//   - unlinkProduct(productId)      → desvincula
-//   - aggregated()                  → lista produtos agregados
-//                                     entre todas empresas do owner
+//   - matchSuggestions(companyId, productId)   → sugere similares
+//   - linkProduct(companyId, productId, sku)   → vincula
+//   - unlinkProduct(companyId, productId)      → desvincula
+//   - aggregated()                             → produtos agregados
+//                                                entre todas empresas
 //
-// Os 3 primeiros precisam de companyId no path (resolvido pelo
-// `request` ao usar { useCurrentCompany: true } default). O último
-// vai em /me e não precisa.
+// Os 3 primeiros precisam de companyId no path. O último vai em
+// /me e não precisa.
 // ============================================================
-import { request, requestNoCompany } from "@/services/api";
+import { request } from "@/services/api";
 
 // ── Tipos ──────────────────────────────────────────────────
 
@@ -104,17 +103,17 @@ export type AggregatedResponse = {
 
 export var productLinksApi = {
   // GET /companies/:id/products/:productId/match-suggestions
-  matchSuggestions: function (productId: string) {
+  matchSuggestions: function (companyId: string, productId: string) {
     return request<MatchSuggestionsResponse>(
-      "/products/" + productId + "/match-suggestions",
+      "/companies/" + companyId + "/products/" + productId + "/match-suggestions",
       { retry: 1 }
     );
   },
 
   // POST /companies/:id/products/:productId/master-sku
-  linkProduct: function (productId: string, masterSku: string) {
+  linkProduct: function (companyId: string, productId: string, masterSku: string) {
     return request<LinkProductResponse>(
-      "/products/" + productId + "/master-sku",
+      "/companies/" + companyId + "/products/" + productId + "/master-sku",
       {
         method: "POST",
         body: { master_sku: masterSku },
@@ -125,29 +124,17 @@ export var productLinksApi = {
   },
 
   // DELETE /companies/:id/products/:productId/master-sku
-  unlinkProduct: function (productId: string) {
+  unlinkProduct: function (companyId: string, productId: string) {
     return request<UnlinkProductResponse>(
-      "/products/" + productId + "/master-sku",
+      "/companies/" + companyId + "/products/" + productId + "/master-sku",
       { method: "DELETE", retry: 0, timeout: 10000 }
     );
   },
 
   // GET /me/products/aggregated — view consolidada multi-CNPJ
-  // Usa requestNoCompany porque não precisa do companyId no path
-  // (rota é /me/products/aggregated, não /companies/:id/...).
-  // Se essa helper não existir no api.ts, cai no request normal
-  // mas sem prefix de company.
+  // Não precisa de companyId — backend resolve pelo JWT.user.id.
   aggregated: function () {
-    if (typeof requestNoCompany === "function") {
-      return requestNoCompany<AggregatedResponse>("/me/products/aggregated", {
-        retry: 1,
-      });
-    }
-    // Fallback: chamada direta sem prefixar /companies/:id
-    return request<AggregatedResponse>("/me/products/aggregated", {
-      retry: 1,
-      skipCompanyPrefix: true,
-    } as any);
+    return request<AggregatedResponse>("/me/products/aggregated", { retry: 1 });
   },
 };
 
@@ -159,4 +146,12 @@ export function matchTypeLabel(type: MatchSuggestion["match_type"]): string {
     case "name_similarity": return "Nome parecido";
     default:                return "Match";
   }
+}
+
+// Helper UI: cor do badge baseada no score (0..1)
+export function matchScoreColor(score: number): string {
+  if (score >= 0.95) return "#16a34a";   // verde forte (match perfeito)
+  if (score >= 0.7)  return "#7c3aed";   // violeta (boa probabilidade)
+  if (score >= 0.5)  return "#f59e0b";   // âmbar (revisar)
+  return "#94a3b8";                      // cinza (pouco confiável)
 }
