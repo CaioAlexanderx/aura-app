@@ -14,6 +14,7 @@ import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
+import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
@@ -183,6 +184,10 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       )}
       <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
 
+      {/* M1-06: Switcher de empresa (Multi-CNPJ) */}
+      <CompanySwitcher collapsed={collapsed} />
+      <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
+
       <ScrollView style={{ flex: 1, marginTop: 4 }} showsVerticalScrollIndicator={true}>
         {filteredNav.map(s => (
           <View key={s.s} style={{ marginBottom: collapsed ? 8 : 16 }}>
@@ -287,6 +292,10 @@ function MBar() {
       {showMore && Platform.OS === "web" && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 998, background: "rgba(0,0,0,0.5)" } as any} onClick={() => setShowMore(false)}>
           <div style={{ position: "absolute", bottom: 56, left: 8, right: 8, background: C.bg2, borderRadius: 16, border: "1px solid " + C.border, padding: 12, maxHeight: "60vh", overflowY: "auto", zIndex: 999 } as any} onClick={(e: any) => e.stopPropagation()}>
+            {/* M1-06: Switcher de empresa no topo do menu Mais (mobile) */}
+            <View style={{ marginBottom: 12 }}>
+              <CompanySwitcher variant="mobile" />
+            </View>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 } as any}>
               {filteredMore.map(item => {
                 const active = isA(p, item.r);
