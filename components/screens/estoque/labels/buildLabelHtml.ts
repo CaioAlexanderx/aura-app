@@ -22,8 +22,7 @@
 // ║    - Preview bar / guia visual pre-impressao (livre, so tela)          ║
 // ║                                                                        ║
 // ║  Se ALTERAR BARCODE_OPTS: imprimir UMA etiqueta, escanear com pistola, ║
-// ║  confirmar leitura em CODE128, EAN13, EAN8 e UPC (4 formatos) ANTES    ║
-// ║  de fazer deploy.                                                      ║
+// ║  confirmar leitura em EAN13 ANTES de fazer deploy.                     ║
 // ╚════════════════════════════════════════════════════════════════════════╝
 // ============================================================================
 
@@ -46,9 +45,7 @@ const BARCODE_OPTS = {
 // -----------------------------------------------------------------
 
 // ----- Validacao de codigo de barras -----
-// Placeholders conhecidos que nao devem virar etiqueta real:
-// "..." e variacoes apareceram em cadastros recentes da Finesse (abr/2026)
-// gerando barcode com 3 barras grossas - ilegivel no scanner.
+// Placeholders conhecidos que nao devem virar etiqueta real.
 const BARCODE_PLACEHOLDERS = new Set([
   "", "...", "....", ".....", "-", "--", "---",
   "0", "00", "000", "N/A", "n/a", "NA", "na",
@@ -62,9 +59,7 @@ export function isValidBarcode(code: string | null | undefined): boolean {
   if (trimmed.length < BARCODE_MIN_LENGTH) return false;
   if (BARCODE_PLACEHOLDERS.has(trimmed)) return false;
   if (BARCODE_PLACEHOLDERS.has(trimmed.toLowerCase())) return false;
-  // Rejeita so pontos/traços/espaços (ex: ".....", "-----", "     ")
   if (/^[.\-\s_]+$/.test(trimmed)) return false;
-  // Rejeita todos iguais (ex: "0000", "aaaa")
   if (/^(.)\1+$/.test(trimmed)) return false;
   return true;
 }
@@ -78,12 +73,49 @@ export function validateLabelItems(items: Array<{ name: string; barcode: string 
     if (!code) { invalid.push({ name: item.name, code: "(vazio)", reason: "Sem codigo cadastrado" }); return; }
     if (code.length < BARCODE_MIN_LENGTH) { invalid.push({ name: item.name, code: code, reason: "Codigo muito curto (minimo " + BARCODE_MIN_LENGTH + " caracteres)" }); return; }
     if (BARCODE_PLACEHOLDERS.has(code) || BARCODE_PLACEHOLDERS.has(code.toLowerCase())) { invalid.push({ name: item.name, code: code, reason: "Codigo placeholder — substitua por SKU real" }); return; }
-    if (/^[.\-\s_]+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo invalido (so pontos/traços)" }); return; }
+    if (/^[.\-\s_]+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo invalido (so pontos/tracos)" }); return; }
     if (/^(.)\1+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo repetido (ex: 0000)" }); return; }
   });
   return invalid;
 }
 // -----------------------------------------------------------------
+
+// ----- EAN-13 utilities -----
+// Calcula o digito verificador EAN-13 a partir dos 12 primeiros digitos.
+function ean13CheckDigit(digits12: string): number {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(digits12[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+// Valida se um codigo e um EAN-13 legitimo (13 digitos numericos + check digit correto).
+export function isValidEAN13(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const trimmed = String(code).trim();
+  if (!/^\d{13}$/.test(trimmed)) return false;
+  return ean13CheckDigit(trimmed.slice(0, 12)) === parseInt(trimmed[12]);
+}
+
+// Gera um EAN-13 deterministico para uso interno a partir de qualquer seed.
+// Prefixo "200" = reservado GS1 para uso interno (sem registro necessario).
+// Mesmo seed sempre gera mesmo codigo — consistencia entre sessoes de impressao.
+export function generateEAN13(seed: string): string {
+  const s = String(seed || "").trim() || "aura_internal";
+  // djb2 hash (32-bit unsigned)
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) ^ s.charCodeAt(i);
+    h = h >>> 0;
+  }
+  const PREFIX = "200"; // 3 digitos
+  const digits9 = String(h).padStart(10, "0").slice(-9); // 9 digitos do hash
+  const base12 = PREFIX + digits9; // 12 digitos
+  const check = ean13CheckDigit(base12);
+  return base12 + String(check); // 13 digitos
+}
+// ----------------------------
 
 export function buildLabelName(name: string, size: string, color: string): string {
   if (!size && !color) return name;
@@ -118,14 +150,6 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
   const totalLabels = items.reduce((s, i) => s + i.qty, 0);
 
-  // Detecta formato do primeiro codigo (assume todos iguais no batch)
-  const firstCode = items[0]?.barcode || "";
-  const numOnly = /^\d+$/.test(firstCode);
-  let jsFormat = "CODE128";
-  if (numOnly && firstCode.length === 13) jsFormat = "EAN13";
-  else if (numOnly && firstCode.length === 8) jsFormat = "EAN8";
-  else if (numOnly && firstCode.length === 12) jsFormat = "UPC";
-
   const cells: string[] = [];
   let labelIdx = 0;
 
@@ -147,7 +171,6 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         // ===== LOCKED STRUCTURE =====
         // Ordem: store -> bc-box -> name -> price
         // NAO mudar as classes nem os parametros do SVG/JsBarcode.
-        // O SVG com id="bc-N" e data-code="..." eh lido pelo JsBarcode no fim do HTML.
         cells.push(
           '<td class="cell"><div class="bc-inner">' +
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
@@ -184,13 +207,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Ordem visual: store (topo) → barcode → nome → preco (fundo)
   html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;width:33mm;gap:0.3mm}';
   html += '.bc-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  // bc-box: container do codigo. max-width menor que 33mm pra dar respiro lateral.
   html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:30mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
   html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
   html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
   html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
 
-  // QR layout (nao critico pra POS, so pra uso alternativo)
+  // QR layout
   html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:21mm;width:33mm}';
   html += '.qr-inner .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
   html += '.qr-inner .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
@@ -199,7 +221,6 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
 
   // ===== GUIA VISUAL PRE-IMPRESSAO (livre, so tela) =====
-  // Checklist obrigatoria antes de liberar Ctrl+P. Nao afeta a impressao.
   html += '.setup-guide{position:fixed;top:0;left:0;right:0;background:#fef2f2;border-bottom:3px solid #dc2626;padding:14px 20px;z-index:1000;font-family:-apple-system,"Segoe UI",sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.1)}';
   html += '.setup-guide h2{color:#991b1b;font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}';
   html += '.setup-guide h2::before{content:"⚠️";font-size:18px}';
@@ -213,7 +234,6 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.setup-guide.ready h2{color:#166534}.setup-guide.ready h2::before{content:"✅"}';
   html += '.setup-guide.ready .step{color:#14532d}.setup-guide.ready .step b{background:#16a34a}';
   html += '.setup-guide.ready .confirm-row{border-top-color:#86efac}.setup-guide.ready .confirm-row label{color:#166534}';
-  // Preview bar (rodape)
   html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
   html += '.preview-bar span{color:#a78bfa;font-size:12px}.preview-bar b{color:#e2e8f0;font-size:13px}';
   html += '.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}';
@@ -223,7 +243,6 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '@media print{.setup-guide{display:none!important}.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
   html += '</style></head><body>';
 
-  // Guia visual no topo - checklist obrigatoria pra liberar o botao Imprimir
   html += '<div class="setup-guide" id="setupGuide">';
   html += '<h2>Antes de imprimir — confira o setup da impressora</h2>';
   html += '<div class="steps">';
@@ -236,11 +255,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '</div>';
 
   html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
-  html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "Codigo de barras") + ')</span><br>';
+  html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "EAN-13") + ')</span><br>';
   html += '<b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + items.length + ' produto' + (items.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
   html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirmação acima</button></div>';
 
-  // Liga o checkbox ao botao imprimir (bloqueio ate o usuario confirmar setup)
   html += '<script>(function(){';
   html += 'var cb=document.getElementById("confirmSetup");';
   html += 'var btn=document.getElementById("printBtn");';
@@ -253,8 +271,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
 
   if (!isQR) {
     // ===== LOCKED — parametros do JsBarcode =====
-    // Qualquer mudanca aqui PRECISA ser validada com scanner fisico.
-    // Valores serializados inline para impedir manipulacao acidental.
+    // Padrao: EAN13. Se falhar (ex: codigo invalido), fallback para CODE128.
     html += '<script>';
     html += 'document.querySelectorAll("[data-code]").forEach(function(el){';
     html += 'var code=el.getAttribute("data-code");';
@@ -268,7 +285,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
             ',fontOptions:"' + BARCODE_OPTS.fontOptions + '"' +
             ',background:"' + BARCODE_OPTS.background + '"' +
             ',lineColor:"' + BARCODE_OPTS.lineColor + '"};';
-    html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"' + jsFormat + '"}));}';
+    html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"EAN13"}));}';
     html += 'catch(e){try{JsBarcode(el,code,Object.assign({},opts,{format:"CODE128"}));}catch(e2){console.error(e2);}}';
     html += '});';
     html += '</scr' + 'ipt>';
