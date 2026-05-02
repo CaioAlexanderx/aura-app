@@ -17,6 +17,7 @@
 // ║    - Textos (nome, preco, storeHeader)                                 ║
 // ║    - Fonte, cor, peso do texto (nao do barcode)                        ║
 // ║    - Margem interna, gap                                               ║
+// ║    - Ordem dos elementos de texto (nome/preco/store)                   ║
 // ║    - QR code (modo alternativo, nao critico pra POS fisico)            ║
 // ║    - Preview bar / guia visual pre-impressao (livre, so tela)          ║
 // ║                                                                        ║
@@ -76,7 +77,7 @@ export function validateLabelItems(items: Array<{ name: string; barcode: string 
     const code = String(item.barcode || "").trim();
     if (!code) { invalid.push({ name: item.name, code: "(vazio)", reason: "Sem codigo cadastrado" }); return; }
     if (code.length < BARCODE_MIN_LENGTH) { invalid.push({ name: item.name, code: code, reason: "Codigo muito curto (minimo " + BARCODE_MIN_LENGTH + " caracteres)" }); return; }
-    if (BARCODE_PLACEHOLDERS.has(code) || BARCODE_PLACEHOLDERS.has(code.toLowerCase())) { invalid.push({ name: item.name, code: code, reason: "Codigo placeholder \u2014 substitua por SKU real" }); return; }
+    if (BARCODE_PLACEHOLDERS.has(code) || BARCODE_PLACEHOLDERS.has(code.toLowerCase())) { invalid.push({ name: item.name, code: code, reason: "Codigo placeholder — substitua por SKU real" }); return; }
     if (/^[.\-\s_]+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo invalido (so pontos/traços)" }); return; }
     if (/^(.)\1+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo repetido (ex: 0000)" }); return; }
   });
@@ -144,13 +145,14 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         );
       } else {
         // ===== LOCKED STRUCTURE =====
-        // Nao mudar a ordem (store -> name -> bc-box -> price) nem as classes.
+        // Ordem: store -> bc-box -> name -> price
+        // NAO mudar as classes nem os parametros do SVG/JsBarcode.
         // O SVG com id="bc-N" e data-code="..." eh lido pelo JsBarcode no fim do HTML.
         cells.push(
           '<td class="cell"><div class="bc-inner">' +
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
-          '<div class="name">' + labelName + '</div>' +
           '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
+          '<div class="name">' + labelName + '</div>' +
           '<div class="price">' + price + '</div></div></td>'
         );
         // ============================
@@ -179,12 +181,13 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // ============================================================
 
   // LOCKED: layout interno da celula barcode (padrao Finesse)
+  // Ordem visual: store (topo) → barcode → nome → preco (fundo)
   html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;width:33mm;gap:0.3mm}';
   html += '.bc-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
   // bc-box: container do codigo. max-width menor que 33mm pra dar respiro lateral.
   html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:30mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
   html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
+  html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
   html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
 
   // QR layout (nao critico pra POS, so pra uso alternativo)
@@ -199,7 +202,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Checklist obrigatoria antes de liberar Ctrl+P. Nao afeta a impressao.
   html += '.setup-guide{position:fixed;top:0;left:0;right:0;background:#fef2f2;border-bottom:3px solid #dc2626;padding:14px 20px;z-index:1000;font-family:-apple-system,"Segoe UI",sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.1)}';
   html += '.setup-guide h2{color:#991b1b;font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}';
-  html += '.setup-guide h2::before{content:"\u26a0\ufe0f";font-size:18px}';
+  html += '.setup-guide h2::before{content:"⚠️";font-size:18px}';
   html += '.setup-guide .steps{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:10px}';
   html += '.setup-guide .step{display:flex;align-items:center;gap:8px;font-size:12px;color:#7f1d1d;font-weight:600}';
   html += '.setup-guide .step b{background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-weight:800;letter-spacing:0.3px}';
@@ -207,7 +210,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.setup-guide .confirm-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#991b1b;font-weight:700}';
   html += '.setup-guide .confirm-row input[type=checkbox]{width:18px;height:18px;accent-color:#dc2626;cursor:pointer}';
   html += '.setup-guide.ready{background:#f0fdf4;border-bottom-color:#16a34a}';
-  html += '.setup-guide.ready h2{color:#166534}.setup-guide.ready h2::before{content:"\u2705"}';
+  html += '.setup-guide.ready h2{color:#166534}.setup-guide.ready h2::before{content:"✅"}';
   html += '.setup-guide.ready .step{color:#14532d}.setup-guide.ready .step b{background:#16a34a}';
   html += '.setup-guide.ready .confirm-row{border-top-color:#86efac}.setup-guide.ready .confirm-row label{color:#166534}';
   // Preview bar (rodape)
@@ -222,20 +225,20 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
 
   // Guia visual no topo - checklist obrigatoria pra liberar o botao Imprimir
   html += '<div class="setup-guide" id="setupGuide">';
-  html += '<h2>Antes de imprimir \u2014 confira o setup da impressora</h2>';
+  html += '<h2>Antes de imprimir — confira o setup da impressora</h2>';
   html += '<div class="steps">';
   html += '<div class="step"><b>1</b> Papel: <b>99 x 21 mm</b> (bobina 3 etiquetas)</div>';
   html += '<div class="step"><b>2</b> Margens: <b>Nenhuma</b></div>';
-  html += '<div class="step"><b>3</b> Escala: <b>100%</b> (n\u00e3o usar "Ajustar \u00e0 p\u00e1gina")</div>';
-  html += '<div class="step"><b>4</b> Cabe\u00e7alho/Rodap\u00e9: <b>Desligados</b></div>';
+  html += '<div class="step"><b>3</b> Escala: <b>100%</b> (não usar "Ajustar à página")</div>';
+  html += '<div class="step"><b>4</b> Cabeçalho/Rodapé: <b>Desligados</b></div>';
   html += '</div>';
-  html += '<div class="confirm-row"><label><input type="checkbox" id="confirmSetup"> Confirmo que o setup acima est\u00e1 correto</label></div>';
+  html += '<div class="confirm-row"><label><input type="checkbox" id="confirmSetup"> Confirmo que o setup acima está correto</label></div>';
   html += '</div>';
 
   html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
   html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "Codigo de barras") + ')</span><br>';
   html += '<b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + items.length + ' produto' + (items.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
-  html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirma\u00e7\u00e3o acima</button></div>';
+  html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirmação acima</button></div>';
 
   // Liga o checkbox ao botao imprimir (bloqueio ate o usuario confirmar setup)
   html += '<script>(function(){';
@@ -244,7 +247,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'var guide=document.getElementById("setupGuide");';
   html += 'cb.addEventListener("change",function(){';
   html += 'if(cb.checked){btn.disabled=false;btn.textContent="Imprimir";guide.classList.add("ready");}';
-  html += 'else{btn.disabled=true;btn.textContent="Marque a confirma\u00e7\u00e3o acima";guide.classList.remove("ready");}';
+  html += 'else{btn.disabled=true;btn.textContent="Marque a confirmação acima";guide.classList.remove("ready");}';
   html += '});';
   html += '})();</scr' + 'ipt>';
 
