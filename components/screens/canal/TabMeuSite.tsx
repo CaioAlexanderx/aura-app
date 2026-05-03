@@ -44,6 +44,13 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [pixBirthDate, setPixBirthDate] = useState("");
   const [pixCompanyType, setPixCompanyType] = useState<"MEI" | "LTDA" | "INDIVIDUAL">("MEI");
 
+  // Pix manual (chave proxima do lojista — substitui o fluxo Asaas)
+  const [pixKey, setPixKey] = useState(config.pix_key || "");
+  const [pixKeyType, setPixKeyType] = useState<"CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM">((config.pix_key_type as any) || "CPF");
+  const [pixHolderName, setPixHolderName] = useState(config.pix_holder_name || "");
+  const [pixHolderCity, setPixHolderCity] = useState(config.pix_holder_city || "");
+  const [payOnDelivery, setPayOnDelivery] = useState(config.pay_on_delivery_enabled === true);
+
   useEffect(() => {
     if (!config.exists) return;
     setSiteName(config.site_name || ""); setTagline(config.tagline || "");
@@ -51,6 +58,11 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setWhatsapp(maskPhone(config.whatsapp || "")); setInstagram(config.instagram || "");
     setAddress(config.address || ""); setColor(config.primary_color || "#7c3aed");
     setPublished(config.is_published ?? false);
+    setPixKey(config.pix_key || "");
+    setPixKeyType((config.pix_key_type as any) || "CPF");
+    setPixHolderName(config.pix_holder_name || "");
+    setPixHolderCity(config.pix_holder_city || "");
+    setPayOnDelivery(config.pay_on_delivery_enabled === true);
   }, [config.exists]);
 
   function openColorPicker() {
@@ -97,7 +109,22 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   }
 
   async function handleSave() {
-    await saveConfig({ site_name: siteName.trim() || null, tagline: tagline.trim() || null, description: description.trim() || null, phone: phone.trim() || null, whatsapp: whatsapp.trim() || null, instagram: instagram.trim() || null, address: address.trim() || null, primary_color: color, is_published: published });
+    await saveConfig({
+      site_name: siteName.trim() || null,
+      tagline: tagline.trim() || null,
+      description: description.trim() || null,
+      phone: phone.trim() || null,
+      whatsapp: whatsapp.trim() || null,
+      instagram: instagram.trim() || null,
+      address: address.trim() || null,
+      primary_color: color,
+      is_published: published,
+      pix_key: pixKey.trim() || null,
+      pix_key_type: pixKey.trim() ? pixKeyType : null,
+      pix_holder_name: pixHolderName.trim() || null,
+      pix_holder_city: pixHolderCity.trim() || null,
+      pay_on_delivery_enabled: payOnDelivery,
+    });
   }
 
   async function handleRequestDomain() {
@@ -143,6 +170,14 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const hasDomain = config.custom_domain && config.custom_domain_status !== "none";
   const asaasConfigured = !!(company as any)?.asaas_subconta_id;
   const dobRequired = pixCompanyType === "INDIVIDUAL" || pixCompanyType === "MEI";
+
+  const PIX_KEY_TYPES: { value: "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM"; label: string }[] = [
+    { value: "CPF", label: "CPF" },
+    { value: "CNPJ", label: "CNPJ" },
+    { value: "EMAIL", label: "E-mail" },
+    { value: "PHONE", label: "Celular" },
+    { value: "RANDOM", label: "Aleatoria" },
+  ];
 
   const PIX_TYPES: { value: "MEI" | "LTDA" | "INDIVIDUAL"; label: string }[] = [
     { value: "MEI", label: "MEI" },
@@ -252,131 +287,76 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <Text style={[cs.hint, { marginTop: 8, marginBottom: 0 }]}>Horizontal, min. 1200x400px. PNG ou JPG, max. 5MB</Text>
       </View>
 
-      {/* Pagamentos / Pix */}
+      {/* Pagamentos — chave Pix manual + entrega */}
       <SectionTitle title="Pagamentos" />
       <View style={cs.card}>
-        <View style={s.pixRow}>
-          <View style={[s.pixIcon, { backgroundColor: asaasConfigured ? Colors.greenD : Colors.amberD }]}>
-            <Text style={{ fontSize: 18 }}>💸</Text>
-          </View>
+        <Text style={cs.hint}>Como voce quer receber dos clientes? Pode marcar mais de uma opcao.</Text>
+
+        {/* Toggle: pagamento na entrega */}
+        <View style={cs.switchRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.pixTitle}>Pix {asaasConfigured ? "ativo" : "nao configurado"}</Text>
-            <Text style={s.pixDesc}>
-              {asaasConfigured
-                ? "Pagamentos Pix habilitados. Clientes pagam diretamente para sua conta."
-                : "Ative o Pix para receber pagamentos reais dos seus clientes."}
-            </Text>
+            <Text style={cs.switchLabel}>Aceitar pagamento na entrega</Text>
+            <Text style={cs.switchHint}>Cliente paga em dinheiro/cartao no momento da entrega ou retirada</Text>
           </View>
-          <View style={[s.pixBadge, { backgroundColor: asaasConfigured ? Colors.greenD : Colors.amberD }]}>
-            <Text style={[s.pixBadgeText, { color: asaasConfigured ? Colors.green : Colors.amber }]}>
-              {asaasConfigured ? "Ativo" : "Inativo"}
-            </Text>
-          </View>
+          <Switch value={payOnDelivery} onValueChange={setPayOnDelivery} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+        </View>
+        <View style={cs.divider} />
+
+        {/* Form chave Pix manual */}
+        <Text style={[cs.fieldLabel, { marginBottom: 4 }]}>Chave Pix (recebimento online)</Text>
+        <Text style={[cs.hint, { marginTop: 0, marginBottom: 12 }]}>
+          Cliente paga via Pix copia-e-cola, anexa o comprovante e voce aprova manualmente em Pedidos.
+        </Text>
+
+        <Text style={cs.fieldLabel}>Tipo da chave</Text>
+        <View style={s.typeRow}>
+          {PIX_KEY_TYPES.map(t => (
+            <Pressable
+              key={t.value}
+              onPress={() => { setPixKeyType(t.value); setPixKey(""); }}
+              style={[s.typeBtn, pixKeyType === t.value && s.typeBtnActive]}
+            >
+              <Text style={[s.typeBtnText, pixKeyType === t.value && s.typeBtnTextActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
         </View>
 
-        {!asaasConfigured && (
-          <>
-            <View style={cs.divider} />
-            {!showPixForm ? (
-              <Pressable onPress={() => setShowPixForm(true)} style={s.activatePixBtn}>
-                <Text style={{ fontSize: 16 }}>⚡</Text>
-                <Text style={s.activatePixBtnText}>Ativar Pix agora</Text>
-              </Pressable>
-            ) : (
-              <View style={s.pixForm}>
-                <Text style={s.pixFormTitle}>Dados para ativar o Pix</Text>
-                <Text style={s.pixFormHint}>Usamos esses dados para criar sua conta de recebimentos. Leva menos de 1 minuto.</Text>
+        <Text style={cs.fieldLabel}>Chave</Text>
+        <TextInput
+          style={cs.input}
+          value={pixKey}
+          onChangeText={(v) => {
+            if (pixKeyType === "CPF" || pixKeyType === "CNPJ") setPixKey(maskCpfCnpj(v));
+            else if (pixKeyType === "PHONE") setPixKey(maskPhone(v));
+            else setPixKey(v);
+          }}
+          placeholder={
+            pixKeyType === "CPF" ? "000.000.000-00" :
+            pixKeyType === "CNPJ" ? "00.000.000/0000-00" :
+            pixKeyType === "EMAIL" ? "voce@exemplo.com" :
+            pixKeyType === "PHONE" ? "(11) 99999-0000" :
+            "00000000-0000-0000-0000-000000000000"
+          }
+          placeholderTextColor={Colors.ink3}
+          keyboardType={pixKeyType === "EMAIL" ? "email-address" : pixKeyType === "RANDOM" ? "default" : "numeric"}
+          autoCapitalize={pixKeyType === "EMAIL" ? "none" : "sentences"}
+        />
 
-                <Text style={cs.fieldLabel}>Tipo</Text>
-                <View style={s.typeRow}>
-                  {PIX_TYPES.map(t => (
-                    <Pressable
-                      key={t.value}
-                      onPress={() => setPixCompanyType(t.value)}
-                      style={[s.typeBtn, pixCompanyType === t.value && s.typeBtnActive]}
-                    >
-                      <Text style={[s.typeBtnText, pixCompanyType === t.value && s.typeBtnTextActive]}>{t.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+        <Field label="Nome do recebedor" value={pixHolderName} onChange={setPixHolderName} placeholder="Nome que aparece pro cliente no app do banco" />
+        <Field label="Cidade do recebedor" value={pixHolderCity} onChange={setPixHolderCity} placeholder="Sao Paulo" />
 
-                <Text style={cs.fieldLabel}>{pixCompanyType === "INDIVIDUAL" ? "Nome completo" : "Nome / Razao social"}</Text>
-                <TextInput
-                  style={cs.input}
-                  value={pixName}
-                  onChangeText={setPixName}
-                  placeholder={pixCompanyType === "INDIVIDUAL" ? "Joao da Silva" : "Empresa Exemplo Ltda"}
-                  placeholderTextColor={Colors.ink3}
-                />
-
-                <Text style={cs.fieldLabel}>{pixCompanyType === "INDIVIDUAL" ? "CPF" : "CNPJ"}</Text>
-                <TextInput
-                  style={cs.input}
-                  value={pixCpfCnpj}
-                  onChangeText={(v) => setPixCpfCnpj(maskCpfCnpj(v))}
-                  placeholder={pixCompanyType === "INDIVIDUAL" ? "000.000.000-00" : "00.000.000/0000-00"}
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="numeric"
-                />
-
-                <Text style={cs.fieldLabel}>E-mail</Text>
-                <TextInput
-                  style={cs.input}
-                  value={pixEmail}
-                  onChangeText={setPixEmail}
-                  placeholder="contato@empresa.com.br"
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-
-                <Text style={cs.fieldLabel}>Celular</Text>
-                <TextInput
-                  style={cs.input}
-                  value={pixPhone}
-                  onChangeText={(v) => setPixPhone(maskPhone(v))}
-                  placeholder="(11) 99999-0000"
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="phone-pad"
-                />
-
-                {dobRequired && (
-                  <>
-                    <Text style={cs.fieldLabel}>Data de nascimento</Text>
-                    <TextInput
-                      style={cs.input}
-                      value={pixBirthDate}
-                      onChangeText={(v) => setPixBirthDate(maskDateBr(v))}
-                      placeholder="DD/MM/AAAA"
-                      placeholderTextColor={Colors.ink3}
-                      keyboardType="numeric"
-                      maxLength={10}
-                    />
-                    <Text style={[cs.hint, { marginTop: -4, marginBottom: 12, fontSize: 11 }]}>
-                      O Asaas exige data de nascimento para contas {pixCompanyType === "INDIVIDUAL" ? "PF" : "MEI"}.
-                    </Text>
-                  </>
-                )}
-
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-                  <Pressable
-                    onPress={() => setShowPixForm(false)}
-                    style={s.pixCancelBtn}
-                  >
-                    <Text style={s.pixCancelBtnText}>Cancelar</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleSetupPix}
-                    disabled={isSettingUpPix}
-                    style={[s.pixConfirmBtn, isSettingUpPix && { opacity: 0.6 }]}
-                  >
-                    <Text style={s.pixConfirmBtnText}>{isSettingUpPix ? "Ativando..." : "Ativar Pix"}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-          </>
+        {asaasConfigured && (
+          <View style={cs.infoCard}>
+            <Icon name="alert" size={13} color={Colors.violet3} />
+            <Text style={cs.infoText}>
+              Conta Asaas legada ativa. A chave Pix manual cadastrada acima passa a prevalecer no checkout.
+            </Text>
+          </View>
         )}
+
+        <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }, { marginTop: 12 }]}>
+          <Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar pagamentos"}</Text>
+        </Pressable>
       </View>
 
       <SectionTitle title="Dominio personalizado" />
