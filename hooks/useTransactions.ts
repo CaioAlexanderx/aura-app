@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi, dashboardApi } from "@/services/api";
+import { meAggregatesApi } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Transaction, DreData, WithdrawalData, PeriodKey } from "@/components/screens/financeiro/types";
@@ -23,6 +24,10 @@ function mapApiTransaction(t: any): Transaction {
     employee_id: t.employee_id || null,
     employee_name: t.employee_name || null,
     idempotency_key: t.idempotency_key || null,
+    // MULTICNPJ Onda 2.2: campos extras passam pelo cast — frontend usa
+    // (t as any).company_name pra exibir badge da loja na lista.
+    company_id: t.company_id || null,
+    company_name: t.company_name || null,
   } as Transaction;
 }
 
@@ -38,7 +43,12 @@ function toISODate(d: Date): string {
 }
 
 export function useTransactionsApi(activeTab?: number, period?: PeriodKey, customStart?: string, customEnd?: string) {
-  var { company, token, isDemo } = useAuthStore();
+  // MULTICNPJ Onda 2.2: detecta consolidatedView e ramifica entre
+  // /companies/:id/transactions (per-company) e /me/transactions (consolidated).
+  // Mutations (create/delete) so funcionam em modo per-company — em consolidated
+  // o usuario precisa trocar pra empresa especifica antes de criar/editar.
+  // DRE e Withdrawal tambem so existem em per-company por enquanto.
+  var { company, token, isDemo, consolidatedView } = useAuthStore();
   var qc = useQueryClient();
   var companyId = company?.id;
 
@@ -60,30 +70,60 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { start: toISODate(range.start), end: toISODate(range.end) };
   }, []);
 
+  // Query principal de transactions — ramifica entre per-company e consolidated
   var { data: apiTx, isLoading: isLoadingTx } = useQuery({
-    queryKey: ["transactions", companyId, periodRange.start, periodRange.end],
+    queryKey: consolidatedView
+      ? ["me-transactions", periodRange.start, periodRange.end]
+      : ["transactions", companyId, periodRange.start, periodRange.end],
     queryFn: function() {
+      if (consolidatedView) {
+        return meAggregatesApi.transactions({
+          start: periodRange.start,
+          end: periodRange.end,
+          limit: 5000,
+        });
+      }
       var params = "limit=5000&start=" + periodRange.start + "&end=" + periodRange.end;
       return companiesApi.transactions(companyId!, params);
     },
-    enabled: !!companyId && !!token && !isDemo,
+    enabled: (consolidatedView || !!companyId) && !!token && !isDemo,
     retry: 1, staleTime: 30000,
   });
 
+  // Periodo anterior (so per-company por ora; consolidated nao tem comparativo ainda)
   var { data: apiPrevTx } = useQuery({
-    queryKey: ["transactions-prev", companyId, prevRange?.start, prevRange?.end],
+    queryKey: consolidatedView
+      ? ["me-transactions-prev", prevRange?.start, prevRange?.end]
+      : ["transactions-prev", companyId, prevRange?.start, prevRange?.end],
     queryFn: function() {
+      if (consolidatedView) {
+        return meAggregatesApi.transactions({
+          start: prevRange!.start,
+          end: prevRange!.end,
+          limit: 1,
+        });
+      }
       var params = "limit=1&start=" + prevRange!.start + "&end=" + prevRange!.end;
       return companiesApi.transactions(companyId!, params);
     },
-    enabled: !!companyId && !!token && !isDemo && !!prevRange,
+    enabled: (consolidatedView || !!companyId) && !!token && !isDemo && !!prevRange,
     retry: 1, staleTime: 120000,
   });
 
-  var monthQueryEnabled = !!companyId && !!token && !isDemo && period !== "month";
+  var monthQueryEnabled = (consolidatedView || !!companyId) && !!token && !isDemo && period !== "month";
   var { data: apiCurrentMonth } = useQuery({
-    queryKey: ["current-month-expenses", companyId, currentMonthRange.start, currentMonthRange.end],
+    queryKey: consolidatedView
+      ? ["me-current-month-expenses", currentMonthRange.start, currentMonthRange.end]
+      : ["current-month-expenses", companyId, currentMonthRange.start, currentMonthRange.end],
     queryFn: function() {
+      if (consolidatedView) {
+        return meAggregatesApi.transactions({
+          start: currentMonthRange.start,
+          end: currentMonthRange.end,
+          type: "expense",
+          limit: 1,
+        });
+      }
       var params = "limit=1&type=expense&start=" + currentMonthRange.start + "&end=" + currentMonthRange.end;
       return companiesApi.transactions(companyId!, params);
     },
@@ -91,17 +131,19 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     retry: 1, staleTime: 60000,
   });
 
+  // DRE e Withdrawal so em modo per-company por enquanto. Em consolidated
+  // a tela exibe placeholder "Disponivel ao selecionar empresa".
   var { data: apiDre } = useQuery({
     queryKey: ["dre", companyId],
     queryFn: function() { return companiesApi.dre(companyId!); },
-    enabled: !!companyId && !!token && !isDemo && activeTab === 2,
+    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === 2,
     retry: 1,
   });
 
   var { data: apiWithdrawal } = useQuery({
     queryKey: ["withdrawal", companyId],
     queryFn: function() { return dashboardApi.summary(companyId!); },
-    enabled: !!companyId && !!token && !isDemo && activeTab === 3,
+    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === 3,
     retry: 1,
   });
 
@@ -121,11 +163,8 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
   var summary = useMemo(function() {
     var income = apiTx?.summary?.income != null ? parseFloat(apiTx.summary.income) : transactions.filter(function(t) { return t.type === "income" && t.status === "confirmed"; }).reduce(function(s, t) { return s + t.amount; }, 0);
     var expenses = apiTx?.summary?.expenses != null ? parseFloat(apiTx.summary.expenses) : transactions.filter(function(t) { return t.type === "expense" && t.status === "confirmed"; }).reduce(function(s, t) { return s + t.amount; }, 0);
-    // Pending exposto separadamente pelo backend (PR aura-backend#3 mergeado 27/04 noite).
-    // Frontend exibe como badge "X em pendentes" sem inflar o saldo.
     var pendingIncome = apiTx?.summary?.pending_income != null ? parseFloat(apiTx.summary.pending_income) : transactions.filter(function(t) { return t.type === "income" && t.status === "pending"; }).reduce(function(s, t) { return s + t.amount; }, 0);
     var pendingExpenses = apiTx?.summary?.pending_expenses != null ? parseFloat(apiTx.summary.pending_expenses) : transactions.filter(function(t) { return t.type === "expense" && t.status === "pending"; }).reduce(function(s, t) { return s + t.amount; }, 0);
-    // gap: vendas sem lancamento correspondente (backend calcula, exposto para aviso visual)
     var gap = apiTx?.summary?.gap != null ? parseFloat(apiTx.summary.gap) : 0;
     return { income: income, expenses: expenses, balance: income - expenses, gap: gap, pendingIncome: pendingIncome, pendingExpenses: pendingExpenses };
   }, [apiTx, transactions]);
@@ -159,8 +198,20 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return w as WithdrawalData;
   }, [apiWithdrawal]);
 
+  // MULTICNPJ Onda 2.2: breakdown por empresa (apenas em consolidated)
+  var consolidatedBreakdown = useMemo(function() {
+    if (!consolidatedView) return null;
+    return apiTx?.breakdown || null;
+  }, [apiTx, consolidatedView]);
+
   var createMutation = useMutation({
-    mutationFn: function(body: any) { return companiesApi.createTransaction(companyId!, body); },
+    mutationFn: function(body: any) {
+      // Bloqueio em consolidated: nao tem company
+      if (consolidatedView) {
+        return Promise.reject(new Error("Selecione uma empresa especifica para criar lancamentos"));
+      }
+      return companiesApi.createTransaction(companyId!, body);
+    },
     onSuccess: function() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
       qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
@@ -169,12 +220,20 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       qc.invalidateQueries({ queryKey: ["dre", companyId] });
       toast.success("Lancamento criado!");
     },
-    onError: function() { toast.error("Erro ao criar lancamento"); },
+    onError: function(err: any) {
+      toast.error(err?.message || "Erro ao criar lancamento");
+    },
   });
 
   var deleteMutation = useMutation({
-    mutationFn: function(txId: string) { return companiesApi.deleteTransaction(companyId!, txId); },
+    mutationFn: function(txId: string) {
+      if (consolidatedView) {
+        return Promise.reject(new Error("Selecione uma empresa especifica para excluir lancamentos"));
+      }
+      return companiesApi.deleteTransaction(companyId!, txId);
+    },
     onMutate: async function(txId: string) {
+      if (consolidatedView) return { prev: null };
       await qc.cancelQueries({ queryKey: ["transactions", companyId] });
       var prev = qc.getQueryData(["transactions", companyId, periodRange.start, periodRange.end]);
       qc.setQueryData(["transactions", companyId, periodRange.start, periodRange.end], function(old: any) {
@@ -187,9 +246,9 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       toast.success("Lancamento excluido");
       return { prev: prev };
     },
-    onError: function(_err: any, _txId: any, context: any) {
+    onError: function(err: any, _txId: any, context: any) {
       if (context?.prev) qc.setQueryData(["transactions", companyId, periodRange.start, periodRange.end], context.prev);
-      toast.error("Erro ao excluir lancamento");
+      toast.error(err?.message || "Erro ao excluir lancamento");
     },
     onSettled: function() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
@@ -200,21 +259,37 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
   });
 
   function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string; payment_method?: string; employee_id?: string }) {
+    if (consolidatedView) {
+      toast.error("Selecione uma empresa especifica para criar lancamentos");
+      return;
+    }
     if (!companyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
     createMutation.mutate(body);
   }
 
   function deleteTransaction(id: string) {
+    if (consolidatedView) {
+      toast.error("Selecione uma empresa especifica para excluir lancamentos");
+      return;
+    }
     if (companyId && !isDemo) deleteMutation.mutate(id);
   }
 
   return {
-    transactions: transactions, summary: summary, previousSummary: previousSummary,
+    transactions: transactions,
+    summary: summary,
+    previousSummary: previousSummary,
     currentMonthExpenses: currentMonthExpenses,
-    dreData: dreData, withdrawalData: withdrawalData,
-    isLoading: isLoadingTx && !isDemo, isDemo: isDemo,
-    createTransaction: createTransaction, deleteTransaction: deleteTransaction,
-    createMutation: !isDemo && companyId ? createMutation : undefined,
+    dreData: dreData,
+    withdrawalData: withdrawalData,
+    isLoading: isLoadingTx && !isDemo,
+    isDemo: isDemo,
+    createTransaction: createTransaction,
+    deleteTransaction: deleteTransaction,
+    createMutation: !isDemo && (consolidatedView || companyId) ? createMutation : undefined,
+    // MULTICNPJ Onda 2.2: dados especificos de modo consolidado
+    consolidatedView: consolidatedView,
+    consolidatedBreakdown: consolidatedBreakdown,
   };
 }
