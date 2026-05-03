@@ -21,6 +21,7 @@ function Stars({ r }: { r: number | null }) {
 export function CustomerRow({
   c, expanded, onToggle, onDelete, onEdit,
   isSelected, onSelect,
+  showCompanyBadge,
 }: {
   c: Customer;
   expanded: boolean;
@@ -29,10 +30,14 @@ export function CustomerRow({
   onEdit?: (c: Customer) => void;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
+  // MULTICNPJ Onda 2.3: mostra badge da loja onde foi cadastrado.
+  // FE passa true so quando companyCount > 1 (multi-CNPJ ativo).
+  showCompanyBadge?: boolean;
 }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
   const tags = getStatus(c);
+  const showBadge = showCompanyBadge && c.company_name;
 
   return (
     <View>
@@ -42,7 +47,6 @@ export function CustomerRow({
         onHoverOut={w ? () => sH(false) : undefined}
         style={[s.row, h && { backgroundColor: Colors.bg4 }, isSelected && { backgroundColor: Colors.violetD }, w && { transition: "background-color 0.15s ease" } as any]}
       >
-        {/* Checkbox bulk select */}
         {onSelect && (
           <View style={[s.checkbox, isSelected && s.checkboxSelected]}>
             {isSelected && <Text style={s.checkmark}>✓</Text>}
@@ -50,9 +54,18 @@ export function CustomerRow({
         )}
         <View style={s.left}>
           <View style={s.avatar}><Text style={s.avatarText}>{c.name.charAt(0)}</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.name}>{c.name}</Text>
-            <Text style={s.meta}>{c.phone}{c.instagram ? " / " + c.instagram : ""}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.name} numberOfLines={1}>{c.name}</Text>
+            <View style={s.metaRow}>
+              <Text style={s.meta} numberOfLines={1}>
+                {c.phone}{c.instagram ? " / " + c.instagram : ""}
+              </Text>
+              {showBadge && (
+                <View style={s.companyBadge}>
+                  <Text style={s.companyBadgeText} numberOfLines={1}>{c.company_name}</Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
         {!onSelect && (
@@ -69,6 +82,13 @@ export function CustomerRow({
               <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Total gasto" && { color: Colors.green }, l === "Instagram" && { color: Colors.violet3 }]}>{v}</Text></View>
             )}
             <View style={s.detailItem}><Text style={s.detailLabel}>Avaliacao</Text><Stars r={c.rating} /></View>
+            {/* MULTICNPJ Onda 2.3: empresa onde foi cadastrado (so se multi-CNPJ) */}
+            {showBadge && (
+              <View style={s.detailItem}>
+                <Text style={s.detailLabel}>Cadastrado em</Text>
+                <Text style={[s.detailValue, { color: Colors.violet3 }]} numberOfLines={1}>{c.company_name}</Text>
+              </View>
+            )}
           </View>
           {c.notes ? <Text style={s.notes}>{c.notes}</Text> : null}
           <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}>{tags.map(t => <Tag key={t} tag={t} />)}</View></View>
@@ -94,7 +114,24 @@ const s = StyleSheet.create({
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   avatarText: { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
   name: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  meta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" },
+  meta: { fontSize: 11, color: Colors.ink3, flexShrink: 1 },
+  // MULTICNPJ Onda 2.3: badge da loja
+  companyBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: Colors.violetD,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    maxWidth: 160,
+  },
+  companyBadgeText: {
+    fontSize: 9.5,
+    color: Colors.violet3,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
   spent: { fontSize: 13, color: Colors.green, fontWeight: "700" },
   detail: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, marginHorizontal: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },

@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RetentionCard } from "@/components/RetentionCard";
 import { ReviewsList } from "@/components/ReviewsList";
 import { ServerImport } from "@/components/ServerImport";
+import { Icon } from "@/components/Icon";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const PAGE_SIZE = 20;
@@ -27,6 +28,7 @@ export default function ClientesScreen() {
   const {
     customers, isLoading, isDemo, planBlocked, bulkDeleting,
     addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers,
+    consolidatedView, companyCount,
   } = useCustomers();
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -38,7 +40,6 @@ export default function ClientesScreen() {
   const [editTarget, setEditTarget] = useState<Customer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  // Bulk select
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
@@ -52,9 +53,13 @@ export default function ClientesScreen() {
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search);
   const totalLtv = customers.reduce((s, c) => s + c.totalSpent, 0);
 
-  // Quantos da pagina atual estao selecionados
   const pageIds        = paginated.map(c => c.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every(id => bulkSelected.has(id));
+
+  // MULTICNPJ Onda 2.3: mostra badge da loja em cada cliente quando o
+  // owner tem 2+ empresas. Vale tanto em consolidated quanto per-company
+  // (lista e a mesma owner-scoped, mostrar a origem ajuda a entender).
+  const showCompanyBadge = (companyCount || 1) > 1;
 
   function handleAdd(c: Customer) { addCustomer(c); setShowAdd(false); }
   function handleEdit(c: Customer) { updateCustomer(c.id, c); setEditTarget(null); }
@@ -73,7 +78,6 @@ export default function ClientesScreen() {
     });
   }
 
-  // Seleciona/desmarca apenas a pagina atual (max 20 itens por vez)
   function handleSelectPage() {
     if (pageAllSelected) {
       setBulkSelected(prev => {
@@ -110,6 +114,23 @@ export default function ClientesScreen() {
         </Pressable>
       </View>
 
+      {/* MULTICNPJ Onda 2.3: banner explicativo de lista unica owner-scoped */}
+      {showCompanyBadge && (
+        <View style={s.consolidatedBanner}>
+          <Icon name="users" size={14} color="#a78bfa" />
+          <View style={{ flex: 1 }}>
+            <Text style={s.consolidatedTitle}>
+              {consolidatedView
+                ? `Lista unica · ${companyCount} empresas`
+                : `Lista compartilhada entre suas ${companyCount} empresas`}
+            </Text>
+            <Text style={s.consolidatedSub}>
+              Os clientes sao do dono, nao da loja. Cada cliente aparece uma so vez, mesmo que compre em qualquer das suas empresas.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {planBlocked && (
         <View style={s.planBlock}><Text style={s.planBlockText}>Clientes disponivel a partir do plano Negocio.</Text></View>
       )}
@@ -119,7 +140,7 @@ export default function ClientesScreen() {
         <View style={s.card}><Text style={s.cardLabel}>FATURAMENTO TOTAL</Text><Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text></View>
       </View>
 
-      {tab === 0 && !planBlocked && !isDemo && <RetentionCard />}
+      {tab === 0 && !planBlocked && !isDemo && !consolidatedView && <RetentionCard />}
 
       {showAdd && !editTarget && <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />}
       {editTarget && <AddCustomerForm initialData={editTarget} onSave={handleEdit} onCancel={() => setEditTarget(null)} />}
@@ -135,7 +156,9 @@ export default function ClientesScreen() {
       {tab === 0 && !planBlocked && (
         <View style={s.importRow}>
           <ImportExportBar onExport={handleExport} itemCount={customers.length} />
-          <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers", company?.id] })} />
+          {!consolidatedView && (
+            <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers"] })} />
+          )}
           {!bulkMode ? (
             <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}>
               <Text style={s.bulkBtnText}>Selecionar</Text>
@@ -148,10 +171,8 @@ export default function ClientesScreen() {
         </View>
       )}
 
-      {/* Bulk action bar */}
       {bulkMode && (
         <View style={s.bulkBar}>
-          {/* Selecionar pagina atual */}
           <Pressable onPress={handleSelectPage} style={s.bulkAction}>
             <Text style={s.bulkActionText}>
               {pageAllSelected ? "Desmarcar pagina" : "Pag. atual"}
@@ -199,6 +220,7 @@ export default function ClientesScreen() {
                 onDelete={!bulkMode ? (id) => setDeleteTarget(id) : undefined}
                 isSelected={bulkSelected.has(c.id)}
                 onSelect={bulkMode ? toggleBulkSelect : undefined}
+                showCompanyBadge={showCompanyBadge}
               />
             ))}
           </View>
@@ -258,4 +280,19 @@ const s = StyleSheet.create({
   listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+  // MULTICNPJ Onda 2.3
+  consolidatedBanner: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    backgroundColor: "rgba(124,58,237,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
+  consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
 });
