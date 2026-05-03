@@ -14,16 +14,16 @@ import type { SalesListItem, SalesFilters } from "@/services/api";
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
 //
-// Lista todas as vendas do PDV pra conferencia da vendedora.
+// MULTICNPJ Onda 2.4 (03/05/2026): em modo consolidated, lista vendas
+// agregadas de TODAS as empresas do user. Cada linha tem badge violeta
+// com nome da loja onde foi feita. Ao abrir o detalhe, passamos
+// companyId+companyName pro SaleDetailModal — assim cancel/detail vai
+// pra empresa correta.
 //
-// Layout:
-//   1. Stats no topo (4 cards): hoje, mes, ticket medio, canceladas
-//   2. Filtros: periodo (hoje/semana/mes/tudo) + status (todas/ativas/canceladas)
-//   3. Busca por cliente/vendedora
-//   4. Lista compacta: data/hora · cliente · vendedora · valor · status
-//   5. Click numa venda -> abre SaleDetailModal
-//   6. SaleDetailModal -> botao "Editar lancamento" -> abre TransactionModal
-//      do financeiro (com SaleDetailsSection ja integrada do Item 1)
+// "Editar lancamento" em consolidated: oculto por ora. TransactionModal
+// usa company.id internamente e ainda nao suporta company override
+// (Onda 2.6 vai adaptar). User troca pra empresa especifica antes de
+// editar lancamentos do PDV.
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
@@ -62,12 +62,9 @@ var fmtDate = function(iso: string) {
   } catch { return ""; }
 };
 
-// Calcula intervalo ISO (timestamptz) baseado no periodo selecionado.
-// Retorna { from?, to? } pra usar nos filtros do backend.
 function periodToRange(period: PeriodKey): { from?: string; to?: string } {
   if (period === "all") return {};
   const now = new Date();
-  // Comeco do dia em SP
   const tzNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   const startOfDay = new Date(tzNow.getFullYear(), tzNow.getMonth(), tzNow.getDate());
 
@@ -75,28 +72,32 @@ function periodToRange(period: PeriodKey): { from?: string; to?: string } {
     return { from: startOfDay.toISOString() };
   }
   if (period === "week") {
-    // Ultimos 7 dias (rolling)
     const sevenAgo = new Date(startOfDay);
     sevenAgo.setDate(sevenAgo.getDate() - 6);
     return { from: sevenAgo.toISOString() };
   }
   if (period === "month") {
-    // Mes atual (do dia 1 ate hoje)
     const monthStart = new Date(tzNow.getFullYear(), tzNow.getMonth(), 1);
     return { from: monthStart.toISOString() };
   }
   return {};
 }
 
+// MULTICNPJ Onda 2.4: tipo do item da lista. Em consolidated tem
+// company_id+company_name; em per-company eles sao undefined.
+type SaleListRow = SalesListItem & {
+  company_id?: string;
+  company_name?: string;
+};
+
 export default function VendasScreen() {
-  const { company } = useAuthStore();
+  const { company, consolidatedView } = useAuthStore();
   const [period, setPeriod] = useState<PeriodKey>("month");
   const [status, setStatus] = useState<StatusKey>("all");
   const [search, setSearch] = useState("");
-  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
 
-  // Range derivado do periodo
   const range = useMemo(function() { return periodToRange(period); }, [period]);
 
   const filters: SalesFilters = {
@@ -107,25 +108,27 @@ export default function VendasScreen() {
     limit: 100,
   };
 
-  const { sales, stats, total, isLoading, isFetching, error, refetch } = useSalesList(filters);
+  const { sales, stats, total, isLoading, isFetching, error, refetch, breakdown, companyCount } = useSalesList(filters as any);
 
-  // Pra abrir TransactionModal precisa carregar a tx — usa companies.transactions endpoint
-  // Buscando a tx pelo ID isolado
+  // MULTICNPJ Onda 2.4: badge da loja so quando o user tem 2+ empresas
+  const showCompanyBadge = (companyCount || 1) > 1;
+
+  // Pra abrir TransactionModal precisa carregar a tx — usa companies.transactions
+  // SO funciona em modo per-company. Em consolidated, "Editar lancamento" e ocultado.
   const { data: editTx } = useQuery({
     queryKey: ["transaction-by-id", company?.id, editingTxId],
     queryFn: async function() {
       if (!company?.id || !editingTxId) return null;
-      // Busca todas e filtra (endpoint nao tem GET por id direto)
       const res = await companiesApi.transactions(company.id);
       const tx = (res?.transactions || []).find(function(t: any) { return t.id === editingTxId; });
       return tx || null;
     },
-    enabled: !!company?.id && !!editingTxId,
+    enabled: !!company?.id && !!editingTxId && !consolidatedView,
     staleTime: 5_000,
   });
 
-  function handleSaleClick(sale: SalesListItem) {
-    setSelectedSaleId(sale.id);
+  function handleSaleClick(sale: SaleListRow) {
+    setSelectedSale(sale);
   }
 
   function handleEditTransaction(txId: string) {
@@ -152,6 +155,25 @@ export default function VendasScreen() {
         ou cancele uma venda inteira.
       </Text>
 
+      {/* MULTICNPJ Onda 2.4: banner consolidado */}
+      {showCompanyBadge && (
+        <View style={s.consolidatedBanner}>
+          <Icon name="cart" size={14} color="#a78bfa" />
+          <View style={{ flex: 1 }}>
+            <Text style={s.consolidatedTitle}>
+              {consolidatedView
+                ? `Vendas consolidadas \u00b7 ${companyCount} empresas`
+                : `Visualizando vendas desta empresa`}
+            </Text>
+            <Text style={s.consolidatedSub}>
+              {consolidatedView
+                ? "Cada linha mostra a loja onde a venda foi feita. Para editar o lancamento financeiro, troque pra empresa especifica."
+                : "Para ver vendas de todas as suas empresas juntas, troque pra \"Todas as empresas\" no seletor."}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* STATS CARDS */}
       <View style={s.statsRow}>
         <View style={s.statCard}>
@@ -175,6 +197,37 @@ export default function VendasScreen() {
           <Text style={[s.statValue, { color: Colors.violet3 }]}>{stats?.active_sales ?? "-"}</Text>
         </View>
       </View>
+
+      {/* MULTICNPJ Onda 2.4: breakdown por empresa em consolidated */}
+      {consolidatedView && breakdown && breakdown.length > 1 && (
+        <View style={s.breakdownCard}>
+          <Text style={s.breakdownTitle}>Por empresa</Text>
+          <View style={s.breakdownRows}>
+            {breakdown.map(function(b: any) {
+              return (
+                <View key={b.company_id} style={s.breakdownRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={s.breakdownNameRow}>
+                      <Text style={s.breakdownName} numberOfLines={1}>{b.company_name}</Text>
+                      {b.is_primary && (
+                        <View style={s.breakdownPrimaryBadge}>
+                          <Text style={s.breakdownPrimaryText}>PRINCIPAL</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={s.breakdownMeta}>
+                      {b.total_sales} venda{b.total_sales !== 1 ? "s" : ""}
+                      {b.cancelled_sales > 0 ? ` \u00b7 ${b.cancelled_sales} cancelada${b.cancelled_sales !== 1 ? "s" : ""}` : ""}
+                      {" \u00b7 ticket " + fmt(b.avg_ticket)}
+                    </Text>
+                  </View>
+                  <Text style={s.breakdownRevenue}>{fmt(b.revenue)}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       {/* FILTROS */}
       <View style={s.filtersWrap}>
@@ -254,7 +307,7 @@ export default function VendasScreen() {
 
       {!isLoading && !error && sales.length > 0 && (
         <View style={s.listWrap}>
-          {sales.map(function(sale) {
+          {sales.map(function(sale: SaleListRow) {
             const isCancelled = sale.status === "cancelled";
             return (
               <Pressable
@@ -287,6 +340,12 @@ export default function VendasScreen() {
                     <View style={s.rowMetaPill}>
                       <Text style={s.rowMetaPillText}>{sale.items_count} item(s)</Text>
                     </View>
+                    {/* MULTICNPJ Onda 2.4: badge da loja */}
+                    {showCompanyBadge && sale.company_name && (
+                      <View style={s.rowCompanyPill}>
+                        <Text style={s.rowCompanyPillText} numberOfLines={1}>{sale.company_name}</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
                 <View style={s.rowRight}>
@@ -313,16 +372,20 @@ export default function VendasScreen() {
         </View>
       )}
 
-      {/* MODAL DE DETALHES */}
+      {/* MODAL DE DETALHES — em consolidated, passa companyId+companyName do sale clicado */}
       <SaleDetailModal
-        visible={!!selectedSaleId}
-        saleId={selectedSaleId}
-        onClose={function() { setSelectedSaleId(null); }}
-        onEditTransaction={handleEditTransaction}
+        visible={!!selectedSale}
+        saleId={selectedSale?.id ?? null}
+        companyId={selectedSale?.company_id}
+        companyName={showCompanyBadge ? selectedSale?.company_name : undefined}
+        onClose={function() { setSelectedSale(null); }}
+        // MULTICNPJ Onda 2.4: "Editar lancamento" so funciona em per-company.
+        // TransactionModal usa company.id; sera adaptado na Onda 2.6.
+        onEditTransaction={consolidatedView ? undefined : handleEditTransaction}
       />
 
-      {/* TRANSACTION MODAL — abre quando user clica "Editar lancamento" no detalhes */}
-      {editTx && (
+      {/* TRANSACTION MODAL — so abre em modo per-company */}
+      {!consolidatedView && editTx && (
         <TransactionModal
           visible={!!editTx}
           editTransaction={editTx}
@@ -344,12 +407,40 @@ const s = StyleSheet.create({
   refreshText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   subtitle: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 18 },
 
+  // MULTICNPJ Onda 2.4: banner
+  consolidatedBanner: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    backgroundColor: "rgba(124,58,237,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
+  consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
+
   // STATS
   statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 },
   statCard: { flex: 1, minWidth: 130, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
   statLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   statValue: { fontSize: 20, color: Colors.ink, fontWeight: "800", marginTop: 6 },
   statHint: { fontSize: 9.5, color: Colors.ink3, marginTop: 3 },
+
+  // MULTICNPJ Onda 2.4: breakdown por empresa
+  breakdownCard: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
+  breakdownTitle: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 10 },
+  breakdownRows: { gap: 8 },
+  breakdownRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
+  breakdownNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  breakdownName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  breakdownPrimaryBadge: { backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+  breakdownPrimaryText: { fontSize: 8, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.4 },
+  breakdownMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
+  breakdownRevenue: { fontSize: 14, color: Colors.green, fontWeight: "700" },
 
   // FILTROS
   filtersWrap: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 14, gap: 12 },
@@ -382,6 +473,9 @@ const s = StyleSheet.create({
   rowMetaRow: { flexDirection: "row", gap: 4, flexWrap: "wrap" },
   rowMetaPill: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: Colors.bg4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   rowMetaPillText: { fontSize: 9.5, color: Colors.ink3, fontWeight: "500" },
+  // MULTICNPJ Onda 2.4: pill da loja (violeta pra destacar)
+  rowCompanyPill: { backgroundColor: Colors.violetD, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 140 },
+  rowCompanyPillText: { fontSize: 9.5, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.2 },
   rowRight: { alignItems: "flex-end", gap: 4, flexDirection: "row" },
   rowAmount: { fontSize: 13, color: Colors.green, fontWeight: "700" },
   rowAmountStrike: { color: Colors.red, textDecorationLine: "line-through" as any },
