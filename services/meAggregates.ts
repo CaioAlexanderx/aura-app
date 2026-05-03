@@ -5,9 +5,9 @@
 // Usado quando consolidatedView=true no auth store.
 //
 // Onda 2.1: /me/dashboard
-// Onda 2.2 (atual): /me/transactions — lista paginada com filtros
-//   + ?company_id= opcional pra drill-down dentro do consolidado.
-// Proximas: /me/customers, /me/sales, /me/appointments
+// Onda 2.2: /me/transactions
+// Onda 2.3 (atual): /me/customers — lista UNICA owner-scoped
+// Proximas: /me/sales, /me/appointments
 // ============================================================
 import { request } from "@/services/api";
 
@@ -80,14 +80,14 @@ export type DashboardConsolidatedResponse = {
 // /me/transactions — Onda 2.2
 // ──────────────────────────────────────────────────────────
 export type TransactionFilters = {
-  start?: string;     // YYYY-MM-DD
-  end?: string;       // YYYY-MM-DD
+  start?: string;
+  end?: string;
   type?: "income" | "expense";
   status?: "confirmed" | "pending";
   q?: string;
   limit?: number;
   offset?: number;
-  company_id?: string;  // drill-down opcional dentro do consolidado
+  company_id?: string;
 };
 
 export type ConsolidatedTransaction = {
@@ -111,7 +111,6 @@ export type ConsolidatedTransaction = {
   employee_name: string | null;
   idempotency_key: string | null;
   source: "pdv" | "manual";
-  // Multi-CNPJ
   company_id: string;
   company_name: string;
 };
@@ -143,6 +142,49 @@ export type TransactionsConsolidatedResponse = {
   filtered_company_id: string | null;
 };
 
+// ──────────────────────────────────────────────────────────
+// /me/customers — Onda 2.3
+// ──────────────────────────────────────────────────────────
+export type CustomerFilters = {
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ConsolidatedCustomer = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  cpf_cnpj: string;
+  birthday: string;
+  birth_date: string | null;
+  instagram: string;
+  instagram_handle: string;
+  total_spent: number;
+  totalSpent: number;
+  visits: number;
+  visit_count: number;
+  last_purchase: string | null;
+  first_visit: string | null;
+  notes: string;
+  is_active: boolean;
+  rating: number | null;
+  created_at: string | null;
+  // Multi-CNPJ
+  company_id: string;
+  company_name: string;
+};
+
+export type CustomersConsolidatedResponse = {
+  customers: ConsolidatedCustomer[];
+  total: number;
+  limit: number;
+  offset: number;
+  plan_limit: number;
+  company_count: number;
+};
+
 export var meAggregatesApi = {
   // GET /me/dashboard — KPIs consolidados de todas as empresas do user.
   dashboard: function () {
@@ -163,5 +205,18 @@ export var meAggregatesApi = {
     if (filters?.company_id) qs.push("company_id=" + encodeURIComponent(filters.company_id));
     var suffix = qs.length ? "?" + qs.join("&") : "";
     return request<TransactionsConsolidatedResponse>("/me/transactions" + suffix, { retry: 1 });
+  },
+
+  // GET /me/customers — Lista UNICA owner-scoped (Onda 2.3).
+  // Decisao de produto: clientes sao do dono, nao da loja. Lista unica
+  // entre todos os CNPJs do mesmo owner. company_id em cada item indica
+  // a loja onde foi cadastrado (info pra UI mostrar badge).
+  customers: function (filters?: CustomerFilters) {
+    var qs: string[] = [];
+    if (filters?.search) qs.push("search=" + encodeURIComponent(filters.search));
+    if (filters?.limit) qs.push("limit=" + filters.limit);
+    if (filters?.offset) qs.push("offset=" + filters.offset);
+    var suffix = qs.length ? "?" + qs.join("&") : "";
+    return request<CustomersConsolidatedResponse>("/me/customers" + suffix, { retry: 1 });
   },
 };

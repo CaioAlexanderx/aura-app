@@ -1,9 +1,20 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi, ApiError } from "@/services/api";
+import { meAggregatesApi } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Customer } from "@/components/screens/clientes/types";
+
+// MULTICNPJ Sessao 2 Onda 2.3 (03/05/2026):
+// Hook ramifica entre /me/customers (consolidated) e /companies/:id/customers
+// (per-company). Backend ja retorna lista UNICA owner-scoped em ambos os
+// endpoints — vendedora membro so de Loja A ainda ve clientes registrados
+// em Loja B do mesmo dono.
+//
+// Mutations (POST/PATCH/DELETE) em modo consolidated:
+// resolvem automaticamente a primary do owner (do availableCompanies).
+// User nao precisa trocar de empresa pra criar/editar/deletar.
 
 // Processa deletes em lotes para nao sobrecarregar o servidor
 async function deleteBatched(
@@ -38,6 +49,9 @@ function mapApiCustomer(c: any): Customer {
     firstVisit: c.first_visit ? new Date(c.first_visit).toLocaleDateString("pt-BR") : c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString("pt-BR") : c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : "---",
     notes: c.notes || "",
     rating: c.rating != null ? parseInt(c.rating) : null,
+    // MULTICNPJ Onda 2.3: loja onde foi cadastrado
+    company_id: c.company_id || null,
+    company_name: c.company_name || null,
   };
 }
 
@@ -50,80 +64,160 @@ function parseBirthday(val: string): string | undefined {
 }
 
 export function useCustomers() {
-  const { company, token, isDemo } = useAuthStore();
+  const { company, token, isDemo, consolidatedView, availableCompanies } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // MULTICNPJ Onda 2.3: em modo consolidated, mutations precisam de uma
+  // empresa concreta. Resolve a primary do owner automaticamente.
+  const mutationCompanyId = useMemo(function () {
+    if (!consolidatedView) return companyId || null;
+    const primary = (availableCompanies || []).find(function (c: any) { return c.is_primary; });
+    return primary?.id || (availableCompanies?.[0]?.id ?? null);
+  }, [consolidatedView, companyId, availableCompanies]);
+
   const { data: apiData, isLoading, error: fetchError } = useQuery({
-    queryKey: ["customers", companyId],
-    queryFn: () => companiesApi.customers(companyId!),
-    enabled: !!companyId && !!token && !isDemo,
+    queryKey: consolidatedView ? ["customers", "me"] : ["customers", companyId],
+    queryFn: function () {
+      if (consolidatedView) {
+        return meAggregatesApi.customers();
+      }
+      return companiesApi.customers(companyId!);
+    },
+    enabled: (consolidatedView || !!companyId) && !!token && !isDemo,
     retry: 1,
     staleTime: 30000,
   });
 
   const planBlocked = (fetchError as any)?.status === 403;
 
-  const customers: Customer[] = useMemo(() => {
+  const customers: Customer[] = useMemo(function () {
     if (isDemo || planBlocked) return [];
-    const arr = apiData?.customers || apiData?.rows || apiData;
+    const arr = (apiData as any)?.customers || (apiData as any)?.rows || apiData;
     if (!(arr instanceof Array)) return [];
     return arr.map(mapApiCustomer);
   }, [apiData, isDemo, planBlocked]);
 
+  // Companies count vem do response em consolidated (pra FE decidir mostrar badge)
+  const companyCount = (apiData as any)?.company_count || (availableCompanies?.length || 1);
+
+  // Helper de invalidacao — invalida ambos os keys pra cobrir os dois modos
+  function invalidateCustomers() {
+    qc.invalidateQueries({ queryKey: ["customers"] });
+  }
+
   const addMutation = useMutation({
-    mutationFn: (body: any) => companiesApi.createCustomer(companyId!, body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", companyId] }); toast.success("Cliente cadastrado!"); },
-    onError: (err: any) => {
+    mutationFn: function (body: any) {
+      if (!mutationCompanyId) {
+        return Promise.reject(new Error("Empresa nao identificada"));
+      }
+      return companiesApi.createCustomer(mutationCompanyId, body);
+    },
+    onSuccess: function () {
+      invalidateCustomers();
+      toast.success("Cliente cadastrado!");
+    },
+    onError: function (err: any) {
       if (err instanceof ApiError && err.status === 403) toast.error("Clientes disponivel a partir do plano Negocio.");
       else toast.error(err?.message || "Erro ao salvar cliente");
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: any }) => companiesApi.updateCustomer(companyId!, id, body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", companyId] }); toast.success("Cliente atualizado!"); },
-    onError: (err: any) => toast.error(err?.message || "Erro ao atualizar cliente"),
+    mutationFn: function (params: { id: string; body: any; sourceCompanyId?: string | null }) {
+      // Em consolidated, usa o company_id do proprio cliente (sourceCompanyId)
+      // se disponivel — mais correto que primary, pq o BE espera owner-scope.
+      // Backend customers.js owner-scoped permite editar de qualquer loja
+      // do mesmo dono, mas usar o original e mais explicito.
+      const targetCid = params.sourceCompanyId || mutationCompanyId;
+      if (!targetCid) return Promise.reject(new Error("Empresa nao identificada"));
+      return companiesApi.updateCustomer(targetCid, params.id, params.body);
+    },
+    onSuccess: function () {
+      invalidateCustomers();
+      toast.success("Cliente atualizado!");
+    },
+    onError: function (err: any) {
+      toast.error(err?.message || "Erro ao atualizar cliente");
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (custId: string) => companiesApi.deleteCustomer(companyId!, custId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers", companyId] }); toast.success("Cliente excluido"); },
-    onError: (err: any) => {
+    mutationFn: function (params: { custId: string; sourceCompanyId?: string | null }) {
+      const targetCid = params.sourceCompanyId || mutationCompanyId;
+      if (!targetCid) return Promise.reject(new Error("Empresa nao identificada"));
+      return companiesApi.deleteCustomer(targetCid, params.custId);
+    },
+    onSuccess: function () {
+      invalidateCustomers();
+      toast.success("Cliente excluido");
+    },
+    onError: function (err: any) {
       if (err instanceof ApiError && err.status === 403) toast.error("Funcionalidade disponivel a partir do plano Negocio.");
       else toast.error("Erro ao excluir cliente");
     },
   });
 
   function addCustomer(c: Customer) {
-    if (!companyId) { toast.error("Empresa nao identificada"); return; }
+    if (!mutationCompanyId) { toast.error("Empresa nao identificada"); return; }
     if (isDemo) return;
-    addMutation.mutate({ name: c.name, email: c.email || undefined, phone: c.phone || undefined, instagram_handle: c.instagram || undefined, birth_date: parseBirthday(c.birthday), notes: c.notes || undefined });
+    addMutation.mutate({
+      name: c.name,
+      email: c.email || undefined,
+      phone: c.phone || undefined,
+      instagram_handle: c.instagram || undefined,
+      birth_date: parseBirthday(c.birthday),
+      notes: c.notes || undefined,
+    });
   }
 
   function updateCustomer(id: string, c: Partial<Customer>) {
-    if (!companyId || isDemo) return;
-    updateMutation.mutate({ id, body: { name: c.name, email: c.email || undefined, phone: c.phone || undefined, instagram_handle: c.instagram || undefined, birth_date: c.birthday ? parseBirthday(c.birthday) : undefined, notes: c.notes || undefined } });
+    if (!mutationCompanyId || isDemo) return;
+    // Resolve a empresa de origem do cliente (se vem da lista) pra mandar
+    // pro endpoint correto. Customer.company_id e preenchido pelo backend.
+    const existing = customers.find(function (x) { return x.id === id; });
+    const sourceCompanyId = existing?.company_id || null;
+    updateMutation.mutate({
+      id,
+      sourceCompanyId,
+      body: {
+        name: c.name,
+        email: c.email || undefined,
+        phone: c.phone || undefined,
+        instagram_handle: c.instagram || undefined,
+        birth_date: c.birthday ? parseBirthday(c.birthday) : undefined,
+        notes: c.notes || undefined,
+      },
+    });
   }
 
   function deleteCustomer(id: string) {
-    if (companyId && !isDemo) deleteMutation.mutate(id);
+    if (!mutationCompanyId || isDemo) return;
+    const existing = customers.find(function (x) { return x.id === id; });
+    const sourceCompanyId = existing?.company_id || null;
+    deleteMutation.mutate({ custId: id, sourceCompanyId });
   }
 
   // Bulk delete em lotes de 10 — nao sobrecarrega o servidor
   async function bulkDeleteCustomers(ids: string[]) {
-    if (!companyId || isDemo || ids.length === 0) return;
+    if (!mutationCompanyId || isDemo || ids.length === 0) return;
     setBulkDeleting(true);
-    // Feedback imediato para volumes grandes
     if (ids.length > 20) toast.info(`Excluindo ${ids.length} clientes...`);
     try {
+      // Pra cada id, resolve sourceCompanyId do customer.
+      // Como o helper deleteBatched recebe so um deleteFn(id), encapsulamos.
+      const customerById = new Map(customers.map(function (c) { return [c.id, c]; }));
       const { succeeded, failed } = await deleteBatched(
         ids,
-        (id) => companiesApi.deleteCustomer(companyId!, id),
-        10 // 10 por vez
+        function (id) {
+          const c = customerById.get(id);
+          const targetCid = c?.company_id || mutationCompanyId;
+          return companiesApi.deleteCustomer(targetCid!, id);
+        },
+        10
       );
-      qc.invalidateQueries({ queryKey: ["customers", companyId] });
+      invalidateCustomers();
       if (failed === 0) {
         toast.success(`${succeeded} cliente${succeeded !== 1 ? "s" : ""} excluido${succeeded !== 1 ? "s" : ""}`);
       } else {
@@ -137,5 +231,18 @@ export function useCustomers() {
     }
   }
 
-  return { customers, isLoading: isLoading && !isDemo, isDemo, planBlocked, bulkDeleting, addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers };
+  return {
+    customers,
+    isLoading: isLoading && !isDemo,
+    isDemo,
+    planBlocked,
+    bulkDeleting,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    bulkDeleteCustomers,
+    // MULTICNPJ Onda 2.3: info pra UI condicionar badge da loja
+    consolidatedView,
+    companyCount,
+  };
 }

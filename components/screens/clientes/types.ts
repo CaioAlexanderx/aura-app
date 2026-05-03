@@ -11,6 +11,10 @@ export type Customer = {
   firstVisit: string;
   notes: string;
   rating: number | null;
+  // MULTICNPJ Onda 2.3: empresa onde foi cadastrado.
+  // FE so mostra badge quando companyCount > 1 (multi-CNPJ ativo).
+  company_id?: string | null;
+  company_name?: string | null;
 };
 
 export const TABS = ["Clientes", "Ranking", "Retencao", "Avaliacoes"];
