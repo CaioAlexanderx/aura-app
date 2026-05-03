@@ -1,20 +1,23 @@
 import { useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
-  Modal, ActivityIndicator,
+  Modal, ActivityIndicator, Linking, Image, TextInput,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useDigitalOrders } from "@/hooks/useDigitalOrders";
+import { api } from "@/services/api";
+import { toast } from "@/components/Toast";
 import { cs } from "./shared";
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  pending_payment: { label: "Aguardando Pix", color: "#d97706", bg: "#fef3c7" },
-  confirmed:       { label: "Confirmado",     color: "#2563eb", bg: "#dbeafe" },
-  preparing:       { label: "Em preparo",     color: "#7c3aed", bg: "#ede9fe" },
-  ready:           { label: "Pronto",         color: "#059669", bg: "#d1fae5" },
-  delivered:       { label: "Entregue",       color: "#374151", bg: "#f3f4f6" },
-  cancelled:       { label: "Cancelado",      color: "#dc2626", bg: "#fee2e2" },
+  pending_payment:    { label: "Aguardando Pix",   color: "#d97706", bg: "#fef3c7" },
+  awaiting_approval:  { label: "Aguardando aprov.", color: "#dc2626", bg: "#fee2e2" },
+  confirmed:          { label: "Confirmado",        color: "#2563eb", bg: "#dbeafe" },
+  preparing:          { label: "Em preparo",        color: "#7c3aed", bg: "#ede9fe" },
+  ready:              { label: "Pronto",            color: "#059669", bg: "#d1fae5" },
+  delivered:          { label: "Entregue",          color: "#374151", bg: "#f3f4f6" },
+  cancelled:          { label: "Cancelado",         color: "#dc2626", bg: "#fee2e2" },
 };
 
 const NEXT_STATUS: Record<string, string> = {
@@ -24,12 +27,13 @@ const NEXT_STATUS: Record<string, string> = {
 };
 
 const CHIPS = [
-  { key: "all",             label: "Todos" },
-  { key: "pending_payment", label: "Pix" },
-  { key: "confirmed",       label: "Novos" },
-  { key: "preparing",       label: "Preparo" },
-  { key: "ready",           label: "Prontos" },
-  { key: "delivered",       label: "Entregues" },
+  { key: "all",                label: "Todos" },
+  { key: "awaiting_approval",  label: "Aguardando aprov." },
+  { key: "pending_payment",    label: "Pix gerado" },
+  { key: "confirmed",          label: "Novos" },
+  { key: "preparing",          label: "Preparo" },
+  { key: "ready",              label: "Prontos" },
+  { key: "delivered",          label: "Entregues" },
 ];
 
 function timeAgo(iso: string) {
@@ -45,10 +49,17 @@ function fmt(v: number | string) {
   return "R$ " + Number(v).toFixed(2).replace(".", ",");
 }
 
-export function TabPedidos() {
+export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState<any>(null);
+  const [proofZoom, setProofZoom] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [working, setWorking] = useState(false);
   const { orders, kpi, isLoading, refetch, updateStatus, isUpdating } = useDigitalOrders(filter);
+
+  // companyId pode vir via prop OU ser pego do hook (fallback usa qualquer endpoint que ja tem cid)
+  const cid = companyId || (orders[0]?.company_id) || null;
 
   async function advance() {
     if (!order) return;
@@ -64,13 +75,51 @@ export function TabPedidos() {
     setOrder(null);
   }
 
+  async function approvePayment() {
+    if (!order || !cid) return;
+    setWorking(true);
+    try {
+      await api.post(`/companies/${cid}/digital-channel/orders/${order.id}/approve-payment`, {});
+      toast.success("Pagamento aprovado!");
+      setOrder(null);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao aprovar pagamento");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function rejectPayment() {
+    if (!order || !cid) return;
+    setWorking(true);
+    try {
+      await api.post(`/companies/${cid}/digital-channel/orders/${order.id}/reject-payment`, {
+        reason: rejectReason.trim() || undefined,
+      });
+      toast.success("Pedido rejeitado");
+      setOrder(null);
+      setShowRejectInput(false);
+      setRejectReason("");
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao rejeitar");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  function openProof(url: string) {
+    setProofZoom(url);
+  }
+
   return (
     <View>
       {/* KPI Row */}
       <View style={s.kpiRow}>
-        <View style={[s.kpiCard, { borderTopColor: "#d97706" }]}>
-          <Text style={[s.kpiNum, { color: "#d97706" }]}>{kpi.pending_payment}</Text>
-          <Text style={s.kpiLabel}>Aguardando Pix</Text>
+        <View style={[s.kpiCard, { borderTopColor: "#dc2626" }]}>
+          <Text style={[s.kpiNum, { color: "#dc2626" }]}>{(kpi as any).awaiting_approval || 0}</Text>
+          <Text style={s.kpiLabel}>Aguardando aprov.</Text>
         </View>
         <View style={[s.kpiCard, { borderTopColor: Colors.violet }]}>
           <Text style={[s.kpiNum, { color: Colors.violet }]}>{kpi.confirmed}</Text>
@@ -107,10 +156,11 @@ export function TabPedidos() {
           <Text style={s.emptyDesc}>Quando clientes fizerem pedidos pelo site, eles aparecerão aqui.</Text>
         </View>
       ) : (
-        orders.map((o) => {
+        orders.map((o: any) => {
           const st = STATUS_MAP[o.status] || STATUS_MAP.cancelled;
+          const isAwaiting = o.status === "awaiting_approval";
           return (
-            <Pressable key={o.id} style={s.card} onPress={() => setOrder(o)}>
+            <Pressable key={o.id} style={[s.card, isAwaiting && s.cardHighlight]} onPress={() => setOrder(o)}>
               <View style={s.cardTop}>
                 <Text style={s.cardNum}>#{o.order_number}</Text>
                 <View style={[s.badge, { backgroundColor: st.bg }]}>
@@ -121,9 +171,19 @@ export function TabPedidos() {
               <View style={s.cardBottom}>
                 <Text style={s.cardTotal}>{fmt(o.total)}</Text>
                 <Text style={s.cardMeta}>
-                  {o.delivery_type === "delivery" ? "🚚 Entrega" : "🏪 Retirada"} · {timeAgo(o.created_at)}
+                  {o.payment_method === "on_delivery" ? "💵 Na entrega" : "💸 Pix"}
+                  {" · "}
+                  {o.delivery_type === "delivery" ? "🚚 Entrega" : "🏪 Retirada"}
+                  {" · "}
+                  {timeAgo(o.created_at)}
                 </Text>
               </View>
+              {isAwaiting && o.payment_proof_url && (
+                <View style={s.proofBadgeRow}>
+                  <Icon name="check" size={11} color={Colors.green} />
+                  <Text style={s.proofBadgeText}>Comprovante anexado</Text>
+                </View>
+              )}
             </Pressable>
           );
         })
@@ -135,13 +195,14 @@ export function TabPedidos() {
         animationType="slide"
         transparent
         presentationStyle="overFullScreen"
-        onRequestClose={() => setOrder(null)}
+        onRequestClose={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); }}
       >
         <View style={s.overlay}>
           <View style={s.sheet}>
             {order && (() => {
               const st = STATUS_MAP[order.status] || STATUS_MAP.cancelled;
               const nextSt = NEXT_STATUS[order.status];
+              const isAwaiting = order.status === "awaiting_approval";
               const canCancel = !["delivered", "cancelled"].includes(order.status);
               return (
                 <>
@@ -150,7 +211,7 @@ export function TabPedidos() {
                       <Text style={s.sheetTitle}>Pedido #{order.order_number}</Text>
                       <Text style={s.sheetSub}>{timeAgo(order.created_at)}</Text>
                     </View>
-                    <Pressable onPress={() => setOrder(null)} style={s.closeBtn}>
+                    <Pressable onPress={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); }} style={s.closeBtn}>
                       <Text style={{ fontSize: 20, color: Colors.ink3 }}>×</Text>
                     </Pressable>
                   </View>
@@ -160,10 +221,44 @@ export function TabPedidos() {
                       <Text style={[s.statusBannerText, { color: st.color }]}>{st.label}</Text>
                     </View>
 
+                    <Text style={s.sec}>Pagamento</Text>
+                    <View style={cs.card}>
+                      <Text style={s.dLine}>
+                        {order.payment_method === "on_delivery" ? "💵 Pagamento na entrega" : "💸 Pix manual"}
+                      </Text>
+                      <Text style={s.dSub}>
+                        {order.payment_status === "confirmed"
+                          ? "✓ Pagamento confirmado"
+                          : order.payment_method === "on_delivery"
+                            ? "Cliente paga no momento da entrega/retirada"
+                            : isAwaiting
+                              ? "Cliente avisou que pagou — confirme abaixo"
+                              : "Aguardando cliente pagar"}
+                      </Text>
+
+                      {order.payment_proof_url && (
+                        <Pressable onPress={() => openProof(order.payment_proof_url)} style={s.proofThumb}>
+                          {order.payment_proof_url.toLowerCase().includes(".pdf") ? (
+                            <View style={s.proofPdf}>
+                              <Text style={{ fontSize: 28 }}>📄</Text>
+                              <Text style={s.proofPdfText}>Ver comprovante (PDF)</Text>
+                            </View>
+                          ) : (
+                            <Image source={{ uri: order.payment_proof_url }} style={s.proofImg} resizeMode="cover" />
+                          )}
+                          <Text style={s.proofZoomHint}>🔍 Toque pra ampliar</Text>
+                        </Pressable>
+                      )}
+                    </View>
+
                     <Text style={s.sec}>Cliente</Text>
                     <View style={cs.card}>
                       <Text style={s.dLine}>{order.customer_name}</Text>
-                      {!!order.customer_phone && <Text style={s.dSub}>{order.customer_phone}</Text>}
+                      {!!order.customer_phone && (
+                        <Pressable onPress={() => Linking.openURL(`https://wa.me/${order.customer_phone.replace(/\D/g, "")}`)}>
+                          <Text style={[s.dSub, { color: Colors.violet3 }]}>{order.customer_phone} (abrir WhatsApp)</Text>
+                        </Pressable>
+                      )}
                       {!!order.customer_email && <Text style={s.dSub}>{order.customer_email}</Text>}
                     </View>
 
@@ -199,16 +294,51 @@ export function TabPedidos() {
                       </>
                     )}
 
+                    {/* Caixa de motivo de rejeição (aparece quando user clica em Rejeitar) */}
+                    {isAwaiting && showRejectInput && (
+                      <View style={[cs.card, { borderColor: "#fecaca", backgroundColor: "#fef2f2" }]}>
+                        <Text style={[cs.fieldLabel, { color: "#dc2626" }]}>Motivo da rejeição (opcional)</Text>
+                        <TextInput
+                          style={cs.input}
+                          value={rejectReason}
+                          onChangeText={setRejectReason}
+                          placeholder="Ex: comprovante não bate com o valor"
+                          placeholderTextColor={Colors.ink3}
+                          multiline
+                        />
+                      </View>
+                    )}
+
                     <View style={{ height: 24 }} />
                   </ScrollView>
 
                   <View style={s.sheetFoot}>
-                    {canCancel && (
+                    {isAwaiting && !showRejectInput && (
+                      <>
+                        <Pressable onPress={() => setShowRejectInput(true)} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
+                          <Text style={s.cancelText}>Rejeitar</Text>
+                        </Pressable>
+                        <Pressable onPress={approvePayment} disabled={working} style={[s.advBtn, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
+                          <Text style={s.advText}>{working ? "..." : "✓ Aprovar pagamento"}</Text>
+                        </Pressable>
+                      </>
+                    )}
+                    {isAwaiting && showRejectInput && (
+                      <>
+                        <Pressable onPress={() => { setShowRejectInput(false); setRejectReason(""); }} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
+                          <Text style={s.cancelText}>Voltar</Text>
+                        </Pressable>
+                        <Pressable onPress={rejectPayment} disabled={working} style={[s.advBtn, { backgroundColor: "#dc2626" }, working && { opacity: 0.6 }]}>
+                          <Text style={s.advText}>{working ? "..." : "Confirmar rejeição"}</Text>
+                        </Pressable>
+                      </>
+                    )}
+                    {!isAwaiting && canCancel && (
                       <Pressable onPress={cancel} disabled={isUpdating} style={[s.cancelBtn, isUpdating && { opacity: 0.6 }]}>
                         <Text style={s.cancelText}>Cancelar pedido</Text>
                       </Pressable>
                     )}
-                    {!!nextSt && (
+                    {!isAwaiting && !!nextSt && (
                       <Pressable onPress={advance} disabled={isUpdating} style={[s.advBtn, isUpdating && { opacity: 0.6 }]}>
                         <Text style={s.advText}>{isUpdating ? "..." : `→ ${STATUS_MAP[nextSt]?.label}`}</Text>
                       </Pressable>
@@ -219,6 +349,29 @@ export function TabPedidos() {
             })()}
           </View>
         </View>
+      </Modal>
+
+      {/* Lightbox do comprovante */}
+      <Modal
+        visible={!!proofZoom}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setProofZoom(null)}
+      >
+        <Pressable style={s.lightbox} onPress={() => setProofZoom(null)}>
+          {proofZoom && (
+            proofZoom.toLowerCase().includes(".pdf") ? (
+              <View style={{ alignItems: "center", gap: 16 }}>
+                <Text style={{ color: "#fff", fontSize: 18 }}>📄 Comprovante em PDF</Text>
+                <Pressable onPress={() => Linking.openURL(proofZoom)} style={s.lightboxOpenBtn}>
+                  <Text style={s.lightboxOpenText}>Abrir PDF em nova aba</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Image source={{ uri: proofZoom }} style={s.lightboxImg} resizeMode="contain" />
+            )
+          )}
+        </Pressable>
       </Modal>
     </View>
   );
@@ -236,14 +389,17 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
   emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
   card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
+  cardHighlight: { borderColor: "#fecaca", borderWidth: 2, backgroundColor: "#fff5f5" },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
   cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
   cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTotal: { fontSize: 15, fontWeight: "800", color: Colors.ink },
-  cardMeta: { fontSize: 11, color: Colors.ink3 },
+  cardMeta: { fontSize: 10, color: Colors.ink3, flex: 1, textAlign: "right", marginLeft: 8 },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: "700" },
+  proofBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
+  proofBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", overflow: "hidden" },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
@@ -255,6 +411,11 @@ const s = StyleSheet.create({
   sec: { fontSize: 11, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 14 },
   dLine: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   dSub: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
+  proofThumb: { marginTop: 12, alignItems: "center", gap: 6 },
+  proofImg: { width: "100%" as any, height: 180, borderRadius: 10, backgroundColor: Colors.bg4 },
+  proofPdf: { width: "100%" as any, height: 100, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", gap: 6 },
+  proofPdfText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  proofZoomHint: { fontSize: 11, color: Colors.ink3 },
   itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   itemName: { fontSize: 13, color: Colors.ink, flex: 1 },
   itemPrice: { fontSize: 13, fontWeight: "700", color: Colors.ink },
@@ -266,4 +427,9 @@ const s = StyleSheet.create({
   cancelText: { fontSize: 13, fontWeight: "700", color: Colors.ink3 },
   advBtn: { flex: 2, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   advText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  // Lightbox
+  lightbox: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center", padding: 20 },
+  lightboxImg: { width: "100%" as any, height: "80%" as any },
+  lightboxOpenBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
+  lightboxOpenText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
