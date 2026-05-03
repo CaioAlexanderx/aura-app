@@ -88,22 +88,29 @@ type AuthState = {
 };
 
 // MULTICNPJ Sessao 1: helper centralizado pra reload pos-switch.
-// Respeita `aura_post_switch_redirect` que o <RequireCompanyScope />
-// salva antes de disparar o switch. Sem essa chave, comportamento
-// default (volta pra "/") preservado.
+//
+// FIX 2026-05-03: ordem de prioridade do redirect:
+//   1. `aura_post_switch_redirect` (set pelo <RequireCompanyScope />): gate quer
+//      voltar pra URL especifica
+//   2. URL atual via window.location.reload(): preserva onde o user estava
+//      (caso ele use o switcher do header em qualquer tela)
+//
+// Antes era hardcoded "/" — sempre voltava pro Painel mesmo se o user troca
+// de empresa enquanto esta no Estoque, Financeiro etc.
 function reloadAfterSwitch() {
   if (Platform.OS !== "web" || typeof window === "undefined") return;
   setTimeout(() => {
     try {
-      const redirectTo = window.sessionStorage.getItem("aura_post_switch_redirect");
-      if (redirectTo && redirectTo !== "/") {
+      const explicitRedirect = window.sessionStorage.getItem("aura_post_switch_redirect");
+      if (explicitRedirect && explicitRedirect !== "/") {
         window.sessionStorage.removeItem("aura_post_switch_redirect");
-        window.location.href = redirectTo;
-      } else {
-        window.location.href = "/";
+        window.location.href = explicitRedirect;
+        return;
       }
+      // Default: preserva URL atual (reload na mesma pagina)
+      window.location.reload();
     } catch {
-      try { window.location.href = "/"; } catch {}
+      try { window.location.reload(); } catch {}
     }
   }, 200);
 }
@@ -384,8 +391,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
           });
         }
 
-        // No web, força reload (respeitando redirect do RequireCompanyScope se houver).
-        // No mobile, o estado atualizado faz subscribers reagirem.
+        // No web, força reload (preserva URL atual a menos que aura_post_switch_redirect
+        // tenha sido salvo pelo RequireCompanyScope). No mobile, o estado atualizado
+        // faz subscribers reagirem.
         reloadAfterSwitch();
       } catch (err) {
         set({ switching: false });
