@@ -15,6 +15,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { FolhaToolbar } from "@/components/FolhaToolbar";
 import type { Employee } from "@/components/screens/folha/types";
+import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -67,7 +68,9 @@ function FormField({ label, required, children, hint, error }: { label: string; 
   );
 }
 
-export default function FolhaScreen() {
+// MULTICNPJ Sessao 1: Folha exige CNPJ especifico (vinculo trabalhista por CNPJ).
+// No modo consolidado, RequireCompanyScope abre picker antes de renderizar.
+function FolhaScreenInner() {
   const [tab, setTab] = useState(0);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -229,6 +232,14 @@ export default function FolhaScreen() {
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
+  );
+}
+
+export default function FolhaScreen() {
+  return (
+    <RequireCompanyScope context="folha" actionLabel="gerenciar folha de pagamento">
+      <FolhaScreenInner />
+    </RequireCompanyScope>
   );
 }
 
