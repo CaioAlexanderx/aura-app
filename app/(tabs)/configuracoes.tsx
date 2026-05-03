@@ -45,70 +45,201 @@ const g = StyleSheet.create({
   badgeText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
 });
 
+// MULTICNPJ Onda 2.6: gate explicativo das secoes per-company quando user
+// esta em modo consolidado. Algumas configs sao especificas de uma empresa
+// (identidade, dados registrais, vendas, equipe) e nao fazem sentido agregadas.
+// Outras (perfil do dono, plano, empresas, aparencia, suporte) seguem visiveis.
+function PerCompanyGate({ availableCompanies, switchToCompany }: {
+  availableCompanies: any[];
+  switchToCompany: (id: string) => void;
+}) {
+  return (
+    <View style={pcg.wrap}>
+      <View style={pcg.row}>
+        <Icon name="bag" size={16} color="#a78bfa" />
+        <View style={{ flex: 1 }}>
+          <Text style={pcg.title}>Configuracoes por empresa</Text>
+          <Text style={pcg.desc}>
+            Identidade, dados registrais, equipe e politicas de venda sao especificas de cada CNPJ.
+            Selecione uma empresa para configura-la.
+          </Text>
+        </View>
+      </View>
+      <View style={pcg.list}>
+        {availableCompanies.map((c) => (
+          <Pressable
+            key={c.id}
+            onPress={() => switchToCompany(c.id)}
+            style={pcg.item}
+          >
+            <View style={pcg.itemIcon}>
+              <Text style={pcg.itemIconText}>{(c.trade_name || c.legal_name || "E").charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={pcg.itemTitle} numberOfLines={1}>
+                {c.trade_name || c.legal_name || "Empresa"}
+              </Text>
+              <Text style={pcg.itemDesc} numberOfLines={1}>
+                {c.is_primary ? "Empresa principal" : "Empresa secundaria"}
+              </Text>
+            </View>
+            <Icon name="chevron_right" size={16} color={Colors.ink3} />
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const pcg = StyleSheet.create({
+  wrap: {
+    backgroundColor: "rgba(124,58,237,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    gap: 14,
+  },
+  row: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  title: { fontSize: 13, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2, marginBottom: 4 },
+  desc: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
+  list: { gap: 6 },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: Colors.bg3,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  itemIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: Colors.violetD,
+    borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+  },
+  itemIconText: { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
+  itemTitle: { fontSize: 13, fontWeight: "600", color: Colors.ink },
+  itemDesc: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+});
+
 export default function ConfiguracoesScreen() {
-  const { user, company, isDemo, availableCompanies } = useAuthStore();
+  // MULTICNPJ Onda 2.6: detecta consolidatedView e divide a tela em
+  // secoes globais (sempre visiveis) vs per-company (com gate em consolidated).
+  const { user, company, isDemo, availableCompanies, consolidatedView, switchCompany } = useAuthStore();
   const profile = useConfigProfile();
   const plan    = company?.plan || "essencial";
   const planDat = PLANS[plan] || PLANS.essencial;
   const isEssencial = plan === "essencial";
   const totalCompanies = availableCompanies?.length || 1;
 
+  function handleSwitchToCompany(companyId: string) {
+    // Switch + redireciona pra propria tela de Config (deep link mantido).
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem("aura_post_switch_redirect", "/configuracoes"); } catch {}
+    }
+    switchCompany(companyId);
+  }
+
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
-      <ProfileHero
-        companyName={profile.companyName}
-        cnpj={profile.cnpj}
-        taxRegime={profile.taxRegime}
-        profileFields={profile.profileFields}
-        onLogoSaved={profile.saveLogoUrl}
-        onLogoRemoved={profile.removeLogoUrl}
-      />
+      {/* Em consolidated, ProfileHero seria do "company atual" que nao existe.
+          Ocultar e usar um header simples no topo. */}
+      {!consolidatedView && (
+        <ProfileHero
+          companyName={profile.companyName}
+          cnpj={profile.cnpj}
+          taxRegime={profile.taxRegime}
+          profileFields={profile.profileFields}
+          onLogoSaved={profile.saveLogoUrl}
+          onLogoRemoved={profile.removeLogoUrl}
+        />
+      )}
 
-      {profile.loading && (
+      {consolidatedView && (
+        <View style={s.consolidatedHero}>
+          <Icon name="bag" size={20} color="#a78bfa" />
+          <View style={{ flex: 1 }}>
+            <Text style={s.consolidatedHeroTitle}>Configuracoes — Visao consolidada</Text>
+            <Text style={s.consolidatedHeroDesc}>
+              {totalCompanies} empresa{totalCompanies !== 1 ? "s" : ""} ativa{totalCompanies !== 1 ? "s" : ""}.
+              Configuracoes globais ficam aqui; especificas exigem entrar em uma empresa.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {profile.loading && !consolidatedView && (
         <View style={s.loadingBox}>
           <ActivityIndicator color={Colors.violet3} />
           <Text style={s.loadingText}>Carregando perfil...</Text>
         </View>
       )}
 
-      {!profile.loading && (
+      {(!profile.loading || consolidatedView) && (
         <>
-          {/* IDENTIDADE */}
-          <SectionTitle title="Identidade" />
-          <Card>
-            <EditField label="Nome da empresa" value={profile.companyName} onChange={profile.setCompanyName} placeholder="Ex: Barbearia do Caio" />
-            <View style={sh.fieldDivider} />
-            <EditField label="Endereco" value={profile.address} onChange={profile.setAddress} placeholder="Rua, numero, cidade - UF" multiline />
-          </Card>
+          {/* ============================================
+              SECOES PER-COMPANY (sub-gated em consolidated)
+              ============================================ */}
+          {!consolidatedView && (
+            <>
+              {/* IDENTIDADE */}
+              <SectionTitle title="Identidade" />
+              <Card>
+                <EditField label="Nome da empresa" value={profile.companyName} onChange={profile.setCompanyName} placeholder="Ex: Barbearia do Caio" />
+                <View style={sh.fieldDivider} />
+                <EditField label="Endereco" value={profile.address} onChange={profile.setAddress} placeholder="Rua, numero, cidade - UF" multiline />
+              </Card>
 
-          {/* CONTATO */}
-          <SectionTitle title="Contato" />
-          <Card>
-            <EditField label="E-mail da empresa" value={profile.email} onChange={profile.setEmail}
-              placeholder="contato@empresa.com" keyboardType="email-address" autoCapitalize="none"
-              error={profile.email ? profile.emailError : null}
-              hint={!profile.emailError ? "Usado para comunicacoes e notas fiscais" : undefined}
-            />
-            <View style={sh.fieldDivider} />
-            <EditField label="Telefone" value={profile.phone} onChange={(v) => profile.setPhone(maskPhone(v))}
-              placeholder="(12) 99999-0000" keyboardType="phone-pad"
-              error={profile.phone ? profile.phoneError : null}
-              hint={!profile.phoneError ? "Aparece na vitrine e no canal digital" : undefined}
-            />
-            {!profile.hasErrors && (
-              <View style={s.contactNote}>
-                <Icon name="info" size={13} color={Colors.ink3} />
-                <Text style={s.contactNoteText}>Alteracoes entram em vigor apos salvar.</Text>
-              </View>
-            )}
-          </Card>
+              {/* CONTATO */}
+              <SectionTitle title="Contato" />
+              <Card>
+                <EditField label="E-mail da empresa" value={profile.email} onChange={profile.setEmail}
+                  placeholder="contato@empresa.com" keyboardType="email-address" autoCapitalize="none"
+                  error={profile.email ? profile.emailError : null}
+                  hint={!profile.emailError ? "Usado para comunicacoes e notas fiscais" : undefined}
+                />
+                <View style={sh.fieldDivider} />
+                <EditField label="Telefone" value={profile.phone} onChange={(v) => profile.setPhone(maskPhone(v))}
+                  placeholder="(12) 99999-0000" keyboardType="phone-pad"
+                  error={profile.phone ? profile.phoneError : null}
+                  hint={!profile.phoneError ? "Aparece na vitrine e no canal digital" : undefined}
+                />
+                {!profile.hasErrors && (
+                  <View style={s.contactNote}>
+                    <Icon name="info" size={13} color={Colors.ink3} />
+                    <Text style={s.contactNoteText}>Alteracoes entram em vigor apos salvar.</Text>
+                  </View>
+                )}
+              </Card>
 
-          {/* DADOS REGISTRAIS */}
-          <SectionTitle title="Dados registrais" />
-          <CnpjSection cnpj={profile.cnpj} taxRegime={profile.taxRegime} onCnpjSaved={profile.onCnpjSaved} />
+              {/* DADOS REGISTRAIS */}
+              <SectionTitle title="Dados registrais" />
+              <CnpjSection cnpj={profile.cnpj} taxRegime={profile.taxRegime} onCnpjSaved={profile.onCnpjSaved} />
+            </>
+          )}
 
-          {/* PLANO ATUAL */}
+          {/* Gate "Configuracoes por empresa" so em consolidated.
+              Aparece no lugar das secoes per-company acima. */}
+          {consolidatedView && availableCompanies && availableCompanies.length > 0 && (
+            <>
+              <SectionTitle title="Configuracoes especificas" />
+              <PerCompanyGate
+                availableCompanies={availableCompanies}
+                switchToCompany={handleSwitchToCompany}
+              />
+            </>
+          )}
+
+          {/* ============================================
+              SECOES GLOBAIS (sempre visiveis)
+              ============================================ */}
+
+          {/* PLANO ATUAL — global (plano e do dono, nao da empresa em Multi-CNPJ) */}
           <SectionTitle title="Plano atual" />
           <Card>
             <View style={s.planRow}>
@@ -121,10 +252,7 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
-          {/* MINHAS EMPRESAS — gestao Multi-CNPJ (M1-07) */}
-          {/* Sempre visivel: mesmo com 1 empresa o user precisa achar onde
-              adicionar a 2a. No Essencial o link continua ali, e a tela
-              mostra o bloqueio + CTA de upgrade. */}
+          {/* MINHAS EMPRESAS — sempre visivel */}
           <SectionTitle title="Empresas" />
           <Pressable onPress={() => router.push("/empresas")} style={s.linkCard}>
             <View style={s.linkCardIcon}>
@@ -146,25 +274,33 @@ export default function ConfiguracoesScreen() {
             <Icon name="chevron_right" size={16} color={Colors.ink3} />
           </Pressable>
 
-          {/* VENDAS — politicas do caixa + cupons */}
-          <SectionTitle title="Vendas" />
-          <PdvSettingsCard />
-          <Pressable onPress={() => router.push("/(tabs)/cupons")} style={s.linkCard}>
-            <View style={s.linkCardIcon}>
-              <Icon name="star" size={18} color={Colors.violet3} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.linkCardTitle}>Cupons de desconto</Text>
-              <Text style={s.linkCardDesc}>Crie e gerencie cupons para oferecer descontos no caixa</Text>
-            </View>
-            <Icon name="chevron_right" size={16} color={Colors.ink3} />
-          </Pressable>
+          {/* VENDAS — per-company (PDV settings sao por empresa) */}
+          {!consolidatedView && (
+            <>
+              <SectionTitle title="Vendas" />
+              <PdvSettingsCard />
+              <Pressable onPress={() => router.push("/(tabs)/cupons")} style={s.linkCard}>
+                <View style={s.linkCardIcon}>
+                  <Icon name="star" size={18} color={Colors.violet3} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.linkCardTitle}>Cupons de desconto</Text>
+                  <Text style={s.linkCardDesc}>Crie e gerencie cupons para oferecer descontos no caixa</Text>
+                </View>
+                <Icon name="chevron_right" size={16} color={Colors.ink3} />
+              </Pressable>
+            </>
+          )}
 
-          {/* EQUIPE — bloqueado no Essencial */}
-          <SectionTitle title="Equipe" />
-          {isEssencial ? <EquipeGate /> : <MembersSection />}
+          {/* EQUIPE — per-company (members/permissoes sao por empresa) */}
+          {!consolidatedView && (
+            <>
+              <SectionTitle title="Equipe" />
+              {isEssencial ? <EquipeGate /> : <MembersSection />}
+            </>
+          )}
 
-          {/* MINHA CONTA */}
+          {/* MINHA CONTA — global (perfil do user, nao da empresa) */}
           <SectionTitle title="Minha conta" />
           <Card>
             <InfoRow label="Nome" value={user?.name || ""} />
@@ -176,11 +312,11 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
-          {/* APARENCIA — PR25 #11 */}
+          {/* APARENCIA — global (preferencia do user) */}
           <SectionTitle title="Aparencia" />
           <ThemeSwitchCard />
 
-          {/* SUPORTE */}
+          {/* SUPORTE — global */}
           <SectionTitle title="Suporte" />
           <View style={s.supportRow}>
             <Pressable onPress={() => Linking.openURL(AURA_WHATSAPP)} style={s.supportBtn}>
@@ -193,29 +329,31 @@ export default function ConfiguracoesScreen() {
             </Pressable>
           </View>
 
-          {/* SALVAR */}
-          <View style={s.saveWrap}>
-            {profile.hasErrors && (
-              <View style={s.errorBanner}>
-                <Icon name="alert" size={14} color={Colors.red} />
-                <Text style={s.errorBannerText}>Corrija os campos marcados antes de salvar.</Text>
-              </View>
-            )}
-            <Pressable onPress={() => { profile.handleSave().then(() => { if (!profile.hasErrors) toast.success("Perfil atualizado"); }); }}
-              disabled={profile.hasErrors || profile.saving}
-              style={[s.saveBtn, profile.savedOk && s.saveBtnOk, profile.hasErrors && s.saveBtnDisabled]}>
-              {profile.saving ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : profile.savedOk ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Icon name="check" size={16} color="#fff" />
-                  <Text style={s.saveBtnText}>Salvo com sucesso!</Text>
+          {/* SALVAR — so per-company */}
+          {!consolidatedView && (
+            <View style={s.saveWrap}>
+              {profile.hasErrors && (
+                <View style={s.errorBanner}>
+                  <Icon name="alert" size={14} color={Colors.red} />
+                  <Text style={s.errorBannerText}>Corrija os campos marcados antes de salvar.</Text>
                 </View>
-              ) : (
-                <Text style={s.saveBtnText}>{profile.hasErrors ? "Corrija os erros acima" : "Salvar alteracoes"}</Text>
               )}
-            </Pressable>
-          </View>
+              <Pressable onPress={() => { profile.handleSave().then(() => { if (!profile.hasErrors) toast.success("Perfil atualizado"); }); }}
+                disabled={profile.hasErrors || profile.saving}
+                style={[s.saveBtn, profile.savedOk && s.saveBtnOk, profile.hasErrors && s.saveBtnDisabled]}>
+                {profile.saving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : profile.savedOk ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Icon name="check" size={16} color="#fff" />
+                    <Text style={s.saveBtnText}>Salvo com sucesso!</Text>
+                  </View>
+                ) : (
+                  <Text style={s.saveBtnText}>{profile.hasErrors ? "Corrija os erros acima" : "Salvar alteracoes"}</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
 
           <View style={{ marginTop: 20 }}><ReferralCard /></View>
 
@@ -264,4 +402,18 @@ const s = StyleSheet.create({
   saveBtnText:    { color: "#fff", fontSize: 15, fontWeight: "700" },
   demoBanner:     { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 20 },
   demoBannerText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+  // MULTICNPJ Onda 2.6
+  consolidatedHero: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+    backgroundColor: "rgba(124,58,237,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  consolidatedHeroTitle: { fontSize: 14, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2, marginBottom: 4 },
+  consolidatedHeroDesc: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
 });
