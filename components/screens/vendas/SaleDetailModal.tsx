@@ -3,21 +3,18 @@ import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextI
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSaleDetail, useCancelSale } from "@/hooks/useSales";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
 //
-// Renderiza:
-//   - Header: total, data/hora, metodo, status (badge cancelada)
-//   - Cliente + Vendedora
-//   - Lista de items (foto, nome, qty, preco, total)
-//   - Footer com 2 botoes:
-//       1. "Editar lancamento" -> abre TransactionModal via callback
-//          (parente passa transaction_id pra abrir corretamente)
-//       2. "Cancelar venda" -> ConfirmDialog com textarea reason
-//          So aparece se a venda estiver ATIVA
+// MULTICNPJ Onda 2.4 (03/05/2026): aceita prop `companyId` opcional.
+// Em modo consolidated, vendas.tsx passa o sale.company_id da listagem
+// pra que useSaleDetail e useCancelSale chamem o endpoint correto.
+// Default (modo per-company) = company.id do auth store.
+//
+// Tambem aceita `companyName` opcional pra mostrar badge no header
+// indicando qual loja registrou a venda.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -44,14 +41,18 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 export function SaleDetailModal({
   visible, saleId, onClose, onEditTransaction,
+  companyId, companyName,
 }: {
   visible: boolean;
   saleId: string | null;
   onClose: () => void;
   onEditTransaction?: (transactionId: string) => void;
+  // MULTICNPJ Onda 2.4: passados em modo consolidated (sale.company_id+name)
+  companyId?: string;
+  companyName?: string;
 }) {
-  const { detail, isLoading, error } = useSaleDetail(visible ? saleId : null);
-  const { cancelSale, isCancelling } = useCancelSale();
+  const { detail, isLoading, error } = useSaleDetail(visible ? saleId : null, companyId);
+  const { cancelSale, isCancelling } = useCancelSale(companyId);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -105,6 +106,12 @@ export function SaleDetailModal({
                   <Text style={s.cancelledText}>Cancelada</Text>
                 </View>
               )}
+              {/* MULTICNPJ Onda 2.4: badge da loja */}
+              {companyName && (
+                <View style={s.companyBadge}>
+                  <Text style={s.companyBadgeText} numberOfLines={1}>{companyName}</Text>
+                </View>
+              )}
             </View>
             {sale && <Text style={s.headerDate}>{fmtDateTime(sale.created_at)}</Text>}
           </View>
@@ -130,7 +137,6 @@ export function SaleDetailModal({
         {/* Conteudo */}
         {detail && sale && (
           <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 4 }}>
-            {/* Card de totais */}
             <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
               <Text style={s.totalLabel}>Valor da venda</Text>
               <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(sale.total_amount)}</Text>
@@ -155,7 +161,6 @@ export function SaleDetailModal({
               </View>
             </View>
 
-            {/* Cliente + Vendedora */}
             <View style={s.peopleRow}>
               <View style={s.personCard}>
                 <Icon name="users" size={12} color={Colors.ink3} />
@@ -174,7 +179,6 @@ export function SaleDetailModal({
               </View>
             </View>
 
-            {/* Items */}
             <Text style={s.sectionTitle}>Mercadorias</Text>
             <View style={s.itemsBox}>
               {items.length === 0 && (
@@ -203,7 +207,6 @@ export function SaleDetailModal({
               })}
             </View>
 
-            {/* Notas se houver */}
             {sale.notes && (
               <View style={s.notesBox}>
                 <Text style={s.notesLabel}>Observacoes</Text>
@@ -211,7 +214,6 @@ export function SaleDetailModal({
               </View>
             )}
 
-            {/* Cancelled hint */}
             {isCancelled && sale.cancelled_at && (
               <View style={s.cancelledHint}>
                 <Icon name="info" size={12} color={Colors.red} />
@@ -222,7 +224,6 @@ export function SaleDetailModal({
               </View>
             )}
 
-            {/* Acoes */}
             <View style={s.actionsRow}>
               {sale.transaction_id && onEditTransaction && (
                 <Pressable
@@ -254,7 +255,6 @@ export function SaleDetailModal({
         )}
       </View>
 
-      {/* Confirmacao de cancelamento */}
       {confirmCancel && (
         <View style={s.confirmOverlay}>
           <View style={s.confirmModal}>
@@ -312,11 +312,14 @@ const s = StyleSheet.create({
     maxHeight: "92%",
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 16 },
-  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   headerTitle: { fontSize: 18, color: Colors.ink, fontWeight: "700" },
   headerDate: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
   cancelledBadge: { backgroundColor: Colors.redD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.red + "55" },
   cancelledText: { fontSize: 9, color: Colors.red, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
+  // MULTICNPJ Onda 2.4
+  companyBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 200 },
+  companyBadgeText: { fontSize: 9, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.4 },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
   closeText: { fontSize: 16, color: Colors.ink3, fontWeight: "600" },
 
@@ -366,7 +369,6 @@ const s = StyleSheet.create({
   actionCancel: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   actionCancelText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 
-  // ConfirmDialog inline (sobre o modal pra preservar contexto)
   confirmOverlay: {
     position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center",

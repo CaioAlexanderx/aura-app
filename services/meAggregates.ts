@@ -6,8 +6,8 @@
 //
 // Onda 2.1: /me/dashboard
 // Onda 2.2: /me/transactions
-// Onda 2.3 (atual): /me/customers — lista UNICA owner-scoped
-// Proximas: /me/sales, /me/appointments
+// Onda 2.3: /me/customers — lista UNICA owner-scoped
+// Onda 2.4 (atual): /me/sales — listagem agregada com breakdown
 // ============================================================
 import { request } from "@/services/api";
 
@@ -185,6 +185,70 @@ export type CustomersConsolidatedResponse = {
   company_count: number;
 };
 
+// ──────────────────────────────────────────────────────────
+// /me/sales — Onda 2.4
+//
+// Mesma shape do /companies/:id/sales + breakdown[] por empresa.
+// Pra cancelar/abrir detalhe, FE usa companyId que vem em sale.company_id
+// e chama o endpoint per-company (/companies/:cid/sales/:sid/cancel).
+// ──────────────────────────────────────────────────────────
+export type SalesFilters = {
+  date_from?: string;  // ISO timestamptz
+  date_to?: string;
+  status?: "all" | "active" | "cancelled";
+  seller_id?: string;
+  customer_id?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+  company_id?: string;  // drill-down opcional dentro do consolidado
+};
+
+export type ConsolidatedSalesListItem = {
+  id: string;
+  total_amount: number;
+  discount_amount: number;
+  payment_method: string | null;
+  status: "completed" | "cancelled";
+  cancelled_at: string | null;
+  created_at: string;
+  customer: { id: string; name: string } | null;
+  seller: { id: string | null; name: string | null };
+  items_count: number;
+  transaction_id: string | null;
+  // Multi-CNPJ
+  company_id: string;
+  company_name: string;
+};
+
+export type SalesBreakdown = {
+  company_id: string;
+  company_name: string;
+  is_primary: boolean;
+  total_sales: number;
+  active_sales: number;
+  cancelled_sales: number;
+  revenue: number;
+  avg_ticket: number;
+};
+
+export type SalesConsolidatedResponse = {
+  sales: ConsolidatedSalesListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  stats: {
+    total_sales: number;
+    active_sales: number;
+    cancelled_sales: number;
+    revenue: number;
+    avg_ticket: number;
+  };
+  breakdown: SalesBreakdown[];
+  company_count: number;
+  filtered_company_id: string | null;
+};
+
 export var meAggregatesApi = {
   // GET /me/dashboard — KPIs consolidados de todas as empresas do user.
   dashboard: function () {
@@ -208,9 +272,6 @@ export var meAggregatesApi = {
   },
 
   // GET /me/customers — Lista UNICA owner-scoped (Onda 2.3).
-  // Decisao de produto: clientes sao do dono, nao da loja. Lista unica
-  // entre todos os CNPJs do mesmo owner. company_id em cada item indica
-  // a loja onde foi cadastrado (info pra UI mostrar badge).
   customers: function (filters?: CustomerFilters) {
     var qs: string[] = [];
     if (filters?.search) qs.push("search=" + encodeURIComponent(filters.search));
@@ -218,5 +279,22 @@ export var meAggregatesApi = {
     if (filters?.offset) qs.push("offset=" + filters.offset);
     var suffix = qs.length ? "?" + qs.join("&") : "";
     return request<CustomersConsolidatedResponse>("/me/customers" + suffix, { retry: 1 });
+  },
+
+  // GET /me/sales — Lista agregada de vendas (Onda 2.4).
+  // Passar `company_id` faz drill-down dentro do consolidado.
+  sales: function (filters?: SalesFilters) {
+    var qs: string[] = [];
+    if (filters?.date_from) qs.push("date_from=" + encodeURIComponent(filters.date_from));
+    if (filters?.date_to) qs.push("date_to=" + encodeURIComponent(filters.date_to));
+    if (filters?.status && filters.status !== "all") qs.push("status=" + filters.status);
+    if (filters?.seller_id) qs.push("seller_id=" + encodeURIComponent(filters.seller_id));
+    if (filters?.customer_id) qs.push("customer_id=" + encodeURIComponent(filters.customer_id));
+    if (filters?.q) qs.push("q=" + encodeURIComponent(filters.q));
+    if (filters?.limit) qs.push("limit=" + filters.limit);
+    if (filters?.offset) qs.push("offset=" + filters.offset);
+    if (filters?.company_id) qs.push("company_id=" + encodeURIComponent(filters.company_id));
+    var suffix = qs.length ? "?" + qs.join("&") : "";
+    return request<SalesConsolidatedResponse>("/me/sales" + suffix, { retry: 1 });
   },
 };
