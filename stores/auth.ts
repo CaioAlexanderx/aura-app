@@ -87,6 +87,27 @@ type AuthState = {
   addCompany: (body: CreateCompanyBody) => Promise<CreateCompanyResponse>;
 };
 
+// MULTICNPJ Sessao 1: helper centralizado pra reload pos-switch.
+// Respeita `aura_post_switch_redirect` que o <RequireCompanyScope />
+// salva antes de disparar o switch. Sem essa chave, comportamento
+// default (volta pra "/") preservado.
+function reloadAfterSwitch() {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  setTimeout(() => {
+    try {
+      const redirectTo = window.sessionStorage.getItem("aura_post_switch_redirect");
+      if (redirectTo && redirectTo !== "/") {
+        window.sessionStorage.removeItem("aura_post_switch_redirect");
+        window.location.href = redirectTo;
+      } else {
+        window.location.href = "/";
+      }
+    } catch {
+      try { window.location.href = "/"; } catch {}
+    }
+  }, 200);
+}
+
 export const useAuthStore = create<AuthState>((set, get) => {
   setTokenGetter(() => get().token);
 
@@ -163,8 +184,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
           companyCount,
         });
 
-        // Carrega lista de empresas em background (Multi-CNPJ).
-        // No modo consolidado, isso e o que vai popular o switcher.
         backgroundLoadCompanies();
       } catch {
         await storage.del();
@@ -179,7 +198,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res: any = await authApi.login(email, password);
         const { token, user, company } = res;
         const refreshToken = res.refresh_token || null;
-        // MULTICNPJ Sessao 1: consume consolidated_view da resposta.
         const consolidatedFromApi = !!res.consolidated_view;
         const companyCount = res.company_count || 0;
 
@@ -249,7 +267,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     setCompanyLogo: (logo) => set({ companyLogo: logo }),
 
-    // Atualiza company no store sem re-login (usado apos salvar perfil em Configuracoes)
     updateCompany: (partial) => {
       const current = get().company;
       if (!current) return;
@@ -287,7 +304,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     // ── Multi-CNPJ actions (M1-05) ────────────────────────
 
-    // GET /auth/companies — alimenta o switcher
     loadCompanies: async () => {
       if (!get().token) return;
       set({ companiesLoading: true });
@@ -295,7 +311,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res = await authMulticnpjApi.companies();
         set({
           availableCompanies: res.companies || [],
-          // /auth/companies tambem retorna consolidated_view (espelha JWT atual)
           consolidatedView: !!res.consolidated_view,
           companyCount: res.companies?.length || 0,
           companiesLoading: false,
@@ -306,13 +321,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
     },
 
-    // POST /auth/switch-company — troca contexto e re-emite token
-    // Aceita "all" para modo consolidado.
     switchCompany: async (companyId: string | "all") => {
       const state = get();
       if (!state.token) throw new Error("Não autenticado");
 
-      // Se já está na empresa pedida e não é modo consolidado, no-op
       if (
         companyId !== "all" &&
         state.company?.id === companyId &&
@@ -326,28 +338,23 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res = await authMulticnpjApi.switchCompany(companyId);
         const newToken = res.token;
 
-        // Persiste novo access token
         await storage.set(newToken);
 
         if (res.consolidated_view) {
-          // Modo "Todas as empresas"
           set({
             token: newToken,
             company: null,
             consolidatedView: true,
             switching: false,
-            // Mantém availableCompanies — só atualiza is_current
             availableCompanies: state.availableCompanies.map((c) => ({
               ...c,
               is_current: false,
             })),
           });
         } else {
-          // Modo empresa específica
           const cc = res.current_company;
           if (!cc) throw new Error("Resposta inválida do servidor");
 
-          // Monta objeto compatível com type Company (LoginResponse["company"])
           const newCompany: any = {
             id: cc.id,
             name: cc.name,
@@ -377,24 +384,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
           });
         }
 
-        // No web, força reload pra garantir estado limpo nas telas que cachearam companyId.
-        // No mobile, o estado atualizado faz subscribers reagirem; navegação volta pra raiz.
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          setTimeout(() => {
-            try { window.location.href = "/"; } catch {}
-          }, 200);
-        }
+        // No web, força reload (respeitando redirect do RequireCompanyScope se houver).
+        // No mobile, o estado atualizado faz subscribers reagirem.
+        reloadAfterSwitch();
       } catch (err) {
         set({ switching: false });
         throw err;
       }
     },
 
-    // POST /me/companies — cria empresa adicional
-    // Após sucesso, recarrega availableCompanies pra incluir a nova.
     addCompany: async (body: CreateCompanyBody) => {
       const res = await userCompaniesApi.create(body);
-      // Recarrega lista (não bloqueia o caller pra UI mostrar sucesso rápido)
       get().loadCompanies().catch(() => {});
       return res;
     },
