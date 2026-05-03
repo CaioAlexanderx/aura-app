@@ -11,17 +11,41 @@ type Props = {
   onComplete?: (result: { imported: number; skipped: number; errors: string[] }) => void;
 };
 
-// Simple CSV parser (handles quoted fields, BOM, semicolons)
+// FIX: parser CSV com suporte a campos entre aspas (quoted fields).
+// A versão anterior usava line.split(sep) simples, que quebrava
+// nomes de produtos com ponto-e-vírgula (ex: "Tênis Ref; 031 ..."):
+// o split extra deslocava todas as colunas seguintes, fazendo o
+// preço de venda receber "par" → parseBRL null → erro de importação.
+function parseCSVLine(line: string, sep: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { current += c; }
+    } else {
+      if (c === '"') { inQuotes = true; }
+      else if (c === sep) { result.push(current.trim()); current = ''; }
+      else { current += c; }
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
 function parseCSV(text: string): Record<string, string>[] {
   const clean = text.replace(/^﻿/, ''); // remove BOM
   const lines = clean.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
 
   const sep = lines[0].includes(';') ? ';' : ',';
-  const headers = lines[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim());
+  const headers = parseCSVLine(lines[0], sep).map(h => h.trim());
 
   return lines.slice(1).map(line => {
-    const values = line.split(sep).map(v => v.replace(/^"|"$/g, '').trim());
+    const values = parseCSVLine(line, sep);
     const row: Record<string, string> = {};
     headers.forEach((h, i) => { if (h) row[h] = values[i] || ''; });
     return row;
