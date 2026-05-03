@@ -6,6 +6,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { BASE_URL } from "@/services/api";
 import { Field, SectionTitle, StatusBadge, COLOR_PRESETS, cs } from "./shared";
+import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
 
 type Props = {
   config: any;
@@ -24,8 +25,8 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
   const [tagline, setTagline] = useState(config.tagline || "");
   const [description, setDescription] = useState(config.description || "");
-  const [phone, setPhone] = useState(config.phone || "");
-  const [whatsapp, setWhatsapp] = useState(config.whatsapp || "");
+  const [phone, setPhone] = useState(maskPhone(config.phone || ""));
+  const [whatsapp, setWhatsapp] = useState(maskPhone(config.whatsapp || ""));
   const [instagram, setInstagram] = useState(config.instagram || "");
   const [address, setAddress] = useState(config.address || "");
   const [color, setColor] = useState(config.primary_color || "#7c3aed");
@@ -40,13 +41,14 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [pixCpfCnpj, setPixCpfCnpj] = useState("");
   const [pixEmail, setPixEmail] = useState("");
   const [pixPhone, setPixPhone] = useState("");
+  const [pixBirthDate, setPixBirthDate] = useState("");
   const [pixCompanyType, setPixCompanyType] = useState<"MEI" | "LTDA" | "INDIVIDUAL">("MEI");
 
   useEffect(() => {
     if (!config.exists) return;
     setSiteName(config.site_name || ""); setTagline(config.tagline || "");
-    setDescription(config.description || ""); setPhone(config.phone || "");
-    setWhatsapp(config.whatsapp || ""); setInstagram(config.instagram || "");
+    setDescription(config.description || ""); setPhone(maskPhone(config.phone || ""));
+    setWhatsapp(maskPhone(config.whatsapp || "")); setInstagram(config.instagram || "");
     setAddress(config.address || ""); setColor(config.primary_color || "#7c3aed");
     setPublished(config.is_published ?? false);
   }, [config.exists]);
@@ -109,12 +111,29 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     if (!pixEmail.trim()) { toast.error("Informe o e-mail"); return; }
     if (!pixCpfCnpj.trim()) { toast.error("Informe o CPF ou CNPJ"); return; }
     if (!pixPhone.trim()) { toast.error("Informe o celular"); return; }
+
+    // Asaas exige data de nascimento para CPF (INDIVIDUAL) e MEI
+    const requiresDob = pixCompanyType === "INDIVIDUAL" || pixCompanyType === "MEI";
+    let isoBirthDate: string | null = null;
+    if (requiresDob) {
+      if (!pixBirthDate.trim()) {
+        toast.error("Informe a data de nascimento");
+        return;
+      }
+      isoBirthDate = brDateToIso(pixBirthDate);
+      if (!isoBirthDate) {
+        toast.error("Data de nascimento inválida (use DD/MM/AAAA)");
+        return;
+      }
+    }
+
     await setupPix({
       name: pixName.trim(),
       email: pixEmail.trim(),
       cpf_cnpj: pixCpfCnpj.trim(),
       mobile_phone: pixPhone.trim(),
       company_type: pixCompanyType,
+      birth_date: isoBirthDate || undefined,
     });
     setShowPixForm(false);
   }
@@ -123,6 +142,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const storefrontUrl = config.storefront_url || `${BASE_URL}/storefront/${slug}/page`;
   const hasDomain = config.custom_domain && config.custom_domain_status !== "none";
   const asaasConfigured = !!(company as any)?.asaas_subconta_id;
+  const dobRequired = pixCompanyType === "INDIVIDUAL" || pixCompanyType === "MEI";
 
   const PIX_TYPES: { value: "MEI" | "LTDA" | "INDIVIDUAL"; label: string }[] = [
     { value: "MEI", label: "MEI" },
@@ -161,9 +181,9 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <Field label="Nome do negocio" value={siteName} onChange={setSiteName} placeholder="Ex: Barbearia do Caio" />
         <Field label="Slogan (opcional)" value={tagline} onChange={setTagline} placeholder="Qualidade que fala por si" />
         <Field label="Descricao" value={description} onChange={setDescription} placeholder="Conte sobre seu negocio..." multiline />
-        <Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(12) 99999-0000" />
+        <Field label="WhatsApp" value={whatsapp} onChange={(v) => setWhatsapp(maskPhone(v))} placeholder="(12) 99999-0000" />
         <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegocio" />
-        <Field label="Telefone" value={phone} onChange={setPhone} placeholder="(12) 3333-0000" />
+        <Field label="Telefone" value={phone} onChange={(v) => setPhone(maskPhone(v))} placeholder="(12) 3333-0000" />
         <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacarei/SP" />
         <Text style={cs.fieldLabel}>Cor principal</Text>
         <View style={cs.colorRow}>
@@ -293,7 +313,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                 <TextInput
                   style={cs.input}
                   value={pixCpfCnpj}
-                  onChangeText={setPixCpfCnpj}
+                  onChangeText={(v) => setPixCpfCnpj(maskCpfCnpj(v))}
                   placeholder={pixCompanyType === "INDIVIDUAL" ? "000.000.000-00" : "00.000.000/0000-00"}
                   placeholderTextColor={Colors.ink3}
                   keyboardType="numeric"
@@ -314,11 +334,29 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                 <TextInput
                   style={cs.input}
                   value={pixPhone}
-                  onChangeText={setPixPhone}
+                  onChangeText={(v) => setPixPhone(maskPhone(v))}
                   placeholder="(11) 99999-0000"
                   placeholderTextColor={Colors.ink3}
                   keyboardType="phone-pad"
                 />
+
+                {dobRequired && (
+                  <>
+                    <Text style={cs.fieldLabel}>Data de nascimento</Text>
+                    <TextInput
+                      style={cs.input}
+                      value={pixBirthDate}
+                      onChangeText={(v) => setPixBirthDate(maskDateBr(v))}
+                      placeholder="DD/MM/AAAA"
+                      placeholderTextColor={Colors.ink3}
+                      keyboardType="numeric"
+                      maxLength={10}
+                    />
+                    <Text style={[cs.hint, { marginTop: -4, marginBottom: 12, fontSize: 11 }]}>
+                      O Asaas exige data de nascimento para contas {pixCompanyType === "INDIVIDUAL" ? "PF" : "MEI"}.
+                    </Text>
+                  </>
+                )}
 
                 <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
                   <Pressable
