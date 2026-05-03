@@ -132,7 +132,7 @@ export default function DashboardScreen() {
   function onRefresh() {
     setRefreshing(true);
     queryClient.invalidateQueries({ queryKey: consolidatedView ? ["dashboard", "me"] : ["dashboard", company?.id] });
-    queryClient.invalidateQueries({ queryKey: ["sales-analytics"] });
+    queryClient.invalidateQueries({ queryKey: ["salesAnalytics"] });
     queryClient.invalidateQueries({ queryKey: ["products-ranking"] });
     queryClient.invalidateQueries({ queryKey: ["employees-ranking"] });
     queryClient.invalidateQueries({ queryKey: ["birthdays", company?.id] });
@@ -240,11 +240,12 @@ export default function DashboardScreen() {
             </View>
             <KPIGrid d={d} onNavigate={go} />
 
-            {/* ---- VENDAS (wired analytics card) ---- */}
-            {/* SalesAnalyticsCard, TopSellersCard, BirthdaysCard usam company.id —
-                 escondidos em modo consolidado por enquanto (Onda 2.4 e 2.5
-                 consolidam vendas e clientes). */}
-            {!isDemo && !consolidatedView && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
+            {/* ---- VENDAS (analytics) ---- */}
+            {/* MULTICNPJ Onda 2.6: SalesAnalyticsCard agora funciona em consolidated
+                via /me/sales/analytics (useSalesAnalytics ramifica internamente).
+                TopSellersCard e BirthdaysCard ainda per-company (escondidos em
+                consolidated por ora — proxima onda de polish, se houver demanda). */}
+            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
             {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
             {!isDemo && !consolidatedView && <BirthdaysCard />}
 
