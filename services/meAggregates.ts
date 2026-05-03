@@ -7,7 +7,8 @@
 // Onda 2.1: /me/dashboard
 // Onda 2.2: /me/transactions
 // Onda 2.3: /me/customers — lista UNICA owner-scoped
-// Onda 2.4 (atual): /me/sales — listagem agregada com breakdown
+// Onda 2.4: /me/sales — listagem agregada com breakdown
+// Onda 2.6 (atual): /me/sales/analytics — reabilita SalesAnalyticsCard no Painel
 // ============================================================
 import { request } from "@/services/api";
 
@@ -187,13 +188,9 @@ export type CustomersConsolidatedResponse = {
 
 // ──────────────────────────────────────────────────────────
 // /me/sales — Onda 2.4
-//
-// Mesma shape do /companies/:id/sales + breakdown[] por empresa.
-// Pra cancelar/abrir detalhe, FE usa companyId que vem em sale.company_id
-// e chama o endpoint per-company (/companies/:cid/sales/:sid/cancel).
 // ──────────────────────────────────────────────────────────
 export type SalesFilters = {
-  date_from?: string;  // ISO timestamptz
+  date_from?: string;
   date_to?: string;
   status?: "all" | "active" | "cancelled";
   seller_id?: string;
@@ -201,7 +198,7 @@ export type SalesFilters = {
   q?: string;
   limit?: number;
   offset?: number;
-  company_id?: string;  // drill-down opcional dentro do consolidado
+  company_id?: string;
 };
 
 export type ConsolidatedSalesListItem = {
@@ -216,7 +213,6 @@ export type ConsolidatedSalesListItem = {
   seller: { id: string | null; name: string | null };
   items_count: number;
   transaction_id: string | null;
-  // Multi-CNPJ
   company_id: string;
   company_name: string;
 };
@@ -249,6 +245,45 @@ export type SalesConsolidatedResponse = {
   filtered_company_id: string | null;
 };
 
+// ──────────────────────────────────────────────────────────
+// /me/sales/analytics — Onda 2.6
+//
+// Mesma shape do per-company endpoint (companiesApi.salesAnalytics).
+// FE useSalesAnalytics ramifica via consolidatedView — SalesAnalyticsCard
+// no Painel agora funciona em modo consolidado tambem.
+// ──────────────────────────────────────────────────────────
+export type SalesAnalyticsFilters = {
+  period?: "today" | "yesterday" | "week" | "month" | "year" | "custom";
+  group_by?: "day" | "week" | "month";
+  start_date?: string;
+  end_date?: string;
+  company_id?: string;
+};
+
+export type SalesAnalyticsConsolidatedResponse = {
+  period: { start: string | null; end: string | null; label: string };
+  summary: {
+    total_sales: number;
+    total_revenue: number;
+    avg_ticket: number;
+    total_discounts: number;
+    unique_customers: number;
+    active_days: number;
+  };
+  series: Array<{ period: string | Date; total_sales: number; total_revenue: number }>;
+  top_products: Array<{
+    id: string; name: string; category: string;
+    total_qty: number; total_revenue: number; appearances: number;
+  }>;
+  top_employees: Array<{
+    id: string; full_name: string;
+    total_sales: number; total_revenue: number; avg_ticket: number;
+  }>;
+  by_payment: Array<{ method: string; total_sales: number; total_revenue: number }>;
+  company_count: number;
+  filtered_company_id: string | null;
+};
+
 export var meAggregatesApi = {
   // GET /me/dashboard — KPIs consolidados de todas as empresas do user.
   dashboard: function () {
@@ -256,7 +291,6 @@ export var meAggregatesApi = {
   },
 
   // GET /me/transactions — Lista paginada agregada com filtros opcionais.
-  // Passar `company_id` faz drill-down dentro do consolidado (sem trocar JWT).
   transactions: function (filters?: TransactionFilters) {
     var qs: string[] = [];
     if (filters?.start) qs.push("start=" + encodeURIComponent(filters.start));
@@ -282,7 +316,6 @@ export var meAggregatesApi = {
   },
 
   // GET /me/sales — Lista agregada de vendas (Onda 2.4).
-  // Passar `company_id` faz drill-down dentro do consolidado.
   sales: function (filters?: SalesFilters) {
     var qs: string[] = [];
     if (filters?.date_from) qs.push("date_from=" + encodeURIComponent(filters.date_from));
@@ -296,5 +329,18 @@ export var meAggregatesApi = {
     if (filters?.company_id) qs.push("company_id=" + encodeURIComponent(filters.company_id));
     var suffix = qs.length ? "?" + qs.join("&") : "";
     return request<SalesConsolidatedResponse>("/me/sales" + suffix, { retry: 1 });
+  },
+
+  // GET /me/sales/analytics — Analytics de vendas consolidadas (Onda 2.6).
+  // Mesma shape do per-company endpoint pra reaproveitar SalesAnalyticsCard.
+  salesAnalytics: function (filters?: SalesAnalyticsFilters) {
+    var qs: string[] = [];
+    if (filters?.period) qs.push("period=" + filters.period);
+    if (filters?.group_by) qs.push("group_by=" + filters.group_by);
+    if (filters?.start_date) qs.push("start_date=" + encodeURIComponent(filters.start_date));
+    if (filters?.end_date) qs.push("end_date=" + encodeURIComponent(filters.end_date));
+    if (filters?.company_id) qs.push("company_id=" + encodeURIComponent(filters.company_id));
+    var suffix = qs.length ? "?" + qs.join("&") : "";
+    return request<SalesAnalyticsConsolidatedResponse>("/me/sales/analytics" + suffix, { retry: 1 });
   },
 };
