@@ -15,8 +15,11 @@ import type { NfeDoc } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm } from "@/components/screens/nfe/EmitNfceForm";
 import { TabConfig } from "@/components/screens/nfe/TabConfig";
+import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
-export default function NfeScreen() {
+// MULTICNPJ Sessao 1: NF-e exige CNPJ emissor por lei.
+// No modo consolidado, RequireCompanyScope abre picker antes de renderizar.
+function NfeScreenInner() {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const [tab, setTab] = useState(0);
@@ -91,6 +94,14 @@ export default function NfeScreen() {
       <ConfirmDialog visible={!!cancelTarget} title="Cancelar nota fiscal?" message="O cancelamento sera enviado a SEFAZ. Esta acao nao pode ser desfeita." confirmLabel="Cancelar nota" destructive
         onConfirm={() => { if (cancelTarget) { cancelMut.mutate(cancelTarget); setCancelTarget(null); } }} onCancel={() => setCancelTarget(null)} />
     </ScrollView>
+  );
+}
+
+export default function NfeScreen() {
+  return (
+    <RequireCompanyScope context="nfe" actionLabel="emitir nota fiscal">
+      <NfeScreenInner />
+    </RequireCompanyScope>
   );
 }
 
