@@ -68,10 +68,11 @@ type AuthState = {
   companyLogo: string | null;
   trialActive: boolean;
   trialEndsAt: string | null;
-  // Multi-CNPJ (M1-05)
+  // Multi-CNPJ (M1-05 + Sessao 1 consolidated-default)
   availableCompanies: SwitcherCompany[];
   companiesLoading: boolean;
   consolidatedView: boolean;
+  companyCount: number;
   switching: boolean;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -124,6 +125,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     availableCompanies: [],
     companiesLoading: false,
     consolidatedView: false,
+    companyCount: 0,
     switching: false,
 
     hydrate: async () => {
@@ -136,7 +138,13 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
 
       try {
-        const { user, company } = await authApi.me(token);
+        const meRes: any = await authApi.me(token);
+        const { user, company } = meRes;
+        // MULTICNPJ Sessao 1: API agora devolve consolidated_view e company_count direto.
+        // Quando consolidated_view=true, company vem como null e nao devemos tentar
+        // popular nada relacionado a uma empresa especifica.
+        const consolidatedFromApi = !!meRes.consolidated_view;
+        const companyCount = meRes.company_count || 0;
         const trialEnd = (company as any)?.trial_ends_at;
         const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
         const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
@@ -145,15 +153,18 @@ export const useAuthStore = create<AuthState>((set, get) => {
           token,
           refreshToken: savedRefresh,
           user,
-          company: company ?? null,
+          company: consolidatedFromApi ? null : (company ?? null),
           isStaff: staff,
           isHydrated: true,
           isDemo: false,
           trialActive,
           trialEndsAt: trialEnd || null,
+          consolidatedView: consolidatedFromApi,
+          companyCount,
         });
 
-        // Carrega lista de empresas em background (Multi-CNPJ)
+        // Carrega lista de empresas em background (Multi-CNPJ).
+        // No modo consolidado, isso e o que vai popular o switcher.
         backgroundLoadCompanies();
       } catch {
         await storage.del();
@@ -165,9 +176,12 @@ export const useAuthStore = create<AuthState>((set, get) => {
     login: async (email, password) => {
       set({ isLoading: true });
       try {
-        const res = await authApi.login(email, password);
+        const res: any = await authApi.login(email, password);
         const { token, user, company } = res;
-        const refreshToken = (res as any).refresh_token || null;
+        const refreshToken = res.refresh_token || null;
+        // MULTICNPJ Sessao 1: consume consolidated_view da resposta.
+        const consolidatedFromApi = !!res.consolidated_view;
+        const companyCount = res.company_count || 0;
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
@@ -179,17 +193,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
           token,
           refreshToken,
           user,
-          company: company ?? null,
+          company: consolidatedFromApi ? null : (company ?? null),
           isLoading: false,
           isDemo: false,
           isStaff: staff,
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
           availableCompanies: [],
-          consolidatedView: false,
+          consolidatedView: consolidatedFromApi,
+          companyCount,
         });
 
-        // Carrega lista de empresas em background (Multi-CNPJ)
         backgroundLoadCompanies();
       } catch (err) {
         set({ isLoading: false });
@@ -200,9 +214,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
     register: async (body: RegisterBody) => {
       set({ isLoading: true });
       try {
-        const res = await authApi.register(body);
+        const res: any = await authApi.register(body);
         const { token, user, company } = res;
-        const refreshToken = (res as any).refresh_token || null;
+        const refreshToken = res.refresh_token || null;
+        const consolidatedFromApi = !!res.consolidated_view;
+        const companyCount = res.company_count || (company ? 1 : 0);
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
@@ -213,14 +229,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
           token,
           refreshToken,
           user,
-          company: company ?? null,
+          company: consolidatedFromApi ? null : (company ?? null),
           isLoading: false,
           isDemo: false,
           isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
           availableCompanies: [],
-          consolidatedView: false,
+          consolidatedView: consolidatedFromApi,
+          companyCount,
         });
 
         backgroundLoadCompanies();
@@ -258,6 +275,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         availableCompanies: [],
         companiesLoading: false,
         consolidatedView: false,
+        companyCount: 0,
         switching: false,
       });
       if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -277,7 +295,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res = await authMulticnpjApi.companies();
         set({
           availableCompanies: res.companies || [],
+          // /auth/companies tambem retorna consolidated_view (espelha JWT atual)
           consolidatedView: !!res.consolidated_view,
+          companyCount: res.companies?.length || 0,
           companiesLoading: false,
         });
       } catch (err) {
