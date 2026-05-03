@@ -15,6 +15,10 @@ export type Transaction = {
   employee_id?: string | null;
   employee_name?: string | null;
   idempotency_key?: string | null;
+  // MULTICNPJ Onda 2.2: preenchido quando vem do /me/transactions
+  // (modo consolidado). Em modo per-company, fica undefined.
+  company_id?: string | null;
+  company_name?: string | null;
 };
 
 export type DreData = {

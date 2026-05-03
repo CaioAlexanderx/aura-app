@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi } from "@/hooks/useTransactions";
@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { BASE_URL } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
+import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 var isWeb = Platform.OS === "web";
@@ -43,7 +44,6 @@ function brToISO(br: string): string | null {
 }
 
 export default function FinanceiroScreen() {
-  // Periodo padrao agora eh "today" (Dia) — Tarefa B
   var [activeTab, setActiveTab] = useState(0);
   var [period, setPeriod] = useState<PeriodKey>("today");
   var [showModal, setShowModal] = useState(false);
@@ -57,16 +57,38 @@ export default function FinanceiroScreen() {
   var customStart = brToISO(customStartBR) || undefined;
   var customEnd = brToISO(customEndBR) || undefined;
 
-  var { transactions, summary, previousSummary, currentMonthExpenses, dreData, withdrawalData, isLoading, isDemo, createTransaction, deleteTransaction } = useTransactionsApi(activeTab, period, customStart, customEnd);
-  var { company, token } = useAuthStore();
+  var {
+    transactions, summary, previousSummary, currentMonthExpenses,
+    dreData, withdrawalData, isLoading, isDemo,
+    createTransaction, deleteTransaction,
+    consolidatedView, consolidatedBreakdown,
+  } = useTransactionsApi(activeTab, period, customStart, customEnd);
+  var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
 
   var uncategorized = transactions.filter(function(t: any) { return !t.category || t.category === "outros"; }).map(function(t: any) { return t.description; }).filter(Boolean);
 
-  // Banner so aparece quando o filtro atual nao mostra despesas do mes vigente
-  // mas existem. Skipa quando filtro ja eh "month" (mostra normalmente) ou
-  // "all" (mostra tudo).
   var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
+
+  // MULTICNPJ Onda 2.2: adapta TransactionsBreakdown -> DashboardBreakdown shape
+  // (income -> revenue) pra reusar o mesmo ConsolidatedBreakdownCard do Painel.
+  var breakdownForCard = useMemo(function() {
+    if (!consolidatedBreakdown || !consolidatedBreakdown.length) return [];
+    return consolidatedBreakdown.map(function(b: any) {
+      return {
+        company_id: b.company_id,
+        company_name: b.company_name,
+        is_primary: b.is_primary,
+        revenue: b.income || 0,
+        expenses: b.expenses || 0,
+        net: b.net || 0,
+        pending_income: b.pending_income || 0,
+        pending_expenses: b.pending_expenses || 0,
+        sales_count_month: 0,
+        sales_today: 0,
+      };
+    });
+  }, [consolidatedBreakdown]);
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
@@ -76,6 +98,11 @@ export default function FinanceiroScreen() {
   }
 
   async function handleImport() {
+    // MULTICNPJ Onda 2.2: import nao funciona em consolidated (precisa company)
+    if (consolidatedView) {
+      toast.error("Selecione uma empresa especifica para importar lancamentos");
+      return;
+    }
     if (!company?.id || !token) { toast.error("Sessao expirada"); return; }
     try {
       setImporting(true);
@@ -98,11 +125,16 @@ export default function FinanceiroScreen() {
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
-  function handleEdit(tx: Transaction) { setEditTx(tx); setShowModal(true); }
+  function handleEdit(tx: Transaction) {
+    if (consolidatedView) {
+      toast.error("Selecione a empresa especifica para editar (toque no badge da loja)");
+      return;
+    }
+    setEditTx(tx); setShowModal(true);
+  }
 
   return (
     <View style={{ flex: 1 }}>
-      {/* WebPortal: renderiza no document.body pra escapar de ancestors com CSS transform */}
       <WebPortal active={showModal}>
         <TransactionModal
           visible={showModal}
@@ -113,8 +145,31 @@ export default function FinanceiroScreen() {
         />
       </WebPortal>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-        <ScreenHeader title="Financeiro" actionLabel="Novo lancamento" actionIcon="dollar" onAction={function() { setEditTx(null); setShowModal(true); }} />
-        <AgentBanner context="financeiro" />
+        {/* MULTICNPJ Onda 2.2: em modo consolidado, esconde a acao "Novo lancamento"
+            (precisa de empresa especifica). User pode abrir o switcher pra trocar. */}
+        <ScreenHeader
+          title="Financeiro"
+          actionLabel={consolidatedView ? undefined : "Novo lancamento"}
+          actionIcon={consolidatedView ? undefined : "dollar"}
+          onAction={consolidatedView ? undefined : function() { setEditTx(null); setShowModal(true); }}
+        />
+
+        {/* MULTICNPJ Onda 2.2: banner de modo consolidado */}
+        {consolidatedView && (
+          <View style={s.consolidatedBanner}>
+            <Icon name="globe" size={14} color="#a78bfa" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.consolidatedTitle}>
+                Visao consolidada · {companyCount} empresa{companyCount !== 1 ? "s" : ""}
+              </Text>
+              <Text style={s.consolidatedSub}>
+                Lancamentos somados de todas as empresas. Para criar/editar, selecione uma empresa especifica.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {!consolidatedView && <AgentBanner context="financeiro" />}
 
         <View style={s.periodBar}>
           {PERIODS.map(function(p) {
@@ -143,13 +198,17 @@ export default function FinanceiroScreen() {
           </View>
         )}
 
-        {/* Banner que avisa sobre despesas do mes vigente quando o filtro atual esconde — Tarefa C */}
         {showMonthBanner && (
           <MonthExpensesBanner
             count={currentMonthExpenses.count}
             total={currentMonthExpenses.total}
             onSwitchToMonth={function() { setPeriod("month"); }}
           />
+        )}
+
+        {/* MULTICNPJ Onda 2.2: breakdown card so na Tab 0 (Visao Geral) e em consolidated */}
+        {consolidatedView && activeTab === 0 && breakdownForCard.length > 0 && (
+          <ConsolidatedBreakdownCard breakdown={breakdownForCard as any} />
         )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
@@ -160,18 +219,37 @@ export default function FinanceiroScreen() {
           })}
         </ScrollView>
 
-        {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
+        {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
         {isLoading && activeTab < 4 && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} previousSummary={previousSummary} period={period} customStart={customStart} customEnd={customEnd} isLoading={isLoading} isDemo={isDemo} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onImport={!importing ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={function(id) { setDeleteTarget(id); }} onEdit={!isDemo ? handleEdit : undefined} />}
-        {activeTab === 1 && <TabLancamentos transactions={transactions} isLoading={isLoading} importing={importing} onNewTransaction={function() { setEditTx(null); setShowModal(true); }} onExport={handleExport} onImport={handleImport} onDelete={!isDemo ? function(id) { setDeleteTarget(id); } : undefined} onEdit={!isDemo ? handleEdit : undefined} />}
-        {activeTab === 2 && <TabResumo transactions={transactions} dreApi={dreData} period={period} />}
-        {activeTab === 3 && <TabRetirada transactions={transactions} />}
-        {activeTab === 4 && <TabCupons />}
+        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} previousSummary={previousSummary} period={period} customStart={customStart} customEnd={customEnd} isLoading={isLoading} isDemo={isDemo} onNewTransaction={consolidatedView ? function() { toast.error("Selecione uma empresa especifica"); } : function() { setEditTx(null); setShowModal(true); }} onImport={!importing && !consolidatedView ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }} onEdit={!isDemo && !consolidatedView ? handleEdit : undefined} />}
+        {activeTab === 1 && <TabLancamentos transactions={transactions} isLoading={isLoading} importing={importing} onNewTransaction={consolidatedView ? function() { toast.error("Selecione uma empresa especifica"); } : function() { setEditTx(null); setShowModal(true); }} onExport={handleExport} onImport={handleImport} onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined} onEdit={!isDemo && !consolidatedView ? handleEdit : undefined} />}
+
+        {/* MULTICNPJ Onda 2.2: tabs Analise/Retirada/Cupons exigem empresa especifica */}
+        {activeTab === 2 && consolidatedView && <ConsolidatedBlocked label="Análise (DRE)" description="O DRE precisa do contexto fiscal de uma empresa especifica. Selecione uma empresa no switcher para visualizar." />}
+        {activeTab === 2 && !consolidatedView && <TabResumo transactions={transactions} dreApi={dreData} period={period} />}
+        {activeTab === 3 && consolidatedView && <ConsolidatedBlocked label="Retirada / Pro-labore" description="O calculo de retirada usa regime tributario e Fator R da empresa. Selecione uma empresa no switcher." />}
+        {activeTab === 3 && !consolidatedView && <TabRetirada transactions={transactions} />}
+        {activeTab === 4 && consolidatedView && <ConsolidatedBlocked label="Cupons" description="Cupons sao gerenciados por empresa. Selecione uma para ver e criar cupons." />}
+        {activeTab === 4 && !consolidatedView && <TabCupons />}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
+    </View>
+  );
+}
+
+// MULTICNPJ Onda 2.2: placeholder pras tabs que precisam de empresa especifica
+function ConsolidatedBlocked({ label, description }: { label: string; description: string }) {
+  return (
+    <View style={s.blocked}>
+      <View style={s.blockedIconWrap}>
+        <Icon name="lock" size={20} color="#a78bfa" />
+      </View>
+      <Text style={s.blockedTitle}>{label} indisponível em modo consolidado</Text>
+      <Text style={s.blockedDesc}>{description}</Text>
+      <Text style={s.blockedHint}>Use o seletor de empresa no menu lateral para escolher uma.</Text>
     </View>
   );
 }
@@ -195,4 +273,43 @@ var s = StyleSheet.create({
   tabTextActive: { color: "#fff", fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+
+  // MULTICNPJ Onda 2.2
+  consolidatedBanner: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    backgroundColor: "rgba(124,58,237,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
+  consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
+  blocked: {
+    backgroundColor: Colors.bg3,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 24,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  blockedIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "rgba(124,58,237,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  blockedTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 6 },
+  blockedDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, textAlign: "center", marginBottom: 8, maxWidth: 420 },
+  blockedHint: { fontSize: 11, color: Colors.violet3, fontStyle: "italic" },
 });

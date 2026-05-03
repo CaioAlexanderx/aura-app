@@ -78,6 +78,10 @@ export function TransactionRow({ item, onDelete, onEdit }: { item: Transaction; 
   const paymentText = nativePay?.text || legacyPc?.text;
 
   const employeeName = (item as any).employee_name;
+  // MULTICNPJ Onda 2.2: company_name vem preenchido quando a transaction
+  // foi listada via /me/transactions (modo consolidado). Em per-company
+  // fica null e o badge nao aparece.
+  const companyName = (item as any).company_name;
 
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
@@ -91,6 +95,13 @@ export function TransactionRow({ item, onDelete, onEdit }: { item: Transaction; 
             <Text style={s.meta}>
               {dateStr} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}{isPending ? " / Pendente" : ""}
             </Text>
+            {/* MULTICNPJ Onda 2.2: badge da loja origem (so em modo consolidado) */}
+            {companyName && (
+              <View style={s.companyBadge}>
+                <Icon name="bag" size={9} color={Colors.violet3} />
+                <Text style={s.companyText} numberOfLines={1}>{companyName}</Text>
+              </View>
+            )}
             {paymentLabel && paymentBg && paymentText && (
               <View style={[s.payBadge, { backgroundColor: paymentBg }]}>
                 <Text style={[s.payText, { color: paymentText }]}>{paymentLabel}</Text>
@@ -135,6 +146,20 @@ const s = StyleSheet.create({
   payText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.3 },
   empBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: Colors.bg4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, maxWidth: 130 },
   empText: { fontSize: 9.5, color: Colors.ink3, fontWeight: "600" },
+  // MULTICNPJ Onda 2.2: badge da loja origem em modo consolidado
+  companyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: Colors.violetD,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    maxWidth: 160,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.28)",
+  },
+  companyText: { fontSize: 9.5, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.2 },
   right: { flexDirection: "row", alignItems: "center", gap: 6 },
   amount: { fontSize: 14, fontWeight: "600" },
   editBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
