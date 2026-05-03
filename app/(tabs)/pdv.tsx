@@ -19,6 +19,12 @@
 // Layout: sidebar vem do _layout.tsx (expo-router).
 // Wide (>860): grid "1fr 420px" — catalog scrolla, cart sticky.
 // Narrow: scroll unico empilhado.
+//
+// MULTICNPJ Sessao 1 (2026-05-02): PDV exige CNPJ especifico (caixa fiscal,
+// estoque, vendedora vinculada por empresa). No modo consolidado, o
+// RequireCompanyScope abre picker antes de renderizar e troca o JWT pra
+// a empresa escolhida. Memoria por sessionStorage no picker faz a 2a vez
+// passar direto ate o user fechar a aba ou clicar "Editar".
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -39,6 +45,7 @@ import { Pagination } from "@/components/Pagination";
 import { EmptyState } from "@/components/EmptyState";
 import { QuickCustomerModal } from "@/components/QuickCustomerModal";
 import { VariantPickerModal } from "@/components/VariantPickerModal";
+import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
 import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
 import { CaixaBackdrop } from "@/components/screens/pdv/CaixaBackdrop";
@@ -133,7 +140,9 @@ function useIsWide() {
   return wide;
 }
 
-export default function CaixaScreen() {
+// MULTICNPJ Sessao 1: PDV exige CNPJ especifico (caixa fiscal por empresa).
+// Renomeado pra Inner — wrapper exportado abaixo aplica RequireCompanyScope.
+function CaixaScreenInner() {
   const { company, isDemo } = useAuthStore();
   const { products } = useProducts();
   const { customers } = useCustomers();
@@ -712,6 +721,15 @@ export default function CaixaScreen() {
         onClose={() => setPendingProduct(null)}
       />
     </View>
+  );
+}
+
+// MULTICNPJ Sessao 1: wrapper com gate de empresa.
+export default function CaixaScreen() {
+  return (
+    <RequireCompanyScope context="pdv" actionLabel="abrir o caixa">
+      <CaixaScreenInner />
+    </RequireCompanyScope>
   );
 }
 
