@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { dashboardApi } from "@/services/api";
+import { meAggregatesApi } from "@/services/meAggregates";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { TrialBanner } from "@/components/TrialBanner";
@@ -27,6 +28,7 @@ import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalytic
 import { TopSellersCard } from "@/components/screens/dashboard/TopSellersCard";
 import { BirthdaysCard } from "@/components/screens/dashboard/BirthdaysCard";
 import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
+import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "pdv", route: "/pdv" },
@@ -42,8 +44,6 @@ var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "configuracoes", route: "/configuracoes" },
 ];
 
-// Injects the Claude Design keyframes (spin, drawLine, pulse, heroShift, orbFloat, fadeUp)
-// and custom scrollbar styling into the web document. No-op on native.
 function AuraDesignStyle() {
   if (!IS_WEB) return null;
   const css = `
@@ -62,8 +62,6 @@ function AuraDesignStyle() {
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
 
-// Claude Design floating orbs backdrop (web only). Positioned behind the
-// scroll area via position:fixed on the dashboard root.
 function AuraBackdrop() {
   if (!IS_WEB) return null;
   const style = {
@@ -92,7 +90,9 @@ function AuraBackdrop() {
 }
 
 export default function DashboardScreen() {
-  var { user, company, token, isDemo, logout } = useAuthStore();
+  // MULTICNPJ Sessao 2 Onda 2.1: detecta consolidatedView e usa /me/dashboard
+  // em vez de /companies/:id/dashboard quando user esta em modo "todas as empresas".
+  var { user, company, token, isDemo, logout, consolidatedView, companyCount } = useAuthStore();
   var router = useRouter();
   var queryClient = useQueryClient();
   var [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
@@ -101,11 +101,17 @@ export default function DashboardScreen() {
   var [redirecting, setRedirecting] = useState(false);
   var [refreshing, setRefreshing] = useState(false);
 
+  // Query: ramifica entre per-company e consolidated
   var { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ["dashboard", company?.id],
-    queryFn: function() { return dashboardApi.aggregate(company!.id); },
-    enabled: !!company?.id && !!token && !isDemo && !redirecting,
-    retry: 1, staleTime: 60000,
+    queryKey: consolidatedView ? ["dashboard", "me"] : ["dashboard", company?.id],
+    queryFn: function () {
+      return consolidatedView
+        ? meAggregatesApi.dashboard()
+        : dashboardApi.aggregate(company!.id);
+    },
+    enabled: (consolidatedView || !!company?.id) && !!token && !isDemo && !redirecting,
+    retry: 1,
+    staleTime: 60000,
   });
 
   useEffect(function() {
@@ -125,7 +131,7 @@ export default function DashboardScreen() {
 
   function onRefresh() {
     setRefreshing(true);
-    queryClient.invalidateQueries({ queryKey: ["dashboard", company?.id] });
+    queryClient.invalidateQueries({ queryKey: consolidatedView ? ["dashboard", "me"] : ["dashboard", company?.id] });
     queryClient.invalidateQueries({ queryKey: ["sales-analytics"] });
     queryClient.invalidateQueries({ queryKey: ["products-ranking"] });
     queryClient.invalidateQueries({ queryKey: ["employees-ranking"] });
@@ -142,8 +148,7 @@ export default function DashboardScreen() {
   var isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
   var go = function(p: string) { router.push(p as any); };
 
-  // Projection fim-do-mes — simple extrapolation when backend didn't provide it:
-  // (revenue - expenses) scaled to monthly cadence based on day-of-month.
+  // Projection fim-do-mes
   var projection = (d as any).projection;
   if (!projection && d.revenue) {
     var today = new Date();
@@ -153,7 +158,13 @@ export default function DashboardScreen() {
   }
 
   var firstName = user?.name?.split(" ")[0] ?? "usuario";
-  var companyLabel = tradeName || company?.name || "---";
+  // MULTICNPJ Sessao 2: header reflete o modo (consolidado vs empresa especifica)
+  var companyLabel = consolidatedView
+    ? "Visão consolidada · " + companyCount + " empresa" + (companyCount !== 1 ? "s" : "")
+    : (tradeName || company?.name || "---");
+
+  // Breakdown so existe quando consolidated
+  var breakdown = consolidatedView ? (d as any).breakdown : null;
 
   return (
     <View style={{ flex: 1, position: "relative" }}>
@@ -188,7 +199,8 @@ export default function DashboardScreen() {
           </View>
           <BrandBanner mode="header" />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <PlanBadge plan={company?.plan ?? "essencial"} />
+            {/* Em modo consolidado, plan badge vem do company.plan que e null — esconde. */}
+            {!consolidatedView && <PlanBadge plan={company?.plan ?? "essencial"} />}
             <TouchableOpacity onPress={logout} style={s.lo}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Icon name="logout" size={14} color={Colors.ink3} />
@@ -198,8 +210,8 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <ProfileBanner />
-        {!isDemo && <VerifyEmailBanner emailVerified={emailVerified} onVerified={function() { setEmailVerified(true); }} />}
+        {!consolidatedView && <ProfileBanner />}
+        {!isDemo && !consolidatedView && <VerifyEmailBanner emailVerified={emailVerified} onVerified={function() { setEmailVerified(true); }} />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
         {isEmpty && <EmptyDashboard name={firstName} onPress={go} />}
@@ -215,25 +227,31 @@ export default function DashboardScreen() {
               netDelta={d.netDelta}
             />
 
+            {/* ---- MULTICNPJ: Breakdown por empresa (so consolidated) ---- */}
+            {consolidatedView && breakdown && breakdown.length > 0 && (
+              <ConsolidatedBreakdownCard breakdown={breakdown} />
+            )}
+
             {/* ---- VISAO GERAL (KPI grid) ---- */}
             <View style={s.secTitleRow}>
               <View style={s.secBar} />
-              <Text style={s.secTitle}>Visao geral</Text>
+              <Text style={s.secTitle}>Visão geral</Text>
               <View style={s.secCount}><Text style={s.secCountText}>{currentMonth().slice(0, 3).toLowerCase()} {String(new Date().getFullYear()).slice(-2)}</Text></View>
             </View>
             <KPIGrid d={d} onNavigate={go} />
 
             {/* ---- VENDAS (wired analytics card) ---- */}
-            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
-            {!isDemo && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
-
-            {/* ---- ANIVERSARIANTES (BE-06) ---- */}
-            {!isDemo && <BirthdaysCard />}
+            {/* SalesAnalyticsCard, TopSellersCard, BirthdaysCard usam company.id —
+                 escondidos em modo consolidado por enquanto (Onda 2.4 e 2.5
+                 consolidam vendas e clientes). */}
+            {!isDemo && !consolidatedView && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
+            {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
+            {!isDemo && !consolidatedView && <BirthdaysCard />}
 
             {/* ---- QUICK ACTIONS ---- */}
             <View style={s.secTitleRow}>
               <View style={s.secBar} />
-              <Text style={s.secTitle}>Acesso rapido</Text>
+              <Text style={s.secTitle}>Acesso rápido</Text>
             </View>
             <ScrollView
               horizontal={!IS_WIDE}
@@ -245,7 +263,7 @@ export default function DashboardScreen() {
               <QuickAction ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={function() { go("/financeiro"); }} />
               <QuickAction ic="package" iconColor={Colors.amber} label="Estoque" onPress={function() { go("/estoque"); }} />
               <QuickAction ic="file_text" iconColor={Colors.red} label="NF-e" onPress={function() { go("/nfe"); }} />
-              <QuickAction ic="calculator" iconColor={"#8b5cf6"} label="Contabil" onPress={function() { go("/contabilidade"); }} />
+              <QuickAction ic="calculator" iconColor={"#8b5cf6"} label="Contábil" onPress={function() { go("/contabilidade"); }} />
               <QuickAction ic="users" iconColor={Colors.violet3} label="Clientes" onPress={function() { go("/clientes"); }} />
             </ScrollView>
 
@@ -254,16 +272,20 @@ export default function DashboardScreen() {
               <>
                 <View style={s.secTitleRow}>
                   <View style={s.secBar} />
-                  <Text style={s.secTitle}>Obrigacoes contabeis</Text>
+                  <Text style={s.secTitle}>Obrigações contábeis</Text>
                   <View style={[s.secCount, { backgroundColor: "rgba(251,191,36,0.14)", borderColor: "rgba(251,191,36,0.28)", borderWidth: 1 }]}>
                     <Text style={[s.secCountText, { color: Colors.amber, fontWeight: "700" }]}>{d.obligations.length} aberta{d.obligations.length > 1 ? "s" : ""}</Text>
                   </View>
                 </View>
                 <View style={s.panel}>
                   {d.obligations.map(function(o: any) {
-                    return <ObligationRow key={o.id} name={o.name} due={o.due} amount={o.amount} status={o.status} category={o.category} />;
+                    // Em consolidated, prefixa nome da empresa pra distinguir.
+                    var nameWithCompany = consolidatedView && o.company_name
+                      ? o.company_name + " — " + o.name
+                      : o.name;
+                    return <ObligationRow key={o.id} name={nameWithCompany} due={o.due} amount={o.amount} status={o.status} category={o.category} />;
                   })}
-                  <View style={s.panelFoot}><Text style={s.panelFootText}>Apoio contabil informativo  -  estimativa</Text></View>
+                  <View style={s.panelFoot}><Text style={s.panelFootText}>Apoio contábil informativo  -  estimativa</Text></View>
                 </View>
               </>
             )}
@@ -273,14 +295,18 @@ export default function DashboardScreen() {
               <>
                 <View style={s.secTitleRow}>
                   <View style={s.secBar} />
-                  <Text style={s.secTitle}>Ultimas transacoes</Text>
+                  <Text style={s.secTitle}>Últimas transações</Text>
                   <TouchableOpacity onPress={function() { go("/financeiro"); }} style={{ marginLeft: "auto" }}>
                     <Text style={s.secCta}>Ver todas  -  </Text>
                   </TouchableOpacity>
                 </View>
                 <View style={s.panel}>
                   {d.recentSales.map(function(sl: any) {
-                    return <SaleRow key={sl.id} customer={sl.customer} amount={sl.amount} time={sl.time} method={sl.method} type={sl.type} />;
+                    // Em consolidated, mostra de qual empresa veio.
+                    var customerWithCompany = consolidatedView && sl.company_name
+                      ? sl.customer + " · " + sl.company_name
+                      : sl.customer;
+                    return <SaleRow key={sl.id} customer={customerWithCompany} amount={sl.amount} time={sl.time} method={sl.method} type={sl.type} />;
                   })}
                 </View>
               </>
