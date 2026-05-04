@@ -3,9 +3,10 @@
 // Aba "Despesas" do Financeiro v2. Onda 2: KPI Strip + DRE Waterfall (per-company)
 // + Top 5 + formas de pagamento + tendencia diaria + categorias + timeline a pagar
 // + Gauge despesa/receita + AnomalyAlerts (categorias acima da media 3m).
+// Onda 3: + Evolucao mensal 12m.
 //
 // Em consolidated, DRE Waterfall fica bloqueado (precisa contexto fiscal).
-// Onda 3 vai adicionar: fixo x variavel 6m, evolucao 12m.
+// Onda 4 vai adicionar: fixo x variavel 6m.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -15,6 +16,8 @@ import { fmt, fmtK } from "../types";
 import { useMemo } from "react";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, Gauge, AnomalyAlerts } from "./SharedCards";
+// Onda 3: evolução mensal 12m
+import { MonthlyEvolution } from "./Onda3Cards";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -68,7 +71,7 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
     ? ((summary.expenses - previousSummary.expenses) / previousSummary.expenses) * 100
     : null;
 
-  // Insights enriquecidos (Onda 2): top5, payment_methods, timeline, anomalies, gauge
+  // Insights enriquecidos (Onda 2/3): top5, payment_methods, timeline, anomalies, gauge, monthly_evolution
   var insights = useFinancialInsights({
     transactions: transactions,
     summary: summary,
@@ -215,12 +218,20 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
         <AnomalyAlerts items={eb?.anomalies || []} />
       </View>
 
-      {/* Roadmap card — Onda 3 */}
+      {/* Onda 3: Evolução mensal 12m */}
+      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <Text style={[s.kicker, { color: Colors.ink3 }]}>EVOLUCAO MENSAL · 12 MESES</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Despesa vs receita ao longo do tempo</Text>
+        <MonthlyEvolution items={insights.monthly_evolution || []} />
+      </View>
+
+      {/* Roadmap card — Onda 4 */}
       <View style={[s.card, s.roadmap, { backgroundColor: Colors.bg3, borderColor: Colors.border2 }]}>
-        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 3</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Mais cards chegando</Text>
+        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 4</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Mais analise chegando</Text>
         <Text style={[s.roadmapText, { color: Colors.ink2 }]}>
-          Fixo x variavel 6m e evolucao mensal de 12 meses ficam pra proxima onda do redesign.
+          Fixo x variavel 6m chega na proxima onda — depende de categorizacao "fixo/variavel"
+          que vamos adicionar nas categorias de despesa.
         </Text>
       </View>
     </View>

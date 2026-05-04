@@ -6,13 +6,14 @@ import { SparklineBar } from "./SparklineBar";
 import { PendingCards } from "./PendingCards";
 import { IncomeDetail } from "./IncomeDetail";
 import { ExpenseDetail } from "./ExpenseDetail";
-import { CashFlowCard } from "./CashFlowCard";
 import { ReconciliationSection } from "./ReconciliationSection";
 import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
 import type { Transaction, PeriodKey } from "./types";
 // v2: hero cards (redesign Onda 1)
 import { HealthScoreHero, RunwayCard, BiggestLever } from "./v2";
+// Onda 3: cashflow chart enriquecido (history + projection com banda confianca)
+import { CashflowChart } from "./v2/Onda3Cards";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 // Multi-CNPJ: precisa saber se esta em modo consolidado pra ajustar comportamento
 // dos cards v2 (legendas, hints "abra a empresa especifica", etc).
@@ -121,7 +122,14 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
       <PendingCards transactions={transactions} />
       <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
       <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
-      <CashFlowCard />
+      {/* V2 Onda 3: CashflowChart substitui CashFlowCard antigo. Consome
+          insights.cashflow do server (history 30d + projection 30/60/90 com
+          banda confianca ±15%). Funciona em consolidated e per-company. */}
+      <View style={[s.cashflowCard, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <Text style={s.cashflowKicker}>FLUXO DE CAIXA · HISTORICO + PROJECAO</Text>
+        <Text style={s.cashflowTitle}>Pra onde o caixa esta indo</Text>
+        <CashflowChart data={insights.cashflow} consolidated={consolidatedView} />
+      </View>
       {/* AIFinancialInsights removido na Onda 1 do redesign — volta no plano Expansao
           com cache 24h + regen on-demand pra nao queimar quota Haiku. */}
       <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
@@ -149,4 +157,7 @@ var s = StyleSheet.create({
   sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
+  cashflowCard: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 20 },
+  cashflowKicker: { fontSize: 9.5, color: Colors.ink3, letterSpacing: 1.2, fontWeight: "600", textTransform: "uppercase" },
+  cashflowTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700", marginTop: 4, marginBottom: 14, letterSpacing: -0.3 },
 });
