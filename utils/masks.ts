@@ -71,3 +71,43 @@ export function brDateToIso(value: string): string | null {
 export function onlyDigits(value: string): string {
   return (value || "").replace(/\D/g, "");
 }
+
+// ============================================================
+// Moeda BR — usadas em formulários de produto/serviço
+// ============================================================
+
+/**
+ * Máscara de moeda BR: recebe string (dígitos ou valor já mascarado)
+ * e retorna no formato "0,00" / "1.234,56".
+ *
+ * Funciona no modelo centavos-first: os dígitos entrados são sempre
+ * interpretados como centavos da direita pra esquerda.
+ *
+ * Exemplos:
+ *   maskCurrency("3508")     → "35,08"
+ *   maskCurrency("123456")   → "1.234,56"
+ *   maskCurrency("0")        → "0,00"
+ *   maskCurrency("35,08")    → "35,08"  (idempotente)
+ */
+export function maskCurrency(value: string): string {
+  const digits = (value || "").replace(/\D/g, "") || "0";
+  const n = parseInt(digits, 10) || 0;
+  const str = String(n).padStart(3, "0");
+  const intPart = str.slice(0, -2).replace(/^0+/, "") || "0";
+  const decPart = str.slice(-2);
+  // Separador de milhar
+  const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return formatted + "," + decPart;
+}
+
+/**
+ * Remove a máscara de moeda e retorna só os dígitos (centavos).
+ *
+ * Exemplos:
+ *   unmaskNumber("35,08")    → "3508"
+ *   unmaskNumber("1.234,56") → "123456"
+ *   unmaskNumber("")         → ""
+ */
+export function unmaskNumber(value: string): string {
+  return (value || "").replace(/\D/g, "");
+}
