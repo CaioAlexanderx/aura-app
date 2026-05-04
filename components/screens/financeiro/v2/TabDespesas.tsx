@@ -1,10 +1,11 @@
 // components/screens/financeiro/v2/TabDespesas.tsx
 //
-// Aba "Despesas" do Financeiro v2. Onda 1: KPI Strip + DRE Waterfall (versao
-// simplificada) + tendencia diaria + breakdown por categoria.
-// Em consolidated, DRE Waterfall fica bloqueado (precisa contexto fiscal por empresa).
-// Onda 2 vai adicionar: Top 5 despesas, formas de pagamento, timeline a pagar,
-// gauge despesa/receita, fixo x variavel 6m, alertas de anomalia.
+// Aba "Despesas" do Financeiro v2. Onda 2: KPI Strip + DRE Waterfall (per-company)
+// + Top 5 + formas de pagamento + tendencia diaria + categorias + timeline a pagar
+// + Gauge despesa/receita + AnomalyAlerts (categorias acima da media 3m).
+//
+// Em consolidated, DRE Waterfall fica bloqueado (precisa contexto fiscal).
+// Onda 3 vai adicionar: fixo x variavel 6m, evolucao 12m.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -12,6 +13,8 @@ import { Icon } from "@/components/Icon";
 import type { Transaction } from "../types";
 import { fmt, fmtK } from "../types";
 import { useMemo } from "react";
+import { useFinancialInsights } from "@/hooks/useFinancialInsights";
+import { Top5List, HBarList, Timeline, Gauge, AnomalyAlerts } from "./SharedCards";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -24,6 +27,7 @@ type Props = {
   transactions: Transaction[];
   summary: Summary;
   previousSummary?: Summary | null;
+  period: string;
   consolidated: boolean;
 };
 
@@ -52,11 +56,10 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
   });
 }
 
-export function TabDespesas({ transactions, summary, previousSummary, consolidated }: Props) {
+export function TabDespesas({ transactions, summary, previousSummary, period, consolidated }: Props) {
   var expenseCount = useMemo(function() {
     return transactions.filter(function(t) { return t.type === "expense"; }).length;
   }, [transactions]);
-  var avgExpense = expenseCount > 0 ? summary.expenses / expenseCount : 0;
   var payable = summary.pendingExpenses || 0;
   var paid = summary.expenses;
   var marginPct = summary.income > 0 ? ((summary.income - summary.expenses) / summary.income) * 100 : 0;
@@ -64,6 +67,15 @@ export function TabDespesas({ transactions, summary, previousSummary, consolidat
   var expenseDelta = previousSummary && previousSummary.expenses > 0
     ? ((summary.expenses - previousSummary.expenses) / previousSummary.expenses) * 100
     : null;
+
+  // Insights enriquecidos (Onda 2): top5, payment_methods, timeline, anomalies, gauge
+  var insights = useFinancialInsights({
+    transactions: transactions,
+    summary: summary,
+    previousSummary: previousSummary,
+    period: period,
+  });
+  var eb = insights.expense_breakdown;
 
   var categories = useMemo(function() { return groupExpenseByCategory(transactions); }, [transactions]);
   var catColors = ["#f87171", "#fbbf24", "#a78bfa", "#5b8cff", "#7c3aed", "#34d399"];
@@ -102,6 +114,21 @@ export function TabDespesas({ transactions, summary, previousSummary, consolidat
         </View>
       )}
 
+      {/* Onda 2: Top 5 + Formas de pagamento (lado a lado em wide) */}
+      <View style={IS_WIDE ? s.row2 : s.col}>
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>TOP 5 DESPESAS</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Os pagamentos mais pesados</Text>
+          <Top5List items={eb?.top5 || []} kind="expense" showCompanyBadge={consolidated} />
+        </View>
+
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>FORMAS DE PAGAMENTO</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Como o dinheiro saiu</Text>
+          <HBarList items={eb?.payment_methods || []} kind="expense" />
+        </View>
+      </View>
+
       {/* Tendencia diaria */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
         <Text style={[s.kicker, { color: Colors.ink3 }]}>TENDENCIA DIARIA</Text>
@@ -132,7 +159,30 @@ export function TabDespesas({ transactions, summary, previousSummary, consolidat
         )}
       </View>
 
-      {/* Categorias de despesa */}
+      {/* Onda 2: Timeline a pagar + Gauge despesa/receita */}
+      <View style={IS_WIDE ? s.row2 : s.col}>
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>A PAGAR</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Timeline de pagamentos</Text>
+          {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" /> : (
+            <View style={s.empty}>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando timeline…</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>DESPESAS / RECEITA</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Quanto da receita vira despesa</Text>
+          {eb?.gauge ? <Gauge data={eb.gauge} benchmark={62} /> : (
+            <View style={s.empty}>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando gauge…</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Categorias de despesa (cliente) */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
         <Text style={[s.kicker, { color: Colors.ink3 }]}>CATEGORIAS DE DESPESA</Text>
         <Text style={[s.cardTitle, { color: Colors.ink }]}>Pra onde o dinheiro foi</Text>
@@ -158,22 +208,25 @@ export function TabDespesas({ transactions, summary, previousSummary, consolidat
         )}
       </View>
 
-      {/* Roadmap */}
+      {/* Onda 2: Anomalias */}
+      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <Text style={[s.kicker, { color: Colors.ink3 }]}>ALERTAS DE ANOMALIA</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Categorias com gasto incomum vs media de 3 meses</Text>
+        <AnomalyAlerts items={eb?.anomalies || []} />
+      </View>
+
+      {/* Roadmap card — Onda 3 */}
       <View style={[s.card, s.roadmap, { backgroundColor: Colors.bg3, borderColor: Colors.border2 }]}>
-        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 2</Text>
+        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 3</Text>
         <Text style={[s.cardTitle, { color: Colors.ink }]}>Mais cards chegando</Text>
         <Text style={[s.roadmapText, { color: Colors.ink2 }]}>
-          Top 5 maiores despesas, formas de pagamento, timeline "a pagar", gauge despesa/receita,
-          fixo x variavel 6m e alertas de anomalia (categorias acima do esperado) sao a proxima onda
-          do redesign.
+          Fixo x variavel 6m e evolucao mensal de 12 meses ficam pra proxima onda do redesign.
         </Text>
       </View>
     </View>
   );
 }
 
-// DRE Waterfall — visualizacao simplificada usando Views horizontais.
-// Cada categoria de despesa vira uma "queda" da receita ate o resultado liquido.
 function DreWaterfall({ income, categories, netResult, marginPct }: {
   income: number;
   categories: { label: string; value: number; pct: number }[];
@@ -191,14 +244,12 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
 
   return (
     <View style={dre.wrap}>
-      {/* Receita bruta */}
       <View style={dre.row}>
         <Text style={[dre.label, { color: Colors.ink }]}>Receita bruta</Text>
         <View style={[dre.bar, { width: "100%", backgroundColor: Colors.green }]} />
         <Text style={[dre.value, { color: Colors.green }]}>+{fmtK(income)}</Text>
       </View>
-      {/* Cada despesa diminuindo */}
-      {categories.map(function(c, i) {
+      {categories.map(function(c) {
         var w = (c.value / max) * 100;
         return (
           <View key={c.label} style={dre.row}>
@@ -208,7 +259,6 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
           </View>
         );
       })}
-      {/* Resultado liquido */}
       <View style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
         <Text style={[dre.label, { color: Colors.ink, fontWeight: "800" }]}>Resultado liquido</Text>
         <View style={[dre.bar, { width: Math.max(2, (Math.abs(netResult) / max) * 100) + "%", backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
@@ -224,7 +274,6 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
 }
 
 function KpiCard({ label, value, delta, color, invert }: { label: string; value: string; delta: number | null; color: string; invert?: boolean }) {
-  // invert=true: delta negativo (despesas caindo) e bom (verde)
   var deltaGood = invert ? (delta != null && delta < 0) : (delta != null && delta >= 0);
   return (
     <View style={[k.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
@@ -243,6 +292,8 @@ function KpiCard({ label, value, delta, color, invert }: { label: string; value:
 var s = StyleSheet.create({
   kpiStrip: { flexDirection: "row", gap: 10, marginBottom: 14, flexWrap: "wrap" },
   kpiStripNarrow: { gap: 8 },
+  row2: { flexDirection: "row", gap: 14 },
+  col: { flexDirection: "column" },
   card: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 14 },
   lockedCard: { alignItems: "center", paddingVertical: 28 },
   lockIconWrap: {

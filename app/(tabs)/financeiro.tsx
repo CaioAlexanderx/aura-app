@@ -259,12 +259,15 @@ export default function FinanceiroScreen() {
           />
         )}
 
-        {/* V2: Receitas + Despesas — abas novas (multi-CNPJ aware) */}
+        {/* V2: Receitas + Despesas — abas novas (multi-CNPJ aware).
+            Onda 2: passa period pro hook useFinancialInsights buscar dados ricos
+            do server (top5, methods, timeline, DOW, anomalias, gauge). */}
         {activeTab === TAB_INDEX.receitas && (
           <TabReceitas
             transactions={transactions}
             summary={summary}
             previousSummary={previousSummary}
+            period={period}
             consolidated={!!consolidatedView}
           />
         )}
@@ -273,6 +276,7 @@ export default function FinanceiroScreen() {
             transactions={transactions}
             summary={summary}
             previousSummary={previousSummary}
+            period={period}
             consolidated={!!consolidatedView}
           />
         )}
