@@ -12,7 +12,8 @@ import { useAuthStore } from "@/stores/auth";
 
 const DEFAULT_SETTINGS: PdvSettings = {
   require_customer: false,
-  require_seller: false,
+  require_seller:   false,
+  caixa_enabled:    false,
 };
 
 export function usePdvSettings() {
