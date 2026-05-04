@@ -5,7 +5,7 @@ import { meAggregatesApi } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Transaction, DreData, WithdrawalData, PeriodKey } from "@/components/screens/financeiro/types";
-import { getPeriodRange, getPreviousPeriodRange } from "@/components/screens/financeiro/types";
+import { TAB_INDEX, getPeriodRange, getPreviousPeriodRange } from "@/components/screens/financeiro/types";
 
 function mapApiTransaction(t: any): Transaction {
   return {
@@ -131,19 +131,22 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     retry: 1, staleTime: 60000,
   });
 
-  // DRE e Withdrawal so em modo per-company por enquanto. Em consolidated
-  // a tela exibe placeholder "Disponivel ao selecionar empresa".
+  // V2 (04/05/2026): DRE agora vive dentro da aba Despesas (TAB_INDEX.despesas).
+  // Em consolidated o WaterFall e bloqueado — fetch nao roda.
+  // DRE e Withdrawal so em modo per-company por enquanto.
   var { data: apiDre } = useQuery({
     queryKey: ["dre", companyId],
     queryFn: function() { return companiesApi.dre(companyId!); },
-    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === 2,
+    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === TAB_INDEX.despesas,
     retry: 1,
   });
 
+  // V2: Retirada agora e a aba 4 (era 3 antes do redesign). TAB_INDEX.retirada
+  // mantem isso semanticamente correto — nao depender de literal numerico.
   var { data: apiWithdrawal } = useQuery({
     queryKey: ["withdrawal", companyId],
     queryFn: function() { return dashboardApi.summary(companyId!); },
-    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === 3,
+    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === TAB_INDEX.retirada,
     retry: 1,
   });
 
@@ -206,7 +209,6 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
 
   var createMutation = useMutation({
     mutationFn: function(body: any) {
-      // Bloqueio em consolidated: nao tem company
       if (consolidatedView) {
         return Promise.reject(new Error("Selecione uma empresa especifica para criar lancamentos"));
       }
@@ -218,6 +220,9 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["dre", companyId] });
+      // V2: invalida insights tambem (per-company e consolidated)
+      qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
+      qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
       toast.success("Lancamento criado!");
     },
     onError: function(err: any) {
@@ -255,6 +260,8 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
       qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
+      qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
+      qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
     },
   });
 

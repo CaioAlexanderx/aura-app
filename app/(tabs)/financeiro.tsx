@@ -2,7 +2,6 @@ import { useState, useMemo, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi } from "@/hooks/useTransactions";
-import { ScreenHeader } from "@/components/ScreenHeader";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
@@ -12,7 +11,7 @@ import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
-import { TABS, PERIODS } from "@/components/screens/financeiro/types";
+import { TABS, TAB_INDEX } from "@/components/screens/financeiro/types";
 import type { PeriodKey, Transaction } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
@@ -24,6 +23,8 @@ import { BASE_URL } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
 import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
+// V2 redesign (04/05/2026): Topbar nova + 2 abas novas (Receitas, Despesas).
+import { FinanceiroTopbar, TabReceitas, TabDespesas } from "@/components/screens/financeiro/v2";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 var isWeb = Platform.OS === "web";
@@ -44,12 +45,17 @@ function brToISO(br: string): string | null {
 }
 
 export default function FinanceiroScreen() {
-  var [activeTab, setActiveTab] = useState(0);
+  // V2: 6 abas (Visao Geral, Receitas, Despesas, Lancamentos, Retirada, Cupons).
+  // TAB_INDEX exporta indices semanticos; nao escrever numeros literais.
+  var [activeTab, setActiveTab] = useState(TAB_INDEX.visao);
   var [period, setPeriod] = useState<PeriodKey>("today");
   var [showModal, setShowModal] = useState(false);
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
+  // Estado pra abrir/fechar o seletor de periodo customizado quando usuario clica
+  // no botao "Periodo" do topbar.
+  var [showCustomPeriod, setShowCustomPeriod] = useState(false);
   var scrollRef = useRef<any>(null);
 
   var [customStartBR, setCustomStartBR] = useState("");
@@ -92,13 +98,19 @@ export default function FinanceiroScreen() {
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
+  function handlePeriodChange(p: PeriodKey) {
+    setPeriod(p);
+    // Quando usuario clica em "Periodo", abre seletor de datas custom inline
+    if (p === "custom") setShowCustomPeriod(true);
+    else setShowCustomPeriod(false);
+  }
+
   function handleExport() {
     if (transactions.length === 0) { toast.error("Nenhum lancamento para exportar"); return; }
     downloadCSV(arrayToCSV(transactions, TRANSACTION_COLUMNS), "aura_lancamentos_" + new Date().toISOString().slice(0, 10) + ".csv");
   }
 
   async function handleImport() {
-    // MULTICNPJ Onda 2.2: import nao funciona em consolidated (precisa company)
     if (consolidatedView) {
       toast.error("Selecione uma empresa especifica para importar lancamentos");
       return;
@@ -133,6 +145,14 @@ export default function FinanceiroScreen() {
     setEditTx(tx); setShowModal(true);
   }
 
+  function handleNewTransaction() {
+    if (consolidatedView) {
+      toast.error("Selecione uma empresa especifica para criar lancamentos");
+      return;
+    }
+    setEditTx(null); setShowModal(true);
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <WebPortal active={showModal}>
@@ -145,16 +165,19 @@ export default function FinanceiroScreen() {
         />
       </WebPortal>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-        {/* MULTICNPJ Onda 2.2: em modo consolidado, esconde a acao "Novo lancamento"
-            (precisa de empresa especifica). User pode abrir o switcher pra trocar. */}
-        <ScreenHeader
-          title="Financeiro"
-          actionLabel={consolidatedView ? undefined : "Novo lancamento"}
-          actionIcon={consolidatedView ? undefined : "dollar"}
-          onAction={consolidatedView ? undefined : function() { setEditTx(null); setShowModal(true); }}
+        {/* V2: Topbar nova substitui ScreenHeader + periodBar antigo. Em consolidated,
+            mostra "Consolidado · N empresas" e esconde "Novo lancamento". */}
+        <FinanceiroTopbar
+          companyName={company?.name || ""}
+          consolidated={!!consolidatedView}
+          companyCount={companyCount || 0}
+          period={period}
+          onPeriodChange={handlePeriodChange}
+          onExport={handleExport}
+          onNew={consolidatedView ? undefined : handleNewTransaction}
         />
 
-        {/* MULTICNPJ Onda 2.2: banner de modo consolidado */}
+        {/* MULTICNPJ Onda 2.2: banner de modo consolidado — preservado abaixo do topbar */}
         {consolidatedView && (
           <View style={s.consolidatedBanner}>
             <Icon name="globe" size={14} color="#a78bfa" />
@@ -171,15 +194,9 @@ export default function FinanceiroScreen() {
 
         {!consolidatedView && <AgentBanner context="financeiro" />}
 
-        <View style={s.periodBar}>
-          {PERIODS.map(function(p) {
-            return <Pressable key={p.key} onPress={function() { setPeriod(p.key); }} style={[s.periodBtn, period === p.key && s.periodBtnActive, isWeb && { transition: "all 0.2s ease" } as any]}>
-              <Text style={[s.periodText, period === p.key && s.periodTextActive]}>{p.label}</Text>
-            </Pressable>;
-          })}
-        </View>
-
-        {period === "custom" && (
+        {/* Selector de periodo custom — aparece quando usuario clica "Periodo" no topbar.
+            Em produção, futuro: substituir por DatePicker bonito. */}
+        {(period === "custom" || showCustomPeriod) && (
           <View style={s.customRow}>
             <View style={s.customField}>
               <Text style={s.customLabel}>De</Text>
@@ -206,11 +223,12 @@ export default function FinanceiroScreen() {
           />
         )}
 
-        {/* MULTICNPJ Onda 2.2: breakdown card so na Tab 0 (Visao Geral) e em consolidated */}
-        {consolidatedView && activeTab === 0 && breakdownForCard.length > 0 && (
+        {/* MULTICNPJ Onda 2.2: breakdown card so na Tab Visao Geral e em consolidated */}
+        {consolidatedView && activeTab === TAB_INDEX.visao && breakdownForCard.length > 0 && (
           <ConsolidatedBreakdownCard breakdown={breakdownForCard as any} />
         )}
 
+        {/* Tabs (6 abas — V2). Scroll horizontal em mobile pra caber todas. */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {TABS.map(function(tab, i) {
             return <Pressable key={tab} onPress={function() { handleTabSelect(i); }} style={[s.tab, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
@@ -219,19 +237,65 @@ export default function FinanceiroScreen() {
           })}
         </ScrollView>
 
-        {!isDemo && transactions.length > 0 && (activeTab === 0 || activeTab === 1) && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
-        {isLoading && activeTab < 4 && <ListSkeleton rows={4} showCards />}
+        {!isDemo && transactions.length > 0 && (activeTab === TAB_INDEX.visao || activeTab === TAB_INDEX.lancamentos) && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
+        {isLoading && activeTab !== TAB_INDEX.cupons && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === 0 && <TabVisaoGeral transactions={transactions} summary={summary} previousSummary={previousSummary} period={period} customStart={customStart} customEnd={customEnd} isLoading={isLoading} isDemo={isDemo} onNewTransaction={consolidatedView ? function() { toast.error("Selecione uma empresa especifica"); } : function() { setEditTx(null); setShowModal(true); }} onImport={!importing && !consolidatedView ? handleImport : undefined} onGoToLancamentos={function() { handleTabSelect(1); }} onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }} onEdit={!isDemo && !consolidatedView ? handleEdit : undefined} />}
-        {activeTab === 1 && <TabLancamentos transactions={transactions} isLoading={isLoading} importing={importing} onNewTransaction={consolidatedView ? function() { toast.error("Selecione uma empresa especifica"); } : function() { setEditTx(null); setShowModal(true); }} onExport={handleExport} onImport={handleImport} onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined} onEdit={!isDemo && !consolidatedView ? handleEdit : undefined} />}
+        {/* Tab content — switch por activeTab semantico */}
+        {activeTab === TAB_INDEX.visao && (
+          <TabVisaoGeral
+            transactions={transactions}
+            summary={summary}
+            previousSummary={previousSummary}
+            period={period}
+            customStart={customStart}
+            customEnd={customEnd}
+            isLoading={isLoading}
+            isDemo={isDemo}
+            onNewTransaction={handleNewTransaction}
+            onImport={!importing && !consolidatedView ? handleImport : undefined}
+            onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+            onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }}
+            onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
+          />
+        )}
 
-        {/* MULTICNPJ Onda 2.2: tabs Analise/Retirada/Cupons exigem empresa especifica */}
-        {activeTab === 2 && consolidatedView && <ConsolidatedBlocked label="Análise (DRE)" description="O DRE precisa do contexto fiscal de uma empresa especifica. Selecione uma empresa no switcher para visualizar." />}
-        {activeTab === 2 && !consolidatedView && <TabResumo transactions={transactions} dreApi={dreData} period={period} />}
-        {activeTab === 3 && consolidatedView && <ConsolidatedBlocked label="Retirada / Pro-labore" description="O calculo de retirada usa regime tributario e Fator R da empresa. Selecione uma empresa no switcher." />}
-        {activeTab === 3 && !consolidatedView && <TabRetirada transactions={transactions} />}
-        {activeTab === 4 && consolidatedView && <ConsolidatedBlocked label="Cupons" description="Cupons sao gerenciados por empresa. Selecione uma para ver e criar cupons." />}
-        {activeTab === 4 && !consolidatedView && <TabCupons />}
+        {/* V2: Receitas + Despesas — abas novas (multi-CNPJ aware) */}
+        {activeTab === TAB_INDEX.receitas && (
+          <TabReceitas
+            transactions={transactions}
+            summary={summary}
+            previousSummary={previousSummary}
+            consolidated={!!consolidatedView}
+          />
+        )}
+        {activeTab === TAB_INDEX.despesas && (
+          <TabDespesas
+            transactions={transactions}
+            summary={summary}
+            previousSummary={previousSummary}
+            consolidated={!!consolidatedView}
+          />
+        )}
+
+        {activeTab === TAB_INDEX.lancamentos && (
+          <TabLancamentos
+            transactions={transactions}
+            isLoading={isLoading}
+            importing={importing}
+            onNewTransaction={handleNewTransaction}
+            onExport={handleExport}
+            onImport={handleImport}
+            onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined}
+            onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
+          />
+        )}
+
+        {/* Retirada e Cupons — preservadas como abas extras (Onda 1 do redesign).
+            Em consolidated, ambas mostram o ConsolidatedBlocked existente. */}
+        {activeTab === TAB_INDEX.retirada && consolidatedView && <ConsolidatedBlocked label="Retirada / Pro-labore" description="O calculo de retirada usa regime tributario e Fator R da empresa. Selecione uma empresa no switcher." />}
+        {activeTab === TAB_INDEX.retirada && !consolidatedView && <TabRetirada transactions={transactions} />}
+        {activeTab === TAB_INDEX.cupons && consolidatedView && <ConsolidatedBlocked label="Cupons" description="Cupons sao gerenciados por empresa. Selecione uma para ver e criar cupons." />}
+        {activeTab === TAB_INDEX.cupons && !consolidatedView && <TabCupons />}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
@@ -256,12 +320,7 @@ function ConsolidatedBlocked({ label, description }: { label: string; descriptio
 
 var s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  periodBar: { flexDirection: "row", backgroundColor: Colors.bg3, borderRadius: 12, padding: 4, marginBottom: 12, borderWidth: 1, borderColor: Colors.border, gap: 4 },
-  periodBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: "center" },
-  periodBtnActive: { backgroundColor: Colors.violet },
-  periodText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  periodTextActive: { color: "#fff", fontWeight: "700" },
+  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 1100, alignSelf: "center", width: "100%" },
   customRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2 },
   customField: { flex: 1 },
   customLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
