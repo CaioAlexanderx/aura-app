@@ -1,7 +1,6 @@
 // Tipos compartilhados pelos componentes do Financeiro v2.
-// Onda 2 (04/05/2026): adiciona income_breakdown e expense_breakdown que vem
-// do server (cobertura completa de Top 5, formas pagamento, timeline, DOW,
-// anomalias, gauge).
+// Onda 3 (04/05/2026): adiciona cashflow (history+projection), monthly_evolution
+// e professional_ranking que vem do server.
 
 import type { Transaction } from "../types";
 
@@ -15,7 +14,6 @@ export type HealthDriver = {
   contribution: number;
 };
 
-// ----- Onda 2: novos tipos -----
 export type TopTransaction = {
   id: string;
   description: string;
@@ -25,12 +23,11 @@ export type TopTransaction = {
   employee_name: string | null;
   status: string;
   date: string;
-  // Multi-CNPJ: badge da loja em consolidated
   company_name: string | null;
 };
 
 export type PaymentMethodSlice = {
-  label: string;       // "PIX", "Credito", etc
+  label: string;
   value: number;
   count: number;
   pct: number;
@@ -45,7 +42,7 @@ export type TimelineBuckets = {
 };
 
 export type DowItem = {
-  dow: number;       // 0=Dom, 6=Sab
+  dow: number;
   label: string;
   total: number;
   count: number;
@@ -81,6 +78,44 @@ export type ExpenseBreakdown = {
   total: number;
 };
 
+// ----- Onda 3 -----
+export type CashflowHistoryPoint = {
+  date: string;     // "YYYY-MM-DD"
+  income: number;
+  expenses: number;
+  net: number;
+};
+
+export type CashflowProjectionPoint = {
+  days_ahead: number;  // 30, 60, 90
+  value: number;       // valor central projetado
+  low: number;         // banda inferior (-15%)
+  high: number;        // banda superior (+15%)
+};
+
+export type CashflowData = {
+  history: CashflowHistoryPoint[];
+  avg_daily_net: number;
+  std_daily_net: number;
+  projection: CashflowProjectionPoint[];
+};
+
+export type MonthlyItem = {
+  month: string;       // "YYYY-MM"
+  label: string;       // "out/26"
+  income: number;
+  expenses: number;
+  balance: number;
+};
+
+export type RankingItem = {
+  id: string;
+  name: string;
+  tx_count: number;
+  total: number;
+  avg_ticket: number;
+};
+
 export type FinancialInsights = {
   health: {
     score: number;
@@ -101,14 +136,14 @@ export type FinancialInsights = {
     count: number;
     oldest_days?: number;
   } | null;
-  // Onda 2: dados ricos do server (Top5, methods, timeline, DOW, anomalies, gauge)
   income_breakdown?: IncomeBreakdown;
   expense_breakdown?: ExpenseBreakdown;
-  // Onda 3: cashflow projection 30/60/90 com banda confianca
-  cashflow?: any;
+  // Onda 3
+  cashflow?: CashflowData;
+  monthly_evolution?: MonthlyItem[];
+  professional_ranking?: RankingItem[];
 };
 
-// Metas do Health Score (espelha backend financeiroInsights.js — manter sync!)
 export const HEALTH_TARGETS = {
   margin_pct: 20,
   runway_days: 60,
