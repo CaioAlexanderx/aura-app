@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
@@ -12,6 +12,7 @@ import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { useProductCategories } from "@/hooks/useProductCategories";
+import { HorizontalChipsScroller } from "@/components/HorizontalChipsScroller";
 import type { Product } from "./types";
 import { UNITS } from "./types";
 
@@ -209,19 +210,19 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </View>
         <View style={{ flex: 1 }}>
           <FormField label="Unidade">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 4 }}>
+            <HorizontalChipsScroller contentContainerStyle={{ gap: 4 }}>
               {UNITS.map(u => (
                 <Pressable key={u} onPress={() => setUnit(u)} style={[s.chip, unit === u && s.chipActive]}>
                   <Text style={[s.chipText, unit === u && s.chipTextActive]}>{u}</Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </HorizontalChipsScroller>
           </FormField>
         </View>
       </View>
 
       <FormField label="Categoria">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        <HorizontalChipsScroller>
           {mergedCategoryList.map(c => {
             const selected = category === c && !showNewCat;
             const chipColor = managedColorByName[c];
@@ -235,7 +236,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}>
             <Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text>
           </Pressable>
-        </ScrollView>
+        </HorizontalChipsScroller>
         {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
         <Text style={s.categoryHint}>Gerencie suas categorias pelo botao &quot;Categorias&quot; na tela de Estoque.</Text>
       </FormField>
