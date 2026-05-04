@@ -112,7 +112,7 @@ export type ProductCategoryRow = {
   product_count: number;
 };
 
-// Birthday API types (BE-06 — cupom de aniversário + envio WhatsApp)
+// Birthday API types (BE-06 — cupôm de aniversário + envio WhatsApp)
 export type BirthdayCustomer = {
   id: string;
   name: string;
@@ -321,18 +321,13 @@ export var pdvSettingsApi = {
 };
 
 // Transaction <-> Sale API (Item 1 Eryca)
-// Permite editar mercadorias e vendedora vinculadas a uma transacao
-// que veio do PDV (idempotency_key formato "pdv-sale-{uuid}").
 export var transactionSaleApi = {
-  // Detalhes completos da venda (items, cliente, vendedora, employees disponiveis)
   getDetails: function(companyId: string, txId: string) {
     return request<SaleDetails>(
       "/companies/" + companyId + "/transactions/" + txId + "/sale-details",
       { retry: 1 }
     );
   },
-  // Devolucao parcial: remove item, devolve estoque, reduz total da venda,
-  // reduz valor da transacao original e cria transacao espelho de "devolucao".
   removeItem: function(companyId: string, txId: string, itemId: string) {
     return request<{
       ok: boolean;
@@ -345,9 +340,6 @@ export var transactionSaleApi = {
       { method: "DELETE", retry: 0, timeout: 15000 }
     );
   },
-  // Adiciona produto a venda existente (EXTRA C). Atomico:
-  // decrementa estoque, insere sale_items, soma sales.total_amount e
-  // transactions.amount.
   addItem: function(
     companyId: string,
     txId: string,
@@ -363,8 +355,6 @@ export var transactionSaleApi = {
       { method: "POST", body: body, retry: 0, timeout: 15000 }
     );
   },
-  // Atualiza vendedora da transacao (e da venda vinculada se houver).
-  // employee_id null limpa o vinculo.
   updateSeller: function(companyId: string, txId: string, employee_id: string | null, employee_name?: string) {
     return request<{ ok: boolean; transaction: any; synced_to_sale: boolean }>(
       "/companies/" + companyId + "/transactions/" + txId + "/seller",
@@ -375,7 +365,6 @@ export var transactionSaleApi = {
 
 // Sales API (Item 3 Eryca — tela de visualizacao)
 export var salesApi = {
-  // Lista paginada com filtros + stats agregados (sobre o mesmo filtro).
   list: function(companyId: string, filters?: SalesFilters) {
     var qs: string[] = [];
     if (filters?.date_from) qs.push("date_from=" + encodeURIComponent(filters.date_from));
@@ -389,11 +378,9 @@ export var salesApi = {
     var suffix = qs.length ? "?" + qs.join("&") : "";
     return request<SalesListResponse>("/companies/" + companyId + "/sales" + suffix, { retry: 1 });
   },
-  // Detalhes completos: sale + customer + seller + items
   get: function(companyId: string, saleId: string) {
     return request<SaleDetailFull>("/companies/" + companyId + "/sales/" + saleId, { retry: 1 });
   },
-  // Cancela venda inteira (devolve estoque, marca cancelled, espelho no financeiro)
   cancel: function(companyId: string, saleId: string, reason?: string) {
     return request<{ ok: boolean; sale_id: string; refunded_amount: number; items_returned: number }>(
       "/companies/" + companyId + "/sales/" + saleId + "/cancel",
@@ -445,7 +432,6 @@ export var companiesApi = {
   createVariant: function(companyId: string, productId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants", { method: "POST", body: body }); },
   updateVariant: function(companyId: string, productId: string, variantId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "PATCH", body: body }); },
   deleteVariant: function(companyId: string, productId: string, variantId: string) { return request<any>("/companies/" + companyId + "/products/" + productId + "/variants/" + variantId, { method: "DELETE" }); },
-  // Product/Service categories (compartilham a mesma tabela via coluna type)
   productCategories: function(companyId: string, type?: CategoryType) {
     var q = type ? "?type=" + type : "";
     return request<{ categories: ProductCategoryRow[]; total: number; type: CategoryType }>("/companies/" + companyId + "/product-categories" + q);
@@ -464,8 +450,6 @@ export var companiesApi = {
   updateCustomer: function(companyId: string, custId: string, body: any) { return request<any>("/companies/" + companyId + "/customers/" + custId, { method: "PATCH", body: body }); },
   deleteCustomer: function(companyId: string, custId: string) { return request<any>("/companies/" + companyId + "/customers/" + custId, { method: "DELETE" }); },
   retention: function(companyId: string, period?: string) { return request<any>("/companies/" + companyId + "/customers/retention?period=" + (period || "month")); },
-  // GET /customers/birthdays?days=N — clientes com aniversário em N dias
-  // (days=0 retorna só hoje)
   birthdays: function(companyId: string, days: number) {
     return request<{ days: number; total: number; customers: BirthdayCustomer[] }>(
       "/companies/" + companyId + "/customers/birthdays?days=" + days,
@@ -475,19 +459,21 @@ export var companiesApi = {
   reviews: function(companyId: string, rating?: number) { return request<any>("/companies/" + companyId + "/reviews" + (rating ? "?rating=" + rating : "")); },
   requestReview: function(companyId: string, saleId: string, customerId?: string) { return request<any>("/companies/" + companyId + "/reviews/request", { method: "POST", body: { sale_id: saleId, customer_id: customerId } }); },
   members: function(companyId: string) { return request<any>("/companies/" + companyId + "/members"); },
-  inviteMember: async function(companyId: string, body: { email: string; role_label?: string }) {
+  // Unified member list: one entry per user across all sibling companies (multi-CNPJ)
+  membersUnified: function(companyId: string) { return request<any>("/companies/" + companyId + "/members/unified"); },
+  // Invite member — company_ids[] grants access to multiple CNPJs at once
+  inviteMember: function(companyId: string, body: { email: string; role_label?: string; company_ids?: string[]; permissions?: Record<string, boolean> }) {
     var normalizedRole = (body.role_label || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
-    var payloads = [
-      { invite_email: body.email }, { email: body.email },
-      { invite_email: body.email, role_label: normalizedRole }, { email: body.email, role_label: normalizedRole },
-      { invite_email: body.email, role: normalizedRole }, { email: body.email, role: normalizedRole },
-    ];
-    var lastErr: unknown;
-    for (var i = 0; i < payloads.length; i++) {
-      try { return await request<any>("/companies/" + companyId + "/members/invite", { method: "POST", body: payloads[i], retry: 0 }); }
-      catch (err) { lastErr = err; if (!(err instanceof ApiError) || err.status !== 400) throw err; }
-    }
-    throw lastErr;
+    return request<any>("/companies/" + companyId + "/members/invite", {
+      method: "POST",
+      body: {
+        invite_email: body.email || undefined,
+        role_label:   normalizedRole || undefined,
+        company_ids:  body.company_ids,
+        permissions:  body.permissions,
+      },
+      retry: 0,
+    });
   },
   updateMember: function(companyId: string, mid: string, body: any) { return request<any>("/companies/" + companyId + "/members/" + mid, { method: "PATCH", body: body }); },
   removeMember: function(companyId: string, mid: string) { return request<any>("/companies/" + companyId + "/members/" + mid, { method: "DELETE" }); },
@@ -554,24 +540,20 @@ export var couponsApi = {
   remove: function(companyId: string, couponId: string) { return request<any>("/companies/" + companyId + "/coupons/" + couponId, { method: "DELETE" }); },
 };
 
-// Birthday API (BE-06 — fluxo cupom de aniversário + WhatsApp)
-// /companies/:id/birthday — settings, create-coupon, send-log, sent-this-year
+// Birthday API (BE-06 — fluxo cupôm de aniversário + WhatsApp)
 export var birthdayApi = {
-  // GET /settings — defaults editáveis + template (com fallback)
   getSettings: function(companyId: string) {
     return request<BirthdaySettings>(
       "/companies/" + companyId + "/birthday/settings",
       { retry: 1 }
     );
   },
-  // PUT /settings — salva defaults e/ou template (owner/admin)
   saveSettings: function(companyId: string, body: { defaults?: Partial<BirthdayCouponDefaults>; template?: string }) {
     return request<{ ok: true }>(
       "/companies/" + companyId + "/birthday/settings",
       { method: "PUT", body: body, retry: 0 }
     );
   },
-  // POST /create-coupon — cria cupom marcado como source='birthday' (owner/admin)
   createCoupon: function(companyId: string, body: {
     customer_id: string;
     code?: string;
@@ -587,7 +569,6 @@ export var birthdayApi = {
       { method: "POST", body: body, retry: 0 }
     );
   },
-  // POST /send-log — registra envio (idempotente por company+customer+ano)
   logSent: function(companyId: string, body: {
     customer_id: string;
     coupon_id?: string;
@@ -599,7 +580,6 @@ export var birthdayApi = {
       { method: "POST", body: body, retry: 0 }
     );
   },
-  // GET /sent-this-year — lista IDs dos clientes já contactados no ano corrente
   sentThisYear: function(companyId: string) {
     return request<{ year: number; total: number; sent: BirthdaySentRow[] }>(
       "/companies/" + companyId + "/birthday/sent-this-year",
@@ -649,17 +629,12 @@ export var adminApi = {
   clients: function() { return request<any>("/admin/clients"); },
   clientModules: function(companyId: string) { return request<any>("/admin/clients/" + companyId + "/modules"); },
   updateModules: function(companyId: string, overrides: Record<string, boolean>) { return request<any>("/admin/clients/" + companyId + "/modules", { method: "PUT", body: { overrides: overrides } }); },
-  // Altera plano do cliente (PATCH /admin/clients/:cid/plan).
-  // Nao mexe em Asaas — so capabilities.
   setPlan: function(companyId: string, plan: string) {
     return request<{ company: any; visible_modules: string[]; changed: boolean; message: string }>("/admin/clients/" + companyId + "/plan", { method: "PATCH", body: { plan: plan }, retry: 0 });
   },
-  // Ativa ou desativa modulo vertical (PATCH /admin/clients/:cid/vertical).
-  // Passar null desativa.
   setVertical: function(companyId: string, vertical: VerticalKey | null) {
     return request<{ company: any; changed: boolean; message: string }>("/admin/clients/" + companyId + "/vertical", { method: "PATCH", body: { vertical: vertical }, retry: 0 });
   },
-  // Access codes (codigos de acesso — trial, promo, manual, referral)
   accessCodes: {
     list: function(params?: { type?: string; is_active?: boolean; q?: string; limit?: number }) {
       var qs: string[] = [];
