@@ -9,11 +9,12 @@
 // initialType='service' (travado).
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { useProductCategories } from "@/hooks/useProductCategories";
+import { HorizontalChipsScroller } from "@/components/HorizontalChipsScroller";
 import type { Product } from "./types";
 
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -119,7 +120,7 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
             </Pressable>
           )}
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        <HorizontalChipsScroller>
           {chipList.map(function(c) {
             var selected = category === c && !showNewCat;
             var chipColor = colorByName[c];
@@ -137,7 +138,7 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
           <Pressable onPress={function() { setShowNewCat(true); }} style={[s.chip, showNewCat && s.chipActive]}>
             <Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text>
           </Pressable>
-        </ScrollView>
+        </HorizontalChipsScroller>
         {showNewCat && (
           <TextInput
             style={[s.input, { marginTop: 8 }]}
@@ -172,7 +173,9 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
 }
 
 var s = StyleSheet.create({
-  container: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, marginBottom: 24 },
+  // O chrome do card é fornecido pelo modal wrapper em estoque.tsx
+  // (formSheet + ScrollView contentContainerStyle). Aqui só agrupamos.
+  container: {},
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },

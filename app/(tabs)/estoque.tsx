@@ -21,6 +21,7 @@ import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
+import { WebPortal } from "@/components/WebPortal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -525,20 +526,23 @@ export default function EstoqueScreen() {
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
 
-      {/* ─── Overlay de edição/adição ─────────────────────────────────────
-          position: absolute dentro do wrapper scoped à área de conteúdo,
-          ou seja, não cobre a sidebar no web. ScrollView interno permite
-          rolar o formulário inteiro sem problemáticas de altura fixa.
+      {/* ─── Modal de adicionar/editar (padrão do Lançamento Financeiro) ──
+          WebPortal escapa do wrapper (position: relative) e renderiza
+          direto no document.body como position: fixed full-screen.
+          Modal centralizado, maxWidth 540, maxHeight 92% — ScrollView
+          interno com flex: 1 garante que TODO o conteúdo possa ser
+          rolado, inclusive o footer com Cancelar/Salvar (que antes
+          ficava cortado no bottom-sheet).
       ──────────────────────────────────────────────────────────────────── */}
-      {formOpen && (
+      <WebPortal active={formOpen}>
         <Pressable style={s.formOverlay} onPress={closeFormModal}>
           <Pressable style={s.formSheet} onPress={() => {}}>
-            <View style={s.formHandle} />
             <ScrollView
+              style={{ flex: 1 }}
               bounces={false}
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 32 }}
+              contentContainerStyle={{ padding: 24, paddingBottom: 32 }}
             >
               {showServiceForm && (
                 <AddServiceForm
@@ -558,7 +562,7 @@ export default function EstoqueScreen() {
             </ScrollView>
           </Pressable>
         </Pressable>
-      )}
+      </WebPortal>
     </View>
   );
 }
@@ -626,28 +630,28 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
-  // Overlay de edição: position absolute dentro do wrapper,
-  // não extravasa para a sidebar no desktop.
+  // Overlay do modal de adicionar/editar produto — padrão centralizado
+  // (mesmo do TransactionModal/Lançamento Financeiro). WebPortal renderiza
+  // este overlay direto no document.body, então position: fixed cobre a
+  // tela inteira (incluindo a sidebar) e não fica preso no wrapper.
   formOverlay: {
-    position: "absolute",
+    position: "fixed" as any,
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 100,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   formSheet: {
     backgroundColor: Colors.bg3,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    maxHeight: "88%",
-  },
-  formHandle: {
-    width: 40, height: 4,
-    backgroundColor: Colors.border2,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    width: "92%",
+    maxWidth: 540,
+    maxHeight: "92%",
+    // display: flex implícito via View — ScrollView com flex: 1 ocupa
+    // a altura disponível e habilita scroll interno do conteúdo.
+    overflow: "hidden",
   },
 });
