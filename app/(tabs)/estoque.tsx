@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator, Modal, KeyboardAvoidingView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
@@ -150,7 +150,7 @@ function AggregatedView() {
                 <Text style={agg.name} numberOfLines={1}>{g.name}</Text>
                 {g.is_linked && (
                   <View style={agg.linkedBadge}>
-                    <Text style={agg.linkedBadgeText}>{"\uD83D\uDD17 " + g.company_count + " CNPJs"}</Text>
+                    <Text style={agg.linkedBadgeText}>{"🔗 " + g.company_count + " CNPJs"}</Text>
                   </View>
                 )}
               </View>
@@ -257,14 +257,6 @@ export default function EstoqueScreen() {
   });
   const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
 
-  // Scroll para o topo após o formulário ser renderizado
-  useEffect(() => {
-    if (showAddForm || showServiceForm) {
-      const t = setTimeout(() => scrollRef.current?.scrollTo?.({ y: 0, animated: true }), 80);
-      return () => clearTimeout(t);
-    }
-  }, [showAddForm, showServiceForm]);
-
   // Categorias cadastradas tem prioridade; categorias derivadas dos produtos
   // (legado, ainda nao cadastradas) entram depois para cobrir o que ja existe.
   const allCategories = useMemo(() => {
@@ -289,6 +281,12 @@ export default function EstoqueScreen() {
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
   const serviceCount = products.filter(p => p.category === "Servicos" || p.unit === "srv").length;
 
+  function closeFormModal() {
+    setShowAddForm(false);
+    setShowServiceForm(false);
+    setEditProduct(null);
+  }
+
   function handleSaveProduct(product: Product) {
     if (editProduct) { updateProduct(product); setEditProduct(null); }
     else addProduct(product);
@@ -298,10 +296,21 @@ export default function EstoqueScreen() {
   }
 
   function handleEdit(product: Product) {
-    setEditProduct(product); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0);
+    setEditProduct(product);
+    setShowAddForm(true);
+    setShowServiceForm(false);
+    setActiveTab(0);
   }
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
+
+  function handleScanBarcode() {
+    if (Platform.OS === "web") {
+      toast.error("Scanner de código disponível no app mobile");
+    } else {
+      toast.error("Scanner em breve");
+    }
+  }
 
   function handleExport() {
     if (products.length === 0) { toast.error("Nenhum produto para exportar"); return; }
@@ -394,7 +403,7 @@ export default function EstoqueScreen() {
         </View>
       )}
 
-      {dupGroupsCount > 0 && !showAddForm && !showServiceForm && !isDemo && (
+      {dupGroupsCount > 0 && !isDemo && (
         <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBanner}>
           <View style={s.dupBannerIcon}><Text style={s.dupBannerIconText}>!</Text></View>
           <View style={{ flex: 1 }}>
@@ -405,27 +414,9 @@ export default function EstoqueScreen() {
         </Pressable>
       )}
 
-      {/* Service form (simplified) */}
-      {showServiceForm && (
-        <AddServiceForm
-          onSave={handleSaveProduct}
-          onCancel={() => setShowServiceForm(false)}
-          onOpenCategories={() => setCategoriesModal({ open: true, initialType: "service" })}
-        />
-      )}
-
-      {showAddForm && (
-        <AddProductForm
-          categories={allCategories}
-          onSave={handleSaveProduct}
-          onCancel={() => { setShowAddForm(false); setEditProduct(null); }}
-          editProduct={editProduct}
-        />
-      )}
-
       {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {!isLoading && products.length === 0 && !isDemo && !showAddForm && !showServiceForm && (
+      {!isLoading && products.length === 0 && !isDemo && (
         <View>
           <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou servico, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
           <View style={s.emptyImport}>
@@ -474,7 +465,18 @@ export default function EstoqueScreen() {
 
       {activeTab === 0 && products.length > 0 && (
         <View>
-          <TextInput style={s.searchInput} placeholder="Buscar por nome ou codigo..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+          <View style={s.searchRow}>
+            <TextInput
+              style={s.searchInput}
+              placeholder="Buscar por nome ou codigo..."
+              placeholderTextColor={Colors.ink3}
+              value={search}
+              onChangeText={setSearch}
+            />
+            <Pressable onPress={handleScanBarcode} style={s.scanBtn}>
+              <Icon name="barcode" size={20} color={Colors.violet3} />
+            </Pressable>
+          </View>
           <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
           <View style={s.listCard}>
             {paginated.map(p => (
@@ -534,12 +536,46 @@ export default function EstoqueScreen() {
           productId={linkTarget.id}
           onClose={() => setLinkTarget(null)}
           onLinked={() => {
-            // Invalida produtos pra refetch (master_sku mudou)
             qc.invalidateQueries({ queryKey: ["products", company?.id] });
             qc.invalidateQueries({ queryKey: ["productsAggregated"] });
           }}
         />
       )}
+
+      {/* Modal de edição/adição — bottom sheet, sobrepõe a tela com fundo escurecido */}
+      <Modal
+        visible={showAddForm || showServiceForm}
+        transparent
+        animationType="slide"
+        onRequestClose={closeFormModal}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Pressable style={s.modalBackdrop} onPress={closeFormModal}>
+            <Pressable style={s.modalSheet} onPress={() => {}}>
+              <View style={s.modalHandle} />
+              {showServiceForm && (
+                <AddServiceForm
+                  onSave={handleSaveProduct}
+                  onCancel={closeFormModal}
+                  onOpenCategories={() => setCategoriesModal({ open: true, initialType: "service" })}
+                />
+              )}
+              {showAddForm && (
+                <AddProductForm
+                  categories={allCategories}
+                  onSave={handleSaveProduct}
+                  onCancel={closeFormModal}
+                  editProduct={editProduct}
+                />
+              )}
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
     </ScrollView>
   );
@@ -580,7 +616,9 @@ const s = StyleSheet.create({
   bulkAction: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   bulkDeleteAction: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   bulkActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  searchInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 12 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  searchInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
+  scanBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   abcInfo: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
   abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
@@ -605,4 +643,14 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalSheet: {
+    backgroundColor: Colors.bg3,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingTop: 12,
+    maxHeight: "90%",
+  },
+  modalHandle: { width: 40, height: 4, backgroundColor: Colors.border2, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
 });
