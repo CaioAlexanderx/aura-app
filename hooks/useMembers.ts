@@ -4,6 +4,13 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
+export type MemberCompany = {
+  company_id: string;
+  company_name: string;
+  is_primary: boolean;
+  member_id: string;
+};
+
 export type Member = {
   id: string;
   user_id: string | null;
@@ -16,20 +23,19 @@ export type Member = {
   invite_email?: string;
   invited_at?: string;
   accepted_at?: string;
+  companies: MemberCompany[];  // CNPJs que este membro tem acesso
+};
+
+export type SiblingCompany = {
+  id: string;
+  name: string;
+  is_primary: boolean;
 };
 
 export type LastInvite = {
   url: string;
   email: string;
   role: string;
-};
-
-export type MembersData = {
-  total: number;
-  active: number;
-  pending: number;
-  monthly_cost: number;
-  members: Member[];
 };
 
 function mapMember(raw: any): Member {
@@ -47,6 +53,7 @@ function mapMember(raw: any): Member {
     invite_email: raw.invite_email,
     invited_at:   raw.invited_at,
     accepted_at:  raw.accepted_at,
+    companies:    raw.companies || [],
   };
 }
 
@@ -57,21 +64,21 @@ export function useMembers() {
   const [lastInvite, setLastInvite] = useState<LastInvite | null>(null);
 
   const { data, isLoading } = useQuery<any>({
-    queryKey: ["members", cid],
-    queryFn:  () => companiesApi.members(cid!),
+    queryKey: ["members-unified", cid],
+    queryFn:  () => companiesApi.membersUnified(cid!),
     enabled:  !!cid,
     staleTime: 60_000,
   });
 
   const rawMembers: any[] = data?.members || [];
   const members: Member[] = rawMembers.map(mapMember);
+  const siblings: SiblingCompany[] = data?.siblings || [];
 
   const inviteMutation = useMutation({
-    mutationFn: (body: { email: string; role_label?: string }) =>
+    mutationFn: (body: { email: string; role_label?: string; company_ids?: string[]; permissions?: Record<string, boolean> }) =>
       companiesApi.inviteMember(cid!, body),
     onSuccess: (response: any) => {
-      qc.invalidateQueries({ queryKey: ["members", cid] });
-      // Captura o link de convite retornado pela API
+      qc.invalidateQueries({ queryKey: ["members-unified", cid] });
       if (response?.invite_url) {
         setLastInvite({
           url:   response.invite_url,
@@ -89,16 +96,18 @@ export function useMembers() {
     mutationFn: ({ mid, body }: { mid: string; body: any }) =>
       companiesApi.updateMember(cid!, mid, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["members", cid] });
+      qc.invalidateQueries({ queryKey: ["members-unified", cid] });
       toast.success("Permissoes atualizadas");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao atualizar"),
   });
 
+  // removeMember aceita array de member_ids para remover de todos os CNPJs de uma vez
   const removeMutation = useMutation({
-    mutationFn: (mid: string) => companiesApi.removeMember(cid!, mid),
+    mutationFn: (memberIds: string[]) =>
+      Promise.all(memberIds.map(mid => companiesApi.removeMember(cid!, mid))),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["members", cid] });
+      qc.invalidateQueries({ queryKey: ["members-unified", cid] });
       toast.success("Membro suspenso");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao suspender"),
@@ -108,9 +117,10 @@ export function useMembers() {
 
   return {
     members,
-    total:      data?.total       || 0,
-    active:     data?.active      || 0,
-    pending:    data?.pending     || 0,
+    siblings,
+    total:       data?.total        || 0,
+    active:      data?.active       || 0,
+    pending:     data?.pending      || 0,
     monthlyCost: data?.monthly_cost || 0,
     isLoading,
     lastInvite,
