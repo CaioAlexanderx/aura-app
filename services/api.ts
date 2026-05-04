@@ -188,6 +188,7 @@ export type SidebarLayout = {
 export type PdvSettings = {
   require_customer: boolean;  // exigir identificacao do cliente em toda venda
   require_seller: boolean;    // exigir identificacao da vendedora em toda venda
+  caixa_enabled: boolean;     // habilita modulo de abertura/fechamento de caixa por turno
 };
 
 // Sale Details (vinculo transacao -> venda do PDV)
