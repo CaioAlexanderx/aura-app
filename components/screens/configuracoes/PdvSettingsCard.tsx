@@ -10,12 +10,12 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { Card } from "@/components/screens/configuracoes/shared";
 
 // ============================================================
-// AURA. — Configuracoes do Caixa (PDV) por empresa
+// AURA. — Configurações do Caixa (PDV) por empresa
 //
 // Toggles:
-//   - Obrigar identificacao do cliente em toda venda
-//   - Obrigar identificacao da vendedora em toda venda
-//   - Ativar modulo de Abertura/Fechamento de Caixa
+//   - Obrigar identificação do cliente em toda venda
+//   - Obrigar identificação da vendedora em toda venda
+//   - Ativar módulo de Abertura/Fechamento de Caixa
 //
 // Persistido em companies.pdv_settings (jsonb).
 // ============================================================
@@ -51,7 +51,7 @@ export function PdvSettingsCard() {
       <Card>
         <View style={s.loadingBox}>
           <ActivityIndicator color={Colors.violet3} size="small" />
-          <Text style={s.loadingText}>Carregando configuracoes...</Text>
+          <Text style={s.loadingText}>Carregando configurações...</Text>
         </View>
       </Card>
     );
@@ -64,8 +64,8 @@ export function PdvSettingsCard() {
           <Icon name="cart" size={16} color={Colors.violet3} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.title}>Politicas do Caixa</Text>
-          <Text style={s.desc}>Defina o que eh obrigatorio em cada venda</Text>
+          <Text style={s.title}>Políticas do Caixa</Text>
+          <Text style={s.desc}>Defina o que é obrigatório em cada venda</Text>
         </View>
       </View>
 
@@ -106,7 +106,7 @@ export function PdvSettingsCard() {
       {/* Toggle: módulo de caixa */}
       <View style={s.row}>
         <View style={{ flex: 1 }}>
-          <Text style={s.rowLabel}>Modulo de caixa</Text>
+          <Text style={s.rowLabel}>Módulo de caixa</Text>
           <Text style={s.rowDesc}>Habilita abertura e fechamento de caixa por turno</Text>
         </View>
         <Switch
