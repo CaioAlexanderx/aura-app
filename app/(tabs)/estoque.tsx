@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator, Modal, KeyboardAvoidingView } from "react-native";
+import { useState, useRef, useMemo } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
@@ -57,16 +57,6 @@ type CategoriesModalState = { open: boolean; initialType?: CategoryType };
 
 // ────────────────────────────────────────────────────────────
 // MSL-06: View AGREGADA (modo "Todas as empresas")
-//
-// Quando o user troca pra "Todas as empresas" via switcher,
-// company === null no auth store e useProducts() não tem
-// companyId pra chamar. Em vez de mostrar tela vazia, usamos
-// productLinksApi.aggregated() que soma estoque por master_sku
-// e lista produtos não-vinculados como linhas individuais.
-//
-// Ações destrutivas (editar/excluir/vincular) são desabilitadas
-// nesse modo — user precisa abrir uma empresa específica pra
-// agir. Modo é puramente leitura/análise.
 // ────────────────────────────────────────────────────────────
 function AggregatedView() {
   const [search, setSearch] = useState("");
@@ -108,7 +98,6 @@ function AggregatedView() {
 
   return (
     <View>
-      {/* Banner explicativo do modo */}
       <View style={agg.banner}>
         <Icon name="bag" size={16} color="#7c3aed" />
         <View style={{ flex: 1 }}>
@@ -119,7 +108,6 @@ function AggregatedView() {
         </View>
       </View>
 
-      {/* Resumo */}
       <View style={s.summaryRow}>
         <SummaryCard label="GRUPOS" value={String(groups.length)} sub={`${linkedCount} vinculados entre empresas`} />
         <SummaryCard label="UNIDADES TOTAIS" value={String(Math.round(totalUnits))} />
@@ -242,9 +230,6 @@ export default function EstoqueScreen() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
-  // M-STOCKLINK: produto selecionado pra abrir modal de vínculo Multi-CNPJ.
-  // Só faz sentido quando user tem 2+ empresas e está em uma específica
-  // (não no modo consolidado — sem company.id pra chamar API).
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
   const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
@@ -257,8 +242,6 @@ export default function EstoqueScreen() {
   });
   const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
 
-  // Categorias cadastradas tem prioridade; categorias derivadas dos produtos
-  // (legado, ainda nao cadastradas) entram depois para cobrir o que ja existe.
   const allCategories = useMemo(() => {
     return Array.from(new Set([
       ...DEFAULT_CATEGORIES,
@@ -343,9 +326,8 @@ export default function EstoqueScreen() {
     refetchDupGroups();
   }
 
-  // ── MODO CONSOLIDADO: renderiza view agregada e retorna ───
-  // Não há company.id, useProducts() está vazio, todas as ações
-  // de escrita são bloqueadas. Usa apenas a view agregada.
+  const formOpen = showAddForm || showServiceForm;
+
   if (consolidatedView) {
     return (
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
@@ -360,202 +342,204 @@ export default function EstoqueScreen() {
   }
 
   return (
-    <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      {/* Header with three action buttons: servico, lote, produto */}
-      <View style={s.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.pageTitle}>Estoque</Text>
-        </View>
-        <View style={s.headerActions}>
-          <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
-            <Icon name="star" size={14} color={Colors.violet3} />
-            <Text style={s.serviceBtnText}>+ Servico</Text>
-          </Pressable>
-          {!isDemo && (
-            <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
-              <Icon name="layers" size={14} color={Colors.violet3} />
-              <Text style={s.batchBtnText}>+ Em lote</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
-            <Icon name="package" size={14} color="#fff" />
-            <Text style={s.addBtnText}>+ Produto</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Hint Multi-CNPJ: aparece quando user tem 2+ CNPJs e ainda
-          não vinculou produtos, lembrando da feature. */}
-      {canLinkProducts && products.length > 0 && (
-        <View style={s.multicnpjHint}>
-          <Icon name="bag" size={14} color="#7c3aed" />
-          <Text style={s.multicnpjHintText}>
-            Você tem {availableCompanies.length} CNPJs. Toque em qualquer produto e use "🔗 Vincular CNPJ" para somar estoque entre lojas.
-          </Text>
-        </View>
-      )}
-
-      {products.length > 0 && (
-        <View style={s.summaryRow}>
-          <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
-          <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
-          <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
-        </View>
-      )}
-
-      {dupGroupsCount > 0 && !isDemo && (
-        <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBanner}>
-          <View style={s.dupBannerIcon}><Text style={s.dupBannerIconText}>!</Text></View>
+    // Wrapper com position: relative para o overlay ficar restrito à área de conteúdo
+    <View style={s.wrapper}>
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
+        <View style={s.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.dupBannerTitle}>{dupGroupsCount} grupo{dupGroupsCount > 1 ? "s" : ""} de produtos duplicados</Text>
-            <Text style={s.dupBannerDesc}>Produtos com o mesmo nome podem ser unificados em variantes (cor/tamanho).</Text>
+            <Text style={s.pageTitle}>Estoque</Text>
           </View>
-          <View style={s.dupBannerCta}><Text style={s.dupBannerCtaText}>Unificar</Text><Text style={s.dupBannerArrow}>{"›"}</Text></View>
-        </Pressable>
-      )}
-
-      {isLoading && <ListSkeleton rows={4} showCards />}
-
-      {!isLoading && products.length === 0 && !isDemo && (
-        <View>
-          <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou servico, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
-          <View style={s.emptyImport}>
-            <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
-            <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole varios produtos de uma vez e cadastre em segundos</Text></View>
-            <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtnSmall}>
-              <Text style={s.batchBtnSmallText}>Abrir</Text>
+          <View style={s.headerActions}>
+            <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
+              <Icon name="star" size={14} color={Colors.violet3} />
+              <Text style={s.serviceBtnText}>+ Servico</Text>
+            </Pressable>
+            {!isDemo && (
+              <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
+                <Icon name="layers" size={14} color={Colors.violet3} />
+                <Text style={s.batchBtnText}>+ Em lote</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
+              <Icon name="package" size={14} color="#fff" />
+              <Text style={s.addBtnText}>+ Produto</Text>
             </Pressable>
           </View>
-          <View style={s.emptyImport}>
-            <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
-            <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha CSV</Text><Text style={s.emptyImportDesc}>Cadastre centenas de produtos via arquivo CSV</Text></View>
-            <ServerImport entity="products" onComplete={handleImportComplete} />
-          </View>
         </View>
-      )}
 
-      {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
+        {canLinkProducts && products.length > 0 && (
+          <View style={s.multicnpjHint}>
+            <Icon name="bag" size={14} color="#7c3aed" />
+            <Text style={s.multicnpjHintText}>
+              Você tem {availableCompanies.length} CNPJs. Toque em qualquer produto e use "🔗 Vincular CNPJ" para somar estoque entre lojas.
+            </Text>
+          </View>
+        )}
 
-      {products.length > 0 && activeTab === 0 && (
-        <View style={s.toolbar}>
-          <ImportExportBar onExport={handleExport} itemCount={products.length} />
-          <ServerImport entity="products" onComplete={handleImportComplete} />
-          <Pressable onPress={() => setCategoriesModal({ open: true })} style={s.catBtn}>
-            <Icon name="tag" size={12} color={Colors.violet3} />
-            <Text style={s.catBtnText}>Categorias</Text>
+        {products.length > 0 && (
+          <View style={s.summaryRow}>
+            <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
+            <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
+            <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
+          </View>
+        )}
+
+        {dupGroupsCount > 0 && !isDemo && (
+          <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBanner}>
+            <View style={s.dupBannerIcon}><Text style={s.dupBannerIconText}>!</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.dupBannerTitle}>{dupGroupsCount} grupo{dupGroupsCount > 1 ? "s" : ""} de produtos duplicados</Text>
+              <Text style={s.dupBannerDesc}>Produtos com o mesmo nome podem ser unificados em variantes (cor/tamanho).</Text>
+            </View>
+            <View style={s.dupBannerCta}><Text style={s.dupBannerCtaText}>Unificar</Text><Text style={s.dupBannerArrow}>{"›"}</Text></View>
           </Pressable>
-          {!bulkMode ? (
-            <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}><Text style={s.bulkBtnText}>Selecionar</Text></Pressable>
-          ) : (
-            <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}><Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text></Pressable>
-          )}
-          {dupGroupsCount > 0 && !bulkMode && !isDemo && (
-            <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBtn}><Text style={s.dupBtnText}>{"⚑ Unificar " + dupGroupsCount + (dupGroupsCount > 1 ? " grupos" : " grupo")}</Text></Pressable>
-          )}
-        </View>
-      )}
+        )}
 
-      {bulkMode && bulkSelected.size > 0 && (
-        <View style={s.bulkBar}>
-          <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size > 1 ? "s" : ""}</Text>
-          <Pressable onPress={handleSelectAll} style={s.bulkAction}><Text style={s.bulkActionText}>{bulkSelected.size === filtered.length ? "Desmarcar todos" : "Selecionar todos"}</Text></Pressable>
-          <Pressable onPress={() => setShowBulkConfirm(true)} style={[s.bulkAction, s.bulkDeleteAction]}><Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text></Pressable>
-        </View>
-      )}
+        {isLoading && <ListSkeleton rows={4} showCards />}
 
-      {activeTab === 0 && products.length > 0 && (
-        <View>
-          <View style={s.searchRow}>
-            <TextInput
-              style={s.searchInput}
-              placeholder="Buscar por nome ou codigo..."
-              placeholderTextColor={Colors.ink3}
-              value={search}
-              onChangeText={setSearch}
-            />
-            <Pressable onPress={handleScanBarcode} style={s.scanBtn}>
-              <Icon name="barcode" size={20} color={Colors.violet3} />
+        {!isLoading && products.length === 0 && !isDemo && (
+          <View>
+            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou servico, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
+            <View style={s.emptyImport}>
+              <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole varios produtos de uma vez e cadastre em segundos</Text></View>
+              <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtnSmall}>
+                <Text style={s.batchBtnSmallText}>Abrir</Text>
+              </Pressable>
+            </View>
+            <View style={s.emptyImport}>
+              <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha CSV</Text><Text style={s.emptyImportDesc}>Cadastre centenas de produtos via arquivo CSV</Text></View>
+              <ServerImport entity="products" onComplete={handleImportComplete} />
+            </View>
+          </View>
+        )}
+
+        {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
+
+        {products.length > 0 && activeTab === 0 && (
+          <View style={s.toolbar}>
+            <ImportExportBar onExport={handleExport} itemCount={products.length} />
+            <ServerImport entity="products" onComplete={handleImportComplete} />
+            <Pressable onPress={() => setCategoriesModal({ open: true })} style={s.catBtn}>
+              <Icon name="tag" size={12} color={Colors.violet3} />
+              <Text style={s.catBtnText}>Categorias</Text>
             </Pressable>
+            {!bulkMode ? (
+              <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}><Text style={s.bulkBtnText}>Selecionar</Text></Pressable>
+            ) : (
+              <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}><Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text></Pressable>
+            )}
+            {dupGroupsCount > 0 && !bulkMode && !isDemo && (
+              <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBtn}><Text style={s.dupBtnText}>{"⚑ Unificar " + dupGroupsCount + (dupGroupsCount > 1 ? " grupos" : " grupo")}</Text></Pressable>
+            )}
           </View>
-          <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
-          <View style={s.listCard}>
-            {paginated.map(p => (
-              <ProductRow
-                key={p.id}
-                product={p}
-                showAbc={!bulkMode}
-                onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
-                onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
-                onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
-                isSelected={bulkSelected.has(p.id)}
-                onSelect={bulkMode ? toggleBulkSelect : undefined}
+        )}
+
+        {bulkMode && bulkSelected.size > 0 && (
+          <View style={s.bulkBar}>
+            <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size > 1 ? "s" : ""}</Text>
+            <Pressable onPress={handleSelectAll} style={s.bulkAction}><Text style={s.bulkActionText}>{bulkSelected.size === filtered.length ? "Desmarcar todos" : "Selecionar todos"}</Text></Pressable>
+            <Pressable onPress={() => setShowBulkConfirm(true)} style={[s.bulkAction, s.bulkDeleteAction]}><Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text></Pressable>
+          </View>
+        )}
+
+        {activeTab === 0 && products.length > 0 && (
+          <View>
+            <View style={s.searchRow}>
+              <TextInput
+                style={s.searchInput}
+                placeholder="Buscar por nome ou codigo..."
+                placeholderTextColor={Colors.ink3}
+                value={search}
+                onChangeText={setSearch}
               />
-            ))}
-            {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
+              <Pressable onPress={handleScanBarcode} style={s.scanBtn}>
+                <Icon name="barcode" size={20} color={Colors.violet3} />
+              </Pressable>
+            </View>
+            <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
+            <View style={s.listCard}>
+              {paginated.map(p => (
+                <ProductRow
+                  key={p.id}
+                  product={p}
+                  showAbc={!bulkMode}
+                  onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
+                  onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
+                  onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
+                  isSelected={bulkSelected.has(p.id)}
+                  onSelect={bulkMode ? toggleBulkSelect : undefined}
+                />
+              ))}
+              {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
+            </View>
+            <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
           </View>
-          <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
-        </View>
-      )}
+        )}
 
-      {activeTab === 1 && (
-        <View>
-          <View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View>
-          <AbcSummary products={products} />
-          <View style={[s.listCard, { marginTop: 20 }]}>
-            {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => (
-              <ProductRow
-                key={p.id}
-                product={p}
-                showAbc
-                onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
-                onEdit={!isDemo ? handleEdit : undefined}
-                onLink={canLinkProducts ? (prod) => setLinkTarget(prod) : undefined}
-              />
-            ))}
+        {activeTab === 1 && (
+          <View>
+            <View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View>
+            <AbcSummary products={products} />
+            <View style={[s.listCard, { marginTop: 20 }]}>
+              {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => (
+                <ProductRow
+                  key={p.id}
+                  product={p}
+                  showAbc
+                  onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
+                  onEdit={!isDemo ? handleEdit : undefined}
+                  onLink={canLinkProducts ? (prod) => setLinkTarget(prod) : undefined}
+                />
+              ))}
+            </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {activeTab === 2 && <AlertsList products={products} />}
-      {activeTab === 3 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
+        {activeTab === 2 && <AlertsList products={products} />}
+        {activeTab === 3 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 
-      <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
-      <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
-      <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
-      <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
-      <CategoriesModal
-        visible={categoriesModal.open}
-        initialType={categoriesModal.initialType}
-        onClose={() => setCategoriesModal({ open: false })}
-      />
-      {/* M-STOCKLINK: modal de vínculo Multi-CNPJ */}
-      {linkTarget && company?.id && (
-        <LinkProductModal
-          visible={!!linkTarget}
-          companyId={company.id}
-          productId={linkTarget.id}
-          onClose={() => setLinkTarget(null)}
-          onLinked={() => {
-            qc.invalidateQueries({ queryKey: ["products", company?.id] });
-            qc.invalidateQueries({ queryKey: ["productsAggregated"] });
-          }}
+        <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
+        <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
+        <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
+        <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
+        <CategoriesModal
+          visible={categoriesModal.open}
+          initialType={categoriesModal.initialType}
+          onClose={() => setCategoriesModal({ open: false })}
         />
-      )}
+        {linkTarget && company?.id && (
+          <LinkProductModal
+            visible={!!linkTarget}
+            companyId={company.id}
+            productId={linkTarget.id}
+            onClose={() => setLinkTarget(null)}
+            onLinked={() => {
+              qc.invalidateQueries({ queryKey: ["products", company?.id] });
+              qc.invalidateQueries({ queryKey: ["productsAggregated"] });
+            }}
+          />
+        )}
 
-      {/* Modal de edição/adição — bottom sheet, sobrepõe a tela com fundo escurecido */}
-      <Modal
-        visible={showAddForm || showServiceForm}
-        transparent
-        animationType="slide"
-        onRequestClose={closeFormModal}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <Pressable style={s.modalBackdrop} onPress={closeFormModal}>
-            <Pressable style={s.modalSheet} onPress={() => {}}>
-              <View style={s.modalHandle} />
+        {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
+      </ScrollView>
+
+      {/* ─── Overlay de edição/adição ─────────────────────────────────────
+          position: absolute dentro do wrapper scoped à área de conteúdo,
+          ou seja, não cobre a sidebar no web. ScrollView interno permite
+          rolar o formulário inteiro sem problemáticas de altura fixa.
+      ──────────────────────────────────────────────────────────────────── */}
+      {formOpen && (
+        <Pressable style={s.formOverlay} onPress={closeFormModal}>
+          <Pressable style={s.formSheet} onPress={() => {}}>
+            <View style={s.formHandle} />
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 32 }}
+            >
               {showServiceForm && (
                 <AddServiceForm
                   onSave={handleSaveProduct}
@@ -571,17 +555,16 @@ export default function EstoqueScreen() {
                   editProduct={editProduct}
                 />
               )}
-            </Pressable>
+            </ScrollView>
           </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
-    </ScrollView>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  wrapper: { flex: 1, position: "relative" },
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, gap: 8, flexWrap: "wrap" },
@@ -643,14 +626,28 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  modalSheet: {
+  // Overlay de edição: position absolute dentro do wrapper,
+  // não extravasa para a sidebar no desktop.
+  formOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 100,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  formSheet: {
     backgroundColor: Colors.bg3,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 12,
-    maxHeight: "90%",
+    maxHeight: "88%",
   },
-  modalHandle: { width: 40, height: 4, backgroundColor: Colors.border2, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
+  formHandle: {
+    width: 40, height: 4,
+    backgroundColor: Colors.border2,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
 });
