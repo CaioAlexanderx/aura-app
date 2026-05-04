@@ -1,1 +1,104 @@
-aW1wb3J0IHsgVmlldywgVGV4dCwgVGV4dElucHV0LCBTdHlsZVNoZWV0IH0gZnJvbSAicmVhY3QtbmF0aXZlIjsKaW1wb3J0IHsgQ29sb3JzIH0gZnJvbSAiQC9jb25zdGFudHMvY29sb3JzIjsKCmV4cG9ydCBjb25zdCBQTEFOUzogUmVjb3JkPHN0cmluZywgeyBsYWJlbDogc3RyaW5nOyBwcmljZTogc3RyaW5nIH0+ID0gewogIGVzc2VuY2lhbDogICAgIHsgbGFiZWw6ICJFc3NlbmNpYWwiLCAgICAgcHJpY2U6ICJSJCA4OS9tZXMiICAgIH0sCiAgbmVnb2NpbzogICAgICAgeyBsYWJlbDogIk5lZ29jaW8iLCAgICAgICBwcmljZTogIlIkIDE2OS9tZXMiICAgfSwKICBleHBhbnNhbzogICAgICB7IGxhYmVsOiAiRXhwYW5zYW8iLCAgICAgIHByaWNlOiAiUiQgMjY5L21lcyIgICB9LAogIHBlcnNvbmFsaXphZG86IHsgbGFiZWw6ICJQZXJzb25hbGl6YWRvIiwgcHJpY2U6ICJTb2IgY29uc3VsdGEiIH0sCn07CgpleHBvcnQgY29uc3QgQ09ORklHX0tFWSA9ICJhdXJhX2NvbmZpZyI7CmV4cG9ydCBjb25zdCBBVVJBX1dIQVRTQVBQID0gImh0dHBzOi8vd2EubWUvNTUxMjk5MTIzNDU2NyI7CmV4cG9ydCBjb25zdCBBVVJBX0VNQUlMICAgID0gImNvbnRhdG9AZ2V0YXVyYS5jb20uYnIiOwoKZXhwb3J0IGZ1bmN0aW9uIHJlZ2ltZUxhYmVsKHJhdzogc3RyaW5nKTogc3RyaW5nIHsKICBjb25zdCB2ID0gKHJhdyB8fCAiIikudG9Mb3dlckNhc2UoKTsKICBpZiAodiA9PT0gIm1laSIpIHJldHVybiAiTUVJIjsKICBpZiAodiA9PT0gInNpbXBsZXMiIHx8IHYgPT09ICJzaW1wbGVzX25hY2lvbmFsIikgcmV0dXJuICJTaW1wbGVzIE5hY2lvbmFsIjsKICBpZiAodiA9PT0gImx1Y3JvX3ByZXN1bWlkbyIpIHJldHVybiAiTHVjcm8gUHJlc3VtaWRvIjsKICBpZiAodiA9PT0gImx1Y3JvX3JlYWwiKSByZXR1cm4gIkx1Y3JvIFJlYWwiOwogIHJldHVybiAiIjsKfQoKZXhwb3J0IGZ1bmN0aW9uIGZtdENOUEoocmF3OiBzdHJpbmcpOiBzdHJpbmcgewogIGNvbnN0IG4gPSAocmF3IHx8ICIiKS5yZXBsYWNlKC9cRC9nLCAiIik7CiAgaWYgKG4ubGVuZ3RoID09PSAxNCkgcmV0dXJuIG4ucmVwbGFjZSgvKFxkezJ9KShcZHszfSkoXGR7M30pKFxkezR9KShcZHsyfSkvLCAiJDEuJDIuJDMvJDQtJDUiKTsKICBpZiAobi5sZW5ndGggPT09IDExKSByZXR1cm4gbi5yZXBsYWNlKC8oXGR7M30pKFxkezN9KShcZHszfSkoXGR7Mn0pLywgIiQxLiQyLiQzLSQ0Iik7CiAgcmV0dXJuIHJhdyB8fCAiIjsKfQoKZXhwb3J0IGZ1bmN0aW9uIHZhbGlkYXRlRW1haWwodjogc3RyaW5nKTogc3RyaW5nIHwgbnVsbCB7CiAgaWYgKCF2LnRyaW0oKSkgcmV0dXJuICJFLW1haWwgZSBvYnJpZ2F0b3JpbyI7CiAgaWYgKCEvXlteXHNAXStAW15cc0BdK1wuW15cc0BdezIsfSQvLnRlc3Qodi50cmltKCkpKSByZXR1cm4gIkZvcm1hdG8gaW52YWxpZG8iOwogIHJldHVybiBudWxsOwp9CgpleHBvcnQgZnVuY3Rpb24gdmFsaWRhdGVQaG9uZSh2OiBzdHJpbmcpOiBzdHJpbmcgfCBudWxsIHsKICBpZiAoIXYudHJpbSgpKSByZXR1cm4gbnVsbDsKICBjb25zdCBudW1zID0gdi5yZXBsYWNlKC9cRC9nLCAiIik7CiAgaWYgKG51bXMubGVuZ3RoIDwgMTAgfHwgbnVtcy5sZW5ndGggPiAxMSkgcmV0dXJuICJUZWxlZm9uZSBpbnZhbGlkbyI7CiAgcmV0dXJuIG51bGw7Cn0KCmV4cG9ydCBmdW5jdGlvbiBzeW5jUHJvZmlsZUNhY2hlKGRhdGE6IHsgY29tcGFueU5hbWU6IHN0cmluZzsgY25wajogc3RyaW5nOyBlbWFpbDogc3RyaW5nOyBwaG9uZTogc3RyaW5nOyBhZGRyZXNzOiBzdHJpbmcgfSkgewogIHRyeSB7IGlmICh0eXBlb2YgbG9jYWxTdG9yYWdlICE9PSAidW5kZWZpbmVkIikgbG9jYWxTdG9yYWdlLnNldEl0ZW0oQ09ORklHX0tFWSwgSlNPTi5zdHJpbmdpZnkoZGF0YSkpOyB9IGNhdGNoIHt9Cn0KCmV4cG9ydCB0eXBlIFByb2ZpbGVGaWVsZCA9IHsgbGFiZWw6IHN0cmluZzsgb2s6IGJvb2xlYW4gfTsKCi8vIFNoYXJlZCBVSSBhdG9tcwpleHBvcnQgZnVuY3Rpb24gU2VjdGlvblRpdGxlKHsgdGl0bGUgfTogeyB0aXRsZTogc3RyaW5nIH0pIHsKICByZXR1cm4gPFRleHQgc3R5bGU9e3NoLnNlY3Rpb25UaXRsZX0+e3RpdGxlfTwvVGV4dD47Cn0KCmV4cG9ydCBmdW5jdGlvbiBDYXJkKHsgY2hpbGRyZW4sIHN0eWxlIH06IHsgY2hpbGRyZW46IFJlYWN0LlJlYWN0Tm9kZTsgc3R5bGU/OiBhbnkgfSkgewogIHJldHVybiA8VmlldyBzdHlsZT17W3NoLmNhcmQsIHN0eWxlXX0+e2NoaWxkcmVufTwvVmlldz47Cn0KCmV4cG9ydCBmdW5jdGlvbiBFZGl0RmllbGQoeyBsYWJlbCwgdmFsdWUsIG9uQ2hhbmdlLCBwbGFjZWhvbGRlciwga2V5Ym9hcmRUeXBlLCBlcnJvciwgaGludCwgYXV0b0NhcGl0YWxpemUsIG11bHRpbGluZSwgZWRpdGFibGUgfTogewogIGxhYmVsOiBzdHJpbmc7IHZhbHVlOiBzdHJpbmc7IG9uQ2hhbmdlOiAodjogc3RyaW5nKSA9PiB2b2lkOwogIHBsYWNlaG9sZGVyPzogc3RyaW5nOyBrZXlib2FyZFR5cGU/OiBhbnk7IGVycm9yPzogc3RyaW5nIHwgbnVsbDsKICBoaW50Pzogc3RyaW5nOyBhdXRvQ2FwaXRhbGl6ZT86IGFueTsgbXVsdGlsaW5lPzogYm9vbGVhbjsgZWRpdGFibGU/OiBib29sZWFuOwp9KSB7CiAgcmV0dXJuICgKICAgIDxWaWV3IHN0eWxlPXtzaC5maWVsZFdyYXB9PgogICAgICA8VGV4dCBzdHlsZT17c2guZmllbGRMYWJlbH0+e2xhYmVsfTwvVGV4dD4KICAgICAgPFRleHRJbnB1dAogICAgICAgIHN0eWxlPXtbc2guaW5wdXQsIGVycm9yID8gc2guaW5wdXRFcnJvciA6IG51bGwsIG11bHRpbGluZSAmJiBzaC50ZXh0YXJlYSwgZWRpdGFibGUgPT09IGZhbHNlICYmIHNoLmlucHV0UmVhZG9ubHldfQogICAgICAgIHZhbHVlPXt2YWx1ZX0gb25DaGFuZ2VUZXh0PXtvbkNoYW5nZX0gcGxhY2Vob2xkZXI9e3BsYWNlaG9sZGVyfQogICAgICAgIHBsYWNlaG9sZGVyVGV4dENvbG9yPXtDb2xvcnMuaW5rM30ga2V5Ym9hcmRUeXBlPXtrZXlib2FyZFR5cGV9CiAgICAgICAgYXV0b0NhcGl0YWxpemU9e2F1dG9DYXBpdGFsaXplIHx8ICJzZW50ZW5jZXMifSBtdWx0aWxpbmU9e211bHRpbGluZX0KICAgICAgICBudW1iZXJPZkxpbmVzPXttdWx0aWxpbmUgPyAyIDogMX0gZWRpdGFibGU9e2VkaXRhYmxlICE9PSBmYWxzZX0KICAgICAgLz4KICAgICAge2Vycm9yICYmIDxUZXh0IHN0eWxlPXtzaC5maWVsZEVycm9yfT57ZXJyb3J9PC9UZXh0Pn0KICAgICAge2hpbnQgJiYgIWVycm9yICYmIDxUZXh0IHN0eWxlPXtzaC5maWVsZEhpbnR9PntoaW50fTwvVGV4dD59CiAgICA8L1ZpZXc+CiAgKTsKfQoKZXhwb3J0IGZ1bmN0aW9uIEluZm9Sb3coeyBsYWJlbCwgdmFsdWUgfTogeyBsYWJlbDogc3RyaW5nOyB2YWx1ZTogc3RyaW5nIH0pIHsKICByZXR1cm4gKAogICAgPFZpZXcgc3R5bGU9e3NoLmluZm9Sb3d9PgogICAgICA8VGV4dCBzdHlsZT17c2guaW5mb0xhYmVsfT57bGFiZWx9PC9UZXh0PgogICAgICA8VGV4dCBzdHlsZT17c2guaW5mb1ZhbHVlfT57dmFsdWUgfHwgIuKAlCJ9PC9UZXh0PgogICAgPC9WaWV3PgogICk7Cn0KCmV4cG9ydCBjb25zdCBzaCA9IFN0eWxlU2hlZXQuY3JlYXRlKHsKICBzZWN0aW9uVGl0bGU6IHsgZm9udFNpemU6IDExLCBmb250V2VpZ2h0OiAiNzAwIiwgY29sb3I6IENvbG9ycy5pbmszLCB0ZXh0VHJhbnNmb3JtOiAidXBwZXJjYXNlIiwgbGV0dGVyU3BhY2luZzogMC42LCBtYXJnaW5Ub3A6IDI0LCBtYXJnaW5Cb3R0b206IDggfSwKICBjYXJkOiAgICAgICAgIHsgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmczLCBib3JkZXJSYWRpdXM6IDE2LCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IENvbG9ycy5ib3JkZXIsIHBhZGRpbmdIb3Jpem9udGFsOiAxNiwgcGFkZGluZ1RvcDogMTYsIHBhZGRpbmdCb3R0b206IDgsIG1hcmdpbkJvdHRvbTogNCB9LAogIGZpZWxkV3JhcDogICAgeyBtYXJnaW5Cb3R0b206IDE0IH0sCiAgZmllbGRMYWJlbDogICB7IGZvbnRTaXplOiAxMSwgY29sb3I6IENvbG9ycy5pbmszLCBmb250V2VpZ2h0OiAiNjAwIiwgbWFyZ2luQm90dG9tOiA2LCB0ZXh0VHJhbnNmb3JtOiAidXBwZXJjYXNlIiwgbGV0dGVyU3BhY2luZzogMC4zIH0sCiAgaW5wdXQ6ICAgICAgICB7IGJhY2tncm91bmRDb2xvcjogQ29sb3JzLmJnNCwgYm9yZGVyUmFkaXVzOiAxMCwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBDb2xvcnMuYm9yZGVyLCBwYWRkaW5nSG9yaXpvbnRhbDogMTQsIHBhZGRpbmdWZXJ0aWNhbDogMTEsIGZvbnRTaXplOiAxNCwgY29sb3I6IENvbG9ycy5pbmsgfSwKICBpbnB1dEVycm9yOiAgIHsgYm9yZGVyQ29sb3I6IENvbG9ycy5yZWQgfSwKICBpbnB1dFJlYWRvbmx5OiB7IG9wYWNpdHk6IDAuNiB9LAogIHRleHRhcmVhOiAgICAgeyBtaW5IZWlnaHQ6IDYwLCB0ZXh0QWxpZ25WZXJ0aWNhbDogInRvcCIgfSwKICBmaWVsZEVycm9yOiAgIHsgZm9udFNpemU6IDExLCBjb2xvcjogQ29sb3JzLnJlZCwgbWFyZ2luVG9wOiA1IH0sCiAgZmllbGRIaW50OiAgICB7IGZvbnRTaXplOiAxMSwgY29sb3I6IENvbG9ycy5pbmszLCBtYXJnaW5Ub3A6IDUgfSwKICBmaWVsZERpdmlkZXI6IHsgaGVpZ2h0OiAxLCBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ib3JkZXIsIG1hcmdpbkJvdHRvbTogMTQgfSwKICBpbmZvUm93OiAgICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGp1c3RpZnlDb250ZW50OiAic3BhY2UtYmV0d2VlbiIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBwYWRkaW5nVmVydGljYWw6IDExIH0sCiAgaW5mb0xhYmVsOiAgICB7IGZvbnRTaXplOiAxMywgY29sb3I6IENvbG9ycy5pbmszIH0sCiAgaW5mb1ZhbHVlOiAgICB7IGZvbnRTaXplOiAxMywgY29sb3I6IENvbG9ycy5pbmssIGZvbnRXZWlnaHQ6ICI1MDAiLCB0ZXh0QWxpZ246ICJyaWdodCIsIGZsZXg6IDEsIG1hcmdpbkxlZnQ6IDE2IH0sCn0pOwo=
+import { View, Text, TextInput, StyleSheet } from "react-native";
+import { Colors } from "@/constants/colors";
+
+export const PLANS: Record<string, { label: string; price: string }> = {
+  essencial:     { label: "Essencial",     price: "R$ 89/mes"    },
+  negocio:       { label: "Negocio",       price: "R$ 169/mes"   },
+  expansao:      { label: "Expansao",      price: "R$ 269/mes"   },
+  personalizado: { label: "Personalizado", price: "Sob consulta" },
+};
+
+export const CONFIG_KEY = "aura_config";
+export const AURA_WHATSAPP = "https://wa.me/5512991234567";
+export const AURA_EMAIL    = "contato@getaura.com.br";
+
+export function regimeLabel(raw: string): string {
+  const v = (raw || "").toLowerCase();
+  if (v === "mei") return "MEI";
+  if (v === "simples" || v === "simples_nacional") return "Simples Nacional";
+  if (v === "lucro_presumido") return "Lucro Presumido";
+  if (v === "lucro_real") return "Lucro Real";
+  return "";
+}
+
+export function fmtCNPJ(raw: string): string {
+  const n = (raw || "").replace(/\D/g, "");
+  if (n.length === 14) return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  if (n.length === 11) return n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  return raw || "";
+}
+
+export function validateEmail(v: string): string | null {
+  if (!v.trim()) return "E-mail e obrigatorio";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())) return "Formato invalido";
+  return null;
+}
+
+export function validatePhone(v: string): string | null {
+  if (!v.trim()) return null;
+  const nums = v.replace(/\D/g, "");
+  if (nums.length < 10 || nums.length > 11) return "Telefone invalido";
+  return null;
+}
+
+export function syncProfileCache(data: { companyName: string; cnpj: string; email: string; phone: string; address: string }) {
+  try { if (typeof localStorage !== "undefined") localStorage.setItem(CONFIG_KEY, JSON.stringify(data)); } catch {}
+}
+
+export type ProfileField = { label: string; ok: boolean };
+
+// Shared UI atoms
+export function SectionTitle({ title }: { title: string }) {
+  return <Text style={sh.sectionTitle}>{title}</Text>;
+}
+
+export function Card({ children, style }: { children: React.ReactNode; style?: any }) {
+  return <View style={[sh.card, style]}>{children}</View>;
+}
+
+export function EditField({ label, value, onChange, placeholder, keyboardType, error, hint, autoCapitalize, multiline, editable }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; keyboardType?: any; error?: string | null;
+  hint?: string; autoCapitalize?: any; multiline?: boolean; editable?: boolean;
+}) {
+  return (
+    <View style={sh.fieldWrap}>
+      <Text style={sh.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[sh.input, error ? sh.inputError : null, multiline && sh.textarea, editable === false && sh.inputReadonly]}
+        value={value} onChangeText={onChange} placeholder={placeholder}
+        placeholderTextColor={Colors.ink3} keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize || "sentences"} multiline={multiline}
+        numberOfLines={multiline ? 2 : 1} editable={editable !== false}
+      />
+      {error && <Text style={sh.fieldError}>{error}</Text>}
+      {hint && !error && <Text style={sh.fieldHint}>{hint}</Text>}
+    </View>
+  );
+}
+
+export function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={sh.infoRow}>
+      <Text style={sh.infoLabel}>{label}</Text>
+      <Text style={sh.infoValue}>{value || "—"}</Text>
+    </View>
+  );
+}
+
+export const sh = StyleSheet.create({
+  sectionTitle: { fontSize: 11, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 24, marginBottom: 8 },
+  card:         { backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, marginBottom: 4 },
+  fieldWrap:    { marginBottom: 14 },
+  fieldLabel:   { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
+  input:        { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: Colors.ink },
+  inputError:   { borderColor: Colors.red },
+  inputReadonly: { opacity: 0.6 },
+  textarea:     { minHeight: 60, textAlignVertical: "top" },
+  fieldError:   { fontSize: 11, color: Colors.red, marginTop: 5 },
+  fieldHint:    { fontSize: 11, color: Colors.ink3, marginTop: 5 },
+  fieldDivider: { height: 1, backgroundColor: Colors.border, marginBottom: 14 },
+  infoRow:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 11 },
+  infoLabel:    { fontSize: 13, color: Colors.ink3 },
+  infoValue:    { fontSize: 13, color: Colors.ink, fontWeight: "500", textAlign: "right", flex: 1, marginLeft: 16 },
+});
