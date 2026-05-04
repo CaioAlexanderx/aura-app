@@ -1,15 +1,19 @@
 // components/screens/financeiro/v2/TabReceitas.tsx
 //
-// Aba "Receitas" do Financeiro v2. Onda 1: KPI Strip + tendencia diaria (DailyBars
-// reaproveitando lógica do SparklineBar) + breakdown por categoria.
-// Onda 2 vai adicionar: Top 5 recebimentos, formas de recebimento, timeline a receber,
-// dia da semana, ranking profissionais, evolucao mensal 12m.
+// Aba "Receitas" do Financeiro v2. Onda 2: KPI Strip + tendencia diaria +
+// breakdown por categoria (cliente) + Top 5 + formas de pagamento + timeline
+// a receber + dia da semana (do server, via useFinancialInsights).
+//
+// Onda 3 vai adicionar: ranking profissionais (employees JOIN), evolucao 12m.
+// Multi-CNPJ aware: passa flag pros componentes mostrarem badges/dicas.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Transaction } from "../types";
 import { fmt, fmtK } from "../types";
 import { useMemo } from "react";
+import { useFinancialInsights } from "@/hooks/useFinancialInsights";
+import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -22,10 +26,10 @@ type Props = {
   transactions: Transaction[];
   summary: Summary;
   previousSummary?: Summary | null;
+  period: string;
   consolidated: boolean;
 };
 
-// Categorias de receita agrupadas
 function groupIncomeByCategory(txs: Transaction[]): { label: string; value: number; pct: number }[] {
   var groups: Record<string, number> = {};
   txs.filter(function(t) { return t.type === "income" && t.status === "confirmed"; })
@@ -51,7 +55,7 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
   });
 }
 
-export function TabReceitas({ transactions, summary, previousSummary, consolidated }: Props) {
+export function TabReceitas({ transactions, summary, previousSummary, period, consolidated }: Props) {
   var incomeCount = useMemo(function() {
     return transactions.filter(function(t) { return t.type === "income"; }).length;
   }, [transactions]);
@@ -63,6 +67,15 @@ export function TabReceitas({ transactions, summary, previousSummary, consolidat
 
   var receivable = summary.pendingIncome || 0;
   var collected = summary.income;
+
+  // Insights enriquecidos (Onda 2): top5, payment_methods, timeline, dow do server
+  var insights = useFinancialInsights({
+    transactions: transactions,
+    summary: summary,
+    previousSummary: previousSummary,
+    period: period,
+  });
+  var ib = insights.income_breakdown;
 
   var categories = useMemo(function() { return groupIncomeByCategory(transactions); }, [transactions]);
   var topCategoryColor = ["#7c3aed", "#a78bfa", "#34d399", "#5b8cff", "#fbbf24", "#f87171"];
@@ -79,6 +92,21 @@ export function TabReceitas({ transactions, summary, previousSummary, consolidat
         <KpiCard label="A receber" value={fmtK(receivable)} delta={null} color={Colors.amber} />
         <KpiCard label="Ticket medio" value={fmtK(avgTicket)} delta={null} color={Colors.violet3} />
         <KpiCard label="Lancamentos" value={String(incomeCount)} delta={null} color={Colors.violet3} />
+      </View>
+
+      {/* Onda 2: Top 5 + Formas de recebimento (lado a lado em wide, stack em mobile) */}
+      <View style={IS_WIDE ? s.row2 : s.col}>
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>TOP 5 RECEBIMENTOS</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Os clientes que mais movimentaram</Text>
+          <Top5List items={ib?.top5 || []} kind="income" showCompanyBadge={consolidated} />
+        </View>
+
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>FORMAS DE RECEBIMENTO</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Como o dinheiro entra</Text>
+          <HBarList items={ib?.payment_methods || []} kind="income" />
+        </View>
       </View>
 
       {/* Tendencia diaria */}
@@ -111,7 +139,26 @@ export function TabReceitas({ transactions, summary, previousSummary, consolidat
         )}
       </View>
 
-      {/* Categorias de receita */}
+      {/* Onda 2: Timeline a receber + dia da semana */}
+      <View style={IS_WIDE ? s.row2 : s.col}>
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>A RECEBER</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Timeline de recebiveis</Text>
+          {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" /> : (
+            <View style={s.empty}>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando timeline…</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>DIA DA SEMANA</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Faturamento por dia</Text>
+          <DowBars items={ib?.dow || []} kind="income" />
+        </View>
+      </View>
+
+      {/* Categorias de receita (cliente, sem dependencia de server) */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
         <Text style={[s.kicker, { color: Colors.ink3 }]}>CATEGORIAS DE RECEITA</Text>
         <Text style={[s.cardTitle, { color: Colors.ink }]}>Onde a receita nasce</Text>
@@ -137,14 +184,13 @@ export function TabReceitas({ transactions, summary, previousSummary, consolidat
         )}
       </View>
 
-      {/* Roadmap card — comunica que mais cards estao chegando */}
+      {/* Roadmap card — Onda 3 */}
       <View style={[s.card, s.roadmap, { backgroundColor: Colors.bg3, borderColor: Colors.border2 }]}>
-        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 2</Text>
+        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 3</Text>
         <Text style={[s.cardTitle, { color: Colors.ink }]}>Mais cards chegando</Text>
         <Text style={[s.roadmapText, { color: Colors.ink2 }]}>
-          Top 5 maiores recebimentos, formas de recebimento, timeline "a receber", faturamento por dia
-          da semana, ranking de profissionais e evolucao mensal de 12 meses sao a proxima onda
-          do redesign.{consolidated ? " Em modo consolidado, alguns desses ficarao agregados." : ""}
+          Ranking de profissionais{consolidated ? " (so per-company)" : ""} e evolucao mensal de 12 meses
+          ficam pra proxima onda do redesign.
         </Text>
       </View>
     </View>
@@ -169,6 +215,8 @@ function KpiCard({ label, value, delta, color }: { label: string; value: string;
 var s = StyleSheet.create({
   kpiStrip: { flexDirection: "row", gap: 10, marginBottom: 14, flexWrap: "wrap" },
   kpiStripNarrow: { gap: 8 },
+  row2: { flexDirection: "row", gap: 14 },
+  col: { flexDirection: "column" },
   card: {
     borderRadius: 16,
     padding: 18,

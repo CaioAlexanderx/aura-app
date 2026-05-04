@@ -1,31 +1,91 @@
 // Tipos compartilhados pelos componentes do Financeiro v2.
-// Esses tipos espelham o JSON que o agregador /financeiro/insights vai
-// retornar, mas o hook tambem produz um fallback client-side enquanto o
-// endpoint nao esta disponivel — entao todos os campos sao opcionais.
+// Onda 2 (04/05/2026): adiciona income_breakdown e expense_breakdown que vem
+// do server (cobertura completa de Top 5, formas pagamento, timeline, DOW,
+// anomalias, gauge).
 
 import type { Transaction } from "../types";
 
 export type HealthDriver = {
   id: "margem" | "runway" | "crescimento" | "ticket";
   label: string;
-  // valor formatado pra exibir, ex: "23,4%", "68d", "R$ 218", "+8,2%"
   current: string;
-  // meta como string, ex: ">= 20%", ">= 60d"
   target: string;
-  // status: "ok" | "warn" | "bad"
   status: "ok" | "warn" | "bad";
-  // gap textual, ex: "+3 pontos acima da meta", "-12 dias abaixo"
   gap: string;
-  // contribuicao 0-1 pro score (peso ja aplicado)
   contribution: number;
+};
+
+// ----- Onda 2: novos tipos -----
+export type TopTransaction = {
+  id: string;
+  description: string;
+  category: string;
+  amount: number;
+  payment_method: string | null;
+  employee_name: string | null;
+  status: string;
+  date: string;
+  // Multi-CNPJ: badge da loja em consolidated
+  company_name: string | null;
+};
+
+export type PaymentMethodSlice = {
+  label: string;       // "PIX", "Credito", etc
+  value: number;
+  count: number;
+  pct: number;
+};
+
+export type TimelineBucket = { total: number; count: number };
+export type TimelineBuckets = {
+  atrasadas: TimelineBucket;
+  esta_semana: TimelineBucket;
+  este_mes: TimelineBucket;
+  futuras: TimelineBucket;
+};
+
+export type DowItem = {
+  dow: number;       // 0=Dom, 6=Sab
+  label: string;
+  total: number;
+  count: number;
+};
+
+export type Anomaly = {
+  category: string;
+  current: number;
+  avg_3m: number;
+  diff_pct: number;
+};
+
+export type GaugeData = {
+  expense_pct: number;
+  zone: "saudavel" | "atencao" | "critico";
+};
+
+export type IncomeBreakdown = {
+  top5: TopTransaction[];
+  payment_methods: PaymentMethodSlice[];
+  timeline: TimelineBuckets;
+  dow: DowItem[];
+  total: number;
+  count: number;
+};
+
+export type ExpenseBreakdown = {
+  top5: TopTransaction[];
+  payment_methods: PaymentMethodSlice[];
+  timeline: TimelineBuckets;
+  anomalies: Anomaly[];
+  gauge: GaugeData;
+  total: number;
 };
 
 export type FinancialInsights = {
   health: {
-    score: number; // 0-100
+    score: number;
     label: "Saudavel" | "Atencao" | "Critico" | "Inicial";
     drivers: HealthDriver[];
-    // Frase narrativa parametrizada (NAO use AI — texto local com 6 variantes)
     narrative: { headline: string; subline: string };
   };
   runway: {
@@ -41,20 +101,19 @@ export type FinancialInsights = {
     count: number;
     oldest_days?: number;
   } | null;
-  // Demais secoes serao preenchidas em commits subsequentes
-  income_breakdown?: any;
-  expense_breakdown?: any;
+  // Onda 2: dados ricos do server (Top5, methods, timeline, DOW, anomalies, gauge)
+  income_breakdown?: IncomeBreakdown;
+  expense_breakdown?: ExpenseBreakdown;
+  // Onda 3: cashflow projection 30/60/90 com banda confianca
   cashflow?: any;
-  reconciliation?: any;
 };
 
-// Metas do Health Score — cresceram a partir da conversa em 04/05/2026.
-// Pesos somam 1.0. Cada driver vira 0-100 normalizado contra meta.
+// Metas do Health Score (espelha backend financeiroInsights.js — manter sync!)
 export const HEALTH_TARGETS = {
-  margin_pct: 20,        // margem liquida >= 20%
-  runway_days: 60,       // runway >= 60 dias
-  growth_mom_pct: 0,     // crescimento MoM positivo (clamp inferior em -10%)
-  ticket_baseline: 1.0,  // ticket atual / media 6m >= 1.0
+  margin_pct: 20,
+  runway_days: 60,
+  growth_mom_pct: 0,
+  ticket_baseline: 1.0,
 } as const;
 
 export const HEALTH_WEIGHTS = {
@@ -64,9 +123,6 @@ export const HEALTH_WEIGHTS = {
   ticket: 0.10,
 } as const;
 
-// Helper: normaliza um valor 0-100 baseado em "actual vs target".
-// Se actual >= target -> 100. Se actual <= 0 -> 0. Linear no meio.
-// Para crescimento (que pode ser negativo), aplique clampMin antes.
 export function scoreVsTarget(actual: number, target: number, clampMin = 0): number {
   if (target <= 0) return 100;
   var v = Math.max(clampMin, actual);
@@ -75,13 +131,11 @@ export function scoreVsTarget(actual: number, target: number, clampMin = 0): num
   return Math.round((v / target) * 100);
 }
 
-// Constroi a frase narrativa de acordo com o estado.
-// 6 variantes minimas conforme decidido em 04/05/2026.
 export function buildNarrative(args: {
   score: number;
-  margem: number;       // pct (ex: 23 = 23%)
+  margem: number;
   runwayDays: number;
-  growthPct: number;    // ex: 8.2 = +8.2%
+  growthPct: number;
   txCount: number;
 }): { headline: string; subline: string } {
   if (args.txCount < 10) {
@@ -126,5 +180,4 @@ export function buildNarrative(args: {
   };
 }
 
-// Reexporta Transaction pra os componentes v2 importarem direto daqui
 export type { Transaction };
