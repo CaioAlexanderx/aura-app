@@ -56,7 +56,20 @@ export var PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "custom", label: "Periodo" },
 ];
 
-export var TABS = ["Visao Geral", "Lancamentos", "Analise", "Retirada", "Cupons"];
+// V2 redesign (04/05/2026): TABS expandido pra 6 abas.
+// Receitas e Despesas sao novas; DRE Waterfall (que era TabResumo) virou parte
+// da aba Despesas. Retirada e Cupons preservadas como abas extras.
+// Indices semanticos pra useTransactionsApi nao depender da posicao crua.
+export var TABS = ["Visao Geral", "Receitas", "Despesas", "Lancamentos", "Retirada", "Cupons"];
+export var TAB_INDEX = {
+  visao: 0,
+  receitas: 1,
+  despesas: 2,
+  lancamentos: 3,
+  retirada: 4,
+  cupons: 5,
+} as const;
+
 export var INCOME_CATS = ["Vendas", "Servicos", "Outros", "Investimentos"];
 export var EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
 
