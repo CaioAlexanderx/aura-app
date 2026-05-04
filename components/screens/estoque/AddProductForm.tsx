@@ -395,7 +395,10 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
 }
 
 const s = StyleSheet.create({
-  container: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, marginBottom: 24 },
+  // O chrome do card (bg/radius/border/padding) é fornecido pelo modal
+  // wrapper em estoque.tsx (formSheet + ScrollView contentContainerStyle).
+  // Aqui o container só agrupa os campos sem duplicar visual de cartão.
+  container: {},
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   title: { fontSize: 20, color: Colors.ink, fontWeight: "700" },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },

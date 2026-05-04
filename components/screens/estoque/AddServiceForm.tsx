@@ -172,7 +172,9 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
 }
 
 var s = StyleSheet.create({
-  container: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, marginBottom: 24 },
+  // O chrome do card é fornecido pelo modal wrapper em estoque.tsx
+  // (formSheet + ScrollView contentContainerStyle). Aqui só agrupamos.
+  container: {},
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
