@@ -14,6 +14,8 @@ import { fmt, fmtK } from "../types";
 import { useMemo } from "react";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
+// Onda 3: ranking + evolução mensal 12m
+import { ProfessionalsRanking, MonthlyEvolution } from "./Onda3Cards";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -184,14 +186,20 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
         )}
       </View>
 
-      {/* Roadmap card — Onda 3 */}
-      <View style={[s.card, s.roadmap, { backgroundColor: Colors.bg3, borderColor: Colors.border2 }]}>
-        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 3</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Mais cards chegando</Text>
-        <Text style={[s.roadmapText, { color: Colors.ink2 }]}>
-          Ranking de profissionais{consolidated ? " (so per-company)" : ""} e evolucao mensal de 12 meses
-          ficam pra proxima onda do redesign.
+      {/* Onda 3: Ranking de profissionais — só per-company */}
+      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <Text style={[s.kicker, { color: Colors.ink3 }]}>RANKING DE PROFISSIONAIS</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>
+          {consolidated ? "Disponivel ao selecionar empresa" : "Quem mais movimentou no periodo"}
         </Text>
+        <ProfessionalsRanking items={insights.professional_ranking || []} consolidated={consolidated} />
+      </View>
+
+      {/* Onda 3: Evolução mensal 12m */}
+      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <Text style={[s.kicker, { color: Colors.ink3 }]}>EVOLUCAO MENSAL · 12 MESES</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Receita ao longo do tempo</Text>
+        <MonthlyEvolution items={insights.monthly_evolution || []} />
       </View>
     </View>
   );
