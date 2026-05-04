@@ -3,6 +3,10 @@
 // Banner de "Maior alavanca" — destaca a acao com maior impacto no caixa.
 // Hoje so identifica "cobrar atrasados". Em ondas futuras pode incluir
 // cortar despesa anomala, antecipar recebiveis, etc.
+//
+// Multi-CNPJ: quando consolidated=true, mostra legenda sutil indicando
+// que o valor agrega varias empresas e que pra COBRAR de fato o usuario
+// precisa abrir uma empresa especifica (limitacao de mutations em modo consolidado).
 
 import { View, Text, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -16,9 +20,13 @@ var isWeb = Platform.OS === "web";
 type Props = {
   insights: FinancialInsights;
   onCta?: () => void; // navega pra Lancamentos com filtro de atrasados
+  // Quando true, banner mostra legenda "Soma de todas as empresas".
+  // CTA continua funcional (leva pra Lancamentos consolidado), mas o usuario
+  // sabe que vai precisar entrar em cada CNPJ pra cobrar de fato.
+  consolidated?: boolean;
 };
 
-export function BiggestLever({ insights, onCta }: Props) {
+export function BiggestLever({ insights, onCta, consolidated }: Props) {
   var lever = insights.biggest_lever;
 
   // Sem alavanca = sem atrasados (parabens) — mostra um estado positivo
@@ -31,10 +39,12 @@ export function BiggestLever({ insights, onCta }: Props) {
         <View style={{ flex: 1 }}>
           <Text style={s.kickerOk}>SEM ALAVANCA URGENTE</Text>
           <Text style={[s.headlineOk, { color: Colors.ink }]}>
-            Voce esta em dia com cobrancas e despesas
+            {consolidated ? "Nenhuma empresa esta com atrasados" : "Voce esta em dia com cobrancas e despesas"}
           </Text>
           <Text style={[s.subline, { color: Colors.ink3 }]}>
-            Nenhuma conta atrasada por aqui. Continue acompanhando os indicadores.
+            {consolidated
+              ? "Nenhum CNPJ acumulou contas atrasadas no periodo. Continue acompanhando os indicadores."
+              : "Nenhuma conta atrasada por aqui. Continue acompanhando os indicadores."}
           </Text>
         </View>
       </View>
@@ -64,12 +74,18 @@ export function BiggestLever({ insights, onCta }: Props) {
         <View style={{ flex: 1, gap: 4 }}>
           <View style={s.kickerRow}>
             <Text style={[s.kicker, { color: Colors.amber }]}>MAIOR ALAVANCA · ESTA SEMANA</Text>
+            {consolidated && (
+              <View style={[s.consolidatedBadge, { backgroundColor: Colors.violetD, borderColor: Colors.border2 }]}>
+                <Icon name="globe" size={10} color={Colors.violet3} />
+                <Text style={[s.consolidatedText, { color: Colors.violet3 }]}>Consolidado</Text>
+              </View>
+            )}
           </View>
           <Text style={[s.headline, { color: Colors.ink }]}>{lever.headline}</Text>
 
           <View style={s.statsRow}>
             <View style={s.stat}>
-              <Text style={s.statLabel}>Contas atrasadas</Text>
+              <Text style={s.statLabel}>{consolidated ? "Atrasadas (todas)" : "Contas atrasadas"}</Text>
               <Text style={[s.statVal, { color: Colors.ink }]}>{lever.count}</Text>
             </View>
             {lever.oldest_days != null && lever.oldest_days > 0 && (
@@ -83,6 +99,12 @@ export function BiggestLever({ insights, onCta }: Props) {
               <Text style={[s.statVal, { color: Colors.green }]}>+{lever.impact_days}d</Text>
             </View>
           </View>
+
+          {consolidated && (
+            <Text style={[s.consolidatedHint, { color: Colors.ink3 }]}>
+              Soma de todas as empresas. Pra cobrar de fato, abra a empresa especifica.
+            </Text>
+          )}
         </View>
 
         {!NARROW && (
@@ -143,8 +165,19 @@ var s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  kickerRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  kickerRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   kicker: { fontSize: 9.5, fontWeight: "700", letterSpacing: 1.2 },
+  consolidatedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  consolidatedText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.4 },
+  consolidatedHint: { fontSize: 10.5, fontStyle: "italic", marginTop: 4 },
   kickerOk: { fontSize: 9.5, color: Colors.ink3, letterSpacing: 1.2, fontWeight: "600", textTransform: "uppercase" },
   headline: { fontSize: NARROW ? 15 : 17, fontWeight: "700", letterSpacing: -0.3, lineHeight: NARROW ? 20 : 22 },
   headlineOk: { fontSize: 14, fontWeight: "600" },

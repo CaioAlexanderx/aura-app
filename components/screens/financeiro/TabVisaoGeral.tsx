@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import { SmartBalance } from "./SmartBalance";
@@ -8,12 +7,19 @@ import { PendingCards } from "./PendingCards";
 import { IncomeDetail } from "./IncomeDetail";
 import { ExpenseDetail } from "./ExpenseDetail";
 import { CashFlowCard } from "./CashFlowCard";
-import { AIFinancialInsights } from "./AIFinancialInsights";
 import { ReconciliationSection } from "./ReconciliationSection";
 import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
 import type { Transaction, PeriodKey } from "./types";
+// v2: hero cards (redesign Onda 1)
+import { HealthScoreHero, RunwayCard, BiggestLever } from "./v2";
+import { useFinancialInsights } from "@/hooks/useFinancialInsights";
+// Multi-CNPJ: precisa saber se esta em modo consolidado pra ajustar comportamento
+// dos cards v2 (legendas, hints "abra a empresa especifica", etc).
+import { useAuthStore } from "@/stores/auth";
 
+var W = Dimensions.get("window").width;
+var IS_WIDE = W > 768;
 var isWeb = Platform.OS === "web";
 
 type Summary = { income: number; expenses: number; balance: number; pendingIncome?: number; pendingExpenses?: number };
@@ -35,30 +41,89 @@ type Props = {
 };
 
 export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete, onEdit }: Props) {
+  // Multi-CNPJ: detecta modo consolidado pra ajustar UI dos cards v2.
+  // Em consolidated, BiggestLever mostra "Soma de todas as empresas" + dica
+  // pra abrir empresa especifica antes de cobrar.
+  var consolidatedView = useAuthStore(function(state) { return state.consolidatedView; });
+
+  // Calcula insights v2 (health score, runway, biggest lever) client-side.
+  // Em consolidated, transactions e summary ja vem agregados de useTransactionsApi
+  // (que chama /me/transactions em vez de /companies/:id/transactions).
+  // Quando endpoint /financeiro/insights estiver pronto, hook mescla com dados do server
+  // — em consolidated chamara /me/financeiro/insights, em per-company /companies/:id/financeiro/insights.
+  var insights = useFinancialInsights({
+    transactions: transactions,
+    summary: summary,
+    previousSummary: previousSummary,
+    period: period,
+  });
+
   if (transactions.length === 0 && !isLoading && !isDemo) {
     return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
   }
 
   return (
     <View>
-      <SmartBalance
-        income={summary.income}
-        expenses={summary.expenses}
-        balance={summary.balance}
-        pendingIncome={summary.pendingIncome}
-        pendingExpenses={summary.pendingExpenses}
-        txCount={transactions.length}
-        period={period}
-        customStart={customStart}
-        customEnd={customEnd}
-        previousSummary={previousSummary}
-      />
+      {/* === V2: Hero cards (redesign Onda 1, 04/05/2026) === */}
+      {/* Health Score Hero — donut + drivers + frase narrativa parametrizada.
+          Substitui ranking arbitrario "78/100" com formula 0.35*margem + 0.35*runway
+          + 0.20*crescimento + 0.10*ticket (HEALTH_TARGETS/HEALTH_WEIGHTS). */}
+      <HealthScoreHero insights={insights} />
+
+      {/* Biggest Lever — destaca acao com maior impacto no caixa.
+          Em consolidated mostra legenda "Soma de todas as empresas" + dica de abrir
+          empresa especifica. CTA continua valido (leva pra Lancamentos consolidado). */}
+      <BiggestLever insights={insights} onCta={onGoToLancamentos} consolidated={consolidatedView} />
+
+      {/* SmartBalance + RunwayCard lado a lado em wide, stack em mobile.
+          SmartBalance ja tinha "Saudavel/Atencao/Critico" propria — agora coabita
+          com Health Score (visoes complementares: saldo do periodo vs saude geral). */}
+      {IS_WIDE ? (
+        <View style={s.heroGrid}>
+          <View style={{ flex: 1 }}>
+            <SmartBalance
+              income={summary.income}
+              expenses={summary.expenses}
+              balance={summary.balance}
+              pendingIncome={summary.pendingIncome}
+              pendingExpenses={summary.pendingExpenses}
+              txCount={transactions.length}
+              period={period}
+              customStart={customStart}
+              customEnd={customEnd}
+              previousSummary={previousSummary}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <RunwayCard insights={insights} />
+          </View>
+        </View>
+      ) : (
+        <>
+          <SmartBalance
+            income={summary.income}
+            expenses={summary.expenses}
+            balance={summary.balance}
+            pendingIncome={summary.pendingIncome}
+            pendingExpenses={summary.pendingExpenses}
+            txCount={transactions.length}
+            period={period}
+            customStart={customStart}
+            customEnd={customEnd}
+            previousSummary={previousSummary}
+          />
+          <RunwayCard insights={insights} />
+        </>
+      )}
+
+      {/* === Componentes existentes (preservados) === */}
       <SparklineBar transactions={transactions} />
       <PendingCards transactions={transactions} />
       <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
       <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
       <CashFlowCard />
-      <AIFinancialInsights summary={summary} txCount={transactions.length} />
+      {/* AIFinancialInsights removido na Onda 1 do redesign — volta no plano Expansao
+          com cache 24h + regen on-demand pra nao queimar quota Haiku. */}
       <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
       <ReconciliationSection />
       {transactions.length > 0 && (
@@ -79,6 +144,7 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
 }
 
 var s = StyleSheet.create({
+  heroGrid: { flexDirection: "row", gap: 14, marginBottom: 0 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
