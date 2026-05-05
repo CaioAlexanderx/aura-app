@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
@@ -9,14 +9,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { Icon } from "@/components/Icon";
 import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfe } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm } from "@/components/screens/nfe/EmitNfceForm";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
-// Mai/2026: aba "Configuração" removida (cadastro de certificado A1 vai
-// manualmente via console da Nuvem Fiscal). Documentos agora consome
-// /companies/:id/nfce do backend (rota nova com schema infNFe correto).
+// Mai/2026 audit: refetch dinâmico quando há nota em status='processando' +
+// botão de refresh manual + ESC fecha modal de cancel.
 function NfeScreenInner() {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
@@ -26,14 +26,37 @@ function NfeScreenInner() {
   const [tipoFilter, setTipoFilter] = useState<"all" | "nfce" | "nfe">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | NfceStatus>("all");
 
-  const { data, isLoading } = useQuery({
+  // Estado anterior pra calcular refetchInterval com base nos dados
+  const [hasProcessing, setHasProcessing] = useState(false);
+
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["nfce-emissions", company?.id],
     queryFn: () => nfceApi.list(company!.id),
     enabled: !!company?.id && !isDemo,
-    staleTime: 15000,
+    staleTime: 5000,
+    // Auto-refetch a cada 4s quando há nota processando (espera SEFAZ
+    // confirmar). Para de pollar assim que todas viram terminal.
+    refetchInterval: hasProcessing ? 4000 : false,
   });
   const emissions: NfceEmission[] = data?.emissions || [];
   const stats = data?.stats;
+
+  // Atualiza flag hasProcessing quando emissions mudam
+  useEffect(() => {
+    const hp = emissions.some(e => e.status === "processando");
+    if (hp !== hasProcessing) setHasProcessing(hp);
+  }, [emissions, hasProcessing]);
+
+  // ESC fecha modal de cancel (só web)
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    if (!cancelTarget) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setCancelTarget(null); setCancelReason(""); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [cancelTarget]);
 
   const cancelMut = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
@@ -81,9 +104,31 @@ function NfeScreenInner() {
     cancelMut.mutate({ id: cancelTarget.id, reason: cancelReason.trim() });
   }
 
+  function handleManualRefresh() {
+    refetch();
+    toast.info("Atualizando...");
+  }
+
+  // Filtros aplicados — quando 0 resultados mas há emissions, mostra dica
+  const filtersActive = tipoFilter !== "all" || statusFilter !== "all";
+
   return (
     <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
-      <PageHeader title="Notas fiscais" subtitle="NFC-e (consumidor) e NF-e (B2B) via Nuvem Fiscal" />
+      <View style={s.headerRow}>
+        <View style={{ flex: 1 }}>
+          <PageHeader title="Notas fiscais" subtitle="NFC-e (consumidor) e NF-e (B2B) via Nuvem Fiscal" />
+        </View>
+        <Pressable
+          onPress={handleManualRefresh}
+          disabled={isFetching}
+          style={[s.refreshBtn, isFetching && { opacity: 0.5 }]}
+          accessibilityLabel="Atualizar lista de notas"
+        >
+          {isFetching
+            ? <ActivityIndicator size="small" color={Colors.violet3} />
+            : <Icon name="refresh" size={16} color={Colors.violet3} />}
+        </Pressable>
+      </View>
 
       <View style={s.kpis}>
         <View style={s.kpi}>
@@ -101,6 +146,15 @@ function NfeScreenInner() {
           <Text style={s.kl}>Processando</Text>
         </View>
       </View>
+
+      {hasProcessing && (
+        <View style={s.processingBanner}>
+          <ActivityIndicator size="small" color={Colors.amber} />
+          <Text style={s.processingText}>
+            Há {totalProcessing} nota{totalProcessing > 1 ? "s" : ""} aguardando confirmação da SEFAZ. Atualizando automaticamente...
+          </Text>
+        </View>
+      )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0, marginBottom: 12 }}
@@ -151,8 +205,15 @@ function NfeScreenInner() {
                   />
                 ))}
                 {filtered.length === 0 && (
-                  <View style={{ alignItems: "center", paddingVertical: 30 }}>
+                  <View style={{ alignItems: "center", paddingVertical: 30, gap: 8 }}>
                     <Text style={{ fontSize: 12, color: Colors.ink3 }}>Nenhuma nota com este filtro</Text>
+                    {filtersActive && (
+                      <Pressable
+                        onPress={() => { setTipoFilter("all"); setStatusFilter("all"); }}
+                        style={s.clearFilterBtn}>
+                        <Text style={s.clearFilterText}>Limpar filtros</Text>
+                      </Pressable>
+                    )}
                   </View>
                 )}
               </View>
@@ -192,7 +253,7 @@ function NfeScreenInner() {
             <View style={s.modalActions}>
               <Pressable style={s.modalCancelBtn}
                 onPress={() => { setCancelTarget(null); setCancelReason(""); }}>
-                <Text style={s.modalCancelText}>Voltar</Text>
+                <Text style={s.modalCancelText}>Voltar (Esc)</Text>
               </Pressable>
               <Pressable
                 style={[s.modalConfirmBtn, (cancelReason.trim().length < 15 || cancelMut.isPending) && { opacity: 0.5 }]}
@@ -219,14 +280,31 @@ export default function NfeScreen() {
 const s = StyleSheet.create({
   scr: { flex: 1 },
   cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  refreshBtn: {
+    width: 38, height: 38, borderRadius: 10,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+  },
   kpis: { flexDirection: "row", gap: 8, marginBottom: 16 },
   kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 4 },
   kv: { fontSize: 20, fontWeight: "800", color: Colors.ink },
   kl: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
+  processingBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.amberD, borderRadius: 10, padding: 12,
+    marginBottom: 12, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)",
+  },
+  processingText: { flex: 1, fontSize: 12, color: Colors.amber, fontWeight: "600" },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   tabTextActive: { color: "#fff", fontWeight: "600" },
+  clearFilterBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+  },
+  clearFilterText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
 
   modalOverlay: {
     position: (Platform.OS === "web" ? "fixed" : "absolute") as any,
