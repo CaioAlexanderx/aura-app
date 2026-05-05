@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, Image, Linking } from "react-native";
 import { useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
-import { nfceApi, type EmitResponse } from "@/services/nfceApi";
+import { nfceApi, type EmitResponse, type NfceEmission } from "@/services/nfceApi";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import type { SaleResult } from "@/hooks/useCart";
@@ -12,11 +12,18 @@ import { PAYMENTS } from "@/hooks/useCart";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-// QR code rendering: usamos api.qrserver.com (público, free) com a string
-// completa do qrCode que a Nuvem Fiscal devolve em infNFeSupl.qrCode.
-// Funciona em web e mobile via React Native Image.
+// QR code via api.qrserver.com — funciona em web e mobile.
 function buildQrImageUrl(qrText: string, size = 220): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(qrText)}&margin=8`;
+}
+
+// Formata chave de acesso 44 dígitos em grupos de 4 pra leitura humana.
+// "35260512345678901234650010000000011000000011" → "3526 0512 3456 7890 1234 6500 1000 0000 0110 0000 0011"
+function formatAccessKey(k: string | null | undefined): string {
+  if (!k) return "";
+  const clean = String(k).replace(/\D/g, "");
+  if (clean.length !== 44) return clean;
+  return clean.match(/.{1,4}/g)!.join(" ");
 }
 
 async function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
@@ -42,14 +49,21 @@ function openExternal(url: string) {
   else Linking.openURL(url);
 }
 
-// Constrói wa.me link; assume número BR. Strip não-dígitos. Se não tem
-// 55 no começo, adiciona. Se < 10 dígitos, retorna null (inválido).
 function buildWhatsAppLink(phone: string | null | undefined, message: string): string | null {
   if (!phone) return null;
   let d = phone.replace(/\D/g, "");
   if (d.length < 10) return null;
   if (!d.startsWith("55")) d = "55" + d;
   return `https://wa.me/${d}?text=${encodeURIComponent(message)}`;
+}
+
+// Copy to clipboard helper (web only — mobile usaria Clipboard API).
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (Platform.OS !== "web" || typeof navigator === "undefined") return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch { return false; }
 }
 
 type EmitState = "idle" | "emitting" | "authorized" | "rejected" | "error";
@@ -63,6 +77,11 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
   const [emitResult, setEmitResult] = useState<EmitResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [errorPayload, setErrorPayload] = useState<any>(null);
+  const [pollAttempts, setPollAttempts] = useState(0);
+  const pollTimer = useRef<any>(null);
+
+  // Limpa timer de polling ao desmontar
+  useEffect(() => () => { if (pollTimer.current) clearTimeout(pollTimer.current); }, []);
 
   const emitMut = useMutation({
     mutationFn: () => {
@@ -81,18 +100,27 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
         tipo: "nfce",
       });
     },
-    onMutate: () => { setEmitState("emitting"); setErrorMsg(null); setErrorPayload(null); },
+    onMutate: () => {
+      setEmitState("emitting");
+      setErrorMsg(null); setErrorPayload(null);
+      setPollAttempts(0);
+    },
     onSuccess: (res) => {
       setEmitResult(res);
       const status = res.nfce?.status;
       if (status === "autorizada") {
         setEmitState("authorized");
         toast.success(`NFC-e #${res.nfce.numero} autorizada!`);
+        // Se PDF ainda não está pronto, polling buscará atualização
+        if (!res.pdf_url && !res.nfce.pdf_url) startPollingForPdf(res.nfce.id);
       } else if (status === "rejeitada") {
         setEmitState("rejected");
         setErrorMsg(res.nfce.error_message || "Nota rejeitada pela SEFAZ");
+      } else if (status === "processando") {
+        setEmitState("authorized");  // mostra UI de autorizada com aviso
+        startPollingForAuthorization(res.nfce.id);
       } else {
-        setEmitState("authorized"); // processando ainda mostra como autorizada com aviso
+        setEmitState("authorized");
       }
     },
     onError: (err: any) => {
@@ -101,6 +129,82 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
       setErrorPayload(err?.data?.payload || null);
     },
   });
+
+  // Polling: chama GET /:nfceId a cada 3s até virar terminal (autorizada/rejeitada)
+  // ou bater o cap (10 tentativas = 30s). Usado pra estado "processando".
+  function startPollingForAuthorization(emissionId: string) {
+    if (!company?.id || pollTimer.current) return;
+    let attempt = 0;
+    const maxAttempts = 10;
+
+    const tick = async () => {
+      attempt++;
+      setPollAttempts(attempt);
+      try {
+        const { emission } = await nfceApi.get(company.id, emissionId);
+        if (emission.status === "autorizada") {
+          // Hidrata emitResult com os campos que vieram (chave, pdf_url, qr_code, etc.)
+          setEmitResult(prev => ({
+            ...(prev as EmitResponse),
+            nfce: emission,
+            pdf_url: emission.pdf_url,
+            xml_url: emission.xml_url,
+            qr_code: emission.qr_code,
+            url_consulta: emission.url_consulta,
+          }));
+          toast.success(`NFC-e #${emission.numero} autorizada!`);
+          pollTimer.current = null;
+          return;
+        }
+        if (emission.status === "rejeitada" || emission.status === "erro") {
+          setEmitState("rejected");
+          setErrorMsg(emission.error_message || "Nota rejeitada");
+          pollTimer.current = null;
+          return;
+        }
+        if (attempt >= maxAttempts) {
+          // Esgotou — UI mostra que ainda tá processando, usuário pode dar refresh
+          pollTimer.current = null;
+          return;
+        }
+        pollTimer.current = setTimeout(tick, 3000);
+      } catch {
+        // Erro de rede no polling — desiste e deixa usuário recarregar manualmente
+        pollTimer.current = null;
+      }
+    };
+    pollTimer.current = setTimeout(tick, 3000);
+  }
+
+  // Polling pra hidratar pdf_url quando autorizada mas Nuvem ainda gerando.
+  // Mais curto: 5 tentativas a cada 2s.
+  function startPollingForPdf(emissionId: string) {
+    if (!company?.id || pollTimer.current) return;
+    let attempt = 0;
+    const tick = async () => {
+      attempt++;
+      try {
+        const { emission } = await nfceApi.get(company.id, emissionId);
+        if (emission.pdf_url) {
+          setEmitResult(prev => ({
+            ...(prev as EmitResponse),
+            nfce: emission,
+            pdf_url: emission.pdf_url,
+            xml_url: emission.xml_url,
+            qr_code: emission.qr_code,
+            url_consulta: emission.url_consulta,
+          }));
+          pollTimer.current = null;
+          return;
+        }
+        if (attempt >= 5) { pollTimer.current = null; return; }
+        pollTimer.current = setTimeout(tick, 2000);
+      } catch {
+        pollTimer.current = null;
+      }
+    };
+    pollTimer.current = setTimeout(tick, 2000);
+  }
 
   function handlePrint() {
     if (!company?.id) return;
@@ -112,13 +216,20 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
   function handleOpenDanfe() {
     const url = emitResult?.pdf_url || emitResult?.nfce?.pdf_url;
     if (url) openExternal(url);
-    else toast.error("PDF do DANFE indisponível");
+    else toast.info("DANFE ainda sendo gerado pela Nuvem Fiscal. Aguarde alguns segundos.");
   }
 
   function handleOpenConsultaSefaz() {
     const url = emitResult?.url_consulta || emitResult?.nfce?.url_consulta;
     if (url) openExternal(url);
     else toast.error("URL de consulta SEFAZ indisponível");
+  }
+
+  async function handleCopyChave() {
+    const k = emitResult?.nfce?.chave_acesso;
+    if (!k) return;
+    const ok = await copyToClipboard(k.replace(/\D/g, ""));
+    toast[ok ? "success" : "error"](ok ? "Chave de acesso copiada" : "Não foi possível copiar");
   }
 
   function handleSendWhatsApp() {
@@ -135,12 +246,10 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
     else toast.error("Cliente sem telefone cadastrado. Selecione um cliente com telefone para enviar.");
   }
 
-  const canSendWhatsApp = !!sale.customerPhone && (
-    !!emitResult?.pdf_url || !!emitResult?.nfce?.pdf_url ||
-    !!emitResult?.url_consulta || !!emitResult?.nfce?.url_consulta
-  );
+  const hasPdf = !!(emitResult?.pdf_url || emitResult?.nfce?.pdf_url);
+  const hasConsulta = !!(emitResult?.url_consulta || emitResult?.nfce?.url_consulta);
+  const canSendWhatsApp = !!sale.customerPhone && (hasPdf || hasConsulta);
 
-  // Renderização condicional do bloco NFC-e
   function renderNfceBlock() {
     if (emitState === "idle") {
       return (
@@ -162,13 +271,23 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
       const qrText = emitResult.qr_code || emitResult.nfce?.qr_code;
       const numero = emitResult.nfce?.numero;
       const protocolo = emitResult.nfce?.protocolo;
+      const chave = emitResult.nfce?.chave_acesso;
+      const isProcessing = emitResult.nfce?.status === "processando" ||
+                          (emitResult.nfce?.status === "autorizada" && !hasPdf);
       return (
         <View style={s.nfceAuthorized}>
           <View style={s.nfceHeaderRow}>
-            <View style={[s.nfceStatusDot, { backgroundColor: Colors.green }]} />
-            <Text style={s.nfceStatusLabel}>NFC-e #{numero} autorizada</Text>
+            <View style={[s.nfceStatusDot, { backgroundColor: isProcessing ? Colors.amber : Colors.green }]} />
+            <Text style={s.nfceStatusLabel}>
+              {emitResult.nfce?.status === "processando"
+                ? `NFC-e #${numero} processando...`
+                : `NFC-e #${numero} autorizada`}
+            </Text>
           </View>
           {protocolo && <Text style={s.nfceProtocolo}>Protocolo {protocolo}</Text>}
+          {pollAttempts > 0 && emitResult.nfce?.status === "processando" && (
+            <Text style={s.nfceProtocolo}>Aguardando SEFAZ confirmar... ({pollAttempts}/10)</Text>
+          )}
 
           {qrText && (
             <View style={s.qrWrap}>
@@ -181,20 +300,34 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
             </View>
           )}
 
+          {chave && (
+            <Pressable onPress={handleCopyChave} style={s.chaveBox}>
+              <Text style={s.chaveLabel}>Chave de acesso (clique pra copiar)</Text>
+              <Text style={s.chaveValue} numberOfLines={2}>{formatAccessKey(chave)}</Text>
+            </Pressable>
+          )}
+
           <View style={s.nfceActions}>
-            <Pressable onPress={handleOpenDanfe} style={s.nfceActionBtn}>
+            <Pressable
+              onPress={handleOpenDanfe}
+              disabled={!hasPdf}
+              style={[s.nfceActionBtn, !hasPdf && { opacity: 0.45 }]}>
               <Icon name="download" size={14} color={Colors.violet3} />
-              <Text style={s.nfceActionText}>Abrir DANFE</Text>
+              <Text style={s.nfceActionText}>{hasPdf ? "Abrir DANFE" : "PDF gerando..."}</Text>
             </Pressable>
             <Pressable
               onPress={handleSendWhatsApp}
               disabled={!canSendWhatsApp}
-              style={[s.nfceActionBtn, !canSendWhatsApp && { opacity: 0.45 }]}
-            >
+              style={[s.nfceActionBtn, !canSendWhatsApp && { opacity: 0.45 }]}>
               <Icon name="message" size={14} color={Colors.green} />
-              <Text style={[s.nfceActionText, { color: Colors.green }]}>WhatsApp</Text>
+              <Text style={[s.nfceActionText, { color: Colors.green }]}>
+                {!sale.customerPhone ? "Cliente s/ tel" : "WhatsApp"}
+              </Text>
             </Pressable>
-            <Pressable onPress={handleOpenConsultaSefaz} style={s.nfceActionBtn}>
+            <Pressable
+              onPress={handleOpenConsultaSefaz}
+              disabled={!hasConsulta}
+              style={[s.nfceActionBtn, !hasConsulta && { opacity: 0.45 }]}>
               <Icon name="globe" size={14} color={Colors.ink3} />
               <Text style={[s.nfceActionText, { color: Colors.ink3 }]}>SEFAZ</Text>
             </Pressable>
@@ -203,6 +336,11 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
       );
     }
     if (emitState === "rejected" || emitState === "error") {
+      // Tenta mostrar campo+mensagem específicos do payload Nuvem Fiscal.
+      const erros = errorPayload?.erros || errorPayload?.errors || [];
+      const firstErro = Array.isArray(erros) && erros.length ? erros[0] : null;
+      const campo = firstErro?.campo || firstErro?.field;
+      const detail = firstErro?.mensagem || firstErro?.message || firstErro?.descricao;
       return (
         <View style={s.nfceError}>
           <View style={s.nfceHeaderRow}>
@@ -212,8 +350,10 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
             </Text>
           </View>
           {errorMsg && <Text style={s.nfceErrorMsg}>{errorMsg}</Text>}
-          {errorPayload?.erros?.[0]?.campo && (
-            <Text style={s.nfceErrorField}>Campo: {errorPayload.erros[0].campo}</Text>
+          {campo && (
+            <Text style={s.nfceErrorField}>
+              Campo: {campo}{detail ? ` — ${detail}` : ""}
+            </Text>
           )}
           <Pressable onPress={handleEmitNfce} style={s.nfceRetryBtn}>
             <Icon name="refresh" size={13} color={Colors.violet3} />
@@ -280,7 +420,6 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
 
         <View style={s.divider} />
 
-        {/* Bloco NFC-e: botão idle / loading / autorizada (QR+PDF+WA) / erro */}
         {renderNfceBlock()}
 
         <View style={[s.actions, { marginTop: 14 }]}>
@@ -319,7 +458,6 @@ const s = StyleSheet.create({
   primaryBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   primaryText: { fontSize: 14, color: "#fff", fontWeight: "700" },
 
-  // ── NFC-e flow ──────────────────────────────────────────────
   nfcePrimaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     width: "100%", paddingVertical: 14, borderRadius: 12,
@@ -351,6 +489,16 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
   },
   qrHint: { fontSize: 10, color: Colors.ink3, fontWeight: "500" },
+
+  chaveBox: {
+    width: "100%", padding: 10, borderRadius: 8,
+    backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
+  },
+  chaveLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
+  chaveValue: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 11, color: Colors.ink, letterSpacing: 0.3,
+  },
 
   nfceActions: { flexDirection: "row", gap: 8, width: "100%", flexWrap: "wrap", justifyContent: "center" },
   nfceActionBtn: {
