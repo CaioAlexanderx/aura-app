@@ -5,26 +5,9 @@
 // Esta tela e apenas o orquestrador entre os hooks e os componentes
 // visuais do "Claude Design" (glassmorphism + orbs + conic gradients).
 //
-// Conectores (100% wirados com backend real, nada mockado):
-//   - useProducts()          produtos + estoque (backend)
-//   - useCart()              carrinho, pagamento, finalizar, cupom,
-//                            cliente, vendedora, desconto manual
-//   - useCustomers()         lista de clientes
-//   - useEmployees(...)      lista de funcionarias (via useQuery)
-//   - usePdvSettings()       politicas require_customer/seller
-//   - pdvApi.scan()          leitor de codigo de barras
-//   - couponsApi.validate()  validacao de cupom
-//   - openQuotePdf()         PDF de orcamento
-//
-// Layout: sidebar vem do _layout.tsx (expo-router).
-// Wide (>860): grid "1fr 420px" — catalog scrolla, cart sticky.
-// Narrow: scroll unico empilhado.
-//
-// MULTICNPJ Sessao 1 (2026-05-02): PDV exige CNPJ especifico (caixa fiscal,
-// estoque, vendedora vinculada por empresa). No modo consolidado, o
-// RequireCompanyScope abre picker antes de renderizar e troca o JWT pra
-// a empresa escolhida. Memoria por sessionStorage no picker faz a 2a vez
-// passar direto ate o user fechar a aba ou clicar "Editar".
+// Mai/2026: PDV agora coleta CPF na nota (NFC-e) via input no
+// CartPanel. SaleComplete ganhou fluxo completo de emissão de NFC-e
+// (botão -> processando -> autorizada/erro -> QR + DANFE + WhatsApp).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -63,24 +46,17 @@ import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 
 const PAGE_SIZE = 12;
 
-// Helper: extrai estoque do produto independente do nome do campo
-// (alguns endpoints retornam `stock`, outros `stock_qty`).
 function getProductStock(p: any): number {
   const v = p?.stock ?? p?.stock_qty ?? 0;
   const n = typeof v === "number" ? v : parseFloat(v);
   return isNaN(n) ? 0 : n;
 }
 
-// Produtos com variantes têm estoque próprio na variante — sempre visíveis
-// no picker, o gate de estoque cai na seleção da variante.
 function isProductInStock(p: any): boolean {
   if (p?.has_variants === true) return true;
   return getProductStock(p) > 0;
 }
 
-// ── Search helpers ───────────────────────────────────────────
-// Normaliza texto pra busca: lowercase + strip de acentos (NFD + remove
-// diacriticos). Faz "ÂNGEL" virar "angel", "Stitch" virar "stitch", etc.
 function normalizeText(s: any): string {
   return String(s ?? "")
     .toLowerCase()
@@ -89,9 +65,6 @@ function normalizeText(s: any): string {
     .trim();
 }
 
-// Concatena os campos relevantes do produto num único haystack normalizado.
-// Ordem é arbitrária — o matcher é AND de termos, então só precisa que
-// os termos da query apareçam em algum lugar.
 function buildProductHaystack(p: any): string {
   return normalizeText(
     [p?.name, p?.barcode, p?.sku, p?.code, p?.category, p?.color, p?.size]
@@ -100,10 +73,6 @@ function buildProductHaystack(p: any): string {
   );
 }
 
-// Match AND multi-palavra: "copo stitch" exige que tanto "copo" quanto
-// "stitch" apareçam no haystack (em qualquer ordem, sem precisar serem
-// contíguos). Antes era includes() simples — só casava substring exata,
-// então "copo stitch" não batia em "COPO TERMICO ... STITCH".
 function matchesQuery(haystack: string, query: string): boolean {
   if (!query) return true;
   const terms = normalizeText(query).split(/\s+/).filter(Boolean);
@@ -114,7 +83,6 @@ function matchesQuery(haystack: string, query: string): boolean {
   return true;
 }
 
-// Icons for the 4 payment chips (maps backend id -> icon name in Icon set)
 const PAY_ICONS: Record<string, string> = {
   pix: "dollar",
   dinheiro: "wallet",
@@ -140,8 +108,6 @@ function useIsWide() {
   return wide;
 }
 
-// MULTICNPJ Sessao 1: PDV exige CNPJ especifico (caixa fiscal por empresa).
-// Renomeado pra Inner — wrapper exportado abaixo aplica RequireCompanyScope.
 function CaixaScreenInner() {
   const { company, isDemo } = useAuthStore();
   const { products } = useProducts();
@@ -151,10 +117,6 @@ function CaixaScreenInner() {
   const plan = (company?.plan || "essencial").toLowerCase();
   const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
 
-  // Module overrides — Gestão Aura pode liberar/bloquear módulos por empresa
-  // (companies.module_overrides JSONB no backend, retornado pelo /auth/me).
-  // Override booleano vence o plano: true = força-ligar, false = força-desligar,
-  // undefined = cai no padrão do plano. Veja services/modules.js no backend.
   const moduleOverrides = ((company as any)?.module_overrides ?? {}) as Record<string, boolean>;
   const isModuleEnabled = (key: string, planDefault: boolean) =>
     moduleOverrides[key] === true ? true
@@ -162,7 +124,6 @@ function CaixaScreenInner() {
     : planDefault;
   const clientesEnabled = isModuleEnabled("clientes", isNegocioPlus);
 
-  // Employees: fetched only for Negocio+ (API returns 403 for Essencial).
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
     queryFn: () => employeesApi.list(company!.id),
@@ -182,6 +143,7 @@ function CaixaScreenInner() {
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, discountValue, manualDiscountAmount,
+    cpfNaNota, setCpfNaNota,
   } = useCart();
 
   const wide = useIsWide();
@@ -193,7 +155,6 @@ function CaixaScreenInner() {
 
   const cartHeadRef = useRef<any>(null);
 
-  // ── Categories (with counts) ─────────────────────────────
   const categories = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of products) {
@@ -207,26 +168,16 @@ function CaixaScreenInner() {
     ];
   }, [products]);
 
-  // Quantos produtos estão zerados (pra mostrar no toggle)
   const outOfStockCount = useMemo(() => {
     return products.reduce((acc, p) => acc + (isProductInStock(p) ? 0 : 1), 0);
   }, [products]);
 
-  // ── Index de busca: pré-calcula haystack normalizado por produto ─────
-  // Recalcula só quando `products` muda (não a cada keystroke). Importante
-  // pra estoques grandes (Alynne tem 1232 produtos).
   const productIndex = useMemo(() => {
     const idx = new Map<string, string>();
     for (const p of products) idx.set((p as any).id, buildProductHaystack(p));
     return idx;
   }, [products]);
 
-  // ── Filtered products ─────────────────────────────────────
-  // Esconder zerados por padrão (Alynne 28/04/2026). Toggle "Mostrar zerados"
-  // libera a visualização de tudo. Produtos com variantes sempre passam
-  // (variante tem estoque próprio).
-  // Busca: AND multi-palavra contra haystack (nome + barcode + sku + categoria
-  // + cor + tamanho), tudo normalizado (acentos strip).
   const filtered = useMemo(() => {
     const normQuery = normalizeText(query);
     return products.filter(p => {
@@ -240,7 +191,6 @@ function CaixaScreenInner() {
 
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, query + cat + (showOutOfStock ? "1" : "0"));
 
-  // ── Qty-by-base-id for the grid badges ───────────────────
   const qtyById = useMemo(() => {
     const m: Record<string, number> = {};
     for (const it of cart) {
@@ -250,7 +200,13 @@ function CaixaScreenInner() {
     return m;
   }, [cart]);
 
-  // ── Handlers ─────────────────────────────────────────────
+  // Helper: ao trocar customer, captura phone tambem (pra wa.me da NFC-e)
+  function pickCustomerWithPhone(v: { id: string; name: string } | null) {
+    if (!v) { selectCustomer(null, null, null); return; }
+    const c = customers.find(c => c.id === v.id);
+    selectCustomer(v.id, v.name, c?.phone || null);
+  }
+
   async function handleScan(code: string) {
     const cleaned = (code || "").trim();
     if (!cleaned) return;
@@ -283,7 +239,6 @@ function CaixaScreenInner() {
   function handleAddProduct(p: Product, evt?: { x: number; y: number; accent: string; letter: string }) {
     if (p.has_variants) { setPendingProduct(p); return; }
     addToCart(p);
-    // Fly-to-cart animation (web only).
     if (evt && cartHeadRef.current && IS_WEB) {
       const target = cartHeadRef.current.getBoundingClientRect?.();
       if (target) {
@@ -356,7 +311,6 @@ function CaixaScreenInner() {
     toast.success("Orçamento gerado");
   }
 
-  // ── Display helpers ──────────────────────────────────────
   const displayItems: CartDisplayItem[] = cart.map(it => {
     const base = it.productId.split("__")[0];
     return {
@@ -381,7 +335,6 @@ function CaixaScreenInner() {
   if (pdvSettings.require_customer && !selectedCustomerId) requiredHints.push("Cliente obrigatório");
   if (pdvSettings.require_seller && !selectedEmployeeId && !(sellerName || "").trim()) requiredHints.push("Vendedora obrigatória");
 
-  // Active seller for the ActPerson card — can be free-text or employee
   const activeSellerValue = selectedEmployeeId
     ? { id: selectedEmployeeId, name: selectedEmployeeName || "Vendedora" }
     : sellerName?.trim()
@@ -394,11 +347,8 @@ function CaixaScreenInner() {
 
   const customerOptions = customers.map(c => ({ id: c.id, name: c.name, subtitle: c.phone || c.email }));
 
-  // Order number (last 6 chars of demo date or real sale) — for display only
   const orderSuffix = "#" + ((Date.now() % 100000).toString().padStart(5, "0"));
 
-  // Componente do toggle "Mostrar zerados". Renderiza somente quando há
-  // produtos zerados pra esconder — caso contrário polui sem motivo.
   function StockToggle() {
     if (outOfStockCount === 0) return null;
     return (
@@ -428,11 +378,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={lastSale} onNewSale={newSale} onEmitNfe={() => toast.info("Emissão de NF-e será integrada após configuração do provedor.")} />
+          <SaleComplete sale={lastSale} onNewSale={newSale} />
         </View>
       );
     }
-    return <SaleComplete sale={lastSale} onNewSale={newSale} onEmitNfe={() => toast.info("Emissão de NF-e será integrada após configuração do provedor.")} />;
+    return <SaleComplete sale={lastSale} onNewSale={newSale} />;
   }
 
   // ═══════ WIDE (desktop web) — 2-col grid ═══════
@@ -449,7 +399,6 @@ function CaixaScreenInner() {
             contentContainerStyle={{ padding: 28, paddingBottom: 48 }}
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
-            {/* Header row */}
             <View style={s.topRow}>
               <View>
                 <Text style={s.title}>Caixa</Text>
@@ -477,8 +426,6 @@ function CaixaScreenInner() {
 
             <MerchantBanner height={200} />
 
-            {/* Action toolbar: 4 cards
-                z-index 50 > ProductGrid stacking contexts, so popovers layer above cards. */}
             <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, position: "relative", zIndex: 50 } as any)]}>
               <ActBarcode onScan={handleScan} />
               <ActPerson
@@ -497,13 +444,13 @@ function CaixaScreenInner() {
                 }}
                 options={employees}
                 searchable={employees.length > 5}
-                disabled={!isNegocioPlus && employees.length === 0 && false /* keep input enabled always */}
+                disabled={!isNegocioPlus && employees.length === 0 && false}
               />
               <ActPerson
                 kind="cliente"
                 shortcut="F3"
                 value={activeCustomerValue}
-                onChange={v => { if (v) selectCustomer(v.id, v.name); else selectCustomer(null, null); }}
+                onChange={pickCustomerWithPhone}
                 options={customerOptions}
                 searchable
                 addable={clientesEnabled}
@@ -583,6 +530,8 @@ function CaixaScreenInner() {
               discountLabel={discountLabel}
               isProcessing={isProcessing}
               requiredHints={requiredHints}
+              cpfNaNota={cpfNaNota}
+              onCpfNaNotaChange={setCpfNaNota}
             />
           </View>
         </View>
@@ -590,7 +539,7 @@ function CaixaScreenInner() {
         <QuickCustomerModal
           visible={showNewCustomer}
           onClose={() => setShowNewCustomer(false)}
-          onCustomerCreated={c => selectCustomer(c.id, c.name)}
+          onCustomerCreated={c => selectCustomer(c.id, c.name, (c as any).phone || null)}
         />
         <VariantPickerModal
           visible={!!pendingProduct}
@@ -633,7 +582,7 @@ function CaixaScreenInner() {
             kind="cliente"
             shortcut="F3"
             value={activeCustomerValue}
-            onChange={v => { if (v) selectCustomer(v.id, v.name); else selectCustomer(null, null); }}
+            onChange={pickCustomerWithPhone}
             options={customerOptions}
             searchable
             addable={clientesEnabled}
@@ -705,6 +654,8 @@ function CaixaScreenInner() {
             discountLabel={discountLabel}
             isProcessing={isProcessing}
             requiredHints={requiredHints}
+            cpfNaNota={cpfNaNota}
+            onCpfNaNotaChange={setCpfNaNota}
           />
         </View>
       </ScrollView>
@@ -712,7 +663,7 @@ function CaixaScreenInner() {
       <QuickCustomerModal
         visible={showNewCustomer}
         onClose={() => setShowNewCustomer(false)}
-        onCustomerCreated={c => selectCustomer(c.id, c.name)}
+        onCustomerCreated={c => selectCustomer(c.id, c.name, (c as any).phone || null)}
       />
       <VariantPickerModal
         visible={!!pendingProduct}
@@ -724,7 +675,6 @@ function CaixaScreenInner() {
   );
 }
 
-// MULTICNPJ Sessao 1: wrapper com gate de empresa.
 export default function CaixaScreen() {
   return (
     <RequireCompanyScope context="pdv" actionLabel="abrir o caixa">
@@ -735,88 +685,22 @@ export default function CaixaScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  main: {
-    flex: 1,
-    flexDirection: "row",
-    minWidth: 0,
-  },
-  catalog: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cartWrap: {
-    width: 420,
-    overflow: "hidden",
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 20,
-    marginBottom: 22,
-  },
-  title: {
-    fontSize: 26,
-    color: Colors.ink,
-    letterSpacing: -0.4,
-    fontWeight: "700",
-  },
-  titleSub: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 3,
-  },
-  titleSubTxt: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 11,
-    color: Colors.ink3,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  actBar: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 18,
-    flexWrap: "wrap",
-  },
-  catRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 10,
-  },
-  demoBanner: {
-    alignSelf: "center",
-    backgroundColor: Colors.violetD,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 16,
-  },
+  main: { flex: 1, flexDirection: "row", minWidth: 0 },
+  catalog: { flex: 1, minWidth: 0 },
+  cartWrap: { width: 420, overflow: "hidden" },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 22 },
+  title: { fontSize: 26, color: Colors.ink, letterSpacing: -0.4, fontWeight: "700" },
+  titleSub: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
+  titleSubTxt: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 11, color: Colors.ink3, letterSpacing: 0.6, textTransform: "uppercase" },
+  actBar: { flexDirection: "row", gap: 10, marginBottom: 18, flexWrap: "wrap" },
+  catRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16 },
   demoTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
 });
 
 const stockToggleStyles = StyleSheet.create({
-  btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: "rgba(124,58,237,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.25)",
-    flexShrink: 0,
-  },
-  btnActive: {
-    backgroundColor: "rgba(124,58,237,0.18)",
-    borderColor: "rgba(124,58,237,0.55)",
-  },
-  txt: {
-    fontSize: 11,
-    color: Colors.ink3,
-    fontWeight: "600",
-  },
-  txtActive: {
-    color: "#a78bfa",
-  },
+  btn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: "rgba(124,58,237,0.06)", borderWidth: 1, borderColor: "rgba(124,58,237,0.25)", flexShrink: 0 },
+  btnActive: { backgroundColor: "rgba(124,58,237,0.18)", borderColor: "rgba(124,58,237,0.55)" },
+  txt: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
+  txtActive: { color: "#a78bfa" },
 });

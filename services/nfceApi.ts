@@ -46,6 +46,8 @@ export type NfceEmission = {
   payment_method: string | null;
   xml_url: string | null;
   pdf_url: string | null;
+  qr_code: string | null;       // string completa do QR (NFC-e infNFeSupl.qrCode)
+  url_consulta: string | null;  // URL de consulta SEFAZ (infNFeSupl.urlChave)
   authorized_at: string | null;
   cancelled_at: string | null;
   created_at: string;
@@ -97,6 +99,8 @@ export type EmitResponse = {
   tipo: NfeKind;
   pdf_url: string | null;
   xml_url: string | null;
+  qr_code: string | null;
+  url_consulta: string | null;
 };
 
 // Erro retornado em rejeição: 502 + payload original Nuvem Fiscal

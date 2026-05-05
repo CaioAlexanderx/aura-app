@@ -2,7 +2,9 @@
 // AURA. -- PDV/Caixa · Cart panel (header + body + foot)
 // Violet glass hero with big total, items list with qty controls,
 // payment chips, summary rows, and Limpar/Orçamento/Finalizar CTAs.
-// 24/04 · theme-aware bg + inks (cards legíveis em modo claro e escuro).
+//
+// Mai/2026: ganhou input "CPF na nota" (NFC-e). Aparece sempre,
+// mas só vira CPF da NFC-e se preenchido.
 // ============================================================
 import { forwardRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -12,7 +14,7 @@ import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt }
 
 export type CartDisplayItem = {
   productId: string;
-  productBaseId: string; // without variant suffix, used to pick accent color
+  productBaseId: string;
   name: string;
   price: number;
   qty: number;
@@ -43,40 +45,35 @@ type Props = {
   requiredHints?: string[];
   emptyCta?: string;
   headerSubtitle?: string | null;
+  // CPF na nota (NFC-e). Opcional — se passado, mostra o input.
+  cpfNaNota?: string;
+  onCpfNaNotaChange?: (v: string) => void;
 };
 
-// Texts over the violet gradient header stay white in both themes — the
-// gradient is dense enough to carry white type in light mode too.
 const HEAD_INK = "#ffffff";
 const HEAD_INK_SOFT = "rgba(255,255,255,0.9)";
 const HEAD_INK_DIM = "rgba(255,255,255,0.65)";
 const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 
+// CPF: 000.000.000-00. Aplicamos mask leve (sem lib) só visual.
+function maskCpf(v: string): string {
+  const d = (v || "").replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+}
+
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
-    orderNumber,
-    items,
-    subtotal,
-    discountAmount,
-    total,
-    itemCount,
-    payMethods,
-    activePay,
-    onPay,
-    onInc,
-    onDec,
-    onSetQty,
-    onRemove,
-    onClear,
-    onFinalize,
-    onGenerateQuote,
-    showOrcamento,
-    discountLabel,
-    isProcessing,
-    requiredHints,
-    emptyCta,
-    headerSubtitle,
+    orderNumber, items, subtotal, discountAmount, total, itemCount,
+    payMethods, activePay, onPay,
+    onInc, onDec, onSetQty, onRemove, onClear, onFinalize, onGenerateQuote,
+    showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle,
+    cpfNaNota, onCpfNaNotaChange,
   } = props;
+
+  const showCpfInput = onCpfNaNotaChange !== undefined;
 
   return (
     <View
@@ -233,6 +230,23 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>
         </View>
 
+        {/* CPF na nota (NFC-e) — input opcional, aparece só quando wirado */}
+        {showCpfInput && (
+          <View style={s.cpfRow}>
+            <Icon name="file_text" size={14} color={Colors.ink3} />
+            <Text style={s.cpfLabel}>CPF na nota</Text>
+            <TextInput
+              style={s.cpfInput}
+              value={cpfNaNota || ""}
+              onChangeText={(v) => onCpfNaNotaChange?.(maskCpf(v))}
+              placeholder="(opcional)"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="number-pad"
+              maxLength={14}
+            />
+          </View>
+        )}
+
         {/* Required hints */}
         {requiredHints && requiredHints.length > 0 && (
           <View style={s.hintsBox}>
@@ -302,11 +316,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 });
 
 function CartItem({
-  item,
-  onInc,
-  onDec,
-  onRemove,
-  onQtySet,
+  item, onInc, onDec, onRemove, onQtySet,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
@@ -387,280 +397,68 @@ function CartItem({
 }
 
 const s = StyleSheet.create({
-  cart: {
-    flex: 1,
-    flexDirection: "column",
-    overflow: "hidden",
-  },
-  head: {
-    padding: 22,
-    paddingHorizontal: 24,
-    position: "relative",
-    overflow: "hidden",
-  },
+  cart: { flex: 1, flexDirection: "column", overflow: "hidden" },
+  head: { padding: 22, paddingHorizontal: 24, position: "relative", overflow: "hidden" },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  headLabel: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: HEAD_INK_DIM,
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-  },
-  headOrd: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    color: "#e9d5ff",
-    fontSize: 10,
-    letterSpacing: 0.6,
-  },
-  totalRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  cur: {
-    fontSize: 22,
-    color: HEAD_INK,
-    opacity: 0.75,
-    marginRight: 6,
-    lineHeight: 44,
-    fontWeight: "400",
-  },
-  totalInt: {
-    fontSize: 46,
-    color: HEAD_INK,
-    fontWeight: "700",
-    letterSpacing: -1,
-    lineHeight: 48,
-  },
-  cents: {
-    fontSize: 22,
-    color: HEAD_INK,
-    opacity: 0.8,
-    lineHeight: 44,
-    fontWeight: "500",
-  },
-  meta: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingTop: 14,
-    marginTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.22)",
-  },
-  metaK: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: HEAD_INK_DIMMER,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  metaV: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 12,
-    color: HEAD_INK,
-    fontWeight: "700",
-    marginTop: 3,
-  },
+  headLabel: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIM, letterSpacing: 1.5, textTransform: "uppercase" },
+  headOrd: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", color: "#e9d5ff", fontSize: 10, letterSpacing: 0.6 },
+  totalRow: { flexDirection: "row", alignItems: "baseline", marginTop: 12, marginBottom: 8 },
+  cur: { fontSize: 22, color: HEAD_INK, opacity: 0.75, marginRight: 6, lineHeight: 44, fontWeight: "400" },
+  totalInt: { fontSize: 46, color: HEAD_INK, fontWeight: "700", letterSpacing: -1, lineHeight: 48 },
+  cents: { fontSize: 22, color: HEAD_INK, opacity: 0.8, lineHeight: 44, fontWeight: "500" },
+  meta: { flexDirection: "row", justifyContent: "space-between", paddingTop: 14, marginTop: 4, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.22)" },
+  metaK: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIMMER, letterSpacing: 1, textTransform: "uppercase" },
+  metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
   body: { flex: 1 },
   empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
-  emptyIco: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(124,58,237,0.1)",
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "rgba(124,58,237,0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  emptyTxt: {
-    color: Colors.ink2,
-    fontSize: 12,
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Glass.lineFaint,
-  },
-  itemImg: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  itemLetter: {
-    fontSize: 16,
-    color: "#ffffff",
-    fontWeight: "700",
-    textShadowColor: "rgba(0,0,0,0.25)" as any,
-    textShadowRadius: Platform.OS === "web" ? 4 : 0 as any,
-  },
+  emptyIco: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(124,58,237,0.1)", borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  emptyTxt: { color: Colors.ink2, fontSize: 12, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", letterSpacing: 0.6, textTransform: "uppercase", fontWeight: "700", textAlign: "center" },
+  item: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Glass.lineFaint },
+  itemImg: { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  itemLetter: { fontSize: 16, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  itemMeta: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 10,
-    color: Colors.ink3,
-    marginTop: 2,
-    letterSpacing: 0.3,
-  },
-  qtyCtrl: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 2,
-    backgroundColor: Glass.lineSoft,
-    borderRadius: 8,
-  },
-  qtyBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: Glass.lineFaint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, marginTop: 2, letterSpacing: 0.3 },
+  qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 8, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 8 },
+  qtyBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Glass.lineFaint, alignItems: "center", justifyContent: "center" },
   qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
-  qtyVal: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 13,
-    color: Colors.ink,
-    fontWeight: "700",
-    minWidth: 18,
-    textAlign: "center",
-  },
-  itemPrice: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 13,
-    color: Colors.violet3,
-    fontWeight: "700",
-    minWidth: 72,
-    textAlign: "right",
-  },
-  itemX: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    color: Colors.ink3 as any,
-  },
-  foot: {
-    padding: 14,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  payGrid: {
-    flexDirection: "row",
-    gap: 6,
-    marginBottom: 12,
-  },
-  payChip: {
-    flex: 1,
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-  },
-  payChipActive: {
-    backgroundColor: Colors.violetD,
-    borderWidth: 1,
-    borderColor: Colors.border2,
-  },
-  payLabel: {
-    fontSize: 10,
-    color: Colors.ink2,
-    fontWeight: "600",
-  },
-  sumRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 4,
-  },
-  sumRowTotal: {
-    paddingTop: 10,
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: Glass.lineSoft,
-  },
+  qtyVal: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.ink, fontWeight: "700", minWidth: 18, textAlign: "center" },
+  itemPrice: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.violet3, fontWeight: "700", minWidth: 72, textAlign: "right" },
+  itemX: { width: 22, height: 22, borderRadius: 6, alignItems: "center", justifyContent: "center", color: Colors.ink3 as any },
+  foot: { padding: 14, paddingHorizontal: 20, paddingBottom: 20 },
+  payGrid: { flexDirection: "row", gap: 6, marginBottom: 12 },
+  payChip: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10 },
+  payChipActive: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  payLabel: { fontSize: 10, color: Colors.ink2, fontWeight: "600" },
+  sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
+  sumRowTotal: { paddingTop: 10, marginTop: 6, borderTopWidth: 1, borderTopColor: Glass.lineSoft },
   sumK: { fontSize: 12, color: Colors.ink2, fontWeight: "500" },
-  sumV: {
+  sumV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", color: Colors.ink, fontWeight: "700", fontSize: 12 },
+  cpfRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 10, paddingVertical: 8,
+    backgroundColor: Glass.lineFaint, borderRadius: 8,
+    marginTop: 10, borderWidth: 1, borderColor: Glass.lineBorderCard,
+  },
+  cpfLabel: {
+    fontSize: 11, color: Colors.ink3, fontWeight: "600",
+    textTransform: "uppercase", letterSpacing: 0.5,
+  },
+  cpfInput: {
+    flex: 1, textAlign: "right",
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    color: Colors.ink,
-    fontWeight: "700",
-    fontSize: 12,
+    fontSize: 12, color: Colors.ink, fontWeight: "600",
+    paddingVertical: 0,
   },
-  hintsBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: Colors.amberD,
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.25)",
-  },
+  hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginTop: 8, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
-  ctaRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 14,
-  },
-  ctaSec: {
-    flex: 1,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: Glass.lineFaint,
-    borderWidth: 1,
-    borderColor: Glass.lineBorderCard,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  ctaRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  ctaSec: { flex: 1, height: 48, borderRadius: 12, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard, alignItems: "center", justifyContent: "center" },
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
-  ctaAlt: {
-    flex: 1.3,
-    height: 48,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: Glass.lineFaint,
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.3)",
-  },
+  ctaAlt: { flex: 1.3, height: 48, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
   ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  ctaPri: {
-    flex: 1.7,
-    height: 48,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  ctaPriTxt: {
-    fontSize: 13,
-    color: "#fff",
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
+  ctaPri: { flex: 1.7, height: 48, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  ctaPriTxt: { fontSize: 13, color: "#fff", fontWeight: "700", letterSpacing: 0.3 },
 });
 
 export default CartPanel;
