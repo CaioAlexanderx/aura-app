@@ -13,6 +13,14 @@ export function PendingCards({ transactions }: Props) {
     var payable = { count: 0, total: 0 };
     transactions.forEach(function(t) {
       if (t.status !== "pending") return;
+      // FIX 04/05/2026 (cliente Eryca): excluir despesas fixas/recorrentes do
+      // "A pagar". Card representa fila acionavel — compromissos recorrentes
+      // (aluguel, energia, contadora) sao previsiveis e ja contabilizados
+      // no orcamento mensal, nao pertencem aqui. Aplica simetricamente pra
+      // "A receber" — assinaturas recorrentes tambem ficam de fora.
+      // Filtra por (t as any).recurrence_group_id porque o type Transaction
+      // local nao expoe esse campo, mas o mapApiTransaction passa adiante.
+      if ((t as any).recurrence_group_id) return;
       if (t.type === "income") { receivable.count++; receivable.total += t.amount; }
       else { payable.count++; payable.total += t.amount; }
     });
@@ -23,7 +31,7 @@ export function PendingCards({ transactions }: Props) {
 
   return (
     <View style={s.container}>
-      <Text style={s.sectionTitle}>Pendentes</Text>
+      <Text style={s.sectionTitle}>Pendentes (avulsas)</Text>
       <View style={s.row}>
         {pending.receivable.count > 0 && (
           <View style={[s.card, s.cardReceivable]}>
@@ -50,6 +58,9 @@ export function PendingCards({ transactions }: Props) {
           </View>
         )}
       </View>
+      <Text style={s.hint}>
+        Compromissos fixos (aluguel, energia, etc) ficam fora desta lista — sao previsiveis e ja entram no orcamento mensal.
+      </Text>
     </View>
   );
 }
@@ -66,6 +77,7 @@ var s = StyleSheet.create({
   cardLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
   cardValue: { fontSize: 18, fontWeight: "800", marginTop: 2 },
   cardCount: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  hint: { fontSize: 10.5, color: Colors.ink3, marginTop: 10, fontStyle: "italic", lineHeight: 14 },
 });
 
 export default PendingCards;
