@@ -15,14 +15,18 @@ export type Customer = {
   // FE so mostra badge quando companyCount > 1 (multi-CNPJ ativo).
   company_id?: string | null;
   company_name?: string | null;
+  // Crediario (mai/2026): saldo devedor por (cliente, empresa).
+  // > 0 = cliente deve; <= 0 = quitado/credito.
+  creditBalance: number;
 };
 
 export const TABS = ["Clientes", "Ranking", "Retencao", "Avaliacoes"];
 
 export const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-export function getStatus(c: { visits: number; totalSpent: number; lastPurchase: string }): string[] {
+export function getStatus(c: { visits: number; totalSpent: number; lastPurchase: string; creditBalance?: number }): string[] {
   const t: string[] = [];
+  if ((c.creditBalance || 0) > 0) t.push("Devendo");
   if (c.totalSpent >= 2000) t.push("VIP");
   if (c.visits >= 10) t.push("Frequente");
   if (c.visits <= 3) t.push("Novo");
