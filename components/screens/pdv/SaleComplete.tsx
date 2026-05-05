@@ -42,6 +42,30 @@ async function openPrintReceipt(companyId: string, saleId: string, token: string
   } catch { toast.error("Erro ao gerar cupom"); }
 }
 
+// Imprime DANFE NFC-e térmica 80mm (HTML local gerado pelo backend).
+// Não depende de pdf_url da Nuvem Fiscal — usa nossa rota dedicada.
+async function openPrintNfceTermica(companyId: string, nfceId: string, token: string | null) {
+  if (!token || !companyId) { toast.error("Sessao expirada"); return; }
+  if (Platform.OS !== "web" || typeof window === "undefined") {
+    toast.info("Impressao disponivel apenas na versao web");
+    return;
+  }
+  try {
+    const res = await fetch(`${BASE_URL}/companies/${companyId}/nfce/${nfceId}/danfe-termica`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      toast.error(txt || "Erro ao gerar NFCe");
+      return;
+    }
+    const html = await res.text();
+    const win = window.open("", "_blank", "width=420,height=700,scrollbars=yes");
+    if (win) { win.document.write(html); win.document.close(); }
+    else toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
+  } catch { toast.error("Erro ao gerar NFCe"); }
+}
+
 function openExternal(url: string) {
   if (Platform.OS === "web" && typeof window !== "undefined") window.open(url, "_blank");
   else Linking.openURL(url);
@@ -224,10 +248,11 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
     openPrintReceipt(company.id, sale.id, token);
   }
   function handleEmitNfce() { emitMut.mutate(); }
-  function handleOpenDanfe() {
-    const url = emitResult?.pdf_url || emitResult?.nfce?.pdf_url;
-    if (url) openExternal(url);
-    else toast.info("DANFE ainda sendo gerado pela Nuvem Fiscal. Aguarde alguns segundos.");
+  function handlePrintNfce() {
+    if (!company?.id) return;
+    const nfceId = emitResult?.nfce?.id;
+    if (!nfceId) { toast.error("ID da NFC-e indisponivel"); return; }
+    openPrintNfceTermica(company.id, nfceId, token);
   }
   function handleOpenConsultaSefaz() {
     const url = emitResult?.url_consulta || emitResult?.nfce?.url_consulta;
@@ -254,9 +279,10 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
     else toast.error("Cliente sem telefone cadastrado. Selecione um cliente com telefone para enviar.");
   }
 
+  const hasNfceId = !!emitResult?.nfce?.id;
   const hasPdf = !!(emitResult?.pdf_url || emitResult?.nfce?.pdf_url);
   const hasConsulta = !!(emitResult?.url_consulta || emitResult?.nfce?.url_consulta);
-  const canSendWhatsApp = !!sale.customerPhone && (hasPdf || hasConsulta);
+  const canSendWhatsApp = !!sale.customerPhone && (hasNfceId || hasPdf || hasConsulta);
 
   function renderNfceBlock() {
     if (emitState === "idle") {
@@ -280,20 +306,19 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
       const numero = emitResult.nfce?.numero;
       const protocolo = emitResult.nfce?.protocolo;
       const chave = emitResult.nfce?.chave_acesso;
-      const isProcessing = emitResult.nfce?.status === "processando" ||
-                          (emitResult.nfce?.status === "autorizada" && !hasPdf);
+      const isProcessing = emitResult.nfce?.status === "processando";
       return (
         <View style={s.nfceAuthorized}>
           <View style={s.nfceHeaderRow}>
             <View style={[s.nfceStatusDot, { backgroundColor: isProcessing ? Colors.amber : Colors.green }]} />
             <Text style={s.nfceStatusLabel}>
-              {emitResult.nfce?.status === "processando"
+              {isProcessing
                 ? `NFC-e #${numero} processando...`
                 : `NFC-e #${numero} autorizada`}
             </Text>
           </View>
           {protocolo && <Text style={s.nfceProtocolo}>Protocolo {protocolo}</Text>}
-          {pollAttempts > 0 && emitResult.nfce?.status === "processando" && (
+          {pollAttempts > 0 && isProcessing && (
             <Text style={s.nfceProtocolo}>Aguardando SEFAZ confirmar... ({pollAttempts}/10)</Text>
           )}
 
@@ -314,11 +339,11 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
 
           <View style={s.nfceActions}>
             <Pressable
-              onPress={handleOpenDanfe}
-              disabled={!hasPdf}
-              style={[s.nfceActionBtn, !hasPdf && { opacity: 0.45 }]}>
-              <Icon name="download" size={14} color={Colors.violet3} />
-              <Text style={s.nfceActionText}>{hasPdf ? "Abrir DANFE" : "PDF gerando..."}</Text>
+              onPress={handlePrintNfce}
+              disabled={!hasNfceId}
+              style={[s.nfceActionBtn, !hasNfceId && { opacity: 0.45 }]}>
+              <Icon name="file_text" size={14} color={Colors.violet3} />
+              <Text style={s.nfceActionText}>Imprimir NFCe</Text>
             </Pressable>
             <Pressable
               onPress={handleSendWhatsApp}
