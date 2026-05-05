@@ -48,7 +48,11 @@ export default function FinanceiroScreen() {
   // V2: 6 abas (Visao Geral, Receitas, Despesas, Lancamentos, Retirada, Cupons).
   // TAB_INDEX exporta indices semanticos; nao escrever numeros literais.
   var [activeTab, setActiveTab] = useState(TAB_INDEX.visao);
-  var [period, setPeriod] = useState<PeriodKey>("today");
+  // FIX 04/05/2026: default era "today" — recorrentes mensais materializadas
+  // (12 rows com due_date espalhadas) eram filtradas fora da janela. Cliente
+  // Eryca reportou que despesa de R$5k aparecia no Painel mas nao no Financeiro.
+  // "month" alinha com expectativa: entrei no Financeiro pra ver o mes atual.
+  var [period, setPeriod] = useState<PeriodKey>("month");
   var [showModal, setShowModal] = useState(false);
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
