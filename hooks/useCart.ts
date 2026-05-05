@@ -200,12 +200,19 @@ export function useCart() {
     if (couponApplied) setCouponApplied(null);
   }
 
+  // FIX 05/05/2026: `-` no qty=1 remove o item (fluxo natural do PDV).
+  // Antes mantinha em 1 e o usuário precisava usar a lixeira separada.
   function updateQty(productId: string, delta: number) {
-    setCart(function(prev) { return prev.map(function(i) {
-      if (i.productId !== productId) return i;
-      var newQty = i.qty + delta;
-      return newQty > 0 ? { ...i, qty: newQty } : i;
-    }); });
+    setCart(function(prev) {
+      // Calcula primeiro pra decidir se filtra (remove) ou mapeia (atualiza)
+      var item = prev.find(function(i) { return i.productId === productId; });
+      if (!item) return prev;
+      var newQty = item.qty + delta;
+      if (newQty <= 0) {
+        return prev.filter(function(i) { return i.productId !== productId; });
+      }
+      return prev.map(function(i) { return i.productId === productId ? { ...i, qty: newQty } : i; });
+    });
     if (couponApplied) setCouponApplied(null);
   }
 
