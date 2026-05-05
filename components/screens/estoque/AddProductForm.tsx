@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -80,6 +80,10 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
 
+  // Refs pra navegação por setas no scroll de categorias (UX desktop)
+  const categoryScrollRef = useRef<any>(null);
+  const chipPositionsRef = useRef<Record<string, { x: number; width: number }>>({});
+
   // Fix 10: estoque sempre aberto no CREATE; no EDIT segue lógica anterior
   const initialShowStock = isEdit
     ? ((parseInt(editProduct?.stock as any) || 0) > 0 || (parseInt(editProduct?.minStock as any) || 0) > 0)
@@ -131,6 +135,32 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";
     setCode(prefix + "-" + String(Math.floor(Math.random() * 999) + 1).padStart(3, "0"));
   }
+
+  // Navegação por setas: avança/volta a SELEÇÃO de categoria + scroll automático
+  // pra trazer o chip novo pra view. No web, usuario nao precisa scrollar
+  // horizontalmente com trackpad — só clicar nas setas.
+  function navigateCategory(direction: "prev" | "next") {
+    if (showNewCat) setShowNewCat(false);
+    const list = mergedCategoryList;
+    if (list.length === 0) return;
+    let idx = list.indexOf(category);
+    if (idx === -1) idx = 0;
+    const nextIdx = direction === "next" ? idx + 1 : idx - 1;
+    if (nextIdx < 0 || nextIdx >= list.length) return;
+    const newCat = list[nextIdx];
+    setCategory(newCat);
+    // Scroll pra trazer o chip novo pra view (offset -80 deixa um respiro
+    // antes do chip selecionado, evitando que ele cole na seta esquerda)
+    const pos = chipPositionsRef.current[newCat];
+    if (pos && categoryScrollRef.current?.scrollTo) {
+      categoryScrollRef.current.scrollTo({ x: Math.max(0, pos.x - 80), animated: true });
+    }
+  }
+
+  const currentCategoryIdx = mergedCategoryList.indexOf(category);
+  const canPrevCategory = currentCategoryIdx > 0 && !showNewCat;
+  const canNextCategory = currentCategoryIdx >= 0 && currentCategoryIdx < mergedCategoryList.length - 1 && !showNewCat;
+  const showCategoryArrows = Platform.OS === "web" && mergedCategoryList.length > 1;
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome do produto"); return; }
@@ -252,21 +282,58 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       </FormField>
 
       <FormField label="Categoria">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-          {mergedCategoryList.map(c => {
-            const selected = category === c && !showNewCat;
-            const chipColor = managedColorByName[c];
-            return (
-              <Pressable key={c} onPress={() => { setCategory(c); setShowNewCat(false); }} style={[s.chip, selected && s.chipActive]}>
-                {chipColor ? <View style={[s.chipDot, { backgroundColor: chipColor }]} /> : null}
-                <Text style={[s.chipText, selected && s.chipTextActive]}>{c}</Text>
-              </Pressable>
-            );
-          })}
-          <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}>
-            <Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text>
-          </Pressable>
-        </ScrollView>
+        {/* Wrapper horizontal: setas ‹ › (web) + ScrollView de chips */}
+        <View style={s.categoryRow}>
+          {showCategoryArrows && (
+            <Pressable
+              onPress={() => navigateCategory("prev")}
+              disabled={!canPrevCategory}
+              style={[s.catArrow, !canPrevCategory && s.catArrowDisabled]}
+              accessibilityLabel="Categoria anterior"
+            >
+              <Text style={[s.catArrowText, !canPrevCategory && s.catArrowTextDisabled]}>‹</Text>
+            </Pressable>
+          )}
+          <ScrollView
+            ref={categoryScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: "row", gap: 6 }}
+            style={{ flex: 1 }}
+          >
+            {mergedCategoryList.map(c => {
+              const selected = category === c && !showNewCat;
+              const chipColor = managedColorByName[c];
+              return (
+                <Pressable
+                  key={c}
+                  onLayout={(e) => {
+                    const { x, width } = e.nativeEvent.layout;
+                    chipPositionsRef.current[c] = { x, width };
+                  }}
+                  onPress={() => { setCategory(c); setShowNewCat(false); }}
+                  style={[s.chip, selected && s.chipActive]}
+                >
+                  {chipColor ? <View style={[s.chipDot, { backgroundColor: chipColor }]} /> : null}
+                  <Text style={[s.chipText, selected && s.chipTextActive]}>{c}</Text>
+                </Pressable>
+              );
+            })}
+            <Pressable onPress={() => setShowNewCat(true)} style={[s.chip, showNewCat && s.chipActive]}>
+              <Text style={[s.chipText, showNewCat && s.chipTextActive]}>+ Nova</Text>
+            </Pressable>
+          </ScrollView>
+          {showCategoryArrows && (
+            <Pressable
+              onPress={() => navigateCategory("next")}
+              disabled={!canNextCategory}
+              style={[s.catArrow, !canNextCategory && s.catArrowDisabled]}
+              accessibilityLabel="Proxima categoria"
+            >
+              <Text style={[s.catArrowText, !canNextCategory && s.catArrowTextDisabled]}>›</Text>
+            </Pressable>
+          )}
+        </View>
         {showNewCat && <TextInput style={[s.input, { marginTop: 8 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
         <Text style={s.categoryHint}>Gerencie suas categorias pelo botao &quot;Categorias&quot; na tela de Estoque.</Text>
       </FormField>
@@ -443,6 +510,16 @@ const s = StyleSheet.create({
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
   categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
   ncmHint: { fontSize: 10, color: Colors.ink3, marginTop: 4, lineHeight: 14 },
+  // Setas de navegação no scroll horizontal de categorias (UX desktop)
+  categoryRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  catArrow: {
+    width: 32, height: 32, borderRadius: 8,
+    backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  catArrowDisabled: { opacity: 0.35 },
+  catArrowText: { fontSize: 18, color: Colors.violet3, fontWeight: "700", lineHeight: 18, marginTop: -2 },
+  catArrowTextDisabled: { color: Colors.ink3 },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10 },
