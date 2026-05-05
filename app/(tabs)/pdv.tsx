@@ -5,6 +5,9 @@
 // CartPanel. SaleComplete ganhou fluxo completo de emissão de NFC-e.
 // Auto-emit toggle: lê nfce_config.auto_emit_nfce e dispara emissão
 // automática ao finalizar venda (sem botão idle).
+// Multi-pagamento: useCart expõe splitMode + splitPayments[] que
+// CartPanel renderiza como SplitPaymentList. NFC-e mapeia cada
+// entrada pra detPag SEFAZ (vDesc preserva soma=total).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -152,6 +155,10 @@ function CaixaScreenInner() {
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, discountValue, manualDiscountAmount,
     cpfNaNota, setCpfNaNota,
+    // Multi-pagamento
+    splitMode, toggleSplitMode,
+    splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
+    splitRemaining, splitIsBalanced,
   } = useCart();
 
   const wide = useIsWide();
@@ -356,6 +363,41 @@ function CaixaScreenInner() {
 
   const orderSuffix = "#" + ((Date.now() % 100000).toString().padStart(5, "0"));
 
+  // Props comuns aos dois renders (wide e narrow) — DRY pra evitar drift entre os dois.
+  const cartProps = {
+    orderNumber: orderSuffix,
+    items: displayItems,
+    subtotal,
+    discountAmount,
+    total: totalFinal,
+    itemCount,
+    payMethods: PAY_METHODS,
+    activePay: payment,
+    onPay: setPayment,
+    onInc: (id: string) => updateQty(id, 1),
+    onDec: (id: string) => updateQty(id, -1),
+    onSetQty: setQty,
+    onRemove: removeItem,
+    onClear: () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
+    onFinalize: handleFinalize,
+    onGenerateQuote: handleGenerateQuote,
+    showOrcamento: true,
+    discountLabel,
+    isProcessing,
+    requiredHints,
+    cpfNaNota,
+    onCpfNaNotaChange: setCpfNaNota,
+    // Multi-pagamento
+    splitMode,
+    splitPayments,
+    splitRemaining,
+    splitIsBalanced,
+    onToggleSplit: toggleSplitMode,
+    onAddSplitPayment: () => addSplitPayment(),
+    onUpdateSplitPayment: updateSplitPayment,
+    onRemoveSplitPayment: removeSplitPayment,
+  };
+
   function StockToggle() {
     if (outOfStockCount === 0) return null;
     return (
@@ -512,31 +554,7 @@ function CaixaScreenInner() {
           </ScrollView>
 
           <View style={[s.cartWrap, IS_WEB && ({ position: "sticky" as any, top: 0, height: "100vh" } as any)]}>
-            <CartPanel
-              ref={cartHeadRef}
-              orderNumber={orderSuffix}
-              items={displayItems}
-              subtotal={subtotal}
-              discountAmount={discountAmount}
-              total={totalFinal}
-              itemCount={itemCount}
-              payMethods={PAY_METHODS}
-              activePay={payment}
-              onPay={setPayment}
-              onInc={id => updateQty(id, 1)}
-              onDec={id => updateQty(id, -1)}
-              onSetQty={setQty}
-              onRemove={removeItem}
-              onClear={() => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); }}
-              onFinalize={handleFinalize}
-              onGenerateQuote={handleGenerateQuote}
-              showOrcamento
-              discountLabel={discountLabel}
-              isProcessing={isProcessing}
-              requiredHints={requiredHints}
-              cpfNaNota={cpfNaNota}
-              onCpfNaNotaChange={setCpfNaNota}
-            />
+            <CartPanel ref={cartHeadRef} {...cartProps} />
           </View>
         </View>
 
@@ -635,31 +653,7 @@ function CaixaScreenInner() {
         )}
 
         <View style={{ marginTop: 20 }}>
-          <CartPanel
-            ref={cartHeadRef}
-            orderNumber={orderSuffix}
-            items={displayItems}
-            subtotal={subtotal}
-            discountAmount={discountAmount}
-            total={totalFinal}
-            itemCount={itemCount}
-            payMethods={PAY_METHODS}
-            activePay={payment}
-            onPay={setPayment}
-            onInc={id => updateQty(id, 1)}
-            onDec={id => updateQty(id, -1)}
-            onSetQty={setQty}
-            onRemove={removeItem}
-            onClear={() => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); }}
-            onFinalize={handleFinalize}
-            onGenerateQuote={handleGenerateQuote}
-            showOrcamento
-            discountLabel={discountLabel}
-            isProcessing={isProcessing}
-            requiredHints={requiredHints}
-            cpfNaNota={cpfNaNota}
-            onCpfNaNotaChange={setCpfNaNota}
-          />
+          <CartPanel ref={cartHeadRef} {...cartProps} />
         </View>
       </ScrollView>
 
