@@ -8,6 +8,8 @@
 // Multi-pagamento: useCart expõe splitMode + splitPayments[] que
 // CartPanel renderiza como SplitPaymentList. NFC-e mapeia cada
 // entrada pra detPag SEFAZ (vDesc preserva soma=total).
+// 05/05: Crediário disponível como chip + edição inline do preço
+// (setUnitPrice -> onPriceChange) + lixeira com confirm 2-cliques.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -89,6 +91,7 @@ const PAY_ICONS: Record<string, string> = {
   dinheiro: "wallet",
   cartao: "receipt",
   debito: "trending_up",
+  crediario: "credit_card",
 };
 const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
   key: p.key,
@@ -148,7 +151,7 @@ function CaixaScreenInner() {
 
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon, itemCount, isProcessing,
-    addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
+    addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
@@ -377,6 +380,7 @@ function CaixaScreenInner() {
     onInc: (id: string) => updateQty(id, 1),
     onDec: (id: string) => updateQty(id, -1),
     onSetQty: setQty,
+    onPriceChange: setUnitPrice,
     onRemove: removeItem,
     onClear: () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
     onFinalize: handleFinalize,
