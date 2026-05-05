@@ -1,24 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, Image, Linking } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, Linking } from "react-native";
 import { useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
-import { nfceApi, type EmitResponse, type NfceEmission } from "@/services/nfceApi";
+import { nfceApi, type EmitResponse } from "@/services/nfceApi";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
+import { QrCode } from "@/components/QrCode";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-// QR code via api.qrserver.com — funciona em web e mobile.
-function buildQrImageUrl(qrText: string, size = 220): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(qrText)}&margin=8`;
-}
-
-// Formata chave de acesso 44 dígitos em grupos de 4 pra leitura humana.
-// "35260512345678901234650010000000011000000011" → "3526 0512 3456 7890 1234 6500 1000 0000 0110 0000 0011"
 function formatAccessKey(k: string | null | undefined): string {
   if (!k) return "";
   const clean = String(k).replace(/\D/g, "");
@@ -57,7 +51,6 @@ function buildWhatsAppLink(phone: string | null | undefined, message: string): s
   return `https://wa.me/${d}?text=${encodeURIComponent(message)}`;
 }
 
-// Copy to clipboard helper (web only — mobile usaria Clipboard API).
 async function copyToClipboard(text: string): Promise<boolean> {
   if (Platform.OS !== "web" || typeof navigator === "undefined") return false;
   try {
@@ -68,7 +61,15 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 type EmitState = "idle" | "emitting" | "authorized" | "rejected" | "error";
 
-export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale: () => void }) {
+type Props = {
+  sale: SaleResult;
+  onNewSale: () => void;
+  /** Se true, dispara nfceApi.emit() automaticamente no mount (sem botão idle).
+      Lido de nfce_config.auto_emit_nfce pela tela do PDV. */
+  autoEmit?: boolean;
+};
+
+export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
   const { company, token } = useAuthStore();
   const subtotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
   const hasCoupon = !!(sale.couponCode && sale.couponDiscount && sale.couponDiscount > 0);
@@ -79,8 +80,8 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
   const [errorPayload, setErrorPayload] = useState<any>(null);
   const [pollAttempts, setPollAttempts] = useState(0);
   const pollTimer = useRef<any>(null);
+  const autoEmitFired = useRef(false);
 
-  // Limpa timer de polling ao desmontar
   useEffect(() => () => { if (pollTimer.current) clearTimeout(pollTimer.current); }, []);
 
   const emitMut = useMutation({
@@ -111,13 +112,12 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
       if (status === "autorizada") {
         setEmitState("authorized");
         toast.success(`NFC-e #${res.nfce.numero} autorizada!`);
-        // Se PDF ainda não está pronto, polling buscará atualização
         if (!res.pdf_url && !res.nfce.pdf_url) startPollingForPdf(res.nfce.id);
       } else if (status === "rejeitada") {
         setEmitState("rejected");
         setErrorMsg(res.nfce.error_message || "Nota rejeitada pela SEFAZ");
       } else if (status === "processando") {
-        setEmitState("authorized");  // mostra UI de autorizada com aviso
+        setEmitState("authorized");
         startPollingForAuthorization(res.nfce.id);
       } else {
         setEmitState("authorized");
@@ -130,20 +130,27 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
     },
   });
 
-  // Polling: chama GET /:nfceId a cada 3s até virar terminal (autorizada/rejeitada)
-  // ou bater o cap (10 tentativas = 30s). Usado pra estado "processando".
+  // Auto-emit: dispara emissão automática no mount se nfce_config.auto_emit_nfce
+  // for true. Só roda uma vez por instância (autoEmitFired ref evita doubles).
+  useEffect(() => {
+    if (!autoEmit) return;
+    if (autoEmitFired.current) return;
+    if (emitState !== "idle") return;
+    autoEmitFired.current = true;
+    emitMut.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEmit]);
+
   function startPollingForAuthorization(emissionId: string) {
     if (!company?.id || pollTimer.current) return;
     let attempt = 0;
     const maxAttempts = 10;
-
     const tick = async () => {
       attempt++;
       setPollAttempts(attempt);
       try {
         const { emission } = await nfceApi.get(company.id, emissionId);
         if (emission.status === "autorizada") {
-          // Hidrata emitResult com os campos que vieram (chave, pdf_url, qr_code, etc.)
           setEmitResult(prev => ({
             ...(prev as EmitResponse),
             nfce: emission,
@@ -162,22 +169,13 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
           pollTimer.current = null;
           return;
         }
-        if (attempt >= maxAttempts) {
-          // Esgotou — UI mostra que ainda tá processando, usuário pode dar refresh
-          pollTimer.current = null;
-          return;
-        }
+        if (attempt >= maxAttempts) { pollTimer.current = null; return; }
         pollTimer.current = setTimeout(tick, 3000);
-      } catch {
-        // Erro de rede no polling — desiste e deixa usuário recarregar manualmente
-        pollTimer.current = null;
-      }
+      } catch { pollTimer.current = null; }
     };
     pollTimer.current = setTimeout(tick, 3000);
   }
 
-  // Polling pra hidratar pdf_url quando autorizada mas Nuvem ainda gerando.
-  // Mais curto: 5 tentativas a cada 2s.
   function startPollingForPdf(emissionId: string) {
     if (!company?.id || pollTimer.current) return;
     let attempt = 0;
@@ -199,9 +197,7 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
         }
         if (attempt >= 5) { pollTimer.current = null; return; }
         pollTimer.current = setTimeout(tick, 2000);
-      } catch {
-        pollTimer.current = null;
-      }
+      } catch { pollTimer.current = null; }
     };
     pollTimer.current = setTimeout(tick, 2000);
   }
@@ -210,28 +206,23 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
     if (!company?.id) return;
     openPrintReceipt(company.id, sale.id, token);
   }
-
   function handleEmitNfce() { emitMut.mutate(); }
-
   function handleOpenDanfe() {
     const url = emitResult?.pdf_url || emitResult?.nfce?.pdf_url;
     if (url) openExternal(url);
     else toast.info("DANFE ainda sendo gerado pela Nuvem Fiscal. Aguarde alguns segundos.");
   }
-
   function handleOpenConsultaSefaz() {
     const url = emitResult?.url_consulta || emitResult?.nfce?.url_consulta;
     if (url) openExternal(url);
     else toast.error("URL de consulta SEFAZ indisponível");
   }
-
   async function handleCopyChave() {
     const k = emitResult?.nfce?.chave_acesso;
     if (!k) return;
     const ok = await copyToClipboard(k.replace(/\D/g, ""));
     toast[ok ? "success" : "error"](ok ? "Chave de acesso copiada" : "Não foi possível copiar");
   }
-
   function handleSendWhatsApp() {
     const pdfUrl = emitResult?.pdf_url || emitResult?.nfce?.pdf_url;
     const consulta = emitResult?.url_consulta || emitResult?.nfce?.url_consulta;
@@ -291,11 +282,8 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
 
           {qrText && (
             <View style={s.qrWrap}>
-              <Image
-                source={{ uri: buildQrImageUrl(qrText, 200) }}
-                style={s.qrImg}
-                accessibilityLabel="QR code da NFC-e"
-              />
+              {/* QR gerado localmente via qrcode-svg (sem CDN externa) */}
+              <QrCode value={qrText} size={200} />
               <Text style={s.qrHint}>Cliente pode escanear ↑</Text>
             </View>
           )}
@@ -336,7 +324,6 @@ export function SaleComplete({ sale, onNewSale }: { sale: SaleResult; onNewSale:
       );
     }
     if (emitState === "rejected" || emitState === "error") {
-      // Tenta mostrar campo+mensagem específicos do payload Nuvem Fiscal.
       const erros = errorPayload?.erros || errorPayload?.errors || [];
       const firstErro = Array.isArray(erros) && erros.length ? erros[0] : null;
       const campo = firstErro?.campo || firstErro?.field;
@@ -458,69 +445,27 @@ const s = StyleSheet.create({
   primaryBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   primaryText: { fontSize: 14, color: "#fff", fontWeight: "700" },
 
-  nfcePrimaryBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    width: "100%", paddingVertical: 14, borderRadius: 12,
-    backgroundColor: Colors.violet,
-  },
+  nfcePrimaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.violet },
   nfcePrimaryText: { fontSize: 14, color: "#fff", fontWeight: "700" },
-
-  nfceLoading: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    width: "100%", paddingVertical: 16, borderRadius: 12,
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
-  },
+  nfceLoading: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", paddingVertical: 16, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   nfceLoadingText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-
-  nfceAuthorized: {
-    width: "100%", padding: 16, borderRadius: 14,
-    backgroundColor: Colors.greenD, borderWidth: 1, borderColor: Colors.green + "44",
-    alignItems: "center", gap: 12,
-  },
+  nfceAuthorized: { width: "100%", padding: 16, borderRadius: 14, backgroundColor: Colors.greenD, borderWidth: 1, borderColor: Colors.green + "44", alignItems: "center", gap: 12 },
   nfceHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   nfceStatusDot: { width: 8, height: 8, borderRadius: 4 },
   nfceStatusLabel: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   nfceProtocolo: { fontSize: 10, color: Colors.ink3, letterSpacing: 0.4 },
-
   qrWrap: { alignItems: "center", gap: 6, marginVertical: 4 },
-  qrImg: {
-    width: 200, height: 200, borderRadius: 8,
-    backgroundColor: "#fff",
-    borderWidth: 1, borderColor: Colors.border,
-  },
   qrHint: { fontSize: 10, color: Colors.ink3, fontWeight: "500" },
-
-  chaveBox: {
-    width: "100%", padding: 10, borderRadius: 8,
-    backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
-  },
+  chaveBox: { width: "100%", padding: 10, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
   chaveLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
-  chaveValue: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 11, color: Colors.ink, letterSpacing: 0.3,
-  },
-
+  chaveValue: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 11, color: Colors.ink, letterSpacing: 0.3 },
   nfceActions: { flexDirection: "row", gap: 8, width: "100%", flexWrap: "wrap", justifyContent: "center" },
-  nfceActionBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
-    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border,
-    minWidth: 120,
-  },
+  nfceActionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, minWidth: 120 },
   nfceActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
-
-  nfceError: {
-    width: "100%", padding: 14, borderRadius: 12,
-    backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "44",
-    gap: 8,
-  },
+  nfceError: { width: "100%", padding: 14, borderRadius: 12, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "44", gap: 8 },
   nfceErrorMsg: { fontSize: 12, color: Colors.ink, lineHeight: 18 },
   nfceErrorField: { fontSize: 11, color: Colors.red, fontWeight: "700" },
-  nfceRetryBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    paddingVertical: 10, borderRadius: 10,
-    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, marginTop: 4,
-  },
+  nfceRetryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
   nfceRetryText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
 });
 
