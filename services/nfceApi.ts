@@ -1,14 +1,9 @@
 // ============================================================
 // AURA. — NFC-e/NF-e API client (rotas /companies/:id/nfce/*)
-//
-// Substitui o nfeApi antigo (que batia em /nfe/* legado e mandava
-// payload fictício). Use este client em qualquer tela que precisa
-// emitir, listar ou cancelar NFC-e/NF-e.
 // ============================================================
 
 import { request } from "./api";
 
-// ── Types ───────────────────────────────────────────────────
 export type NfeKind = "nfce" | "nfe";
 
 export type NfceStatus =
@@ -32,6 +27,16 @@ export type NfceEmissionItem = {
   discount?: number;
 };
 
+// Pagamento individual da NFC-e (usado em multi-pagamento).
+// method: chave interna ('pix','dinheiro','credito','debito',...) — backend mapeia pra tPag SEFAZ.
+// value: valor desse pagamento. Soma dos values deve bater com total da nota.
+export type NfcePaymentEntry = {
+  method: string;
+  value: number;
+  change?: number;
+  indPag?: 0 | 1;
+};
+
 export type NfceEmission = {
   id: string;
   numero: number;
@@ -46,8 +51,8 @@ export type NfceEmission = {
   payment_method: string | null;
   xml_url: string | null;
   pdf_url: string | null;
-  qr_code: string | null;       // string completa do QR (NFC-e infNFeSupl.qrCode)
-  url_consulta: string | null;  // URL de consulta SEFAZ (infNFeSupl.urlChave)
+  qr_code: string | null;
+  url_consulta: string | null;
   authorized_at: string | null;
   cancelled_at: string | null;
   created_at: string;
@@ -73,12 +78,24 @@ export type NfceConfig = {
   inscricao_estadual: string | null;
   is_active: boolean;
   csc_id: string | null;
+  /** Se true, o PDV emite NFC-e automaticamente após finalizar a venda. */
+  auto_emit_nfce: boolean;
 };
 
 export type NfceConfigResponse = {
   config: NfceConfig | null;
   instrucoes: { nfce: string; nfe: string; dica: string };
 };
+
+export type NfceConfigUpdateBody = Partial<{
+  serie_nfce: number;
+  ambiente: "homologacao" | "producao";
+  uf: string;
+  inscricao_estadual: string | null;
+  csc_id: string | null;
+  csc_token: string | null;
+  auto_emit_nfce: boolean;
+}>;
 
 export type EmitBody = {
   items: NfceEmissionItem[];
@@ -87,6 +104,9 @@ export type EmitBody = {
   customer_name?: string | null;
   customer_email?: string | null;
   recipient_cnpj?: string | null;
+  /** Multi-pagamento: array de { method, value, change?, indPag? } */
+  payments?: NfcePaymentEntry[];
+  /** Legado: shape singular. Use `payments[]` quando possível. */
   payment_method?: string;
   payment_change?: number;
   sale_id?: string;
@@ -101,16 +121,16 @@ export type EmitResponse = {
   xml_url: string | null;
   qr_code: string | null;
   url_consulta: string | null;
+  /** True quando idempotência por sale_id retornou nota existente. */
+  idempotent?: boolean;
 };
 
-// Erro retornado em rejeição: 502 + payload original Nuvem Fiscal
 export type EmitErrorPayload = {
   error: string;
   payload?: any;
   nfce_id?: string;
 };
 
-// ── API ─────────────────────────────────────────────────────
 export const nfceApi = {
   list: (companyId: string, filters?: { status?: NfceStatus; tipo?: NfeKind; start?: string; end?: string }) => {
     const qs: string[] = [];
@@ -147,5 +167,11 @@ export const nfceApi = {
     request<NfceConfigResponse>(
       "/companies/" + companyId + "/nfce/config",
       { retry: 1 }
+    ),
+
+  saveConfig: (companyId: string, body: NfceConfigUpdateBody) =>
+    request<{ config: NfceConfig }>(
+      "/companies/" + companyId + "/nfce/config",
+      { method: "POST", body, retry: 0 }
     ),
 };
