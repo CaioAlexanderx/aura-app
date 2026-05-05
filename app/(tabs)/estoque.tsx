@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useProducts } from "@/hooks/useProducts";
@@ -21,6 +21,7 @@ import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
+import { ScannerInput } from "@/components/ScannerInput";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -230,6 +231,20 @@ export default function EstoqueScreen() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
+  // Scanner popup: abre TextInput em focus automatico pra leitor USB ou
+  // teclado virtual. Ao bipar/digitar, joga no search e fecha.
+  const [scanOpen, setScanOpen] = useState(false);
+  const scanRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!scanOpen || Platform.OS !== "web") return;
+    function onDoc(e: MouseEvent) {
+      if (scanRef.current && !scanRef.current.contains(e.target)) setScanOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [scanOpen]);
+
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
   const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
@@ -252,8 +267,22 @@ export default function EstoqueScreen() {
   }, [managedCategoryNames, categories, products]);
 
   const filterCategories = ["Todos", ...allCategories];
+  // FIX 05/05/2026: busca agora bate em barcode e sku alem de name e code.
+  // Antes, leitor de codigo de barras escaneava no campo mas o filtro nao
+  // achava porque so olhava p.name/p.code (e codigo de barras geralmente
+  // mora em p.barcode, nao em p.code).
   const filtered = products.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
+    const q = (search || "").trim().toLowerCase();
+    if (!q) {
+      return catFilter === "Todos" || p.category === catFilter;
+    }
+    const haystacks = [
+      p.name,
+      p.code,
+      (p as any).barcode,
+      (p as any).sku,
+    ].filter(Boolean).map(x => String(x).toLowerCase());
+    const matchSearch = haystacks.some(h => h.includes(q));
     const matchCat = catFilter === "Todos" || p.category === catFilter;
     return matchSearch && matchCat;
   });
@@ -287,12 +316,24 @@ export default function EstoqueScreen() {
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
-  function handleScanBarcode() {
-    if (Platform.OS === "web") {
-      toast.error("Scanner de código disponível no app mobile");
-    } else {
-      toast.error("Scanner em breve");
-    }
+  function handleScanResult(code: string) {
+    const cleaned = (code || "").trim();
+    if (!cleaned) return;
+    setSearch(cleaned);
+    setScanOpen(false);
+    // Se o produto for unico, dá feedback rapido
+    setTimeout(() => {
+      const matches = products.filter(p =>
+        (p as any).barcode === cleaned ||
+        (p as any).sku === cleaned ||
+        p.code === cleaned
+      );
+      if (matches.length === 1) {
+        toast.success(matches[0].name);
+      } else if (matches.length === 0) {
+        toast.info("Nenhum produto com esse codigo. Mostrando busca textual.");
+      }
+    }, 50);
   }
 
   function handleExport() {
@@ -446,17 +487,29 @@ export default function EstoqueScreen() {
 
         {activeTab === 0 && products.length > 0 && (
           <View>
-            <View style={s.searchRow}>
+            <View style={s.searchRow} ref={scanRef as any}>
               <TextInput
                 style={s.searchInput}
-                placeholder="Buscar por nome ou codigo..."
+                placeholder="Buscar por nome, código, SKU ou código de barras..."
                 placeholderTextColor={Colors.ink3}
                 value={search}
                 onChangeText={setSearch}
               />
-              <Pressable onPress={handleScanBarcode} style={s.scanBtn}>
-                <Icon name="barcode" size={20} color={Colors.violet3} />
+              <Pressable onPress={() => setScanOpen(o => !o)} style={[s.scanBtn, scanOpen && s.scanBtnActive]}>
+                <Icon name="barcode" size={20} color={scanOpen ? Colors.violet : Colors.violet3} />
               </Pressable>
+              {scanOpen && (
+                <View style={s.scanPop}>
+                  <Text style={s.scanPopTitle}>Bipar código de barras</Text>
+                  <ScannerInput
+                    placeholder="Bipe ou digite o código…"
+                    onScan={r => handleScanResult(r.code)}
+                  />
+                  <Text style={s.scanPopHint}>
+                    Aponte o leitor USB ou digite manualmente. Casa por código de barras, SKU ou código interno.
+                  </Text>
+                </View>
+              )}
             </View>
             <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
             <View style={s.listCard}>
@@ -600,9 +653,32 @@ const s = StyleSheet.create({
   bulkAction: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   bulkDeleteAction: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   bulkActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12, position: "relative", zIndex: 50 },
   searchInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   scanBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  scanBtnActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  // Popover do scanner — fica logo abaixo do botao, alinhado ao canto direito.
+  scanPop: {
+    position: "absolute",
+    top: 50, right: 0,
+    width: 320, maxWidth: "100%" as any,
+    backgroundColor: Colors.bg3,
+    borderRadius: 12,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.3)",
+    padding: 14,
+    zIndex: 999,
+    ...(Platform.OS === "web" ? {
+      boxShadow: "0 20px 40px -10px rgba(124,58,237,0.25)",
+    } as any : {}),
+  } as any,
+  scanPopTitle: {
+    fontSize: 10, fontWeight: "700", color: Colors.ink3,
+    letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10,
+  },
+  scanPopHint: {
+    fontSize: 10, color: Colors.ink3, marginTop: 8,
+    lineHeight: 14,
+  },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   abcInfo: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
   abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
