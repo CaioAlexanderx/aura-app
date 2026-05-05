@@ -7,6 +7,8 @@
 //   · Input "CPF na nota" com validação mod-11
 //   · Modo "Dividir pagamento" com lista de N entradas (NFC-e payments[])
 //   · CartItem ganha lixeira (confirm 2-cliques) + edição inline do preço
+//   · Compactação 1440x900: sidebar 380px, item layout reduzido pra evitar
+//     truncamento de preço e lixeira
 // ============================================================
 import { forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -180,7 +182,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
       </View>
 
       {/* BODY */}
-      <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 20 }}>
+      <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 16 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
             <View style={s.emptyIco}>
@@ -238,7 +240,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                     Platform.OS === "web" ? (webChip as any) : null,
                   ] as any}
                 >
-                  <Icon name={m.icon as any} size={16} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
+                  <Icon name={m.icon as any} size={15} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
                   <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
                 </Pressable>
               );
@@ -249,7 +251,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         {/* Toggle "Dividir pagamento" — só aparece quando o pai wireou. */}
         {splitAvailable && (
           <Pressable onPress={onToggleSplit} style={s.splitToggle}>
-            <Icon name={splitOn ? "x" : "credit_card"} size={13} color={Colors.violet3} />
+            <Icon name={splitOn ? "x" : "wallet"} size={13} color={Colors.violet3} />
             <Text style={s.splitToggleTxt}>
               {splitOn ? "Cancelar divisão" : "Dividir pagamento"}
             </Text>
@@ -593,7 +595,7 @@ function CartItem({
             <Text style={s.itemMeta}>
               {fmtCurrency(item.price)} × {item.qty}
             </Text>
-            <Icon name="edit" size={10} color={Colors.violet3} />
+            <Icon name="edit" size={9} color={Colors.violet3} />
           </Pressable>
         ) : (
           <Text style={s.itemMeta}>
@@ -630,8 +632,8 @@ function CartItem({
         style={[s.itemTrash, confirmDelete && s.itemTrashConfirm]}
       >
         <Icon
-          name={confirmDelete ? "alert" : "x"}
-          size={14}
+          name={confirmDelete ? "alert" : "trash"}
+          size={13}
           color={confirmDelete ? "#ef4444" : Colors.ink3}
         />
       </Pressable>
@@ -641,15 +643,15 @@ function CartItem({
 
 const s = StyleSheet.create({
   cart: { flex: 1, flexDirection: "column", overflow: "hidden" },
-  head: { padding: 22, paddingHorizontal: 24, position: "relative", overflow: "hidden" },
+  head: { padding: 18, paddingHorizontal: 20, position: "relative", overflow: "hidden" },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headLabel: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIM, letterSpacing: 1.5, textTransform: "uppercase" },
   headOrd: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", color: "#e9d5ff", fontSize: 10, letterSpacing: 0.6 },
-  totalRow: { flexDirection: "row", alignItems: "baseline", marginTop: 12, marginBottom: 8 },
-  cur: { fontSize: 22, color: HEAD_INK, opacity: 0.75, marginRight: 6, lineHeight: 44, fontWeight: "400" },
-  totalInt: { fontSize: 46, color: HEAD_INK, fontWeight: "700", letterSpacing: -1, lineHeight: 48 },
-  cents: { fontSize: 22, color: HEAD_INK, opacity: 0.8, lineHeight: 44, fontWeight: "500" },
-  meta: { flexDirection: "row", justifyContent: "space-between", paddingTop: 14, marginTop: 4, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.22)" },
+  totalRow: { flexDirection: "row", alignItems: "baseline", marginTop: 10, marginBottom: 6 },
+  cur: { fontSize: 20, color: HEAD_INK, opacity: 0.75, marginRight: 6, lineHeight: 40, fontWeight: "400" },
+  totalInt: { fontSize: 40, color: HEAD_INK, fontWeight: "700", letterSpacing: -1, lineHeight: 42 },
+  cents: { fontSize: 20, color: HEAD_INK, opacity: 0.8, lineHeight: 40, fontWeight: "500" },
+  meta: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, marginTop: 4, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.22)" },
   metaK: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIMMER, letterSpacing: 1, textTransform: "uppercase" },
   metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
@@ -657,11 +659,13 @@ const s = StyleSheet.create({
   empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
   emptyIco: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(124,58,237,0.1)", borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTxt: { color: Colors.ink2, fontSize: 12, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", letterSpacing: 0.6, textTransform: "uppercase", fontWeight: "700", textAlign: "center" },
-  item: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Glass.lineFaint },
-  itemImg: { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  itemLetter: { fontSize: 16, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
-  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, marginTop: 2, letterSpacing: 0.3 },
+  // CartItem compactado pra caber em sidebar 380px sem cortar preço/lixeira.
+  // Antes: gap 12, avatar 42, qtyBtn 24, itemPrice minWidth 72, trash 26.
+  item: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Glass.lineFaint },
+  itemImg: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  itemLetter: { fontSize: 12, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
+  itemName: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 9.5, color: Colors.ink3, marginTop: 2, letterSpacing: 0.2 },
   // Edição inline do preço
   priceEditableTouch: {
     flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2,
@@ -671,37 +675,39 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2,
     alignSelf: "flex-start",
     backgroundColor: Colors.bg, borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 3,
+    paddingHorizontal: 5, paddingVertical: 2,
     borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
   },
-  priceEditPrefix: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
+  priceEditPrefix: { fontSize: 9.5, color: Colors.ink3, fontWeight: "600" },
   priceEditInput: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 11, color: Colors.ink, fontWeight: "700",
-    minWidth: 56, paddingVertical: 0,
+    minWidth: 50, paddingVertical: 0,
     textAlign: "right",
   },
-  priceEditSuffix: { fontSize: 10, color: Colors.ink3, marginLeft: 2 },
-  qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 8, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 8 },
-  qtyBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Glass.lineFaint, alignItems: "center", justifyContent: "center" },
-  qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
-  qtyVal: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.ink, fontWeight: "700", minWidth: 18, textAlign: "center" },
-  itemPrice: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.violet3, fontWeight: "700", minWidth: 72, textAlign: "right" },
+  priceEditSuffix: { fontSize: 9.5, color: Colors.ink3, marginLeft: 2 },
+  qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 2, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 7 },
+  qtyBtn: { width: 22, height: 22, borderRadius: 5, backgroundColor: Glass.lineFaint, alignItems: "center", justifyContent: "center" },
+  qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 13 },
+  qtyVal: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: Colors.ink, fontWeight: "700", minWidth: 14, textAlign: "center", paddingHorizontal: 2 },
+  itemPrice: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: Colors.violet3, fontWeight: "700", minWidth: 56, textAlign: "right" },
   // Lixeira: estado normal e estado de confirm (2o clique deleta)
   itemTrash: {
-    width: 26, height: 26, borderRadius: 6,
+    width: 22, height: 22, borderRadius: 5,
     alignItems: "center", justifyContent: "center",
     backgroundColor: "transparent",
+    flexShrink: 0,
   },
   itemTrashConfirm: {
     backgroundColor: "rgba(239,68,68,0.14)",
     borderWidth: 1, borderColor: "rgba(239,68,68,0.45)",
   },
-  foot: { padding: 14, paddingHorizontal: 20, paddingBottom: 20 },
-  payGrid: { flexDirection: "row", gap: 6, marginBottom: 12, flexWrap: "wrap" },
-  payChip: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10, minWidth: 64 },
+  foot: { padding: 12, paddingHorizontal: 16, paddingBottom: 16 },
+  // 5 chips em uma linha (gap menor + paddingHorizontal menor pra crediário caber).
+  payGrid: { flexDirection: "row", gap: 4, marginBottom: 10, flexWrap: "wrap" },
+  payChip: { flex: 1, alignItems: "center", gap: 4, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 9, minWidth: 56 },
   payChipActive: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
-  payLabel: { fontSize: 10, color: Colors.ink2, fontWeight: "600" },
+  payLabel: { fontSize: 9.5, color: Colors.ink2, fontWeight: "600" },
   // Toggle "Dividir pagamento" — link sutil (não compete com chips)
   splitToggle: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -791,11 +797,11 @@ const s = StyleSheet.create({
   hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginTop: 8, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
   ctaRow: { flexDirection: "row", gap: 8, marginTop: 14 },
-  ctaSec: { flex: 1, height: 48, borderRadius: 12, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard, alignItems: "center", justifyContent: "center" },
+  ctaSec: { flex: 1, height: 46, borderRadius: 12, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard, alignItems: "center", justifyContent: "center" },
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
-  ctaAlt: { flex: 1.3, height: 48, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
+  ctaAlt: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
   ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  ctaPri: { flex: 1.7, height: 48, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  ctaPri: { flex: 1.7, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   ctaPriTxt: { fontSize: 13, color: "#fff", fontWeight: "700", letterSpacing: 0.3 },
 });
 
