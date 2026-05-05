@@ -1,14 +1,24 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 export type CartItem = { productId: string; name: string; price: number; qty: number };
+
+// Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
+// O backend mapeia method PDV → tPag SEFAZ (dinheiro→01, cartao→03, debito→04, pix→17).
+export type PaymentEntry = {
+  method: string;        // chave do PDV: "dinheiro" | "pix" | "debito" | "cartao" | etc.
+  value: number;         // valor em R$
+  change?: number;       // troco (só faz sentido em dinheiro)
+};
+
 export type SaleResult = {
   id: string;
   total: number;
-  payment: string;
+  payment: string;       // método "primário" — primeira entrada quando split, ou o único quando single
+  payments?: PaymentEntry[]; // populado quando splitMode foi usado (length >= 1)
   items: CartItem[];
   date: string;
   customerName?: string;
@@ -34,6 +44,10 @@ function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } 
   var idx = cartKey.indexOf("__");
   if (idx < 0) return { pid: cartKey, vid: null };
   return { pid: cartKey.slice(0, idx), vid: cartKey.slice(idx + 2) };
+}
+
+function round2(n: number): number {
+  return Math.round((Number(n) || 0) * 100) / 100;
 }
 
 export function useCart() {
@@ -65,6 +79,12 @@ export function useCart() {
   // selectedCustomer, mas o front pode pre-preencher quando aplicavel.
   const [cpfNaNota, setCpfNaNota] = useState<string>("");
 
+  // ── Multi-pagamento ─────────────────────────────────────────
+  // splitMode=false → comportamento legado, único `payment` chip
+  // splitMode=true → soma dos splitPayments deve fechar com totalAfterCoupon
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
+
   const saleMutation = useMutation({
     mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
     onSuccess: () => {
@@ -93,6 +113,65 @@ export function useCart() {
 
   const couponDiscount = couponApplied?.discount || 0;
   const totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
+
+  // Splits — derivados puros
+  const splitTotal = useMemo(
+    () => round2(splitPayments.reduce((s, p) => s + (Number(p.value) || 0), 0)),
+    [splitPayments],
+  );
+  // Restante = totalAfterCoupon − soma dos splits. Pode ser negativo (overpay).
+  const splitRemaining = useMemo(
+    () => round2(totalAfterCoupon - splitTotal),
+    [totalAfterCoupon, splitTotal],
+  );
+  // Tolerância: 1 centavo (mesma do backend validatePayments).
+  const splitIsBalanced = Math.abs(splitRemaining) < 0.01;
+
+  function addSplitPayment(entry?: Partial<PaymentEntry>) {
+    setSplitPayments(prev => [
+      ...prev,
+      {
+        method: entry?.method || (prev.length === 0 ? payment : "dinheiro"),
+        // Se nada informado, sugere o restante (até 0).
+        value: entry?.value !== undefined
+          ? round2(entry.value)
+          : round2(Math.max(0, totalAfterCoupon - prev.reduce((s, p) => s + p.value, 0))),
+        change: entry?.change,
+      },
+    ]);
+  }
+
+  function updateSplitPayment(idx: number, patch: Partial<PaymentEntry>) {
+    setSplitPayments(prev => prev.map((p, i) => i === idx ? {
+      ...p,
+      ...(patch.method !== undefined ? { method: patch.method } : {}),
+      ...(patch.value !== undefined ? { value: round2(patch.value) } : {}),
+      ...(patch.change !== undefined ? { change: round2(patch.change) } : {}),
+    } : p));
+  }
+
+  function removeSplitPayment(idx: number) {
+    setSplitPayments(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function clearSplitPayments() {
+    setSplitPayments([]);
+  }
+
+  function toggleSplitMode() {
+    setSplitMode(prev => {
+      const next = !prev;
+      if (next) {
+        // Inicia com 1 entrada cobrindo total no chip atual
+        setSplitPayments([{ method: payment, value: round2(totalAfterCoupon) }]);
+      } else {
+        setSplitPayments([]);
+      }
+      return next;
+    });
+  }
+
+  // ── Cart ops ────────────────────────────────────────────────
 
   function addToCart(product: { id: string; name: string; price: number }, variant?: { id: string; label: string; price?: number }) {
     setLastSale(null);
@@ -139,11 +218,25 @@ export function useCart() {
 
   function finalizeSale(saleDate?: string) {
     if (cart.length === 0 || isProcessing) return;
+    // Bloqueio só quando split está ativo e não fecha
+    if (splitMode && !splitIsBalanced) {
+      toast.error(splitRemaining > 0
+        ? `Faltam R$ ${splitRemaining.toFixed(2)} pra fechar`
+        : `Sobrando R$ ${Math.abs(splitRemaining).toFixed(2)} nos pagamentos`);
+      return;
+    }
     setIsProcessing(true);
 
     var cartSnapshot = [...cart];
     var effectiveSellerName = sellerName.trim() || selectedEmployeeName || null;
     var cleanCpf = cpfNaNota.replace(/\D/g, "");
+
+    // Pagamento "primário" (o que vai no campo singular tanto na sale quanto no resumo)
+    var primaryPayment = splitMode && splitPayments.length > 0 ? splitPayments[0].method : payment;
+    var paymentsSnapshot: PaymentEntry[] | undefined = splitMode && splitPayments.length > 0
+      ? splitPayments.map(p => ({ method: p.method, value: round2(p.value), change: p.change ? round2(p.change) : undefined }))
+      : undefined;
+
     var saleData: any = {
       items: cartSnapshot.map(function(i) {
         var decomposed = decomposeCartKey(i.productId);
@@ -155,12 +248,13 @@ export function useCart() {
           product_name_snapshot: i.name,
         };
       }),
-      payment_method: payment,
+      payment_method: primaryPayment,
       customer_id: selectedCustomerId || undefined,
       employee_id: selectedEmployeeId || undefined,
       seller_name: effectiveSellerName || undefined,
     };
 
+    if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
     if (saleDate) saleData.sale_date = saleDate;
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
 
@@ -172,45 +266,42 @@ export function useCart() {
       }
     }
 
-    if (companyId && !isDemo) {
-      saleMutation.mutate(saleData, {
-        onSuccess: function(res: any) {
-          var saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale({
-            id: String(saleId),
-            total: totalAfterCoupon,
-            payment: payment,
-            items: cartSnapshot,
-            date: new Date().toLocaleString("pt-BR"),
-            customerName: selectedCustomerName || undefined,
-            customerPhone: selectedCustomerPhone || undefined,
-            employeeName: selectedEmployeeName || undefined,
-            sellerName: effectiveSellerName || undefined,
-            couponCode: couponApplied?.code,
-            couponDiscount: couponApplied?.discount,
-            manualDiscount: manualDiscountAmount || undefined,
-            cpfNaNota: cleanCpf || undefined,
-          });
-          setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
-          setSellerName("");
-          setCpfNaNota("");
-        },
-        onError: function(err: any) { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
-      });
-    } else {
-      setLastSale({
-        id: Date.now().toString(36).toUpperCase().slice(-6),
+    function buildLastSale(saleId: string): SaleResult {
+      return {
+        id: String(saleId),
         total: totalAfterCoupon,
-        payment: payment,
+        payment: primaryPayment,
+        payments: paymentsSnapshot,
         items: cartSnapshot,
         date: new Date().toLocaleString("pt-BR"),
         customerName: selectedCustomerName || undefined,
         customerPhone: selectedCustomerPhone || undefined,
         employeeName: selectedEmployeeName || undefined,
         sellerName: effectiveSellerName || undefined,
+        couponCode: couponApplied?.code,
+        couponDiscount: couponApplied?.discount,
+        manualDiscount: manualDiscountAmount || undefined,
         cpfNaNota: cleanCpf || undefined,
+      };
+    }
+
+    if (companyId && !isDemo) {
+      saleMutation.mutate(saleData, {
+        onSuccess: function(res: any) {
+          var saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
+          setLastSale(buildLastSale(String(saleId)));
+          setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setSellerName("");
+          setCpfNaNota("");
+          // Não desativa splitMode automaticamente — usuário decide se mantém
+          if (splitMode) setSplitPayments([]);
+        },
+        onError: function(err: any) { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
       });
+    } else {
+      setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
       setCart([]); setIsProcessing(false);
+      if (splitMode) setSplitPayments([]);
     }
   }
 
@@ -221,6 +312,8 @@ export function useCart() {
     setSellerName("");
     setCpfNaNota("");
     clearCoupon(); clearDiscount();
+    // mantém splitMode entre vendas (workflow de loja)
+    setSplitPayments([]);
   }
 
   return {
@@ -232,5 +325,9 @@ export function useCart() {
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
+    // Multi-pagamento
+    splitMode, toggleSplitMode,
+    splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
+    splitTotal, splitRemaining, splitIsBalanced,
   };
 }
