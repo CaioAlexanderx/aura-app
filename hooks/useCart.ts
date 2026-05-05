@@ -7,9 +7,10 @@ import { toast } from "@/components/Toast";
 export type CartItem = { productId: string; name: string; price: number; qty: number };
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
-// O backend mapeia method PDV → tPag SEFAZ (dinheiro→01, cartao→03, debito→04, pix→17).
+// O backend mapeia method PDV → tPag SEFAZ (dinheiro→01, cartao→03, debito→04, pix→17,
+// crediario→01 — fiado declarado como dinheiro pra evitar 391/442).
 export type PaymentEntry = {
-  method: string;        // chave do PDV: "dinheiro" | "pix" | "debito" | "cartao" | etc.
+  method: string;        // chave do PDV: "dinheiro" | "pix" | "debito" | "cartao" | "crediario"
   value: number;         // valor em R$
   change?: number;       // troco (só faz sentido em dinheiro)
 };
@@ -31,11 +32,15 @@ export type SaleResult = {
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
 };
 
+// Crediário (mai/2026): operação interna do lojista — venda fica como "a receber"
+// no cliente, registrada em customer_credit_transactions (migration 099). Backend
+// exige customer_id quando crediario aparece em payment_method ou em algum split.
 export const PAYMENTS = [
-  { key: "dinheiro", label: "Dinheiro" },
-  { key: "pix",     label: "PIX" },
-  { key: "debito",  label: "Débito" },
-  { key: "cartao",  label: "Crédito" },
+  { key: "dinheiro",  label: "Dinheiro" },
+  { key: "pix",       label: "PIX" },
+  { key: "debito",    label: "Débito" },
+  { key: "cartao",    label: "Crédito" },
+  { key: "crediario", label: "Crediário" },
 ];
 
 const MAX_DISCOUNT_PCT = 50;
@@ -43,7 +48,7 @@ const MAX_DISCOUNT_PCT = 50;
 function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } {
   var idx = cartKey.indexOf("__");
   if (idx < 0) return { pid: cartKey, vid: null };
-  return { pid: cartKey.slice(0, idx), vid: cartKey.slice(idx + 2) };
+  return { pid: cartKey, vid: cartKey.slice(idx + 2) };
 }
 
 function round2(n: number): number {
@@ -93,6 +98,8 @@ export function useCart() {
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
       qc.invalidateQueries({ queryKey: ["customers", companyId] });
       qc.invalidateQueries({ queryKey: ["employees", companyId] });
+      // Crediário: invalida saldos pra UI de /clientes refletir o novo debit.
+      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
     },
   });
 
@@ -202,6 +209,20 @@ export function useCart() {
     if (couponApplied) setCouponApplied(null);
   }
 
+  // Mai/2026: alteração livre do preço unitário do item no carrinho.
+  // Caixa pode descontar/promover sem cap. Limpa cupom (precisa revalidar).
+  // Round 2 casas pra evitar artefatos de digitação tipo 99.99000001.
+  function setUnitPrice(productId: string, price: number) {
+    if (!isFinite(price) || price < 0) return;
+    const rounded = Math.round(price * 100) / 100;
+    setCart(function(prev) {
+      return prev.map(function(i) {
+        return i.productId === productId ? { ...i, price: rounded } : i;
+      });
+    });
+    if (couponApplied) setCouponApplied(null);
+  }
+
   function removeItem(productId: string) {
     setCart(function(prev) { return prev.filter(function(i) { return i.productId !== productId; }); });
     if (couponApplied) setCouponApplied(null);
@@ -225,6 +246,17 @@ export function useCart() {
         : `Sobrando R$ ${Math.abs(splitRemaining).toFixed(2)} nos pagamentos`);
       return;
     }
+
+    // FEAT 05/05/2026: crediário exige cliente identificado.
+    // Backend faz a mesma checagem e retorna 400, mas validar aqui dá
+    // feedback imediato sem network round-trip.
+    const usingCrediarioSingle = !splitMode && payment === "crediario";
+    const usingCrediarioSplit  = splitMode && splitPayments.some(p => p.method === "crediario");
+    if ((usingCrediarioSingle || usingCrediarioSplit) && !selectedCustomerId) {
+      toast.error("Crediário exige um cliente. Selecione o cliente antes de finalizar.");
+      return;
+    }
+
     setIsProcessing(true);
 
     var cartSnapshot = [...cart];
@@ -318,7 +350,7 @@ export function useCart() {
 
   return {
     cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
-    addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
+    addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
