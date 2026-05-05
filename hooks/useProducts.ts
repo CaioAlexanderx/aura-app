@@ -41,6 +41,7 @@ function mapApiProduct(p: any): Product {
     size: p.size || "",
     image_url: p.image_url || "",
     has_variants: !!p.has_variants,
+    ncm: p.ncm || "",
   };
 }
 
@@ -84,6 +85,7 @@ export function useProducts() {
       description: product.notes || undefined,
       color: product.color || undefined,
       size: product.size || undefined,
+      ncm: product.ncm || undefined,
     };
   }
 
