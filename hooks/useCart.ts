@@ -5,7 +5,21 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 export type CartItem = { productId: string; name: string; price: number; qty: number };
-export type SaleResult = { id: string; total: number; payment: string; items: CartItem[]; date: string; customerName?: string; employeeName?: string; sellerName?: string; couponCode?: string; couponDiscount?: number; manualDiscount?: number };
+export type SaleResult = {
+  id: string;
+  total: number;
+  payment: string;
+  items: CartItem[];
+  date: string;
+  customerName?: string;
+  customerPhone?: string;   // pra wa.me share da NFC-e
+  employeeName?: string;
+  sellerName?: string;
+  couponCode?: string;
+  couponDiscount?: number;
+  manualDiscount?: number;
+  cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
+};
 
 export const PAYMENTS = [
   { key: "dinheiro", label: "Dinheiro" },
@@ -34,6 +48,7 @@ export function useCart() {
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
+  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
 
@@ -45,6 +60,10 @@ export function useCart() {
 
   const [discountType, setDiscountType] = useState<"%" | "R$">("%");
   const [discountValue, setDiscountValue] = useState("");
+
+  // CPF na nota (NFC-e) — caixa digita ou cliente fala. Independente de
+  // selectedCustomer, mas o front pode pre-preencher quando aplicavel.
+  const [cpfNaNota, setCpfNaNota] = useState<string>("");
 
   const saleMutation = useMutation({
     mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
@@ -109,7 +128,11 @@ export function useCart() {
     if (couponApplied) setCouponApplied(null);
   }
 
-  function selectCustomer(id: string | null, name: string | null) { setSelectedCustomerId(id); setSelectedCustomerName(name); }
+  function selectCustomer(id: string | null, name: string | null, phone?: string | null) {
+    setSelectedCustomerId(id);
+    setSelectedCustomerName(name);
+    setSelectedCustomerPhone(phone || null);
+  }
   function selectEmployee(id: string | null, name: string | null) { setSelectedEmployeeId(id); setSelectedEmployeeName(name); }
   function clearCoupon() { setCouponCode(""); setCouponApplied(null); }
   function clearDiscount() { setDiscountValue(""); }
@@ -120,6 +143,7 @@ export function useCart() {
 
     var cartSnapshot = [...cart];
     var effectiveSellerName = sellerName.trim() || selectedEmployeeName || null;
+    var cleanCpf = cpfNaNota.replace(/\D/g, "");
     var saleData: any = {
       items: cartSnapshot.map(function(i) {
         var decomposed = decomposeCartKey(i.productId);
@@ -152,33 +176,61 @@ export function useCart() {
       saleMutation.mutate(saleData, {
         onSuccess: function(res: any) {
           var saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale({ id: String(saleId), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, sellerName: effectiveSellerName || undefined, couponCode: couponApplied?.code, couponDiscount: couponApplied?.discount, manualDiscount: manualDiscountAmount || undefined });
+          setLastSale({
+            id: String(saleId),
+            total: totalAfterCoupon,
+            payment: payment,
+            items: cartSnapshot,
+            date: new Date().toLocaleString("pt-BR"),
+            customerName: selectedCustomerName || undefined,
+            customerPhone: selectedCustomerPhone || undefined,
+            employeeName: selectedEmployeeName || undefined,
+            sellerName: effectiveSellerName || undefined,
+            couponCode: couponApplied?.code,
+            couponDiscount: couponApplied?.discount,
+            manualDiscount: manualDiscountAmount || undefined,
+            cpfNaNota: cleanCpf || undefined,
+          });
           setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
+          setCpfNaNota("");
         },
         onError: function(err: any) { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
       });
     } else {
-      setLastSale({ id: Date.now().toString(36).toUpperCase().slice(-6), total: totalAfterCoupon, payment: payment, items: cartSnapshot, date: new Date().toLocaleString("pt-BR"), customerName: selectedCustomerName || undefined, employeeName: selectedEmployeeName || undefined, sellerName: effectiveSellerName || undefined });
+      setLastSale({
+        id: Date.now().toString(36).toUpperCase().slice(-6),
+        total: totalAfterCoupon,
+        payment: payment,
+        items: cartSnapshot,
+        date: new Date().toLocaleString("pt-BR"),
+        customerName: selectedCustomerName || undefined,
+        customerPhone: selectedCustomerPhone || undefined,
+        employeeName: selectedEmployeeName || undefined,
+        sellerName: effectiveSellerName || undefined,
+        cpfNaNota: cleanCpf || undefined,
+      });
       setCart([]); setIsProcessing(false);
     }
   }
 
   function newSale() {
     setLastSale(null); setCart([]); setIsProcessing(false);
-    setSelectedCustomerId(null); setSelectedCustomerName(null);
+    setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
+    setCpfNaNota("");
     clearCoupon(); clearDiscount();
   }
 
   return {
     cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
-    selectedCustomerId, selectedCustomerName, selectCustomer,
+    selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
+    cpfNaNota, setCpfNaNota,
   };
 }
