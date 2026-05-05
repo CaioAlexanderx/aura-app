@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
-import { nfceApi, type EmitResponse } from "@/services/nfceApi";
+import { nfceApi, type EmitResponse, type NfcePaymentEntry } from "@/services/nfceApi";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { QrCode } from "@/components/QrCode";
@@ -12,6 +12,10 @@ import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+function paymentLabel(key: string): string {
+  return PAYMENTS.find(p => p.key === key)?.label || key;
+}
 
 function formatAccessKey(k: string | null | undefined): string {
   if (!k) return "";
@@ -74,6 +78,13 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
   const subtotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
   const hasCoupon = !!(sale.couponCode && sale.couponDiscount && sale.couponDiscount > 0);
 
+  // Multi-pagamento: backend aceita body.payments[] (validatePayments + buildPag).
+  // Front usa quando o useCart capturou splitMode com 1+ entradas.
+  const hasSplit = !!(sale.payments && sale.payments.length > 0);
+  const payments: NfcePaymentEntry[] | undefined = hasSplit
+    ? sale.payments!.map(p => ({ method: p.method, value: p.value, change: p.change }))
+    : undefined;
+
   const [emitState, setEmitState] = useState<EmitState>("idle");
   const [emitResult, setEmitResult] = useState<EmitResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -87,7 +98,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
   const emitMut = useMutation({
     mutationFn: () => {
       if (!company?.id) throw new Error("Empresa não identificada");
-      return nfceApi.emit(company.id, {
+      const body: any = {
         items: sale.items.map(i => ({
           product_id: i.productId.split("__")[0],
           product_name: i.name,
@@ -97,9 +108,15 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
         sale_id: sale.id,
         customer_cpf:  sale.cpfNaNota || undefined,
         customer_name: sale.customerName || undefined,
-        payment_method: sale.payment,
         tipo: "nfce",
-      });
+      };
+      // Se split ativo, manda payments[]; senão fallback singular pra compat.
+      if (payments && payments.length > 0) {
+        body.payments = payments;
+      } else {
+        body.payment_method = sale.payment;
+      }
+      return nfceApi.emit(company.id, body);
     },
     onMutate: () => {
       setEmitState("emitting");
@@ -378,10 +395,23 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
           <Text style={s.label}>Total</Text>
           <Text style={s.value}>{fmt(sale.total)}</Text>
         </View>
-        <View style={s.row}>
-          <Text style={s.label}>Pagamento</Text>
-          <Text style={s.meta}>{PAYMENTS.find(p => p.key === sale.payment)?.label}</Text>
-        </View>
+        {/* Pagamento — uma linha quando single, ou lista quando split */}
+        {hasSplit ? (
+          <View style={s.splitBox}>
+            <Text style={s.splitTitle}>Pagamentos ({payments!.length})</Text>
+            {payments!.map((p, i) => (
+              <View key={i} style={s.splitLine}>
+                <Text style={s.splitMethod}>{paymentLabel(p.method)}</Text>
+                <Text style={s.splitValue}>{fmt(p.value)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={s.row}>
+            <Text style={s.label}>Pagamento</Text>
+            <Text style={s.meta}>{paymentLabel(sale.payment)}</Text>
+          </View>
+        )}
         <View style={s.row}>
           <Text style={s.label}>Itens</Text>
           <Text style={s.meta}>{sale.items.reduce((s, i) => s + i.qty, 0)} produtos</Text>
@@ -444,6 +474,21 @@ const s = StyleSheet.create({
   secondaryText: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   primaryBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   primaryText: { fontSize: 14, color: "#fff", fontWeight: "700" },
+
+  // Lista de splits no resumo da venda
+  splitBox: {
+    width: "100%",
+    paddingVertical: 8,
+    gap: 4,
+  },
+  splitTitle: {
+    fontSize: 11, color: Colors.ink3, fontWeight: "700",
+    textTransform: "uppercase", letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  splitLine: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
+  splitMethod: { fontSize: 12, color: Colors.ink2, fontWeight: "600" },
+  splitValue: { fontSize: 12, color: Colors.ink, fontWeight: "700" },
 
   nfcePrimaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.violet },
   nfcePrimaryText: { fontSize: 14, color: "#fff", fontWeight: "700" },
