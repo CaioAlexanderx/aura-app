@@ -15,6 +15,9 @@ import type { Customer } from "@/components/screens/clientes/types";
 // Mutations (POST/PATCH/DELETE) em modo consolidated:
 // resolvem automaticamente a primary do owner (do availableCompanies).
 // User nao precisa trocar de empresa pra criar/editar/deletar.
+//
+// Crediario (mai/2026): backend retorna credit_balance via LEFT JOIN
+// com customer_credit_balances. Mapeio pra Customer.creditBalance.
 
 // Processa deletes em lotes para nao sobrecarregar o servidor
 async function deleteBatched(
@@ -52,6 +55,8 @@ function mapApiCustomer(c: any): Customer {
     // MULTICNPJ Onda 2.3: loja onde foi cadastrado
     company_id: c.company_id || null,
     company_name: c.company_name || null,
+    // Crediario: saldo > 0 = cliente deve. Backend retorna 0 quando nao ha lancamentos.
+    creditBalance: parseFloat(c.credit_balance ?? c.creditBalance) || 0,
   };
 }
 
@@ -244,5 +249,7 @@ export function useCustomers() {
     // MULTICNPJ Onda 2.3: info pra UI condicionar badge da loja
     consolidatedView,
     companyCount,
+    // Helper pra UI invalidar saldo apos receber pagamento
+    invalidateCustomers,
   };
 }
