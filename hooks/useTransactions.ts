@@ -28,6 +28,12 @@ function mapApiTransaction(t: any): Transaction {
     // (t as any).company_name pra exibir badge da loja na lista.
     company_id: t.company_id || null,
     company_name: t.company_name || null,
+    // FIX 04/05/2026: passar campos de recorrencia adiante. Backend ja retorna
+    // (transactions.js), mas mapper nao copiava. PendingCards usa pra excluir
+    // despesas fixas do card "A pagar" (cliente Eryca queria so avulsas).
+    recurrence_group_id: t.recurrence_group_id || null,
+    recurrence_type: t.recurrence_type || null,
+    recurrence_index: t.recurrence_index != null ? t.recurrence_index : null,
   } as Transaction;
 }
 
