@@ -17,6 +17,7 @@ export type Product = {
   size: string;
   image_url?: string;
   has_variants?: boolean;
+  ncm?: string;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];
