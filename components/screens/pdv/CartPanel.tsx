@@ -6,8 +6,9 @@
 // Mai/2026:
 //   · Input "CPF na nota" com validação mod-11
 //   · Modo "Dividir pagamento" com lista de N entradas (NFC-e payments[])
+//   · CartItem ganha lixeira (confirm 2-cliques) + edição inline do preço
 // ============================================================
-import { forwardRef, useMemo, useState } from "react";
+import { forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -40,6 +41,7 @@ type Props = {
   onInc: (id: string) => void;
   onDec: (id: string) => void;
   onSetQty?: (id: string, qty: number) => void;
+  onPriceChange?: (id: string, price: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onFinalize: () => void;
@@ -74,7 +76,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   const {
     orderNumber, items, subtotal, discountAmount, total, itemCount,
     payMethods, activePay, onPay,
-    onInc, onDec, onSetQty, onRemove, onClear, onFinalize, onGenerateQuote,
+    onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle,
     cpfNaNota, onCpfNaNotaChange,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
@@ -198,6 +200,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onDec={() => onDec(it.productId)}
               onRemove={() => onRemove(it.productId)}
               onQtySet={qty => onSetQty?.(it.productId, qty)}
+              onPriceChange={onPriceChange ? (price => onPriceChange(it.productId, price)) : undefined}
             />
           ))
         )}
@@ -486,16 +489,26 @@ function SplitRow({
 }
 
 function CartItem({
-  item, onInc, onDec, onRemove, onQtySet,
+  item, onInc, onDec, onRemove, onQtySet, onPriceChange,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
   onDec: () => void;
   onRemove: () => void;
   onQtySet: (qty: number) => void;
+  onPriceChange?: (price: number) => void;
 }) {
+  // Buffer pra edição de qty
   const [inputVal, setInputVal] = useState<string | null>(null);
   const isEditing = inputVal !== null;
+
+  // Buffer pra edição de preço
+  const [priceBuf, setPriceBuf] = useState<string | null>(null);
+  const isEditingPrice = priceBuf !== null;
+
+  // Lixeira: 2 cliques (1o vira vermelho/alerta, 2o deleta dentro de 2s)
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimer = useRef<any>(null);
 
   function handleFocus() {
     setInputVal(String(item.qty));
@@ -509,6 +522,33 @@ function CartItem({
       }
     }
     setInputVal(null);
+  }
+
+  function handlePriceFocus() {
+    if (!onPriceChange) return;
+    setPriceBuf(item.price.toFixed(2).replace(".", ","));
+  }
+
+  function handlePriceCommit() {
+    if (priceBuf !== null && onPriceChange) {
+      const cleaned = priceBuf.replace(",", ".").replace(/[^\d.]/g, "");
+      const n = parseFloat(cleaned);
+      if (!isNaN(n) && n >= 0 && n !== item.price) {
+        onPriceChange(n);
+      }
+    }
+    setPriceBuf(null);
+  }
+
+  function handleDeletePress() {
+    if (confirmDelete) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setConfirmDelete(false);
+      onRemove();
+      return;
+    }
+    setConfirmDelete(true);
+    confirmTimer.current = setTimeout(() => setConfirmDelete(false), 2000);
   }
 
   const accent = accentForProduct(item.productBaseId);
@@ -532,9 +572,34 @@ function CartItem({
         <Text numberOfLines={1} style={s.itemName}>
           {item.name}
         </Text>
-        <Text style={s.itemMeta}>
-          {fmtCurrency(item.price)} × {item.qty}
-        </Text>
+        {/* Preço + qty: clica no preço pra editar (quando onPriceChange foi wirado) */}
+        {isEditingPrice ? (
+          <View style={s.priceEditRow}>
+            <Text style={s.priceEditPrefix}>R$</Text>
+            <TextInput
+              style={s.priceEditInput}
+              value={priceBuf!}
+              onChangeText={(v) => setPriceBuf(v.replace(/[^\d,.]/g, ""))}
+              onBlur={handlePriceCommit}
+              onSubmitEditing={handlePriceCommit}
+              keyboardType="decimal-pad"
+              autoFocus
+              selectTextOnFocus
+            />
+            <Text style={s.priceEditSuffix}>× {item.qty}</Text>
+          </View>
+        ) : onPriceChange ? (
+          <Pressable onPress={handlePriceFocus} style={s.priceEditableTouch}>
+            <Text style={s.itemMeta}>
+              {fmtCurrency(item.price)} × {item.qty}
+            </Text>
+            <Icon name="edit" size={10} color={Colors.violet3} />
+          </Pressable>
+        ) : (
+          <Text style={s.itemMeta}>
+            {fmtCurrency(item.price)} × {item.qty}
+          </Text>
+        )}
       </View>
       <View style={s.qtyCtrl}>
         <Pressable onPress={onDec} style={s.qtyBtn}>
@@ -559,8 +624,16 @@ function CartItem({
         </Pressable>
       </View>
       <Text style={s.itemPrice}>{fmtCurrency(item.price * item.qty)}</Text>
-      <Pressable onPress={onRemove} style={s.itemX}>
-        <Icon name="x" size={14} color={Colors.ink3} />
+      {/* Lixeira com confirm 2-cliques. 1o clique vira alerta vermelho, 2o (em 2s) deleta. */}
+      <Pressable
+        onPress={handleDeletePress}
+        style={[s.itemTrash, confirmDelete && s.itemTrashConfirm]}
+      >
+        <Icon
+          name={confirmDelete ? "alert" : "x"}
+          size={14}
+          color={confirmDelete ? "#ef4444" : Colors.ink3}
+        />
       </Pressable>
     </View>
   );
@@ -589,15 +662,44 @@ const s = StyleSheet.create({
   itemLetter: { fontSize: 16, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, marginTop: 2, letterSpacing: 0.3 },
+  // Edição inline do preço
+  priceEditableTouch: {
+    flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2,
+    alignSelf: "flex-start",
+  },
+  priceEditRow: {
+    flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2,
+    alignSelf: "flex-start",
+    backgroundColor: Colors.bg, borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 3,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
+  },
+  priceEditPrefix: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
+  priceEditInput: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 11, color: Colors.ink, fontWeight: "700",
+    minWidth: 56, paddingVertical: 0,
+    textAlign: "right",
+  },
+  priceEditSuffix: { fontSize: 10, color: Colors.ink3, marginLeft: 2 },
   qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 8, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 8 },
   qtyBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Glass.lineFaint, alignItems: "center", justifyContent: "center" },
   qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
   qtyVal: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.ink, fontWeight: "700", minWidth: 18, textAlign: "center" },
   itemPrice: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.violet3, fontWeight: "700", minWidth: 72, textAlign: "right" },
-  itemX: { width: 22, height: 22, borderRadius: 6, alignItems: "center", justifyContent: "center", color: Colors.ink3 as any },
+  // Lixeira: estado normal e estado de confirm (2o clique deleta)
+  itemTrash: {
+    width: 26, height: 26, borderRadius: 6,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  itemTrashConfirm: {
+    backgroundColor: "rgba(239,68,68,0.14)",
+    borderWidth: 1, borderColor: "rgba(239,68,68,0.45)",
+  },
   foot: { padding: 14, paddingHorizontal: 20, paddingBottom: 20 },
-  payGrid: { flexDirection: "row", gap: 6, marginBottom: 12 },
-  payChip: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10 },
+  payGrid: { flexDirection: "row", gap: 6, marginBottom: 12, flexWrap: "wrap" },
+  payChip: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10, minWidth: 64 },
   payChipActive: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   payLabel: { fontSize: 10, color: Colors.ink2, fontWeight: "600" },
   // Toggle "Dividir pagamento" — link sutil (não compete com chips)
