@@ -4,13 +4,15 @@
 // payment chips, summary rows, and Limpar/Orçamento/Finalizar CTAs.
 //
 // Mai/2026: ganhou input "CPF na nota" (NFC-e). Aparece sempre,
-// mas só vira CPF da NFC-e se preenchido.
+// mas só vira CPF da NFC-e se preenchido. Tem validação de
+// checksum mod-11 (lib/validators) com indicador visual.
 // ============================================================
-import { forwardRef, useState } from "react";
+import { forwardRef, useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt } from "./types";
+import { validateCpf, maskCpf, onlyDigits } from "@/lib/validators";
 
 export type CartDisplayItem = {
   productId: string;
@@ -55,15 +57,6 @@ const HEAD_INK_SOFT = "rgba(255,255,255,0.9)";
 const HEAD_INK_DIM = "rgba(255,255,255,0.65)";
 const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 
-// CPF: 000.000.000-00. Aplicamos mask leve (sem lib) só visual.
-function maskCpf(v: string): string {
-  const d = (v || "").replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 3) return d;
-  if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`;
-  if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
-  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
-}
-
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
     orderNumber, items, subtotal, discountAmount, total, itemCount,
@@ -74,6 +67,20 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   } = props;
 
   const showCpfInput = onCpfNaNotaChange !== undefined;
+
+  // Estado de validação CPF: só avalia quando temos 11 dígitos.
+  // Antes disso fica neutro (sem indicador, sem border colorido).
+  const cpfState = useMemo<"empty" | "incomplete" | "valid" | "invalid">(() => {
+    const d = onlyDigits(cpfNaNota || "");
+    if (d.length === 0) return "empty";
+    if (d.length < 11) return "incomplete";
+    return validateCpf(d) ? "valid" : "invalid";
+  }, [cpfNaNota]);
+
+  const cpfBorderColor =
+    cpfState === "valid" ? "rgba(34,197,94,0.55)" :
+    cpfState === "invalid" ? "rgba(239,68,68,0.55)" :
+    Glass.lineBorderCard;
 
   return (
     <View
@@ -230,21 +237,37 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>
         </View>
 
-        {/* CPF na nota (NFC-e) — input opcional, aparece só quando wirado */}
+        {/* CPF na nota (NFC-e) — input opcional, aparece só quando wirado.
+            Indicador visual de validação mod-11 ao lado direito quando 11 dígitos. */}
         {showCpfInput && (
-          <View style={s.cpfRow}>
-            <Icon name="file_text" size={14} color={Colors.ink3} />
-            <Text style={s.cpfLabel}>CPF na nota</Text>
-            <TextInput
-              style={s.cpfInput}
-              value={cpfNaNota || ""}
-              onChangeText={(v) => onCpfNaNotaChange?.(maskCpf(v))}
-              placeholder="(opcional)"
-              placeholderTextColor={Colors.ink3}
-              keyboardType="number-pad"
-              maxLength={14}
-            />
-          </View>
+          <>
+            <View style={[s.cpfRow, { borderColor: cpfBorderColor }]}>
+              <Icon name="file_text" size={14} color={Colors.ink3} />
+              <Text style={s.cpfLabel}>CPF na nota</Text>
+              <TextInput
+                style={s.cpfInput}
+                value={cpfNaNota || ""}
+                onChangeText={(v) => onCpfNaNotaChange?.(maskCpf(v))}
+                placeholder="(opcional)"
+                placeholderTextColor={Colors.ink3}
+                keyboardType="number-pad"
+                maxLength={14}
+              />
+              {cpfState === "valid" && (
+                <View style={[s.cpfBadge, { backgroundColor: "rgba(34,197,94,0.18)" }]}>
+                  <Icon name="check" size={12} color="#22c55e" />
+                </View>
+              )}
+              {cpfState === "invalid" && (
+                <View style={[s.cpfBadge, { backgroundColor: "rgba(239,68,68,0.18)" }]}>
+                  <Icon name="x" size={12} color="#ef4444" />
+                </View>
+              )}
+            </View>
+            {cpfState === "invalid" && (
+              <Text style={s.cpfErr}>CPF inválido — confira os dígitos</Text>
+            )}
+          </>
         )}
 
         {/* Required hints */}
@@ -438,7 +461,7 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingHorizontal: 10, paddingVertical: 8,
     backgroundColor: Glass.lineFaint, borderRadius: 8,
-    marginTop: 10, borderWidth: 1, borderColor: Glass.lineBorderCard,
+    marginTop: 10, borderWidth: 1,
   },
   cpfLabel: {
     fontSize: 11, color: Colors.ink3, fontWeight: "600",
@@ -449,6 +472,14 @@ const s = StyleSheet.create({
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 12, color: Colors.ink, fontWeight: "600",
     paddingVertical: 0,
+  },
+  cpfBadge: {
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  cpfErr: {
+    fontSize: 10, color: "#ef4444", fontWeight: "600",
+    marginTop: 4, marginLeft: 4,
   },
   hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginTop: 8, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
