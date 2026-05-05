@@ -3,9 +3,9 @@
 // Violet glass hero with big total, items list with qty controls,
 // payment chips, summary rows, and Limpar/Orçamento/Finalizar CTAs.
 //
-// Mai/2026: ganhou input "CPF na nota" (NFC-e). Aparece sempre,
-// mas só vira CPF da NFC-e se preenchido. Tem validação de
-// checksum mod-11 (lib/validators) com indicador visual.
+// Mai/2026:
+//   · Input "CPF na nota" com validação mod-11
+//   · Modo "Dividir pagamento" com lista de N entradas (NFC-e payments[])
 // ============================================================
 import { forwardRef, useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -23,6 +23,9 @@ export type CartDisplayItem = {
 };
 
 export type PayChip = { key: string; label: string; icon: string };
+
+// Mantido isolado de useCart pra evitar dep ciclica e permitir uso standalone.
+export type SplitEntry = { method: string; value: number; change?: number };
 
 type Props = {
   orderNumber?: string | null;
@@ -50,6 +53,16 @@ type Props = {
   // CPF na nota (NFC-e). Opcional — se passado, mostra o input.
   cpfNaNota?: string;
   onCpfNaNotaChange?: (v: string) => void;
+
+  // Multi-pagamento (opcional). Se onToggleSplit não passar, modo split fica oculto.
+  splitMode?: boolean;
+  splitPayments?: SplitEntry[];
+  splitRemaining?: number;
+  splitIsBalanced?: boolean;
+  onToggleSplit?: () => void;
+  onAddSplitPayment?: () => void;
+  onUpdateSplitPayment?: (idx: number, patch: Partial<SplitEntry>) => void;
+  onRemoveSplitPayment?: (idx: number) => void;
 };
 
 const HEAD_INK = "#ffffff";
@@ -64,9 +77,13 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     onInc, onDec, onSetQty, onRemove, onClear, onFinalize, onGenerateQuote,
     showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle,
     cpfNaNota, onCpfNaNotaChange,
+    splitMode, splitPayments, splitRemaining, splitIsBalanced,
+    onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
   } = props;
 
   const showCpfInput = onCpfNaNotaChange !== undefined;
+  const splitAvailable = onToggleSplit !== undefined; // fica off quando o pai não wireou
+  const splitOn = !!splitMode && splitAvailable;
 
   // Estado de validação CPF: só avalia quando temos 11 dígitos.
   // Antes disso fica neutro (sem indicador, sem border colorido).
@@ -81,6 +98,9 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     cpfState === "valid" ? "rgba(34,197,94,0.55)" :
     cpfState === "invalid" ? "rgba(239,68,68,0.55)" :
     Glass.lineBorderCard;
+
+  // Se split está ativo e desbalanceado, bloqueia finalizar.
+  const finalizeDisabled = !!isProcessing || items.length === 0 || (splitOn && !splitIsBalanced);
 
   return (
     <View
@@ -149,7 +169,9 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           </View>
           <View>
             <Text style={s.metaK}>Pagamento</Text>
-            <Text style={[s.metaV, { color: "#e9d5ff", textTransform: "uppercase" }]}>{activePay}</Text>
+            <Text style={[s.metaV, { color: "#e9d5ff", textTransform: "uppercase" }]}>
+              {splitOn ? `${splitPayments?.length || 0}× SPLIT` : activePay}
+            </Text>
           </View>
         </View>
         {headerSubtitle ? <Text style={s.subtitle}>{headerSubtitle}</Text> : null}
@@ -190,34 +212,88 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             : { backgroundColor: Colors.bg, borderTopWidth: 1, borderTopColor: Colors.border },
         ]}
       >
-        {/* Payment chips */}
-        <View style={s.payGrid}>
-          {payMethods.map(m => {
-            const isActive = activePay === m.key;
-            const webChip = webOnly({
-              background: isActive ? "rgba(124,58,237,0.22)" : Glass.lineFaint,
-              border: isActive ? "1px solid rgba(124,58,237,0.5)" : "1px solid " + Glass.lineBorderCard,
-              color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink2,
-              transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
-              cursor: "pointer",
-              boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
-            });
-            return (
-              <Pressable
-                key={m.key}
-                onPress={() => onPay(m.key)}
-                style={[
-                  s.payChip,
-                  isActive && s.payChipActive,
-                  Platform.OS === "web" ? (webChip as any) : null,
-                ] as any}
-              >
-                <Icon name={m.icon as any} size={16} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
-                <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/* Payment chips — só quando NÃO está em modo split */}
+        {!splitOn && (
+          <View style={s.payGrid}>
+            {payMethods.map(m => {
+              const isActive = activePay === m.key;
+              const webChip = webOnly({
+                background: isActive ? "rgba(124,58,237,0.22)" : Glass.lineFaint,
+                border: isActive ? "1px solid rgba(124,58,237,0.5)" : "1px solid " + Glass.lineBorderCard,
+                color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink2,
+                transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
+                cursor: "pointer",
+                boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
+              });
+              return (
+                <Pressable
+                  key={m.key}
+                  onPress={() => onPay(m.key)}
+                  style={[
+                    s.payChip,
+                    isActive && s.payChipActive,
+                    Platform.OS === "web" ? (webChip as any) : null,
+                  ] as any}
+                >
+                  <Icon name={m.icon as any} size={16} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
+                  <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Toggle "Dividir pagamento" — só aparece quando o pai wireou. */}
+        {splitAvailable && (
+          <Pressable onPress={onToggleSplit} style={s.splitToggle}>
+            <Icon name={splitOn ? "x" : "credit_card"} size={13} color={Colors.violet3} />
+            <Text style={s.splitToggleTxt}>
+              {splitOn ? "Cancelar divisão" : "Dividir pagamento"}
+            </Text>
+          </Pressable>
+        )}
+
+        {/* Lista de splits */}
+        {splitOn && (
+          <View style={s.splitPanel}>
+            {(splitPayments || []).map((entry, idx) => (
+              <SplitRow
+                key={idx}
+                entry={entry}
+                methods={payMethods}
+                onChangeMethod={(method) => onUpdateSplitPayment?.(idx, { method })}
+                onChangeValue={(value) => onUpdateSplitPayment?.(idx, { value })}
+                onRemove={() => onRemoveSplitPayment?.(idx)}
+                canRemove={(splitPayments?.length || 0) > 1}
+              />
+            ))}
+            <Pressable onPress={onAddSplitPayment} style={s.splitAdd}>
+              <Icon name="plus" size={14} color={Colors.violet3} />
+              <Text style={s.splitAddTxt}>Adicionar pagamento</Text>
+            </Pressable>
+
+            {/* Status balance */}
+            <View style={[
+              s.splitStatus,
+              splitIsBalanced
+                ? { backgroundColor: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.35)" }
+                : { backgroundColor: "rgba(251,191,36,0.12)", borderColor: "rgba(251,191,36,0.35)" },
+            ]}>
+              <Icon
+                name={splitIsBalanced ? "check" : "alert"}
+                size={12}
+                color={splitIsBalanced ? "#22c55e" : Colors.amber}
+              />
+              <Text style={[s.splitStatusTxt, { color: splitIsBalanced ? "#22c55e" : Colors.amber }]}>
+                {splitIsBalanced
+                  ? "Pronto · soma fecha com o total"
+                  : (splitRemaining || 0) > 0
+                    ? `Faltam ${fmtCurrency(splitRemaining || 0)}`
+                    : `Sobrando ${fmtCurrency(Math.abs(splitRemaining || 0))}`}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Summary */}
         <View style={s.sumRow}>
@@ -291,7 +367,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           )}
           <Pressable
             onPress={onFinalize}
-            disabled={!!isProcessing || items.length === 0}
+            disabled={finalizeDisabled}
             style={[
               s.ctaPri,
               Platform.OS === "web"
@@ -303,7 +379,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                     overflow: "hidden",
                   } as any)
                 : { backgroundColor: Colors.violet },
-              (isProcessing || items.length === 0) && { opacity: 0.5 },
+              finalizeDisabled && { opacity: 0.5 },
             ]}
           >
             {IS_WEB && (
@@ -337,6 +413,77 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     </View>
   );
 });
+
+// ── Linha do split: chips de método + input valor + remover ─────
+function SplitRow({
+  entry, methods, onChangeMethod, onChangeValue, onRemove, canRemove,
+}: {
+  entry: SplitEntry;
+  methods: PayChip[];
+  onChangeMethod: (m: string) => void;
+  onChangeValue: (v: number) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  // Edição de valor com buffer local (evita rerender em cada tecla quando user digita "12,50")
+  const [buf, setBuf] = useState<string | null>(null);
+  const isEditing = buf !== null;
+  const display = isEditing ? buf! : entry.value.toFixed(2).replace(".", ",");
+
+  function handleCommit() {
+    if (buf !== null) {
+      const cleaned = buf.replace(",", ".").replace(/[^\d.]/g, "");
+      const n = parseFloat(cleaned);
+      if (!isNaN(n) && n >= 0) onChangeValue(n);
+    }
+    setBuf(null);
+  }
+
+  return (
+    <View style={s.splitRow}>
+      {/* Mini chips de método */}
+      <View style={s.splitChips}>
+        {methods.map(m => {
+          const active = entry.method === m.key;
+          return (
+            <Pressable
+              key={m.key}
+              onPress={() => onChangeMethod(m.key)}
+              style={[s.splitChip, active && s.splitChipActive]}
+            >
+              <Icon name={m.icon as any} size={11} color={active ? Colors.violet : Colors.ink3} />
+              <Text style={[s.splitChipTxt, active && { color: Colors.violet, fontWeight: "700" }]}>{m.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Valor */}
+      <View style={s.splitValBox}>
+        <Text style={s.splitValPrefix}>R$</Text>
+        <TextInput
+          style={s.splitValInput}
+          value={display}
+          onFocus={() => setBuf(entry.value.toFixed(2).replace(".", ","))}
+          onChangeText={(v) => setBuf(v.replace(/[^\d,.]/g, ""))}
+          onBlur={handleCommit}
+          onSubmitEditing={handleCommit}
+          keyboardType="decimal-pad"
+          selectTextOnFocus
+        />
+      </View>
+
+      {/* Remover */}
+      {canRemove ? (
+        <Pressable onPress={onRemove} style={s.splitRemove}>
+          <Icon name="x" size={12} color={Colors.ink3} />
+        </Pressable>
+      ) : (
+        <View style={s.splitRemove} />
+      )}
+    </View>
+  );
+}
 
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet,
@@ -453,6 +600,64 @@ const s = StyleSheet.create({
   payChip: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10 },
   payChipActive: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   payLabel: { fontSize: 10, color: Colors.ink2, fontWeight: "600" },
+  // Toggle "Dividir pagamento" — link sutil (não compete com chips)
+  splitToggle: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 6, marginBottom: 8,
+    alignSelf: "center",
+  },
+  splitToggleTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  // Painel de splits
+  splitPanel: {
+    marginBottom: 12,
+    padding: 10,
+    backgroundColor: Glass.lineFaint,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Glass.lineBorderCard,
+    gap: 8,
+  },
+  splitRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  splitChips: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  splitChip: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingVertical: 4, paddingHorizontal: 7,
+    borderRadius: 6,
+    backgroundColor: Glass.lineSoft,
+    borderWidth: 1, borderColor: "transparent",
+  },
+  splitChipActive: { backgroundColor: Colors.violetD, borderColor: "rgba(124,58,237,0.4)" },
+  splitChipTxt: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 },
+  splitValBox: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: Colors.bg, borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 4,
+    borderWidth: 1, borderColor: Glass.lineBorderCard,
+    minWidth: 88,
+  },
+  splitValPrefix: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
+  splitValInput: {
+    flex: 1, textAlign: "right",
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 12, color: Colors.ink, fontWeight: "700",
+    paddingVertical: 0,
+  },
+  splitRemove: {
+    width: 22, height: 22, borderRadius: 6,
+    alignItems: "center", justifyContent: "center",
+  },
+  splitAdd: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.4)",
+  },
+  splitAddTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "700" },
+  splitStatus: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 6, paddingHorizontal: 10,
+    borderRadius: 8, borderWidth: 1,
+  },
+  splitStatusTxt: { fontSize: 10, fontWeight: "700", flex: 1 },
   sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   sumRowTotal: { paddingTop: 10, marginTop: 6, borderTopWidth: 1, borderTopColor: Glass.lineSoft },
   sumK: { fontSize: 12, color: Colors.ink2, fontWeight: "500" },
