@@ -115,7 +115,7 @@ function PeriodSegmented({
   compact?: boolean;
 }) {
   return (
-    <View style={[ps.seg, { backgroundColor: Colors.bg, borderColor: Colors.border }]}>
+    <View style={[ps.seg, compact ? ps.segCompact : null, { backgroundColor: Colors.bg, borderColor: Colors.border }]}>
       {TOPBAR_PERIODS.map(function(p) {
         var active = period === p.key;
         return (
@@ -154,7 +154,10 @@ var s = StyleSheet.create({
     marginBottom: 16,
   },
   left: { flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0, flex: 1 },
-  right: { flexDirection: "row", alignItems: "center", gap: 10 },
+  // FIX 04/05/2026: flexShrink: 0 pra o `right` nao colapsar quando o nome da
+  // empresa em `left` (com flex: 1) ocupa muito espaco. Antes dessa correcao,
+  // os botoes do period segmented + Exportar ficavam sobrepostos em wide.
+  right: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 0 },
   kicker: { fontSize: 9.5, letterSpacing: 1.2, fontWeight: "600" },
   dot: { fontSize: 12 },
   companyName: { fontSize: 17, fontWeight: "700", letterSpacing: -0.3, flexShrink: 1 },
@@ -177,6 +180,7 @@ var s = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
+    flexShrink: 0,
   },
   btnGhostText: { fontSize: 12, fontWeight: "600" },
   btnPrimary: {
@@ -186,20 +190,25 @@ var s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 10,
+    flexShrink: 0,
   },
   btnPrimaryText: { color: "#fff", fontSize: 12.5, fontWeight: "700" },
   btnPrimaryMobile: { paddingHorizontal: 12, paddingVertical: 8 },
 });
 
 var ps = StyleSheet.create({
+  // FIX 04/05/2026: removido `flex: NARROW ? 1 : 0` do seg e dos btns. Em wide,
+  // `flex: 0` (= 0 0 auto) deveria respeitar conteudo, mas dentro de um container
+  // (right) que estava colapsando, os botoes se sobrepunham. Agora seg respeita
+  // conteudo natural em wide e expande pela linha em mobile via segCompact.
   seg: {
     flexDirection: "row",
     borderRadius: 10,
     padding: 3,
     borderWidth: 1,
     flexShrink: 0,
-    flex: NARROW ? 1 : 0,
   },
+  segCompact: { flex: 1 },
   btn: {
     flexDirection: "row",
     alignItems: "center",
@@ -207,10 +216,10 @@ var ps = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 7,
-    flex: NARROW ? 1 : 0,
+    flexShrink: 0,
     justifyContent: "center",
   },
-  btnCompact: { paddingHorizontal: 10, paddingVertical: 5 },
+  btnCompact: { paddingHorizontal: 10, paddingVertical: 5, flex: 1 },
   btnCustom: { gap: 4 },
   text: { fontSize: 12, fontWeight: "500" },
   textCompact: { fontSize: 11 },
