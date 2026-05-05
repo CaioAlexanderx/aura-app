@@ -99,9 +99,16 @@ export function getPeriodRange(key: PeriodKey, customStart?: string, customEnd?:
       return { start: start, end: today, label: "Ultimos 7 dias" };
     }
     case "month": {
+      // FIX 04/05/2026: end = ultimo dia do mes (era today). Alinha com janela
+      // do dashboard.js no backend: WHERE due_date < (date_trunc('month', NOW())
+      // + INTERVAL '1 month')::date. Antes, despesas confirmed com due_date no
+      // futuro do mes (ex.: recorrente com i=0 confirmed em 5/maio quando hoje
+      // eh 4/maio) apareciam no Painel mas nao no Financeiro — divergencia
+      // confusa pro usuario. Cliente Eryca reportou.
       var startM = new Date(now.getFullYear(), now.getMonth(), 1);
+      var endM = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       var monthName = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-      return { start: startM, end: today, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) };
+      return { start: startM, end: endM, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) };
     }
     case "year": return { start: new Date(now.getFullYear(), 0, 1), end: today, label: String(now.getFullYear()) };
     case "prev_year": { var y = now.getFullYear() - 1; return { start: new Date(y, 0, 1), end: new Date(y, 11, 31, 23, 59, 59), label: String(y) }; }
