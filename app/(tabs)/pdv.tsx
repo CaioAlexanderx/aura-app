@@ -1,13 +1,10 @@
 // ============================================================
 // AURA. -- Caixa (PDV) — Claude Design redesign
 //
-// Arquitetura: toda regra de negocio permanece nos hooks existentes.
-// Esta tela e apenas o orquestrador entre os hooks e os componentes
-// visuais do "Claude Design" (glassmorphism + orbs + conic gradients).
-//
 // Mai/2026: PDV agora coleta CPF na nota (NFC-e) via input no
-// CartPanel. SaleComplete ganhou fluxo completo de emissão de NFC-e
-// (botão -> processando -> autorizada/erro -> QR + DANFE + WhatsApp).
+// CartPanel. SaleComplete ganhou fluxo completo de emissão de NFC-e.
+// Auto-emit toggle: lê nfce_config.auto_emit_nfce e dispara emissão
+// automática ao finalizar venda (sem botão idle).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -22,6 +19,7 @@ import { usePdvSettings, validateSaleAgainstSettings } from "@/hooks/usePdvSetti
 import { usePagination } from "@/hooks/usePagination";
 
 import { couponsApi, employeesApi, pdvApi } from "@/services/api";
+import { nfceApi } from "@/services/nfceApi";
 
 import { toast } from "@/components/Toast";
 import { Pagination } from "@/components/Pagination";
@@ -135,6 +133,16 @@ function CaixaScreenInner() {
     [empData]
   );
 
+  // Lê config NFC-e da empresa pra saber se auto-emit está ativo. Cache 5min
+  // (config muda raramente). Se config não existe, autoEmit = false.
+  const { data: nfceConfigData } = useQuery({
+    queryKey: ["nfce-config", company?.id],
+    queryFn: () => nfceApi.getConfig(company!.id),
+    enabled: !!company?.id && !isDemo,
+    staleTime: 5 * 60 * 1000,
+  });
+  const autoEmitNfce = !!nfceConfigData?.config?.auto_emit_nfce && nfceConfigData?.config?.is_active;
+
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, removeItem, finalizeSale, newSale,
@@ -200,7 +208,6 @@ function CaixaScreenInner() {
     return m;
   }, [cart]);
 
-  // Helper: ao trocar customer, captura phone tambem (pra wa.me da NFC-e)
   function pickCustomerWithPhone(v: { id: string; name: string } | null) {
     if (!v) { selectCustomer(null, null, null); return; }
     const c = customers.find(c => c.id === v.id);
@@ -371,21 +378,19 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Sale complete fullscreen ─────────────────────────────
   if (lastSale) {
     if (wide) {
       return (
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={lastSale} onNewSale={newSale} />
+          <SaleComplete sale={lastSale} onNewSale={newSale} autoEmit={autoEmitNfce} />
         </View>
       );
     }
-    return <SaleComplete sale={lastSale} onNewSale={newSale} />;
+    return <SaleComplete sale={lastSale} onNewSale={newSale} autoEmit={autoEmitNfce} />;
   }
 
-  // ═══════ WIDE (desktop web) — 2-col grid ═══════
   if (wide) {
     return (
       <View style={s.root}>
@@ -393,7 +398,6 @@ function CaixaScreenInner() {
         <CaixaBackdrop />
 
         <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: "1fr 420px" } as any)]}>
-          {/* CATALOG */}
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
             contentContainerStyle={{ padding: 28, paddingBottom: 48 }}
@@ -418,6 +422,7 @@ function CaixaScreenInner() {
                   )}
                   <Text style={s.titleSubTxt}>
                     {(company?.name || "Sua loja") + " · venda " + orderSuffix}
+                    {autoEmitNfce ? " · NFC-e auto" : ""}
                   </Text>
                 </View>
               </View>
@@ -506,7 +511,6 @@ function CaixaScreenInner() {
             )}
           </ScrollView>
 
-          {/* CART */}
           <View style={[s.cartWrap, IS_WEB && ({ position: "sticky" as any, top: 0, height: "100vh" } as any)]}>
             <CartPanel
               ref={cartHeadRef}
@@ -551,7 +555,6 @@ function CaixaScreenInner() {
     );
   }
 
-  // ═══════ NARROW (mobile / tablet) — stacked ═══════
   return (
     <View style={{ flex: 1 }}>
       <CaixaDesignStyle />
