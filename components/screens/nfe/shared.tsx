@@ -1,30 +1,97 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { Icon } from "@/components/Icon";
+import type { NfceEmission, NfceStatus } from "@/services/nfceApi";
 
+// Tipo legado mantido por componentes que ainda chamam nfeApi (a aba NFS-e vai
+// ser repointada num PR separado). Para a aba Documentos usamos NfceEmission.
 export type NfeDoc = {
   id: string; ref: string; type: string; status: string;
   number: string | null; recipient_name: string; description: string;
   value: number; issued_at: string | null; cancelled_at: string | null; created_at: string;
 };
 
-export const TABS = ["Documentos", "Emitir NFS-e", "Emitir NFC-e", "Configuracao"];
+// Aba Configuração some — certificado A1 é cadastrado direto via console
+// da Nuvem Fiscal (decisão registrada no plano).
+export const TABS = ["Documentos", "Emitir NFS-e", "Emitir NFC-e"];
+
 export const fmt = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
+// Status do nfce_emissions (autorizada/processando/etc.) — fonte de verdade
+// agora que a aba Documentos consome o /nfce do backend.
 export const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  authorized: { label: "Autorizada", color: Colors.green },
-  cancelled:  { label: "Cancelada", color: Colors.red },
-  pending:    { label: "Pendente", color: Colors.amber },
-  processing: { label: "Processando", color: Colors.violet3 },
-  error:      { label: "Erro", color: Colors.red },
+  autorizada:  { label: "Autorizada",  color: Colors.green },
+  cancelada:   { label: "Cancelada",   color: Colors.red },
+  rejeitada:   { label: "Rejeitada",   color: Colors.red },
+  processando: { label: "Processando", color: Colors.violet3 },
+  erro:        { label: "Erro",        color: Colors.red },
+  // Legado nfe_documents — mantido pra retrocompat enquanto NFS-e ainda usa
+  authorized:  { label: "Autorizada",  color: Colors.green },
+  cancelled:   { label: "Cancelada",   color: Colors.red },
+  pending:     { label: "Pendente",    color: Colors.amber },
+  processing:  { label: "Processando", color: Colors.violet3 },
+  error:       { label: "Erro",        color: Colors.red },
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const st = STATUS_MAP[status] || STATUS_MAP.pending;
+  const st = STATUS_MAP[status] || STATUS_MAP.processando;
   return <View style={[ns.badge, { backgroundColor: st.color + "18" }]}><Text style={[ns.badgeText, { color: st.color }]}>{st.label}</Text></View>;
 }
 
+// ── EmissionRow: novo formato consumindo /nfce do backend ──────
+export function EmissionRow({
+  emission,
+  onCancel,
+  onView,
+}: {
+  emission: NfceEmission;
+  onCancel: () => void;
+  onView: () => void;
+}) {
+  const typeLabel = emission.tipo === "nfe" ? "NF-e" : "NFC-e";
+  const dateStr = emission.authorized_at || emission.created_at;
+  const recipient = emission.customer_name || (emission.customer_cpf ? "CPF " + emission.customer_cpf : "Consumidor");
+
+  return (
+    <View style={ns.docRow}>
+      <View style={ns.docIcon}><Icon name="file_text" size={16} color={Colors.violet3} /></View>
+      <View style={ns.docInfo}>
+        <Text style={ns.docNumber}>#{emission.numero || "—"} · {typeLabel} · S{emission.serie}</Text>
+        <Text style={ns.docRecipient} numberOfLines={1}>{recipient}</Text>
+        <Text style={ns.docDate}>{new Date(dateStr).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</Text>
+        {emission.error_message && (
+          <Text style={[ns.docDate, { color: Colors.red }]} numberOfLines={1}>
+            {emission.error_message}
+          </Text>
+        )}
+      </View>
+      <View style={ns.docRight}>
+        <Text style={ns.docAmount}>{fmt(emission.total_nfce)}</Text>
+        <StatusBadge status={emission.status} />
+        <View style={{ flexDirection: "row", gap: 4, marginTop: 4 }}>
+          <Pressable onPress={onView} style={ns.miniBtn}>
+            <Text style={ns.miniBtnText}>{emission.pdf_url ? "PDF" : "Ver"}</Text>
+          </Pressable>
+          {emission.status === "autorizada" && (
+            <Pressable onPress={onCancel} style={[ns.miniBtn, { borderColor: Colors.red + "33" }]}>
+              <Text style={[ns.miniBtnText, { color: Colors.red }]}>Cancelar</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// Helper: abre PDF do DANFE em nova aba (web) ou via Linking (mobile)
+export function openDanfe(url: string | null) {
+  if (!url) return;
+  if (Platform.OS === "web" && typeof window !== "undefined") window.open(url, "_blank");
+  else Linking.openURL(url);
+}
+
+// ── DocRow legado — usado pela aba NFS-e enquanto não migra ────
 export function DocRow({ doc, onCancel, onView }: { doc: NfeDoc; onCancel: () => void; onView: () => void }) {
   const typeLabel = doc.type === "nfse" ? "NFS-e" : doc.type === "nfce" ? "NFC-e" : "NF-e";
   return (
