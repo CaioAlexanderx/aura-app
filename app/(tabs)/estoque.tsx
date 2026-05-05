@@ -529,6 +529,7 @@ export default function EstoqueScreen() {
           position: absolute dentro do wrapper scoped à área de conteúdo,
           ou seja, não cobre a sidebar no web. ScrollView interno permite
           rolar o formulário inteiro sem problemáticas de altura fixa.
+          formSheet centralizado horizontalmente com maxWidth 640 pra desktop.
       ──────────────────────────────────────────────────────────────────── */}
       {formOpen && (
         <Pressable style={s.formOverlay} onPress={closeFormModal}>
@@ -627,13 +628,15 @@ const s = StyleSheet.create({
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
   // Overlay de edição: position absolute dentro do wrapper,
-  // não extravasa para a sidebar no desktop.
+  // não extravasa para a sidebar no desktop. alignItems centraliza
+  // horizontalmente o sheet (limitado a 640px de largura).
   formOverlay: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 100,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+    alignItems: "center",
   },
   formSheet: {
     backgroundColor: Colors.bg3,
@@ -642,6 +645,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     maxHeight: "88%",
+    width: "100%",
+    maxWidth: 640,
   },
   formHandle: {
     width: 40, height: 4,
