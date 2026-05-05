@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
+import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/components/Toast";
+import { creditApi } from "@/services/creditApi";
 import type { Customer } from "./types";
 import { fmt, getStatus } from "./types";
 
@@ -8,6 +12,7 @@ function Tag({ tag }: { tag: string }) {
   const m: Record<string, { b: string; f: string }> = {
     VIP: { b: Colors.violetD, f: Colors.violet3 }, Frequente: { b: Colors.greenD, f: Colors.green },
     Novo: { b: Colors.amberD, f: Colors.amber }, Inativo: { b: Colors.redD, f: Colors.red },
+    Devendo: { b: "rgba(251,146,60,0.18)", f: "#f97316" },
   };
   const c = m[tag] || { b: Colors.bg4, f: Colors.ink3 };
   return <View style={{ borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: c.b }}><Text style={{ fontSize: 9, fontWeight: "600", color: c.f, letterSpacing: 0.3 }}>{tag}</Text></View>;
@@ -35,9 +40,63 @@ export function CustomerRow({
   showCompanyBadge?: boolean;
 }) {
   const [h, sH] = useState(false);
+  const [busy, setBusy] = useState(false);
   const w = Platform.OS === "web";
   const tags = getStatus(c);
   const showBadge = showCompanyBadge && c.company_name;
+  const hasCredit = (c.creditBalance || 0) > 0;
+  const qc = useQueryClient();
+  const { company } = useAuthStore();
+
+  // Receber pagamento — MVP via window.prompt (web). Em mobile a UX e parecida,
+  // mas falla pra browser-only por ora. Modal completo vira numa V2 quando o
+  // fluxo estiver validado pelo Davi.
+  async function handleReceivePayment() {
+    if (!hasCredit) return;
+    // Crediario e por (cliente, empresa) — usar a empresa onde o cliente
+    // foi cadastrado (que e onde o saldo existe), nao a current.
+    const targetCompanyId = c.company_id || company?.id;
+    if (!targetCompanyId) {
+      toast.error("Empresa do cliente nao identificada");
+      return;
+    }
+    if (typeof window === "undefined" || typeof window.prompt !== "function") {
+      toast.error("Receber pagamento disponivel apenas no navegador");
+      return;
+    }
+    const raw = window.prompt(
+      `Receber pagamento de ${c.name}\n` +
+      `Saldo em aberto: ${fmt(c.creditBalance)}\n\n` +
+      `Quanto recebeu? (R$)`,
+      c.creditBalance.toFixed(2).replace(".", ",")
+    );
+    if (raw === null) return;
+    const cleaned = String(raw).replace(",", ".").replace(/[^\d.]/g, "");
+    const amount = parseFloat(cleaned);
+    if (!isFinite(amount) || amount <= 0) {
+      toast.error("Valor invalido");
+      return;
+    }
+    if (amount > c.creditBalance + 0.01) {
+      const ok = window.confirm(
+        `O valor recebido (${fmt(amount)}) e maior que o saldo em aberto (${fmt(c.creditBalance)}).\n\n` +
+        `Isso vai gerar credito a favor do cliente. Confirmar?`
+      );
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      const res = await creditApi.receivePayment(targetCompanyId, c.id, { amount });
+      toast.success(`Pagamento registrado. Novo saldo: ${fmt(res.new_balance)}`);
+      // Invalida lista de clientes (tem credit_balance) + saldos de credit
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["credit-balances"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao registrar pagamento");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <View>
@@ -71,6 +130,11 @@ export function CustomerRow({
         {!onSelect && (
           <View style={{ alignItems: "flex-end", gap: 4 }}>
             <Text style={s.spent}>{fmt(c.totalSpent)}</Text>
+            {hasCredit && (
+              <View style={s.openBadge}>
+                <Text style={s.openBadgeText}>Em aberto: {fmt(c.creditBalance)}</Text>
+              </View>
+            )}
             <View style={{ flexDirection: "row", gap: 4 }}>{tags.slice(0, 2).map(t => <Tag key={t} tag={t} />)}</View>
           </View>
         )}
@@ -89,10 +153,28 @@ export function CustomerRow({
                 <Text style={[s.detailValue, { color: Colors.violet3 }]} numberOfLines={1}>{c.company_name}</Text>
               </View>
             )}
+            {/* Crediario: saldo em aberto */}
+            {hasCredit && (
+              <View style={s.detailItem}>
+                <Text style={s.detailLabel}>Saldo em aberto</Text>
+                <Text style={[s.detailValue, { color: "#f97316" }]}>{fmt(c.creditBalance)}</Text>
+              </View>
+            )}
           </View>
           {c.notes ? <Text style={s.notes}>{c.notes}</Text> : null}
           <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}>{tags.map(t => <Tag key={t} tag={t} />)}</View></View>
           <View style={s.actions}>
+            {hasCredit && (
+              <Pressable
+                onPress={handleReceivePayment}
+                disabled={busy}
+                style={[s.receiveBtn, busy && { opacity: 0.5 }]}
+              >
+                <Text style={s.receiveText}>
+                  {busy ? "Registrando..." : "Receber pagamento"}
+                </Text>
+              </Pressable>
+            )}
             {["Enviar WhatsApp", "Pedir avaliacao", "Ver historico"].map(a =>
               <Pressable key={a} style={s.actionBtn}><Text style={s.actionText}>{a}</Text></Pressable>
             )}
@@ -133,6 +215,21 @@ const s = StyleSheet.create({
     letterSpacing: 0.2,
   },
   spent: { fontSize: 13, color: Colors.green, fontWeight: "700" },
+  // Crediario: badge laranja "Em aberto: R$ X"
+  openBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    backgroundColor: "rgba(251,146,60,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(251,146,60,0.4)",
+  },
+  openBadgeText: {
+    fontSize: 10,
+    color: "#f97316",
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
   detail: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, marginHorizontal: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   detailItem: { width: "30%", minWidth: 100, paddingVertical: 6, gap: 3 },
@@ -144,6 +241,16 @@ const s = StyleSheet.create({
   actions: { flexDirection: "row", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border, flexWrap: "wrap" },
   actionBtn: { backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
   actionText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  // Botao "Receber pagamento" — destaque laranja, mesmo tom do badge
+  receiveBtn: {
+    backgroundColor: "rgba(251,146,60,0.16)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(251,146,60,0.5)",
+  },
+  receiveText: { fontSize: 11, color: "#f97316", fontWeight: "700" },
   editBtn: { backgroundColor: Colors.amberD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.amber + "33" },
   editText: { fontSize: 11, color: Colors.amber, fontWeight: "600" },
   deleteBtn: { backgroundColor: Colors.redD, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.red + "33" },
