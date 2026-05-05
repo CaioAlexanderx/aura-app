@@ -74,6 +74,9 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [notes, setNotes]       = useState(editProduct?.notes || "");
   const [color, setColor]       = useState(editProduct?.color || "");
   const [size, setSize]         = useState(editProduct?.size || "");
+  // NCM: campo fiscal de 8 dígitos. Strip de não-dígitos no onChangeText e
+  // bloqueia salvar se != 8 chars (ou se vazio — vazio é permitido).
+  const [ncm, setNcm]           = useState(editProduct?.ncm || "");
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
 
@@ -132,6 +135,11 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome do produto"); return; }
     if (!price.trim()) { toast.error("Preencha o preco de venda"); return; }
+    // NCM: vazio é OK; preenchido tem que ter exatamente 8 dígitos
+    if (ncm && ncm.length !== 8) {
+      toast.error("NCM deve ter 8 digitos numericos (ou ficar vazio)");
+      return;
+    }
     const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
     // Fix 7: parsear valores mascarados
     const parsedPrice = parseInt(unmaskNumber(price) || "0") / 100;
@@ -146,6 +154,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       abc: editProduct?.abc || "C", sold30d: editProduct?.sold30d || 0,
       unit, brand: editProduct?.brand || "",
       notes: notes.trim(), color: color || "", size: size.trim(),
+      ncm: ncm || "",
     });
   }
 
@@ -219,6 +228,28 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           </FormField>
         </View>
       </View>
+
+      {/* NCM: codigo fiscal SEFAZ. Mai/2026 — necessario pra emitir NFC-e/NF-e */}
+      <FormField label="NCM (codigo fiscal)">
+        <TextInput
+          style={s.input}
+          value={ncm}
+          onChangeText={(v) => setNcm(v.replace(/\D/g, "").slice(0, 8))}
+          placeholder="64022000"
+          placeholderTextColor={Colors.ink3}
+          keyboardType="number-pad"
+          maxLength={8}
+        />
+        <Text style={s.ncmHint}>
+          8 digitos. Necessario pra emitir nota fiscal.
+          {ncm.length > 0 && ncm.length < 8 && (
+            <Text style={{ color: Colors.red }}> {"  "}Faltam {8 - ncm.length} digito{8 - ncm.length > 1 ? "s" : ""}.</Text>
+          )}
+          {ncm.length === 8 && (
+            <Text style={{ color: Colors.green }}> {"  "}OK</Text>
+          )}
+        </Text>
+      </FormField>
 
       <FormField label="Categoria">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
@@ -411,6 +442,7 @@ const s = StyleSheet.create({
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
   categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, fontStyle: "italic" as any },
+  ncmHint: { fontSize: 10, color: Colors.ink3, marginTop: 4, lineHeight: 14 },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 10 },
