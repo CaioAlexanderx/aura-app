@@ -21,7 +21,6 @@ import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
-import { ScannerInput } from "@/components/ScannerInput";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
@@ -231,18 +230,33 @@ export default function EstoqueScreen() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
-  // Scanner popup: abre TextInput em focus automatico pra leitor USB ou
-  // teclado virtual. Ao bipar/digitar, joga no search e fecha.
+  // Scanner popup: TextInput inline simples (sem ScannerInput pra evitar
+  // conflitos de auto-focus + overlay). Foco é dado via ref.focus() quando
+  // o popup abre. Ao bipar (Enter) ou clicar Aplicar, joga no search.
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanText, setScanText] = useState("");
   const scanRef = useRef<any>(null);
+  const scanInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (!scanOpen || Platform.OS !== "web") return;
     function onDoc(e: MouseEvent) {
-      if (scanRef.current && !scanRef.current.contains(e.target)) setScanOpen(false);
+      if (scanRef.current && !scanRef.current.contains(e.target)) {
+        setScanOpen(false);
+        setScanText("");
+      }
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
+  }, [scanOpen]);
+
+  // Auto-focus quando popup abre — pequeno timeout pra esperar o render.
+  useEffect(() => {
+    if (!scanOpen) return;
+    const t = setTimeout(() => {
+      scanInputRef.current?.focus();
+    }, 80);
+    return () => clearTimeout(t);
   }, [scanOpen]);
 
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
@@ -268,9 +282,6 @@ export default function EstoqueScreen() {
 
   const filterCategories = ["Todos", ...allCategories];
   // FIX 05/05/2026: busca agora bate em barcode e sku alem de name e code.
-  // Antes, leitor de codigo de barras escaneava no campo mas o filtro nao
-  // achava porque so olhava p.name/p.code (e codigo de barras geralmente
-  // mora em p.barcode, nao em p.code).
   const filtered = products.filter(p => {
     const q = (search || "").trim().toLowerCase();
     if (!q) {
@@ -316,12 +327,13 @@ export default function EstoqueScreen() {
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
-  function handleScanResult(code: string) {
-    const cleaned = (code || "").trim();
+  function applyScan() {
+    const cleaned = (scanText || "").trim();
     if (!cleaned) return;
     setSearch(cleaned);
     setScanOpen(false);
-    // Se o produto for unico, dá feedback rapido
+    setScanText("");
+    // Feedback rápido se for match único
     setTimeout(() => {
       const matches = products.filter(p =>
         (p as any).barcode === cleaned ||
@@ -331,7 +343,7 @@ export default function EstoqueScreen() {
       if (matches.length === 1) {
         toast.success(matches[0].name);
       } else if (matches.length === 0) {
-        toast.info("Nenhum produto com esse codigo. Mostrando busca textual.");
+        toast.info("Nenhum produto com esse código. Mostrando busca textual.");
       }
     }, 50);
   }
@@ -496,17 +508,35 @@ export default function EstoqueScreen() {
                 onChangeText={setSearch}
               />
               <Pressable onPress={() => setScanOpen(o => !o)} style={[s.scanBtn, scanOpen && s.scanBtnActive]}>
-                <Icon name="barcode" size={20} color={scanOpen ? Colors.violet : Colors.violet3} />
+                <Icon name="barcode" size={20} color={scanOpen ? "#fff" : Colors.violet3} />
               </Pressable>
               {scanOpen && (
                 <View style={s.scanPop}>
                   <Text style={s.scanPopTitle}>Bipar código de barras</Text>
-                  <ScannerInput
-                    placeholder="Bipe ou digite o código…"
-                    onScan={r => handleScanResult(r.code)}
-                  />
+                  <View style={s.scanInputRow}>
+                    <Icon name="barcode" size={16} color={Colors.violet3} />
+                    <TextInput
+                      ref={scanInputRef}
+                      style={s.scanInput}
+                      placeholder="Bipe ou digite o código…"
+                      placeholderTextColor={Colors.ink3}
+                      value={scanText}
+                      onChangeText={setScanText}
+                      onSubmitEditing={applyScan}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="search"
+                    />
+                    <Pressable
+                      onPress={applyScan}
+                      disabled={!scanText.trim()}
+                      style={[s.scanApply, !scanText.trim() && { opacity: 0.4 }]}
+                    >
+                      <Text style={s.scanApplyTxt}>Aplicar</Text>
+                    </Pressable>
+                  </View>
                   <Text style={s.scanPopHint}>
-                    Aponte o leitor USB ou digite manualmente. Casa por código de barras, SKU ou código interno.
+                    Aponte o leitor USB ou digite manualmente. Aceita código de barras, SKU ou código interno.
                   </Text>
                 </View>
               )}
@@ -657,11 +687,11 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   scanBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   scanBtnActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  // Popover do scanner — fica logo abaixo do botao, alinhado ao canto direito.
+  // Popover do scanner — TextInput inline simples (sem ScannerInput)
   scanPop: {
     position: "absolute",
     top: 50, right: 0,
-    width: 320, maxWidth: "100%" as any,
+    width: 360, maxWidth: "100%" as any,
     backgroundColor: Colors.bg3,
     borderRadius: 12,
     borderWidth: 1, borderColor: "rgba(124,58,237,0.3)",
@@ -675,6 +705,24 @@ const s = StyleSheet.create({
     fontSize: 10, fontWeight: "700", color: Colors.ink3,
     letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10,
   },
+  scanInputRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.bg, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 4,
+    borderWidth: 1.5, borderColor: "rgba(124,58,237,0.4)",
+  },
+  scanInput: {
+    flex: 1, fontSize: 13, color: Colors.ink, fontWeight: "500",
+    paddingVertical: 10,
+    ...(Platform.OS === "web" ? { outlineStyle: "none" } as any : {}),
+  } as any,
+  scanApply: {
+    backgroundColor: Colors.violet,
+    borderRadius: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  scanApplyTxt: { color: "#fff", fontSize: 11, fontWeight: "700" },
   scanPopHint: {
     fontSize: 10, color: Colors.ink3, marginTop: 8,
     lineHeight: 14,
@@ -703,9 +751,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
-  // Overlay de edição: position absolute dentro do wrapper,
-  // não extravasa para a sidebar no desktop. alignItems centraliza
-  // horizontalmente o sheet (limitado a 640px de largura).
   formOverlay: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
