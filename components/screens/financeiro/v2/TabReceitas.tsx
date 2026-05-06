@@ -6,6 +6,9 @@
 //
 // Onda 3 vai adicionar: ranking profissionais (employees JOIN), evolucao 12m.
 // Multi-CNPJ aware: passa flag pros componentes mostrarem badges/dicas.
+//
+// 06/05/2026: AbcCurveCard adicionado depois de "Categorias de receita" —
+// curva ABC migrou do Estoque pra cá, calculada via useProductsRanking.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -16,6 +19,8 @@ import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
 // Onda 3: ranking + evolução mensal 12m
 import { ProfessionalsRanking, MonthlyEvolution } from "./Onda3Cards";
+// 06/05: Curva ABC migrada do Estoque
+import { AbcCurveCard } from "./AbcCurveCard";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -184,6 +189,12 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
             );
           })
         )}
+      </View>
+
+      {/* Curva ABC dos produtos — calculada a partir de vendas reais.
+          Migrou do Estoque (era decorativa, sempre 'C') pra cá em 06/05. */}
+      <View style={{ marginBottom: 14 }}>
+        <AbcCurveCard />
       </View>
 
       {/* Onda 3: Ranking de profissionais — só per-company */}
