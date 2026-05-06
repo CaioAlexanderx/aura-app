@@ -7,12 +7,15 @@
 //
 // Em consolidated, DRE Waterfall fica bloqueado (precisa contexto fiscal).
 // Onda 4 vai adicionar: fixo x variavel 6m.
+//
+// 06/05/2026: parseDateLocal corrige timezone em dailyExpenseSeries (date-only
+// shiftando 1 dia em BRT) + tooltips no hover das barras e categorias.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { Transaction } from "../types";
-import { fmt, fmtK } from "../types";
+import { fmt, fmtK, parseDateLocal } from "../types";
 import { useMemo } from "react";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, Gauge, AnomalyAlerts } from "./SharedCards";
@@ -23,6 +26,11 @@ var W = Dimensions.get("window").width;
 var NARROW = W < 480;
 var IS_WIDE = W > 768;
 var isWeb = Platform.OS === "web";
+
+// Tooltip nativo do browser via title= (RN-Web). No native ignora.
+function tip(text: string): any {
+  return Platform.OS === "web" ? { title: text } : {};
+}
 
 type Summary = { income: number; expenses: number; balance: number; pendingIncome?: number; pendingExpenses?: number };
 
@@ -50,7 +58,9 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
     .forEach(function(t) {
       var raw = (t as any).due_date || (t as any).created_at;
       if (!raw) return;
-      var d = new Date(raw);
+      // FIX 06/05/2026 (timezone): parseDateLocal evita shift de 1 dia em BRT.
+      var d = parseDateLocal(raw);
+      if (isNaN(d.getTime())) return;
       var k = d.getDate();
       map[k] = (map[k] || 0) + t.amount;
     });
@@ -144,8 +154,9 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
           <View style={s.bars}>
             {daily.map(function(d, i) {
               var h = Math.max(2, (d.value / maxDaily) * 100);
+              var tipText = "Dia " + String(d.day).padStart(2, "0") + ": " + fmt(d.value);
               return (
-                <View key={i} style={s.barCol}>
+                <View key={i} {...tip(tipText)} style={s.barCol}>
                   <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
                     <View style={[s.barFill, { height: h + "%", backgroundColor: Colors.red }]} />
                   </View>
@@ -196,8 +207,9 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
         ) : (
           categories.map(function(c, i) {
             var color = catColors[i % catColors.length];
+            var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
             return (
-              <View key={c.label} style={s.catRow}>
+              <View key={c.label} {...tip(tipText)} style={s.catRow}>
                 <View style={[s.catDot, { backgroundColor: color }]} />
                 <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
                 <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
@@ -255,7 +267,7 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
 
   return (
     <View style={dre.wrap}>
-      <View style={dre.row}>
+      <View {...tip("Receita bruta: " + fmt(income))} style={dre.row}>
         <Text style={[dre.label, { color: Colors.ink }]}>Receita bruta</Text>
         <View style={[dre.bar, { width: "100%", backgroundColor: Colors.green }]} />
         <Text style={[dre.value, { color: Colors.green }]}>+{fmtK(income)}</Text>
@@ -263,14 +275,14 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
       {categories.map(function(c) {
         var w = (c.value / max) * 100;
         return (
-          <View key={c.label} style={dre.row}>
+          <View key={c.label} {...tip(c.label + ": −" + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)")} style={dre.row}>
             <Text style={[dre.label, { color: Colors.ink2 }]} numberOfLines={1}>− {c.label}</Text>
             <View style={[dre.bar, { width: w + "%", backgroundColor: Colors.red, opacity: 0.85 }]} />
             <Text style={[dre.value, { color: Colors.red }]}>−{fmtK(c.value)}</Text>
           </View>
         );
       })}
-      <View style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
+      <View {...tip("Resultado liquido: " + (netResult >= 0 ? "+" : "") + fmt(netResult) + " · margem " + marginPct.toFixed(1) + "%")} style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
         <Text style={[dre.label, { color: Colors.ink, fontWeight: "800" }]}>Resultado liquido</Text>
         <View style={[dre.bar, { width: Math.max(2, (Math.abs(netResult) / max) * 100) + "%", backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
         <Text style={[dre.value, { color: netResult >= 0 ? Colors.violet3 : Colors.red, fontWeight: "800" }]}>
