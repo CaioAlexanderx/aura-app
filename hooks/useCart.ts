@@ -45,10 +45,12 @@ export const PAYMENTS = [
 
 const MAX_DISCOUNT_PCT = 50;
 
+// FIX 06/05/2026: pid estava retornando cartKey inteiro (incluía __variantId),
+// causando "invalid input syntax for type uuid" no backend ao finalizar split.
 function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } {
   var idx = cartKey.indexOf("__");
   if (idx < 0) return { pid: cartKey, vid: null };
-  return { pid: cartKey, vid: cartKey.slice(idx + 2) };
+  return { pid: cartKey.slice(0, idx), vid: cartKey.slice(idx + 2) };
 }
 
 function round2(n: number): number {
