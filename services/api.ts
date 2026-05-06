@@ -387,6 +387,15 @@ export var salesApi = {
       { method: "POST", body: { reason: reason || "" }, retry: 0, timeout: 15000 }
     );
   },
+  // Atualiza o vendedor de uma venda existente.
+  // seller_id=null limpa o vendedor. Persiste seller_name denormalizado
+  // no backend para garantir exibicao mesmo se o employee for removido.
+  updateSeller: function(companyId: string, saleId: string, seller_id: string | null) {
+    return request<{ ok: boolean; sale_id: string; seller_id: string | null; seller_name: string | null }>(
+      "/companies/" + companyId + "/sales/" + saleId,
+      { method: "PATCH", body: { seller_id: seller_id }, retry: 0 }
+    );
+  },
 };
 
 // Invite API
