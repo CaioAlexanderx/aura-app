@@ -48,7 +48,65 @@ var cb = StyleSheet.create({
   text:        { fontSize: 9, fontWeight: "700", color: Colors.ink3 },
 });
 
-function MemberRow({ member, siblings, isOwner, onUpdate, onRemove, isUpdating, isRemoving }: {
+// 06/05/2026: painel reutilizavel pra mostrar o link de convite a qualquer
+// momento (nao so logo apos gerar). Renderizado dentro do MemberRow expandido
+// quando member.status === 'pending' && member.invite_url.
+function PendingInvitePanel({ inviteUrl, role, companyName, onCancel, isCancelling }: {
+  inviteUrl: string;
+  role: string;
+  companyName: string;
+  onCancel: () => void;
+  isCancelling: boolean;
+}) {
+  function copyLink() {
+    if (Platform.OS === "web" && typeof navigator !== "undefined") {
+      navigator.clipboard?.writeText(inviteUrl);
+    }
+    toast.success("Link copiado!");
+  }
+  function shareWhatsApp() {
+    var msg = "Voce foi convidado para a equipe de " + companyName + " no app Aura como " + role + ".\n\nAcesse o link para entrar:\n" + inviteUrl;
+    Linking.openURL("https://wa.me/?text=" + encodeURIComponent(msg));
+  }
+  return (
+    <View style={s.pendingPanel}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <Icon name="link" size={14} color={Colors.amber} />
+        <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.amber }}>Convite ainda nao aceito</Text>
+      </View>
+      <Text style={{ fontSize: 11, color: Colors.ink3, marginBottom: 12 }}>
+        Compartilhe o link abaixo com a pessoa pra que ela crie a conta e entre na equipe.
+      </Text>
+      <View style={s.inviteLinkBox}>
+        <Text style={s.inviteLinkText} numberOfLines={2}>{inviteUrl}</Text>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+        <Pressable onPress={copyLink} style={s.copyBtn}>
+          <Icon name="copy" size={13} color={Colors.violet3} />
+          <Text style={s.copyBtnText}>Copiar link</Text>
+        </Pressable>
+        <Pressable onPress={shareWhatsApp} style={s.whatsappBtn}>
+          <Icon name="message" size={13} color={Colors.green} />
+          <Text style={s.whatsappBtnText}>WhatsApp</Text>
+        </Pressable>
+      </View>
+      <Pressable
+        onPress={onCancel}
+        disabled={isCancelling}
+        style={[s.cancelInviteBtn, isCancelling && { opacity: 0.5 }]}
+      >
+        {isCancelling
+          ? <ActivityIndicator size="small" color={Colors.red} />
+          : <Text style={s.cancelInviteBtnText}>Cancelar convite</Text>}
+      </Pressable>
+      <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 8, textAlign: "center" }}>
+        Link valido por 7 dias. Uso unico.
+      </Text>
+    </View>
+  );
+}
+
+function MemberRow({ member, siblings, isOwner, onUpdate, onRemove, isUpdating, isRemoving, companyName }: {
   member: Member;
   siblings: SiblingCompany[];
   isOwner: boolean;
@@ -56,6 +114,7 @@ function MemberRow({ member, siblings, isOwner, onUpdate, onRemove, isUpdating, 
   onRemove: () => void;
   isUpdating: boolean;
   isRemoving: boolean;
+  companyName: string;
 }) {
   var [expanded, setExpanded]   = useState(false);
   var [perms, setPerms]         = useState<Record<string, boolean>>(member.permissions || {});
@@ -66,13 +125,19 @@ function MemberRow({ member, siblings, isOwner, onUpdate, onRemove, isUpdating, 
   var canEdit      = !isOwner && member.status !== "suspended";
   var isOwnerLabel = member.role_label === "owner";
   var isPending    = member.status === "pending";
-  var multiCnpj   = siblings.length > 1;
+  var multiCnpj    = siblings.length > 1;
   var memberCnpjIds = member.companies.map(function(c) { return c.company_id; });
+
+  // 06/05/2026: pending tambem pode expandir pra mostrar o link recuperavel.
+  var canExpand = !isOwner && (
+    (isPending && !!member.invite_url) ||
+    (!isPending && canEdit)
+  );
 
   return (
     <View>
       <Pressable
-        onPress={function() { if (canEdit && !isPending) setExpanded(!expanded); }}
+        onPress={function() { if (canExpand) setExpanded(!expanded); }}
         style={s.memberRow}
       >
         <View style={s.avatar}>
@@ -81,7 +146,7 @@ function MemberRow({ member, siblings, isOwner, onUpdate, onRemove, isUpdating, 
         <View style={{ flex: 1 }}>
           <Text style={s.memberName}>{member.name}</Text>
           <Text style={s.memberEmail} numberOfLines={1}>
-            {isPending ? (member.invite_email || member.email || "Link enviado") : member.email}
+            {isPending ? (member.invite_email || member.email || "Link gerado — expanda para ver") : member.email}
           </Text>
           {/* Company access badges (multi-CNPJ only, non-owner) */}
           {multiCnpj && !isOwnerLabel && memberCnpjIds.length > 0 && (
@@ -98,17 +163,24 @@ function MemberRow({ member, siblings, isOwner, onUpdate, onRemove, isUpdating, 
           {isOwnerLabel
             ? <View style={[bdg.wrap, { backgroundColor: Colors.violetD }]}><Text style={[bdg.text, { color: Colors.violet3 }]}>Titular</Text></View>
             : <StatusBadge status={member.status} />}
-          {isPending && (
-            <Pressable onPress={function() { setConfirmRemove(true); }} disabled={isRemoving} style={s.deleteBtn} hitSlop={8}>
-              <Icon name="x" size={14} color={Colors.red} />
-            </Pressable>
-          )}
-          {canEdit && !isPending && (
+          {canExpand && (
             <Icon name={expanded ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />
           )}
         </View>
       </Pressable>
 
+      {/* Pending: mostra link recuperavel + botao cancelar */}
+      {expanded && isPending && member.invite_url && (
+        <PendingInvitePanel
+          inviteUrl={member.invite_url}
+          role={member.role_label || "Colaborador"}
+          companyName={companyName}
+          onCancel={function() { setConfirmRemove(true); }}
+          isCancelling={isRemoving}
+        />
+      )}
+
+      {/* Ativo: editor de permissoes + suspender (fluxo legado) */}
       {expanded && canEdit && !isPending && (
         <View style={s.permEditor}>
           {/* Role selector */}
@@ -242,7 +314,9 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, onClose }: {
           <Text style={s.whatsappBtnText}>WhatsApp</Text>
         </Pressable>
       </View>
-      <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 8 }}>Link valido por 7 dias. Uso unico.</Text>
+      <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 8 }}>
+        Tranquilo se fechar — voce pode recuperar o link expandindo o convite na lista abaixo enquanto estiver pendente.
+      </Text>
     </View>
   );
 }
@@ -451,6 +525,7 @@ export function MembersSection() {
                 member={m}
                 siblings={siblings}
                 isOwner={m.role_label === "owner"}
+                companyName={company?.name || "Aura"}
                 onUpdate={function(perms, role, cnpjIds) {
                   var body: any = { permissions: perms, role_label: role };
                   if (cnpjIds !== undefined) body.company_ids = cnpjIds;
@@ -490,12 +565,16 @@ var s = StyleSheet.create({
   inviteBtnSecondary: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   inviteSuccess:      { margin: 12, backgroundColor: Colors.greenD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.green + "33" },
   successClose:       { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
+  // Painel de convite pendente (recuperavel) — paleta amber pra distinguir do success verde
+  pendingPanel:       { backgroundColor: Colors.amberD, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
   inviteLinkBox:      { backgroundColor: Colors.bg4, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: Colors.border },
   inviteLinkText:     { fontSize: 11, color: Colors.violet3, fontFamily: "monospace" as any, lineHeight: 16 },
   copyBtn:            { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   copyBtnText:        { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   whatsappBtn:        { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.green + "44" },
   whatsappBtnText:    { fontSize: 11, color: Colors.green, fontWeight: "600" },
+  cancelInviteBtn:    { marginTop: 10, paddingVertical: 9, borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: Colors.red + "33", backgroundColor: Colors.redD },
+  cancelInviteBtnText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
   inviteForm:         { margin: 12, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
   formTitle:          { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 12 },
   formLabel:          { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
@@ -514,7 +593,6 @@ var s = StyleSheet.create({
   avatarText:         { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
   memberName:         { fontSize: 13, fontWeight: "600", color: Colors.ink },
   memberEmail:        { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  deleteBtn:          { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "33", alignItems: "center", justifyContent: "center" },
   permEditor:         { backgroundColor: Colors.bg4, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
   permSectionLabel:   { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
   permRow:            { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
