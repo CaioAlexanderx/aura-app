@@ -55,8 +55,14 @@ export function useSalesAnalytics(period = 'month', groupBy = 'day') {
   });
 }
 
+// Backend `/companies/:id/products/ranking` retorna `period` como
+// { start, end, label } (não como string). Type ajustado em 06/05/2026
+// junto com o fix do crash do AbcCurveCard — a string fica como union
+// pra compatibilidade com mocks e código legado que ainda passa string.
+export type ProductRankingPeriod = string | { start: string; end: string; label: string };
+
 export type ProductRanking = {
-  period: string;
+  period: ProductRankingPeriod;
   products: { id: string; name: string; category: string; qty_sold: number; revenue: number; abc: string }[];
   summary: { total_products: number; total_sold: number; total_revenue: number };
 };

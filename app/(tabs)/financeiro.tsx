@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi } from "@/hooks/useTransactions";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -29,6 +30,18 @@ import { FinanceiroTopbar, TabReceitas, TabDespesas } from "@/components/screens
 var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 var isWeb = Platform.OS === "web";
 
+// Mapping de query param -> indice da tab. Usado pra deep-link como
+// /financeiro?tab=receitas&focus=abc (chamado pelo CTA "Ver analise
+// completa" no SalesAnalyticsCard do Painel).
+var TAB_KEY_TO_INDEX: Record<string, number> = {
+  visao: TAB_INDEX.visao,
+  receitas: TAB_INDEX.receitas,
+  despesas: TAB_INDEX.despesas,
+  lancamentos: TAB_INDEX.lancamentos,
+  retirada: TAB_INDEX.retirada,
+  cupons: TAB_INDEX.cupons,
+};
+
 function maskDate(v: string): string {
   var d = v.replace(/\D/g, "").slice(0, 8);
   if (d.length >= 5) return d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4);
@@ -45,9 +58,16 @@ function brToISO(br: string): string | null {
 }
 
 export default function FinanceiroScreen() {
+  // Deep-link: ?tab= define aba inicial; ?focus= rola pro card alvo
+  // (ex.: focus=abc -> #abc-curve-card dentro da TabReceitas).
+  var params = useLocalSearchParams<{ tab?: string; focus?: string }>();
+  var paramTab = typeof params.tab === "string" ? params.tab : undefined;
+  var paramFocus = typeof params.focus === "string" ? params.focus : undefined;
+  var initialTab = paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined ? TAB_KEY_TO_INDEX[paramTab] : TAB_INDEX.visao;
+
   // V2: 6 abas (Visao Geral, Receitas, Despesas, Lancamentos, Retirada, Cupons).
   // TAB_INDEX exporta indices semanticos; nao escrever numeros literais.
-  var [activeTab, setActiveTab] = useState(TAB_INDEX.visao);
+  var [activeTab, setActiveTab] = useState(initialTab);
   // FIX 04/05/2026: default era "today" — recorrentes mensais materializadas
   // (12 rows com due_date espalhadas) eram filtradas fora da janela. Cliente
   // Eryca reportou que despesa de R$5k aparecia no Painel mas nao no Financeiro.
@@ -75,6 +95,32 @@ export default function FinanceiroScreen() {
   } = useTransactionsApi(activeTab, period, customStart, customEnd);
   var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
+
+  // Deep-link: troca de aba se o param `tab` mudar enquanto a tela ja
+  // estiver montada (ex.: usuario clica no CTA do Painel quando ja estava
+  // em /financeiro). Sem esse efeito, useState so leria o valor inicial.
+  useEffect(function() {
+    if (paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined) {
+      setActiveTab(TAB_KEY_TO_INDEX[paramTab]);
+    }
+  }, [paramTab]);
+
+  // Deep-link: auto-scroll pro card alvo. Por enquanto so 'abc' (Curva ABC
+  // dentro da aba Receitas). nativeID="abc-curve-card" no TabReceitas vira
+  // id no DOM em RN-Web. Pequeno delay pra garantir que a aba renderizou
+  // e o card tem layout. Native nao suporta scrollIntoView -> noop benigno.
+  useEffect(function() {
+    if (paramFocus !== "abc") return;
+    if (activeTab !== TAB_INDEX.receitas) return;
+    if (typeof document === "undefined") return;
+    var timer = setTimeout(function () {
+      var el = document.getElementById("abc-curve-card");
+      if (el && typeof (el as any).scrollIntoView === "function") {
+        (el as any).scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 250);
+    return function () { clearTimeout(timer); };
+  }, [paramFocus, activeTab]);
 
   var uncategorized = transactions.filter(function(t: any) { return !t.category || t.category === "outros"; }).map(function(t: any) { return t.description; }).filter(Boolean);
 

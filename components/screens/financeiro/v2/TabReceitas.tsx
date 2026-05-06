@@ -9,6 +9,8 @@
 //
 // 06/05/2026: AbcCurveCard adicionado depois de "Categorias de receita" —
 // curva ABC migrou do Estoque pra cá, calculada via useProductsRanking.
+// Wrapper recebe nativeID="abc-curve-card" pro deep-link `?focus=abc`
+// auto-rolar ate o card no web (document.getElementById).
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -192,8 +194,10 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
       </View>
 
       {/* Curva ABC dos produtos — calculada a partir de vendas reais.
-          Migrou do Estoque (era decorativa, sempre 'C') pra cá em 06/05. */}
-      <View style={{ marginBottom: 14 }}>
+          Migrou do Estoque (era decorativa, sempre 'C') pra cá em 06/05.
+          nativeID pro deep-link `/financeiro?tab=receitas&focus=abc` poder
+          rolar até o card via document.getElementById no web. */}
+      <View nativeID="abc-curve-card" style={{ marginBottom: 14 }}>
         <AbcCurveCard />
       </View>
 

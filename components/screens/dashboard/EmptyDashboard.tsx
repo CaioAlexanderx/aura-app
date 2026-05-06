@@ -21,11 +21,11 @@ export function EmptyDashboard({ name, onPress }: { name: string; onPress: (p: s
         <View style={s.ringInner}><Icon name="star" size={28} color={Colors.violet3} /></View>
       </View>
       <Text style={s.title}>Bem-vindo, {name}!</Text>
-      <Text style={s.sub}>Seu painel vai ganhar vida conforme voce usar a Aura. Comece por uma destas acoes:</Text>
+      <Text style={s.sub}>Seu painel vai ganhar vida à medida que você usar a Aura. Comece por uma destas ações:</Text>
       <View style={s.actions}>
         <Pressable style={s.action} onPress={() => onPress("/financeiro")}>
           <Icon name="dollar" size={18} color={Colors.green} />
-          <Text style={s.actionText}>Lancar receita</Text>
+          <Text style={s.actionText}>Lançar receita</Text>
         </Pressable>
         <Pressable style={s.action} onPress={() => onPress("/estoque")}>
           <Icon name="package" size={18} color={Colors.amber} />
@@ -33,7 +33,7 @@ export function EmptyDashboard({ name, onPress }: { name: string; onPress: (p: s
         </Pressable>
         <Pressable style={s.action} onPress={() => onPress("/clientes")}>
           <Icon name="user_plus" size={18} color={Colors.violet3} />
-          <Text style={s.actionText}>Adicionar cliente</Text>
+          <Text style={s.actionText}>Cadastrar cliente</Text>
         </Pressable>
       </View>
     </View>

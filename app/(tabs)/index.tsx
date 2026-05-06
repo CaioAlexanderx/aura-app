@@ -244,8 +244,10 @@ export default function DashboardScreen() {
             {/* MULTICNPJ Onda 2.6: SalesAnalyticsCard agora funciona em consolidated
                 via /me/sales/analytics (useSalesAnalytics ramifica internamente).
                 TopSellersCard e BirthdaysCard ainda per-company (escondidos em
-                consolidated por ora — proxima onda de polish, se houver demanda). */}
-            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro"); }} />}
+                consolidated por ora — proxima onda de polish, se houver demanda).
+                06/05/2026: "Ver analise completa" deep-linka pra Curva ABC dentro
+                da aba Receitas (foco abc -> auto-scroll na tela de Financeiro). */}
+            {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro?tab=receitas&focus=abc"); }} />}
             {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
             {!isDemo && !consolidatedView && <BirthdaysCard />}
 
