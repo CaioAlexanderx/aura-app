@@ -7,9 +7,8 @@
 //   · Input "CPF na nota" com validação mod-11
 //   · Modo "Dividir pagamento" com lista de N entradas (NFC-e payments[])
 //   · CartItem ganha lixeira (confirm 2-cliques) + edição inline do preço
-//   · Compactação 1440x900: sidebar 380px, item layout reduzido pra evitar
-//     truncamento de preço e lixeira
-//   · itemMeta mostra só o preço unitário (qty já é exibida no qtyCtrl)
+//   · CartItem em 2 linhas (1: avatar+nome+total+trash, 2: preço+qty)
+//     pra preço/qty/total não competirem por espaço em sidebar estreita
 // ============================================================
 import { forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -491,6 +490,10 @@ function SplitRow({
   );
 }
 
+// ── CartItem em 2 linhas ─────────────────────────────────────────
+// Linha 1: [avatar] [nome flex:1]                  [total] [trash]
+// Linha 2:          [R$ unit ✏]    spacer    [- qty +]
+// Avatar ocupa só linha 1; linha 2 alinha à esquerda do nome (indent).
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange,
 }: {
@@ -568,15 +571,32 @@ function CartItem({
 
   return (
     <View style={s.item}>
-      <View style={[s.itemImg, Platform.OS === "web" ? (imgBg as any) : { backgroundColor: accent + "22", borderWidth: 1, borderColor: accent + "44" }]}>
-        <Text style={s.itemLetter}>{letter}</Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      {/* Linha 1: avatar | nome | total | trash */}
+      <View style={s.itemRow1}>
+        <View style={[s.itemImg, Platform.OS === "web" ? (imgBg as any) : { backgroundColor: accent + "22", borderWidth: 1, borderColor: accent + "44" }]}>
+          <Text style={s.itemLetter}>{letter}</Text>
+        </View>
         <Text numberOfLines={1} style={s.itemName}>
           {item.name}
         </Text>
-        {/* Preço unitário (sem `× qty` — qty já é exibida no qtyCtrl ao lado).
-            Clica nele pra editar o preço inline. */}
+        <Text style={s.itemPrice} numberOfLines={1}>
+          {fmtCurrency(item.price * item.qty)}
+        </Text>
+        <Pressable
+          onPress={handleDeletePress}
+          style={[s.itemTrash, confirmDelete && s.itemTrashConfirm]}
+        >
+          <Icon
+            name={confirmDelete ? "alert" : "trash"}
+            size={13}
+            color={confirmDelete ? "#ef4444" : Colors.ink3}
+          />
+        </Pressable>
+      </View>
+
+      {/* Linha 2: indent | preço unitário editável | spacer | qtyCtrl */}
+      <View style={s.itemRow2}>
+        <View style={s.itemIndent} />
         {isEditingPrice ? (
           <View style={s.priceEditRow}>
             <Text style={s.priceEditPrefix}>R$</Text>
@@ -603,44 +623,36 @@ function CartItem({
             {fmtCurrency(item.price)}
           </Text>
         )}
+        <View style={{ flex: 1 }} />
+        <View style={s.qtyCtrl}>
+          <Pressable onPress={onDec} style={s.qtyBtn}>
+            <Text style={s.qtyBtnTxt}>−</Text>
+          </Pressable>
+          <TextInput
+            style={[
+              s.qtyVal,
+              IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
+            ]}
+            value={isEditing ? inputVal! : String(item.qty)}
+            onFocus={handleFocus}
+            onChangeText={v => setInputVal(v.replace(/\D/g, ""))}
+            onBlur={handleCommit}
+            onSubmitEditing={handleCommit}
+            keyboardType="number-pad"
+            selectTextOnFocus
+            maxLength={3}
+          />
+          <Pressable onPress={onInc} style={s.qtyBtn}>
+            <Text style={s.qtyBtnTxt}>+</Text>
+          </Pressable>
+        </View>
       </View>
-      <View style={s.qtyCtrl}>
-        <Pressable onPress={onDec} style={s.qtyBtn}>
-          <Text style={s.qtyBtnTxt}>−</Text>
-        </Pressable>
-        <TextInput
-          style={[
-            s.qtyVal,
-            IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
-          ]}
-          value={isEditing ? inputVal! : String(item.qty)}
-          onFocus={handleFocus}
-          onChangeText={v => setInputVal(v.replace(/\D/g, ""))}
-          onBlur={handleCommit}
-          onSubmitEditing={handleCommit}
-          keyboardType="number-pad"
-          selectTextOnFocus
-          maxLength={3}
-        />
-        <Pressable onPress={onInc} style={s.qtyBtn}>
-          <Text style={s.qtyBtnTxt}>+</Text>
-        </Pressable>
-      </View>
-      <Text style={s.itemPrice} numberOfLines={1}>{fmtCurrency(item.price * item.qty)}</Text>
-      {/* Lixeira com confirm 2-cliques. 1o clique vira alerta vermelho, 2o (em 2s) deleta. */}
-      <Pressable
-        onPress={handleDeletePress}
-        style={[s.itemTrash, confirmDelete && s.itemTrashConfirm]}
-      >
-        <Icon
-          name={confirmDelete ? "alert" : "trash"}
-          size={13}
-          color={confirmDelete ? "#ef4444" : Colors.ink3}
-        />
-      </Pressable>
     </View>
   );
 }
+
+const ITEM_AVATAR = 32;
+const ITEM_AVATAR_GAP = 8;
 
 const s = StyleSheet.create({
   cart: { flex: 1, flexDirection: "column", overflow: "hidden" },
@@ -660,41 +672,45 @@ const s = StyleSheet.create({
   empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
   emptyIco: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(124,58,237,0.1)", borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTxt: { color: Colors.ink2, fontSize: 12, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", letterSpacing: 0.6, textTransform: "uppercase", fontWeight: "700", textAlign: "center" },
-  // CartItem compactado pra caber em sidebar 380px sem cortar preço/lixeira.
-  // itemMeta agora mostra só o preço unitário (qty já está no qtyCtrl ao lado).
-  item: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Glass.lineFaint },
-  itemImg: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  // CartItem 2-linhas. Linha 1: avatar+nome+total+trash. Linha 2: preço+qty.
+  item: {
+    paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: Glass.lineFaint,
+  },
+  itemRow1: { flexDirection: "row", alignItems: "center", gap: ITEM_AVATAR_GAP },
+  itemRow2: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  itemIndent: { width: ITEM_AVATAR + ITEM_AVATAR_GAP, flexShrink: 0 },
+  itemImg: { width: ITEM_AVATAR, height: ITEM_AVATAR, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   itemLetter: { fontSize: 12, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
-  itemName: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
-  itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, marginTop: 2, letterSpacing: 0.2 },
-  // Edição inline do preço — flex row com flexShrink: 1 pra texto truncar
-  // antes do ícone de edit desaparecer.
+  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600", flex: 1, minWidth: 0 },
+  itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10.5, color: Colors.ink3, letterSpacing: 0.2 },
+  // Edição inline do preço — Pressable que vira TextInput
   priceEditableTouch: {
-    flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2,
-    flexShrink: 1,
+    flexDirection: "row", alignItems: "center", gap: 4,
   },
   priceEditRow: {
-    flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2,
-    alignSelf: "flex-start",
+    flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: Colors.bg, borderRadius: 6,
-    paddingHorizontal: 5, paddingVertical: 2,
+    paddingHorizontal: 6, paddingVertical: 2,
     borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
   },
-  priceEditPrefix: { fontSize: 9.5, color: Colors.ink3, fontWeight: "600" },
+  priceEditPrefix: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
   priceEditInput: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 11, color: Colors.ink, fontWeight: "700",
-    minWidth: 50, paddingVertical: 0,
+    minWidth: 60, paddingVertical: 0,
     textAlign: "right",
   },
-  qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 2, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 7, flexShrink: 0 },
-  qtyBtn: { width: 22, height: 22, borderRadius: 5, backgroundColor: Glass.lineFaint, alignItems: "center", justifyContent: "center" },
-  qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 13 },
-  qtyVal: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: Colors.ink, fontWeight: "700", minWidth: 14, textAlign: "center", paddingHorizontal: 2 },
-  itemPrice: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: Colors.violet3, fontWeight: "700", minWidth: 54, textAlign: "right", flexShrink: 0 },
+  // qtyCtrl tem espaço próprio na linha 2 — sem aperto.
+  qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 4, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 7, flexShrink: 0 },
+  qtyBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: Glass.lineFaint, alignItems: "center", justifyContent: "center" },
+  qtyBtnTxt: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
+  qtyVal: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.ink, fontWeight: "700", minWidth: 18, textAlign: "center", paddingHorizontal: 2 },
+  // Total à direita da linha 1, sem competir com qtyCtrl.
+  itemPrice: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: Colors.violet3, fontWeight: "700", textAlign: "right", flexShrink: 0 },
   // Lixeira: estado normal e estado de confirm (2o clique deleta)
   itemTrash: {
-    width: 22, height: 22, borderRadius: 5,
+    width: 24, height: 24, borderRadius: 6,
     alignItems: "center", justifyContent: "center",
     backgroundColor: "transparent",
     flexShrink: 0,
