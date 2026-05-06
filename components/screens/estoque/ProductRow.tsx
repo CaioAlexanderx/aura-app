@@ -24,18 +24,11 @@ function isServiceProduct(p: Product) {
   return unit === "srv" || cat === "servicos" || cat === "serviços" || cat === "servico" || cat === "serviço";
 }
 
-function AbcBadge({ abc }: { abc: "A" | "B" | "C" }) {
-  const colors = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
-  const bgs = { A: Colors.greenD, B: Colors.amberD, C: "rgba(255,255,255,0.05)" };
-  return <View style={[s.badge, { backgroundColor: bgs[abc] }]}><Text style={[s.badgeText, { color: colors[abc] }]}>{abc}</Text></View>;
-}
-
 export function ProductRow({
-  product, showAbc, onDelete, onEdit, onLink,
+  product, onDelete, onEdit, onLink,
   isSelected, onSelect,
 }: {
   product: Product;
-  showAbc?: boolean;
   onDelete?: (id: string) => void;
   onEdit?: (product: Product) => void;
   // M-STOCKLINK MSL-05: callback opcional pra abrir modal de vínculo
@@ -69,15 +62,14 @@ export function ProductRow({
       >
         {onSelect && (
           <View style={[s.checkbox, isSelected && s.checkboxSelected]}>
-            {isSelected && <Text style={s.checkmark}>{"\u2713"}</Text>}
+            {isSelected && <Text style={s.checkmark}>{"✓"}</Text>}
           </View>
         )}
         <View style={s.left}>
-          {showAbc && !onSelect && !isService && <AbcBadge abc={product.abc} />}
           {/* Thumbnail: servico ganha ícone ao invés de swatch/imagem */}
           {isService ? (
             <View style={s.serviceBadge}>
-              <Text style={s.serviceBadgeIcon}>{"\u2605"}</Text>
+              <Text style={s.serviceBadgeIcon}>{"★"}</Text>
             </View>
           ) : hasImage ? (
             <Image source={{ uri: product.image_url }} style={s.thumb} resizeMode="cover" />
@@ -116,15 +108,14 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+                {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
                 )}
-                <View style={s.detailItem}><Text style={s.detailLabel}>Curva ABC</Text><AbcBadge abc={product.abc} /></View>
               </View>
             </View>
           ) : (
             <View style={s.detailGrid}>
-              {[["Preco", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Vendidos (30d)", String(product.sold30d)]].map(([l, v]) =>
+              {[["Preco", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"]].map(([l, v]) =>
                 <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
               )}
             </View>
@@ -154,7 +145,7 @@ export function ProductRow({
             {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>{isService ? "Editar servico" : "Editar produto"}</Text></Pressable>}
             {showLinkBtn && (
               <Pressable onPress={() => onLink!(product)} style={s.linkBtn}>
-                <Text style={s.linkBtnText}>{"\uD83D\uDD17 Vincular CNPJ"}</Text>
+                <Text style={s.linkBtnText}>{"🔗 Vincular CNPJ"}</Text>
               </Pressable>
             )}
             {onDelete && <Pressable onPress={() => onDelete(product.id)} style={s.deleteBtn}><Text style={s.deleteBtnText}>Excluir</Text></Pressable>}
@@ -166,8 +157,6 @@ export function ProductRow({
 }
 
 const s = StyleSheet.create({
-  badge: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontSize: 12, fontWeight: "800" },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, marginRight: 8, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4 },
   checkboxSelected: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   checkmark: { fontSize: 13, color: "#fff", fontWeight: "700", lineHeight: 16 },
