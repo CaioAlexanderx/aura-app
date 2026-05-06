@@ -12,6 +12,9 @@
 // (setUnitPrice -> onPriceChange) + lixeira com confirm 2-cliques.
 // 05/05 fix: ícone do crediário trocado pra `clock` (credit_card
 // não existe no Icon set). Sidebar 400px (380 era apertado).
+// 06/05: layout responsivo — colunas do grid e sidebar do CartPanel
+// escalam com viewport (4/400 em 1440, 5/440 em 1500, 6/480 em 1900+).
+// actBar e banner ganham maxWidth pra não esticar demais.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -101,17 +104,39 @@ const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
   icon: PAY_ICONS[p.key] || "dollar",
 }));
 
-function useIsWide() {
-  const [wide, setWide] = useState(
-    (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 860
-  );
+// Hook que expõe largura da viewport + breakpoints úteis. Web only escuta
+// resize; mobile usa Dimensions inicial. Substitui useIsWide.
+function useViewport() {
+  const initial = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) || 1024;
+  const [w, setW] = useState(initial);
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
-    const h = () => setWide(window.innerWidth > 860);
+    const h = () => setW(window.innerWidth);
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
-  return wide;
+  return {
+    width: w,
+    wide: w > 860,           // sidebar lateral ativa
+    xl:   w >= 1500,         // ganha 1 coluna extra
+    xxl:  w >= 1900,         // ganha mais 1 coluna (6 total)
+  };
+}
+
+// Decide número de colunas do grid de produtos baseado na viewport.
+// Em 1440 cabia bem em 4 (~250px cada). Em 2560 com 4 ficava ~470px
+// (cards gigantes). Escala progressiva.
+function productColumnsFor(vp: { xl: boolean; xxl: boolean }) {
+  if (vp.xxl) return 6;
+  if (vp.xl)  return 5;
+  return 4;
+}
+
+// CartPanel cresce levemente em telas grandes pra não parecer espremido.
+function cartWidthFor(vp: { xl: boolean; xxl: boolean }) {
+  if (vp.xxl) return 480;
+  if (vp.xl)  return 440;
+  return 400;
 }
 
 function CaixaScreenInner() {
@@ -166,7 +191,10 @@ function CaixaScreenInner() {
     splitRemaining, splitIsBalanced,
   } = useCart();
 
-  const wide = useIsWide();
+  const vp = useViewport();
+  const wide = vp.wide;
+  const productCols = productColumnsFor(vp);
+  const cartWidth = cartWidthFor(vp);
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<string>("all");
   const [showOutOfStock, setShowOutOfStock] = useState(false);
@@ -445,12 +473,16 @@ function CaixaScreenInner() {
         <CaixaDesignStyle />
         <CaixaBackdrop />
 
-        <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: "1fr 400px" } as any)]}>
+        <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: `1fr ${cartWidth}px` } as any)]}>
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
             contentContainerStyle={{ padding: 28, paddingBottom: 48 }}
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
+            {/* Em telas muito grandes, limitamos a largura do conteúdo principal
+                pra cards não esticarem (look comprido demais) e linhas de leitura
+                continuarem confortáveis. 1600 deixa respiro. */}
+            <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
             <View style={s.topRow}>
               <View>
                 <Text style={s.title}>Caixa</Text>
@@ -546,7 +578,7 @@ function CaixaScreenInner() {
                   products={paginated}
                   qtyById={qtyById}
                   onAdd={(p, e) => handleAddProduct(p as Product, e)}
-                  columns={4}
+                  columns={productCols}
                 />
                 <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
               </>
@@ -557,9 +589,10 @@ function CaixaScreenInner() {
                 <Text style={s.demoTxt}>Modo demonstrativo</Text>
               </View>
             )}
+            </View>
           </ScrollView>
 
-          <View style={[s.cartWrap, IS_WEB && ({ position: "sticky" as any, top: 0, height: "100vh" } as any)]}>
+          <View style={[s.cartWrap, { width: cartWidth }, IS_WEB && ({ position: "sticky" as any, top: 0, height: "100vh" } as any)]}>
             <CartPanel ref={cartHeadRef} {...cartProps} />
           </View>
         </View>
@@ -690,9 +723,8 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   main: { flex: 1, flexDirection: "row", minWidth: 0 },
   catalog: { flex: 1, minWidth: 0 },
-  // 1440x900: sidebar 400px (era 380, apertava demais; era 420 original).
-  // 1440 - 400 = 1040px catálogo, suficiente pra 4 colunas confortáveis.
-  cartWrap: { width: 400, overflow: "hidden" },
+  // Sidebar dinâmica via width inline (cartWidth) — 400 padrão, 440 em xl, 480 em xxl.
+  cartWrap: { overflow: "hidden" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 22 },
   title: { fontSize: 26, color: Colors.ink, letterSpacing: -0.4, fontWeight: "700" },
   titleSub: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
