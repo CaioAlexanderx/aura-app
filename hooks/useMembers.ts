@@ -21,6 +21,10 @@ export type Member = {
   is_active: boolean;
   permissions: Record<string, boolean>;
   invite_email?: string;
+  // Backend ja monta a URL completa; frontend so renderiza.
+  // Vem null/undefined pra ativos.
+  invite_token?: string | null;
+  invite_url?: string | null;
   invited_at?: string;
   accepted_at?: string;
   companies: MemberCompany[];  // CNPJs que este membro tem acesso
@@ -51,6 +55,10 @@ function mapMember(raw: any): Member {
       ? JSON.parse(raw.permissions)
       : (raw.permissions || {}),
     invite_email: raw.invite_email,
+    // 06/05/2026: backend agora retorna invite_token/url pra pending —
+    // permite recuperar link a qualquer momento.
+    invite_token: raw.invite_token || null,
+    invite_url:   raw.invite_url   || null,
     invited_at:   raw.invited_at,
     accepted_at:  raw.accepted_at,
     companies:    raw.companies || [],
