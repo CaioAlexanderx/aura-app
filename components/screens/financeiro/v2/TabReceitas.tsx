@@ -11,11 +11,15 @@
 // curva ABC migrou do Estoque pra cá, calculada via useProductsRanking.
 // Wrapper recebe nativeID="abc-curve-card" pro deep-link `?focus=abc`
 // auto-rolar ate o card no web (document.getElementById).
+//
+// 06/05/2026: parseDateLocal corrige bug de timezone em dailyIncomeSeries
+// (due_date como '2026-05-06' virava 5/maio em BRT) + tooltips no hover
+// das barras e categorias via title= (web only).
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Transaction } from "../types";
-import { fmt, fmtK } from "../types";
+import { fmt, fmtK, parseDateLocal } from "../types";
 import { useMemo } from "react";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
@@ -28,6 +32,11 @@ var W = Dimensions.get("window").width;
 var NARROW = W < 480;
 var IS_WIDE = W > 768;
 var isWeb = Platform.OS === "web";
+
+// Tooltip nativo do browser via title= (RN-Web). No native ignora.
+function tip(text: string): any {
+  return Platform.OS === "web" ? { title: text } : {};
+}
 
 type Summary = { income: number; expenses: number; balance: number; pendingIncome?: number; pendingExpenses?: number };
 
@@ -55,7 +64,10 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
     .forEach(function(t) {
       var raw = (t as any).due_date || (t as any).created_at;
       if (!raw) return;
-      var d = new Date(raw);
+      // FIX 06/05/2026 (timezone): parseDateLocal evita o shift de 1 dia
+      // em date-only strings (UTC midnight -> BRT 21h dia anterior).
+      var d = parseDateLocal(raw);
+      if (isNaN(d.getTime())) return;
       var k = d.getDate();
       map[k] = (map[k] || 0) + t.amount;
     });
@@ -130,8 +142,9 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
           <View style={s.bars}>
             {daily.map(function(d, i) {
               var h = Math.max(2, (d.value / maxDaily) * 100);
+              var tipText = "Dia " + String(d.day).padStart(2, "0") + ": " + fmt(d.value);
               return (
-                <View key={i} style={s.barCol}>
+                <View key={i} {...tip(tipText)} style={s.barCol}>
                   <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
                     <View style={[s.barFill, { height: h + "%", backgroundColor: Colors.green }]} />
                   </View>
@@ -178,8 +191,9 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
         ) : (
           categories.map(function(c, i) {
             var color = topCategoryColor[i % topCategoryColor.length];
+            var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
             return (
-              <View key={c.label} style={s.catRow}>
+              <View key={c.label} {...tip(tipText)} style={s.catRow}>
                 <View style={[s.catDot, { backgroundColor: color }]} />
                 <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
                 <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>

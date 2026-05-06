@@ -9,6 +9,7 @@ import { ExpenseDetail } from "./ExpenseDetail";
 import { ReconciliationSection } from "./ReconciliationSection";
 import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
+import { CollapsibleSection } from "./CollapsibleSection";
 import type { Transaction, PeriodKey } from "./types";
 // v2: hero cards (redesign Onda 1)
 import { HealthScoreHero, RunwayCard, BiggestLever } from "./v2";
@@ -63,9 +64,14 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
     return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
   }
 
+  // Contadores rapidos pros subtitles dos accordions
+  var incomeCount = transactions.filter(function(t) { return t.type === "income"; }).length;
+  var expenseCount = transactions.filter(function(t) { return t.type === "expense"; }).length;
+  var pendingCount = transactions.filter(function(t) { return t.status === "pending"; }).length;
+
   return (
     <View>
-      {/* === V2: Hero cards (redesign Onda 1, 04/05/2026) === */}
+      {/* === TOPO FIXO — visao imediata, sempre visivel === */}
       {/* Health Score Hero — donut + drivers + frase narrativa parametrizada.
           Substitui ranking arbitrario "78/100" com formula 0.35*margem + 0.35*runway
           + 0.20*crescimento + 0.10*ticket (HEALTH_TARGETS/HEALTH_WEIGHTS). */}
@@ -76,9 +82,7 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
           empresa especifica. CTA continua valido (leva pra Lancamentos consolidado). */}
       <BiggestLever insights={insights} onCta={onGoToLancamentos} consolidated={consolidatedView} />
 
-      {/* SmartBalance + RunwayCard lado a lado em wide, stack em mobile.
-          SmartBalance ja tinha "Saudavel/Atencao/Critico" propria — agora coabita
-          com Health Score (visoes complementares: saldo do periodo vs saude geral). */}
+      {/* SmartBalance + RunwayCard lado a lado em wide, stack em mobile. */}
       {IS_WIDE ? (
         <View style={s.heroGrid}>
           <View style={{ flex: 1 }}>
@@ -117,35 +121,80 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         </>
       )}
 
-      {/* === Componentes existentes (preservados) === */}
       <SparklineBar transactions={transactions} />
-      <PendingCards transactions={transactions} />
-      <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
-      <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
-      {/* V2 Onda 3: CashflowChart substitui CashFlowCard antigo. Consome
-          insights.cashflow do server (history 30d + projection 30/60/90 com
-          banda confianca ±15%). Funciona em consolidated e per-company. */}
-      <View style={[s.cashflowCard, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={s.cashflowKicker}>FLUXO DE CAIXA · HISTORICO + PROJECAO</Text>
-        <Text style={s.cashflowTitle}>Pra onde o caixa esta indo</Text>
-        <CashflowChart data={insights.cashflow} consolidated={consolidatedView} />
-      </View>
-      {/* AIFinancialInsights removido na Onda 1 do redesign — volta no plano Expansao
-          com cache 24h + regen on-demand pra nao queimar quota Haiku. */}
-      <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
-      <ReconciliationSection />
+
+      {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand === */}
+      <CollapsibleSection
+        id="pendencias"
+        title="Pendências"
+        subtitle={pendingCount + " lancamento" + (pendingCount === 1 ? "" : "s") + " pendente" + (pendingCount === 1 ? "" : "s")}
+        defaultExpanded
+      >
+        <PendingCards transactions={transactions} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="receitas-detalhe"
+        title="Receitas — análise detalhada"
+        subtitle={incomeCount + " lancamento" + (incomeCount === 1 ? "" : "s") + " · categorias, top 5, tendência diária"}
+        defaultExpanded
+      >
+        <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="despesas-detalhe"
+        title="Despesas — análise detalhada"
+        subtitle={expenseCount + " lancamento" + (expenseCount === 1 ? "" : "s") + " · categorias, top 5, formas de pagamento"}
+        defaultExpanded
+      >
+        <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="fluxo-caixa"
+        title="Fluxo de caixa"
+        subtitle="Histórico 30d + projeção 30/60/90 com banda de confiança"
+      >
+        <View style={[s.cashflowCard, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <CashflowChart data={insights.cashflow} consolidated={consolidatedView} />
+        </View>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="analise-rapida"
+        title="Análise rápida"
+        subtitle="Insights automaticos sobre o periodo"
+      >
+        <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="conciliacao"
+        title="Conciliação bancária"
+        subtitle="Confronte extrato vs lançamentos"
+      >
+        <ReconciliationSection />
+      </CollapsibleSection>
+
       {transactions.length > 0 && (
-        <View>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Ultimos lancamentos</Text>
-            <Pressable onPress={onGoToLancamentos}><Text style={s.seeAll}>Ver todos</Text></Pressable>
-          </View>
+        <CollapsibleSection
+          id="ultimos-lancamentos"
+          title="Últimos lançamentos"
+          subtitle={"Mostrando " + Math.min(8, transactions.length) + " de " + transactions.length}
+          defaultExpanded
+          rightAccessory={
+            <Pressable onPress={onGoToLancamentos} hitSlop={8}>
+              <Text style={s.seeAll}>Ver todos</Text>
+            </Pressable>
+          }
+        >
           <View style={s.listCard}>
             {transactions.slice(0, 8).map(function(t) {
               return <TransactionRow key={t.id} item={t} onDelete={!isDemo ? onDelete : undefined} onEdit={!isDemo ? onEdit : undefined} />;
             })}
           </View>
-        </View>
+        </CollapsibleSection>
       )}
     </View>
   );
@@ -153,11 +202,7 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
 
 var s = StyleSheet.create({
   heroGrid: { flexDirection: "row", gap: 14, marginBottom: 0 },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  sectionTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
-  cashflowCard: { borderRadius: 16, padding: 18, borderWidth: 1, marginBottom: 20 },
-  cashflowKicker: { fontSize: 9.5, color: Colors.ink3, letterSpacing: 1.2, fontWeight: "600", textTransform: "uppercase" },
-  cashflowTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700", marginTop: 4, marginBottom: 14, letterSpacing: -0.3 },
+  listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border },
+  cashflowCard: { borderRadius: 16, padding: 18, borderWidth: 1 },
 });

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions, TextInput } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, useWindowDimensions, TextInput } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi } from "@/hooks/useTransactions";
@@ -27,7 +27,6 @@ import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/Consol
 // V2 redesign (04/05/2026): Topbar nova + 2 abas novas (Receitas, Despesas).
 import { FinanceiroTopbar, TabReceitas, TabDespesas } from "@/components/screens/financeiro/v2";
 
-var IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 var isWeb = Platform.OS === "web";
 
 // Mapping de query param -> indice da tab. Usado pra deep-link como
@@ -41,6 +40,18 @@ var TAB_KEY_TO_INDEX: Record<string, number> = {
   retirada: TAB_INDEX.retirada,
   cupons: TAB_INDEX.cupons,
 };
+
+// FIX 06/05/2026 (responsividade): maxWidth e padding adaptam a viewport.
+// Antes tinha maxWidth: 1100 cravado, deixando 170px vazio em 1440x900
+// e 730px em 2560x1440. Agora escala em 4 niveis. Padding tambem ajusta —
+// mobile precisa de menos pra dar espaco aos cards.
+function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: number } {
+  if (w < 480) return { maxWidth: "100%", padding: 14 };       // mobile
+  if (w < 768) return { maxWidth: "100%", padding: 20 };       // tablet retrato
+  if (w < 1280) return { maxWidth: 1100, padding: 28 };        // tablet paisagem / laptop pequeno
+  if (w < 1900) return { maxWidth: 1340, padding: 32 };        // 1440x900 / FHD
+  return { maxWidth: 1600, padding: 36 };                       // 2560x1440 ultrawide
+}
 
 function maskDate(v: string): string {
   var d = v.replace(/\D/g, "").slice(0, 8);
@@ -58,6 +69,13 @@ function brToISO(br: string): string | null {
 }
 
 export default function FinanceiroScreen() {
+  // Reativo a resize/orientation. Antes era Dimensions.get("window").width
+  // no module load — viewport ficava cravado no primeiro render.
+  var { width: vw } = useWindowDimensions();
+  var layout = getLayoutForWidth(vw);
+  var IS_WIDE = vw >= 768;
+  var IS_NARROW = vw < 480;
+
   // Deep-link: ?tab= define aba inicial; ?focus= rola pro card alvo
   // (ex.: focus=abc -> #abc-curve-card dentro da TabReceitas).
   var params = useLocalSearchParams<{ tab?: string; focus?: string }>();
@@ -203,6 +221,15 @@ export default function FinanceiroScreen() {
     setEditTx(null); setShowModal(true);
   }
 
+  // Container responsivo — recalcula a cada render conforme vw muda.
+  var contentStyle = {
+    padding: layout.padding,
+    paddingBottom: 48,
+    maxWidth: layout.maxWidth as any,
+    alignSelf: "center" as const,
+    width: "100%" as const,
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <WebPortal active={showModal}>
@@ -214,7 +241,7 @@ export default function FinanceiroScreen() {
           editTransaction={editTx}
         />
       </WebPortal>
-      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={contentStyle}>
         {/* V2: Topbar nova substitui ScreenHeader + periodBar antigo. Em consolidated,
             mostra "Consolidado · N empresas" e esconde "Novo lancamento". */}
         <FinanceiroTopbar
@@ -247,12 +274,12 @@ export default function FinanceiroScreen() {
         {/* Selector de periodo custom — aparece quando usuario clica "Periodo" no topbar.
             Em produção, futuro: substituir por DatePicker bonito. */}
         {(period === "custom" || showCustomPeriod) && (
-          <View style={s.customRow}>
+          <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
             <View style={s.customField}>
               <Text style={s.customLabel}>De</Text>
               <TextInput style={s.customInput} value={customStartBR} onChangeText={function(v) { setCustomStartBR(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
             </View>
-            <Icon name="arrow_right" size={14} color={Colors.ink3} />
+            {!IS_NARROW && <Icon name="arrow_right" size={14} color={Colors.ink3} />}
             <View style={s.customField}>
               <Text style={s.customLabel}>Ate</Text>
               <TextInput style={s.customInput} value={customEndBR} onChangeText={function(v) { setCustomEndBR(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
@@ -279,9 +306,9 @@ export default function FinanceiroScreen() {
         )}
 
         {/* Tabs (6 abas — V2). Scroll horizontal em mobile pra caber todas. */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: IS_WIDE ? 8 : 6 }}>
           {TABS.map(function(tab, i) {
-            return <Pressable key={tab} onPress={function() { handleTabSelect(i); }} style={[s.tab, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
+            return <Pressable key={tab} onPress={function() { handleTabSelect(i); }} style={[s.tab, IS_NARROW ? s.tabNarrow : null, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
               <Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text>
             </Pressable>;
           })}
@@ -374,13 +401,15 @@ function ConsolidatedBlocked({ label, description }: { label: string; descriptio
 
 var s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
-  content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 1100, alignSelf: "center", width: "100%" },
+  // padding/maxWidth movidos pra contentStyle inline (responsivo via useWindowDimensions)
   customRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2 },
   customField: { flex: 1 },
   customLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  // Tab compacta em mobile — caber mais antes de scroll horizontal.
+  tabNarrow: { paddingHorizontal: 12, paddingVertical: 8 },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   tabTextActive: { color: "#fff", fontWeight: "600" },

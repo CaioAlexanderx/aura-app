@@ -84,6 +84,29 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+// FIX 06/05/2026 (timezone): Postgres DATE serializa como 'YYYY-MM-DD' e
+// new Date('2026-05-06') interpreta como UTC midnight, que em America/Sao_Paulo
+// (UTC-3) recua pro dia anterior — lancamentos apareciam no dia errado nos
+// graficos client-side (tendencia diaria, byDay buckets, etc).
+//
+// Estrategia: detectar strings date-only (sem hora/offset) e construir Date
+// em timezone local explicitamente via Date(y, m, d). Strings com offset (Z,
+// +HH:MM) ja sao parseadas corretamente pelo construtor padrao — apenas
+// repassa.
+//
+// Backend ja usa AT TIME ZONE 'America/Sao_Paulo' nas queries, entao a
+// agregacao server-side (summary, dashboard, insights) ja vinha certa. Esta
+// funcao corrige o ultimo elo (parsing client-side de date-only strings).
+export function parseDateLocal(s: string | null | undefined): Date {
+  if (!s) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    var parts = s.split("-");
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+  // Timestamp com timezone explicito (Z, +offset): construtor padrao acerta.
+  return new Date(s);
+}
+
 export function getPeriodRange(key: PeriodKey, customStart?: string, customEnd?: string): { start: Date; end: Date; label: string } {
   var now = new Date();
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -169,7 +192,8 @@ export function filterByPeriod(txs: Transaction[], key: PeriodKey): Transaction[
   return txs.filter(function(t) {
     var raw = (t as any).due_date || (t as any).created_at || t.date;
     if (!raw) return false;
-    var d = new Date(raw);
+    var d = parseDateLocal(raw);
+    if (isNaN(d.getTime())) return false;
     return d >= range.start && d <= range.end;
   });
 }

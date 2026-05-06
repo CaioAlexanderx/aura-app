@@ -5,6 +5,9 @@
 // DowBars (dia da semana), AnomalyAlerts (categorias acima da media), Gauge.
 //
 // Multi-CNPJ: Top5List exibe badge da loja (company_name) quando disponivel.
+//
+// 06/05/2026: traducao pt-BR de payment_method (backend retorna em ingles)
+// + tooltips nativos do browser via title= no hover (web only).
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -22,6 +25,52 @@ import type {
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
 var isWeb = Platform.OS === "web";
+
+// FIX 06/05/2026: backend serializa payment_method em ingles. Centraliza
+// traducao aqui (espelha o dict de IncomeDetail/ExpenseDetail). Se a chave
+// nao for reconhecida, repassa o original — assim categorias custom ou
+// labels ja em portugues nao sao destruidas.
+var METHOD_LABELS_PT: Record<string, string> = {
+  pix: "PIX",
+  cash: "Dinheiro",
+  dinheiro: "Dinheiro",
+  credit: "Crédito",
+  credit_card: "Crédito",
+  credito: "Crédito",
+  "credito (a vista)": "Crédito",
+  debit: "Débito",
+  debit_card: "Débito",
+  debito: "Débito",
+  voucher: "Vale",
+  vale: "Vale",
+  ticket: "Vale",
+  transfer: "Transferência",
+  bank_transfer: "Transferência",
+  transferencia: "Transferência",
+  boleto: "Boleto",
+  check: "Cheque",
+  cheque: "Cheque",
+  installment: "Parcelado",
+  parcelado: "Parcelado",
+  other: "Outros",
+  others: "Outros",
+  outros: "Outros",
+  unknown: "Não informado",
+  none: "Não informado",
+  null: "Não informado",
+};
+
+function translateMethod(label: string | null | undefined): string {
+  if (!label) return "Não informado";
+  var k = String(label).toLowerCase().trim();
+  return METHOD_LABELS_PT[k] || String(label);
+}
+
+// Helper pra montar o tooltip nativo (title= em RN-Web). Em native, prop
+// nao existe — fica como any cast, ignorada em runtime.
+function tip(text: string): any {
+  return Platform.OS === "web" ? { title: text } : {};
+}
 
 // ============================================================
 // Top 5 List — top 5 maiores receitas/despesas do periodo
@@ -49,8 +98,14 @@ export function Top5List({
   return (
     <View>
       {items.map(function(t, i) {
+        var methodPt = t.payment_method ? translateMethod(t.payment_method) : "";
+        var tipText = "#" + (i + 1) + " · " + t.description + " · " + (kind === "income" ? "+" : "−") + fmt(t.amount) + (methodPt ? " (" + methodPt + ")" : "");
         return (
-          <View key={t.id} style={[s.top5Row, { borderBottomColor: Colors.border }, i === items.length - 1 ? { borderBottomWidth: 0 } : null]}>
+          <View
+            key={t.id}
+            {...tip(tipText)}
+            style={[s.top5Row, { borderBottomColor: Colors.border }, i === items.length - 1 ? { borderBottomWidth: 0 } : null]}
+          >
             <View style={[s.top5Rank, { backgroundColor: bg }]}>
               <Text style={[s.top5RankNum, { color: color }]}>{i + 1}</Text>
             </View>
@@ -61,7 +116,7 @@ export function Top5List({
                 {t.payment_method && (
                   <>
                     <View style={[s.top5MetaDot, { backgroundColor: Colors.ink3 }]} />
-                    <Text style={[s.top5MetaText, { color: Colors.ink3 }]}>{t.payment_method}</Text>
+                    <Text style={[s.top5MetaText, { color: Colors.ink3 }]}>{methodPt}</Text>
                   </>
                 )}
                 {showCompanyBadge && t.company_name && (
@@ -105,10 +160,12 @@ export function HBarList({ items, kind }: { items: PaymentMethodSlice[]; kind: "
       {items.map(function(m, i) {
         var c = palette[i % palette.length];
         var w = (m.value / max) * 100;
+        var labelPt = translateMethod(m.label);
+        var tipText = labelPt + " · " + fmt(m.value) + " · " + m.pct.toFixed(1) + "%";
         return (
-          <View key={m.label} style={s.hbarRow}>
+          <View key={m.label} {...tip(tipText)} style={s.hbarRow}>
             <View style={s.hbarHead}>
-              <Text style={[s.hbarLabel, { color: Colors.ink }]} numberOfLines={1}>{m.label}</Text>
+              <Text style={[s.hbarLabel, { color: Colors.ink }]} numberOfLines={1}>{labelPt}</Text>
               <Text style={[s.hbarValue, { color: Colors.ink2 }]}>
                 {fmtK(m.value)}
                 <Text style={[s.hbarPct, { color: Colors.ink3 }]}>  ·  {m.pct.toFixed(0)}%</Text>
@@ -159,9 +216,11 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
       <View style={[s.timelineStack, { backgroundColor: Colors.bg4 }]}>
         {rows.filter(function(r) { return r.b.total > 0; }).map(function(r) {
           var w = (r.b.total / totalSum) * 100;
+          var pct = ((r.b.total / totalSum) * 100).toFixed(1);
           return (
             <View
               key={r.key}
+              {...tip(r.label + ": " + fmt(r.b.total) + " (" + pct + "%)")}
               style={[s.timelineSegment, { width: w + "%", backgroundColor: r.c }]}
             />
           );
@@ -173,7 +232,7 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
         {rows.map(function(r) {
           if (r.b.count === 0 && r.b.total === 0) return null;
           return (
-            <View key={r.key} style={s.timelineRow}>
+            <View key={r.key} {...tip(r.label + ": " + r.b.count + " " + (r.b.count === 1 ? "lancamento" : "lancamentos") + " · " + fmt(r.b.total))} style={s.timelineRow}>
               <View style={[s.timelineDot, { backgroundColor: r.c }]} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.timelineLabel, { color: Colors.ink }]}>{r.label}</Text>
@@ -211,7 +270,7 @@ export function DowBars({ items, kind }: { items: DowItem[]; kind: "income" | "e
           var h = Math.max(2, (d.total / max) * 100);
           var isPeak = i === peakIdx && d.total > 0;
           return (
-            <View key={i} style={s.dowCol}>
+            <View key={i} {...tip(d.label + ": " + fmt(d.total))} style={s.dowCol}>
               <Text style={[s.dowValue, { color: isPeak ? color : Colors.ink3, fontWeight: isPeak ? "700" : "500" }]}>
                 {d.total > 0 ? fmtK(d.total) : "—"}
               </Text>
@@ -258,11 +317,12 @@ export function Gauge({ data, benchmark }: { data: GaugeData; benchmark?: number
       </View>
 
       <View style={s.gaugeTrack}>
-        <View style={[s.gaugeZone, { flex: 60, backgroundColor: Colors.green, opacity: 0.35 }]} />
-        <View style={[s.gaugeZone, { flex: 20, backgroundColor: Colors.amber, opacity: 0.35 }]} />
-        <View style={[s.gaugeZone, { flex: 20, backgroundColor: Colors.red, opacity: 0.35 }]} />
+        <View {...tip("Saudável: até 60%")} style={[s.gaugeZone, { flex: 60, backgroundColor: Colors.green, opacity: 0.35 }]} />
+        <View {...tip("Atenção: 60% – 80%")} style={[s.gaugeZone, { flex: 20, backgroundColor: Colors.amber, opacity: 0.35 }]} />
+        <View {...tip("Crítico: acima de 80%")} style={[s.gaugeZone, { flex: 20, backgroundColor: Colors.red, opacity: 0.35 }]} />
         {/* Cursor */}
         <View
+          {...tip("Atual: " + pct + "%")}
           style={[
             s.gaugeCursor,
             { left: pct + "%", backgroundColor: Colors.ink },
@@ -270,6 +330,7 @@ export function Gauge({ data, benchmark }: { data: GaugeData; benchmark?: number
         />
         {benchmark != null && (
           <View
+            {...tip("Benchmark setorial: " + benchmark + "%")}
             style={[
               s.gaugeBench,
               { left: benchmark + "%", borderLeftColor: Colors.violet3 },
@@ -317,8 +378,9 @@ export function AnomalyAlerts({ items }: { items: Anomaly[] }) {
   return (
     <View style={{ gap: 10 }}>
       {items.map(function(a) {
+        var tipText = a.category + ": atual " + fmt(a.current) + " · média 3m " + fmt(a.avg_3m) + " · diferença +" + a.diff_pct.toFixed(1) + "%";
         return (
-          <View key={a.category} style={[s.anomalyCard, { backgroundColor: Colors.amberD, borderColor: Colors.amber + "55" }]}>
+          <View key={a.category} {...tip(tipText)} style={[s.anomalyCard, { backgroundColor: Colors.amberD, borderColor: Colors.amber + "55" }]}>
             <View style={s.anomalyHead}>
               <Text style={[s.anomalyCategory, { color: Colors.ink }]} numberOfLines={1}>{a.category}</Text>
               <View style={[s.anomalyPill, { backgroundColor: Colors.amber + "30" }]}>
