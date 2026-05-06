@@ -24,6 +24,10 @@ import { useAuthStore } from "@/stores/auth";
 //   - companyId opcional: mesmo padrao do useSaleDetail.
 //   - invalida lista (per-company E consolidated) + detalhes + transactions
 //     + dashboard + dre + products.
+//
+// useUpdateSaleSeller(companyId?): mutation pra alterar/remover vendedor
+//   - companyId opcional: mesmo padrao do useCancelSale.
+//   - invalida lista + detalhes ao concluir.
 // ============================================================
 
 export function useSalesList(filters?: SalesFilters) {
@@ -121,6 +125,30 @@ export function useCancelSale(companyId?: string) {
   return {
     cancelSale: function(args: { saleId: string; reason?: string }) { return mutation.mutateAsync(args); },
     isCancelling: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}
+
+export function useUpdateSaleSeller(companyId?: string) {
+  const { company } = useAuthStore();
+  // MULTICNPJ Onda 2.4: em consolidated, caller passa companyId do sale.
+  const targetCompanyId = companyId || company?.id;
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: function(args: { saleId: string; seller_id: string | null }) {
+      if (!targetCompanyId) throw new Error("no company");
+      return salesApi.updateSeller(targetCompanyId, args.saleId, args.seller_id);
+    },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["sales-list"] });
+      qc.invalidateQueries({ queryKey: ["sale-detail"] });
+    },
+  });
+
+  return {
+    updateSeller: function(args: { saleId: string; seller_id: string | null }) { return mutation.mutateAsync(args); },
+    isUpdating: mutation.isPending,
     error: mutation.error as Error | null,
   };
 }
