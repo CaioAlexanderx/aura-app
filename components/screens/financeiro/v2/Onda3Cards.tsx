@@ -4,6 +4,8 @@
 // banda confiança), MonthlyEvolution (12 meses), ProfessionalsRanking (per-company).
 //
 // Mantidos em arquivo separado pra não inflar SharedCards.tsx.
+//
+// 06/05/2026: tooltips title= em todos os graficos de barras (web only).
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -18,6 +20,11 @@ import type {
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
 var isWeb = Platform.OS === "web";
+
+// Tooltip nativo do browser via title= (RN-Web). No native ignora.
+function tip(text: string): any {
+  return Platform.OS === "web" ? { title: text } : {};
+}
 
 // ============================================================
 // CashflowChart — histórico 30d + projeção 30/60/90 com banda
@@ -61,8 +68,10 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
           var hInc = Math.max(2, (d.income / maxDay) * 100);
           var hExp = Math.max(d.expenses > 0 ? 2 : 0, (d.expenses / maxDay) * 100);
           var isToday = i === data.history.length - 1;
+          var dayLabel = isToday ? "Hoje" : "D-" + (data.history.length - 1 - i);
+          var tipText = dayLabel + " · receita " + fmt(d.income) + " · despesa " + fmt(d.expenses);
           return (
-            <View key={i} style={s.cfBarCol}>
+            <View key={i} {...tip(tipText)} style={s.cfBarCol}>
               <View style={s.cfBarStack}>
                 <View
                   style={[
@@ -102,8 +111,9 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
       <View style={s.cfProjList}>
         {data.projection.map(function(p) {
           var color = p.value >= 0 ? Colors.green : Colors.red;
+          var tipText = "+" + p.days_ahead + " dias · projecao " + (p.value >= 0 ? "+" : "") + fmt(p.value) + " · banda " + fmt(p.low) + " a " + fmt(p.high);
           return (
-            <View key={p.days_ahead} style={[s.cfProjRow, { borderBottomColor: Colors.border }]}>
+            <View key={p.days_ahead} {...tip(tipText)} style={[s.cfProjRow, { borderBottomColor: Colors.border }]}>
               <Text style={[s.cfProjLabel, { color: Colors.ink2 }]}>+{p.days_ahead} dias</Text>
               <View style={s.cfProjBand}>
                 <Text style={[s.cfProjLow, { color: Colors.ink3 }]}>{fmtK(p.low)}</Text>
@@ -168,8 +178,9 @@ export function MonthlyEvolution({ items }: { items: MonthlyItem[] }) {
           var hInc = Math.max(2, (m.income / maxValue) * 100);
           var hExp = Math.max(m.expenses > 0 ? 2 : 0, (m.expenses / maxValue) * 100);
           var isLast = i === items.length - 1;
+          var tipText = m.label + " · receita " + fmt(m.income) + " · despesa " + fmt(m.expenses) + " · saldo " + ((m.income - m.expenses) >= 0 ? "+" : "") + fmt(m.income - m.expenses);
           return (
-            <View key={m.month} style={s.evolCol}>
+            <View key={m.month} {...tip(tipText)} style={s.evolCol}>
               <View style={s.evolStack}>
                 <View
                   style={[
@@ -251,8 +262,9 @@ export function ProfessionalsRanking({ items, consolidated }: { items: RankingIt
       {items.map(function(p, i) {
         var color = avatarColors[i % avatarColors.length];
         var w = (p.total / max) * 100;
+        var tipText = "#" + (i + 1) + " " + p.name + " · " + fmt(p.total) + " em " + p.tx_count + " " + (p.tx_count === 1 ? "venda" : "vendas") + " · ticket " + fmt(p.avg_ticket);
         return (
-          <View key={p.id} style={[s.rankRow, i === items.length - 1 ? null : { borderBottomWidth: 1, borderBottomColor: Colors.border }]}>
+          <View key={p.id} {...tip(tipText)} style={[s.rankRow, i === items.length - 1 ? null : { borderBottomWidth: 1, borderBottomColor: Colors.border }]}>
             <Text style={[s.rankPosition, { color: Colors.violet3 }]}>{i + 1}</Text>
             <View style={[s.rankAvatar, { backgroundColor: color }]}>
               <Text style={s.rankAvatarText}>{p.name.charAt(0).toUpperCase()}</Text>
