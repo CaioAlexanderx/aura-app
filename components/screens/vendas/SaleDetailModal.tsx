@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { useSaleDetail, useCancelSale } from "@/hooks/useSales";
+import { useSaleDetail, useCancelSale, useUpdateSaleSeller } from "@/hooks/useSales";
+import { employeesApi } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -15,6 +18,10 @@ import { useSaleDetail, useCancelSale } from "@/hooks/useSales";
 //
 // Tambem aceita `companyName` opcional pra mostrar badge no header
 // indicando qual loja registrou a venda.
+//
+// Seller edit (06/05/2026): lapis no card "Vendedora" abre picker
+// com lista de funcionarios. Salva via PATCH /companies/:id/sales/:saleId.
+// Persiste seller_name denormalizado no backend — robusto a demissoes.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -53,8 +60,27 @@ export function SaleDetailModal({
 }) {
   const { detail, isLoading, error } = useSaleDetail(visible ? saleId : null, companyId);
   const { cancelSale, isCancelling } = useCancelSale(companyId);
+  const { updateSeller, isUpdating } = useUpdateSaleSeller(companyId);
+  const { company } = useAuthStore();
+  const effectiveCompanyId = companyId || company?.id;
+
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [editingSeller, setEditingSeller] = useState(false);
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
+
+  // Carrega funcionarios de forma lazy — so dispara quando o picker abre
+  const { data: empData, isLoading: isLoadingEmps } = useQuery({
+    queryKey: ["employees", effectiveCompanyId],
+    queryFn: function() {
+      if (!effectiveCompanyId) throw new Error("no company");
+      return employeesApi.list(effectiveCompanyId);
+    },
+    enabled: editingSeller && !!effectiveCompanyId,
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const employees: any[] = (empData as any)?.employees || [];
 
   if (!visible) return null;
 
@@ -83,6 +109,22 @@ export function SaleDetailModal({
     if (onEditTransaction) {
       onClose();
       onEditTransaction(txId);
+    }
+  }
+
+  function handleOpenSellerEdit() {
+    setSelectedSellerId((seller as any)?.id || null);
+    setEditingSeller(true);
+  }
+
+  async function handleSaveSeller() {
+    if (!saleId) return;
+    try {
+      await updateSeller({ saleId: saleId, seller_id: selectedSellerId });
+      toast.success(selectedSellerId ? "Vendedor atualizado." : "Vendedor removido.");
+      setEditingSeller(false);
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.message || "Erro ao salvar vendedor");
     }
   }
 
@@ -171,7 +213,14 @@ export function SaleDetailModal({
                 {customer?.phone && <Text style={s.personHint}>{customer.phone}</Text>}
               </View>
               <View style={s.personCard}>
-                <Icon name="user_plus" size={12} color={Colors.ink3} />
+                <View style={s.personCardHeader}>
+                  <Icon name="user_plus" size={12} color={Colors.ink3} />
+                  {!isCancelled && (
+                    <Pressable onPress={handleOpenSellerEdit} style={s.editSellerBtn}>
+                      <Icon name="edit" size={11} color={Colors.violet3} />
+                    </Pressable>
+                  )}
+                </View>
                 <Text style={s.personLabel}>Vendedora</Text>
                 <Text style={s.personValue} numberOfLines={1}>
                   {seller?.name || "Nao informada"}
@@ -255,6 +304,7 @@ export function SaleDetailModal({
         )}
       </View>
 
+      {/* Confirmar cancelamento */}
       {confirmCancel && (
         <View style={s.confirmOverlay}>
           <View style={s.confirmModal}>
@@ -290,6 +340,68 @@ export function SaleDetailModal({
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <Text style={s.confirmBtnConfirmText}>Sim, cancelar venda</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Picker de vendedor */}
+      {editingSeller && (
+        <View style={s.confirmOverlay}>
+          <View style={s.sellerPickerModal}>
+            <Text style={s.confirmTitle}>Alterar vendedora</Text>
+            {isLoadingEmps ? (
+              <View style={s.loadingBox}>
+                <ActivityIndicator color={Colors.violet3} />
+              </View>
+            ) : (
+              <ScrollView style={s.sellerList} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
+                <Pressable
+                  onPress={function() { setSelectedSellerId(null); }}
+                  style={[s.sellerItem, selectedSellerId === null && s.sellerItemSelected]}
+                >
+                  <Text style={[s.sellerItemText, selectedSellerId === null && s.sellerItemTextSelected]}>
+                    Sem vendedor
+                  </Text>
+                </Pressable>
+                {employees.map(function(emp: any) {
+                  const isSelected = selectedSellerId === emp.id;
+                  return (
+                    <Pressable
+                      key={emp.id}
+                      onPress={function() { setSelectedSellerId(emp.id); }}
+                      style={[s.sellerItem, isSelected && s.sellerItemSelected]}
+                    >
+                      <Text style={[s.sellerItemText, isSelected && s.sellerItemTextSelected]}>
+                        {emp.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {employees.length === 0 && (
+                  <Text style={s.noItems}>Nenhum funcionario cadastrado.</Text>
+                )}
+              </ScrollView>
+            )}
+            <View style={s.confirmActions}>
+              <Pressable
+                onPress={function() { setEditingSeller(false); }}
+                style={s.confirmBtnCancel}
+                disabled={isUpdating}
+              >
+                <Text style={s.confirmBtnCancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveSeller}
+                style={s.confirmBtnConfirm}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={s.confirmBtnConfirmText}>Salvar</Text>
                 )}
               </Pressable>
             </View>
@@ -341,6 +453,8 @@ const s = StyleSheet.create({
 
   peopleRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   personCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 4 },
+  personCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  editSellerBtn: { padding: 4, borderRadius: 6, backgroundColor: Colors.violetD },
   personLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", marginTop: 2 },
   personValue: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   personHint: { fontSize: 10, color: Colors.ink3 },
@@ -384,6 +498,14 @@ const s = StyleSheet.create({
   confirmBtnCancelText: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   confirmBtnConfirm: { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: Colors.red, alignItems: "center" },
   confirmBtnConfirmText: { fontSize: 12, color: "#fff", fontWeight: "700" },
+
+  // Seller picker
+  sellerPickerModal: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, maxWidth: 380, width: "88%", borderWidth: 1, borderColor: Colors.border2, maxHeight: "60%" },
+  sellerList: { maxHeight: 280, marginBottom: 14 },
+  sellerItem: { paddingVertical: 11, paddingHorizontal: 12, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  sellerItemSelected: { backgroundColor: Colors.violetD, borderColor: Colors.violet3 },
+  sellerItemText: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  sellerItemTextSelected: { color: Colors.violet3, fontWeight: "700" },
 });
 
 export default SaleDetailModal;
