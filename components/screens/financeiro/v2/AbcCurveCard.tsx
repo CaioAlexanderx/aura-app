@@ -27,6 +27,19 @@ const PERIODS = [
 
 type Grade = "A" | "B" | "C";
 
+// FIX 06/05/2026: backend `/companies/:id/products/ranking` retorna `period`
+// como objeto { start, end, label } — renderizar direto como children de <Text>
+// dispara React error #31 ("Objects are not valid as a React child"). Crash
+// reportado ao abrir a aba Receitas (AbcCurveCard migrou do Estoque hoje).
+// Helper extrai a label seja qual for o shape (string legacy ou objeto novo).
+function periodLabelOf(p: unknown, fallback: string): string {
+  if (p && typeof p === "object" && "label" in (p as any)) {
+    return String((p as any).label || fallback);
+  }
+  if (typeof p === "string" && p) return p;
+  return fallback;
+}
+
 function AbcBadge({ abc, size = 22 }: { abc: Grade; size?: number }) {
   const colors = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
   const bgs = { A: Colors.greenD, B: Colors.amberD, C: "rgba(255,255,255,0.05)" };
@@ -77,6 +90,9 @@ function AbcCurveCardInner({
   const totalRevenue = (data as ProductRanking | undefined)?.summary?.total_revenue || 0;
   const totalSold    = (data as ProductRanking | undefined)?.summary?.total_sold || 0;
 
+  // Ver helper periodLabelOf no topo — protege contra `period` vir como objeto.
+  const periodLabel = periodLabelOf((data as any)?.period, period);
+
   // Agrupa por classe ABC vinda do backend
   const groups: Record<Grade, typeof products> = {
     A: products.filter(p => (p.abc || "C") === "A"),
@@ -108,7 +124,7 @@ function AbcCurveCardInner({
       <View style={s.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Curva ABC de produtos</Text>
-          <Text style={s.subtitle}>Calculada a partir das vendas reais · {data?.period || period}</Text>
+          <Text style={s.subtitle}>Calculada a partir das vendas reais · {periodLabel}</Text>
         </View>
         <View style={s.periodChips}>
           {PERIODS.map(p => {
