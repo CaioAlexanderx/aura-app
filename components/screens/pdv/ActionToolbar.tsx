@@ -6,6 +6,8 @@
 // agora ficam acima dos cards de produto em ambos os temas).
 // 05/05 · popover ganha minWidth 320 + right:0 pra nao cortar conteudo
 // quando o card pai esta estreito (1440x900 com 4 cards).
+// 06/05 · scanner nao fecha popover apos bipe — leitura continua
+//   sem precisar clicar novamente no card entre cada produto.
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
@@ -153,8 +155,14 @@ export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
               setScanning(true);
               setLastCode(r.code);
               onScan(r.code);
-              setTimeout(() => setScanning(false), 600);
-              setOpen(false);
+              // Mantém o popover ABERTO após o bipe.
+              // ScannerInput já limpa e refoca o campo sozinho.
+              // Após 800ms reseta o feedback visual no card e libera
+              // o próximo bipe sem interação adicional do operador.
+              setTimeout(() => {
+                setScanning(false);
+                setLastCode(null);
+              }, 800);
             }}
           />
         </PopShell>
@@ -476,8 +484,6 @@ export function ActCoupon({
 }
 
 // ─── Popover container ───────────────────────────────────────
-// align="left"  (default) → cresce pra direita do card pai
-// align="right"            → alinha ao canto direito (pra cards no fim do row)
 function PopShell({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   const webBox = webOnly({
     background: Glass.pop,
@@ -515,7 +521,6 @@ const s = StyleSheet.create({
     minWidth: 0,
   },
   actBtnActive: {
-    // handled by webBox on web, fallback for native
     backgroundColor: Colors.violetD,
     borderWidth: 1,
     borderColor: Colors.border2,
@@ -557,8 +562,6 @@ const s = StyleSheet.create({
 });
 
 const popS = StyleSheet.create({
-  // Base do popover. Alinhamento (left/right) e separado pra evitar
-  // texto cortado quando o card pai e estreito (1440x900 / 4 cards).
   pop: {
     position: "absolute" as any,
     top: "100%" as any,
