@@ -8,7 +8,7 @@ import { useMemo } from "react";
 import { View, Text, StyleSheet, Platform, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Transaction } from "./types";
-import { fmt, fmtK } from "./types";
+import { fmt, fmtK, parseDateLocal } from "./types";
 
 var isWeb = Platform.OS === "web";
 
@@ -27,10 +27,10 @@ var INCOME_PALETTE = [
 var METHOD_LABELS: Record<string, string> = {
   pix: "PIX",
   cash: "Dinheiro",
-  credit: "Credito",
-  debit: "Debito",
+  credit: "Crédito",
+  debit: "Débito",
   voucher: "Vale",
-  transfer: "Transferencia",
+  transfer: "Transferência",
   boleto: "Boleto",
 };
 
@@ -67,7 +67,9 @@ export function IncomeDetail({ transactions, previousIncome }: Props) {
     incomes.forEach(function(t) {
       var raw = t.due_date || t.created_at || "";
       if (!raw) return;
-      var d = new Date(raw);
+      // FIX 06/05/2026 (timezone): parseDateLocal evita shift de 1 dia em BRT
+      // pra date-only strings (postgres DATE retorna 'YYYY-MM-DD' sem hora).
+      var d = parseDateLocal(raw);
       if (isNaN(d.getTime())) return;
       var key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
       byDay[key] = (byDay[key] || 0) + t.amount;
@@ -100,7 +102,9 @@ export function IncomeDetail({ transactions, previousIncome }: Props) {
     incomes.forEach(function(t) {
       if (t.status !== "pending") return;
       var raw = t.due_date || t.created_at || "";
-      var d = raw ? new Date(raw) : null;
+      // FIX timezone: parseDateLocal evita shift que jogava lancamentos no
+      // bucket errado (ex.: due_date hoje virava overdue por causa do recuo).
+      var d = raw ? parseDateLocal(raw) : null;
       if (!d || isNaN(d.getTime())) {
         buckets.future.c++; buckets.future.t += t.amount; return;
       }
@@ -140,7 +144,7 @@ export function IncomeDetail({ transactions, previousIncome }: Props) {
       <View style={s.empty}>
         <View style={s.emptyIconWrap}><Text style={s.emptyIcon}>+</Text></View>
         <Text style={s.emptyTitle}>Nenhuma receita no periodo</Text>
-        <Text style={s.emptyHint}>Quando voce lancar receitas, esta area trara o detalhamento completo.</Text>
+        <Text style={s.emptyHint}>Quando você lancar receitas, esta área trará o detalhamento completo.</Text>
       </View>
     );
   }
@@ -397,8 +401,11 @@ function DailyTrend({ daily }: { daily: { key: string; label: string; value: num
     var by = pad + chartH - h;
     var bx = x + (stepX - barW) / 2;
     var isPeak = d.value === max;
+    // FIX 06/05/2026: <title> SVG = tooltip nativo no hover (web only).
     return `<g>
-      <rect x="${bx}" y="${by}" width="${barW}" height="${h}" rx="3" fill="url(#incGrad${isPeak ? "Peak" : (idx % 2 === 0 ? "A" : "B")})"/>
+      <rect x="${bx}" y="${by}" width="${barW}" height="${h}" rx="3" fill="url(#incGrad${isPeak ? "Peak" : (idx % 2 === 0 ? "A" : "B")})">
+        <title>${d.label}: ${fmt(d.value)}</title>
+      </rect>
       ${isPeak ? `<circle cx="${bx + barW / 2}" cy="${by - 4}" r="2.5" fill="#34d399"/>` : ""}
     </g>`;
   }).join("");
@@ -460,8 +467,9 @@ function TopIncomes({ top, max }: { top: Transaction[]; max: number }) {
     <View style={{ marginTop: 12, gap: 12 }}>
       {top.map(function(t, i) {
         var pct = max > 0 ? (t.amount / max) * 100 : 0;
+        // FIX timezone: parseDateLocal evita exibir 1 dia antes pra date-only.
         var dateStr = t.due_date
-          ? new Date(t.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+          ? parseDateLocal(t.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
           : t.date;
         return (
           <View key={t.id} style={topS.row}>
