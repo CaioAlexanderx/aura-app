@@ -4,6 +4,8 @@
 // Each card follows the Claude Design "act-btn" pattern from the mockup.
 // 24/04 · theme-aware glass bg + dropdown z-index hardening (popovers
 // agora ficam acima dos cards de produto em ambos os temas).
+// 05/05 · popover ganha minWidth 320 + right:0 pra nao cortar conteudo
+// quando o card pai esta estreito (1440x900 com 4 cards).
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
@@ -78,7 +80,7 @@ function ActCard({
 function ActBody({ k, v, isActive, isEmpty }: { k: string; v: string; isActive?: boolean; isEmpty?: boolean }) {
   return (
     <View style={s.actBody}>
-      <Text style={s.actK}>{k}</Text>
+      <Text style={s.actK} numberOfLines={1}>{k}</Text>
       <Text numberOfLines={1} style={[s.actV, isEmpty && { color: Colors.ink3, fontWeight: "500" }, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>
         {v}
       </Text>
@@ -143,7 +145,7 @@ export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
         <Shortcut k="F1" />
       </ActCard>
       {open && (
-        <PopShell>
+        <PopShell align="left">
           <Text style={popS.title}>Bipar código de barras</Text>
           <ScannerInput
             placeholder="Bipe ou digite o código…"
@@ -248,7 +250,7 @@ export function ActPerson({
       </ActCard>
 
       {open && !disabled && (
-        <PopShell>
+        <PopShell align="left">
           <Text style={popS.title}>{kind === "vendedora" ? "Selecionar vendedora" : "Buscar cliente"}</Text>
 
           {searchable && (
@@ -435,7 +437,7 @@ export function ActCoupon({
         <Shortcut k="F4" />
       </ActCard>
       {open && (
-        <PopShell>
+        <PopShell align="right">
           <Text style={popS.title}>Aplicar cupom de desconto</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TextInput
@@ -474,7 +476,9 @@ export function ActCoupon({
 }
 
 // ─── Popover container ───────────────────────────────────────
-function PopShell({ children }: { children: React.ReactNode }) {
+// align="left"  (default) → cresce pra direita do card pai
+// align="right"            → alinha ao canto direito (pra cards no fim do row)
+function PopShell({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   const webBox = webOnly({
     background: Glass.pop,
     backdropFilter: "blur(20px)",
@@ -489,6 +493,7 @@ function PopShell({ children }: { children: React.ReactNode }) {
     <View
       style={[
         popS.pop,
+        align === "right" ? popS.popRight : popS.popLeft,
         Platform.OS === "web" ? (webBox as any) : { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2 },
       ]}
     >
@@ -502,9 +507,9 @@ const s = StyleSheet.create({
   actBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    padding: 12,
-    paddingHorizontal: 14,
+    gap: 10,
+    padding: 10,
+    paddingHorizontal: 12,
     borderRadius: 12,
     position: "relative",
     minWidth: 0,
@@ -516,9 +521,9 @@ const s = StyleSheet.create({
     borderColor: Colors.border2,
   },
   actIco: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -533,7 +538,7 @@ const s = StyleSheet.create({
     opacity: 0.85,
   },
   actV: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.ink,
     fontWeight: "600",
     marginTop: 2,
@@ -547,20 +552,25 @@ const s = StyleSheet.create({
     backgroundColor: Glass.lineSoft,
     color: Colors.ink3,
     letterSpacing: 0.4,
+    flexShrink: 0,
   },
 });
 
 const popS = StyleSheet.create({
+  // Base do popover. Alinhamento (left/right) e separado pra evitar
+  // texto cortado quando o card pai e estreito (1440x900 / 4 cards).
   pop: {
     position: "absolute" as any,
     top: "100%" as any,
-    left: 0 as any,
-    right: 0 as any,
     marginTop: 8,
     padding: 14,
     borderRadius: 12,
     zIndex: 999,
+    minWidth: 320,
+    maxWidth: 420,
   },
+  popLeft: { left: 0 as any },
+  popRight: { right: 0 as any },
   title: {
     fontSize: 10,
     fontWeight: "700",
@@ -622,6 +632,7 @@ const popS = StyleSheet.create({
     backgroundColor: Colors.violet,
     justifyContent: "center",
     alignItems: "center",
+    minWidth: 84,
   },
   applyWideTxt: { color: "#fff", fontSize: 12, fontWeight: "700" },
   hint: { fontSize: 10, color: Colors.ink3, marginTop: 8 },
