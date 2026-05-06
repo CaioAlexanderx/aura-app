@@ -11,7 +11,7 @@
 // 05/05: Crediário disponível como chip + edição inline do preço
 // (setUnitPrice -> onPriceChange) + lixeira com confirm 2-cliques.
 // 05/05 fix: ícone do crediário trocado pra `clock` (credit_card
-// não existe no Icon set).
+// não existe no Icon set). Sidebar 400px (380 era apertado).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -445,7 +445,7 @@ function CaixaScreenInner() {
         <CaixaDesignStyle />
         <CaixaBackdrop />
 
-        <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: "1fr 380px" } as any)]}>
+        <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: "1fr 400px" } as any)]}>
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
             contentContainerStyle={{ padding: 28, paddingBottom: 48 }}
@@ -690,9 +690,9 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   main: { flex: 1, flexDirection: "row", minWidth: 0 },
   catalog: { flex: 1, minWidth: 0 },
-  // 1440x900: sidebar do CartPanel reduzida pra 380 (era 420) — sobra
-  // 1060px pro catálogo, suficiente pra 4 colunas confortáveis.
-  cartWrap: { width: 380, overflow: "hidden" },
+  // 1440x900: sidebar 400px (era 380, apertava demais; era 420 original).
+  // 1440 - 400 = 1040px catálogo, suficiente pra 4 colunas confortáveis.
+  cartWrap: { width: 400, overflow: "hidden" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 22 },
   title: { fontSize: 26, color: Colors.ink, letterSpacing: -0.4, fontWeight: "700" },
   titleSub: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
