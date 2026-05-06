@@ -32,8 +32,6 @@ function mapApiProduct(p: any): Product {
     cost: parseFloat(p.cost || p.cost_price) || 0,
     stock: parseInt(p.stock_qty ?? p.stock_quantity ?? p.stock) || 0,
     minStock: parseInt(p.stock_min ?? p.min_stock ?? p.minStock) || 0,
-    abc: (p.abc_class || p.abc || "C") as "A" | "B" | "C",
-    sold30d: parseInt(p.sold_30d ?? p.sold30d) || 0,
     unit: p.unit || "un",
     brand: p.brand || "",
     notes: p.notes || p.description || "",
