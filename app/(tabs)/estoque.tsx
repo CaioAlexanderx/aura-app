@@ -12,7 +12,6 @@ import { ServerImport } from "@/components/ServerImport";
 import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
 import { AddServiceForm } from "@/components/screens/estoque/AddServiceForm";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
-import { AbcSummary } from "@/components/screens/estoque/AbcSummary";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
@@ -395,7 +394,6 @@ export default function EstoqueScreen() {
   }
 
   return (
-    // Wrapper com position: relative para o overlay ficar restrito à área de conteúdo
     <View style={s.wrapper}>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
         <View style={s.headerRow}>
@@ -433,7 +431,7 @@ export default function EstoqueScreen() {
           <View style={s.summaryRow}>
             <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
             <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
-            <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(2) : undefined} />
+            <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
           </View>
         )}
 
@@ -547,7 +545,6 @@ export default function EstoqueScreen() {
                 <ProductRow
                   key={p.id}
                   product={p}
-                  showAbc={!bulkMode}
                   onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
                   onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
                   onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
@@ -561,27 +558,10 @@ export default function EstoqueScreen() {
           </View>
         )}
 
-        {activeTab === 1 && (
-          <View>
-            <View style={s.abcInfo}><Text style={s.abcInfoIcon}>i</Text><Text style={s.abcInfoText}>A curva ABC classifica seus produtos por importancia nas vendas.</Text></View>
-            <AbcSummary products={products} />
-            <View style={[s.listCard, { marginTop: 20 }]}>
-              {[...products].sort((a, b) => a.abc.localeCompare(b.abc) || b.sold30d - a.sold30d).map(p => (
-                <ProductRow
-                  key={p.id}
-                  product={p}
-                  showAbc
-                  onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
-                  onEdit={!isDemo ? handleEdit : undefined}
-                  onLink={canLinkProducts ? (prod) => setLinkTarget(prod) : undefined}
-                />
-              ))}
-            </View>
-          </View>
-        )}
-
-        {activeTab === 2 && <AlertsList products={products} />}
-        {activeTab === 3 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
+        {/* Aba 1: Alertas (era 2 antes da Curva ABC migrar) */}
+        {activeTab === 1 && <AlertsList products={products} />}
+        {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
+        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
         <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
@@ -608,12 +588,6 @@ export default function EstoqueScreen() {
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
 
-      {/* ─── Overlay de edição/adição ─────────────────────────────────────
-          position: absolute dentro do wrapper scoped à área de conteúdo,
-          ou seja, não cobre a sidebar no web. ScrollView interno permite
-          rolar o formulário inteiro sem problemáticas de altura fixa.
-          formSheet centralizado horizontalmente com maxWidth 640 pra desktop.
-      ──────────────────────────────────────────────────────────────────── */}
       {formOpen && (
         <Pressable style={s.formOverlay} onPress={closeFormModal}>
           <Pressable style={s.formSheet} onPress={() => {}}>
@@ -687,7 +661,6 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   scanBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   scanBtnActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  // Popover do scanner — TextInput inline simples (sem ScannerInput)
   scanPop: {
     position: "absolute",
     top: 50, right: 0,
@@ -728,9 +701,6 @@ const s = StyleSheet.create({
     lineHeight: 14,
   },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  abcInfo: { flexDirection: "row", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.border2 },
-  abcInfoIcon: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
-  abcInfoText: { fontSize: 12, color: Colors.ink3, flex: 1, lineHeight: 18 },
   emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },
   emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   emptyImportTitle: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
