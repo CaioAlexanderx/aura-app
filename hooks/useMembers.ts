@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { companiesApi } from "@/services/api";
+import { companiesApi, request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -121,6 +121,35 @@ export function useMembers() {
     onError: (err: any) => toast.error(err?.message || "Erro ao suspender"),
   });
 
+  // Sprint 2 (06/05/2026) — reenvia email do convite com mesmo token
+  const resendEmailMutation = useMutation({
+    mutationFn: (mid: string) =>
+      request<{ message: string; invite_email: string; invite_url: string }>(
+        "/companies/" + cid + "/members/" + mid + "/resend-email",
+        { method: "POST", retry: 0, timeout: 15000 }
+      ),
+    onSuccess: () => { toast.success("Email reenviado"); },
+    onError: (err: any) => toast.error(err?.message || "Erro ao reenviar email"),
+  });
+
+  // Sprint 2 — atualiza destinatario do convite + reenvia (mesmo token)
+  const updateInviteEmailMutation = useMutation({
+    mutationFn: ({ mid, email }: { mid: string; email: string }) =>
+      request<{ message: string; invite_email: string; invite_url: string; warning?: string }>(
+        "/companies/" + cid + "/members/" + mid + "/invite-email",
+        { method: "PATCH", body: { invite_email: email }, retry: 0, timeout: 15000 }
+      ),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["members-unified", cid] });
+      if (res?.warning === "send_failed") {
+        toast.error("Email atualizado, mas envio falhou. Tente reenviar.");
+      } else {
+        toast.success("Email atualizado e reenviado");
+      }
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao atualizar email"),
+  });
+
   function clearLastInvite() { setLastInvite(null); }
 
   return {
@@ -139,5 +168,10 @@ export function useMembers() {
     isUpdating:    updateMutation.isPending,
     removeMember:  removeMutation.mutateAsync,
     isRemoving:    removeMutation.isPending,
+    // Sprint 2
+    resendInviteEmail:  resendEmailMutation.mutateAsync,
+    isResending:        resendEmailMutation.isPending,
+    updateInviteEmail:  (mid: string, email: string) => updateInviteEmailMutation.mutateAsync({ mid, email }),
+    isUpdatingEmail:    updateInviteEmailMutation.isPending,
   };
 }
