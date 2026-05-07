@@ -165,6 +165,18 @@ export function useMembers() {
 
   function clearLastInvite() { setLastInvite(null); }
 
+  // Seats por plano (06/05/2026): backend GET /unified agora devolve quantos
+  // acessos sao inclusos no plano vs usados. Disclaimer de cobranca so
+  // aparece quando atLimit, e o monthly_cost so cobra acessos extras.
+  const seatsIncluded   = data?.seats_included    ?? null;   // null = backend antigo
+  const seatsUsed       = data?.seats_used        ?? (data?.active || 0) + (data?.pending || 0);
+  const seatsRemaining  = data?.seats_remaining   ?? null;
+  const extraSeats      = data?.extra_seats       ?? 0;
+  const extraSeatPrice  = data?.extra_seat_price  ?? 19;
+  const atLimit         = !!data?.at_limit;
+  const overLimit       = !!data?.over_limit;
+  const planEffective   = data?.plan || (company as any)?.plan || "essencial";
+
   return {
     members,
     siblings,
@@ -172,6 +184,9 @@ export function useMembers() {
     active:      data?.active       || 0,
     pending:     data?.pending      || 0,
     monthlyCost: data?.monthly_cost || 0,
+    // Seats por plano
+    seatsIncluded, seatsUsed, seatsRemaining, extraSeats, extraSeatPrice,
+    atLimit, overLimit, planEffective,
     isLoading,
     lastInvite,
     clearLastInvite,
