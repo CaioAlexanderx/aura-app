@@ -20,7 +20,13 @@ export var companiesApi = {
   deleteTransaction: function(companyId: string, txId: string) { return request<any>("/companies/" + companyId + "/transactions/" + txId, { method: "DELETE" }); },
   categorize: function(companyId: string, descriptions: string[]) { return request<any>("/companies/" + companyId + "/transactions/categorize", { method: "POST", body: { descriptions: descriptions }, timeout: 15000 }); },
   categorizeTransaction: function(companyId: string, txId: string, apply?: boolean) { return request<any>("/companies/" + companyId + "/transactions/" + txId + "/categorize", { method: "POST", body: { apply: apply || false }, timeout: 15000 }); },
-  products: function(companyId: string) { return request<any>("/companies/" + companyId + "/products"); },
+  // Bug Davi #2 (07/05/2026): sem ?limit explícito, o backend caía no
+  // planLimit (negocio=7000), cortando 3157 produtos do catálogo dele.
+  // ?limit=20000 = HARD_CAP do backend → recebe tudo o que existe (até
+  // 20k). Acima disso o cliente precisa de busca server-side (futuro PR)
+  // ou plano Expansão (limite cadastro ilimitado, ainda assim respeita
+  // HARD_CAP da listagem).
+  products: function(companyId: string) { return request<any>("/companies/" + companyId + "/products?limit=20000"); },
   createProduct: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/products", { method: "POST", body: body }); },
   updateProduct: function(companyId: string, prodId: string, body: any) { return request<any>("/companies/" + companyId + "/products/" + prodId, { method: "PATCH", body: body }); },
   deleteProduct: function(companyId: string, prodId: string) { return request<any>("/companies/" + companyId + "/products/" + prodId, { method: "DELETE" }); },

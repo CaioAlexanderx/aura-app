@@ -17,6 +17,9 @@
 // actBar e banner ganham maxWidth pra não esticar demais.
 // 07/05: Troca (Option B) — ActTroca card (F5) abre TrocaModal.
 // actBar ganha 5ª coluna. TrocaModal importa trocaApi de trocaApi.ts.
+// 07/05: lógica de busca (normalizeText/buildProductHaystack/matchesQuery)
+// extraída pra utils/productSearch — Estoque agora consome a mesma
+// função, fix do bug do Davi (busca não achava por marca/sem acento).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -54,6 +57,7 @@ import { flyToCart } from "@/components/screens/pdv/flyToCart";
 
 import type { Product } from "@/components/screens/estoque/types";
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
+import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
 
 const PAGE_SIZE = 12;
 
@@ -66,32 +70,6 @@ function getProductStock(p: any): number {
 function isProductInStock(p: any): boolean {
   if (p?.has_variants === true) return true;
   return getProductStock(p) > 0;
-}
-
-function normalizeText(s: any): string {
-  return String(s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim();
-}
-
-function buildProductHaystack(p: any): string {
-  return normalizeText(
-    [p?.name, p?.barcode, p?.sku, p?.code, p?.category, p?.color, p?.size]
-      .filter(Boolean)
-      .join(" ")
-  );
-}
-
-function matchesQuery(haystack: string, query: string): boolean {
-  if (!query) return true;
-  const terms = normalizeText(query).split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return true;
-  for (const t of terms) {
-    if (!haystack.includes(t)) return false;
-  }
-  return true;
 }
 
 const PAY_ICONS: Record<string, string> = {
