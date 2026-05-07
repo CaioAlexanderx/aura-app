@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Pressable, Image, Platform, TextInput } from "react-native";
+import { View, Text, StyleSheet, Pressable, Image, Platform, TextInput, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { generateBarcodeSVG, generateQRSVGUrl, generateProductCode, generatePrintHTML } from "@/utils/codeGen";
@@ -19,38 +19,30 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
   const isWeb = Platform.OS === 'web';
 
   // 07/05: scanner popup pra cadastrar produtos que ja chegam com codigo
-  // de barras (EAN). USB scanner emite keypresses + Enter, entao o input
-  // com autoFocus + onSubmitEditing captura tudo. Tambem aceita digitar.
+  // de barras (EAN). Renderizado via Modal (portal RN) pra escapar de
+  // stacking context da secao parent — antes o popup ficava coberto
+  // pela secao seguinte do form ("Cores e Tamanhos").
   const [scanOpen, setScanOpen] = useState(false);
   const [scanText, setScanText] = useState('');
-  const scanPopRef = useRef<any>(null);
   const scanInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    if (!scanOpen || !isWeb) return;
-    function onDoc(e: MouseEvent) {
-      if (scanPopRef.current && !scanPopRef.current.contains(e.target)) {
-        setScanOpen(false);
-        setScanText('');
-      }
-    }
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [scanOpen, isWeb]);
-
-  useEffect(() => {
     if (!scanOpen) return;
-    const t = setTimeout(() => { scanInputRef.current?.focus(); }, 80);
+    const t = setTimeout(() => { scanInputRef.current?.focus(); }, 120);
     return () => clearTimeout(t);
   }, [scanOpen]);
+
+  function closeScan() {
+    setScanOpen(false);
+    setScanText('');
+  }
 
   function applyScan() {
     const cleaned = (scanText || '').trim();
     if (!cleaned) return;
     onCodeChange(cleaned);
     setShowPreview(true);
-    setScanOpen(false);
-    setScanText('');
+    closeScan();
     toast.success('Codigo capturado: ' + cleaned);
   }
 
@@ -93,7 +85,7 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
       </View>
 
       {/* Code input + scan + generate */}
-      <View style={s.inputRow} ref={scanPopRef as any}>
+      <View style={s.inputRow}>
         <TextInput
           style={s.input}
           value={code}
@@ -102,7 +94,7 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
           placeholderTextColor={Colors.ink3}
         />
         <Pressable
-          onPress={() => setScanOpen(o => !o)}
+          onPress={() => setScanOpen(true)}
           style={[s.scanBtn, scanOpen && s.scanBtnActive]}
           accessibilityLabel="Bipar codigo de barras"
         >
@@ -112,12 +104,20 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
           <Icon name="plus" size={14} color="#fff" />
           <Text style={s.genText}>Gerar</Text>
         </Pressable>
+      </View>
 
-        {scanOpen && (
-          <View style={s.scanPop}>
-            <Text style={s.scanPopTitle}>Bipar / digitar codigo</Text>
+      {/* Modal pra escapar do stacking context — popup era coberto pela secao seguinte */}
+      <Modal visible={scanOpen} transparent animationType="fade" onRequestClose={closeScan}>
+        <Pressable style={s.scanBackdrop} onPress={closeScan}>
+          <Pressable style={s.scanModalCard} onPress={(e) => e?.stopPropagation?.()}>
+            <View style={s.scanModalHeader}>
+              <Text style={s.scanModalTitle}>Bipar / digitar codigo</Text>
+              <Pressable onPress={closeScan} style={s.scanModalClose}>
+                <Text style={s.scanModalCloseText}>×</Text>
+              </Pressable>
+            </View>
             <View style={s.scanInputRow}>
-              <Icon name="barcode" size={16} color={Colors.violet3} />
+              <Icon name="barcode" size={18} color={Colors.violet3} />
               <TextInput
                 ref={scanInputRef}
                 style={s.scanInput}
@@ -130,6 +130,14 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
                 autoCorrect={false}
                 returnKeyType="done"
               />
+            </View>
+            <Text style={s.scanPopHint}>
+              Aponte o leitor USB e dispare, ou digite manualmente. Pressione Enter ou clique Aplicar pra confirmar.
+            </Text>
+            <View style={s.scanModalActions}>
+              <Pressable onPress={closeScan} style={s.scanCancelBtn}>
+                <Text style={s.scanCancelText}>Cancelar</Text>
+              </Pressable>
               <Pressable
                 onPress={applyScan}
                 disabled={!scanText.trim()}
@@ -138,12 +146,9 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
                 <Text style={s.scanApplyTxt}>Aplicar</Text>
               </Pressable>
             </View>
-            <Text style={s.scanPopHint}>
-              Aponte o leitor USB e dispare. Tambem aceita digitar manualmente.
-            </Text>
-          </View>
-        )}
-      </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Preview */}
       {showPreview && code && (
@@ -175,44 +180,71 @@ const s = StyleSheet.create({
   toggleActive: { backgroundColor: Colors.violet },
   toggleText: { fontSize: 12, color: Colors.ink3, fontWeight: '500' },
   toggleTextActive: { color: '#fff', fontWeight: '600' },
-  inputRow: { flexDirection: 'row', gap: 8, position: 'relative' as any, zIndex: 30 },
+  inputRow: { flexDirection: 'row', gap: 8 },
   input: { flex: 1, backgroundColor: Colors.bg, borderRadius: 10, padding: 10, fontSize: 13, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
   genBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   genText: { fontSize: 12, color: '#fff', fontWeight: '600' },
   scanBtn: { width: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
   scanBtnActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  scanPop: {
-    position: 'absolute' as any,
-    top: 50,
-    right: 0,
-    width: 320,
-    maxWidth: '100%' as any,
+  scanBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  scanModalCard: {
+    width: '100%',
+    maxWidth: 440,
     backgroundColor: Colors.bg3,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(124,58,237,0.3)',
-    padding: 12,
-    zIndex: 999,
-    ...(Platform.OS === 'web' ? { boxShadow: '0 20px 40px -10px rgba(124,58,237,0.25)' } as any : {}),
+    padding: 18,
+    ...(Platform.OS === 'web' ? { boxShadow: '0 20px 60px -10px rgba(0,0,0,0.5)' } as any : {}),
   } as any,
-  scanPopTitle: {
-    fontSize: 10, fontWeight: '700', color: Colors.ink3,
-    letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8,
+  scanModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
+  scanModalTitle: {
+    fontSize: 14, fontWeight: '700', color: Colors.ink,
+    letterSpacing: 0.2,
+  },
+  scanModalClose: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: Colors.bg4,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scanModalCloseText: { fontSize: 16, color: Colors.ink3, fontWeight: '600' },
   scanInputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: Colors.bg, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 4,
+    paddingHorizontal: 12, paddingVertical: 4,
     borderWidth: 1.5, borderColor: 'rgba(124,58,237,0.4)',
   },
   scanInput: {
-    flex: 1, fontSize: 13, color: Colors.ink, fontWeight: '500',
-    paddingVertical: 9,
+    flex: 1, fontSize: 14, color: Colors.ink, fontWeight: '500',
+    paddingVertical: 11,
     ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
   } as any,
-  scanApply: { backgroundColor: Colors.violet, borderRadius: 7, paddingHorizontal: 12, paddingVertical: 6 },
-  scanApplyTxt: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  scanPopHint: { fontSize: 10, color: Colors.ink3, marginTop: 6, lineHeight: 14 },
+  scanModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 14,
+  },
+  scanCancelBtn: {
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  scanCancelText: { fontSize: 12, color: Colors.ink3, fontWeight: '600' },
+  scanApply: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 9 },
+  scanApplyTxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  scanPopHint: { fontSize: 11, color: Colors.ink3, marginTop: 8, lineHeight: 15 },
   preview: { marginTop: 14, alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 16 },
   previewActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   printBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
