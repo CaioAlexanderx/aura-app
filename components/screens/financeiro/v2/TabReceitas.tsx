@@ -15,6 +15,11 @@
 // 06/05/2026: parseDateLocal corrige bug de timezone em dailyIncomeSeries
 // (due_date como '2026-05-06' virava 5/maio em BRT) + tooltips no hover
 // das barras e categorias via title= (web only).
+//
+// 07/05/2026: FIX barras invisíveis — track recebia flex:1 dentro de pai
+// sem altura definida (alignItems:flex-end no container → barCol só cresce
+// até o conteúdo do texto → flex:1 resolve 0px → height:"X%" fica 0px).
+// Solução: track com height explícita (118px); container sem height/alignItems.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -265,9 +270,12 @@ var s = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: "700", marginTop: 4, marginBottom: 14, letterSpacing: -0.3 },
   empty: { paddingVertical: 32, alignItems: "center" },
   emptyText: { fontSize: 12, fontStyle: "italic" },
-  bars: { flexDirection: "row", height: 140, gap: 3, alignItems: "flex-end" },
+  // FIX 07/05/2026: height explícita no barTrack (118px) em vez de flex:1.
+  // Antes: container com alignItems:"flex-end" → barCol só ganha altura do
+  // texto do label → barTrack(flex:1) resolve 0px → height:"X%" fica 0px.
+  bars: { flexDirection: "row", gap: 3, marginBottom: 4 },
   barCol: { flex: 1, alignItems: "center", gap: 4 },
-  barTrack: { width: "100%", flex: 1, borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
+  barTrack: { width: "100%", height: 118, borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
   barFill: { width: "100%", borderRadius: 4 },
   barLabel: { fontSize: 9 },
   barFooter: { fontSize: 11, marginTop: 10 },

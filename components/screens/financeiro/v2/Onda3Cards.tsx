@@ -6,6 +6,10 @@
 // Mantidos em arquivo separado pra não inflar SharedCards.tsx.
 //
 // 06/05/2026: tooltips title= em todos os graficos de barras (web only).
+//
+// 07/05/2026: FIX barras invisíveis — mesmo padrão do TabReceitas/SharedCards.
+// cfBarStack e evolStack recebem height explícita (72px / 110px) em vez de
+// flex:1; cfBars/evolBars perdem height+alignItems:flex-end.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -292,15 +296,15 @@ var s = StyleSheet.create({
   empty: { paddingVertical: 28, alignItems: "center" },
   emptyText: { fontSize: 12, fontStyle: "italic", textAlign: "center" },
 
-  // Cashflow
+  // Cashflow — FIX 07/05/2026: cfBarStack com height:72 em vez de flex:1.
   cfSummary: { flexDirection: "row", gap: 14, marginBottom: 14 },
   cfStat: { flex: 1 },
   cfStatLabel: { fontSize: 9, letterSpacing: 0.6, fontWeight: "600", textTransform: "uppercase", marginBottom: 3 },
   cfStatValue: { fontSize: 18, fontWeight: "800", letterSpacing: -0.4 },
   cfSection: { fontSize: 9, letterSpacing: 1, fontWeight: "600", marginBottom: 8 },
-  cfBars: { flexDirection: "row", gap: 2, height: 80, alignItems: "flex-end" },
-  cfBarCol: { flex: 1, height: "100%", justifyContent: "flex-end" },
-  cfBarStack: { width: "100%", flex: 1, justifyContent: "flex-end", flexDirection: "column" },
+  cfBars: { flexDirection: "row", gap: 2, marginBottom: 4 },
+  cfBarCol: { flex: 1 },
+  cfBarStack: { width: "100%", height: 72, justifyContent: "flex-end", flexDirection: "column" },
   cfBarFill: { width: "100%", borderRadius: 2 },
   cfBarExp: { marginTop: 1 },
   cfLegend: { flexDirection: "row", gap: 16, marginTop: 8 },
@@ -319,11 +323,11 @@ var s = StyleSheet.create({
   cfProjValue: { fontSize: 13, fontWeight: "800", minWidth: 80, textAlign: "right" },
   cfHint: { fontSize: 11, fontStyle: "italic", marginTop: 12 },
 
-  // MonthlyEvolution
+  // MonthlyEvolution — FIX 07/05/2026: evolStack com height:110 em vez de flex:1.
   evolHeader: { fontSize: 12, fontWeight: "700", marginBottom: 10 },
-  evolBars: { flexDirection: "row", gap: 4, height: 130, alignItems: "flex-end", marginBottom: 8 },
+  evolBars: { flexDirection: "row", gap: 4, marginBottom: 12 },
   evolCol: { flex: 1, alignItems: "center", gap: 3 },
-  evolStack: { width: "100%", flex: 1, justifyContent: "flex-end" },
+  evolStack: { width: "100%", height: 110, justifyContent: "flex-end" },
   evolBar: { width: "100%", borderRadius: 3 },
   evolBarExp: { marginTop: 1 },
   evolLabel: { fontSize: 9 },

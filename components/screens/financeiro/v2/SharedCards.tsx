@@ -8,6 +8,10 @@
 //
 // 06/05/2026: traducao pt-BR de payment_method (backend retorna em ingles)
 // + tooltips nativos do browser via title= no hover (web only).
+//
+// 07/05/2026: FIX DowBars — mesmo padrão do TabReceitas: dowTrack(flex:1)
+// dentro de dowCol sem altura definida → resolvia 0px → barras invisíveis.
+// Solução: dowTrack recebe height:96 explícita; dowBars perde height+alignItems.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -220,7 +224,7 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
           return (
             <View
               key={r.key}
-              {...tip(r.label + ": " + fmt(r.b.total) + " (" + pct + "%)")}
+              {...tip(r.label + ": " + fmt(r.b.total) + " (" + pct + "%)" )}
               style={[s.timelineSegment, { width: w + "%", backgroundColor: r.c }]}
             />
           );
@@ -462,11 +466,12 @@ var s = StyleSheet.create({
   timelineSub: { fontSize: 10.5, marginTop: 1 },
   timelineValue: { fontSize: 13, fontWeight: "800", minWidth: 80, textAlign: "right" },
 
-  // DOW
-  dowBars: { flexDirection: "row", gap: 6, height: 130, alignItems: "flex-end" },
+  // DOW — FIX 07/05/2026: dowTrack com height explícita (96px) em vez de
+  // flex:1. Ver comentário no topo do arquivo para explicação completa.
+  dowBars: { flexDirection: "row", gap: 6, marginBottom: 4 },
   dowCol: { flex: 1, alignItems: "center", gap: 4 },
   dowValue: { fontSize: 9.5 },
-  dowTrack: { width: "100%", flex: 1, borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
+  dowTrack: { width: "100%", height: 96, borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
   dowFill: { width: "100%", borderRadius: 4 },
   dowLabel: { fontSize: 11 },
   dowFooter: { fontSize: 11, marginTop: 10, alignSelf: "center" },
