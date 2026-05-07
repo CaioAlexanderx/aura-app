@@ -20,6 +20,10 @@
 // 07/05: lógica de busca (normalizeText/buildProductHaystack/matchesQuery)
 // extraída pra utils/productSearch — Estoque agora consome a mesma
 // função, fix do bug do Davi (busca não achava por marca/sem acento).
+// 07/05 (tarde): Abertura/Fechamento de Caixa migra da página separada
+// /caixa pra dentro do PDV via CaixaButton no topRow + OpenCloseCashModal
+// (DNA TrocaModal). Bloqueia handleFinalize quando caixa fechado E
+// pdv_settings.caixa_enabled. PDF de fechamento via cashClosePdf.ts.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -58,6 +62,9 @@ import { flyToCart } from "@/components/screens/pdv/flyToCart";
 import type { Product } from "@/components/screens/estoque/types";
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
+import { useCaixa } from "@/hooks/useCaixa";
+import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
+import { OpenCloseCashModal } from "@/components/screens/pdv/OpenCloseCashModal";
 
 const PAGE_SIZE = 12;
 
@@ -135,6 +142,12 @@ function CaixaScreenInner() {
     : moduleOverrides[key] === false ? false
     : planDefault;
   const clientesEnabled = isModuleEnabled("clientes", isNegocioPlus);
+
+  // Caixa habilitado? Toggle vive em pdv_settings.caixa_enabled (Configurações > PDV).
+  // Quando false, o módulo todo fica invisível no PDV — comportamento legado preservado.
+  const caixaEnabled = !!(pdvSettings as any)?.caixa_enabled;
+  const { sessaoAtiva, isAberto, isLoading: caixaLoading, invalidate: invalidateCaixa } = useCaixa();
+  const [showCaixaModal, setShowCaixaModal] = useState(false);
 
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
@@ -253,10 +266,6 @@ function CaixaScreenInner() {
     try {
       const result = await pdvApi.scan(company.id, cleaned);
 
-      // Variante por código de barras: adiciona mesmo que o pai não esteja
-      // no cache local. Usamos parentLocal quando disponível pra preservar
-      // metadados; caso contrário sintetizamos o mínimo necessário pro
-      // useCart (id/name/price).
       if (result.match === "exact" && result.source === "variant_barcode" && result.product && result.variant_id) {
         const parentLocal = products.find(p => p.id === result.product.id);
         const suffix = (result.product as any).sku_suffix || "Variante";
@@ -269,8 +278,6 @@ function CaixaScreenInner() {
         return;
       }
 
-      // Match exato no produto pai. Fallback usa os dados do backend quando
-      // o produto não está no cache local (causa raiz do bug Davi).
       if (result.match === "exact" && result.product) {
         const full = products.find(p => p.id === result.product.id);
         if (full) { handleAddProduct(full); return; }
@@ -307,8 +314,6 @@ function CaixaScreenInner() {
 
   function handleVariantSelected(variant: { id: string; label: string; price: number; stock: number }) {
     if (!pendingProduct) return;
-    // 07/05: id vazio = "Sem variante específica" — vende o pai diretamente,
-    // que decrementa products.stock_qty (estoque genérico independente das variantes).
     if (!variant.id) {
       addToCart(pendingProduct);
     } else {
@@ -318,6 +323,13 @@ function CaixaScreenInner() {
   }
 
   function handleFinalize() {
+    // Bloqueia venda se caixa habilitado mas fechado.
+    // Quando caixaEnabled=false (legado), passa direto.
+    if (caixaEnabled && !isAberto) {
+      toast.error("Abra o caixa antes de finalizar a venda");
+      setShowCaixaModal(true);
+      return;
+    }
     const v = validateSaleAgainstSettings(pdvSettings, {
       customerId: selectedCustomerId,
       sellerId: selectedEmployeeId,
@@ -393,6 +405,7 @@ function CaixaScreenInner() {
   const requiredHints: string[] = [];
   if (pdvSettings.require_customer && !selectedCustomerId) requiredHints.push("Cliente obrigatório");
   if (pdvSettings.require_seller && !selectedEmployeeId && !(sellerName || "").trim()) requiredHints.push("Vendedora obrigatória");
+  if (caixaEnabled && !isAberto) requiredHints.push("Caixa fechado");
 
   const activeSellerValue = selectedEmployeeId
     ? { id: selectedEmployeeId, name: selectedEmployeeName || "Vendedora" }
@@ -408,7 +421,6 @@ function CaixaScreenInner() {
 
   const orderSuffix = "#" + ((Date.now() % 100000).toString().padStart(5, "0"));
 
-  // Props comuns aos dois renders (wide e narrow) — DRY pra evitar drift entre os dois.
   const cartProps = {
     orderNumber: orderSuffix,
     items: displayItems,
@@ -433,7 +445,6 @@ function CaixaScreenInner() {
     requiredHints,
     cpfNaNota,
     onCpfNaNotaChange: setCpfNaNota,
-    // Multi-pagamento
     splitMode,
     splitPayments,
     splitRemaining,
@@ -491,11 +502,17 @@ function CaixaScreenInner() {
             contentContainerStyle={{ padding: 28, paddingBottom: 48 }}
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
-            {/* Em telas muito grandes, limitamos a largura do conteúdo principal
-                pra cards não esticarem (look comprido demais) e linhas de leitura
-                continuarem confortáveis. 1600 deixa respiro. */}
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
             <View style={s.topRow}>
+              {caixaEnabled && (
+                <CaixaButton
+                  isAberto={isAberto}
+                  isLoading={caixaLoading}
+                  openedByName={sessaoAtiva?.opened_by?.name || null}
+                  openedAtIso={sessaoAtiva?.opened_at || null}
+                  onClick={() => setShowCaixaModal(true)}
+                />
+              )}
               <View>
                 <Text style={s.title}>Caixa</Text>
                 <View style={s.titleSub}>
@@ -505,10 +522,10 @@ function CaixaScreenInner() {
                         width: 5,
                         height: 5,
                         borderRadius: "50%",
-                        background: "#34d399",
-                        boxShadow: "0 0 6px #34d399",
+                        background: caixaEnabled && !isAberto ? "rgba(170,160,235,0.65)" : "#34d399",
+                        boxShadow: caixaEnabled && !isAberto ? "none" : "0 0 6px #34d399",
                         display: "inline-block",
-                        animation: "caixaPulse 1.8s ease-in-out infinite",
+                        animation: caixaEnabled && !isAberto ? "none" : "caixaPulse 1.8s ease-in-out infinite",
                       } as any}
                     />
                   )}
@@ -523,7 +540,6 @@ function CaixaScreenInner() {
 
             <MerchantBanner height={200} />
 
-            {/* actBar: 5 colunas (Barcode · Vendedora · Cliente · Cupom · Troca) */}
             <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, position: "relative", zIndex: 50 } as any)]}>
               <ActBarcode onScan={handleScan} />
               <ActPerson
@@ -628,6 +644,15 @@ function CaixaScreenInner() {
           products={products}
           onClose={() => setShowTroca(false)}
         />
+        <OpenCloseCashModal
+          visible={showCaixaModal}
+          companyId={company?.id || ""}
+          companyName={company?.name || "Sua empresa"}
+          companyCnpj={(company as any)?.cnpj || (company as any)?.profile?.cnpj || null}
+          sessaoAtiva={sessaoAtiva}
+          onClose={() => setShowCaixaModal(false)}
+          onSuccess={invalidateCaixa}
+        />
       </View>
     );
   }
@@ -638,6 +663,17 @@ function CaixaScreenInner() {
       <CaixaBackdrop />
       <ScrollView style={{ flex: 1, backgroundColor: "transparent" }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
         <Text style={s.title}>Caixa</Text>
+        {caixaEnabled && (
+          <View style={{ marginTop: 8, marginBottom: 12 }}>
+            <CaixaButton
+              isAberto={isAberto}
+              isLoading={caixaLoading}
+              openedByName={sessaoAtiva?.opened_by?.name || null}
+              openedAtIso={sessaoAtiva?.opened_at || null}
+              onClick={() => setShowCaixaModal(true)}
+            />
+          </View>
+        )}
         <View style={{ marginBottom: 12 }}>
           <SearchBox value={query} onChange={setQuery} />
         </View>
@@ -734,6 +770,15 @@ function CaixaScreenInner() {
         products={products}
         onClose={() => setShowTroca(false)}
       />
+      <OpenCloseCashModal
+        visible={showCaixaModal}
+        companyId={company?.id || ""}
+        companyName={company?.name || "Sua empresa"}
+        companyCnpj={(company as any)?.cnpj || (company as any)?.profile?.cnpj || null}
+        sessaoAtiva={sessaoAtiva}
+        onClose={() => setShowCaixaModal(false)}
+        onSuccess={invalidateCaixa}
+      />
     </View>
   );
 }
@@ -750,7 +795,6 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   main: { flex: 1, flexDirection: "row", minWidth: 0 },
   catalog: { flex: 1, minWidth: 0 },
-  // Sidebar dinâmica via width inline (cartWidth) — 400 padrão, 440 em xl, 480 em xxl.
   cartWrap: { overflow: "hidden" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 22 },
   title: { fontSize: 26, color: Colors.ink, letterSpacing: -0.4, fontWeight: "700" },
