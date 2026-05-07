@@ -329,7 +329,13 @@ function CaixaScreenInner() {
 
   function handleVariantSelected(variant: { id: string; label: string; price: number; stock: number }) {
     if (!pendingProduct) return;
-    addToCart(pendingProduct, variant);
+    // 07/05: id vazio = "Sem variante específica" — vende o pai diretamente,
+    // que decrementa products.stock_qty (estoque genérico independente das variantes).
+    if (!variant.id) {
+      addToCart(pendingProduct);
+    } else {
+      addToCart(pendingProduct, variant);
+    }
     setPendingProduct(null);
   }
 
