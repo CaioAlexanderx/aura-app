@@ -24,6 +24,7 @@ const PATHS: Record<string, string> = {
   upload:         "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4 M17 8l-5-5-5 5 M12 3v12",
   copy:           "M20 9h-9a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-9a2 2 0 00-2-2z M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1",
   refresh:        "M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15",
+  repeat:         "M17 1l4 4-4 4 M3 11V9a4 4 0 014-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 01-4 4H3",
   drag_handle:    "M8 6h.01 M8 12h.01 M8 18h.01 M16 6h.01 M16 12h.01 M16 18h.01",
   // ── Security ────────────────────────────────────────────────
   lock:           "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z M7 11V7a5 5 0 0110 0v4",
@@ -126,7 +127,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     chevron_up: "^", chevron_down: "v", moon: "D", sun: "S", message: "M",
     headset: "H", brain: "I", globe: "G", lock: "L", unlock: "L", plus: "+",
     minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
-    download: "D", upload: "U", copy: "C", refresh: "R", eye: "O", menu: "=",
+    download: "D", upload: "U", copy: "C", refresh: "R", repeat: "T", eye: "O", menu: "=",
     grid: "#", clock: "T", tag: "#", barcode: "|||", camera: "O",
     drag_handle: "=", eye_off: "O", shield: "U",
     tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
