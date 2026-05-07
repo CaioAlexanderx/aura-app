@@ -33,8 +33,8 @@ export type SaleResult = {
 };
 
 // Crediário (mai/2026): operação interna do lojista — venda fica como "a receber"
-// no cliente, registrada em customer_credit_transactions (migration 099). Backend
-// exige customer_id quando crediario aparece em payment_method ou em algum split.
+// no cliente, registrada em customer_credit_transactions (migration 099).
+// Cliente opcional: sem customer_id a venda finaliza normalmente (crediário anônimo).
 export const PAYMENTS = [
   { key: "dinheiro",  label: "Dinheiro" },
   { key: "pix",       label: "PIX" },
@@ -253,16 +253,6 @@ export function useCart() {
       toast.error(splitRemaining > 0
         ? `Faltam R$ ${splitRemaining.toFixed(2)} pra fechar`
         : `Sobrando R$ ${Math.abs(splitRemaining).toFixed(2)} nos pagamentos`);
-      return;
-    }
-
-    // FEAT 05/05/2026: crediário exige cliente identificado.
-    // Backend faz a mesma checagem e retorna 400, mas validar aqui dá
-    // feedback imediato sem network round-trip.
-    const usingCrediarioSingle = !splitMode && payment === "crediario";
-    const usingCrediarioSplit  = splitMode && splitPayments.some(p => p.method === "crediario");
-    if ((usingCrediarioSingle || usingCrediarioSplit) && !selectedCustomerId) {
-      toast.error("Crediário exige um cliente. Selecione o cliente antes de finalizar.");
       return;
     }
 
