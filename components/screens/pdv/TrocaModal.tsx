@@ -11,8 +11,9 @@ import {
 } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { salesApi, trocaApi } from "@/services/api";
+import { salesApi } from "@/services/api";
 import type { SalesListItem, SaleDetailFull, SaleDetailsItem } from "@/services/api";
+import { trocaApi } from "@/services/trocaApi";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 
@@ -268,7 +269,7 @@ export function TrocaModal({
                         · {new Date(sale.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </Text>
                       <Text style={s.saleSub}>
-                        {(sale as any).item_count ?? sale.items_count ?? 0} itens · {fmt(sale.total_amount)}
+                        {(sale as any).item_count ?? (sale as any).items_count ?? 0} itens · {fmt(sale.total_amount)}
                       </Text>
                     </View>
                     <Text style={{ color: Colors.ink3, fontSize: 18 }}>›</Text>
