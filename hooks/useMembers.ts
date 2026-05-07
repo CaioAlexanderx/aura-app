@@ -14,20 +14,18 @@ export type MemberCompany = {
 export type Member = {
   id: string;
   user_id: string | null;
-  name: string;        // mapeado de user_name
-  email: string;       // mapeado de user_email ou invite_email
+  name: string;
+  email: string;
   role_label: string;
   status: "active" | "pending" | "suspended";
   is_active: boolean;
   permissions: Record<string, boolean>;
   invite_email?: string;
-  // Backend ja monta a URL completa; frontend so renderiza.
-  // Vem null/undefined pra ativos.
   invite_token?: string | null;
   invite_url?: string | null;
   invited_at?: string;
   accepted_at?: string;
-  companies: MemberCompany[];  // CNPJs que este membro tem acesso
+  companies: MemberCompany[];
 };
 
 export type SiblingCompany = {
@@ -55,8 +53,6 @@ function mapMember(raw: any): Member {
       ? JSON.parse(raw.permissions)
       : (raw.permissions || {}),
     invite_email: raw.invite_email,
-    // 06/05/2026: backend agora retorna invite_token/url pra pending —
-    // permite recuperar link a qualquer momento.
     invite_token: raw.invite_token || null,
     invite_url:   raw.invite_url   || null,
     invited_at:   raw.invited_at,
@@ -103,14 +99,14 @@ export function useMembers() {
   const updateMutation = useMutation({
     mutationFn: ({ mid, body }: { mid: string; body: any }) =>
       companiesApi.updateMember(cid!, mid, body),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ["members-unified", cid] });
+      qc.invalidateQueries({ queryKey: ["member-audit", cid, vars.mid] });
       toast.success("Permissoes atualizadas");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao atualizar"),
   });
 
-  // removeMember aceita array de member_ids para remover de todos os CNPJs de uma vez
   const removeMutation = useMutation({
     mutationFn: (memberIds: string[]) =>
       Promise.all(memberIds.map(mid => companiesApi.removeMember(cid!, mid))),
@@ -121,26 +117,28 @@ export function useMembers() {
     onError: (err: any) => toast.error(err?.message || "Erro ao suspender"),
   });
 
-  // Sprint 2 (06/05/2026) — reenvia email do convite com mesmo token
   const resendEmailMutation = useMutation({
     mutationFn: (mid: string) =>
       request<{ message: string; invite_email: string; invite_url: string }>(
         "/companies/" + cid + "/members/" + mid + "/resend-email",
         { method: "POST", retry: 0, timeout: 15000 }
       ),
-    onSuccess: () => { toast.success("Email reenviado"); },
+    onSuccess: (_res, mid) => {
+      qc.invalidateQueries({ queryKey: ["member-audit", cid, mid] });
+      toast.success("Email reenviado");
+    },
     onError: (err: any) => toast.error(err?.message || "Erro ao reenviar email"),
   });
 
-  // Sprint 2 — atualiza destinatario do convite + reenvia (mesmo token)
   const updateInviteEmailMutation = useMutation({
     mutationFn: ({ mid, email }: { mid: string; email: string }) =>
       request<{ message: string; invite_email: string; invite_url: string; warning?: string }>(
         "/companies/" + cid + "/members/" + mid + "/invite-email",
         { method: "PATCH", body: { invite_email: email }, retry: 0, timeout: 15000 }
       ),
-    onSuccess: (res: any) => {
+    onSuccess: (res: any, vars) => {
       qc.invalidateQueries({ queryKey: ["members-unified", cid] });
+      qc.invalidateQueries({ queryKey: ["member-audit", cid, vars.mid] });
       if (res?.warning === "send_failed") {
         toast.error("Email atualizado, mas envio falhou. Tente reenviar.");
       } else {
@@ -148,6 +146,21 @@ export function useMembers() {
       }
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao atualizar email"),
+  });
+
+  // Sprint 4 (06/05/2026): renova validade do convite
+  const extendMutation = useMutation({
+    mutationFn: (mid: string) =>
+      request<{ message: string; invited_at: string; invite_url: string }>(
+        "/companies/" + cid + "/members/" + mid + "/extend",
+        { method: "POST", retry: 0 }
+      ),
+    onSuccess: (_res, mid) => {
+      qc.invalidateQueries({ queryKey: ["members-unified", cid] });
+      qc.invalidateQueries({ queryKey: ["member-audit", cid, mid] });
+      toast.success("Validade estendida em 7 dias");
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao estender validade"),
   });
 
   function clearLastInvite() { setLastInvite(null); }
@@ -168,10 +181,12 @@ export function useMembers() {
     isUpdating:    updateMutation.isPending,
     removeMember:  removeMutation.mutateAsync,
     isRemoving:    removeMutation.isPending,
-    // Sprint 2
     resendInviteEmail:  resendEmailMutation.mutateAsync,
     isResending:        resendEmailMutation.isPending,
     updateInviteEmail:  (mid: string, email: string) => updateInviteEmailMutation.mutateAsync({ mid, email }),
     isUpdatingEmail:    updateInviteEmailMutation.isPending,
+    // Sprint 4
+    extendInvite:       extendMutation.mutateAsync,
+    isExtending:        extendMutation.isPending,
   };
 }
