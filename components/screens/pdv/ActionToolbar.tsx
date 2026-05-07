@@ -10,6 +10,11 @@
 //   sem precisar clicar novamente no card entre cada produto.
 // 07/05 · ActTroca — 5º card, abre TrocaModal via onOpen() callback.
 //   Shortcut F5. Sem popover proprio (modal e gerenciado em pdv.tsx).
+// 07/05 · fix scanner: removido mousedown outside-click do ActBarcode.
+//   Popover do scanner agora SÓ fecha ao clicar no card novamente,
+//   pressionar F1 ou clicar no botão × dentro do popover.
+//   Os demais popovers (Vendedora/Cliente/Cupom) mantêm dismiss externo
+//   pois selecionam um valor e fecham naturalmente.
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
@@ -105,20 +110,13 @@ function Shortcut({ k }: { k: string }) {
 }
 
 // ═══════════ 1) Barcode scanner card ═══════════
+// O popover do scanner NÃO fecha ao clicar fora — fica aberto até o
+// operador clicar no card novamente, pressionar F1 ou clicar no × do popup.
+// Isso permite bipagem contínua de múltiplos produtos sem reabrir.
 export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
   const [scanning, setScanning] = useState(false);
   const [open, setOpen] = useState(false);
   const [lastCode, setLastCode] = useState<string | null>(null);
-  const ref = useRef<any>(null);
-
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
 
   // F1 shortcut: toggle scanner popover
   useEffect(() => {
@@ -135,12 +133,11 @@ export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
 
   const active = !!lastCode || scanning;
 
-  // Quando aberto, promove o z-index do container pra ficar acima das irmas
-  // (product grid com transform cria stacking context que conflita).
+  // Promove z-index quando aberto para ficar acima das irmãs e do product grid.
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
   return (
-    <View style={wrapStyle} ref={ref as any}>
+    <View style={wrapStyle}>
       <ActCard active={active} empty={!active} scanning={scanning} onClick={() => setOpen(o => !o)}>
         <ActIco active={active}>
           <Icon name="barcode" size={18} color={active ? "#a78bfa" : Colors.ink3} />
@@ -150,17 +147,22 @@ export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
       </ActCard>
       {open && (
         <PopShell align="left">
-          <Text style={popS.title}>Bipar código de barras</Text>
+          {/* Cabeçalho com título + botão de fechar explícito */}
+          <View style={popS.scannerHeader}>
+            <Text style={popS.title}>Bipar código de barras</Text>
+            <Pressable onPress={() => setOpen(false)} style={popS.closeBtn}>
+              <Icon name="x" size={14} color={Colors.ink3} />
+            </Pressable>
+          </View>
           <ScannerInput
             placeholder="Bipe ou digite o código…"
             onScan={r => {
               setScanning(true);
               setLastCode(r.code);
               onScan(r.code);
-              // Mantém o popover ABERTO após o bipe.
-              // ScannerInput já limpa e refoca o campo sozinho.
-              // Após 800ms reseta o feedback visual no card e libera
-              // o próximo bipe sem interação adicional do operador.
+              // Mantém o popover ABERTO — operador pode bipar o próximo produto
+              // imediatamente. ScannerInput limpa e refoca o campo sozinho.
+              // Após 800ms reseta o feedback visual (scan line + lastCode).
               setTimeout(() => {
                 setScanning(false);
                 setLastCode(null);
@@ -603,13 +605,28 @@ const popS = StyleSheet.create({
   },
   popLeft: { left: 0 as any },
   popRight: { right: 0 as any },
+  // Cabeçalho do scanner: título + botão ×
+  scannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  closeBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
   title: {
     fontSize: 10,
     fontWeight: "700",
     color: Colors.ink3,
     letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginBottom: 10,
+    marginBottom: 0,
   },
   input: {
     paddingHorizontal: 12,
