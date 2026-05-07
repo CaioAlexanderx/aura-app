@@ -89,6 +89,16 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
     setMessageText(initialText);
   }, [visible, settings, customer, company?.name]);
 
+  // Preview ao vivo da URL — DEVE ficar ANTES do early return para não
+  // violar a regra dos hooks (React error #310: hook count mudaria a cada
+  // abertura/fechamento do modal).
+  const previewUrl = useMemo(
+    () => customer
+      ? buildWaMeUrl(customer.phone, messageText.replace(/\{\{cupom_será_gerado\}\}/g, "ANIV-XXX-XX"))
+      : "",
+    [customer, messageText]
+  );
+
   if (!visible || !customer) return null;
 
   const phoneValid = !!normalizeBrPhone(customer.phone);
@@ -184,12 +194,6 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
       setSending(false);
     }
   }
-
-  // Preview ao vivo da URL (apenas debug — não mostra na UI)
-  const previewUrl = useMemo(
-    () => buildWaMeUrl(customer.phone, messageText.replace(/\{\{cupom_será_gerado\}\}/g, "ANIV-XXX-XX")),
-    [customer.phone, messageText]
-  );
 
   const overlay = (
     <View style={s.overlay}>
