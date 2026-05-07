@@ -254,6 +254,13 @@ function CaixaScreenInner() {
     selectCustomer(v.id, v.name, c?.phone || null);
   }
 
+  // 06/05/2026: cache local de products pode ficar stale — produto recém
+  // cadastrado, filtro de categoria/estoque-zerado ativo, ou paginação cortando
+  // o item. Quando isso acontece, o backend confirma match no /scan mas o
+  // products.find() retorna undefined e a função caía em setQuery(cleaned),
+  // jogando o código de barras na busca textual em vez de adicionar ao
+  // carrinho — bug reportado pelo Davi (06/05). Agora usamos os dados do
+  // response como fallback, tanto pra variant_barcode quanto pra match exato.
   async function handleScan(code: string) {
     const cleaned = (code || "").trim();
     if (!cleaned) return;
@@ -263,19 +270,36 @@ function CaixaScreenInner() {
     if (!company?.id || isDemo) { setQuery(cleaned); return; }
     try {
       const result = await pdvApi.scan(company.id, cleaned);
+
+      // Variante por código de barras: adiciona mesmo que o pai não esteja
+      // no cache local. Usamos parentLocal quando disponível pra preservar
+      // metadados; caso contrário sintetizamos o mínimo necessário pro
+      // useCart (id/name/price).
       if (result.match === "exact" && result.source === "variant_barcode" && result.product && result.variant_id) {
-        const parent = products.find(p => p.id === result.product.id);
-        if (parent) {
-          const suffix = (result.product as any).sku_suffix || "Variante";
-          const price = result.effective_price || parent.price;
-          addToCart(parent, { id: result.variant_id, label: suffix, price });
-          toast.success(parent.name + " · " + suffix);
-          return;
-        }
+        const parentLocal = products.find(p => p.id === result.product.id);
+        const suffix = (result.product as any).sku_suffix || "Variante";
+        const parentName = parentLocal?.name || (result.product as any).name || "Produto";
+        const parentPrice = parentLocal?.price ?? (result.product as any).price ?? 0;
+        const price = result.effective_price || parentPrice;
+        const parent: any = parentLocal || { id: result.product.id, name: parentName, price: parentPrice };
+        addToCart(parent, { id: result.variant_id, label: suffix, price });
+        toast.success(parentName + " · " + suffix);
+        return;
       }
+
+      // Match exato no produto pai. Fallback usa os dados do backend quando
+      // o produto não está no cache local (causa raiz do bug Davi).
       if (result.match === "exact" && result.product) {
         const full = products.find(p => p.id === result.product.id);
         if (full) { handleAddProduct(full); return; }
+        const backendProduct: any = {
+          id: result.product.id,
+          name: (result.product as any).name || "Produto",
+          price: result.effective_price || (result.product as any).price || 0,
+        };
+        addToCart(backendProduct);
+        toast.success(backendProduct.name);
+        return;
       }
       setQuery(cleaned);
     } catch {
