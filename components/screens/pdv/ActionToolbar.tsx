@@ -1,6 +1,6 @@
 // ============================================================
-// AURA. -- PDV/Caixa · Action Toolbar (4 cards)
-// Scanner · Vendedora · Cliente · Cupom
+// AURA. -- PDV/Caixa · Action Toolbar (5 cards)
+// Scanner · Vendedora · Cliente · Cupom · Troca
 // Each card follows the Claude Design "act-btn" pattern from the mockup.
 // 24/04 · theme-aware glass bg + dropdown z-index hardening (popovers
 // agora ficam acima dos cards de produto em ambos os temas).
@@ -8,6 +8,8 @@
 // quando o card pai esta estreito (1440x900 com 4 cards).
 // 06/05 · scanner nao fecha popover apos bipe — leitura continua
 //   sem precisar clicar novamente no card entre cada produto.
+// 07/05 · ActTroca — 5º card, abre TrocaModal via onOpen() callback.
+//   Shortcut F5. Sem popover proprio (modal e gerenciado em pdv.tsx).
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
@@ -480,6 +482,33 @@ export function ActCoupon({
         </PopShell>
       )}
     </View>
+  );
+}
+
+// ═══════════ 4) Troca card ═══════════
+// Não tem popover próprio — chama onOpen() que abre o TrocaModal em pdv.tsx.
+// Shortcut F5.
+export function ActTroca({ onOpen }: { onOpen: () => void }) {
+  useEffect(() => {
+    if (!IS_WEB) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "F5") {
+        e.preventDefault();
+        onOpen();
+      }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onOpen]);
+
+  return (
+    <ActCard onClick={onOpen}>
+      <ActIco>
+        <Icon name="repeat" size={18} color={Colors.ink3} />
+      </ActIco>
+      <ActBody k="Troca de produto" v="Iniciar troca" isEmpty />
+      <Shortcut k="F5" />
+    </ActCard>
   );
 }
 
