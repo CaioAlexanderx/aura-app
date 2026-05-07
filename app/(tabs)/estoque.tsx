@@ -261,6 +261,7 @@ export default function EstoqueScreen() {
   }, [scanOpen]);
 
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
+  const [sortOrder, setSortOrder] = useState<'recent' | 'price_desc' | 'price_asc'>('recent');
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
   const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
 
@@ -299,7 +300,19 @@ export default function EstoqueScreen() {
     return matchSearch && matchCat;
   });
 
-  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search + catFilter);
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    if (sortOrder === 'recent') {
+      arr.sort((a, b) => new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime());
+    } else if (sortOrder === 'price_desc') {
+      arr.sort((a, b) => ((b as any).price ?? 0) - ((a as any).price ?? 0));
+    } else if (sortOrder === 'price_asc') {
+      arr.sort((a, b) => ((a as any).price ?? 0) - ((b as any).price ?? 0));
+    }
+    return arr;
+  }, [filtered, sortOrder]);
+
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + sortOrder);
   const lowStock = products.filter(p => p.stock <= p.minStock && p.unit !== "srv");
   const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
@@ -554,6 +567,17 @@ export default function EstoqueScreen() {
                 </View>
               )}
             </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+              <Text style={s.sortLabel}>Ordenar:</Text>
+              {(["recent", "price_desc", "price_asc"] as const).map((key) => {
+                const opts: Record<string, string> = { recent: "🕐 Últimos adicionados", price_desc: "↑ Maior preço", price_asc: "↓ Menor preço" };
+                return (
+                  <Pressable key={key} onPress={() => setSortOrder(key)} style={[s.sortChip, sortOrder === key && s.sortChipActive]}>
+                    <Text style={[s.sortChipText, sortOrder === key && s.sortChipTextActive]}>{opts[key]}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
             <View style={s.listCard}>
               {paginated.map(p => (
@@ -722,6 +746,11 @@ const s = StyleSheet.create({
     fontSize: 10, color: Colors.ink3, marginTop: 8,
     lineHeight: 14,
   },
+  sortLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600" as const, textTransform: "uppercase" as const, letterSpacing: 0.8, alignSelf: "center" as const, marginRight: 2 },
+  sortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  sortChipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  sortChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" as const },
+  sortChipTextActive: { color: "#fff", fontWeight: "600" as const },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },
   emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
