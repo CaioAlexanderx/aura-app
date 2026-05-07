@@ -1,11 +1,17 @@
 // ============================================================
 // AURA. — caixaApi.ts
 // Tipos e funções de API do módulo de Abertura/Fechamento de Caixa
+//
+// 07/05/2026: abrir() ganha parâmetro opcional responsavel_employee_id
+// (registra qual funcionário operacional está abrindo, separado do
+// req.user que continua sendo gravado em opened_by). fechar() agora
+// retorna métricas adicionais (sales_count, new_customers_count,
+// sessao_label) usadas pelo PDF de fechamento.
 // ============================================================
 
 import { request } from "@/services/api";
 
-// ── Tipos ─────────────────────────────────────────────────────────────────
+// ── Tipos ──────────────────────────────────────────────────────────────
 
 export type CaixaTotais = {
   pix:            number;
@@ -30,6 +36,38 @@ export type CaixaSessaoAtiva = {
 
 export type CaixaStatus = {
   sessao_ativa: CaixaSessaoAtiva | null;
+};
+
+/**
+ * Snapshot completo retornado pelo /fechar.
+ * Inclui as métricas extras necessárias pro PDF de fechamento
+ * (sales_count, new_customers_count, sessao_label, closed_at).
+ */
+export type CaixaFechamentoFull = {
+  id:                   string;
+  sessao_id:            string;
+  closed_at?:           string | null;
+  sessao_label?:        string | null;
+
+  // Confronto
+  dinheiro_esperado:    number;
+  dinheiro_contado:     number;
+  diferenca:            number;
+
+  // Totais por forma de pagamento
+  total_pix:            number;
+  total_cartao_debito:  number;
+  total_cartao_credito: number;
+  total_fiado:          number;
+  total_dinheiro:       number;
+  total_outros:         number;
+  total_geral:          number;
+
+  observacao:           string | null;
+
+  // Métricas adicionais (preenchidas pelo backend ao fechar)
+  sales_count?:         number;
+  new_customers_count?: number;
 };
 
 export type CaixaSessaoHistorico = {
@@ -67,7 +105,7 @@ export type CaixaHistoricoParams = {
   ate?:    string;
 };
 
-// ── API ───────────────────────────────────────────────────────────────────
+// ── API ────────────────────────────────────────────────────────────────
 
 export var caixaApi = {
   /** Status ao vivo — sessão aberta com totais em tempo real, ou null */
@@ -78,17 +116,31 @@ export var caixaApi = {
     );
   },
 
-  /** Abre nova sessão de caixa */
-  abrir: function(companyId: string, troco_inicial: number) {
+  /**
+   * Abre nova sessão de caixa.
+   * @param responsavelEmployeeId Funcionário operacional responsável pelo caixa.
+   *                              Opcional — quando omitido, o backend grava só
+   *                              o req.user. Quando presente, vira o "operador"
+   *                              exibido no header e no PDF.
+   */
+  abrir: function(
+    companyId: string,
+    troco_inicial: number,
+    responsavelEmployeeId?: string | null
+  ) {
+    const body: { troco_inicial: number; responsavel_employee_id?: string } = {
+      troco_inicial: troco_inicial,
+    };
+    if (responsavelEmployeeId) body.responsavel_employee_id = responsavelEmployeeId;
     return request<{ sessao: any }>(
       "/companies/" + companyId + "/caixa/abrir",
-      { method: "POST", body: { troco_inicial: troco_inicial }, retry: 0 }
+      { method: "POST", body, retry: 0 }
     );
   },
 
-  /** Fecha a sessão ativa — cria snapshot de fechamento */
+  /** Fecha a sessão ativa — cria snapshot + retorna métricas pro PDF */
   fechar: function(companyId: string, dinheiro_contado: number, observacao?: string) {
-    return request<{ fechamento: CaixaSessaoHistorico }>(
+    return request<{ fechamento: CaixaFechamentoFull }>(
       "/companies/" + companyId + "/caixa/fechar",
       {
         method: "POST",
