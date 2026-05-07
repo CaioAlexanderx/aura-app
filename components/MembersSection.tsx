@@ -937,6 +937,7 @@ export function MembersSection() {
   const { company, user } = useAuthStore();
   const {
     members, siblings, active, pending, monthlyCost, isLoading,
+    seatsIncluded, seatsUsed, extraSeats, extraSeatPrice, atLimit, overLimit, planEffective,
     lastInvite, clearLastInvite,
     inviteMember, isInviting,
     updateMember, isUpdating,
@@ -963,7 +964,14 @@ export function MembersSection() {
           <Text style={s.subtitle}>
             {active} ativo{active !== 1 ? "s" : ""}
             {pending > 0 ? " · " + pending + " pendente" + (pending !== 1 ? "s" : "") : ""}
-            {monthlyCost > 0 ? " · +R$" + monthlyCost + "/mês" : ""}
+            {/* Seats: backend novo retorna seatsIncluded; quando indefinido (backend antigo)
+                cai no fallback de mostrar custo direto. */}
+            {seatsIncluded != null
+              ? " · " + Math.min(seatsUsed, seatsIncluded) + " de " + (seatsIncluded >= 999 ? "ilimitado" : seatsIncluded) + " inclusos"
+              : (monthlyCost > 0 ? " · +R$" + monthlyCost + "/mês" : "")}
+            {seatsIncluded != null && extraSeats > 0
+              ? " · +R$" + (extraSeats * extraSeatPrice) + "/mês"
+              : ""}
           </Text>
         </View>
         {!wizardOpen && (
@@ -1039,8 +1047,29 @@ export function MembersSection() {
       )}
 
       {members.length > 0 && (
-        <View style={s.billingNote}>
-          <Text style={s.billingText}>O titular não é cobrado. Cada membro adicional ativo: R$19/mês.</Text>
+        <View style={[s.billingNote, atLimit && !overLimit ? s.billingNoteWarn : null, overLimit ? s.billingNoteOver : null]}>
+          {/*
+            Disclaimer condicional por plano:
+            - Abaixo do limite: explica seats inclusos no plano
+            - No limite exato:  "Limite de funcionários atingido. Contrate adicional para criar mais acessos."
+            - Acima do limite:  mostra cobrança extra
+            seatsIncluded == null: backend antigo, fallback ao texto legacy.
+          */}
+          {seatsIncluded == null ? (
+            <Text style={s.billingText}>O titular não é cobrado. Cada membro adicional ativo: R$19/mês.</Text>
+          ) : overLimit ? (
+            <Text style={s.billingTextOver}>
+              {extraSeats} acesso{extraSeats !== 1 ? "s" : ""} acima do plano {planEffective} · +R${extraSeats * extraSeatPrice}/mês
+            </Text>
+          ) : atLimit ? (
+            <Text style={s.billingTextWarn}>
+              Limite de funcionários atingido. Contrate adicional para criar mais acessos (R${extraSeatPrice}/mês cada).
+            </Text>
+          ) : (
+            <Text style={s.billingText}>
+              {seatsUsed} de {seatsIncluded >= 999 ? "ilimitado" : seatsIncluded} acesso{seatsIncluded !== 1 ? "s" : ""} inclusos no plano {planEffective}.
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -1178,8 +1207,12 @@ const s = StyleSheet.create({
   emptyCta:     { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violet, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10 },
   emptyCtaText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 
-  billingNote:  { borderTopWidth: 1, borderTopColor: Colors.border, padding: 12 },
-  billingText:  { fontSize: 10, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
+  billingNote:     { borderTopWidth: 1, borderTopColor: Colors.border, padding: 12 },
+  billingNoteWarn: { backgroundColor: "rgba(245,158,11,0.08)", borderTopColor: "rgba(245,158,11,0.3)" },
+  billingNoteOver: { backgroundColor: "rgba(239,68,68,0.08)",  borderTopColor: "rgba(239,68,68,0.3)" },
+  billingText:      { fontSize: 10, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
+  billingTextWarn:  { fontSize: 11, color: Colors.amber || "#f59e0b", fontWeight: "600", textAlign: "center" },
+  billingTextOver:  { fontSize: 11, color: Colors.red   || "#ef4444", fontWeight: "600", textAlign: "center" },
 });
 
 export default MembersSection;
