@@ -15,6 +15,8 @@
 // 06/05: layout responsivo — colunas do grid e sidebar do CartPanel
 // escalam com viewport (4/400 em 1440, 5/440 em 1500, 6/480 em 1900+).
 // actBar e banner ganham maxWidth pra não esticar demais.
+// 07/05: Troca (Option B) — ActTroca card (F5) abre TrocaModal.
+// actBar ganha 5ª coluna. TrocaModal importa trocaApi de trocaApi.ts.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -39,11 +41,12 @@ import { VariantPickerModal } from "@/components/VariantPickerModal";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
 import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
+import { TrocaModal } from "@/components/screens/pdv/TrocaModal";
 import { CaixaBackdrop } from "@/components/screens/pdv/CaixaBackdrop";
 import { CaixaDesignStyle, IS_WEB, accentForProduct, productLetter, fmtCurrency } from "@/components/screens/pdv/types";
 import { SearchBox } from "@/components/screens/pdv/SearchBox";
 import { MerchantBanner } from "@/components/screens/pdv/MerchantBanner";
-import { ActBarcode, ActPerson, ActCoupon } from "@/components/screens/pdv/ActionToolbar";
+import { ActBarcode, ActPerson, ActCoupon, ActTroca } from "@/components/screens/pdv/ActionToolbar";
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel, type CartDisplayItem, type PayChip } from "@/components/screens/pdv/CartPanel";
@@ -200,6 +203,7 @@ function CaixaScreenInner() {
   const [showOutOfStock, setShowOutOfStock] = useState(false);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
+  const [showTroca, setShowTroca] = useState(false);
 
   const cartHeadRef = useRef<any>(null);
 
@@ -535,7 +539,8 @@ function CaixaScreenInner() {
 
             <MerchantBanner height={200} />
 
-            <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, position: "relative", zIndex: 50 } as any)]}>
+            {/* actBar: 5 colunas (Barcode · Vendedora · Cliente · Cupom · Troca) */}
+            <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, position: "relative", zIndex: 50 } as any)]}>
               <ActBarcode onScan={handleScan} />
               <ActPerson
                 kind="vendedora"
@@ -572,6 +577,7 @@ function CaixaScreenInner() {
                 onChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
                 onValidate={handleValidateCoupon}
               />
+              <ActTroca onOpen={() => setShowTroca(true)} />
             </View>
 
             <View style={s.catRow}>
@@ -632,6 +638,12 @@ function CaixaScreenInner() {
           onSelect={handleVariantSelected}
           onClose={() => setPendingProduct(null)}
         />
+        <TrocaModal
+          visible={showTroca}
+          companyId={company?.id || ""}
+          products={products}
+          onClose={() => setShowTroca(false)}
+        />
       </View>
     );
   }
@@ -679,6 +691,7 @@ function CaixaScreenInner() {
             onChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
             onValidate={handleValidateCoupon}
           />
+          <ActTroca onOpen={() => setShowTroca(true)} />
         </View>
 
         <View style={s.catRow}>
@@ -730,6 +743,12 @@ function CaixaScreenInner() {
         product={pendingProduct}
         onSelect={handleVariantSelected}
         onClose={() => setPendingProduct(null)}
+      />
+      <TrocaModal
+        visible={showTroca}
+        companyId={company?.id || ""}
+        products={products}
+        onClose={() => setShowTroca(false)}
       />
     </View>
   );
