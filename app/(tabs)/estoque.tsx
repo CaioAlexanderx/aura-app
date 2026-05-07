@@ -19,6 +19,7 @@ import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
+import { ImportDanfeModal } from "@/components/ImportDanfeModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
@@ -227,6 +228,7 @@ export default function EstoqueScreen() {
 
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [showDanfeModal, setShowDanfeModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
 
   // Scanner popup: TextInput inline simples (sem ScannerInput pra evitar
@@ -411,6 +413,12 @@ export default function EstoqueScreen() {
                 <Text style={s.batchBtnText}>+ Em lote</Text>
               </Pressable>
             )}
+            {!isDemo && (
+              <Pressable onPress={() => setShowDanfeModal(true)} style={s.danfeBtn}>
+                <Icon name="file_text" size={14} color={Colors.violet3} />
+                <Text style={s.danfeBtnText}>Importar DANFE</Text>
+              </Pressable>
+            )}
             <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
               <Icon name="package" size={14} color="#fff" />
               <Text style={s.addBtnText}>+ Produto</Text>
@@ -455,6 +463,13 @@ export default function EstoqueScreen() {
               <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
               <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole varios produtos de uma vez e cadastre em segundos</Text></View>
               <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtnSmall}>
+                <Text style={s.batchBtnSmallText}>Abrir</Text>
+              </Pressable>
+            </View>
+            <View style={s.emptyImport}>
+              <View style={s.emptyImportIcon}><Icon name="file_text" size={18} color={Colors.violet3} /></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar DANFE (PDF)</Text><Text style={s.emptyImportDesc}>Cadastre todos os produtos de uma nota fiscal — IA extrai os itens automaticamente</Text></View>
+              <Pressable onPress={() => setShowDanfeModal(true)} style={s.batchBtnSmall}>
                 <Text style={s.batchBtnSmallText}>Abrir</Text>
               </Pressable>
             </View>
@@ -567,6 +582,11 @@ export default function EstoqueScreen() {
         <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
         <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
         <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
+        <ImportDanfeModal
+          visible={showDanfeModal}
+          onClose={() => setShowDanfeModal(false)}
+          onComplete={() => { handleImportComplete(); }}
+        />
         <CategoriesModal
           visible={categoriesModal.open}
           initialType={categoriesModal.initialType}
@@ -632,6 +652,8 @@ const s = StyleSheet.create({
   serviceBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   batchBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
   batchBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  danfeBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(124,58,237,0.18)", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "rgba(167,139,250,0.35)", borderStyle: "dashed" as any },
+  danfeBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   batchBtnSmall: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   batchBtnSmallText: { fontSize: 12, color: "#fff", fontWeight: "700" },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
