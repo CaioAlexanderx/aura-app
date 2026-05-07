@@ -19,7 +19,7 @@ import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
-import { ImportDanfeModal } from "@/components/ImportDanfeModal";
+import { DanfeImportModal } from "@/components/screens/estoque/DanfeImportModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
@@ -488,7 +488,7 @@ export default function EstoqueScreen() {
             </View>
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="file_text" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar DANFE (PDF)</Text><Text style={s.emptyImportDesc}>Cadastre todos os produtos de uma nota fiscal — IA extrai os itens automaticamente</Text></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar DANFE (XML)</Text><Text style={s.emptyImportDesc}>Cadastre todos os produtos de uma nota fiscal — selecione o arquivo .xml gerado pela SEFAZ</Text></View>
               <Pressable onPress={() => setShowDanfeModal(true)} style={s.batchBtnSmall}>
                 <Text style={s.batchBtnSmallText}>Abrir</Text>
               </Pressable>
@@ -613,11 +613,14 @@ export default function EstoqueScreen() {
         <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
         <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
         <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
-        <ImportDanfeModal
-          visible={showDanfeModal}
-          onClose={() => setShowDanfeModal(false)}
-          onComplete={() => { handleImportComplete(); }}
-        />
+        {company?.id && (
+          <DanfeImportModal
+            visible={showDanfeModal}
+            companyId={company.id}
+            onClose={() => setShowDanfeModal(false)}
+            onSuccess={() => handleImportComplete()}
+          />
+        )}
         <CategoriesModal
           visible={categoriesModal.open}
           initialType={categoriesModal.initialType}
