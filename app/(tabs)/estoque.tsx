@@ -26,6 +26,7 @@ import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/type
 import type { Product } from "@/components/screens/estoque/types";
 import type { CategoryType } from "@/services/api";
 import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
+import { productMatchesSearch } from "@/utils/productSearch";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
@@ -69,14 +70,21 @@ function AggregatedView() {
   });
 
   const groups = data?.products || [];
+  // 07/05/2026: usa productMatchesSearch pra paridade com Estoque single-company
+  // e PDV (acentos normalizados, multi-termo AND, haystack consolidado).
   const filtered = useMemo(() => {
     if (!search) return groups;
-    const q = search.toLowerCase();
     return groups.filter((g: AggregatedProduct) =>
-      g.name.toLowerCase().includes(q) ||
-      (g.barcode || "").toLowerCase().includes(q) ||
-      (g.sku || "").toLowerCase().includes(q) ||
-      (g.master_sku || "").toLowerCase().includes(q)
+      productMatchesSearch(
+        {
+          name: g.name,
+          barcode: g.barcode,
+          sku: g.sku,
+          code: g.master_sku,
+          category: g.category,
+        },
+        search
+      )
     );
   }, [groups, search]);
 
@@ -283,22 +291,21 @@ export default function EstoqueScreen() {
   }, [managedCategoryNames, categories, products]);
 
   const filterCategories = ["Todos", ...allCategories];
-  // FIX 05/05/2026: busca agora bate em barcode e sku alem de name e code.
-  const filtered = products.filter(p => {
-    const q = (search || "").trim().toLowerCase();
-    if (!q) {
-      return catFilter === "Todos" || p.category === catFilter;
-    }
-    const haystacks = [
-      p.name,
-      p.code,
-      (p as any).barcode,
-      (p as any).sku,
-    ].filter(Boolean).map(x => String(x).toLowerCase());
-    const matchSearch = haystacks.some(h => h.includes(q));
-    const matchCat = catFilter === "Todos" || p.category === catFilter;
-    return matchSearch && matchCat;
-  });
+  // 07/05/2026: paridade com PDV via utils/productSearch — fix bug Davi.
+  // Antes a busca falhava em três cenários reportados:
+  //   - acentos no nome ("tenis" não achava "Tênis")
+  //   - ordem de palavras invertida ("preto activita" vs "Activita ... Preto")
+  //   - busca por marca/cor/tamanho/categoria (campos não cobertos)
+  // Agora normalizeText + tokenização AND + haystack consolidado resolvem
+  // os três (mesma lógica que o PDV já usava e o Davi confirmou funcional).
+  const filtered = useMemo(() => {
+    const q = (search || "").trim();
+    return products.filter(p => {
+      const matchSearch = productMatchesSearch(p, q);
+      const matchCat = catFilter === "Todos" || p.category === catFilter;
+      return matchSearch && matchCat;
+    });
+  }, [products, search, catFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
