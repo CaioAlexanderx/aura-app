@@ -49,9 +49,9 @@ function getLabel(v: any, parentColor?: string, parentSize?: string): string {
     if (parentColor) inherited.push(hexToName(parentColor) || parentColor);
     if (parentSize) inherited.push(parentSize);
     var suffix = v.sku_suffix || "Variante";
-    return inherited.length > 0 ? suffix + " \u00b7 " + inherited.join(" \u00b7 ") : suffix;
+    return inherited.length > 0 ? suffix + " · " + inherited.join(" · ") : suffix;
   }
-  return parts.join(" \u00b7 ");
+  return parts.join(" · ");
 }
 
 function getColor(v: any, parentColor?: string): string | null {
@@ -67,7 +67,7 @@ function getColor(v: any, parentColor?: string): string | null {
 
 export function VariantPickerModal({ visible, product, onSelect, onClose }: {
   visible: boolean;
-  product: { id: string; name: string; price: number; color?: string; size?: string } | null;
+  product: { id: string; name: string; price: number; color?: string; size?: string; stock?: number } | null;
   onSelect: (variant: VariantChoice) => void;
   onClose: () => void;
 }) {
@@ -114,6 +114,25 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
             </View>
           ) : (
             <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 8, padding: 16 }}>
+              {/* 07/05: produto pai pode ter stock proprio independente das variantes
+                 (caso onde o usuario cadastrou estoque no pai antes de criar variantes,
+                 ou onde sobrou estoque "generico" nao-categorizado). Quando product.stock > 0
+                 oferecemos a opcao de vender sem variante — id="" sinaliza parent-only. */}
+              {(product.stock || 0) > 0 && (
+                <Pressable
+                  onPress={function() { onSelect({ id: "", label: "Sem variante", price: product.price, stock: product.stock || 0 }); }}
+                  style={[s.variantRow, s.parentRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}
+                >
+                  <View style={[s.colorDot, { backgroundColor: "rgba(167,139,250,0.25)", borderStyle: "dashed" }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.variantLabel}>Sem variante específica</Text>
+                    <Text style={s.variantMeta}>
+                      R$ {product.price.toFixed(2).replace(".", ",")} · {product.stock} un · genérico
+                    </Text>
+                  </View>
+                  <View style={s.stockBadge}><Text style={s.stockText}>{product.stock}</Text></View>
+                </Pressable>
+              )}
               {activeVariants.map(function(v: any) {
                 var label = getLabel(v, parentColor, parentSize);
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : product.price;
@@ -126,8 +145,8 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
                     <View style={{ flex: 1 }}>
                       <Text style={s.variantLabel}>{label}</Text>
                       <Text style={s.variantMeta}>
-                        R$ {effectivePrice.toFixed(2).replace(".", ",")} {"\u00b7"} {stock} un
-                        {v.barcode ? " \u00b7 ..." + String(v.barcode).slice(-4) : ""}
+                        R$ {effectivePrice.toFixed(2).replace(".", ",")} {"·"} {stock} un
+                        {v.barcode ? " · ..." + String(v.barcode).slice(-4) : ""}
                       </Text>
                     </View>
                     <View style={[s.stockBadge, stock < 3 && { backgroundColor: Colors.redD }]}>
@@ -160,6 +179,11 @@ var s = StyleSheet.create({
     backgroundColor: Colors.bg4, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: Colors.border,
   },
+  parentRow: {
+    backgroundColor: "rgba(124,58,237,0.08)",
+    borderColor: "rgba(167,139,250,0.25)",
+    borderStyle: "dashed",
+  } as any,
   colorDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.2)" },
   variantLabel: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   variantMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
