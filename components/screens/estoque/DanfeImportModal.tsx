@@ -1,20 +1,39 @@
+// ============================================================
+// AURA. — Estoque · DanfeImportModal (DNA TrocaModal)
+//
+// Importa NF-e (XML) com revisao item-a-item e bulk actions.
+//
+// 07/05/2026: Refeito visualmente para alinhar com a DNA da TrocaModal
+// (glassmorphism violeta, stepper centralizado, footer dentro do scroll).
+// Logica funcional preservada 1-pra-1: parseXml -> revisar -> importar.
+//
+// Steps logicos:
+//   1. upload  — escolher arquivo XML
+//   2. review  — editar nome/preco/cor/categoria + bulk actions
+//   3. import  — barra de progresso
+//   4. done    — tela de sucesso (espelha OpenCloseCashModal)
+//
+// O step "loading" (parse XML) e transitorio: mostra spinner sobreposto
+// no proprio passo upload sem trocar de tela.
+// ============================================================
 import React, { useState, useRef, useCallback } from "react";
 import {
-  Modal,
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   TextInput,
   ActivityIndicator,
   Platform,
   StyleSheet,
-  Alert,
 } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, IS_DARK_MODE } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import { danfeApi, DanfeItem } from "@/services/danfeApi";
 import { companiesApi } from "@/services/companiesApi";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
+import { IS_WEB, webOnly } from "@/components/screens/pdv/types";
+import { toast } from "@/components/Toast";
 
 interface Props {
   visible: boolean;
@@ -23,7 +42,7 @@ interface Props {
   onSuccess: (count: number) => void;
 }
 
-type Step = "upload" | "loading" | "review" | "importing" | "done";
+type Step = "upload" | "review" | "importing" | "done";
 
 const MARKUP_PRESETS = [
   { label: "0%", pct: 0 },
@@ -46,8 +65,16 @@ function applyMarkup(unitCost: number, pct: number): string {
   return maskCurrency(String(cents));
 }
 
+const STEP_LABELS: Record<Exclude<Step, "done">, string> = {
+  upload: "ARQUIVO",
+  review: "REVISAR",
+  importing: "IMPORTAR",
+};
+const STEP_ORDER: Array<Exclude<Step, "done">> = ["upload", "review", "importing"];
+
 export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Props) {
   const [step, setStep] = useState<Step>("upload");
+  const [parsing, setParsing] = useState(false); // overlay de loading durante parseXml
   const [items, setItems] = useState<EditableItem[]>([]);
   const [supplierName, setSupplierName] = useState<string | null>(null);
   const [invoiceInfo, setInvoiceInfo] = useState<string | null>(null);
@@ -60,6 +87,7 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
 
   const reset = useCallback(() => {
     setStep("upload");
+    setParsing(false);
     setItems([]);
     setSupplierName(null);
     setInvoiceInfo(null);
@@ -75,13 +103,13 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
     onClose();
   }, [onClose, reset]);
 
-  // ── XML file picked ─────────────────────────────────────────────────────────
+  // ── XML file picked ───────────────────────────────────────────────
   const handleFileChange = useCallback(
     async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
       setError(null);
-      setStep("loading");
+      setParsing(true);
       try {
         const text: string = await file.text();
         const result = await danfeApi.parseXml(companyId, text);
@@ -110,17 +138,16 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
         setInvoiceInfo(parts.join(" · ") || null);
         setStep("review");
       } catch (err: any) {
-        setError(
-          err?.data?.error || err?.message || "Falha ao processar XML."
-        );
-        setStep("upload");
+        setError(err?.data?.error || err?.message || "Falha ao processar XML.");
+      } finally {
+        setParsing(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
-      if (fileInputRef.current) fileInputRef.current.value = "";
     },
     [companyId]
   );
 
-  // ── Item field updates ──────────────────────────────────────────────────────
+  // ── Item field updates ───────────────────────────────────────────────
   const updateItem = useCallback(
     (idx: number, field: keyof EditableItem, value: any) => {
       setItems((prev) =>
@@ -134,7 +161,7 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
     setItems((prev) => prev.map((it) => ({ ...it, selected: checked })));
   }, []);
 
-  // ── Bulk actions ────────────────────────────────────────────────────────────
+  // ── Bulk actions ─────────────────────────────────────────────────────────
   const applyBulkMarkup = useCallback((pct: number) => {
     setItems((prev) =>
       prev.map((it) =>
@@ -144,9 +171,7 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
   }, []);
 
   const applyBulkColor = useCallback((color: string) => {
-    setItems((prev) =>
-      prev.map((it) => (it.selected ? { ...it, color } : it))
-    );
+    setItems((prev) => prev.map((it) => (it.selected ? { ...it, color } : it)));
   }, []);
 
   const applyBulkCategory = useCallback(() => {
@@ -158,14 +183,11 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
     );
   }, [bulkCategory]);
 
-  // ── Import ──────────────────────────────────────────────────────────────────
+  // ── Import ───────────────────────────────────────────────────────────────
   const handleImport = useCallback(async () => {
     const selected = items.filter((it) => it.selected);
     if (selected.length === 0) {
-      Alert.alert(
-        "Nenhum item selecionado",
-        "Selecione ao menos um produto para importar."
-      );
+      toast.error("Selecione ao menos um produto para importar.");
       return;
     }
     setStep("importing");
@@ -206,75 +228,118 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
   const selectedCount = items.filter((it) => it.selected).length;
   const allSelected = items.length > 0 && selectedCount === items.length;
 
+  if (!visible) return null;
+
+  // ── Estilo do painel — glassmorphism violeta canonico ──
+  const panelWeb = webOnly({
+    background: IS_DARK_MODE ? "rgba(18,10,35,0.97)" : "rgba(255,255,255,0.97)",
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    border: "1px solid rgba(124,58,237,0.30)",
+    boxShadow: IS_DARK_MODE
+      ? "0 24px 60px -10px rgba(0,0,0,0.70)"
+      : "0 24px 60px -10px rgba(124,58,237,0.22)",
+  });
+
+  // O modal cresce no passo review (tabela 7 colunas).
+  const isWideStep = step === "review";
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleClose}
-    >
-      <View style={[styles.container, { backgroundColor: Colors.bg2 }]}>
+    <View style={s.overlay}>
+      <Pressable style={s.backdrop} onPress={handleClose} />
+      <View
+        style={[
+          s.panel,
+          isWideStep && s.panelWide,
+          IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 },
+        ]}
+      >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: Colors.border }]}>
-          <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-            <Text style={[styles.closeTxt, { color: Colors.ink2 }]}>Cancelar</Text>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: Colors.ink }]}>
-            Importar DANFE (XML)
-          </Text>
-          <View style={{ width: 70 }} />
+        <View style={s.header}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={s.headerIco}>
+              <Icon name="upload" size={15} color="#a78bfa" />
+            </View>
+            <Text style={s.headerTitle}>Importar DANFE (XML)</Text>
+          </View>
+          <Pressable onPress={handleClose} style={s.closeBtn}>
+            <Icon name="x" size={14} color={Colors.ink3} />
+          </Pressable>
         </View>
 
-        {/* ─── UPLOAD ─────────────────────────────────────────────────── */}
+        {/* Stepper — esconde no done */}
+        {step !== "done" && (
+          <View style={s.stepBar}>
+            {STEP_ORDER.map((stKey, idx) => {
+              const curIdx = STEP_ORDER.indexOf(step as any);
+              const myIdx = idx;
+              const done = curIdx > myIdx;
+              const active = curIdx === myIdx;
+              return (
+                <View key={stKey} style={s.stepItem}>
+                  <View style={[s.stepDot, done && s.stepDotDone, active && s.stepDotActive]}>
+                    {done ? (
+                      <Icon name="check" size={9} color="#fff" />
+                    ) : (
+                      <Text style={[s.stepDotTxt, active && { color: "#fff" }]}>{myIdx + 1}</Text>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      s.stepLabel,
+                      (active || done) && { color: active ? "#a78bfa" : Colors.ink3 },
+                    ]}
+                  >
+                    {STEP_LABELS[stKey]}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ─── UPLOAD ────────────────────────────────────────────────── */}
         {step === "upload" && (
-          <View style={styles.centered}>
+          <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
             {error && (
-              <View
-                style={[
-                  styles.errorBox,
-                  {
-                    backgroundColor: Colors.red + "15",
-                    borderColor: Colors.red + "40",
-                  },
-                ]}
-              >
-                <Text style={[styles.errorText, { color: Colors.red }]}>
+              <View style={[s.diff, s.diffDown]}>
+                <Icon name="alert" size={12} color={Colors.red} />
+                <Text style={[s.diffTxt, { color: Colors.red }]} numberOfLines={2}>
                   {error}
                 </Text>
               </View>
             )}
-            <View
-              style={[
-                styles.uploadCard,
-                {
-                  backgroundColor: Colors.bg3,
-                  borderColor: Colors.border2,
-                },
-              ]}
-            >
-              <Text style={styles.uploadIcon}>📄</Text>
-              <Text style={[styles.uploadTitle, { color: Colors.ink }]}>
-                Selecione o arquivo XML da NF-e
+
+            <Text style={s.sectionTitle}>Selecione o arquivo XML da NF-e</Text>
+
+            <View style={s.uploadCard}>
+              <View style={s.uploadIcoWrap}>
+                <Icon name="file_text" size={28} color="#a78bfa" />
+              </View>
+              <Text style={s.uploadTitle}>Arraste ou clique para escolher</Text>
+              <Text style={s.uploadSub}>
+                Apenas o arquivo .xml gerado pela SEFAZ — não o PDF nem imagem.
               </Text>
-              <Text style={[styles.uploadSub, { color: Colors.ink3 }]}>
-                {"O arquivo .xml gerado pela SEFAZ\n(não o PDF nem imagem)"}
-              </Text>
+
               {Platform.OS === "web" ? (
-                <View style={{ position: "relative", marginTop: 20 }}>
-                  <View
-                    style={[styles.uploadBtn, { backgroundColor: Colors.violet }]}
-                  >
-                    <Text style={styles.uploadBtnTxt}>Escolher arquivo .xml</Text>
+                <View style={{ position: "relative", marginTop: 18 }}>
+                  <View style={[s.btnPri, { paddingHorizontal: 22, paddingVertical: 11 }]}>
+                    {parsing ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={s.btnPriTxt}>Escolher arquivo .xml</Text>
+                    )}
                   </View>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".xml,application/xml,text/xml"
+                    disabled={parsing}
                     style={{
                       position: "absolute",
                       inset: 0,
                       opacity: 0,
-                      cursor: "pointer",
+                      cursor: parsing ? "wait" : "pointer",
                       width: "100%",
                       height: "100%",
                     } as any}
@@ -282,111 +347,74 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                   />
                 </View>
               ) : (
-                <Text style={[styles.uploadSub, { color: Colors.ink3, marginTop: 12 }]}>
+                <Text style={[s.helpTxt, { marginTop: 14 }]}>
                   Disponível apenas na versão web.
                 </Text>
               )}
             </View>
-          </View>
+
+            <View style={s.stepFooter}>
+              <Text style={s.footerTxt}>PASSO 1 DE 3</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable style={s.btnSec} onPress={handleClose}>
+                  <Text style={s.btnSecTxt}>Cancelar</Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
         )}
 
-        {/* ─── LOADING ────────────────────────────────────────────────── */}
-        {step === "loading" && (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={Colors.violet} />
-            <Text style={[styles.loadingTxt, { color: Colors.ink2 }]}>
-              Processando XML…
-            </Text>
-          </View>
-        )}
-
-        {/* ─── REVIEW ─────────────────────────────────────────────────── */}
+        {/* ─── REVIEW ────────────────────────────────────────────────── */}
         {step === "review" && (
-          <View style={{ flex: 1 }}>
-            {/* Supplier info strip */}
+          <View style={{ flex: 1, minHeight: 0 }}>
+            {/* Supplier info strip — padrao info-strip da TrocaModal */}
             {(supplierName || invoiceInfo) && (
-              <View
-                style={[
-                  styles.infoBar,
-                  {
-                    backgroundColor: Colors.bg3,
-                    borderBottomColor: Colors.border,
-                  },
-                ]}
-              >
+              <View style={[s.infoStrip, { marginHorizontal: 20, marginTop: 14, marginBottom: 8 }]}>
                 {supplierName && (
-                  <Text style={[styles.supplierName, { color: Colors.ink }]}>
-                    {supplierName}
-                  </Text>
+                  <Text style={s.infoStripTitle}>{supplierName}</Text>
                 )}
                 {invoiceInfo && (
-                  <Text style={[styles.invoiceInfo, { color: Colors.ink3 }]}>
-                    {invoiceInfo}
-                  </Text>
+                  <Text style={s.infoStripSub}>{invoiceInfo}</Text>
                 )}
               </View>
             )}
 
             {/* Bulk actions bar */}
-            <View
-              style={[
-                styles.bulkBar,
-                {
-                  backgroundColor: Colors.bg4,
-                  borderBottomColor: Colors.border,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => toggleAll(!allSelected)}
-                style={styles.checkboxTouch}
-              >
+            <View style={s.bulkBar}>
+              <Pressable onPress={() => toggleAll(!allSelected)} style={s.checkboxTouch}>
                 <View
                   style={[
-                    styles.checkbox,
-                    {
-                      backgroundColor: allSelected
-                        ? Colors.violet
-                        : "transparent",
-                      borderColor: allSelected
-                        ? Colors.violet
-                        : Colors.border2,
+                    s.checkbox,
+                    allSelected && {
+                      backgroundColor: Colors.violet,
+                      borderColor: Colors.violet,
                     },
                   ]}
                 >
-                  {allSelected && (
-                    <Text style={styles.checkMark}>✓</Text>
-                  )}
+                  {allSelected && <Text style={s.checkMark}>✓</Text>}
                 </View>
-                <Text style={[styles.bulkLabel, { color: Colors.ink3 }]}>
+                <Text style={s.bulkLabel}>
                   {selectedCount}/{items.length}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <View style={styles.bulkSep} />
+              <View style={s.bulkSep} />
 
               {MARKUP_PRESETS.map((p) => (
-                <TouchableOpacity
+                <Pressable
                   key={p.label}
                   onPress={() => applyBulkMarkup(p.pct)}
-                  style={[styles.presetBtn, { borderColor: Colors.border2 }]}
+                  style={s.presetBtn}
                 >
-                  <Text style={[styles.presetTxt, { color: Colors.ink2 }]}>
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
+                  <Text style={s.presetTxt}>{p.label}</Text>
+                </Pressable>
               ))}
 
-              <View style={styles.bulkSep} />
+              <View style={s.bulkSep} />
 
-              {/* Bulk color */}
+              {/* Bulk color swatch */}
               <View style={{ position: "relative", width: 30, height: 30 }}>
-                <View
-                  style={[
-                    styles.colorPreview,
-                    { backgroundColor: bulkColor, borderColor: Colors.border2 },
-                  ]}
-                />
+                <View style={[s.colorPreview, { backgroundColor: bulkColor }]} />
                 {Platform.OS === "web" && (
                   <input
                     type="color"
@@ -412,143 +440,72 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
               <TextInput
                 value={bulkCategory}
                 onChangeText={setBulkCategory}
-                placeholder="Categoria..."
+                placeholder="Categoria…"
                 placeholderTextColor={Colors.ink3}
-                style={[
-                  styles.bulkCatInput,
-                  {
-                    color: Colors.ink,
-                    borderColor: Colors.border2,
-                    backgroundColor: Colors.bg3,
-                  },
-                ]}
+                style={s.bulkCatInput as any}
                 onSubmitEditing={applyBulkCategory}
               />
-              <TouchableOpacity
-                onPress={applyBulkCategory}
-                style={[styles.applyBtn, { backgroundColor: Colors.violetD }]}
-              >
-                <Text style={[styles.applyTxt, { color: Colors.violet }]}>
-                  Aplicar
-                </Text>
-              </TouchableOpacity>
+              <Pressable onPress={applyBulkCategory} style={s.applyBtn}>
+                <Text style={s.applyTxt}>Aplicar</Text>
+              </Pressable>
             </View>
 
             {/* Table header */}
-            <View
-              style={[
-                styles.tableHeader,
-                {
-                  backgroundColor: Colors.bg3,
-                  borderBottomColor: Colors.border,
-                },
-              ]}
-            >
-              <View style={styles.colCheck} />
-              <Text
-                style={[styles.colHdr, styles.colName, { color: Colors.ink3 }]}
-              >
-                Produto
-              </Text>
-              <Text
-                style={[styles.colHdr, styles.colQty, { color: Colors.ink3 }]}
-              >
-                Qtd
-              </Text>
-              <Text
-                style={[styles.colHdr, styles.colCost, { color: Colors.ink3 }]}
-              >
-                Custo NF
-              </Text>
-              <Text
-                style={[styles.colHdr, styles.colPrice, { color: Colors.ink3 }]}
-              >
-                Venda
-              </Text>
-              <Text
-                style={[styles.colHdr, styles.colColor, { color: Colors.ink3 }]}
-              >
-                Cor
-              </Text>
-              <Text
-                style={[styles.colHdr, styles.colCat, { color: Colors.ink3 }]}
-              >
-                Categoria
-              </Text>
+            <View style={s.tableHeader}>
+              <View style={s.colCheck} />
+              <Text style={[s.colHdr, s.colName]}>Produto</Text>
+              <Text style={[s.colHdr, s.colQty]}>Qtd</Text>
+              <Text style={[s.colHdr, s.colCost]}>Custo NF</Text>
+              <Text style={[s.colHdr, s.colPrice]}>Venda</Text>
+              <Text style={[s.colHdr, s.colColor]}>Cor</Text>
+              <Text style={[s.colHdr, s.colCat]}>Categoria</Text>
             </View>
 
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 90 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
               {items.map((it, idx) => (
                 <View
                   key={idx}
                   style={[
-                    styles.row,
-                    {
-                      borderBottomColor: Colors.border,
-                      backgroundColor: it.selected ? Colors.bg2 : Colors.bg,
-                    },
+                    s.row,
+                    !it.selected && { opacity: 0.45 },
                   ]}
                 >
                   {/* Checkbox */}
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => updateItem(idx, "selected", !it.selected)}
-                    style={styles.colCheck}
+                    style={s.colCheck}
                   >
                     <View
                       style={[
-                        styles.checkbox,
-                        {
-                          backgroundColor: it.selected
-                            ? Colors.violet
-                            : "transparent",
-                          borderColor: it.selected
-                            ? Colors.violet
-                            : Colors.border2,
+                        s.checkbox,
+                        it.selected && {
+                          backgroundColor: Colors.violet,
+                          borderColor: Colors.violet,
                         },
                       ]}
                     >
-                      {it.selected && (
-                        <Text style={styles.checkMark}>✓</Text>
-                      )}
+                      {it.selected && <Text style={s.checkMark}>✓</Text>}
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
 
                   {/* Name */}
                   <TextInput
                     value={it.name}
                     onChangeText={(v) => updateItem(idx, "name", v)}
-                    style={[
-                      styles.input,
-                      styles.colName,
-                      { color: Colors.ink, borderColor: Colors.border2 },
-                    ]}
+                    style={[s.cellInput, s.colName] as any}
                     placeholderTextColor={Colors.ink3}
                   />
 
                   {/* Qty — read-only */}
-                  <Text
-                    style={[
-                      styles.cell,
-                      styles.colQty,
-                      { color: Colors.ink2 },
-                    ]}
-                  >
-                    {it.quantity % 1 === 0
-                      ? it.quantity
-                      : it.quantity.toFixed(2)}
+                  <Text style={[s.cell, s.colQty]}>
+                    {it.quantity % 1 === 0 ? it.quantity : it.quantity.toFixed(2)}
                   </Text>
 
                   {/* Cost — read-only */}
-                  <Text
-                    style={[
-                      styles.cell,
-                      styles.colCost,
-                      { color: Colors.ink3 },
-                    ]}
-                  >
+                  <Text style={[s.cell, s.colCost, { color: Colors.ink3 }]}>
                     {it.unit_cost.toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
@@ -560,24 +517,16 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                     value={it.price}
                     keyboardType="numeric"
                     onChangeText={(v) =>
-                      updateItem(
-                        idx,
-                        "price",
-                        maskCurrency(unmaskNumber(v))
-                      )
+                      updateItem(idx, "price", maskCurrency(unmaskNumber(v)))
                     }
-                    style={[
-                      styles.input,
-                      styles.colPrice,
-                      { color: Colors.ink, borderColor: Colors.border2 },
-                    ]}
+                    style={[s.cellInput, s.colPrice] as any}
                     placeholderTextColor={Colors.ink3}
                   />
 
                   {/* Color */}
                   <View
                     style={[
-                      styles.colColor,
+                      s.colColor,
                       {
                         position: "relative",
                         alignItems: "center",
@@ -585,12 +534,7 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                       },
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: it.color },
-                      ]}
-                    />
+                    <View style={[s.colorDot, { backgroundColor: it.color }]} />
                     {Platform.OS === "web" && (
                       <input
                         type="color"
@@ -603,9 +547,7 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                           width: "100%",
                           height: "100%",
                         } as any}
-                        onChange={(e: any) =>
-                          updateItem(idx, "color", e.target.value)
-                        }
+                        onChange={(e: any) => updateItem(idx, "color", e.target.value)}
                       />
                     )}
                   </View>
@@ -616,272 +558,376 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                     onChangeText={(v) => updateItem(idx, "category", v)}
                     placeholder="—"
                     placeholderTextColor={Colors.ink3}
-                    style={[
-                      styles.input,
-                      styles.colCat,
-                      { color: Colors.ink, borderColor: Colors.border2 },
-                    ]}
+                    style={[s.cellInput, s.colCat] as any}
                   />
                 </View>
               ))}
             </ScrollView>
 
-            {/* Footer */}
-            <View
-              style={[
-                styles.footer,
-                {
-                  backgroundColor: Colors.bg2,
-                  borderTopColor: Colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.footerInfo, { color: Colors.ink3 }]}>
-                {selectedCount} produto
-                {selectedCount !== 1 ? "s" : ""} selecionado
-                {selectedCount !== 1 ? "s" : ""}
+            {/* Footer (sticky) */}
+            <View style={[s.stepFooter, s.stepFooterSticky]}>
+              <Text style={s.footerTxt}>
+                {selectedCount} produto{selectedCount !== 1 ? "s" : ""} · PASSO 2 DE 3
               </Text>
-              <TouchableOpacity
-                onPress={handleImport}
-                disabled={selectedCount === 0}
-                style={[
-                  styles.importBtn,
-                  {
-                    backgroundColor:
-                      selectedCount > 0 ? Colors.violet : Colors.bg4,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.importBtnTxt,
-                    {
-                      color:
-                        selectedCount > 0 ? "#fff" : Colors.ink3,
-                    },
-                  ]}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  style={s.btnSec}
+                  onPress={() => {
+                    setItems([]);
+                    setSupplierName(null);
+                    setInvoiceInfo(null);
+                    setStep("upload");
+                  }}
                 >
-                  {selectedCount > 0
-                    ? "Importar (" + selectedCount + ")"
-                    : "Importar"}
-                </Text>
-              </TouchableOpacity>
+                  <Text style={s.btnSecTxt}>{"<- Trocar arquivo"}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleImport}
+                  disabled={selectedCount === 0}
+                  style={[s.btnPri, selectedCount === 0 && { opacity: 0.45 }, { minWidth: 160 }]}
+                >
+                  <Text style={s.btnPriTxt}>
+                    {selectedCount > 0
+                      ? "Importar (" + selectedCount + ")"
+                      : "Importar"}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         )}
 
-        {/* ─── IMPORTING ──────────────────────────────────────────────── */}
+        {/* ─── IMPORTING ────────────────────────────────────────────────────── */}
         {step === "importing" && (
-          <View style={styles.centered}>
+          <ScrollView style={s.body} contentContainerStyle={[s.bodyContent, { alignItems: "center", paddingVertical: 36 }]}>
             <ActivityIndicator size="large" color={Colors.violet} />
-            <Text style={[styles.loadingTxt, { color: Colors.ink }]}>
+            <Text style={[s.sectionTitle, { marginTop: 16, textAlign: "center" }]}>
               Importando {importProgress.done}/{importProgress.total}…
             </Text>
-            <View
-              style={[styles.progressTrack, { backgroundColor: Colors.bg4 }]}
-            >
+            <View style={s.progressTrack}>
               <View
                 style={[
-                  styles.progressFill,
+                  s.progressFill,
                   {
-                    backgroundColor: Colors.violet,
                     width:
                       importProgress.total > 0
-                        ? ((importProgress.done / importProgress.total) *
-                            100 +
-                            "%") as any
+                        ? ((importProgress.done / importProgress.total) * 100 + "%") as any
                         : "0%",
                   },
                 ]}
               />
             </View>
-          </View>
+            <Text style={[s.helpTxt, { marginTop: 14, textAlign: "center" }]}>
+              Não feche esta janela enquanto a importação estiver em andamento.
+            </Text>
+          </ScrollView>
         )}
 
-        {/* ─── DONE ───────────────────────────────────────────────────── */}
+        {/* ─── DONE ──────────────────────────────────────────────────────────── */}
         {step === "done" && (
-          <View style={styles.centered}>
-            <Text style={styles.doneIcon}>✅</Text>
-            <Text style={[styles.doneTitle, { color: Colors.ink }]}>
-              {importedCount} produto{importedCount !== 1 ? "s" : ""} importado
-              {importedCount !== 1 ? "s" : ""}
-            </Text>
-            <Text style={[styles.doneSub, { color: Colors.ink3 }]}>
-              Estoque atualizado com as quantidades da NF-e
-            </Text>
-            <TouchableOpacity
-              onPress={handleDone}
-              style={[
-                styles.importBtn,
-                { backgroundColor: Colors.violet, marginTop: 24 },
-              ]}
-            >
-              <Text style={styles.importBtnTxt}>Concluir</Text>
-            </TouchableOpacity>
-          </View>
+          <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
+            <View style={s.successHero}>
+              <View style={s.successCheck}>
+                <Icon name="check" size={26} color={Colors.green} />
+              </View>
+              <Text style={s.successTitle}>
+                {importedCount} produto{importedCount !== 1 ? "s" : ""} importado
+                {importedCount !== 1 ? "s" : ""}
+              </Text>
+              <Text style={s.successSub}>
+                Estoque atualizado com as quantidades da NF-e
+              </Text>
+            </View>
+
+            <View style={s.stepFooter}>
+              <View style={{ flex: 1 }} />
+              <Pressable style={[s.btnPri, { minWidth: 140 }]} onPress={handleDone}>
+                <Text style={s.btnPriTxt}>Concluir</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
         )}
       </View>
-    </Modal>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
+// ── Styles (DNA TrocaModal + extras pra tabela e upload) ─────────────────
+const s = StyleSheet.create({
+  overlay: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 1000,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backdrop: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  panel: {
+    width: "100%" as any,
+    maxWidth: 580,
+    maxHeight: "90vh" as any,
+    borderRadius: 16,
+    overflow: "hidden" as any,
+    zIndex: 1,
+  },
+  panelWide: {
+    maxWidth: 1100,
+    height: "90vh" as any,
+  },
+
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
+    padding: 18,
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.15)",
   },
-  closeBtn: { width: 70 },
-  closeTxt: { fontSize: 15 },
-  headerTitle: { fontSize: 16, fontWeight: "600" },
-  centered: {
-    flex: 1,
+  headerIco: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: "rgba(124,58,237,0.15)",
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+
+  // Stepper
+  stepBar: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.10)",
   },
-  errorBox: {
+  stepItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  stepDot: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    alignItems: "center", justifyContent: "center",
+  },
+  stepDotActive: { backgroundColor: Colors.violet },
+  stepDotDone: { backgroundColor: "#34d399" },
+  stepDotTxt: { fontSize: 10, fontWeight: "700", color: Colors.ink3 },
+  stepLabel: { fontSize: 10, fontWeight: "600", color: Colors.ink3, letterSpacing: 0.3 },
+
+  // Body
+  body: { flex: 1 },
+  bodyContent: { padding: 20, paddingBottom: 28, gap: 10 },
+  sectionTitle: {
+    fontSize: 11, fontWeight: "700", color: Colors.ink3,
+    textTransform: "uppercase", letterSpacing: 1.1, marginBottom: 4,
+  },
+  helpTxt: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 6 },
+
+  // Info strip
+  infoStrip: {
+    padding: 10, borderRadius: 8,
+    backgroundColor: "rgba(124,58,237,0.08)",
+    borderLeftWidth: 3, borderLeftColor: Colors.violet,
+  },
+  infoStripTitle: { fontSize: 12, fontWeight: "600", color: Colors.ink },
+  infoStripSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+
+  // Diff banner (erro)
+  diff: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 9,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 20,
-    width: "100%",
-    maxWidth: 420,
   },
-  errorText: { fontSize: 13, lineHeight: 18 },
+  diffDown: {
+    backgroundColor: "rgba(248,113,113,0.10)",
+    borderColor: "rgba(248,113,113,0.25)",
+  },
+  diffTxt: { fontSize: 12, fontWeight: "600", flex: 1 },
+
+  // Upload card
   uploadCard: {
     borderWidth: 1,
-    borderRadius: 16,
+    borderStyle: "dashed" as any,
+    borderColor: "rgba(124,58,237,0.30)",
+    borderRadius: 14,
     padding: 32,
     alignItems: "center",
-    width: "100%",
-    maxWidth: 420,
+    backgroundColor: "rgba(124,58,237,0.04)",
   },
-  uploadIcon: { fontSize: 48, marginBottom: 16 },
+  uploadIcoWrap: {
+    width: 56, height: 56, borderRadius: 14,
+    backgroundColor: "rgba(124,58,237,0.15)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 14,
+  },
   uploadTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 8,
+    fontSize: 15, fontWeight: "700", color: Colors.ink, marginBottom: 4,
   },
-  uploadSub: { fontSize: 13, textAlign: "center", lineHeight: 18 },
-  uploadBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
-  uploadBtnTxt: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  loadingTxt: { marginTop: 16, fontSize: 15 },
-  infoBar: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
-  supplierName: { fontSize: 14, fontWeight: "600" },
-  invoiceInfo: { fontSize: 12, marginTop: 2 },
+  uploadSub: {
+    fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 17,
+    maxWidth: 320,
+  },
+
+  // Bulk bar
   bulkBar: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 8,
     flexWrap: "wrap",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.10)",
   },
-  checkboxTouch: { flexDirection: "row", alignItems: "center", gap: 5 },
+  checkboxTouch: { flexDirection: "row", alignItems: "center", gap: 6 },
   checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 18, height: 18, borderRadius: 4,
+    borderWidth: 1.5, borderColor: "rgba(124,58,237,0.40)",
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "transparent",
   },
-  checkMark: { color: "#fff", fontSize: 11, fontWeight: "700" },
-  bulkLabel: { fontSize: 12 },
+  checkMark: { color: "#fff", fontSize: 11, fontWeight: "700", lineHeight: 13 },
+  bulkLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
   bulkSep: {
-    width: 1,
-    height: 20,
-    backgroundColor: "rgba(120,100,240,0.15)",
-    marginHorizontal: 2,
+    width: 1, height: 20,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    marginHorizontal: 4,
   },
   presetBtn: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
   },
-  presetTxt: { fontSize: 12, fontWeight: "500" },
-  colorPreview: { width: 28, height: 28, borderRadius: 6, borderWidth: 1 },
+  presetTxt: { fontSize: 11, color: Colors.ink2, fontWeight: "600" },
+  colorPreview: {
+    width: 28, height: 28, borderRadius: 7,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
+  },
   bulkCatInput: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    fontSize: 12,
-    minWidth: 90,
-    height: 30,
+    backgroundColor: "rgba(5,6,15,0.6)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.10)",
+    borderRadius: 7, paddingHorizontal: 10, paddingVertical: 6,
+    color: Colors.ink, fontSize: 12, minWidth: 110, height: 30,
+    outlineStyle: "none",
+  } as any,
+  applyBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 7,
+    backgroundColor: "rgba(124,58,237,0.15)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
   },
-  applyBtn: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  applyTxt: { fontSize: 12, fontWeight: "600" },
+  applyTxt: { fontSize: 11, color: "#a78bfa", fontWeight: "700" },
+
+  // Table
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 6,
+    paddingHorizontal: 20, paddingVertical: 8,
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.10)",
   },
   colHdr: {
-    fontSize: 10,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+    fontSize: 10, fontWeight: "700", color: Colors.ink3,
+    textTransform: "uppercase", letterSpacing: 0.6,
   },
   colCheck: { width: 32, alignItems: "center" },
   colName: { flex: 2, paddingHorizontal: 4 },
-  colQty: { width: 40, textAlign: "center" },
-  colCost: { width: 76, textAlign: "right", paddingRight: 6 },
-  colPrice: { width: 86, paddingHorizontal: 4 },
+  colQty: { width: 50, textAlign: "center" },
+  colCost: { width: 86, textAlign: "right", paddingRight: 8 },
+  colPrice: { width: 96, paddingHorizontal: 4 },
   colColor: { width: 36 },
   colCat: { flex: 1, paddingHorizontal: 4 },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 5,
-    paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20, paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.06)",
   },
-  cell: { fontSize: 13 },
-  input: {
-    fontSize: 13,
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: Platform.OS === "ios" ? 6 : 4,
-    height: 32,
+  cell: { fontSize: 12, color: Colors.ink },
+  cellInput: {
+    fontSize: 12, color: Colors.ink,
+    backgroundColor: "rgba(5,6,15,0.6)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 6, paddingHorizontal: 8, height: 28,
+    paddingVertical: Platform.OS === "ios" ? 4 : 0,
+    outlineStyle: "none",
+  } as any,
+  colorDot: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
   },
-  colorDot: { width: 24, height: 24, borderRadius: 12 },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderTopWidth: 1,
+
+  // Step footer (interno) e variante sticky
+  stepFooter: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginTop: 16, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.12)",
   },
-  footerInfo: { fontSize: 13 },
-  importBtn: { borderRadius: 10, paddingHorizontal: 20, paddingVertical: 12 },
-  importBtnTxt: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  stepFooterSticky: {
+    marginTop: 0,
+    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: "rgba(9,12,26,0.55)",
+    borderTopColor: "rgba(124,58,237,0.18)",
+  },
+  footerTxt: { fontSize: 11, fontWeight: "600", color: Colors.ink3, letterSpacing: 0.3 },
+
+  // Buttons
+  btnSec: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
+  },
+  btnSecTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink },
+  btnPri: {
+    paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8,
+    backgroundColor: Colors.violet,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    minWidth: 110,
+  },
+  btnPriTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+
+  // Progresso (importing)
   progressTrack: {
-    width: "80%",
+    width: "70%" as any,
+    maxWidth: 360,
     height: 6,
     borderRadius: 3,
-    marginTop: 16,
+    marginTop: 18,
     overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
-  progressFill: { height: "100%", borderRadius: 3 },
-  doneIcon: { fontSize: 64, marginBottom: 16 },
-  doneTitle: { fontSize: 22, fontWeight: "700", marginBottom: 8 },
-  doneSub: { fontSize: 14, textAlign: "center" },
+  progressFill: {
+    height: "100%" as any,
+    borderRadius: 3,
+    backgroundColor: Colors.violet,
+  },
+
+  // Sucesso (espelha OpenCloseCashModal)
+  successHero: {
+    alignItems: "center",
+    paddingVertical: 22,
+    borderRadius: 12,
+    backgroundColor: "rgba(52,211,153,0.06)",
+    borderWidth: 1, borderColor: "rgba(52,211,153,0.18)",
+  },
+  successCheck: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: "rgba(52,211,153,0.14)",
+    borderWidth: 2, borderColor: Colors.green,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 12,
+  },
+  successTitle: { fontSize: 17, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  successSub: { fontSize: 12, color: Colors.ink3, marginTop: 4, textAlign: "center" },
 });
+
+export default DanfeImportModal;
