@@ -8,13 +8,13 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useMembers } from "@/hooks/useMembers";
+import { useMemberAudit, AUDIT_LABELS, type AuditAction, type AuditEntry } from "@/hooks/useMemberAudit";
+import { useMemberTemplates, type RoleTemplate } from "@/hooks/useMemberTemplates";
 import { useAuthStore } from "@/stores/auth";
 import type { Member, SiblingCompany } from "@/hooks/useMembers";
 
 // ============================================================
-// CONSTANTS — Sprint 1+2 (06/05/2026)
-// Templates de role com permissions REAIS (antes era so rotulo).
-// Modulos agrupados em 3 categorias com hint explicativo.
+// CONSTANTS
 // ============================================================
 
 const MODULE_GROUPS = [
@@ -42,41 +42,15 @@ const MODULE_GROUPS = [
     ],
   },
 ];
-const ALL_MODULE_KEYS = MODULE_GROUPS.flatMap(g => g.modules.map(m => m.key));
+const MODULE_LABELS = Object.fromEntries(
+  MODULE_GROUPS.flatMap(g => g.modules).map(m => [m.key, m.label])
+) as Record<string, string>;
 
-const ROLE_TEMPLATES = [
-  {
-    key: "caixa",
-    label: "Caixa",
-    description: "Painel + Caixa + Clientes",
-    icon: "🛒",
-    role_label: "Caixa",
-    permissions: { painel: true, pdv: true, clientes: true } as Record<string, boolean>,
-  },
-  {
-    key: "gerente",
-    label: "Gerente",
-    description: "Acesso amplo, exceto Configurações",
-    icon: "👔",
-    role_label: "Gerente",
-    permissions: { painel: true, pdv: true, estoque: true, clientes: true, financeiro: true, relatorios: true, folha: true } as Record<string, boolean>,
-  },
-  {
-    key: "analista",
-    label: "Analista",
-    description: "Painel + Financeiro + Relatórios",
-    icon: "📊",
-    role_label: "Analista",
-    permissions: { painel: true, financeiro: true, relatorios: true } as Record<string, boolean>,
-  },
-  {
-    key: "custom",
-    label: "Personalizado",
-    description: "Eu escolho cada módulo",
-    icon: "⚙️",
-    role_label: "Colaborador",
-    permissions: null as Record<string, boolean> | null, // null = abre o seletor manual
-  },
+const BUILT_IN_TEMPLATES = [
+  { key: "caixa",    label: "Caixa",        description: "Painel + Caixa + Clientes",       icon: "🛒", role_label: "Caixa",       permissions: { painel: true, pdv: true, clientes: true } as Record<string, boolean> },
+  { key: "gerente",  label: "Gerente",      description: "Acesso amplo, exceto Configs",    icon: "👔", role_label: "Gerente",     permissions: { painel: true, pdv: true, estoque: true, clientes: true, financeiro: true, relatorios: true, folha: true } as Record<string, boolean> },
+  { key: "analista", label: "Analista",     description: "Painel + Financeiro + Relatórios", icon: "📊", role_label: "Analista",    permissions: { painel: true, financeiro: true, relatorios: true } as Record<string, boolean> },
+  { key: "custom",   label: "Personalizado", description: "Eu escolho cada módulo",          icon: "⚙️", role_label: "Colaborador", permissions: null as Record<string, boolean> | null },
 ];
 
 // ============================================================
@@ -85,21 +59,17 @@ const ROLE_TEMPLATES = [
 
 const isWeb = Platform.OS === "web";
 
-// Sprint 3: clipboard cross-platform.
-// Web: navigator.clipboard. Native: tenta expo-clipboard via require dinamico.
 async function copyToClipboard(text: string): Promise<boolean> {
   if (isWeb && typeof navigator !== "undefined" && (navigator as any).clipboard?.writeText) {
-    try { await (navigator as any).clipboard.writeText(text); return true; } catch { /* fall through */ }
+    try { await (navigator as any).clipboard.writeText(text); return true; } catch {}
   }
   try {
-    // require dinamico evita quebrar build se expo-clipboard nao estiver instalado
     const Clip = require("expo-clipboard");
     if (Clip?.setStringAsync) { await Clip.setStringAsync(text); return true; }
-  } catch { /* nao instalado */ }
+  } catch {}
   return false;
 }
 
-// Sprint 1#5: calcula dias ate expirar (invited_at + 7d)
 function daysUntilExpiry(invitedAt?: string | null): { days: number; expired: boolean; label: string; soon: boolean } {
   if (!invitedAt) return { days: 7, expired: false, label: "expira em 7 dias", soon: false };
   const invited = new Date(invitedAt);
@@ -107,13 +77,12 @@ function daysUntilExpiry(invitedAt?: string | null): { days: number; expired: bo
   const expiresAt = new Date(invited.getTime() + 7 * 24 * 60 * 60 * 1000);
   const ms = expiresAt.getTime() - Date.now();
   const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
-  if (days <= 0) return { days: 0, expired: true, label: "convite expirado — gere um novo", soon: true };
+  if (days <= 0) return { days: 0, expired: true, label: "convite expirado — gere um novo ou estenda", soon: true };
   if (days === 1) return { days: 1, expired: false, label: "expira amanhã", soon: true };
   if (days <= 2) return { days, expired: false, label: "expira em " + days + " dias", soon: true };
   return { days, expired: false, label: "expira em " + days + " dias", soon: false };
 }
 
-// Sprint 2#11: mensagem WhatsApp personalizada
 function buildWhatsAppMessage(opts: { inviteUrl: string; companyName: string; role: string; inviterName?: string }): string {
   const inviter = opts.inviterName ? opts.inviterName + " te convidou" : "Você foi convidado(a)";
   return "Oi! " + inviter + " pra entrar na equipe da " + opts.companyName + " no app Aura como " + opts.role + "." +
@@ -129,6 +98,49 @@ const ROLE_LABEL_PRETTY: Record<string, string> = {
 function prettyRole(label?: string) {
   if (!label) return "Colaborador";
   return ROLE_LABEL_PRETTY[label.toLowerCase()] || label;
+}
+
+// Sprint 4#19: tempo relativo pra audit log
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return "agora";
+  const m = Math.floor(s / 60);
+  if (m < 60) return "há " + m + " min";
+  const h = Math.floor(m / 60);
+  if (h < 24) return "há " + h + "h";
+  const d = Math.floor(h / 24);
+  if (d < 7) return "há " + d + (d === 1 ? " dia" : " dias");
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+// Sprint 4#19: formata metadata da action pra texto legivel
+function formatAuditDetail(e: AuditEntry): string | null {
+  const m = e.metadata || {};
+  switch (e.action) {
+    case "invite_email_changed":
+      if (m.old_email && m.new_email) return m.old_email + " → " + m.new_email;
+      if (m.new_email) return "Para " + m.new_email;
+      return null;
+    case "invite_created":
+      if (m.invite_email) return "Para " + m.invite_email + " · " + (m.role_label || "colaborador");
+      return m.role_label ? "Como " + m.role_label : null;
+    case "permissions_updated":
+      const added = (m.added || []).map((k: string) => MODULE_LABELS[k] || k);
+      const removed = (m.removed || []).map((k: string) => MODULE_LABELS[k] || k);
+      const parts: string[] = [];
+      if (added.length) parts.push("+ " + added.join(", "));
+      if (removed.length) parts.push("− " + removed.join(", "));
+      return parts.join(" · ") || null;
+    case "role_changed":
+      return (m.from || "?") + " → " + (m.to || "?");
+    case "companies_changed":
+      return (m.company_ids || []).length + " empresa(s)";
+    case "invite_resent":
+      return m.invite_email ? "Para " + m.invite_email : null;
+    default:
+      return null;
+  }
 }
 
 // ============================================================
@@ -163,7 +175,6 @@ const cb = StyleSheet.create({
   text:        { fontSize: 9, fontWeight: "700", color: Colors.ink3 },
 });
 
-// Sprint 2#8: toggle com hint inline (versao mobile-friendly do tooltip)
 function ModuleToggleRow({ moduleKey, label, hint, value, onToggle }: {
   moduleKey: string; label: string; hint: string; value: boolean; onToggle: () => void;
 }) {
@@ -183,7 +194,6 @@ function ModuleToggleRow({ moduleKey, label, hint, value, onToggle }: {
   );
 }
 
-// Sprint 1#1+2 + 3#16: seletor agrupado de modulos (usado quando "Personalizado")
 function ModuleGroupSelector({ value, onChange }: {
   value: Record<string, boolean>;
   onChange: (next: Record<string, boolean>) => void;
@@ -211,14 +221,27 @@ function ModuleGroupSelector({ value, onChange }: {
   );
 }
 
-// Sprint 1#2: cards visuais de templates
-function RoleTemplatePicker({ selected, onSelect }: {
+// Sprint 4#20: cards visuais agora aceitam custom templates do servidor
+type PickerEntry = {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
+  permissions: Record<string, boolean> | null;
+  role_label: string;
+  isCustom?: boolean;
+  customId?: string;
+};
+
+function RoleTemplatePicker({ entries, selected, onSelect, onDeleteCustom }: {
+  entries: PickerEntry[];
   selected: string;
   onSelect: (key: string) => void;
+  onDeleteCustom?: (id: string, label: string) => void;
 }) {
   return (
     <View style={s.tmplGrid}>
-      {ROLE_TEMPLATES.map(t => {
+      {entries.map(t => {
         const active = t.key === selected;
         return (
           <Pressable
@@ -234,6 +257,20 @@ function RoleTemplatePicker({ selected, onSelect }: {
                 <Icon name="check" size={10} color="#fff" />
               </View>
             )}
+            {t.isCustom && onDeleteCustom && t.customId && (
+              <Pressable
+                onPress={(e: any) => { e.stopPropagation?.(); onDeleteCustom(t.customId!, t.label); }}
+                style={s.tmplDelete}
+                hitSlop={6}
+              >
+                <Icon name="x" size={9} color={Colors.ink3} />
+              </Pressable>
+            )}
+            {t.isCustom && !active && (
+              <View style={s.tmplCustomTag}>
+                <Text style={s.tmplCustomTagText}>SEU PERFIL</Text>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -242,18 +279,63 @@ function RoleTemplatePicker({ selected, onSelect }: {
 }
 
 // ============================================================
-// PENDING INVITE PANEL — link + reenviar + editar email + cancelar
+// AUDIT HISTORY (Sprint 4#19)
 // ============================================================
 
-function PendingInvitePanel({ member, companyName, inviterName, onResend, onEditEmail, onCancel, isResending, isEditingEmail, isCancelling }: {
+function AuditHistorySection({ memberId, expanded }: { memberId: string; expanded: boolean }) {
+  const { data, isLoading } = useMemberAudit(expanded ? memberId : null);
+  const entries: AuditEntry[] = data?.entries || [];
+
+  if (!expanded) return null;
+
+  return (
+    <View style={s.auditWrap}>
+      <Text style={s.auditTitle}>Histórico</Text>
+      {isLoading ? (
+        <View style={{ paddingVertical: 12, alignItems: "center" }}>
+          <ActivityIndicator size="small" color={Colors.violet3} />
+        </View>
+      ) : entries.length === 0 ? (
+        <Text style={s.auditEmpty}>Sem eventos registrados ainda.</Text>
+      ) : (
+        <View style={{ gap: 6 }}>
+          {entries.map(e => {
+            const detail = formatAuditDetail(e);
+            return (
+              <View key={e.id} style={s.auditRow}>
+                <View style={s.auditDot} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.auditLabel}>{AUDIT_LABELS[e.action] || e.action}</Text>
+                  {detail && <Text style={s.auditDetail} numberOfLines={2}>{detail}</Text>}
+                  <Text style={s.auditMeta}>
+                    {timeAgo(e.created_at)}
+                    {e.actor_name ? " · " + e.actor_name : ""}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ============================================================
+// PENDING INVITE PANEL — agora com botão Estender (Sprint 4#18)
+// ============================================================
+
+function PendingInvitePanel({ member, companyName, inviterName, onResend, onEditEmail, onExtend, onCancel, isResending, isEditingEmail, isExtending, isCancelling }: {
   member: Member;
   companyName: string;
   inviterName?: string;
   onResend: () => void;
   onEditEmail: (newEmail: string) => Promise<void>;
+  onExtend: () => void;
   onCancel: () => void;
   isResending: boolean;
   isEditingEmail: boolean;
+  isExtending: boolean;
   isCancelling: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -262,10 +344,11 @@ function PendingInvitePanel({ member, companyName, inviterName, onResend, onEdit
   const role = prettyRole(member.role_label);
   const inviteUrl = member.invite_url || "";
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(newEmail.trim());
+  const showExtend = expiry.soon || expiry.expired;
 
   async function handleCopy() {
     const ok = await copyToClipboard(inviteUrl);
-    ok ? toast.success("Link copiado!") : toast.error("Não foi possível copiar. Selecione o link manualmente.");
+    ok ? toast.success("Link copiado!") : toast.error("Não foi possível copiar.");
   }
   function handleWhatsApp() {
     const msg = buildWhatsAppMessage({ inviteUrl, companyName, role, inviterName });
@@ -273,10 +356,7 @@ function PendingInvitePanel({ member, companyName, inviterName, onResend, onEdit
   }
   async function handleSaveEmail() {
     if (!emailValid) { toast.error("E-mail inválido"); return; }
-    try {
-      await onEditEmail(newEmail.trim().toLowerCase());
-      setEditing(false);
-    } catch { /* erro ja exibido via mutation */ }
+    try { await onEditEmail(newEmail.trim().toLowerCase()); setEditing(false); } catch {}
   }
 
   return (
@@ -297,12 +377,23 @@ function PendingInvitePanel({ member, companyName, inviterName, onResend, onEdit
         </View>
       </View>
 
-      {/* Link */}
+      {/* Estender — visivel quando proximo de expirar ou expirado */}
+      {showExtend && (
+        <Pressable
+          onPress={onExtend}
+          disabled={isExtending}
+          style={[s.extendBtn, isExtending && { opacity: 0.5 }]}
+        >
+          {isExtending
+            ? <ActivityIndicator size="small" color={Colors.violet} />
+            : <><Icon name="clock" size={13} color={Colors.violet} /><Text style={s.extendBtnText}>Estender 7 dias</Text></>}
+        </Pressable>
+      )}
+
       <View style={s.linkBox}>
         <Text style={s.linkText} numberOfLines={2}>{inviteUrl || "—"}</Text>
       </View>
 
-      {/* Acoes principais: Copiar + WhatsApp */}
       <View style={s.actionsRow}>
         <Pressable onPress={handleCopy} style={s.copyBtn}>
           <Icon name="copy" size={13} color={Colors.violet3} />
@@ -314,7 +405,6 @@ function PendingInvitePanel({ member, companyName, inviterName, onResend, onEdit
         </Pressable>
       </View>
 
-      {/* Sprint 2#6+7: reenviar email / editar email */}
       {!editing ? (
         <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
           {member.invite_email && (
@@ -363,7 +453,6 @@ function PendingInvitePanel({ member, companyName, inviterName, onResend, onEdit
         </View>
       )}
 
-      {/* Cancelar convite — destrutivo, embaixo de tudo */}
       <Pressable
         onPress={onCancel}
         disabled={isCancelling}
@@ -378,10 +467,10 @@ function PendingInvitePanel({ member, companyName, inviterName, onResend, onEdit
 }
 
 // ============================================================
-// MEMBER ROW — ativo (editor de permissoes) ou pending (link panel)
+// MEMBER ROW
 // ============================================================
 
-function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpdate, onRemove, onResend, onEditEmail, isUpdating, isRemoving, isResending, isEditingEmail }: {
+function MemberRow(props: {
   member: Member;
   siblings: SiblingCompany[];
   isOwner: boolean;
@@ -391,16 +480,20 @@ function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpda
   onRemove: () => void;
   onResend: () => void;
   onEditEmail: (newEmail: string) => Promise<void>;
+  onExtend: () => void;
   isUpdating: boolean;
   isRemoving: boolean;
   isResending: boolean;
   isEditingEmail: boolean;
+  isExtending: boolean;
 }) {
+  const { member, siblings, isOwner, companyName, inviterName, onUpdate, onRemove, onResend, onEditEmail, onExtend, isUpdating, isRemoving, isResending, isEditingEmail, isExtending } = props;
   const [expanded, setExpanded] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>(member.permissions || {});
   const [role, setRole] = useState(member.role_label);
   const [cnpjIds, setCnpjIds] = useState<string[]>(member.companies.map(c => c.company_id));
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const isOwnerLabel = member.role_label === "owner";
   const isPending = member.status === "pending";
@@ -425,9 +518,7 @@ function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpda
         <View style={{ flex: 1 }}>
           <Text style={s.memberName}>{member.name}</Text>
           <Text style={s.memberEmail} numberOfLines={1}>
-            {isPending
-              ? (member.invite_email || "Compartilhe o link manualmente")
-              : member.email}
+            {isPending ? (member.invite_email || "Compartilhe o link manualmente") : member.email}
           </Text>
           {multiCnpj && !isOwnerLabel && memberCnpjIds.length > 0 && (
             <View style={{ flexDirection: "row", gap: 3, marginTop: 4, flexWrap: "wrap" }}>
@@ -447,7 +538,6 @@ function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpda
         </View>
       </Pressable>
 
-      {/* Pending: panel completo (Sprint 1#5 + Sprint 2#6+7) */}
       {expanded && isPending && member.invite_url && (
         <PendingInvitePanel
           member={member}
@@ -455,14 +545,15 @@ function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpda
           inviterName={inviterName}
           onResend={onResend}
           onEditEmail={onEditEmail}
+          onExtend={onExtend}
           onCancel={() => setConfirmRemove(true)}
           isResending={isResending}
           isEditingEmail={isEditingEmail}
+          isExtending={isExtending}
           isCancelling={isRemoving}
         />
       )}
 
-      {/* Ativo: editor de permissoes (mantido com agrupamento Sprint 3#16) */}
       {expanded && canEdit && !isPending && (
         <View style={s.permEditor}>
           <Text style={s.permSectionLabel}>Função (rótulo)</Text>
@@ -518,6 +609,17 @@ function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpda
         </View>
       )}
 
+      {/* Sprint 4#19: histórico — colapsavel dentro de qualquer membro expandido */}
+      {expanded && canExpand && (
+        <View style={s.historyWrap}>
+          <Pressable onPress={() => setHistoryOpen(v => !v)} style={s.historyToggle}>
+            <Icon name={historyOpen ? "chevron_up" : "chevron_right"} size={12} color={Colors.ink3} />
+            <Text style={s.historyToggleText}>Histórico</Text>
+          </Pressable>
+          {historyOpen && <AuditHistorySection memberId={member.id} expanded={historyOpen} />}
+        </View>
+      )}
+
       <ConfirmDialog
         visible={confirmRemove}
         title={isPending ? "Cancelar convite?" : "Suspender membro?"}
@@ -532,36 +634,84 @@ function MemberRow({ member, siblings, isOwner, companyName, inviterName, onUpda
 }
 
 // ============================================================
-// INVITE WIZARD — Sprint 1#1+2+3: form unificado em "passos"
+// INVITE WIZARD — Sprint 1+2+4 (templates customizados)
 // ============================================================
 
-function InviteWizard({ siblings, currentCompanyId, onCancel, onSubmit, isSubmitting }: {
+function InviteWizard({ siblings, currentCompanyId, customTemplates, onSaveTemplate, onDeleteTemplate, onCancel, onSubmit, isSubmitting, isSavingTemplate }: {
   siblings: SiblingCompany[];
   currentCompanyId: string;
+  customTemplates: RoleTemplate[];
+  onSaveTemplate: (body: { name: string; permissions: Record<string, boolean> }) => Promise<any>;
+  onDeleteTemplate: (id: string) => Promise<any>;
   onCancel: () => void;
   onSubmit: (data: { email: string; role_label: string; company_ids?: string[]; permissions?: Record<string, boolean> }) => Promise<void>;
   isSubmitting: boolean;
+  isSavingTemplate: boolean;
 }) {
   const multiCnpj = siblings.length > 1;
   const [email, setEmail] = useState("");
-  // Sprint 1#4: default = SO empresa atual (era todas)
   const [cnpjIds, setCnpjIds] = useState<string[]>([currentCompanyId]);
   const [tmplKey, setTmplKey] = useState<string>("caixa");
   const [customPerms, setCustomPerms] = useState<Record<string, boolean>>({ painel: true });
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
   const emailValid = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
-  const tmpl = ROLE_TEMPLATES.find(t => t.key === tmplKey)!;
-  const isCustom = tmplKey === "custom";
+
+  // Sprint 4#20: monta entries combinando built-in + custom + opcao Personalizado
+  const entries: PickerEntry[] = useMemo(() => {
+    const builtIn = BUILT_IN_TEMPLATES.filter(t => t.key !== "custom").map(t => ({ ...t, isCustom: false } as PickerEntry));
+    const custom: PickerEntry[] = customTemplates.map(ct => ({
+      key:         "custom-" + ct.id,
+      label:       ct.name,
+      description: ct.description || "Perfil personalizado",
+      icon:        "🏷️",
+      role_label:  "Colaborador",
+      permissions: ct.permissions,
+      isCustom:    true,
+      customId:    ct.id,
+    }));
+    const customOption: PickerEntry = { ...BUILT_IN_TEMPLATES.find(t => t.key === "custom")!, isCustom: false };
+    return [...builtIn, ...custom, customOption];
+  }, [customTemplates]);
+
+  const selected = entries.find(e => e.key === tmplKey);
+  const isCustomMode = tmplKey === "custom";
 
   async function handleSubmit() {
     if (email.trim() && !emailValid) { toast.error("E-mail inválido"); return; }
     if (multiCnpj && cnpjIds.length === 0) { toast.error("Selecione pelo menos uma empresa"); return; }
-    const permissions = isCustom ? customPerms : (tmpl.permissions || {});
+    const permissions = isCustomMode ? customPerms : (selected?.permissions || {});
     await onSubmit({
       email: email.trim().toLowerCase(),
-      role_label: tmpl.role_label,
+      role_label: selected?.role_label || "Colaborador",
       company_ids: multiCnpj ? cnpjIds : undefined,
       permissions,
     });
+  }
+
+  async function handleSaveAsTemplate() {
+    if (!templateName.trim()) { toast.error("Dê um nome para o perfil"); return; }
+    if (Object.values(customPerms).filter(Boolean).length === 0) {
+      toast.error("Selecione pelo menos uma permissão");
+      return;
+    }
+    try {
+      const res: any = await onSaveTemplate({ name: templateName.trim(), permissions: customPerms });
+      // Se backend retornou template, seleciona ele direto
+      if (res?.template?.id) setTmplKey("custom-" + res.template.id);
+      setSavingTemplate(false);
+      setTemplateName("");
+    } catch {}
+  }
+
+  async function handleDeleteTemplate(id: string, label: string) {
+    if (typeof window !== "undefined" && window.confirm) {
+      if (!window.confirm("Remover o perfil '" + label + "'?")) return;
+    }
+    try {
+      await onDeleteTemplate(id);
+      if (tmplKey === "custom-" + id) setTmplKey("caixa");
+    } catch {}
   }
 
   return (
@@ -571,7 +721,6 @@ function InviteWizard({ siblings, currentCompanyId, onCancel, onSubmit, isSubmit
         Vamos gerar um link único. Se você preencher o e-mail, mandamos o convite por lá também.
       </Text>
 
-      {/* PASSO 1 — quem */}
       <View style={s.step}>
         <Text style={s.stepLabel}>1. Para quem é?</Text>
         <Text style={s.stepHint}>E-mail é opcional — sem ele você compartilha o link via WhatsApp.</Text>
@@ -587,7 +736,6 @@ function InviteWizard({ siblings, currentCompanyId, onCancel, onSubmit, isSubmit
         {email && !emailValid && <Text style={s.fieldError}>E-mail inválido</Text>}
       </View>
 
-      {/* PASSO 2 — empresas (se multi-CNPJ) */}
       {multiCnpj && (
         <View style={s.step}>
           <Text style={s.stepLabel}>2. Em quais empresas?</Text>
@@ -613,28 +761,65 @@ function InviteWizard({ siblings, currentCompanyId, onCancel, onSubmit, isSubmit
         </View>
       )}
 
-      {/* PASSO 3 — perfil/permissoes */}
       <View style={s.step}>
         <Text style={s.stepLabel}>{multiCnpj ? "3" : "2"}. O que ela pode fazer?</Text>
-        <Text style={s.stepHint}>Escolha um perfil pronto ou personalize.</Text>
-        <RoleTemplatePicker selected={tmplKey} onSelect={setTmplKey} />
+        <Text style={s.stepHint}>Escolha um perfil pronto, use um dos seus salvos ou personalize.</Text>
+        <RoleTemplatePicker
+          entries={entries}
+          selected={tmplKey}
+          onSelect={setTmplKey}
+          onDeleteCustom={handleDeleteTemplate}
+        />
 
-        {isCustom ? (
+        {isCustomMode ? (
           <View style={{ marginTop: 14 }}>
             <ModuleGroupSelector value={customPerms} onChange={setCustomPerms} />
+
+            {/* Sprint 4#20: salvar como template */}
+            <View style={{ marginTop: 12 }}>
+              {!savingTemplate ? (
+                <Pressable onPress={() => setSavingTemplate(true)} style={s.softBtn}>
+                  <Icon name="bookmark" size={12} color={Colors.violet3} />
+                  <Text style={s.softBtnText}>Salvar como perfil</Text>
+                </Pressable>
+              ) : (
+                <View style={s.editEmailBox}>
+                  <Text style={s.editEmailLabel}>Nome do perfil</Text>
+                  <TextInput
+                    style={s.input}
+                    value={templateName}
+                    onChangeText={setTemplateName}
+                    placeholder="Ex.: Caixa Senior, Vendedor com Desconto"
+                    placeholderTextColor={Colors.ink3}
+                    maxLength={60}
+                  />
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                    <Pressable onPress={() => { setSavingTemplate(false); setTemplateName(""); }} style={s.cancelBtn}>
+                      <Text style={s.cancelBtnText}>Cancelar</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleSaveAsTemplate}
+                      disabled={isSavingTemplate || !templateName.trim()}
+                      style={[s.sendBtn, (isSavingTemplate || !templateName.trim()) && { opacity: 0.5 }]}
+                    >
+                      {isSavingTemplate
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={s.sendBtnText}>Salvar perfil</Text>}
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
         ) : (
           <View style={s.tmplPreview}>
             <Text style={s.tmplPreviewLabel}>Esta pessoa terá acesso a:</Text>
             <View style={s.tmplPreviewChips}>
-              {Object.keys(tmpl.permissions || {}).filter(k => tmpl.permissions![k]).map(k => {
-                const mod = MODULE_GROUPS.flatMap(g => g.modules).find(m => m.key === k);
-                return (
-                  <View key={k} style={s.tmplPreviewChip}>
-                    <Text style={s.tmplPreviewChipText}>{mod?.label || k}</Text>
-                  </View>
-                );
-              })}
+              {Object.keys(selected?.permissions || {}).filter(k => selected!.permissions![k]).map(k => (
+                <View key={k} style={s.tmplPreviewChip}>
+                  <Text style={s.tmplPreviewChipText}>{MODULE_LABELS[k] || k}</Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -657,7 +842,7 @@ function InviteWizard({ siblings, currentCompanyId, onCancel, onSubmit, isSubmit
 }
 
 // ============================================================
-// INVITE SUCCESS CARD (logo apos criar) — refeito com clipboard fix
+// INVITE SUCCESS CARD
 // ============================================================
 
 function InviteSuccessCard({ inviteUrl, email, role, companyName, inviterName, onClose }: {
@@ -665,7 +850,7 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, inviterName, o
 }) {
   async function handleCopy() {
     const ok = await copyToClipboard(inviteUrl);
-    ok ? toast.success("Link copiado!") : toast.error("Não foi possível copiar. Selecione o link manualmente.");
+    ok ? toast.success("Link copiado!") : toast.error("Não foi possível copiar.");
   }
   function handleWhats() {
     const msg = buildWhatsAppMessage({ inviteUrl, companyName, role: prettyRole(role), inviterName });
@@ -703,27 +888,22 @@ function InviteSuccessCard({ inviteUrl, email, role, companyName, inviterName, o
         </Pressable>
       </View>
       <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 8 }}>
-        Pode fechar tranquilo — você recupera o link depois clicando no convite na lista abaixo enquanto estiver pendente.
+        Pode fechar tranquilo — você recupera o link, reenvia ou estende a validade depois clicando no convite na lista abaixo.
       </Text>
     </View>
   );
 }
 
 // ============================================================
-// EMPTY ONBOARDING — Sprint 3#12
+// EMPTY ONBOARDING
 // ============================================================
 
 function EmptyOnboarding({ onInvite }: { onInvite: () => void }) {
   return (
     <View style={s.empty}>
-      <View style={s.emptyHero}>
-        <Text style={{ fontSize: 36 }}>👥</Text>
-      </View>
+      <View style={s.emptyHero}><Text style={{ fontSize: 36 }}>👥</Text></View>
       <Text style={s.emptyTitle}>Convide sua equipe</Text>
-      <Text style={s.emptySubtitle}>
-        Funcionários, sócios ou freelancers — todo mundo na mesma plataforma.
-      </Text>
-
+      <Text style={s.emptySubtitle}>Funcionários, sócios ou freelancers — todo mundo na mesma plataforma.</Text>
       <View style={s.steps3}>
         <View style={s.step3}>
           <View style={s.step3Num}><Text style={s.step3NumText}>1</Text></View>
@@ -741,7 +921,6 @@ function EmptyOnboarding({ onInvite }: { onInvite: () => void }) {
           <Text style={s.step3Desc}>Ela aceita e já entra</Text>
         </View>
       </View>
-
       <Pressable onPress={onInvite} style={s.emptyCta}>
         <Icon name="plus" size={14} color="#fff" />
         <Text style={s.emptyCtaText}>Convidar primeira pessoa</Text>
@@ -751,7 +930,7 @@ function EmptyOnboarding({ onInvite }: { onInvite: () => void }) {
 }
 
 // ============================================================
-// ROOT — MembersSection
+// ROOT
 // ============================================================
 
 export function MembersSection() {
@@ -764,22 +943,20 @@ export function MembersSection() {
     removeMember, isRemoving,
     resendInviteEmail, isResending,
     updateInviteEmail, isUpdatingEmail,
+    extendInvite, isExtending,
   } = useMembers();
+  const { customTemplates, createTemplate, isCreating, deleteTemplate } = useMemberTemplates();
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const inviterName = (user as any)?.name || (user as any)?.full_name || undefined;
   const companyName = (company as any)?.name || "Aura";
 
   async function handleInvite(data: { email: string; role_label: string; company_ids?: string[]; permissions?: Record<string, boolean> }) {
-    try {
-      await inviteMember(data);
-      setWizardOpen(false);
-    } catch { /* erro ja exibido */ }
+    try { await inviteMember(data); setWizardOpen(false); } catch {}
   }
 
   return (
     <View style={s.container}>
-      {/* Header — Sprint 1#3 + 2#10: botao unico SEMPRE visivel */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Equipe</Text>
@@ -798,7 +975,6 @@ export function MembersSection() {
         )}
       </View>
 
-      {/* Last invite success */}
       {lastInvite && (
         <InviteSuccessCard
           inviteUrl={lastInvite.url}
@@ -810,18 +986,20 @@ export function MembersSection() {
         />
       )}
 
-      {/* Wizard */}
       {wizardOpen && (
         <InviteWizard
           siblings={siblings}
           currentCompanyId={company?.id || ""}
+          customTemplates={customTemplates}
+          onSaveTemplate={createTemplate}
+          onDeleteTemplate={deleteTemplate}
           onCancel={() => setWizardOpen(false)}
           onSubmit={handleInvite}
           isSubmitting={isInviting}
+          isSavingTemplate={isCreating}
         />
       )}
 
-      {/* Lista / vazio */}
       {isLoading ? (
         <View style={{ alignItems: "center", paddingVertical: 24 }}>
           <ActivityIndicator color={Colors.violet3} />
@@ -849,10 +1027,12 @@ export function MembersSection() {
               }}
               onResend={() => resendInviteEmail(m.id)}
               onEditEmail={(newEmail) => updateInviteEmail(m.id, newEmail)}
+              onExtend={() => extendInvite(m.id)}
               isUpdating={isUpdating}
               isRemoving={isRemoving}
               isResending={isResending}
               isEditingEmail={isUpdatingEmail}
+              isExtending={isExtending}
             />
           ))}
         </View>
@@ -879,17 +1059,18 @@ const s = StyleSheet.create({
   inviteBtn:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 },
   inviteBtnText:{ fontSize: 12.5, color: "#fff", fontWeight: "600" },
 
-  // Success card
   successCard:  { margin: 12, backgroundColor: Colors.greenD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.green + "33" },
   successClose: { width: 24, height: 24, borderRadius: 6, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
 
-  // Pending panel
   pendingPanel:    { backgroundColor: Colors.amberD, paddingHorizontal: 14, paddingVertical: 14, borderTopWidth: 1, borderTopColor: Colors.amber + "33", borderBottomWidth: 1, borderBottomColor: Colors.amber + "33" },
   pendingHead:     { flexDirection: "row", marginBottom: 10 },
   pendingTitle:    { fontSize: 13, fontWeight: "700" },
   pendingSubtitle: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 15 },
 
-  // Link + actions
+  // Sprint 4#18: botao Estender — destaque visual
+  extendBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 10, marginBottom: 10, borderWidth: 1, borderColor: Colors.violet + "55" },
+  extendBtnText: { fontSize: 12, color: Colors.violet, fontWeight: "700" },
+
   linkBox:    { backgroundColor: Colors.bg4, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: Colors.border },
   linkText:   { fontSize: 11, color: Colors.violet3, fontFamily: "monospace" as any, lineHeight: 16 },
   actionsRow: { flexDirection: "row", gap: 8, marginTop: 10 },
@@ -898,18 +1079,15 @@ const s = StyleSheet.create({
   whatsBtn:   { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingVertical: 9, borderWidth: 1, borderColor: Colors.green + "44" },
   whatsBtnText:{ fontSize: 11, color: Colors.green, fontWeight: "600" },
 
-  // Soft / inline buttons (resend + edit-email)
   softBtn:     { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, backgroundColor: "transparent", borderRadius: 8, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border2 },
   softBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
 
-  // Edit email box
   editEmailBox:   { marginTop: 10, padding: 10, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
   editEmailLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
 
   cancelInviteBtn:     { marginTop: 12, paddingVertical: 9, borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: Colors.red + "33", backgroundColor: "transparent" },
   cancelInviteBtnText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 
-  // Wizard
   wizard:         { margin: 12, backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
   wizardTitle:    { fontSize: 15, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
   wizardSubtitle: { fontSize: 12, color: Colors.ink3, marginBottom: 18, lineHeight: 17 },
@@ -917,18 +1095,15 @@ const s = StyleSheet.create({
   stepLabel:      { fontSize: 13, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
   stepHint:       { fontSize: 11, color: Colors.ink3, marginBottom: 10, lineHeight: 15 },
 
-  // Inputs
   input:      { backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: Colors.ink, borderWidth: 1, borderColor: Colors.border },
   inputError: { borderColor: Colors.red },
   fieldError: { fontSize: 11, color: Colors.red, marginTop: 4 },
 
-  // CNPJ checkbox row
   checkRow:        { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   checkBox:        { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
   checkBoxActive:  { backgroundColor: Colors.violet, borderColor: Colors.violet },
   checkLabel:      { fontSize: 13, color: Colors.ink, fontWeight: "500" },
 
-  // Role templates
   tmplGrid:      { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tmplCard:      { flexBasis: "48%", flexGrow: 1, padding: 12, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, position: "relative", minHeight: 100 },
   tmplCardActive:{ borderColor: Colors.violet, backgroundColor: Colors.violetD },
@@ -936,33 +1111,33 @@ const s = StyleSheet.create({
   tmplLabel:     { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 2 },
   tmplDesc:      { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
   tmplCheck:     { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
-  tmplPreview:   { marginTop: 14, padding: 12, backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
+  tmplDelete:    { position: "absolute", top: 8, right: 8, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
+  tmplCustomTag: { position: "absolute", bottom: 6, right: 6, paddingHorizontal: 5, paddingVertical: 1, backgroundColor: Colors.violetD, borderRadius: 3, borderWidth: 1, borderColor: Colors.border2 },
+  tmplCustomTagText: { fontSize: 7.5, fontWeight: "800", color: Colors.violet3, letterSpacing: 0.5 },
+
+  tmplPreview:         { marginTop: 14, padding: 12, backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
   tmplPreviewLabel:    { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 8 },
   tmplPreviewChips:    { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tmplPreviewChip:     { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   tmplPreviewChipText: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
 
-  // Module selector (grupos)
   groupHeader: { fontSize: 10, color: Colors.violet3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 },
   groupBody:   { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   modRow:      { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
   modLabel:    { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   modHint:     { fontSize: 10, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
 
-  // Buttons
   cancelBtn:     { flex: 1, paddingVertical: 11, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center", backgroundColor: "transparent" },
   cancelBtnText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   sendBtn:       { flex: 2, paddingVertical: 11, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center" },
   sendBtnText:   { fontSize: 12.5, color: "#fff", fontWeight: "700" },
 
-  // Member row
   memberRow:    { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   avatar:       { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   avatarText:   { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
   memberName:   { fontSize: 13, fontWeight: "600", color: Colors.ink },
   memberEmail:  { fontSize: 11, color: Colors.ink3, marginTop: 1 },
 
-  // Permission editor (membro ativo expandido)
   permEditor:       { backgroundColor: Colors.bg4, paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
   permSectionLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
   permLabel:        { fontSize: 13, color: Colors.ink, fontWeight: "500" },
@@ -973,12 +1148,23 @@ const s = StyleSheet.create({
   removeBtn:        { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: "transparent", alignItems: "center", borderWidth: 1, borderColor: Colors.red + "33" },
   removeBtnText:    { fontSize: 12, color: Colors.red, fontWeight: "600" },
 
-  // Role chips (no editor)
   roleChip:       { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   roleChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   roleChipText:   { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
 
-  // Empty / onboarding
+  // Sprint 4#19: history collapsible + entries
+  historyWrap:       { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.bg, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  historyToggle:     { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 },
+  historyToggleText: { fontSize: 11, color: Colors.ink3, fontWeight: "600", letterSpacing: 0.3 },
+  auditWrap:         { paddingTop: 8, paddingBottom: 4 },
+  auditTitle:        { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 },
+  auditEmpty:        { fontSize: 11, color: Colors.ink3, fontStyle: "italic", paddingVertical: 8 },
+  auditRow:          { flexDirection: "row", gap: 8, alignItems: "flex-start" },
+  auditDot:          { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.violet3, marginTop: 6 },
+  auditLabel:        { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  auditDetail:       { fontSize: 11, color: Colors.ink2, marginTop: 1 },
+  auditMeta:         { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+
   empty:        { alignItems: "center", paddingVertical: 32, paddingHorizontal: 20 },
   emptyHero:    { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTitle:   { fontSize: 17, fontWeight: "700", color: Colors.ink, marginBottom: 6 },
