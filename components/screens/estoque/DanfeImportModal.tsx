@@ -15,6 +15,14 @@
 //
 // Fix #5 (08/05): overlay usa position: fixed (web) para garantir
 // que o modal abre sempre na viewport, mesmo com ScrollView rolada.
+//
+// Fix light mode (08/05): panel/overlay backdrop, markupInput, rowEven
+// e cellInput tinham backgrounds dark-only (rgba(255,255,255,0.0X) e
+// "#1a1528") que ficavam invisiveis ou ilegiveis no modo claro. Trocados
+// por ternarios theme-aware via IS_DARK_MODE — mesmo padrao usado em
+// outros panels da DNA TrocaModal. IS_DARK_MODE eh fixado em module-load
+// (toggle de tema dispara reload via useThemeStore.toggle), entao o
+// ternario dentro de StyleSheet.create resolve corretamente no boot.
 // ============================================================
 import { useCallback, useRef, useState } from "react";
 import {
@@ -29,7 +37,7 @@ import {
 } from "react-native";
 
 import { companiesApi } from "@/services/api";
-import { Colors } from "@/constants/colors";
+import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 
 const IS_WEB = Platform.OS === "web";
@@ -574,7 +582,7 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(10,8,20,0.72)",
+    backgroundColor: IS_DARK_MODE ? "rgba(10,8,20,0.72)" : "rgba(20,15,40,0.45)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 1000,
@@ -582,10 +590,10 @@ const s = StyleSheet.create({
   } as any,
 
   panel: {
-    backgroundColor: "#1a1528",
+    backgroundColor: IS_DARK_MODE ? "#1a1528" : "#ffffff",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.22)",
+    borderColor: IS_DARK_MODE ? "rgba(124,58,237,0.22)" : "rgba(109,40,217,0.22)",
     overflow: "hidden",
     maxHeight: IS_WEB ? "92vh" : "92%",
   } as any,
@@ -662,7 +670,7 @@ const s = StyleSheet.create({
   markupPresetTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   markupCustom: { flexDirection: "row", gap: 6, alignItems: "center" },
   markupInput: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: IS_DARK_MODE ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
     borderRadius: 7,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -670,7 +678,7 @@ const s = StyleSheet.create({
     fontSize: 12,
     width: 80,
     borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.2)",
+    borderColor: IS_DARK_MODE ? "rgba(124,58,237,0.2)" : "rgba(124,58,237,0.30)",
   },
   markupApplyBtn: {
     backgroundColor: "rgba(124,58,237,0.18)",
@@ -695,7 +703,7 @@ const s = StyleSheet.create({
     borderBottomColor: "rgba(124,58,237,0.2)",
     paddingVertical: 6,
   },
-  rowEven: { backgroundColor: "rgba(255,255,255,0.02)" },
+  rowEven: { backgroundColor: IS_DARK_MODE ? "rgba(255,255,255,0.02)" : "rgba(124,58,237,0.03)" },
   rowOdd: { backgroundColor: "transparent" },
   rowDeselected: { opacity: 0.45 },
 
@@ -712,13 +720,13 @@ const s = StyleSheet.create({
 
   cellInput: {
     height: 32,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: IS_DARK_MODE ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.95)",
     borderRadius: 6,
     paddingHorizontal: 7,
     color: Colors.ink,
     fontSize: 12,
     borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.15)",
+    borderColor: IS_DARK_MODE ? "rgba(124,58,237,0.15)" : "rgba(124,58,237,0.25)",
   },
   cellText: { fontSize: 12, color: Colors.ink3 },
 
