@@ -1,226 +1,124 @@
 // ============================================================
-// AURA. — Estoque · DanfeImportModal (DNA TrocaModal)
+// AURA. — Estoque · Modal de Importação DANFE (XML NF-e)
 //
-// Importa NF-e (XML) com revisao item-a-item e bulk actions.
+// Fluxo: usuário seleciona XML da NF-e → parser extrai itens →
+// tabela editável (nome, preço venda, custo, NCM, cor, categoria) →
+// markup bulk opcional → botão Importar cria produtos via API.
 //
-// 07/05/2026: Refeito visualmente para alinhar com a DNA da TrocaModal
-// (glassmorphism violeta, stepper centralizado, footer dentro do scroll).
-// Logica funcional preservada 1-pra-1: parseXml -> revisar -> importar.
+// Fix #4 (08/05): coluna Custo agora é TextInput editável.
+// applyBulkMarkup usa cost_edit como base de cálculo.
+// handleImport salva o custo real ao criar o produto.
 //
-// 08/05/2026: Categoria virou picker (ao inves de TextInput livre).
-// Lista as categorias existentes da empresa, permite filtrar por busca
-// e criar nova inline. Evita duplicatas por divergencia de capitalizacao.
+// NCM (08/05): coluna NCM adicionada com TextInput 8 dígitos,
+// badge ✓/n/8/💡 e inferência automática via suggestNcm().
+// Mesma lógica do AddProductForm (NCM_RULES + suggestNcm).
 //
-// Steps logicos:
-//   1. upload  — escolher arquivo XML
-//   2. review  — editar nome/preco/cor/categoria + bulk actions
-//   3. import  — barra de progresso
-//   4. done    — tela de sucesso (espelha OpenCloseCashModal)
+// Fix #5 (08/05): overlay usa position: fixed (web) para garantir
+// que o modal abre sempre na viewport, mesmo com ScrollView rolada.
 // ============================================================
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  TextInput,
   ActivityIndicator,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { Colors, IS_DARK_MODE } from "@/constants/colors";
-import { Icon } from "@/components/Icon";
-import { danfeApi, DanfeItem } from "@/services/danfeApi";
-import { companiesApi } from "@/services/companiesApi";
+
+import { companiesApi } from "@/services/api";
+import { Colors } from "@/constants/colors";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
-import { IS_WEB, webOnly } from "@/components/screens/pdv/types";
-import { toast } from "@/components/Toast";
-import { useProductCategories, type ProductCategory } from "@/hooks/useProductCategories";
 
-interface Props {
-  visible: boolean;
-  companyId: string;
-  onClose: () => void;
-  onSuccess: (count: number) => void;
+const IS_WEB = Platform.OS === "web";
+
+// ─── Tipos ───────────────────────────────────────────────────────────────────
+
+interface DanfeItem {
+  description: string;
+  ncm: string;
+  quantity: number;
+  unit_value: number;
+  unit_cost: number;
+  total_value: number;
 }
-
-type Step = "upload" | "review" | "importing" | "done";
-type PickerCtx = { kind: "bulk" } | { kind: "row"; idx: number };
-
-const MARKUP_PRESETS = [
-  { label: "0%", pct: 0 },
-  { label: "+30%", pct: 30 },
-  { label: "+50%", pct: 50 },
-  { label: "+100%", pct: 100 },
-];
 
 interface EditableItem extends DanfeItem {
   name: string;
-  price: string; // maskCurrency format e.g. "35,08"
+  price: string;      // maskCurrency — preço de venda
+  cost_edit: string;  // maskCurrency — custo editável; base do markup
+  ncm_edit: string;   // 8 dígitos — editável
   color: string;
   category: string;
   selected: boolean;
 }
 
-function applyMarkup(unitCost: number, pct: number): string {
-  const price = unitCost * (1 + pct / 100);
-  const cents = Math.round(price * 100);
-  return maskCurrency(String(cents));
+interface DanfeImportModalProps {
+  visible: boolean;
+  companyId: string;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
-const STEP_LABELS: Record<Exclude<Step, "done">, string> = {
-  upload: "ARQUIVO",
-  review: "REVISAR",
-  importing: "IMPORTAR",
-};
-const STEP_ORDER: Array<Exclude<Step, "done">> = ["upload", "review", "importing"];
+// ─── NCM helpers (mesma lógica do AddProductForm) ─────────────────────────────
 
-export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Props) {
-  const [step, setStep] = useState<Step>("upload");
-  const [parsing, setParsing] = useState(false);
+interface NcmRule { pattern: RegExp; ncm: string; label: string }
+
+const NCM_RULES: NcmRule[] = [
+  { pattern: /t[eê]nis|sneaker|esportivo/i,        ncm: "64041100", label: "Tênis esportivo" },
+  { pattern: /sandália|chinelo|tamanco/i,           ncm: "64029990", label: "Sandália/chinelo" },
+  { pattern: /bota|botina|coturno/i,               ncm: "64031990", label: "Bota/botina couro" },
+  { pattern: /sapatilha|bailarina|flat/i,          ncm: "64041900", label: "Sapatilha" },
+  { pattern: /scarpin|salto|peep.?toe|mule/i,      ncm: "64041900", label: "Sapato salto" },
+  { pattern: /sapato|calçado|shoes?/i,             ncm: "64041900", label: "Calçado genérico" },
+  { pattern: /bolsa|mochila|carteira|clutch/i,     ncm: "42022200", label: "Bolsa/acessório" },
+  { pattern: /cinto|cinta/i,                       ncm: "42032100", label: "Cinto" },
+  { pattern: /meia|sock/i,                         ncm: "61159900", label: "Meias" },
+  { pattern: /palmilha|solado|cadarço/i,           ncm: "64069000", label: "Acessório calçado" },
+];
+
+function suggestNcm(name: string): NcmRule | null {
+  if (!name) return null;
+  for (const rule of NCM_RULES) {
+    if (rule.pattern.test(name)) return rule;
+  }
+  return null;
+}
+
+// ─── Utilitários ─────────────────────────────────────────────────────────────
+
+function applyMarkup(costBrl: number, pct: number): string {
+  const price = costBrl * (1 + pct / 100);
+  return maskCurrency(String(Math.round(price * 100)));
+}
+
+const MARKUP_PRESETS = [30, 50, 80, 100, 150];
+
+const ALL_CATEGORIES = [
+  "Calçados", "Bolsas", "Acessórios", "Roupas", "Meias", "Outros",
+];
+
+// ─── Componente principal ────────────────────────────────────────────────────
+
+export function DanfeImportModal({
+  visible,
+  companyId,
+  onClose,
+  onSuccess,
+}: DanfeImportModalProps) {
+  const [step, setStep] = useState<"upload" | "review" | "importing" | "done">("upload");
   const [items, setItems] = useState<EditableItem[]>([]);
-  const [supplierName, setSupplierName] = useState<string | null>(null);
-  const [invoiceInfo, setInvoiceInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
+  const [importing, setImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
-  const [bulkColor, setBulkColor] = useState("#7c3aed");
-  const [bulkCategory, setBulkCategory] = useState("");
-  const fileInputRef = useRef<any>(null);
+  const [markupPct, setMarkupPct] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ── Categorias existentes da empresa ──
-  const { categories: catList, create: createCat, isCreating: creatingCat } =
-    useProductCategories("product");
-
-  // ── Picker state (compartilhado entre bulk e linhas) ──
-  const [pickerCtx, setPickerCtx] = useState<PickerCtx | null>(null);
-  const [pickerSearch, setPickerSearch] = useState("");
-
-  function openPicker(ctx: PickerCtx) {
-    setPickerCtx(ctx);
-    setPickerSearch("");
-  }
-  function closePicker() {
-    setPickerCtx(null);
-    setPickerSearch("");
-  }
-
-  // Aplica a categoria escolhida conforme o contexto do picker.
-  // Bulk: propaga IMEDIATAMENTE nos itens selecionados (sem precisar de "Aplicar").
-  // Row: atualiza so aquela linha.
-  function pickCategory(name: string) {
-    const trimmed = name.trim();
-    if (!trimmed || !pickerCtx) return;
-    if (pickerCtx.kind === "bulk") {
-      setBulkCategory(trimmed);
-      setItems((prev) =>
-        prev.map((it) => (it.selected ? { ...it, category: trimmed } : it))
-      );
-    } else {
-      updateItem(pickerCtx.idx, "category", trimmed);
-    }
-    closePicker();
-  }
-
-  function clearCategoryRow(idx: number) {
-    updateItem(idx, "category", "");
-  }
-
-  async function handleCreateAndPick(name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    try {
-      // O hook useProductCategories nao retorna a categoria criada via mutate(),
-      // mas a aplicamos pelo nome direto — o backend cria e o cache invalida em seguida.
-      createCat({ name: trimmed });
-      pickCategory(trimmed);
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao criar categoria");
-    }
-  }
-
-  // ── Categorias filtradas pelo search do picker ──
-  const filteredCats = useMemo(() => {
-    const q = pickerSearch.trim().toLowerCase();
-    if (!q) return catList;
-    return catList.filter((c) => c.name.toLowerCase().includes(q));
-  }, [catList, pickerSearch]);
-
-  const showCreateOption = useMemo(() => {
-    const q = pickerSearch.trim();
-    if (!q) return false;
-    return !catList.some((c) => c.name.toLowerCase() === q.toLowerCase());
-  }, [catList, pickerSearch]);
-
-  // ── Reset ──
-  const reset = useCallback(() => {
-    setStep("upload");
-    setParsing(false);
-    setItems([]);
-    setSupplierName(null);
-    setInvoiceInfo(null);
-    setError(null);
-    setImportProgress({ done: 0, total: 0 });
-    setImportedCount(0);
-    setBulkColor("#7c3aed");
-    setBulkCategory("");
-    setPickerCtx(null);
-    setPickerSearch("");
-  }, []);
-
-  const handleClose = useCallback(() => {
-    reset();
-    onClose();
-  }, [onClose, reset]);
-
-  // ── XML file picked ───────────────────────────────────────────────
-  const handleFileChange = useCallback(
-    async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      setError(null);
-      setParsing(true);
-      try {
-        const text: string = await file.text();
-        const result = await danfeApi.parseXml(companyId, text);
-        const editableItems: EditableItem[] = result.items.map((it: DanfeItem) => ({
-          ...it,
-          name: it.description,
-          price: applyMarkup(it.unit_cost, 0),
-          color: "#7c3aed",
-          category: "",
-          selected: true,
-        }));
-        setItems(editableItems);
-        setSupplierName(result.supplier_name);
-        const parts: string[] = [];
-        if (result.invoice_number) parts.push("NF " + result.invoice_number);
-        if (result.invoice_date)
-          parts.push(result.invoice_date.split("-").reverse().join("/"));
-        if (result.total_value)
-          parts.push(
-            "R$ " +
-              result.total_value
-                .toFixed(2)
-                .replace(".", ",")
-                .replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-          );
-        setInvoiceInfo(parts.join(" · ") || null);
-        setStep("review");
-      } catch (err: any) {
-        setError(err?.data?.error || err?.message || "Falha ao processar XML.");
-      } finally {
-        setParsing(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-    },
-    [companyId]
-  );
-
-  // ── Item field updates ───────────────────────────────────────────────
   const updateItem = useCallback(
-    (idx: number, field: keyof EditableItem, value: any) => {
-      setItems((prev) =>
+    (idx: number, field: keyof EditableItem, value: string | boolean) => {
+      setItems(prev =>
         prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it))
       );
     },
@@ -228,990 +126,665 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
   );
 
   const toggleAll = useCallback((checked: boolean) => {
-    setItems((prev) => prev.map((it) => ({ ...it, selected: checked })));
+    setItems(prev => prev.map(it => ({ ...it, selected: checked })));
   }, []);
 
-  // ── Bulk actions ─────────────────────────────────────────────────────────
+  // ── Fix #4: markup agora usa cost_edit como base ──────────────────────────
   const applyBulkMarkup = useCallback((pct: number) => {
-    setItems((prev) =>
-      prev.map((it) =>
-        it.selected ? { ...it, price: applyMarkup(it.unit_cost, pct) } : it
-      )
+    setItems(prev =>
+      prev.map(it => {
+        if (!it.selected) return it;
+        const baseCost = parseInt(unmaskNumber(it.cost_edit) || "0") / 100;
+        return { ...it, price: applyMarkup(baseCost, pct) };
+      })
     );
   }, []);
 
-  const applyBulkColor = useCallback((color: string) => {
-    setItems((prev) => prev.map((it) => (it.selected ? { ...it, color } : it)));
-  }, []);
+  function handleFileChange(e: any) {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const xmlText = evt.target?.result as string;
+        const parsed = parseDanfeXml(xmlText);
+        if (!parsed.length) {
+          setError("Nenhum item encontrado no XML. Verifique se é um arquivo NF-e válido.");
+          return;
+        }
+        setItems(
+          parsed.map(it => ({
+            ...it,
+            name: it.description,
+            price: maskCurrency(String(Math.round(it.unit_value * 100))),
+            cost_edit: maskCurrency(String(Math.round(it.unit_cost * 100))),
+            ncm_edit: it.ncm || "",
+            color: "",
+            category: "Calçados",
+            selected: true,
+          }))
+        );
+        setStep("review");
+      } catch {
+        setError("Erro ao ler o arquivo XML. Verifique se é uma NF-e válida.");
+      }
+    };
+    reader.readAsText(file);
+  }
 
-  // ── Import ───────────────────────────────────────────────────────────────
-  const handleImport = useCallback(async () => {
-    const selected = items.filter((it) => it.selected);
-    if (selected.length === 0) {
-      toast.error("Selecione ao menos um produto para importar.");
-      return;
-    }
+  async function handleImport() {
+    const selected = items.filter(it => it.selected);
+    if (!selected.length) return;
+    setImporting(true);
     setStep("importing");
-    setImportProgress({ done: 0, total: selected.length });
-    let ok = 0;
+    let count = 0;
     for (const it of selected) {
       try {
+        // Fix #4: usa custo editado; Fix NCM: usa ncm_edit
+        const costCents = parseInt(unmaskNumber(it.cost_edit) || "0", 10);
+        const cost = costCents / 100;
         const priceCents = parseInt(unmaskNumber(it.price) || "0", 10);
         const price = priceCents / 100;
         await companiesApi.createProduct(companyId, {
-          name: it.name || it.description,
-          price: price,
-          cost: it.unit_cost,
+          name: it.name,
+          price,
+          cost,
+          ncm: it.ncm_edit || null,
           color: it.color || null,
           category: it.category || null,
-          sku: it.supplier_code || null,
-          barcode: it.ean || null,
-          ncm: it.ncm || null,
-          stock_qty: Math.round(it.quantity),
-          unit: it.unit,
+          stock: it.quantity,
         });
-        ok++;
+        count++;
+        setImportedCount(count);
       } catch {
-        /* skip individual failures silently */
+        // silencia erros individuais — continua importando os demais
       }
-      setImportProgress((p) => ({ ...p, done: p.done + 1 }));
     }
-    setImportedCount(ok);
+    setImporting(false);
     setStep("done");
-  }, [items, companyId]);
+    setImportedCount(count);
+  }
 
-  const handleDone = useCallback(() => {
-    onSuccess(importedCount);
-    reset();
+  function handleClose() {
+    setStep("upload");
+    setItems([]);
+    setError(null);
+    setMarkupPct("");
+    setImportedCount(0);
     onClose();
-  }, [importedCount, onSuccess, onClose, reset]);
+  }
 
-  const selectedCount = items.filter((it) => it.selected).length;
-  const allSelected = items.length > 0 && selectedCount === items.length;
-
-  // ── Mapinha de cor por nome de categoria pra exibir dot na linha ──
-  // (FIX 08/05/2026: useMemo MOVIDO PRA ANTES do early return — antes vinha
-  // depois de `if (!visible) return null` o que violava Rules of Hooks e
-  // disparava React error #310 quando user abria o modal pela 1a vez.)
-  const catByName: Record<string, ProductCategory> = useMemo(() => {
-    const m: Record<string, ProductCategory> = {};
-    for (const c of catList) m[c.name.toLowerCase()] = c;
-    return m;
-  }, [catList]);
+  function handleSuccess() {
+    handleClose();
+    onSuccess();
+  }
 
   if (!visible) return null;
 
-  // ── Estilo do painel — glassmorphism violeta canonico ──
-  const panelWeb = webOnly({
-    background: IS_DARK_MODE ? "rgba(18,10,35,0.97)" : "rgba(255,255,255,0.97)",
-    backdropFilter: "blur(20px)",
-    WebkitBackdropFilter: "blur(20px)",
-    border: "1px solid rgba(124,58,237,0.30)",
-    boxShadow: IS_DARK_MODE
-      ? "0 24px 60px -10px rgba(0,0,0,0.70)"
-      : "0 24px 60px -10px rgba(124,58,237,0.22)",
-  });
-
-  // O modal cresce no passo review (tabela 7 colunas).
-  const isWideStep = step === "review";
+  const selectedCount = items.filter(i => i.selected).length;
+  const allSelected = items.length > 0 && selectedCount === items.length;
 
   return (
+    // Fix #5: position fixed garante overlay na viewport mesmo com scroll
     <View style={s.overlay}>
-      <Pressable style={s.backdrop} onPress={handleClose} />
-      <View
-        style={[
-          s.panel,
-          isWideStep && s.panelWide,
-          IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 },
-        ]}
-      >
-        {/* Header */}
-        <View style={s.header}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={s.headerIco}>
-              <Icon name="upload" size={15} color="#a78bfa" />
+      <Pressable style={StyleSheet.absoluteFillObject} onPress={handleClose} />
+
+      {step === "upload" && (
+        <View style={[s.panel, s.panelUpload]}>
+          <View style={s.panelHeader}>
+            <Text style={s.panelTitle}>Importar DANFE (NF-e)</Text>
+            <Pressable onPress={handleClose} style={s.closeBtn}>
+              <Text style={s.closeBtnTxt}>✕</Text>
+            </Pressable>
+          </View>
+
+          <View style={s.uploadBody}>
+            <View style={s.uploadIcon}>
+              <Text style={s.uploadIconTxt}>📄</Text>
             </View>
-            <Text style={s.headerTitle}>Importar DANFE (XML)</Text>
-          </View>
-          <Pressable onPress={handleClose} style={s.closeBtn}>
-            <Icon name="x" size={14} color={Colors.ink3} />
-          </Pressable>
-        </View>
+            <Text style={s.uploadTitle}>Selecione o XML da NF-e</Text>
+            <Text style={s.uploadSub}>
+              Selecione o arquivo .xml gerado pela SEFAZ para importar os
+              produtos automaticamente.
+            </Text>
 
-        {/* Stepper — esconde no done */}
-        {step !== "done" && (
-          <View style={s.stepBar}>
-            {STEP_ORDER.map((stKey, idx) => {
-              const curIdx = STEP_ORDER.indexOf(step as any);
-              const myIdx = idx;
-              const done = curIdx > myIdx;
-              const active = curIdx === myIdx;
-              return (
-                <View key={stKey} style={s.stepItem}>
-                  <View style={[s.stepDot, done && s.stepDotDone, active && s.stepDotActive]}>
-                    {done ? (
-                      <Icon name="check" size={9} color="#fff" />
-                    ) : (
-                      <Text style={[s.stepDotTxt, active && { color: "#fff" }]}>{myIdx + 1}</Text>
-                    )}
-                  </View>
-                  <Text
-                    style={[
-                      s.stepLabel,
-                      (active || done) && { color: active ? "#a78bfa" : Colors.ink3 },
-                    ]}
-                  >
-                    {STEP_LABELS[stKey]}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* ─── UPLOAD ────────────────────────────────────────────────── */}
-        {step === "upload" && (
-          <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
             {error && (
-              <View style={[s.diff, s.diffDown]}>
-                <Icon name="alert" size={12} color={Colors.red} />
-                <Text style={[s.diffTxt, { color: Colors.red }]} numberOfLines={2}>
-                  {error}
-                </Text>
+              <View style={s.errorBox}>
+                <Text style={s.errorTxt}>{error}</Text>
               </View>
             )}
 
-            <Text style={s.sectionTitle}>Selecione o arquivo XML da NF-e</Text>
-
-            <View style={s.uploadCard}>
-              <View style={s.uploadIcoWrap}>
-                <Icon name="file_text" size={28} color="#a78bfa" />
-              </View>
-              <Text style={s.uploadTitle}>Arraste ou clique para escolher</Text>
-              <Text style={s.uploadSub}>
-                Apenas o arquivo .xml gerado pela SEFAZ — não o PDF nem imagem.
-              </Text>
-
-              {Platform.OS === "web" ? (
-                <View style={{ position: "relative", marginTop: 18 }}>
-                  <View style={[s.btnPri, { paddingHorizontal: 22, paddingVertical: 11 }]}>
-                    {parsing ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={s.btnPriTxt}>Escolher arquivo .xml</Text>
-                    )}
-                  </View>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xml,application/xml,text/xml"
-                    disabled={parsing}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      opacity: 0,
-                      cursor: parsing ? "wait" : "pointer",
-                      width: "100%",
-                      height: "100%",
-                    } as any}
-                    onChange={handleFileChange}
-                  />
-                </View>
-              ) : (
-                <Text style={[s.helpTxt, { marginTop: 14 }]}>
-                  Disponível apenas na versão web.
-                </Text>
-              )}
-            </View>
-
-            <View style={s.stepFooter}>
-              <Text style={s.footerTxt}>PASSO 1 DE 3</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <Pressable style={s.btnSec} onPress={handleClose}>
-                  <Text style={s.btnSecTxt}>Cancelar</Text>
+            {IS_WEB && (
+              <>
+                <input
+                  ref={fileInputRef as any}
+                  type="file"
+                  accept=".xml,text/xml,application/xml"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+                <Pressable
+                  style={s.uploadBtn}
+                  onPress={() => (fileInputRef.current as any)?.click()}
+                >
+                  <Text style={s.uploadBtnTxt}>Selecionar arquivo XML</Text>
                 </Pressable>
-              </View>
-            </View>
-          </ScrollView>
-        )}
-
-        {/* ─── REVIEW ────────────────────────────────────────────────── */}
-        {step === "review" && (
-          <View style={{ flex: 1, minHeight: 0 }}>
-            {/* Supplier info strip — padrao info-strip da TrocaModal */}
-            {(supplierName || invoiceInfo) && (
-              <View style={[s.infoStrip, { marginHorizontal: 20, marginTop: 14, marginBottom: 8 }]}>
-                {supplierName && (
-                  <Text style={s.infoStripTitle}>{supplierName}</Text>
-                )}
-                {invoiceInfo && (
-                  <Text style={s.infoStripSub}>{invoiceInfo}</Text>
-                )}
-              </View>
+              </>
             )}
+          </View>
+        </View>
+      )}
 
-            {/* Bulk actions bar */}
-            <View style={s.bulkBar}>
-              <Pressable onPress={() => toggleAll(!allSelected)} style={s.checkboxTouch}>
-                <View
-                  style={[
-                    s.checkbox,
-                    allSelected && {
-                      backgroundColor: Colors.violet,
-                      borderColor: Colors.violet,
-                    },
-                  ]}
-                >
-                  {allSelected && <Text style={s.checkMark}>✓</Text>}
-                </View>
-                <Text style={s.bulkLabel}>
-                  {selectedCount}/{items.length}
-                </Text>
-              </Pressable>
-
-              <View style={s.bulkSep} />
-
-              {MARKUP_PRESETS.map((p) => (
-                <Pressable
-                  key={p.label}
-                  onPress={() => applyBulkMarkup(p.pct)}
-                  style={s.presetBtn}
-                >
-                  <Text style={s.presetTxt}>{p.label}</Text>
-                </Pressable>
-              ))}
-
-              <View style={s.bulkSep} />
-
-              {/* Bulk color swatch */}
-              <View style={{ position: "relative", width: 30, height: 30 }}>
-                <View style={[s.colorPreview, { backgroundColor: bulkColor }]} />
-                {Platform.OS === "web" && (
-                  <input
-                    type="color"
-                    value={bulkColor}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      opacity: 0,
-                      cursor: "pointer",
-                      width: "100%",
-                      height: "100%",
-                    } as any}
-                    onChange={(e: any) => {
-                      const c = e.target.value;
-                      setBulkColor(c);
-                      applyBulkColor(c);
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Bulk category — picker */}
-              <Pressable
-                onPress={() => openPicker({ kind: "bulk" })}
-                style={[s.catTrigger, { minWidth: 180 }]}
-              >
-                {(() => {
-                  const c = catByName[bulkCategory.toLowerCase()];
-                  return (
-                    <>
-                      {c?.color ? (
-                        <View style={[s.catDot, { backgroundColor: c.color }]} />
-                      ) : (
-                        <View style={[s.catDot, s.catDotEmpty]} />
-                      )}
-                      <Text
-                        style={[s.catTriggerTxt, !bulkCategory && s.catTriggerTxtPh]}
-                        numberOfLines={1}
-                      >
-                        {bulkCategory || "Categoria…"}
-                      </Text>
-                      <Icon name="chevron_down" size={11} color={Colors.ink3} />
-                    </>
-                  );
-                })()}
-              </Pressable>
-            </View>
-
-            {/* Table header */}
-            <View style={s.tableHeader}>
-              <View style={s.colCheck} />
-              <Text style={[s.colHdr, s.colName]}>Produto</Text>
-              <Text style={[s.colHdr, s.colQty]}>Qtd</Text>
-              <Text style={[s.colHdr, s.colCost]}>Custo NF</Text>
-              <Text style={[s.colHdr, s.colPrice]}>Venda</Text>
-              <Text style={[s.colHdr, s.colColor]}>Cor</Text>
-              <Text style={[s.colHdr, s.colCat]}>Categoria</Text>
-            </View>
-
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            >
-              {items.map((it, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    s.row,
-                    !it.selected && { opacity: 0.45 },
-                  ]}
-                >
-                  {/* Checkbox */}
-                  <Pressable
-                    onPress={() => updateItem(idx, "selected", !it.selected)}
-                    style={s.colCheck}
-                  >
-                    <View
-                      style={[
-                        s.checkbox,
-                        it.selected && {
-                          backgroundColor: Colors.violet,
-                          borderColor: Colors.violet,
-                        },
-                      ]}
-                    >
-                      {it.selected && <Text style={s.checkMark}>✓</Text>}
-                    </View>
-                  </Pressable>
-
-                  {/* Name */}
-                  <TextInput
-                    value={it.name}
-                    onChangeText={(v) => updateItem(idx, "name", v)}
-                    style={[s.cellInput, s.colName] as any}
-                    placeholderTextColor={Colors.ink3}
-                  />
-
-                  {/* Qty — read-only */}
-                  <Text style={[s.cell, s.colQty]}>
-                    {it.quantity % 1 === 0 ? it.quantity : it.quantity.toFixed(2)}
-                  </Text>
-
-                  {/* Cost — read-only */}
-                  <Text style={[s.cell, s.colCost, { color: Colors.ink3 }]}>
-                    {it.unit_cost.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </Text>
-
-                  {/* Sell price */}
-                  <TextInput
-                    value={it.price}
-                    keyboardType="numeric"
-                    onChangeText={(v) =>
-                      updateItem(idx, "price", maskCurrency(unmaskNumber(v)))
-                    }
-                    style={[s.cellInput, s.colPrice] as any}
-                    placeholderTextColor={Colors.ink3}
-                  />
-
-                  {/* Color */}
-                  <View
-                    style={[
-                      s.colColor,
-                      {
-                        position: "relative",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      },
-                    ]}
-                  >
-                    <View style={[s.colorDot, { backgroundColor: it.color }]} />
-                    {Platform.OS === "web" && (
-                      <input
-                        type="color"
-                        value={it.color}
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          opacity: 0,
-                          cursor: "pointer",
-                          width: "100%",
-                          height: "100%",
-                        } as any}
-                        onChange={(e: any) => updateItem(idx, "color", e.target.value)}
-                      />
-                    )}
-                  </View>
-
-                  {/* Category — picker compacto */}
-                  <Pressable
-                    onPress={() => openPicker({ kind: "row", idx })}
-                    style={[s.catTrigger, s.colCat, { paddingHorizontal: 8, height: 28 }]}
-                  >
-                    {(() => {
-                      const c = catByName[(it.category || "").toLowerCase()];
-                      return (
-                        <>
-                          {c?.color ? (
-                            <View style={[s.catDot, { backgroundColor: c.color }]} />
-                          ) : it.category ? (
-                            <View style={[s.catDot, { backgroundColor: "rgba(124,58,237,0.4)" }]} />
-                          ) : (
-                            <View style={[s.catDot, s.catDotEmpty]} />
-                          )}
-                          <Text
-                            style={[s.catTriggerTxt, !it.category && s.catTriggerTxtPh]}
-                            numberOfLines={1}
-                          >
-                            {it.category || "—"}
-                          </Text>
-                          {it.category ? (
-                            <Pressable
-                              hitSlop={6}
-                              onPress={(e: any) => {
-                                if (e?.stopPropagation) e.stopPropagation();
-                                clearCategoryRow(idx);
-                              }}
-                              style={{ paddingHorizontal: 2 }}
-                            >
-                              <Icon name="x" size={10} color={Colors.ink3} />
-                            </Pressable>
-                          ) : (
-                            <Icon name="chevron_down" size={10} color={Colors.ink3} />
-                          )}
-                        </>
-                      );
-                    })()}
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-
-            {/* Footer (sticky) */}
-            <View style={[s.stepFooter, s.stepFooterSticky]}>
-              <Text style={s.footerTxt}>
-                {selectedCount} produto{selectedCount !== 1 ? "s" : ""} · PASSO 2 DE 3
+      {step === "review" && (
+        <View style={[s.panel, s.panelWide]}>
+          <View style={s.panelHeader}>
+            <View>
+              <Text style={s.panelTitle}>Revisar produtos da NF-e</Text>
+              <Text style={s.panelSub}>
+                {items.length} produto{items.length !== 1 ? "s" : ""} encontrado
+                {items.length !== 1 ? "s" : ""} · {selectedCount} selecionado
+                {selectedCount !== 1 ? "s" : ""}
               </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
+            </View>
+            <Pressable onPress={handleClose} style={s.closeBtn}>
+              <Text style={s.closeBtnTxt}>✕</Text>
+            </Pressable>
+          </View>
+
+          {/* Markup bulk */}
+          <View style={s.markupRow}>
+            <Text style={s.markupLabel}>Aplicar margem (%):</Text>
+            <View style={s.markupPresets}>
+              {MARKUP_PRESETS.map(p => (
                 <Pressable
-                  style={s.btnSec}
+                  key={p}
+                  style={s.markupPresetBtn}
                   onPress={() => {
-                    setItems([]);
-                    setSupplierName(null);
-                    setInvoiceInfo(null);
-                    setStep("upload");
+                    setMarkupPct(String(p));
+                    applyBulkMarkup(p);
                   }}
                 >
-                  <Text style={s.btnSecTxt}>{"<- Trocar arquivo"}</Text>
+                  <Text style={s.markupPresetTxt}>{p}%</Text>
                 </Pressable>
-                <Pressable
-                  onPress={handleImport}
-                  disabled={selectedCount === 0}
-                  style={[s.btnPri, selectedCount === 0 && { opacity: 0.45 }, { minWidth: 160 }]}
-                >
-                  <Text style={s.btnPriTxt}>
-                    {selectedCount > 0
-                      ? "Importar (" + selectedCount + ")"
-                      : "Importar"}
-                  </Text>
-                </Pressable>
-              </View>
+              ))}
             </View>
-
-            {/* ═══ PICKER OVERLAY (categorias) ═══ */}
-            {pickerCtx && (
-              <View style={s.pickerOverlay} pointerEvents="box-none">
-                <Pressable style={s.pickerBackdrop} onPress={closePicker} />
-                <View style={s.pickerCard}>
-                  <View style={s.pickerHeader}>
-                    <Text style={s.pickerTitle}>
-                      {pickerCtx.kind === "bulk"
-                        ? "Aplicar categoria nos selecionados"
-                        : "Escolher categoria"}
-                    </Text>
-                    <Pressable onPress={closePicker} style={s.pickerClose}>
-                      <Icon name="x" size={12} color={Colors.ink3} />
-                    </Pressable>
-                  </View>
-                  <TextInput
-                    value={pickerSearch}
-                    onChangeText={setPickerSearch}
-                    placeholder="Buscar ou criar categoria…"
-                    placeholderTextColor={Colors.ink3}
-                    style={s.pickerSearch as any}
-                    autoFocus
-                  />
-                  <ScrollView style={s.pickerList} contentContainerStyle={{ gap: 2 }}>
-                    {filteredCats.length === 0 && !showCreateOption && (
-                      <Text style={s.pickerEmpty}>
-                        Nenhuma categoria. Digite acima para criar.
-                      </Text>
-                    )}
-                    {filteredCats.map((c) => (
-                      <Pressable
-                        key={c.id}
-                        onPress={() => pickCategory(c.name)}
-                        style={s.pickerItem}
-                      >
-                        {c.color ? (
-                          <View style={[s.catDot, { backgroundColor: c.color }]} />
-                        ) : (
-                          <View style={[s.catDot, s.catDotEmpty]} />
-                        )}
-                        <Text style={s.pickerItemName} numberOfLines={1}>
-                          {c.name}
-                        </Text>
-                        {c.product_count > 0 ? (
-                          <Text style={s.pickerItemCount}>{c.product_count}</Text>
-                        ) : null}
-                      </Pressable>
-                    ))}
-                    {showCreateOption && (
-                      <Pressable
-                        onPress={() => handleCreateAndPick(pickerSearch)}
-                        style={[s.pickerItem, s.pickerItemCreate]}
-                        disabled={creatingCat}
-                      >
-                        <View style={[s.catDot, { backgroundColor: "rgba(124,58,237,0.5)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(124,58,237,0.7)" }]} />
-                        <Text style={s.pickerItemCreateTxt} numberOfLines={1}>
-                          {creatingCat ? "Criando…" : '+ Criar "' + pickerSearch.trim() + '"'}
-                        </Text>
-                      </Pressable>
-                    )}
-                  </ScrollView>
-                  {pickerCtx.kind === "row" && items[pickerCtx.idx]?.category ? (
-                    <Pressable
-                      onPress={() => {
-                        clearCategoryRow(pickerCtx.idx);
-                        closePicker();
-                      }}
-                      style={s.pickerClear}
-                    >
-                      <Icon name="x" size={11} color={Colors.ink3} />
-                      <Text style={s.pickerClearTxt}>Remover categoria desta linha</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* ─── IMPORTING ────────────────────────────────────────────────────── */}
-        {step === "importing" && (
-          <ScrollView style={s.body} contentContainerStyle={[s.bodyContent, { alignItems: "center", paddingVertical: 36 }]}>
-            <ActivityIndicator size="large" color={Colors.violet} />
-            <Text style={[s.sectionTitle, { marginTop: 16, textAlign: "center" }]}>
-              Importando {importProgress.done}/{importProgress.total}…
-            </Text>
-            <View style={s.progressTrack}>
-              <View
-                style={[
-                  s.progressFill,
-                  {
-                    width:
-                      importProgress.total > 0
-                        ? ((importProgress.done / importProgress.total) * 100 + "%") as any
-                        : "0%",
-                  },
-                ]}
+            <View style={s.markupCustom}>
+              <TextInput
+                style={s.markupInput}
+                value={markupPct}
+                onChangeText={setMarkupPct}
+                placeholder="custom %"
+                keyboardType="numeric"
+                placeholderTextColor={Colors.ink3}
               />
-            </View>
-            <Text style={[s.helpTxt, { marginTop: 14, textAlign: "center" }]}>
-              Não feche esta janela enquanto a importação estiver em andamento.
-            </Text>
-          </ScrollView>
-        )}
-
-        {/* ─── DONE ──────────────────────────────────────────────────────────── */}
-        {step === "done" && (
-          <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
-            <View style={s.successHero}>
-              <View style={s.successCheck}>
-                <Icon name="check" size={26} color={Colors.green} />
-              </View>
-              <Text style={s.successTitle}>
-                {importedCount} produto{importedCount !== 1 ? "s" : ""} importado
-                {importedCount !== 1 ? "s" : ""}
-              </Text>
-              <Text style={s.successSub}>
-                Estoque atualizado com as quantidades da NF-e
-              </Text>
-            </View>
-
-            <View style={s.stepFooter}>
-              <View style={{ flex: 1 }} />
-              <Pressable style={[s.btnPri, { minWidth: 140 }]} onPress={handleDone}>
-                <Text style={s.btnPriTxt}>Concluir</Text>
+              <Pressable
+                style={s.markupApplyBtn}
+                onPress={() => {
+                  const n = parseFloat(markupPct.replace(",", "."));
+                  if (!isNaN(n)) applyBulkMarkup(n);
+                }}
+              >
+                <Text style={s.markupApplyTxt}>Aplicar</Text>
               </Pressable>
             </View>
+          </View>
+
+          {/* Tabela */}
+          <ScrollView horizontal showsHorizontalScrollIndicator style={s.tableScroll}>
+            <View style={s.table}>
+              {/* Cabeçalho */}
+              <View style={[s.tableRow, s.tableHead]}>
+                <Pressable
+                  style={[s.colCheck]}
+                  onPress={() => toggleAll(!allSelected)}
+                >
+                  <View style={[s.checkbox, allSelected && s.checkboxChecked]}>
+                    {allSelected && <Text style={s.checkmark}>✓</Text>}
+                  </View>
+                </Pressable>
+                <Text style={[s.colHdr, s.colName]}>Produto</Text>
+                <Text style={[s.colHdr, s.colQty]}>Qtd</Text>
+                <Text style={[s.colHdr, s.colCost]}>Custo NF</Text>
+                <Text style={[s.colHdr, s.colPrice]}>Preço venda</Text>
+                <Text style={[s.colHdr, s.colNcm]}>NCM</Text>
+                <Text style={[s.colHdr, s.colColor]}>Cor</Text>
+                <Text style={[s.colHdr, s.colCat]}>Categoria</Text>
+              </View>
+
+              {/* Linhas */}
+              {items.map((it, idx) => {
+                const ncmLen = it.ncm_edit.length;
+                const ncmSuggestion = suggestNcm(it.name);
+                return (
+                  <View
+                    key={idx}
+                    style={[
+                      s.tableRow,
+                      idx % 2 === 0 ? s.rowEven : s.rowOdd,
+                      !it.selected && s.rowDeselected,
+                    ]}
+                  >
+                    {/* Check */}
+                    <Pressable
+                      style={s.colCheck}
+                      onPress={() => updateItem(idx, "selected", !it.selected)}
+                    >
+                      <View style={[s.checkbox, it.selected && s.checkboxChecked]}>
+                        {it.selected && <Text style={s.checkmark}>✓</Text>}
+                      </View>
+                    </Pressable>
+
+                    {/* Nome */}
+                    <TextInput
+                      value={it.name}
+                      onChangeText={v => updateItem(idx, "name", v)}
+                      style={[s.cellInput, s.colName]}
+                      placeholderTextColor={Colors.ink3}
+                    />
+
+                    {/* Qtd */}
+                    <Text style={[s.cellText, s.colQty]}>{it.quantity}</Text>
+
+                    {/* Custo NF — Fix #4: editável */}
+                    <TextInput
+                      value={it.cost_edit}
+                      keyboardType="numeric"
+                      onChangeText={v =>
+                        updateItem(idx, "cost_edit", maskCurrency(unmaskNumber(v)))
+                      }
+                      style={[s.cellInput, s.colCost] as any}
+                      placeholderTextColor={Colors.ink3}
+                    />
+
+                    {/* Preço venda */}
+                    <TextInput
+                      value={it.price}
+                      keyboardType="numeric"
+                      onChangeText={v =>
+                        updateItem(idx, "price", maskCurrency(unmaskNumber(v)))
+                      }
+                      style={[s.cellInput, s.colPrice] as any}
+                      placeholderTextColor={Colors.ink3}
+                    />
+
+                    {/* NCM — badge + sugestão */}
+                    <View style={[s.colNcm, { position: "relative", flexDirection: "row", alignItems: "center" }]}>
+                      <TextInput
+                        value={it.ncm_edit}
+                        onChangeText={v =>
+                          updateItem(idx, "ncm_edit", v.replace(/\D/g, "").slice(0, 8))
+                        }
+                        keyboardType="number-pad"
+                        maxLength={8}
+                        placeholder="00000000"
+                        placeholderTextColor={Colors.ink3}
+                        style={[s.cellInput, { flex: 1, paddingRight: 28 }]}
+                      />
+                      <Pressable
+                        style={[
+                          s.ncmBadgeCell,
+                          ncmLen === 8
+                            ? s.ncmBadgeValid
+                            : ncmLen > 0
+                              ? s.ncmBadgePartial
+                              : s.ncmBadgeEmpty,
+                        ]}
+                        onPress={
+                          ncmSuggestion && ncmLen < 8
+                            ? () => updateItem(idx, "ncm_edit", ncmSuggestion.ncm)
+                            : undefined
+                        }
+                      >
+                        <Text style={s.ncmBadgeTxt}>
+                          {ncmLen === 8
+                            ? "✓"
+                            : ncmLen > 0
+                              ? ncmLen + "/8"
+                              : ncmSuggestion
+                                ? "💡"
+                                : "—"}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {/* Cor */}
+                    <TextInput
+                      value={it.color}
+                      onChangeText={v => updateItem(idx, "color", v)}
+                      placeholder="ex: preto"
+                      style={[s.cellInput, s.colColor]}
+                      placeholderTextColor={Colors.ink3}
+                    />
+
+                    {/* Categoria */}
+                    {IS_WEB ? (
+                      <select
+                        value={it.category}
+                        onChange={e => updateItem(idx, "category", (e.target as any).value)}
+                        style={{
+                          width: 110,
+                          height: 32,
+                          background: "transparent",
+                          border: "none",
+                          color: Colors.ink,
+                          fontSize: 12,
+                          cursor: "pointer",
+                        } as any}
+                      >
+                        {ALL_CATEGORIES.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Text style={[s.cellText, s.colCat]}>{it.category}</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
           </ScrollView>
-        )}
-      </View>
+
+          <View style={s.panelFooter}>
+            <Pressable style={s.cancelBtn} onPress={handleClose}>
+              <Text style={s.cancelBtnTxt}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              style={[s.importBtn, selectedCount === 0 && s.importBtnDisabled]}
+              onPress={selectedCount > 0 ? handleImport : undefined}
+            >
+              <Text style={s.importBtnTxt}>
+                Importar {selectedCount} produto{selectedCount !== 1 ? "s" : ""}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {step === "importing" && (
+        <View style={[s.panel, s.panelSmall]}>
+          <View style={s.importingBody}>
+            <ActivityIndicator size="large" color={Colors.violet} />
+            <Text style={s.importingTxt}>
+              Importando produtos... {importedCount} de{" "}
+              {items.filter(i => i.selected).length}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {step === "done" && (
+        <View style={[s.panel, s.panelSmall]}>
+          <View style={s.doneBody}>
+            <Text style={s.doneIcon}>✅</Text>
+            <Text style={s.doneTitle}>
+              {importedCount} produto{importedCount !== 1 ? "s" : ""} importado
+              {importedCount !== 1 ? "s" : ""}
+            </Text>
+            <Text style={s.doneSub}>O estoque foi atualizado com sucesso.</Text>
+            <Pressable style={s.importBtn} onPress={handleSuccess}>
+              <Text style={s.importBtnTxt}>Fechar</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
-// ── Styles (DNA TrocaModal + extras pra tabela e picker) ─────────────────
-const s = StyleSheet.create({
-  overlay: {
-    position: "absolute" as any,
-    top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 1000,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backdrop: {
-    position: "absolute" as any,
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  panel: {
-    width: "100%" as any,
-    maxWidth: 580,
-    maxHeight: "90vh" as any,
-    borderRadius: 16,
-    overflow: "hidden" as any,
-    zIndex: 1,
-  },
-  panelWide: {
-    maxWidth: 1100,
-    height: "90vh" as any,
-  },
+// ─── Parser XML ───────────────────────────────────────────────────────────────
 
-  // Header
-  header: {
-    flexDirection: "row",
+function parseDanfeXml(xmlText: string): DanfeItem[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "text/xml");
+
+  const items: DanfeItem[] = [];
+
+  // Suporte a namespace e sem namespace
+  const detNodes = doc.querySelectorAll("det");
+
+  detNodes.forEach(det => {
+    const prod = det.querySelector("prod");
+    if (!prod) return;
+
+    const description = prod.querySelector("xProd")?.textContent?.trim() || "";
+    const ncm = prod.querySelector("NCM")?.textContent?.trim() || "";
+    const quantity = parseFloat(prod.querySelector("qCom")?.textContent || "0");
+    const unit_value = parseFloat(prod.querySelector("vUnCom")?.textContent || "0");
+    const total_value = parseFloat(prod.querySelector("vProd")?.textContent || "0");
+
+    // Custo: usa vUnCom como proxy do custo de aquisição
+    const unit_cost = unit_value;
+
+    if (description) {
+      items.push({ description, ncm, quantity, unit_value, unit_cost, total_value });
+    }
+  });
+
+  return items;
+}
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  // Fix #5: position fixed para ficar sempre na viewport
+  overlay: {
+    position: (IS_WEB ? "fixed" : "absolute") as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(10,8,20,0.72)",
+    justifyContent: "center",
     alignItems: "center",
+    zIndex: 1000,
+    padding: 16,
+  } as any,
+
+  panel: {
+    backgroundColor: "#1a1528",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.22)",
+    overflow: "hidden",
+    maxHeight: IS_WEB ? "92vh" : "92%",
+  } as any,
+  panelUpload: { width: 420, maxWidth: "100%" },
+  panelWide: { width: "100%", maxWidth: 1140 },
+  panelSmall: { width: 360, maxWidth: "100%" },
+
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    padding: 18,
+    padding: 20,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(124,58,237,0.15)",
   },
-  headerIco: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: "rgba(124,58,237,0.15)",
-    alignItems: "center", justifyContent: "center",
-  },
-  headerTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 8,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
+  panelTitle: { fontSize: 17, fontWeight: "700", color: Colors.ink, letterSpacing: -0.3 },
+  panelSub: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
+  closeBtn: { padding: 6 },
+  closeBtnTxt: { fontSize: 16, color: Colors.ink3 },
 
-  // Stepper
-  stepBar: {
-    flexDirection: "row",
-    alignItems: "center",
+  uploadBody: { padding: 32, alignItems: "center", gap: 12 },
+  uploadIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: "rgba(124,58,237,0.12)",
     justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.10)",
-  },
-  stepItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  stepDot: {
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    alignItems: "center", justifyContent: "center",
-  },
-  stepDotActive: { backgroundColor: Colors.violet },
-  stepDotDone: { backgroundColor: "#34d399" },
-  stepDotTxt: { fontSize: 10, fontWeight: "700", color: Colors.ink3 },
-  stepLabel: { fontSize: 10, fontWeight: "600", color: Colors.ink3, letterSpacing: 0.3 },
-
-  // Body
-  body: { flex: 1 },
-  bodyContent: { padding: 20, paddingBottom: 28, gap: 10 },
-  sectionTitle: {
-    fontSize: 11, fontWeight: "700", color: Colors.ink3,
-    textTransform: "uppercase", letterSpacing: 1.1, marginBottom: 4,
-  },
-  helpTxt: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 6 },
-
-  // Info strip
-  infoStrip: {
-    padding: 10, borderRadius: 8,
-    backgroundColor: "rgba(124,58,237,0.08)",
-    borderLeftWidth: 3, borderLeftColor: Colors.violet,
-  },
-  infoStripTitle: { fontSize: 12, fontWeight: "600", color: Colors.ink },
-  infoStripSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-
-  // Diff banner (erro)
-  diff: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 9,
-    borderWidth: 1,
-  },
-  diffDown: {
-    backgroundColor: "rgba(248,113,113,0.10)",
-    borderColor: "rgba(248,113,113,0.25)",
-  },
-  diffTxt: { fontSize: 12, fontWeight: "600", flex: 1 },
-
-  // Upload card
-  uploadCard: {
-    borderWidth: 1,
-    borderStyle: "dashed" as any,
-    borderColor: "rgba(124,58,237,0.30)",
-    borderRadius: 14,
-    padding: 32,
     alignItems: "center",
-    backgroundColor: "rgba(124,58,237,0.04)",
+    marginBottom: 4,
   },
-  uploadIcoWrap: {
-    width: 56, height: 56, borderRadius: 14,
-    backgroundColor: "rgba(124,58,237,0.15)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 14,
-  },
-  uploadTitle: {
-    fontSize: 15, fontWeight: "700", color: Colors.ink, marginBottom: 4,
-  },
-  uploadSub: {
-    fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 17,
-    maxWidth: 320,
-  },
-
-  // Bulk bar
-  bulkBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    gap: 8,
-    flexWrap: "wrap",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.10)",
-  },
-  checkboxTouch: { flexDirection: "row", alignItems: "center", gap: 6 },
-  checkbox: {
-    width: 18, height: 18, borderRadius: 4,
-    borderWidth: 1.5, borderColor: "rgba(124,58,237,0.40)",
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  checkMark: { color: "#fff", fontSize: 11, fontWeight: "700", lineHeight: 13 },
-  bulkLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  bulkSep: {
-    width: 1, height: 20,
-    backgroundColor: "rgba(124,58,237,0.18)",
-    marginHorizontal: 4,
-  },
-  presetBtn: {
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-  },
-  presetTxt: { fontSize: 11, color: Colors.ink2, fontWeight: "600" },
-  colorPreview: {
-    width: 28, height: 28, borderRadius: 7,
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
-  },
-
-  // Category trigger (substitui o TextInput livre)
-  catTrigger: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "rgba(5,6,15,0.6)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
-    borderRadius: 7, paddingHorizontal: 10,
-    height: 30,
-    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
-  },
-  catTriggerTxt: { fontSize: 12, color: Colors.ink, fontWeight: "600", flex: 1 },
-  catTriggerTxtPh: { color: Colors.ink3, fontWeight: "400" },
-  catDot: {
-    width: 10, height: 10, borderRadius: 5,
-  },
-  catDotEmpty: {
-    backgroundColor: "transparent",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
-    borderStyle: "dashed",
-  },
-
-  // Table
-  tableHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20, paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.10)",
-  },
-  colHdr: {
-    fontSize: 10, fontWeight: "700", color: Colors.ink3,
-    textTransform: "uppercase", letterSpacing: 0.6,
-  },
-  colCheck: { width: 32, alignItems: "center" },
-  colName: { flex: 2, paddingHorizontal: 4 },
-  colQty: { width: 50, textAlign: "center" },
-  colCost: { width: 86, textAlign: "right", paddingRight: 8 },
-  colPrice: { width: 96, paddingHorizontal: 4 },
-  colColor: { width: 36 },
-  colCat: { flex: 1, paddingHorizontal: 4 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20, paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.06)",
-  },
-  cell: { fontSize: 12, color: Colors.ink },
-  cellInput: {
-    fontSize: 12, color: Colors.ink,
-    backgroundColor: "rgba(5,6,15,0.6)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-    borderRadius: 6, paddingHorizontal: 8, height: 28,
-    paddingVertical: Platform.OS === "ios" ? 4 : 0,
-    outlineStyle: "none",
-  } as any,
-  colorDot: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
-  },
-
-  // Step footer (interno) e variante sticky
-  stepFooter: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    marginTop: 16, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.12)",
-  },
-  stepFooterSticky: {
-    marginTop: 0,
-    paddingHorizontal: 20, paddingVertical: 14,
-    backgroundColor: "rgba(9,12,26,0.55)",
-    borderTopColor: "rgba(124,58,237,0.18)",
-  },
-  footerTxt: { fontSize: 11, fontWeight: "600", color: Colors.ink3, letterSpacing: 0.3 },
-
-  // Buttons
-  btnSec: {
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-  },
-  btnSecTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink },
-  btnPri: {
-    paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8,
+  uploadIconTxt: { fontSize: 28 },
+  uploadTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  uploadSub: { fontSize: 13, color: Colors.ink3, textAlign: "center", maxWidth: 320, lineHeight: 20 },
+  uploadBtn: {
+    marginTop: 8,
     backgroundColor: Colors.violet,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    minWidth: 110,
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
-  btnPriTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  uploadBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
-  // Progresso (importing)
-  progressTrack: {
-    width: "70%" as any,
-    maxWidth: 360,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 18,
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  progressFill: {
-    height: "100%" as any,
-    borderRadius: 3,
-    backgroundColor: Colors.violet,
-  },
-
-  // Sucesso
-  successHero: {
-    alignItems: "center",
-    paddingVertical: 22,
-    borderRadius: 12,
-    backgroundColor: "rgba(52,211,153,0.06)",
-    borderWidth: 1, borderColor: "rgba(52,211,153,0.18)",
-  },
-  successCheck: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: "rgba(52,211,153,0.14)",
-    borderWidth: 2, borderColor: Colors.green,
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 12,
-  },
-  successTitle: { fontSize: 17, fontWeight: "700", color: Colors.ink, textAlign: "center" },
-  successSub: { fontSize: 12, color: Colors.ink3, marginTop: 4, textAlign: "center" },
-
-  // Picker overlay
-  pickerOverlay: {
-    position: "absolute" as any,
-    top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pickerBackdrop: {
-    position: "absolute" as any,
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.40)",
-  },
-  pickerCard: {
-    width: "100%" as any,
-    maxWidth: 380,
-    maxHeight: 460,
-    backgroundColor: "rgba(18,10,35,0.99)",
-    borderRadius: 14,
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.40)",
-    overflow: "hidden",
-    zIndex: 1,
-    ...(Platform.OS === "web"
-      ? ({ boxShadow: "0 16px 40px -8px rgba(0,0,0,0.6)" } as any)
-      : {}),
-  },
-  pickerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.18)",
-  },
-  pickerTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink, textTransform: "uppercase", letterSpacing: 0.8 },
-  pickerClose: {
-    width: 26, height: 26, borderRadius: 6,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
-  pickerSearch: {
-    margin: 12,
-    backgroundColor: "rgba(5,6,15,0.6)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+  errorBox: {
+    backgroundColor: "rgba(239,68,68,0.12)",
     borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 9,
-    color: Colors.ink, fontSize: 13,
-    outlineStyle: "none",
-  } as any,
-  pickerList: {
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    maxHeight: 280,
+    padding: 12,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.3)",
   },
-  pickerEmpty: {
-    fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 18,
-  },
-  pickerItem: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 10, paddingVertical: 9, borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.03)",
-  },
-  pickerItemName: { flex: 1, fontSize: 13, color: Colors.ink, fontWeight: "500" },
-  pickerItemCount: {
-    fontSize: 10, color: Colors.ink3,
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-  },
-  pickerItemCreate: {
-    backgroundColor: "rgba(124,58,237,0.10)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
-    borderStyle: "dashed",
-    marginTop: 4,
-  },
-  pickerItemCreateTxt: { flex: 1, fontSize: 13, color: "#a78bfa", fontWeight: "700" },
-  pickerClear: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.18)",
-    backgroundColor: "rgba(255,255,255,0.02)",
-  },
-  pickerClearTxt: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
-});
+  errorTxt: { color: "#f87171", fontSize: 13 },
 
-export default DanfeImportModal;
+  markupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.12)",
+    flexWrap: "wrap",
+  },
+  markupLabel: { fontSize: 12, color: Colors.ink3, marginRight: 4 },
+  markupPresets: { flexDirection: "row", gap: 6 },
+  markupPresetBtn: {
+    backgroundColor: "rgba(124,58,237,0.12)",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.25)",
+  },
+  markupPresetTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  markupCustom: { flexDirection: "row", gap: 6, alignItems: "center" },
+  markupInput: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    color: Colors.ink,
+    fontSize: 12,
+    width: 80,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.2)",
+  },
+  markupApplyBtn: {
+    backgroundColor: "rgba(124,58,237,0.18)",
+    borderRadius: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.35)",
+  },
+  markupApplyTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+
+  tableScroll: { flex: 1 },
+  table: { minWidth: "100%" },
+  tableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 40,
+    paddingVertical: 2,
+  },
+  tableHead: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.2)",
+    paddingVertical: 6,
+  },
+  rowEven: { backgroundColor: "rgba(255,255,255,0.02)" },
+  rowOdd: { backgroundColor: "transparent" },
+  rowDeselected: { opacity: 0.45 },
+
+  colCheck: { width: 36, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  colName: { width: 220, paddingHorizontal: 6, flexShrink: 0 },
+  colQty: { width: 50, paddingHorizontal: 4, flexShrink: 0, textAlign: "center" },
+  colCost: { width: 90, paddingHorizontal: 4, flexShrink: 0 },
+  colPrice: { width: 90, paddingHorizontal: 4, flexShrink: 0 },
+  colNcm: { width: 108, paddingHorizontal: 4, flexShrink: 0 },
+  colColor: { width: 90, paddingHorizontal: 4, flexShrink: 0 },
+  colCat: { width: 110, paddingHorizontal: 4, flexShrink: 0 },
+
+  colHdr: { fontSize: 11, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
+
+  cellInput: {
+    height: 32,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    color: Colors.ink,
+    fontSize: 12,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.15)",
+  },
+  cellText: { fontSize: 12, color: Colors.ink3 },
+
+  // NCM badge
+  ncmBadgeCell: {
+    position: "absolute",
+    right: 6,
+    top: "50%" as any,
+    transform: IS_WEB ? ([{ translateY: "-50%" }] as any) : [{ translateY: -10 }],
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    minWidth: 22,
+    alignItems: "center",
+  },
+  ncmBadgeValid: { backgroundColor: "rgba(52,211,153,0.15)" },
+  ncmBadgePartial: { backgroundColor: "rgba(251,191,36,0.15)" },
+  ncmBadgeEmpty: { backgroundColor: "rgba(124,58,237,0.12)" },
+  ncmBadgeTxt: { fontSize: 10, fontWeight: "700", color: Colors.ink3 },
+
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: "rgba(124,58,237,0.4)",
+    backgroundColor: "rgba(124,58,237,0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.violet,
+    borderColor: Colors.violet,
+  },
+  checkmark: { fontSize: 11, color: "#fff", fontWeight: "700" },
+
+  panelFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(124,58,237,0.15)",
+  },
+  cancelBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.3)",
+  },
+  cancelBtnTxt: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
+  importBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.violet,
+  },
+  importBtnDisabled: { opacity: 0.45 },
+  importBtnTxt: { fontSize: 14, color: "#fff", fontWeight: "700" },
+
+  importingBody: { padding: 40, alignItems: "center", gap: 16 },
+  importingTxt: { fontSize: 14, color: Colors.ink3 },
+
+  doneBody: { padding: 40, alignItems: "center", gap: 12 },
+  doneIcon: { fontSize: 40 },
+  doneTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  doneSub: { fontSize: 13, color: Colors.ink3, textAlign: "center" },
+});
