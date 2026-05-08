@@ -921,7 +921,11 @@ const s = StyleSheet.create({
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
   formOverlay: {
-    position: "absolute",
+    // Web: position fixed pra ficar relativo a viewport (não a wrapper que pode
+    // ser muito alto no novo layout wide com Hero+KPIs+Table). Native: absolute
+    // ainda funciona porque RN só tem static/absolute.
+    // FIX 08/05/2026: bug do form sheet sumindo offscreen no layout wide.
+    position: (Platform.OS === "web" ? "fixed" : "absolute") as any,
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 100,
     backgroundColor: "rgba(0,0,0,0.5)",
