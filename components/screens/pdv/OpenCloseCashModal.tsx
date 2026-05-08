@@ -7,6 +7,11 @@
 //   Fix #5 — overlay usa position "fixed" no web.
 //   Fix #7 — employee ≠ owner: funcionário abre caixa somente
 //   em próprio nome (card bloqueado); owner/staff vê lista completa.
+//
+// 08/05/2026 (hotfix):
+//   Fix FK caixa_sessoes_opened_by_employee_id_fkey — quando !isOwner
+//   selectedEmployee.id é o user.id (auth UUID), não employees.id.
+//   Solução: passa null como responsavel_employee_id nesse path.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -173,7 +178,11 @@ export function OpenCloseCashModal({
     if (troco < 0) { toast.error("Troco invalido"); return; }
     setSubmittingOpen(true);
     try {
-      await caixaApi.abrir(companyId, troco, selectedEmployee.id);
+      // Fix: quando !isOwner o selectedEmployee.id é o user.id (auth UUID),
+      // não o employees.id — a FK caixa_sessoes_opened_by_employee_id_fkey
+      // só aceita IDs da tabela employees. Nesse path, opened_by já registra
+      // quem abriu; não precisamos de opened_by_employee_id.
+      await caixaApi.abrir(companyId, troco, isOwner ? selectedEmployee.id : null);
       toast.success("Caixa aberto!");
       onSuccess?.();
       onClose();
