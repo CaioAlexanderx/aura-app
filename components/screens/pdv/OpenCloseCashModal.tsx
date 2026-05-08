@@ -3,29 +3,10 @@
 //
 // Modal único que cobre Abrir e Fechar Caixa.
 //
-// Mode é derivado do status atual:
-//   - !isAberto -> wizard ABRIR (3 passos: Funcionario, Troco, Confirmar)
-//   - isAberto  -> wizard FECHAR (3 passos: Contagem, Observacao, Revisar)
-//                  + tela de SUCESSO com botao "Baixar PDF"
-//
-// Padrao visual: glassmorphism violeta canonico da TrocaModal.
-// Stepper centralizado, footer dentro do scroll.
-//
-// Empregados: hoje nao ha permissao por modulo. Listamos todos os
-// empregados retornados por employeesApi (que ja sao filtrados por
-// plano no backend - so plano Negocio+ tem empregados). Quando o
-// backend ganhar permissoes granulares, basta filtrar aqui.
-//
-// 07/05/2026 (hotfix): valores numericos do backend (Postgres NUMERIC)
-// vem como string. Normalizamos com toNum() antes de qualquer .toFixed
-// ou comparacao numerica.
-//
-// 08/05/2026 (hotfix): tela de sucesso pos-fechamento sumia se onSuccess
-// invalidasse o cache antes do user clicar "Baixar PDF". Agora:
-//   - mode trava em "fechar" enquanto closeResult existir
-//   - onSuccess() so dispara quando o modal fecha (handleCloseModal)
-//   - sessaoSnapshot preserva opened_by/opened_at pra montar o PDF
-//   - tela 4 nao depende mais de sessaoAtiva, so de closeResult
+// 08/05/2026 (sprint):
+//   Fix #5 — overlay usa position "fixed" no web.
+//   Fix #7 — employee ≠ owner: funcionário abre caixa somente
+//   em próprio nome (card bloqueado); owner/staff vê lista completa.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -36,14 +17,13 @@ import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { caixaApi, type CaixaSessaoAtiva, type CaixaFechamentoFull } from "@/services/caixaApi";
 import { employeesApi } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 import { openCashClosePdf, type CashClosePaymentRow } from "@/utils/cashClosePdf";
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-// Postgres NUMERIC chega como string. toNum() faz a coersao defensiva pra
-// number sem cair em NaN (NaN || 0 retorna NaN — usamos isFinite check).
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function toNum(v: unknown): number {
   if (v == null) return 0;
   if (typeof v === "number") return isFinite(v) ? v : 0;
@@ -79,17 +59,15 @@ function initials(name: string): string {
 }
 
 type OpenStep = 1 | 2 | 3;
-type CloseStep = 1 | 2 | 3 | 4; // 4 = sucesso
+type CloseStep = 1 | 2 | 3 | 4;
 
 type Props = {
   visible: boolean;
   companyId: string;
   companyName: string;
   companyCnpj?: string | null;
-  /** Sessao ativa atual (vem do useCaixa do PDV) */
   sessaoAtiva: CaixaSessaoAtiva | null;
   onClose: () => void;
-  /** Chamado apos abrir ou fechar com sucesso pra invalidar caches */
   onSuccess?: () => void;
 };
 
@@ -102,6 +80,11 @@ export function OpenCloseCashModal({
   onClose,
   onSuccess,
 }: Props) {
+  // ── Auth / role ──
+  const { user, isStaff, company: authCompany } = useAuthStore();
+  // Fix #7: owner ou staff vê lista completa; funcionário só abre como si mesmo
+  const isOwner = isStaff || authCompany?.member_role === "owner";
+
   // ── ABRIR state ──
   const [openStep, setOpenStep] = useState<OpenStep>(1);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string; role?: string | null } | null>(null);
@@ -114,12 +97,9 @@ export function OpenCloseCashModal({
   const [obsInput, setObsInput] = useState("");
   const [submittingClose, setSubmittingClose] = useState(false);
   const [closeResult, setCloseResult] = useState<CaixaFechamentoFull | null>(null);
-  // Snapshot da sessao no momento de iniciar o fluxo de fechar.
-  // Preserva opened_by, opened_at, troco_inicial mesmo apos o cache do
-  // useCaixa do pai retornar null (sessao ja fechada no banco).
   const [sessaoSnapshot, setSessaoSnapshot] = useState<CaixaSessaoAtiva | null>(null);
 
-  // ── Reset ao abrir/fechar ──
+  // ── Reset ao fechar modal ──
   useEffect(() => {
     if (!visible) {
       setOpenStep(1);
@@ -135,27 +115,31 @@ export function OpenCloseCashModal({
     }
   }, [visible]);
 
-  // Sempre que sessaoAtiva mudar e for valida, atualiza o snapshot.
-  // Snapshot so e usado quando o cache do pai cai pra null pos-fechamento.
   useEffect(() => {
     if (sessaoAtiva) setSessaoSnapshot(sessaoAtiva);
   }, [sessaoAtiva]);
 
-  // ── Mode lock ──
-  // Se ja temos closeResult, ficamos em "fechar" pra renderizar a tela de
-  // sucesso. Senao, derivamos de sessaoAtiva normalmente.
+  // Fix #7: se não é owner, pré-seleciona o próprio usuário ao abrir o modal
+  useEffect(() => {
+    if (!visible || isOwner) return;
+    if (user) {
+      setSelectedEmployee({
+        id: user.id,
+        name: (user as any).name || (user as any).email || "Eu",
+        role: null,
+      });
+    }
+  }, [visible, isOwner, user]);
+
   const isAberto = !!sessaoAtiva;
   const mode: "abrir" | "fechar" = (closeResult || isAberto) ? "fechar" : "abrir";
-
-  // Sessao efetiva pro fluxo de fechar — preferimos snapshot quando o
-  // sessaoAtiva ja virou null (cache invalidou pos-fechamento).
   const sessaoEff: CaixaSessaoAtiva | null = sessaoAtiva || sessaoSnapshot;
 
-  // ── Funcionarios (so plano Negocio+; useQuery cacheado) ──
+  // ── Funcionarios (só owner os vê) ──
   const { data: empData, isFetching: loadingEmployees } = useQuery({
     queryKey: ["employees", companyId],
     queryFn: () => employeesApi.list(companyId),
-    enabled: !!companyId && visible && mode === "abrir",
+    enabled: !!companyId && visible && mode === "abrir" && isOwner,
     staleTime: 60_000,
   });
   const employees = useMemo(() => {
@@ -166,7 +150,7 @@ export function OpenCloseCashModal({
     }));
   }, [empData]);
 
-  // ── Calculos do fechamento (ao vivo, baseado no sessaoEff) ──
+  // ── Calculos do fechamento ──
   const trocoInicial = toNum(sessaoEff?.troco_inicial);
   const vendasEmDinheiro = toNum(sessaoEff?.totais_ao_vivo?.dinheiro);
   const dinheiroEsperado = Math.round((trocoInicial + vendasEmDinheiro) * 100) / 100;
@@ -174,14 +158,11 @@ export function OpenCloseCashModal({
   const diferenca = dinheiroInput ? Math.round((dinheiroContado - dinheiroEsperado) * 100) / 100 : 0;
   const hasDigitedClose = dinheiroInput.length > 0;
 
-  // ── Wrapper do close — invalida cache do pai SO agora (apos user fechar
-  //    o modal). Isso evita que sessaoAtiva vire null no meio da tela 4.
   function handleCloseModal() {
     if (closeResult || mode === "abrir") onSuccess?.();
     onClose();
   }
 
-  // ── Submit Abrir ──
   async function handleAbrir() {
     if (submittingOpen) return;
     if (!selectedEmployee) {
@@ -189,15 +170,12 @@ export function OpenCloseCashModal({
       return;
     }
     const troco = parseMoeda(trocoInput);
-    if (troco < 0) {
-      toast.error("Troco invalido");
-      return;
-    }
+    if (troco < 0) { toast.error("Troco invalido"); return; }
     setSubmittingOpen(true);
     try {
       await caixaApi.abrir(companyId, troco, selectedEmployee.id);
       toast.success("Caixa aberto!");
-      onSuccess?.();   // ok aqui — abrir nao tem tela de sucesso, fecha modal logo apos
+      onSuccess?.();
       onClose();
     } catch (err: any) {
       toast.error(err?.data?.error || err?.message || "Erro ao abrir o caixa");
@@ -206,28 +184,15 @@ export function OpenCloseCashModal({
     }
   }
 
-  // ── Submit Fechar ──
   async function handleFechar() {
     if (submittingClose) return;
-    if (!hasDigitedClose) {
-      toast.error("Digite o valor contado");
-      return;
-    }
-    // Garante snapshot ANTES do POST pra preservar dados da sessao
-    // (caso useEffect ainda nao tenha atualizado).
+    if (!hasDigitedClose) { toast.error("Digite o valor contado"); return; }
     if (sessaoAtiva && !sessaoSnapshot) setSessaoSnapshot(sessaoAtiva);
-
     setSubmittingClose(true);
     try {
-      const res = await caixaApi.fechar(
-        companyId,
-        dinheiroContado,
-        obsInput.trim() || undefined
-      );
+      const res = await caixaApi.fechar(companyId, dinheiroContado, obsInput.trim() || undefined);
       setCloseResult(res.fechamento);
-      setCloseStep(4); // tela de sucesso
-      // NAO chama onSuccess aqui — invalidacao do cache acontece em
-      // handleCloseModal pra nao desmontar a tela 4.
+      setCloseStep(4);
     } catch (err: any) {
       toast.error(err?.data?.error || err?.message || "Erro ao fechar o caixa");
     } finally {
@@ -235,7 +200,6 @@ export function OpenCloseCashModal({
     }
   }
 
-  // ── Gerar PDF a partir do closeResult ──
   function handleDownloadPdf() {
     if (!closeResult) return;
     const operatorName = sessaoEff?.opened_by?.name || "Operador";
@@ -281,17 +245,14 @@ export function OpenCloseCashModal({
       : "0 24px 60px -10px rgba(124,58,237,0.22)",
   });
 
-  // ── Header dinamico (icone + titulo + close) ──
   const headerIcon = mode === "abrir" ? "unlock" : "lock";
   const headerColor = mode === "abrir" ? "#a78bfa" : "#fbbf24";
   const headerBg = mode === "abrir" ? "rgba(124,58,237,0.15)" : "rgba(251,191,36,0.15)";
   const headerTitle = mode === "abrir" ? "Abrir caixa" : "Fechar caixa";
 
-  // ── Stepper labels ──
   const openLabels = ["FUNCIONARIO", "TROCO", "CONFIRMAR"];
   const closeLabels = ["CONTAGEM", "OBSERVACAO", "REVISAR"];
 
-  // ── Valores do closeResult ja normalizados (usados na tela 4 de sucesso) ──
   const resultDiferenca = closeResult ? toNum(closeResult.diferenca) : 0;
   const resultGeral     = closeResult ? toNum(closeResult.total_geral) : 0;
   const resultSales     = closeResult ? toNum(closeResult.sales_count) : 0;
@@ -315,7 +276,7 @@ export function OpenCloseCashModal({
           </Pressable>
         </View>
 
-        {/* Stepper — esconde quando estamos na tela de sucesso */}
+        {/* Stepper */}
         {!(mode === "fechar" && closeStep === 4) && (
           <View style={s.stepBar}>
             {(mode === "abrir" ? openLabels : closeLabels).map((label, idx) => {
@@ -351,7 +312,29 @@ export function OpenCloseCashModal({
           {mode === "abrir" && openStep === 1 && (
             <>
               <Text style={s.sectionTitle}>Quem esta abrindo o caixa?</Text>
-              {loadingEmployees ? (
+
+              {/* Fix #7: não-owner vê card bloqueado com próprio nome */}
+              {!isOwner ? (
+                <View style={[s.pickerItem, s.pickerItemSelected, { borderStyle: "solid" as any }]}>
+                  <View
+                    style={[
+                      s.avatar,
+                      IS_WEB && webOnly({ background: avatarColor(0) } as any),
+                    ]}
+                  >
+                    <Text style={s.avatarTxt}>{initials((user as any)?.name || "")}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.pickerName} numberOfLines={1}>
+                      {(user as any)?.name || "Você"}
+                    </Text>
+                    <Text style={s.pickerRole}>Abertura registrada em seu nome</Text>
+                  </View>
+                  <View style={[s.permTag, { backgroundColor: "rgba(52,211,153,0.10)", borderColor: "rgba(52,211,153,0.35)" }]}>
+                    <Text style={[s.permTagTxt, { color: "#34d399" }]}>VOCÊ</Text>
+                  </View>
+                </View>
+              ) : loadingEmployees ? (
                 <View style={s.centered}><ActivityIndicator color={Colors.violet} /></View>
               ) : employees.length === 0 ? (
                 <Text style={s.emptyTxt}>
@@ -387,8 +370,11 @@ export function OpenCloseCashModal({
                   })}
                 </View>
               )}
+
               <Text style={s.helpTxt}>
-                Lista filtrada por permissao de acessar o PDV (plano Negocio+).
+                {isOwner
+                  ? "Lista filtrada por permissao de acessar o PDV (plano Negocio+)."
+                  : "Funcionarios abrem o caixa apenas em nome proprio. Proprietarios podem abrir como qualquer operador."}
               </Text>
               <View style={s.stepFooter}>
                 <Text style={s.footerTxt}>PASSO 1 DE 3</Text>
@@ -583,19 +569,9 @@ export function OpenCloseCashModal({
           {mode === "fechar" && closeStep === 2 && (
             <>
               {diferenca !== 0 ? (
-                <View
-                  style={[
-                    s.diff,
-                    diferenca > 0 ? s.diffUp : s.diffDown,
-                  ]}
-                >
+                <View style={[s.diff, diferenca > 0 ? s.diffUp : s.diffDown]}>
                   <Icon name="alert" size={12} color={diferenca > 0 ? "#a78bfa" : Colors.red} />
-                  <Text
-                    style={[
-                      s.diffTxt,
-                      { color: diferenca > 0 ? "#a78bfa" : Colors.red },
-                    ]}
-                  >
+                  <Text style={[s.diffTxt, { color: diferenca > 0 ? "#a78bfa" : Colors.red }]}>
                     Detectamos divergencia de {fmt(Math.abs(diferenca))} ({diferenca > 0 ? "sobra" : "falta"})
                   </Text>
                 </View>
@@ -694,9 +670,7 @@ export function OpenCloseCashModal({
             </>
           )}
 
-          {/* ═══ TELA DE SUCESSO POS-FECHAMENTO ═══ */}
-          {/* IMPORTANTE: nao depende mais de sessaoAtiva/sessaoEff. closeResult tem
-              tudo o que precisamos pra renderizar a tela. */}
+          {/* ═══ SUCESSO POS-FECHAMENTO ═══ */}
           {mode === "fechar" && closeStep === 4 && closeResult && (
             <>
               <View style={s.successHero}>
@@ -754,10 +728,11 @@ export function OpenCloseCashModal({
   );
 }
 
-// ── Styles (DNA TrocaModal) ───────────────────────────────────────────
+// ── Styles (DNA TrocaModal) ────────────────────────────────────────────────────
 const s = StyleSheet.create({
+  // Fix #5: "fixed" no web → relativo à viewport, não ao ScrollView pai
   overlay: {
-    position: "absolute" as any,
+    position: (IS_WEB ? "fixed" : "absolute") as any,
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 1000,
     alignItems: "center",
@@ -776,37 +751,21 @@ const s = StyleSheet.create({
     overflow: "hidden" as any,
     zIndex: 1,
   },
-
-  // Header
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.15)",
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 18, borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.15)",
   },
-  headerIco: {
-    width: 30, height: 30, borderRadius: 8,
-    alignItems: "center", justifyContent: "center",
-  },
+  headerIco: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
   closeBtn: {
     width: 32, height: 32, borderRadius: 8,
     alignItems: "center", justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.04)",
   },
-
-  // Stepper
   stepBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(124,58,237,0.10)",
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 20, paddingVertical: 14, gap: 16,
+    borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.10)",
   },
   stepItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   stepDot: {
@@ -818,8 +777,6 @@ const s = StyleSheet.create({
   stepDotDone: { backgroundColor: "#34d399" },
   stepDotTxt: { fontSize: 10, fontWeight: "700", color: Colors.ink3 },
   stepLabel: { fontSize: 10, fontWeight: "600", color: Colors.ink3, letterSpacing: 0.3 },
-
-  // Body
   body: { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 28, gap: 10 },
   sectionTitle: {
@@ -829,8 +786,6 @@ const s = StyleSheet.create({
   helpTxt: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 6 },
   centered: { alignItems: "center", padding: 24 },
   emptyTxt: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
-
-  // Picker
   pickerItem: {
     flexDirection: "row", alignItems: "center", gap: 12,
     padding: 12, borderRadius: 10,
@@ -839,8 +794,7 @@ const s = StyleSheet.create({
   },
   pickerItemSelected: {
     backgroundColor: "rgba(124,58,237,0.10)",
-    borderColor: Colors.violet,
-    borderLeftWidth: 3,
+    borderColor: Colors.violet, borderLeftWidth: 3,
   },
   avatar: {
     width: 32, height: 32, borderRadius: 16,
@@ -856,8 +810,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
   },
   permTagTxt: { fontSize: 9, color: "#a78bfa", fontWeight: "700", letterSpacing: 0.4 },
-
-  // Money input
   moneyInput: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: "rgba(5,6,15,0.6)",
@@ -869,16 +821,12 @@ const s = StyleSheet.create({
     flex: 1, color: Colors.ink, fontSize: 26, fontWeight: "700",
     letterSpacing: -0.3, outlineStyle: "none",
   } as any,
-
-  // Generic input
   textArea: {
     backgroundColor: "rgba(5,6,15,0.6)",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.10)",
     borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10,
     color: Colors.ink, fontSize: 13, minHeight: 64, outlineStyle: "none",
   } as any,
-
-  // Info strip
   infoStrip: {
     padding: 10, borderRadius: 8,
     backgroundColor: "rgba(124,58,237,0.08)",
@@ -886,52 +834,38 @@ const s = StyleSheet.create({
   },
   infoStripTitle: { fontSize: 12, fontWeight: "600", color: Colors.ink },
   infoStripSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-
-  // Summary
   summaryBox: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 10, padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 12,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
   },
   summaryRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingVertical: 6,
-    borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.08)",
+    paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.08)",
   },
   summaryLab: { fontSize: 12, color: Colors.ink3 },
   summaryVal: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   summaryValBold: { fontWeight: "700", color: "#a78bfa", fontSize: 13 },
-
-  // Net box
   netBox: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     padding: 14, borderRadius: 10,
-    backgroundColor: "rgba(124,58,237,0.07)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.20)",
+    backgroundColor: "rgba(124,58,237,0.07)", borderWidth: 1, borderColor: "rgba(124,58,237,0.20)",
   },
   netLab: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   netVal: { fontSize: 18, fontWeight: "800" },
-
-  // Diff banner
   diff: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 9,
-    borderWidth: 1,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 9, borderWidth: 1,
   },
   diffOk: { backgroundColor: "rgba(52,211,153,0.10)", borderColor: "rgba(52,211,153,0.25)" },
   diffUp: { backgroundColor: "rgba(124,58,237,0.10)", borderColor: "rgba(124,58,237,0.25)" },
   diffDown: { backgroundColor: "rgba(248,113,113,0.10)", borderColor: "rgba(248,113,113,0.25)" },
   diffTxt: { fontSize: 12, fontWeight: "600" },
-
-  // Step footer
   stepFooter: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     marginTop: 16, paddingTop: 12,
     borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.12)",
   },
   footerTxt: { fontSize: 11, fontWeight: "600", color: Colors.ink3, letterSpacing: 0.3 },
-
-  // Buttons
   btnSec: {
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -941,53 +875,35 @@ const s = StyleSheet.create({
   btnPri: {
     paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8,
     backgroundColor: Colors.violet,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    minWidth: 110,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", minWidth: 110,
   },
   btnPriTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
   btnDanger: {
     paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8,
     backgroundColor: Colors.red || "#ef4444",
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    minWidth: 110,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", minWidth: 110,
   },
-
-  // Sucesso
   successHero: {
-    alignItems: "center",
-    paddingVertical: 18,
-    borderRadius: 12,
-    backgroundColor: "rgba(52,211,153,0.06)",
-    borderWidth: 1, borderColor: "rgba(52,211,153,0.18)",
+    alignItems: "center", paddingVertical: 18, borderRadius: 12,
+    backgroundColor: "rgba(52,211,153,0.06)", borderWidth: 1, borderColor: "rgba(52,211,153,0.18)",
   },
   successCheck: {
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: "rgba(52,211,153,0.14)",
     borderWidth: 2, borderColor: Colors.green,
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 12,
+    alignItems: "center", justifyContent: "center", marginBottom: 12,
   },
   successTitle: { fontSize: 17, fontWeight: "700", color: Colors.ink },
   successSub: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
-
-  // KPI grid
-  kpiGrid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 8,
-  },
+  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   kpi: {
-    flexBasis: "48%" as any,
-    flexGrow: 1,
+    flexBasis: "48%" as any, flexGrow: 1,
     backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
     borderRadius: 10, padding: 12,
   },
-  kpiL: {
-    fontSize: 10, color: Colors.ink3, fontWeight: "600",
-    textTransform: "uppercase", letterSpacing: 0.5,
-  },
-  kpiV: {
-    fontSize: 18, fontWeight: "700", color: Colors.ink, marginTop: 4, letterSpacing: -0.3,
-  },
+  kpiL: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
+  kpiV: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginTop: 4, letterSpacing: -0.3 },
 });
 
 export default OpenCloseCashModal;
