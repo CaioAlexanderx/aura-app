@@ -19,6 +19,13 @@
 // 07/05/2026 (hotfix): valores numericos do backend (Postgres NUMERIC)
 // vem como string. Normalizamos com toNum() antes de qualquer .toFixed
 // ou comparacao numerica.
+//
+// 08/05/2026 (hotfix): tela de sucesso pos-fechamento sumia se onSuccess
+// invalidasse o cache antes do user clicar "Baixar PDF". Agora:
+//   - mode trava em "fechar" enquanto closeResult existir
+//   - onSuccess() so dispara quando o modal fecha (handleCloseModal)
+//   - sessaoSnapshot preserva opened_by/opened_at pra montar o PDF
+//   - tela 4 nao depende mais de sessaoAtiva, so de closeResult
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -95,9 +102,6 @@ export function OpenCloseCashModal({
   onClose,
   onSuccess,
 }: Props) {
-  const isAberto = !!sessaoAtiva;
-  const mode: "abrir" | "fechar" = isAberto ? "fechar" : "abrir";
-
   // ── ABRIR state ──
   const [openStep, setOpenStep] = useState<OpenStep>(1);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string; role?: string | null } | null>(null);
@@ -110,6 +114,10 @@ export function OpenCloseCashModal({
   const [obsInput, setObsInput] = useState("");
   const [submittingClose, setSubmittingClose] = useState(false);
   const [closeResult, setCloseResult] = useState<CaixaFechamentoFull | null>(null);
+  // Snapshot da sessao no momento de iniciar o fluxo de fechar.
+  // Preserva opened_by, opened_at, troco_inicial mesmo apos o cache do
+  // useCaixa do pai retornar null (sessao ja fechada no banco).
+  const [sessaoSnapshot, setSessaoSnapshot] = useState<CaixaSessaoAtiva | null>(null);
 
   // ── Reset ao abrir/fechar ──
   useEffect(() => {
@@ -123,8 +131,25 @@ export function OpenCloseCashModal({
       setObsInput("");
       setSubmittingClose(false);
       setCloseResult(null);
+      setSessaoSnapshot(null);
     }
   }, [visible]);
+
+  // Sempre que sessaoAtiva mudar e for valida, atualiza o snapshot.
+  // Snapshot so e usado quando o cache do pai cai pra null pos-fechamento.
+  useEffect(() => {
+    if (sessaoAtiva) setSessaoSnapshot(sessaoAtiva);
+  }, [sessaoAtiva]);
+
+  // ── Mode lock ──
+  // Se ja temos closeResult, ficamos em "fechar" pra renderizar a tela de
+  // sucesso. Senao, derivamos de sessaoAtiva normalmente.
+  const isAberto = !!sessaoAtiva;
+  const mode: "abrir" | "fechar" = (closeResult || isAberto) ? "fechar" : "abrir";
+
+  // Sessao efetiva pro fluxo de fechar — preferimos snapshot quando o
+  // sessaoAtiva ja virou null (cache invalidou pos-fechamento).
+  const sessaoEff: CaixaSessaoAtiva | null = sessaoAtiva || sessaoSnapshot;
 
   // ── Funcionarios (so plano Negocio+; useQuery cacheado) ──
   const { data: empData, isFetching: loadingEmployees } = useQuery({
@@ -141,13 +166,20 @@ export function OpenCloseCashModal({
     }));
   }, [empData]);
 
-  // ── Calculos do fechamento (ao vivo, baseado no sessaoAtiva) ──
-  const trocoInicial = toNum(sessaoAtiva?.troco_inicial);
-  const vendasEmDinheiro = toNum(sessaoAtiva?.totais_ao_vivo?.dinheiro);
+  // ── Calculos do fechamento (ao vivo, baseado no sessaoEff) ──
+  const trocoInicial = toNum(sessaoEff?.troco_inicial);
+  const vendasEmDinheiro = toNum(sessaoEff?.totais_ao_vivo?.dinheiro);
   const dinheiroEsperado = Math.round((trocoInicial + vendasEmDinheiro) * 100) / 100;
   const dinheiroContado = parseMoeda(dinheiroInput);
   const diferenca = dinheiroInput ? Math.round((dinheiroContado - dinheiroEsperado) * 100) / 100 : 0;
   const hasDigitedClose = dinheiroInput.length > 0;
+
+  // ── Wrapper do close — invalida cache do pai SO agora (apos user fechar
+  //    o modal). Isso evita que sessaoAtiva vire null no meio da tela 4.
+  function handleCloseModal() {
+    if (closeResult || mode === "abrir") onSuccess?.();
+    onClose();
+  }
 
   // ── Submit Abrir ──
   async function handleAbrir() {
@@ -165,7 +197,7 @@ export function OpenCloseCashModal({
     try {
       await caixaApi.abrir(companyId, troco, selectedEmployee.id);
       toast.success("Caixa aberto!");
-      onSuccess?.();
+      onSuccess?.();   // ok aqui — abrir nao tem tela de sucesso, fecha modal logo apos
       onClose();
     } catch (err: any) {
       toast.error(err?.data?.error || err?.message || "Erro ao abrir o caixa");
@@ -181,6 +213,10 @@ export function OpenCloseCashModal({
       toast.error("Digite o valor contado");
       return;
     }
+    // Garante snapshot ANTES do POST pra preservar dados da sessao
+    // (caso useEffect ainda nao tenha atualizado).
+    if (sessaoAtiva && !sessaoSnapshot) setSessaoSnapshot(sessaoAtiva);
+
     setSubmittingClose(true);
     try {
       const res = await caixaApi.fechar(
@@ -190,7 +226,8 @@ export function OpenCloseCashModal({
       );
       setCloseResult(res.fechamento);
       setCloseStep(4); // tela de sucesso
-      onSuccess?.();
+      // NAO chama onSuccess aqui — invalidacao do cache acontece em
+      // handleCloseModal pra nao desmontar a tela 4.
     } catch (err: any) {
       toast.error(err?.data?.error || err?.message || "Erro ao fechar o caixa");
     } finally {
@@ -200,7 +237,9 @@ export function OpenCloseCashModal({
 
   // ── Gerar PDF a partir do closeResult ──
   function handleDownloadPdf() {
-    if (!closeResult || !sessaoAtiva) return;
+    if (!closeResult) return;
+    const operatorName = sessaoEff?.opened_by?.name || "Operador";
+    const openedAtIso = sessaoEff?.opened_at || closeResult.closed_at || new Date().toISOString();
     const paymentMix: CashClosePaymentRow[] = [
       { label: "Pix", amount: toNum(closeResult.total_pix) },
       { label: "Credito", amount: toNum(closeResult.total_cartao_credito) },
@@ -213,8 +252,8 @@ export function OpenCloseCashModal({
     openCashClosePdf({
       companyName,
       companyCnpj: companyCnpj || null,
-      operatorName: sessaoAtiva.opened_by.name,
-      openedAtIso: sessaoAtiva.opened_at,
+      operatorName,
+      openedAtIso,
       closedAtIso: closeResult.closed_at || new Date().toISOString(),
       sessaoLabel: closeResult.sessao_label || undefined,
       salesCount: toNum(closeResult.sales_count),
@@ -260,7 +299,7 @@ export function OpenCloseCashModal({
 
   return (
     <View style={s.overlay}>
-      <Pressable style={s.backdrop} onPress={onClose} />
+      <Pressable style={s.backdrop} onPress={handleCloseModal} />
       <View style={[s.panel, IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]}>
 
         {/* Header */}
@@ -271,7 +310,7 @@ export function OpenCloseCashModal({
             </View>
             <Text style={s.headerTitle}>{headerTitle}</Text>
           </View>
-          <Pressable onPress={onClose} style={s.closeBtn}>
+          <Pressable onPress={handleCloseModal} style={s.closeBtn}>
             <Icon name="x" size={14} color={Colors.ink3} />
           </Pressable>
         </View>
@@ -354,7 +393,7 @@ export function OpenCloseCashModal({
               <View style={s.stepFooter}>
                 <Text style={s.footerTxt}>PASSO 1 DE 3</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Pressable style={s.btnSec} onPress={onClose}>
+                  <Pressable style={s.btnSec} onPress={handleCloseModal}>
                     <Text style={s.btnSecTxt}>Cancelar</Text>
                   </Pressable>
                   <Pressable
@@ -458,14 +497,14 @@ export function OpenCloseCashModal({
           )}
 
           {/* ═══ FECHAR ═══ */}
-          {mode === "fechar" && closeStep === 1 && sessaoAtiva && (
+          {mode === "fechar" && closeStep === 1 && sessaoEff && (
             <>
               <View style={s.infoStrip}>
                 <Text style={s.infoStripTitle}>
-                  Caixa aberto em {new Date(sessaoAtiva.opened_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  Caixa aberto em {new Date(sessaoEff.opened_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                 </Text>
                 <Text style={s.infoStripSub}>
-                  {sessaoAtiva.opened_by.name} · troco {fmt(trocoInicial)}
+                  {sessaoEff.opened_by.name} · troco {fmt(trocoInicial)}
                 </Text>
               </View>
               <Text style={[s.sectionTitle, { marginTop: 14 }]}>O que e esperado em caixa</Text>
@@ -526,7 +565,7 @@ export function OpenCloseCashModal({
               <View style={s.stepFooter}>
                 <Text style={s.footerTxt}>PASSO 1 DE 3</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Pressable style={s.btnSec} onPress={onClose}>
+                  <Pressable style={s.btnSec} onPress={handleCloseModal}>
                     <Text style={s.btnSecTxt}>Cancelar</Text>
                   </Pressable>
                   <Pressable
@@ -591,7 +630,7 @@ export function OpenCloseCashModal({
             </>
           )}
 
-          {mode === "fechar" && closeStep === 3 && sessaoAtiva && (
+          {mode === "fechar" && closeStep === 3 && sessaoEff && (
             <>
               <Text style={s.sectionTitle}>Conferencia de caixa</Text>
               <View style={s.summaryBox}>
@@ -656,7 +695,9 @@ export function OpenCloseCashModal({
           )}
 
           {/* ═══ TELA DE SUCESSO POS-FECHAMENTO ═══ */}
-          {mode === "fechar" && closeStep === 4 && closeResult && sessaoAtiva && (
+          {/* IMPORTANTE: nao depende mais de sessaoAtiva/sessaoEff. closeResult tem
+              tudo o que precisamos pra renderizar a tela. */}
+          {mode === "fechar" && closeStep === 4 && closeResult && (
             <>
               <View style={s.successHero}>
                 <View style={s.successCheck}>
@@ -697,7 +738,7 @@ export function OpenCloseCashModal({
               </View>
 
               <View style={s.stepFooter}>
-                <Pressable style={s.btnSec} onPress={onClose}>
+                <Pressable style={s.btnSec} onPress={handleCloseModal}>
                   <Text style={s.btnSecTxt}>Fechar</Text>
                 </Pressable>
                 <Pressable style={[s.btnPri, { minWidth: 200 }]} onPress={handleDownloadPdf}>
