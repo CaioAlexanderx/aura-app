@@ -15,6 +15,10 @@
 // empregados retornados por employeesApi (que ja sao filtrados por
 // plano no backend - so plano Negocio+ tem empregados). Quando o
 // backend ganhar permissoes granulares, basta filtrar aqui.
+//
+// 07/05/2026 (hotfix): valores numericos do backend (Postgres NUMERIC)
+// vem como string. Normalizamos com toNum() antes de qualquer .toFixed
+// ou comparacao numerica.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -31,7 +35,16 @@ import { IS_WEB, webOnly } from "./types";
 import { openCashClosePdf, type CashClosePaymentRow } from "@/utils/cashClosePdf";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
-const fmt = (v: number) => "R$ " + v.toFixed(2).replace(".", ",");
+// Postgres NUMERIC chega como string. toNum() faz a coersao defensiva pra
+// number sem cair em NaN (NaN || 0 retorna NaN — usamos isFinite check).
+function toNum(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  const n = parseFloat(String(v));
+  return isFinite(n) ? n : 0;
+}
+
+const fmt = (v: unknown) => "R$ " + toNum(v).toFixed(2).replace(".", ",");
 
 function parseMoeda(raw: string): number {
   const clean = (raw || "").replace(/[^\d,.-]/g, "").replace(",", ".");
@@ -129,8 +142,8 @@ export function OpenCloseCashModal({
   }, [empData]);
 
   // ── Calculos do fechamento (ao vivo, baseado no sessaoAtiva) ──
-  const trocoInicial = sessaoAtiva?.troco_inicial || 0;
-  const vendasEmDinheiro = sessaoAtiva?.totais_ao_vivo?.dinheiro || 0;
+  const trocoInicial = toNum(sessaoAtiva?.troco_inicial);
+  const vendasEmDinheiro = toNum(sessaoAtiva?.totais_ao_vivo?.dinheiro);
   const dinheiroEsperado = Math.round((trocoInicial + vendasEmDinheiro) * 100) / 100;
   const dinheiroContado = parseMoeda(dinheiroInput);
   const diferenca = dinheiroInput ? Math.round((dinheiroContado - dinheiroEsperado) * 100) / 100 : 0;
@@ -189,12 +202,12 @@ export function OpenCloseCashModal({
   function handleDownloadPdf() {
     if (!closeResult || !sessaoAtiva) return;
     const paymentMix: CashClosePaymentRow[] = [
-      { label: "Pix", amount: closeResult.total_pix || 0 },
-      { label: "Credito", amount: closeResult.total_cartao_credito || 0 },
-      { label: "Debito", amount: closeResult.total_cartao_debito || 0 },
-      { label: "Dinheiro", amount: closeResult.total_dinheiro || 0 },
-      { label: "Fiado", amount: closeResult.total_fiado || 0 },
-      { label: "Outros", amount: closeResult.total_outros || 0 },
+      { label: "Pix", amount: toNum(closeResult.total_pix) },
+      { label: "Credito", amount: toNum(closeResult.total_cartao_credito) },
+      { label: "Debito", amount: toNum(closeResult.total_cartao_debito) },
+      { label: "Dinheiro", amount: toNum(closeResult.total_dinheiro) },
+      { label: "Fiado", amount: toNum(closeResult.total_fiado) },
+      { label: "Outros", amount: toNum(closeResult.total_outros) },
     ].filter((p) => p.amount > 0);
 
     openCashClosePdf({
@@ -204,14 +217,14 @@ export function OpenCloseCashModal({
       openedAtIso: sessaoAtiva.opened_at,
       closedAtIso: closeResult.closed_at || new Date().toISOString(),
       sessaoLabel: closeResult.sessao_label || undefined,
-      salesCount: closeResult.sales_count || 0,
-      newCustomersCount: closeResult.new_customers_count || 0,
-      grossRevenue: closeResult.total_geral || 0,
+      salesCount: toNum(closeResult.sales_count),
+      newCustomersCount: toNum(closeResult.new_customers_count),
+      grossRevenue: toNum(closeResult.total_geral),
       trocoInicial,
       vendasEmDinheiro,
-      dinheiroEsperado: closeResult.dinheiro_esperado || dinheiroEsperado,
-      dinheiroContado: closeResult.dinheiro_contado || dinheiroContado,
-      diferenca: closeResult.diferenca != null ? closeResult.diferenca : diferenca,
+      dinheiroEsperado: closeResult.dinheiro_esperado != null ? toNum(closeResult.dinheiro_esperado) : dinheiroEsperado,
+      dinheiroContado: closeResult.dinheiro_contado != null ? toNum(closeResult.dinheiro_contado) : dinheiroContado,
+      diferenca: closeResult.diferenca != null ? toNum(closeResult.diferenca) : diferenca,
       observacao: closeResult.observacao || obsInput.trim() || null,
       paymentMix,
     });
@@ -238,6 +251,12 @@ export function OpenCloseCashModal({
   // ── Stepper labels ──
   const openLabels = ["FUNCIONARIO", "TROCO", "CONFIRMAR"];
   const closeLabels = ["CONTAGEM", "OBSERVACAO", "REVISAR"];
+
+  // ── Valores do closeResult ja normalizados (usados na tela 4 de sucesso) ──
+  const resultDiferenca = closeResult ? toNum(closeResult.diferenca) : 0;
+  const resultGeral     = closeResult ? toNum(closeResult.total_geral) : 0;
+  const resultSales     = closeResult ? toNum(closeResult.sales_count) : 0;
+  const resultNewCust   = closeResult ? toNum(closeResult.new_customers_count) : 0;
 
   return (
     <View style={s.overlay}>
@@ -652,27 +671,27 @@ export function OpenCloseCashModal({
               <View style={s.kpiGrid}>
                 <View style={s.kpi}>
                   <Text style={s.kpiL}>Vendas</Text>
-                  <Text style={[s.kpiV, { color: "#a78bfa" }]}>{closeResult.sales_count || 0}</Text>
+                  <Text style={[s.kpiV, { color: "#a78bfa" }]}>{resultSales}</Text>
                 </View>
                 <View style={s.kpi}>
                   <Text style={s.kpiL}>Clientes novos</Text>
-                  <Text style={[s.kpiV, { color: "#a78bfa" }]}>{closeResult.new_customers_count || 0}</Text>
+                  <Text style={[s.kpiV, { color: "#a78bfa" }]}>{resultNewCust}</Text>
                 </View>
                 <View style={s.kpi}>
                   <Text style={s.kpiL}>Faturamento</Text>
-                  <Text style={[s.kpiV, { color: Colors.green }]}>{fmt(closeResult.total_geral || 0)}</Text>
+                  <Text style={[s.kpiV, { color: Colors.green }]}>{fmt(resultGeral)}</Text>
                 </View>
                 <View style={s.kpi}>
                   <Text style={s.kpiL}>Diferenca</Text>
                   <Text
                     style={[
                       s.kpiV,
-                      { color: (closeResult.diferenca || 0) === 0 ? Colors.green : (closeResult.diferenca || 0) > 0 ? "#a78bfa" : Colors.red },
+                      { color: resultDiferenca === 0 ? Colors.green : resultDiferenca > 0 ? "#a78bfa" : Colors.red },
                     ]}
                   >
-                    {(closeResult.diferenca || 0) === 0
+                    {resultDiferenca === 0
                       ? "Exato"
-                      : ((closeResult.diferenca || 0) > 0 ? "+ " : "- ") + fmt(Math.abs(closeResult.diferenca || 0))}
+                      : (resultDiferenca > 0 ? "+ " : "- ") + fmt(Math.abs(resultDiferenca))}
                   </Text>
                 </View>
               </View>
