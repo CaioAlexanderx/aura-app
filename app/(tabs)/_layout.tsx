@@ -89,8 +89,8 @@ function useWebFonts() {
 .aura-nav-item { transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; }
 .aura-nav-item:hover { transform: translateX(2px); }
 .aura-nav-item .aura-nav-tile { transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
-.aura-nav-item:not(.is-active):hover .aura-nav-tile { background: rgba(124,58,237,0.10) !important; color: #a78bfa !important; border-color: rgba(120,100,240,0.30) !important; }
-.aura-nav-item:not(.is-active):hover { background: rgba(124,58,237,0.06); color: #f0edff !important; }
+.aura-nav-item:not(.is-active):hover .aura-nav-tile { background: rgba(124,58,237,0.10) !important; color: var(--aura-sb-violet3, #a78bfa) !important; border-color: rgba(120,100,240,0.30) !important; }
+.aura-nav-item:not(.is-active):hover { background: rgba(124,58,237,0.06); color: var(--aura-sb-ink, #f0edff) !important; }
 .aura-fa-row { transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
 .aura-fa-row:hover { background: rgba(124,58,237,0.10); }
 .aura-fa-row .aura-fa-chev { opacity: 0; transition: opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -413,6 +413,10 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       background: sbBg,
       borderRight: "1px solid " + sbBorder,
       transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+      // CSS variables pra hover rules ficarem theme-aware (fix bug 08/05/2026
+      // onde cor de hover #f0edff dava texto branco em fundo claro no light mode)
+      ["--aura-sb-ink" as any]: C.ink,
+      ["--aura-sb-violet3" as any]: C.violet3,
     } as any}>
       {/* Aurora drift */}
       <div className={"aura-sb-aurora " + (isDark ? "aura-sb-aurora-dark" : "aura-sb-aurora-light")} />
