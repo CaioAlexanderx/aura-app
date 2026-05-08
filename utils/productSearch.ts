@@ -17,6 +17,13 @@
 // Este módulo extrai a lógica do PDV (que funciona) pra ambos consumirem.
 // Adicionalmente, o haystack agora inclui `brand` — se o backend devolver
 // marca separada do nome, ainda assim a busca encontra.
+//
+// 08/05/2026 (fix): produtos com color=hex (#000000) eram invisíveis ao
+// buscar por nome de cor ("preto"). Agora hexToName traduz e adiciona o
+// nome traduzido ao haystack ao lado do hex literal — busca por nome
+// passa a casar e busca por hex (raro mas válido) continua funcionando.
+
+import { hexToName } from "@/utils/colorNames";
 
 export function normalizeText(s: any): string {
   return String(s ?? "")
@@ -41,7 +48,13 @@ export type SearchableProduct = {
 // pesquisáveis do produto. Útil quando o consumidor quer cachear via
 // useMemo (ex.: PDV monta um Map<id, haystack> pra evitar reprocessar
 // a cada digitação).
+//
+// 08/05: se `color` for hex, expandimos pra incluir o nome traduzido pt-BR
+// no haystack (ex.: "#000000" → "preto" também entra). Isso permite que
+// `buscar("preto")` ache produtos cadastrados via color picker.
 export function buildProductHaystack(p: SearchableProduct | any): string {
+  const colorRaw = p?.color ? String(p.color) : "";
+  const colorTranslated = colorRaw ? hexToName(colorRaw) : "";
   return normalizeText(
     [
       p?.name,
@@ -49,7 +62,10 @@ export function buildProductHaystack(p: SearchableProduct | any): string {
       p?.sku,
       p?.code,
       p?.category,
-      p?.color,
+      colorRaw,
+      // Inclui nome traduzido só se hexToName devolveu algo diferente do input
+      // (caso contrário seria duplicação literal sem ganho).
+      colorTranslated && colorTranslated !== colorRaw ? colorTranslated : null,
       p?.size,
       p?.brand,
     ]
