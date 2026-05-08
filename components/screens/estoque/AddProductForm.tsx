@@ -580,6 +580,9 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <ProductVariationsSection
           productId={editProduct.id}
           productName={name}
+          parentColor={editProduct.color || null}
+          parentSize={editProduct.size || null}
+          parentStock={editProduct.stock || null}
         />
       )}
 
