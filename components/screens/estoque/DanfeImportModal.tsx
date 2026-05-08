@@ -289,6 +289,16 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
   const selectedCount = items.filter((it) => it.selected).length;
   const allSelected = items.length > 0 && selectedCount === items.length;
 
+  // ── Mapinha de cor por nome de categoria pra exibir dot na linha ──
+  // (FIX 08/05/2026: useMemo MOVIDO PRA ANTES do early return — antes vinha
+  // depois de `if (!visible) return null` o que violava Rules of Hooks e
+  // disparava React error #310 quando user abria o modal pela 1a vez.)
+  const catByName: Record<string, ProductCategory> = useMemo(() => {
+    const m: Record<string, ProductCategory> = {};
+    for (const c of catList) m[c.name.toLowerCase()] = c;
+    return m;
+  }, [catList]);
+
   if (!visible) return null;
 
   // ── Estilo do painel — glassmorphism violeta canonico ──
@@ -304,13 +314,6 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
 
   // O modal cresce no passo review (tabela 7 colunas).
   const isWideStep = step === "review";
-
-  // ── Mapinha de cor por nome de categoria pra exibir dot na linha ──
-  const catByName: Record<string, ProductCategory> = useMemo(() => {
-    const m: Record<string, ProductCategory> = {};
-    for (const c of catList) m[c.name.toLowerCase()] = c;
-    return m;
-  }, [catList]);
 
   return (
     <View style={s.overlay}>
