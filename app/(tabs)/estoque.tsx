@@ -373,7 +373,9 @@ export default function EstoqueScreen() {
     return arr;
   }, [filtered, sortOrder]);
 
-  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + sortOrder);
+  // Pagination key inclui catsMulti pra resetar página quando user
+  // troca categorias no wide layout (multi-select dropdown).
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + catsMulti.join(",") + sortOrder);
   const lowStock = products.filter(p => p.stock <= p.minStock && p.unit !== "srv");
   const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
