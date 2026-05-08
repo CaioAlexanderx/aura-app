@@ -31,7 +31,9 @@ export function useEstoquePremiumStyles() {
       ".aura-est-row:hover { background: var(--aura-est-row-hover, rgba(124,58,237,0.06)) !important; }\n" +
       ".aura-est-row:hover .aura-est-row-actions { opacity: 1 !important; }\n" +
       ".aura-est-rise { animation: auraEstRiseIn 0.55s cubic-bezier(0.4,0,0.2,1) both; }\n" +
-      ".aura-est-search-shimmer { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, rgba(124,58,237,0.06) 50%, transparent 70%); animation: auraEstPillSweep 5s ease-in-out infinite; }\n";
+      ".aura-est-search-shimmer { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, rgba(124,58,237,0.06) 50%, transparent 70%); animation: auraEstPillSweep 5s ease-in-out infinite; }\n" +
+      ".aura-est-card-actions { opacity: 0; transition: opacity 0.2s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }\n" +
+      ".aura-est-card:hover .aura-est-card-actions { opacity: 1; pointer-events: auto; }\n";
     document.head.appendChild(st);
   }, []);
 }

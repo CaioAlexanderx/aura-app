@@ -3,6 +3,11 @@
 // Cards 200px com thumbnail, variante, preço, estoque. Click =
 // editar (ou selecionar quando bulk). Reaproveita os mesmos
 // handlers do ProductRow.
+//
+// 08/05/2026 — adicionadas ações inline (edit/link/delete) com
+// hover-reveal no canto inferior direito do card. Paridade com
+// ProductTableWeb. CSS .aura-est-card-actions vive em
+// useEstoquePremiumStyles.
 // ============================================================
 import { Platform } from "react-native";
 import { useColors, useThemeStore } from "@/constants/colors";
@@ -25,7 +30,7 @@ type Props = {
   canLink: boolean;
 };
 
-export function ProductGridWeb({ items, onEdit, bulkMode, bulkSelected, onSelect }: Props) {
+export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   if (Platform.OS !== "web") return null;
@@ -33,6 +38,31 @@ export function ProductGridWeb({ items, onEdit, bulkMode, bulkSelected, onSelect
   const accent = C.violet;
   const surface = isDark ? "rgba(20,14,38,0.55)" : "rgba(255,255,255,0.70)";
   const border = isDark ? "rgba(120,100,240,0.18)" : "rgba(109,40,217,0.10)";
+
+  // Botão de ação inline. backdrop-filter + bg semitransparente pra ler em
+  // cima de qualquer thumbnail. stopPropagation pra click não abrir editor.
+  const ActionBtn = ({ icon, danger, onClick, title }: {
+    icon: string; danger?: boolean; onClick: () => void; title: string;
+  }) => (
+    <button
+      onClick={(e: any) => { e.stopPropagation(); onClick(); }}
+      title={title}
+      className="aura-est-pressable"
+      style={{
+        width: 30, height: 30, borderRadius: 8,
+        border: "1px solid " + (isDark ? "rgba(255,255,255,0.18)" : "rgba(109,40,217,0.20)"),
+        background: isDark ? "rgba(10,6,24,0.78)" : "rgba(255,255,255,0.92)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        color: danger ? (isDark ? "#f87171" : "#dc2626") : (isDark ? "#f0edff" : "#1a1a2e"),
+        display: "grid", placeItems: "center",
+        cursor: "pointer", padding: 0,
+        boxShadow: "0 2px 6px rgba(20,10,40,0.18)",
+      } as any}
+    >
+      <Icon name={icon as any} size={13} color={danger ? (isDark ? "#f87171" : "#dc2626") : (isDark ? "#f0edff" : "#1a1a2e")} />
+    </button>
+  );
 
   if (items.length === 0) {
     return (
@@ -57,7 +87,7 @@ export function ProductGridWeb({ items, onEdit, bulkMode, bulkSelected, onSelect
         return (
           <div key={p.id}
             onClick={() => { if (bulkMode) onSelect(p.id); else if (onEdit) onEdit(p); }}
-            className="aura-est-pressable aura-est-lift"
+            className="aura-est-card aura-est-pressable aura-est-lift"
             style={{
               background: surface,
               border: "1px solid " + (isSelected ? accent : border),
@@ -101,6 +131,17 @@ export function ProductGridWeb({ items, onEdit, bulkMode, bulkSelected, onSelect
                 } as any}>
                   {isSelected ? <Icon name="check" size={12} color="#fff" /> : null}
                 </span>
+              ) : null}
+              {/* Ações inline (hover-reveal) — só quando NÃO está em bulk mode */}
+              {!bulkMode ? (
+                <div className="aura-est-card-actions" style={{
+                  position: "absolute", bottom: 8, right: 8,
+                  display: "flex", gap: 4,
+                } as any}>
+                  {onEdit ? <ActionBtn icon="edit" onClick={() => onEdit(p)} title="Editar" /> : null}
+                  {canLink && onLink ? <ActionBtn icon="globe" onClick={() => onLink(p)} title="Vincular CNPJ" /> : null}
+                  {onDelete ? <ActionBtn icon="trash" danger onClick={() => onDelete(p.id)} title="Excluir" /> : null}
+                </div>
               ) : null}
             </div>
             <div style={{ padding: "2px 4px 4px" } as any}>
