@@ -1,10 +1,11 @@
 // ============================================================
 // AURA. — CompanySwitcher (Multi-CNPJ M1-06)
 // Dropdown na sidebar pra trocar de empresa, ver "Todas" e
-// adicionar nova empresa. Renderiza em 3 estados:
-//   - 1 empresa: mostra info dela, dropdown com "+ Adicionar"
-//   - 2+ empresas: lista todas + opção "Todas as empresas"
-//   - 0 (loading): placeholder
+// adicionar nova empresa. Renderiza em 4 estados:
+//   - collapsed: ícone redondo (sidebar recolhida)
+//   - variant "card": cartão membership premium (Sidebar v2 — 08/05/2026)
+//   - variant "sidebar": versão antiga compacta (fallback)
+//   - variant "mobile": layout horizontal pra MBar mobile
 // ============================================================
 import { useState, useMemo } from "react";
 import {
@@ -16,7 +17,7 @@ import {
   Modal,
   ScrollView,
 } from "react-native";
-import { useColors, Colors } from "@/constants/colors";
+import { useColors, Colors, useThemeStore } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { planLabel, maskCnpj, type SwitcherCompany } from "@/services/multicnpj";
@@ -24,8 +25,12 @@ import { AddCompanyModal } from "@/components/AddCompanyModal";
 
 type Props = {
   collapsed?: boolean;
-  /** Quando true, renderiza otimizado pra MBar mobile (sem chevron, layout horizontal). */
-  variant?: "sidebar" | "mobile";
+  /**
+   * - "sidebar" (default): versão antiga compacta com bg4 + chevron
+   * - "card": cartão membership premium (Sidebar v2 — gradient + shimmer + ponto verde)
+   * - "mobile": layout horizontal pra MBar mobile (sem chevron)
+   */
+  variant?: "sidebar" | "card" | "mobile";
 };
 
 function planBadgeColor(plan: string) {
@@ -43,6 +48,7 @@ function planBadgeColor(plan: string) {
 
 export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Props) {
   const C = useColors();
+  const { isDark } = useThemeStore();
   const {
     company,
     availableCompanies,
@@ -61,6 +67,7 @@ export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Prop
     : company?.name || company?.legal_name || (companiesLoading ? "Carregando…" : "Sem empresa");
   const currentPlan = consolidatedView ? "Consolidado" : company?.plan ? planLabel(company.plan) : "—";
   const currentBadgeColor = consolidatedView ? "#7c3aed" : planBadgeColor(company?.plan || "");
+  const crestLetter = consolidatedView ? "T" : (currentName || "?").charAt(0).toUpperCase();
 
   const list = availableCompanies;
   const hasMultiple = list.length >= 2;
@@ -134,6 +141,128 @@ export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Prop
     );
   }
 
+  // ───────────────────────────────────────────────────────────
+  // CARD variant (Sidebar Premium v2) — apenas no web. No native
+  // cai no fallback "sidebar" pra manter compat.
+  // ───────────────────────────────────────────────────────────
+  if (variant === "card" && Platform.OS === "web") {
+    const cardBg = isDark
+      ? "linear-gradient(135deg, rgba(124,58,237,0.30) 0%, rgba(91,140,255,0.18) 50%, rgba(20,24,48,0.7) 100%)"
+      : "linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(91,140,255,0.08) 50%, rgba(255,255,255,0.95) 100%)";
+    const cardBorder = isDark ? "rgba(124,58,237,0.32)" : "rgba(124,58,237,0.20)";
+    const cardShadow = isDark
+      ? "inset 0 1px 0 rgba(255,255,255,0.08), 0 6px 18px -8px rgba(124,58,237,0.5)"
+      : "inset 0 1px 0 rgba(255,255,255,0.6), 0 6px 18px -10px rgba(124,58,237,0.3)";
+    return (
+      <>
+        <a
+          onClick={(e: any) => { e.preventDefault(); handleOpen(); }}
+          className={"aura-ws-card aura-ws-shimmer" + (!isDark ? " aura-ws-shimmer-light" : "")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: 14,
+            borderRadius: 16,
+            position: "relative",
+            overflow: "hidden",
+            cursor: "pointer",
+            background: cardBg,
+            border: "1px solid " + cardBorder,
+            boxShadow: cardShadow,
+            textDecoration: "none",
+          } as any}
+        >
+          {/* Crest */}
+          <div style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            background: "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            fontFamily: "'Instrument Serif', Georgia, serif",
+            fontSize: 18,
+            flexShrink: 0,
+            boxShadow: "0 2px 8px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.2)",
+            position: "relative",
+            zIndex: 1,
+          } as any}>
+            {consolidatedView ? (
+              <Icon name="globe" size={16} color="#fff" />
+            ) : (
+              <span>{crestLetter}</span>
+            )}
+          </div>
+          {/* Body */}
+          <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 } as any}>
+            <div style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: C.ink,
+              letterSpacing: "-0.1px",
+              lineHeight: 1.1,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            } as any}>{currentName}</div>
+            <div style={{
+              marginTop: 5,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              color: currentBadgeColor,
+              letterSpacing: "0.4px",
+              textTransform: "uppercase",
+            } as any}>
+              <span className="aura-plan-dot" />
+              <span>{consolidatedView ? "Consolidado" : "Plano " + currentPlan}</span>
+              {hasMultiple && !consolidatedView && (
+                <span style={{ color: C.ink3, fontWeight: 500, letterSpacing: 0, textTransform: "none", fontSize: 10 } as any}>
+                  · {list.length} empresas
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Chevron */}
+          {switching ? (
+            <ActivityIndicator size="small" color={C.ink3} />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.ink3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.7, position: "relative", zIndex: 1 } as any}>
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          )}
+        </a>
+        <DropdownModal
+          visible={open}
+          onClose={() => setOpen(false)}
+          list={list}
+          currentCompanyId={company?.id || null}
+          consolidatedView={consolidatedView}
+          hasMultiple={hasMultiple}
+          companiesLoading={companiesLoading}
+          switching={switching}
+          onPick={handlePick}
+          onAdd={() => {
+            setOpen(false);
+            setAddOpen(true);
+          }}
+          C={C}
+        />
+        <AddCompanyModal visible={addOpen} onClose={() => setAddOpen(false)} />
+      </>
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────
+  // sidebar (compacto antigo) + mobile (layout horizontal)
+  // Mantido pra compat: o MBar mobile usa variant="mobile" e
+  // qualquer caller que não passar variant continua funcionando.
+  // ───────────────────────────────────────────────────────────
   return (
     <>
       <Pressable
