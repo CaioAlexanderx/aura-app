@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, useColors, useThemeStore } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -33,9 +34,38 @@ import { companiesApi } from "@/services/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
 import { productLinksApi, type AggregatedProduct } from "@/services/productLinks";
+// Sidebar-style premium components (Estoque v2 — 08/05/2026).
+// Cada um vive em seu próprio arquivo pra manter este screen <50KB e
+// permitir backtracking limpo. Todos web-only (Platform.OS check interno).
+import { useEstoquePremiumStyles } from "@/components/screens/estoque/useEstoquePremiumStyles";
+import { EstoqueHero } from "@/components/screens/estoque/EstoqueHero";
+import { EstoqueKpiStrip } from "@/components/screens/estoque/EstoqueKpiStrip";
+import { CategoryDropdownWeb } from "@/components/screens/estoque/CategoryDropdownWeb";
+import { ProductTableWeb } from "@/components/screens/estoque/ProductTableWeb";
+import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
+// import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const PAGE_SIZE = 20;
+// Thresholds reativos pro layout split (table+rail). 1100px = mostra
+// rail; 900px = mostra Table/Grid (abaixo cai pra ProductRow).
+const RAIL_BREAKPOINT = 1100;
+const TABLE_BREAKPOINT = 900;
+
+function useScreenWidth(): number {
+  const [w, setW] = useState(
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? window.innerWidth
+      : Dimensions.get("window").width
+  );
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
 
 function SummaryCard({ label, value, color, sub, onPress }: { label: string; value: string; color?: string; sub?: string; onPress?: () => void }) {
   const [h, sH] = useState(false); const w = Platform.OS === "web";
@@ -215,15 +245,28 @@ const agg = StyleSheet.create({
 });
 
 export default function EstoqueScreen() {
+  useEstoquePremiumStyles();
   const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useProducts();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
+  const C = useColors();
+  const { isDark } = useThemeStore();
+  const screenW = useScreenWidth();
+  // Web-wide habilita Hero + KpiStrip + Table/Grid + multi-select cat.
+  // Em narrow web ou native, mantém o layout antigo (compat 100%).
+  const isWebWide = Platform.OS === "web" && screenW > TABLE_BREAKPOINT;
+  const showRailDefault = Platform.OS === "web" && screenW >= RAIL_BREAKPOINT;
 
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
+  // catFilter: single-select chip (narrow). catsMulti: dropdown (wide).
+  // effectiveCats abaixo combina os dois.
   const [catFilter, setCatFilter] = useState("Todos");
+  const [catsMulti, setCatsMulti] = useState<string[]>([]);
+  const [view, setView] = useState<"table" | "grid">("table");
+  const [showRail, setShowRail] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -269,7 +312,7 @@ export default function EstoqueScreen() {
   }, [scanOpen]);
 
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
-  const [sortOrder, setSortOrder] = useState<'recent' | 'price_desc' | 'price_asc'>('recent');
+  const [sortOrder, setSortOrder] = useState<"recent" | "price_desc" | "price_asc" | "low_stock">("recent");
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
   const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
 
@@ -291,6 +334,15 @@ export default function EstoqueScreen() {
   }, [managedCategoryNames, categories, products]);
 
   const filterCategories = ["Todos", ...allCategories];
+
+  // effectiveCats: combina single (catFilter) + multi (catsMulti).
+  // Wide usa o multi-select. Narrow usa o single-chip antigo.
+  // Vazio = "Todos".
+  const effectiveCats = useMemo<string[]>(() => {
+    if (isWebWide) return catsMulti;
+    return catFilter === "Todos" ? [] : [catFilter];
+  }, [isWebWide, catsMulti, catFilter]);
+
   // 07/05/2026: paridade com PDV via utils/productSearch — fix bug Davi.
   // Antes a busca falhava em três cenários reportados:
   //   - acentos no nome ("tenis" não achava "Tênis")
@@ -302,19 +354,21 @@ export default function EstoqueScreen() {
     const q = (search || "").trim();
     return products.filter(p => {
       const matchSearch = productMatchesSearch(p, q);
-      const matchCat = catFilter === "Todos" || p.category === catFilter;
+      const matchCat = effectiveCats.length === 0 || effectiveCats.includes(p.category);
       return matchSearch && matchCat;
     });
-  }, [products, search, catFilter]);
+  }, [products, search, effectiveCats]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    if (sortOrder === 'recent') {
+    if (sortOrder === "recent") {
       arr.sort((a, b) => new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime());
-    } else if (sortOrder === 'price_desc') {
+    } else if (sortOrder === "price_desc") {
       arr.sort((a, b) => ((b as any).price ?? 0) - ((a as any).price ?? 0));
-    } else if (sortOrder === 'price_asc') {
+    } else if (sortOrder === "price_asc") {
       arr.sort((a, b) => ((a as any).price ?? 0) - ((b as any).price ?? 0));
+    } else if (sortOrder === "low_stock") {
+      arr.sort((a, b) => a.stock - b.stock);
     }
     return arr;
   }, [filtered, sortOrder]);
@@ -415,36 +469,54 @@ export default function EstoqueScreen() {
     );
   }
 
+  // Helper: 4 botões de ação do header (reusados em wide e narrow)
+  const ActionButtons = () => (
+    <>
+      <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
+        <Icon name="star" size={14} color={Colors.violet3} />
+        <Text style={s.serviceBtnText}>+ Servico</Text>
+      </Pressable>
+      {!isDemo && (
+        <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
+          <Icon name="layers" size={14} color={Colors.violet3} />
+          <Text style={s.batchBtnText}>+ Em lote</Text>
+        </Pressable>
+      )}
+      {!isDemo && (
+        <Pressable onPress={() => setShowDanfeModal(true)} style={s.danfeBtn}>
+          <Icon name="file_text" size={14} color={Colors.violet3} />
+          <Text style={s.danfeBtnText}>Importar DANFE</Text>
+        </Pressable>
+      )}
+      <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
+        <Icon name="package" size={14} color="#fff" />
+        <Text style={s.addBtnText}>+ Produto</Text>
+      </Pressable>
+    </>
+  );
+
   return (
     <View style={s.wrapper}>
-      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-        <View style={s.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.pageTitle}>Estoque</Text>
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={isWebWide ? s.contentWide : s.content}>
+        {isWebWide ? (
+          <>
+            <EstoqueHero totalProducts={products.length} totalUnits={totalItems} lowCount={lowStock.length} />
+            <View style={[s.headerRow, { marginBottom: 18, marginTop: 4 }]}>
+              <View style={s.headerActions}>
+                <ActionButtons />
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={s.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.pageTitle}>Estoque</Text>
+            </View>
+            <View style={s.headerActions}>
+              <ActionButtons />
+            </View>
           </View>
-          <View style={s.headerActions}>
-            <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
-              <Icon name="star" size={14} color={Colors.violet3} />
-              <Text style={s.serviceBtnText}>+ Servico</Text>
-            </Pressable>
-            {!isDemo && (
-              <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
-                <Icon name="layers" size={14} color={Colors.violet3} />
-                <Text style={s.batchBtnText}>+ Em lote</Text>
-              </Pressable>
-            )}
-            {!isDemo && (
-              <Pressable onPress={() => setShowDanfeModal(true)} style={s.danfeBtn}>
-                <Icon name="file_text" size={14} color={Colors.violet3} />
-                <Text style={s.danfeBtnText}>Importar DANFE</Text>
-              </Pressable>
-            )}
-            <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
-              <Icon name="package" size={14} color="#fff" />
-              <Text style={s.addBtnText}>+ Produto</Text>
-            </Pressable>
-          </View>
-        </View>
+        )}
 
         {canLinkProducts && products.length > 0 && (
           <View style={s.multicnpjHint}>
@@ -456,11 +528,21 @@ export default function EstoqueScreen() {
         )}
 
         {products.length > 0 && (
-          <View style={s.summaryRow}>
-            <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
-            <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
-            <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
-          </View>
+          isWebWide ? (
+            <EstoqueKpiStrip
+              totalValue={totalValue}
+              totalProducts={products.length}
+              totalUnits={totalItems}
+              lowCount={lowStock.length}
+              onLowClick={lowStock.length > 0 ? () => setActiveTab(1) : undefined}
+            />
+          ) : (
+            <View style={s.summaryRow}>
+              <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
+              <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
+              <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
+            </View>
+          )
         )}
 
         {dupGroupsCount > 0 && !isDemo && (
@@ -574,32 +656,84 @@ export default function EstoqueScreen() {
                 </View>
               )}
             </View>
+            {/* Sort + view toggle */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
               <Text style={s.sortLabel}>Ordenar:</Text>
-              {(["recent", "price_desc", "price_asc"] as const).map((key) => {
-                const opts: Record<string, string> = { recent: "🕐 Últimos adicionados", price_desc: "↑ Maior preço", price_asc: "↓ Menor preço" };
+              {(["recent", "price_desc", "price_asc", "low_stock"] as const).map((key) => {
+                const opts: Record<string, string> = { recent: "🕐 Últimos adicionados", price_desc: "↑ Maior preço", price_asc: "↓ Menor preço", low_stock: "⚠ Menor estoque" };
                 return (
                   <Pressable key={key} onPress={() => setSortOrder(key)} style={[s.sortChip, sortOrder === key && s.sortChipActive]}>
                     <Text style={[s.sortChipText, sortOrder === key && s.sortChipTextActive]}>{opts[key]}</Text>
                   </Pressable>
                 );
               })}
+              {isWebWide && Platform.OS === "web" ? (
+                <>
+                  <View style={{ width: 12 } as any} />
+                  <View style={s.viewToggleWrap}>
+                    <Pressable onPress={() => setView("table")} style={[s.viewToggleBtn, view === "table" && s.viewToggleBtnActive]}>
+                      <Icon name="menu" size={14} color={view === "table" ? "#fff" : Colors.ink3} />
+                    </Pressable>
+                    <Pressable onPress={() => setView("grid")} style={[s.viewToggleBtn, view === "grid" && s.viewToggleBtnActive]}>
+                      <Icon name="grid" size={14} color={view === "grid" ? "#fff" : Colors.ink3} />
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
             </ScrollView>
-            <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
-            <View style={s.listCard}>
-              {paginated.map(p => (
-                <ProductRow
-                  key={p.id}
-                  product={p}
-                  onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
-                  onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
-                  onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
-                  isSelected={bulkSelected.has(p.id)}
-                  onSelect={bulkMode ? toggleBulkSelect : undefined}
-                />
-              ))}
-              {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
-            </View>
+
+            {/* Category filter — multi-select dropdown (wide) ou ScrollableChips (narrow) */}
+            {isWebWide ? (
+              <View style={{ marginBottom: 14 } as any}>
+                <CategoryDropdownWeb categories={allCategories} selected={catsMulti} onChange={setCatsMulti} />
+              </View>
+            ) : (
+              <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
+            )}
+
+            {/* List view: ProductTableWeb / ProductGridWeb (wide) ou ProductRow (narrow) */}
+            {isWebWide ? (
+              <View style={{ marginBottom: 12 } as any}>
+                {view === "table" ? (
+                  <ProductTableWeb
+                    items={paginated}
+                    onEdit={!isDemo ? handleEdit : undefined}
+                    onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
+                    onLink={canLinkProducts ? (p) => setLinkTarget(p) : undefined}
+                    bulkMode={bulkMode}
+                    bulkSelected={bulkSelected}
+                    onSelect={toggleBulkSelect}
+                    canLink={canLinkProducts}
+                  />
+                ) : (
+                  <ProductGridWeb
+                    items={paginated}
+                    onEdit={!isDemo ? handleEdit : undefined}
+                    onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
+                    onLink={canLinkProducts ? (p) => setLinkTarget(p) : undefined}
+                    bulkMode={bulkMode}
+                    bulkSelected={bulkSelected}
+                    onSelect={toggleBulkSelect}
+                    canLink={canLinkProducts}
+                  />
+                )}
+              </View>
+            ) : (
+              <View style={s.listCard}>
+                {paginated.map(p => (
+                  <ProductRow
+                    key={p.id}
+                    product={p}
+                    onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
+                    onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
+                    onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
+                    isSelected={bulkSelected.has(p.id)}
+                    onSelect={bulkMode ? toggleBulkSelect : undefined}
+                  />
+                ))}
+                {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
+              </View>
+            )}
             <Pagination page={page} totalPages={totalPages} total={filteredTotal} pageSize={PAGE_SIZE} onPage={goTo} />
           </View>
         )}
@@ -679,6 +813,8 @@ const s = StyleSheet.create({
   wrapper: { flex: 1, position: "relative" },
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  // Wide layout: max-width maior pra acomodar Hero + Table; padding reduzido.
+  contentWide: { padding: 28, paddingBottom: 60, maxWidth: 1480, alignSelf: "center", width: "100%" },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, gap: 8, flexWrap: "wrap" },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
   headerActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
@@ -806,5 +942,20 @@ const s = StyleSheet.create({
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 16,
+  },
+  // Estoque Premium v2 (08/05/2026) — view toggle (table/grid)
+  viewToggleWrap: {
+    flexDirection: "row",
+    backgroundColor: Colors.bg3,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
+    padding: 3, gap: 2,
+  },
+  viewToggleBtn: {
+    width: 32, height: 28, borderRadius: 7,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  viewToggleBtnActive: {
+    backgroundColor: Colors.violet,
   },
 });
