@@ -3,6 +3,8 @@
 // Modal para selecionar variante de um produto (cor/tamanho/etc)
 // Usado no PDV (Fase C) e na Venda retroativa (TransactionModal).
 // FIX: herda cor/tamanho do produto pai quando variante nao tem atributos
+// 08/05/2026: opcao "vender pai" mostra cor+tamanho do pai em vez de
+// "Sem variante especifica · generico" — quando ha atributos no pai.
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -65,6 +67,21 @@ function getColor(v: any, parentColor?: string): string | null {
   return null;
 }
 
+// Rotulo da opcao "vender o pai diretamente" — preferimos os atributos do
+// proprio pai (cor + tamanho) em vez de um generico "Sem variante especifica".
+function buildParentLabel(parentColor?: string, parentSize?: string): { label: string; sub: string } {
+  var parts: string[] = [];
+  if (parentColor) {
+    var nm = hexToName(parentColor) || parentColor;
+    parts.push(nm);
+  }
+  if (parentSize) parts.push(parentSize);
+  if (parts.length > 0) {
+    return { label: parts.join(" · "), sub: "estoque do produto pai" };
+  }
+  return { label: "Sem variante especifica", sub: "genérico" };
+}
+
 export function VariantPickerModal({ visible, product, onSelect, onClose }: {
   visible: boolean;
   product: { id: string; name: string; price: number; color?: string; size?: string; stock?: number } | null;
@@ -89,6 +106,8 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
   var activeVariants = variants.filter(function(v: any) { return v.is_active !== false; });
   var parentColor = product.color || "";
   var parentSize = product.size || "";
+  var parentHex = parentColor ? toHex(parentColor) : null;
+  var parentLabel = buildParentLabel(parentColor, parentSize);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -99,7 +118,7 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
             <Pressable onPress={onClose} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, marginBottom: 8 }}>
-            {parentColor ? <View style={[s.parentDot, { backgroundColor: toHex(parentColor) || parentColor }]} /> : null}
+            {parentColor ? <View style={[s.parentDot, { backgroundColor: parentHex || parentColor }]} /> : null}
             <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
             {parentSize ? <Text style={s.sizeBadge}>{parentSize}</Text> : null}
           </View>
@@ -117,17 +136,25 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
               {/* 07/05: produto pai pode ter stock proprio independente das variantes
                  (caso onde o usuario cadastrou estoque no pai antes de criar variantes,
                  ou onde sobrou estoque "generico" nao-categorizado). Quando product.stock > 0
-                 oferecemos a opcao de vender sem variante — id="" sinaliza parent-only. */}
+                 oferecemos a opcao de vender sem variante — id="" sinaliza parent-only.
+                 08/05: rotulo deriva da cor+tamanho do pai (nao mais "generico" hardcoded). */}
               {(product.stock || 0) > 0 && (
                 <Pressable
-                  onPress={function() { onSelect({ id: "", label: "Sem variante", price: product.price, stock: product.stock || 0 }); }}
+                  onPress={function() { onSelect({ id: "", label: parentLabel.label, price: product.price, stock: product.stock || 0 }); }}
                   style={[s.variantRow, s.parentRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}
                 >
-                  <View style={[s.colorDot, { backgroundColor: "rgba(167,139,250,0.25)", borderStyle: "dashed" }]} />
+                  <View
+                    style={[
+                      s.colorDot,
+                      parentHex
+                        ? { backgroundColor: parentHex }
+                        : { backgroundColor: "rgba(167,139,250,0.25)", borderStyle: "dashed" },
+                    ]}
+                  />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.variantLabel}>Sem variante específica</Text>
+                    <Text style={s.variantLabel}>{parentLabel.label}</Text>
                     <Text style={s.variantMeta}>
-                      R$ {product.price.toFixed(2).replace(".", ",")} · {product.stock} un · genérico
+                      R$ {product.price.toFixed(2).replace(".", ",")} · {product.stock} un · {parentLabel.sub}
                     </Text>
                   </View>
                   <View style={s.stockBadge}><Text style={s.stockText}>{product.stock}</Text></View>
