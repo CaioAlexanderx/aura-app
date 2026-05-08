@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { caixaApi, type CaixaStatus } from "@/services/caixaApi";
 
@@ -11,6 +11,12 @@ import { caixaApi, type CaixaStatus } from "@/services/caixaApi";
 //
 // Expõe `invalidate()` para forçar re-fetch imediato após
 // operações de abrir/fechar.
+//
+// 08/05/2026: ajustes pra evitar "flash" de caixa fechado ao
+// trocar de aba do navegador. Uso `placeholderData: keepPreviousData`
+// pra manter o ultimo `sessaoAtiva` enquanto o refetch acontece +
+// `refetchOnWindowFocus: false` pra nao disparar refetch agressivo.
+// gcTime grande pra cache nao ser coletado em sessoes longas.
 // ============================================================
 
 const QUERY_KEY = "caixa-status";
@@ -26,8 +32,12 @@ export function useCaixa() {
       return caixaApi.status(company.id);
     },
     enabled: !!token && !!company?.id,
-    staleTime: 30_000,       // considera fresco por 30s
-    refetchInterval: 60_000, // re-fetch automático a cada 60s
+    staleTime: 30_000,                      // considera fresco por 30s
+    gcTime: 30 * 60_000,                    // cache vive 30min em memoria
+    refetchInterval: 60_000,                // re-fetch automatico a cada 60s
+    refetchOnWindowFocus: false,            // trocar de aba NAO refetcha
+    refetchOnReconnect: false,              // reconectar rede NAO refetcha
+    placeholderData: keepPreviousData,      // mantem dados anteriores durante refetch
     retry: 1,
   });
 
