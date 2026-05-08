@@ -588,33 +588,6 @@ export default function EstoqueScreen() {
         {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
 
         {products.length > 0 && activeTab === 0 && (
-          <View style={s.toolbar}>
-            <ImportExportBar onExport={handleExport} itemCount={products.length} />
-            <ServerImport entity="products" onComplete={handleImportComplete} />
-            <Pressable onPress={() => setCategoriesModal({ open: true })} style={s.catBtn}>
-              <Icon name="tag" size={12} color={Colors.violet3} />
-              <Text style={s.catBtnText}>Categorias</Text>
-            </Pressable>
-            {!bulkMode ? (
-              <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}><Text style={s.bulkBtnText}>Selecionar</Text></Pressable>
-            ) : (
-              <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}><Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text></Pressable>
-            )}
-            {dupGroupsCount > 0 && !bulkMode && !isDemo && (
-              <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBtn}><Text style={s.dupBtnText}>{"⚑ Unificar " + dupGroupsCount + (dupGroupsCount > 1 ? " grupos" : " grupo")}</Text></Pressable>
-            )}
-          </View>
-        )}
-
-        {bulkMode && bulkSelected.size > 0 && (
-          <View style={s.bulkBar}>
-            <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size > 1 ? "s" : ""}</Text>
-            <Pressable onPress={handleSelectAll} style={s.bulkAction}><Text style={s.bulkActionText}>{bulkSelected.size === filtered.length ? "Desmarcar todos" : "Selecionar todos"}</Text></Pressable>
-            <Pressable onPress={() => setShowBulkConfirm(true)} style={[s.bulkAction, s.bulkDeleteAction]}><Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text></Pressable>
-          </View>
-        )}
-
-        {activeTab === 0 && products.length > 0 && (
           <View>
             <View style={s.searchRow} ref={scanRef as any}>
               <TextInput
@@ -745,38 +718,40 @@ export default function EstoqueScreen() {
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
         {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 
-        <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
-        <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
-        <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
-        <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
-        {company?.id && (
-          <DanfeImportModal
-            visible={showDanfeModal}
-            companyId={company.id}
-            onClose={() => setShowDanfeModal(false)}
-            onSuccess={() => handleImportComplete()}
-          />
-        )}
-        <CategoriesModal
-          visible={categoriesModal.open}
-          initialType={categoriesModal.initialType}
-          onClose={() => setCategoriesModal({ open: false })}
-        />
-        {linkTarget && company?.id && (
-          <LinkProductModal
-            visible={!!linkTarget}
-            companyId={company.id}
-            productId={linkTarget.id}
-            onClose={() => setLinkTarget(null)}
-            onLinked={() => {
-              qc.invalidateQueries({ queryKey: ["products", company?.id] });
-              qc.invalidateQueries({ queryKey: ["productsAggregated"] });
-            }}
-          />
-        )}
-
-        {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
+
+      {/* === Modais e overlays — fora do ScrollView para renderizar fixos na viewport === */}
+      <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
+      <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
+      <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
+      <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
+      {company?.id && (
+        <DanfeImportModal
+          visible={showDanfeModal}
+          companyId={company.id}
+          onClose={() => setShowDanfeModal(false)}
+          onSuccess={() => handleImportComplete()}
+        />
+      )}
+      <CategoriesModal
+        visible={categoriesModal.open}
+        initialType={categoriesModal.initialType}
+        onClose={() => setCategoriesModal({ open: false })}
+      />
+      {linkTarget && company?.id && (
+        <LinkProductModal
+          visible={!!linkTarget}
+          companyId={company.id}
+          productId={linkTarget.id}
+          onClose={() => setLinkTarget(null)}
+          onLinked={() => {
+            qc.invalidateQueries({ queryKey: ["products", company?.id] });
+            qc.invalidateQueries({ queryKey: ["productsAggregated"] });
+          }}
+        />
+      )}
+
+      {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
 
       {formOpen && (
         <Pressable style={s.formOverlay} onPress={closeFormModal}>

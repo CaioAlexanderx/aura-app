@@ -20,6 +20,8 @@
 // 07/05: lógica de busca (normalizeText/buildProductHaystack/matchesQuery)
 // extraída pra utils/productSearch — Estoque agora consome a mesma
 // função, fix do bug do Davi (busca não achava por marca/sem acento).
+// 08/05: Fix #6 — breakpoint sm (w<1200) para monitor 14". actBar gap 6px,
+// cart 340px, banner 120px, padding 16px no catálogo.
 // 07/05 (tarde): Abertura/Fechamento de Caixa migra da página separada
 // /caixa pra dentro do PDV via CaixaButton no topRow + OpenCloseCashModal
 // (DNA TrocaModal). Bloqueia handleFinalize quando caixa fechado E
@@ -106,6 +108,7 @@ function useViewport() {
   return {
     width: w,
     wide: w > 860,           // sidebar lateral ativa
+    sm:   w < 1200,          // monitor 14" (~1366px) — layout compacto
     xl:   w >= 1500,         // ganha 1 coluna extra
     xxl:  w >= 1900,         // ganha mais 1 coluna (6 total)
   };
@@ -121,9 +124,11 @@ function productColumnsFor(vp: { xl: boolean; xxl: boolean }) {
 }
 
 // CartPanel cresce levemente em telas grandes pra não parecer espremido.
-function cartWidthFor(vp: { xl: boolean; xxl: boolean }) {
+// Em monitor 14" (sm), reduz sidebar pra dar mais espaço ao catálogo.
+function cartWidthFor(vp: { sm?: boolean; xl: boolean; xxl: boolean }) {
   if (vp.xxl) return 480;
   if (vp.xl)  return 440;
+  if (vp.sm)  return 340;
   return 400;
 }
 
@@ -249,13 +254,6 @@ function CaixaScreenInner() {
     selectCustomer(v.id, v.name, c?.phone || null);
   }
 
-  // 06/05/2026: cache local de products pode ficar stale — produto recém
-  // cadastrado, filtro de categoria/estoque-zerado ativo, ou paginação cortando
-  // o item. Quando isso acontece, o backend confirma match no /scan mas o
-  // products.find() retorna undefined e a função caía em setQuery(cleaned),
-  // jogando o código de barras na busca textual em vez de adicionar ao
-  // carrinho — bug reportado pelo Davi (06/05). Agora usamos os dados do
-  // response como fallback, tanto pra variant_barcode quanto pra match exato.
   async function handleScan(code: string) {
     const cleaned = (code || "").trim();
     if (!cleaned) return;
@@ -323,8 +321,6 @@ function CaixaScreenInner() {
   }
 
   function handleFinalize() {
-    // Bloqueia venda se caixa habilitado mas fechado.
-    // Quando caixaEnabled=false (legado), passa direto.
     if (caixaEnabled && !isAberto) {
       toast.error("Abra o caixa antes de finalizar a venda");
       setShowCaixaModal(true);
@@ -499,7 +495,7 @@ function CaixaScreenInner() {
         <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: `1fr ${cartWidth}px` } as any)]}>
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
-            contentContainerStyle={{ padding: 28, paddingBottom: 48 }}
+            contentContainerStyle={{ padding: vp.sm ? 16 : 28, paddingBottom: 48 }}
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
@@ -538,9 +534,9 @@ function CaixaScreenInner() {
               <SearchBox value={query} onChange={setQuery} />
             </View>
 
-            <MerchantBanner height={200} />
+            <MerchantBanner height={vp.sm ? 120 : 200} />
 
-            <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, position: "relative", zIndex: 50 } as any)]}>
+            <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: vp.sm ? 6 : 10, position: "relative", zIndex: 50 } as any)]}>
               <ActBarcode onScan={handleScan} />
               <ActPerson
                 kind="vendedora"
