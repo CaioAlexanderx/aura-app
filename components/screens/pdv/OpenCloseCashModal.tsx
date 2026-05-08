@@ -26,6 +26,14 @@
 //   - onSuccess() so dispara quando o modal fecha (handleCloseModal)
 //   - sessaoSnapshot preserva opened_by/opened_at pra montar o PDF
 //   - tela 4 nao depende mais de sessaoAtiva, so de closeResult
+//
+// 08/05/2026 (bug Davi Villa Branca): a fonte da lista de operadores
+// migrou de employeesApi.list pra caixaApi.listOperadores. O endpoint
+// novo une employees ativos + company_members ativos com acesso a PDV
+// (cobre owner/admin sem employee row + atendentes convidados via
+// Equipe). Cada operador carrega `source: 'employee'|'member'` e o
+// submit do /abrir envia responsavel_employee_id ou responsavel_user_id
+// conforme a origem.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -34,8 +42,12 @@ import {
 } from "react-native";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { caixaApi, type CaixaSessaoAtiva, type CaixaFechamentoFull } from "@/services/caixaApi";
-import { employeesApi } from "@/services/api";
+import {
+  caixaApi,
+  type CaixaSessaoAtiva,
+  type CaixaFechamentoFull,
+  type CaixaOperador,
+} from "@/services/caixaApi";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
@@ -104,7 +116,7 @@ export function OpenCloseCashModal({
 }: Props) {
   // ── ABRIR state ──
   const [openStep, setOpenStep] = useState<OpenStep>(1);
-  const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string; role?: string | null } | null>(null);
+  const [selectedOperator, setSelectedOperator] = useState<CaixaOperador | null>(null);
   const [trocoInput, setTrocoInput] = useState("0,00");
   const [submittingOpen, setSubmittingOpen] = useState(false);
 
@@ -123,7 +135,7 @@ export function OpenCloseCashModal({
   useEffect(() => {
     if (!visible) {
       setOpenStep(1);
-      setSelectedEmployee(null);
+      setSelectedOperator(null);
       setTrocoInput("0,00");
       setSubmittingOpen(false);
       setCloseStep(1);
@@ -151,20 +163,20 @@ export function OpenCloseCashModal({
   // sessaoAtiva ja virou null (cache invalidou pos-fechamento).
   const sessaoEff: CaixaSessaoAtiva | null = sessaoAtiva || sessaoSnapshot;
 
-  // ── Funcionarios (so plano Negocio+; useQuery cacheado) ──
-  const { data: empData, isFetching: loadingEmployees } = useQuery({
-    queryKey: ["employees", companyId],
-    queryFn: () => employeesApi.list(companyId),
+  // ── Operadores autorizados (employees + members PDV; useQuery cacheado) ──
+  // 08/05/2026: trocou employeesApi.list -> caixaApi.listOperadores. O
+  // endpoint novo cobre owner/admin sem employee row e atendentes vindos
+  // de Equipe (company_members). Veja aura-app#46 / Aura-backend#42.
+  const { data: opData, isFetching: loadingOperadores } = useQuery({
+    queryKey: ["caixa-operadores", companyId],
+    queryFn: () => caixaApi.listOperadores(companyId),
     enabled: !!companyId && visible && mode === "abrir",
     staleTime: 60_000,
   });
-  const employees = useMemo(() => {
-    return ((empData?.employees || []) as any[]).map((e) => ({
-      id: e.id as string,
-      name: (e.name || "") as string,
-      role: (e.role || null) as string | null,
-    }));
-  }, [empData]);
+  const operadores: CaixaOperador[] = useMemo(
+    () => opData?.operadores || [],
+    [opData]
+  );
 
   // ── Calculos do fechamento (ao vivo, baseado no sessaoEff) ──
   const trocoInicial = toNum(sessaoEff?.troco_inicial);
@@ -184,8 +196,8 @@ export function OpenCloseCashModal({
   // ── Submit Abrir ──
   async function handleAbrir() {
     if (submittingOpen) return;
-    if (!selectedEmployee) {
-      toast.error("Selecione o funcionario responsavel");
+    if (!selectedOperator) {
+      toast.error("Selecione o responsavel pelo caixa");
       return;
     }
     const troco = parseMoeda(trocoInput);
@@ -195,7 +207,16 @@ export function OpenCloseCashModal({
     }
     setSubmittingOpen(true);
     try {
-      await caixaApi.abrir(companyId, troco, selectedEmployee.id);
+      // Roteia o id pro campo correto conforme a origem do operador.
+      // employee  -> responsavel_employee_id  (FK direto em opened_by_employee_id)
+      // member    -> responsavel_user_id      (backend resolve pra employee_id se houver)
+      const empId = selectedOperator.source === "employee"
+        ? (selectedOperator.employee_id || selectedOperator.id)
+        : null;
+      const usrId = selectedOperator.source === "member"
+        ? (selectedOperator.user_id || selectedOperator.id)
+        : null;
+      await caixaApi.abrir(companyId, troco, empId, usrId);
       toast.success("Caixa aberto!");
       onSuccess?.();   // ok aqui — abrir nao tem tela de sucesso, fecha modal logo apos
       onClose();
@@ -351,21 +372,21 @@ export function OpenCloseCashModal({
           {mode === "abrir" && openStep === 1 && (
             <>
               <Text style={s.sectionTitle}>Quem esta abrindo o caixa?</Text>
-              {loadingEmployees ? (
+              {loadingOperadores ? (
                 <View style={s.centered}><ActivityIndicator color={Colors.violet} /></View>
-              ) : employees.length === 0 ? (
+              ) : operadores.length === 0 ? (
                 <Text style={s.emptyTxt}>
-                  Nenhum funcionario cadastrado. Cadastre em Equipe para escolher o responsavel.
+                  Nenhum responsavel autorizado encontrado. Convide pessoas em Equipe ou cadastre funcionarios.
                 </Text>
               ) : (
                 <View style={{ gap: 4 }}>
-                  {employees.map((e, idx) => {
-                    const sel = selectedEmployee?.id === e.id;
+                  {operadores.map((op, idx) => {
+                    const sel = selectedOperator?.key === op.key;
                     return (
                       <Pressable
-                        key={e.id}
+                        key={op.key}
                         style={[s.pickerItem, sel && s.pickerItemSelected]}
-                        onPress={() => setSelectedEmployee(e)}
+                        onPress={() => setSelectedOperator(op)}
                       >
                         <View
                           style={[
@@ -373,11 +394,11 @@ export function OpenCloseCashModal({
                             IS_WEB && webOnly({ background: avatarColor(idx) } as any),
                           ]}
                         >
-                          <Text style={s.avatarTxt}>{initials(e.name)}</Text>
+                          <Text style={s.avatarTxt}>{initials(op.name)}</Text>
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={s.pickerName} numberOfLines={1}>{e.name || "Sem nome"}</Text>
-                          {e.role && <Text style={s.pickerRole} numberOfLines={1}>{e.role}</Text>}
+                          <Text style={s.pickerName} numberOfLines={1}>{op.name || "Sem nome"}</Text>
+                          {op.role && <Text style={s.pickerRole} numberOfLines={1}>{op.role}</Text>}
                         </View>
                         <View style={s.permTag}>
                           <Text style={s.permTagTxt}>ACESSO PDV</Text>
@@ -388,7 +409,7 @@ export function OpenCloseCashModal({
                 </View>
               )}
               <Text style={s.helpTxt}>
-                Lista filtrada por permissao de acessar o PDV (plano Negocio+).
+                Inclui funcionarios cadastrados e membros da equipe com acesso ao PDV.
               </Text>
               <View style={s.stepFooter}>
                 <Text style={s.footerTxt}>PASSO 1 DE 3</Text>
@@ -397,9 +418,9 @@ export function OpenCloseCashModal({
                     <Text style={s.btnSecTxt}>Cancelar</Text>
                   </Pressable>
                   <Pressable
-                    style={[s.btnPri, !selectedEmployee && { opacity: 0.45 }]}
-                    onPress={() => selectedEmployee && setOpenStep(2)}
-                    disabled={!selectedEmployee}
+                    style={[s.btnPri, !selectedOperator && { opacity: 0.45 }]}
+                    onPress={() => selectedOperator && setOpenStep(2)}
+                    disabled={!selectedOperator}
                   >
                     <Text style={s.btnPriTxt}>Avancar -&gt;</Text>
                   </Pressable>
@@ -410,11 +431,11 @@ export function OpenCloseCashModal({
 
           {mode === "abrir" && openStep === 2 && (
             <>
-              {selectedEmployee && (
+              {selectedOperator && (
                 <View style={s.infoStrip}>
-                  <Text style={s.infoStripTitle}>{selectedEmployee.name}</Text>
-                  {selectedEmployee.role && (
-                    <Text style={s.infoStripSub}>{selectedEmployee.role}</Text>
+                  <Text style={s.infoStripTitle}>{selectedOperator.name}</Text>
+                  {selectedOperator.role && (
+                    <Text style={s.infoStripSub}>{selectedOperator.role}</Text>
                   )}
                 </View>
               )}
@@ -456,7 +477,7 @@ export function OpenCloseCashModal({
               <View style={s.summaryBox}>
                 <View style={s.summaryRow}>
                   <Text style={s.summaryLab}>Operador</Text>
-                  <Text style={s.summaryVal}>{selectedEmployee?.name || "-"}</Text>
+                  <Text style={s.summaryVal}>{selectedOperator?.name || "-"}</Text>
                 </View>
                 <View style={s.summaryRow}>
                   <Text style={s.summaryLab}>Empresa</Text>
