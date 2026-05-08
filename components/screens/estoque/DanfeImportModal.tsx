@@ -7,16 +7,17 @@
 // (glassmorphism violeta, stepper centralizado, footer dentro do scroll).
 // Logica funcional preservada 1-pra-1: parseXml -> revisar -> importar.
 //
+// 08/05/2026: Categoria virou picker (ao inves de TextInput livre).
+// Lista as categorias existentes da empresa, permite filtrar por busca
+// e criar nova inline. Evita duplicatas por divergencia de capitalizacao.
+//
 // Steps logicos:
 //   1. upload  — escolher arquivo XML
 //   2. review  — editar nome/preco/cor/categoria + bulk actions
 //   3. import  — barra de progresso
 //   4. done    — tela de sucesso (espelha OpenCloseCashModal)
-//
-// O step "loading" (parse XML) e transitorio: mostra spinner sobreposto
-// no proprio passo upload sem trocar de tela.
 // ============================================================
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -34,6 +35,7 @@ import { companiesApi } from "@/services/companiesApi";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { IS_WEB, webOnly } from "@/components/screens/pdv/types";
 import { toast } from "@/components/Toast";
+import { useProductCategories, type ProductCategory } from "@/hooks/useProductCategories";
 
 interface Props {
   visible: boolean;
@@ -43,6 +45,7 @@ interface Props {
 }
 
 type Step = "upload" | "review" | "importing" | "done";
+type PickerCtx = { kind: "bulk" } | { kind: "row"; idx: number };
 
 const MARKUP_PRESETS = [
   { label: "0%", pct: 0 },
@@ -74,7 +77,7 @@ const STEP_ORDER: Array<Exclude<Step, "done">> = ["upload", "review", "importing
 
 export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Props) {
   const [step, setStep] = useState<Step>("upload");
-  const [parsing, setParsing] = useState(false); // overlay de loading durante parseXml
+  const [parsing, setParsing] = useState(false);
   const [items, setItems] = useState<EditableItem[]>([]);
   const [supplierName, setSupplierName] = useState<string | null>(null);
   const [invoiceInfo, setInvoiceInfo] = useState<string | null>(null);
@@ -85,6 +88,71 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
   const [bulkCategory, setBulkCategory] = useState("");
   const fileInputRef = useRef<any>(null);
 
+  // ── Categorias existentes da empresa ──
+  const { categories: catList, create: createCat, isCreating: creatingCat } =
+    useProductCategories("product");
+
+  // ── Picker state (compartilhado entre bulk e linhas) ──
+  const [pickerCtx, setPickerCtx] = useState<PickerCtx | null>(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+
+  function openPicker(ctx: PickerCtx) {
+    setPickerCtx(ctx);
+    setPickerSearch("");
+  }
+  function closePicker() {
+    setPickerCtx(null);
+    setPickerSearch("");
+  }
+
+  // Aplica a categoria escolhida conforme o contexto do picker.
+  // Bulk: propaga IMEDIATAMENTE nos itens selecionados (sem precisar de "Aplicar").
+  // Row: atualiza so aquela linha.
+  function pickCategory(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || !pickerCtx) return;
+    if (pickerCtx.kind === "bulk") {
+      setBulkCategory(trimmed);
+      setItems((prev) =>
+        prev.map((it) => (it.selected ? { ...it, category: trimmed } : it))
+      );
+    } else {
+      updateItem(pickerCtx.idx, "category", trimmed);
+    }
+    closePicker();
+  }
+
+  function clearCategoryRow(idx: number) {
+    updateItem(idx, "category", "");
+  }
+
+  async function handleCreateAndPick(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      // O hook useProductCategories nao retorna a categoria criada via mutate(),
+      // mas a aplicamos pelo nome direto — o backend cria e o cache invalida em seguida.
+      createCat({ name: trimmed });
+      pickCategory(trimmed);
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao criar categoria");
+    }
+  }
+
+  // ── Categorias filtradas pelo search do picker ──
+  const filteredCats = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return catList;
+    return catList.filter((c) => c.name.toLowerCase().includes(q));
+  }, [catList, pickerSearch]);
+
+  const showCreateOption = useMemo(() => {
+    const q = pickerSearch.trim();
+    if (!q) return false;
+    return !catList.some((c) => c.name.toLowerCase() === q.toLowerCase());
+  }, [catList, pickerSearch]);
+
+  // ── Reset ──
   const reset = useCallback(() => {
     setStep("upload");
     setParsing(false);
@@ -96,6 +164,8 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
     setImportedCount(0);
     setBulkColor("#7c3aed");
     setBulkCategory("");
+    setPickerCtx(null);
+    setPickerSearch("");
   }, []);
 
   const handleClose = useCallback(() => {
@@ -174,15 +244,6 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
     setItems((prev) => prev.map((it) => (it.selected ? { ...it, color } : it)));
   }, []);
 
-  const applyBulkCategory = useCallback(() => {
-    if (!bulkCategory.trim()) return;
-    setItems((prev) =>
-      prev.map((it) =>
-        it.selected ? { ...it, category: bulkCategory.trim() } : it
-      )
-    );
-  }, [bulkCategory]);
-
   // ── Import ───────────────────────────────────────────────────────────────
   const handleImport = useCallback(async () => {
     const selected = items.filter((it) => it.selected);
@@ -243,6 +304,13 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
 
   // O modal cresce no passo review (tabela 7 colunas).
   const isWideStep = step === "review";
+
+  // ── Mapinha de cor por nome de categoria pra exibir dot na linha ──
+  const catByName: Record<string, ProductCategory> = useMemo(() => {
+    const m: Record<string, ProductCategory> = {};
+    for (const c of catList) m[c.name.toLowerCase()] = c;
+    return m;
+  }, [catList]);
 
   return (
     <View style={s.overlay}>
@@ -436,17 +504,30 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                 )}
               </View>
 
-              {/* Bulk category */}
-              <TextInput
-                value={bulkCategory}
-                onChangeText={setBulkCategory}
-                placeholder="Categoria…"
-                placeholderTextColor={Colors.ink3}
-                style={s.bulkCatInput as any}
-                onSubmitEditing={applyBulkCategory}
-              />
-              <Pressable onPress={applyBulkCategory} style={s.applyBtn}>
-                <Text style={s.applyTxt}>Aplicar</Text>
+              {/* Bulk category — picker */}
+              <Pressable
+                onPress={() => openPicker({ kind: "bulk" })}
+                style={[s.catTrigger, { minWidth: 180 }]}
+              >
+                {(() => {
+                  const c = catByName[bulkCategory.toLowerCase()];
+                  return (
+                    <>
+                      {c?.color ? (
+                        <View style={[s.catDot, { backgroundColor: c.color }]} />
+                      ) : (
+                        <View style={[s.catDot, s.catDotEmpty]} />
+                      )}
+                      <Text
+                        style={[s.catTriggerTxt, !bulkCategory && s.catTriggerTxtPh]}
+                        numberOfLines={1}
+                      >
+                        {bulkCategory || "Categoria…"}
+                      </Text>
+                      <Icon name="chevron_down" size={11} color={Colors.ink3} />
+                    </>
+                  );
+                })()}
               </Pressable>
             </View>
 
@@ -552,14 +633,46 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                     )}
                   </View>
 
-                  {/* Category */}
-                  <TextInput
-                    value={it.category}
-                    onChangeText={(v) => updateItem(idx, "category", v)}
-                    placeholder="—"
-                    placeholderTextColor={Colors.ink3}
-                    style={[s.cellInput, s.colCat] as any}
-                  />
+                  {/* Category — picker compacto */}
+                  <Pressable
+                    onPress={() => openPicker({ kind: "row", idx })}
+                    style={[s.catTrigger, s.colCat, { paddingHorizontal: 8, height: 28 }]}
+                  >
+                    {(() => {
+                      const c = catByName[(it.category || "").toLowerCase()];
+                      return (
+                        <>
+                          {c?.color ? (
+                            <View style={[s.catDot, { backgroundColor: c.color }]} />
+                          ) : it.category ? (
+                            <View style={[s.catDot, { backgroundColor: "rgba(124,58,237,0.4)" }]} />
+                          ) : (
+                            <View style={[s.catDot, s.catDotEmpty]} />
+                          )}
+                          <Text
+                            style={[s.catTriggerTxt, !it.category && s.catTriggerTxtPh]}
+                            numberOfLines={1}
+                          >
+                            {it.category || "—"}
+                          </Text>
+                          {it.category ? (
+                            <Pressable
+                              hitSlop={6}
+                              onPress={(e: any) => {
+                                if (e?.stopPropagation) e.stopPropagation();
+                                clearCategoryRow(idx);
+                              }}
+                              style={{ paddingHorizontal: 2 }}
+                            >
+                              <Icon name="x" size={10} color={Colors.ink3} />
+                            </Pressable>
+                          ) : (
+                            <Icon name="chevron_down" size={10} color={Colors.ink3} />
+                          )}
+                        </>
+                      );
+                    })()}
+                  </Pressable>
                 </View>
               ))}
             </ScrollView>
@@ -594,6 +707,83 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
                 </Pressable>
               </View>
             </View>
+
+            {/* ═══ PICKER OVERLAY (categorias) ═══ */}
+            {pickerCtx && (
+              <View style={s.pickerOverlay} pointerEvents="box-none">
+                <Pressable style={s.pickerBackdrop} onPress={closePicker} />
+                <View style={s.pickerCard}>
+                  <View style={s.pickerHeader}>
+                    <Text style={s.pickerTitle}>
+                      {pickerCtx.kind === "bulk"
+                        ? "Aplicar categoria nos selecionados"
+                        : "Escolher categoria"}
+                    </Text>
+                    <Pressable onPress={closePicker} style={s.pickerClose}>
+                      <Icon name="x" size={12} color={Colors.ink3} />
+                    </Pressable>
+                  </View>
+                  <TextInput
+                    value={pickerSearch}
+                    onChangeText={setPickerSearch}
+                    placeholder="Buscar ou criar categoria…"
+                    placeholderTextColor={Colors.ink3}
+                    style={s.pickerSearch as any}
+                    autoFocus
+                  />
+                  <ScrollView style={s.pickerList} contentContainerStyle={{ gap: 2 }}>
+                    {filteredCats.length === 0 && !showCreateOption && (
+                      <Text style={s.pickerEmpty}>
+                        Nenhuma categoria. Digite acima para criar.
+                      </Text>
+                    )}
+                    {filteredCats.map((c) => (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => pickCategory(c.name)}
+                        style={s.pickerItem}
+                      >
+                        {c.color ? (
+                          <View style={[s.catDot, { backgroundColor: c.color }]} />
+                        ) : (
+                          <View style={[s.catDot, s.catDotEmpty]} />
+                        )}
+                        <Text style={s.pickerItemName} numberOfLines={1}>
+                          {c.name}
+                        </Text>
+                        {c.product_count > 0 ? (
+                          <Text style={s.pickerItemCount}>{c.product_count}</Text>
+                        ) : null}
+                      </Pressable>
+                    ))}
+                    {showCreateOption && (
+                      <Pressable
+                        onPress={() => handleCreateAndPick(pickerSearch)}
+                        style={[s.pickerItem, s.pickerItemCreate]}
+                        disabled={creatingCat}
+                      >
+                        <View style={[s.catDot, { backgroundColor: "rgba(124,58,237,0.5)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(124,58,237,0.7)" }]} />
+                        <Text style={s.pickerItemCreateTxt} numberOfLines={1}>
+                          {creatingCat ? "Criando…" : '+ Criar "' + pickerSearch.trim() + '"'}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </ScrollView>
+                  {pickerCtx.kind === "row" && items[pickerCtx.idx]?.category ? (
+                    <Pressable
+                      onPress={() => {
+                        clearCategoryRow(pickerCtx.idx);
+                        closePicker();
+                      }}
+                      style={s.pickerClear}
+                    >
+                      <Icon name="x" size={11} color={Colors.ink3} />
+                      <Text style={s.pickerClearTxt}>Remover categoria desta linha</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -652,7 +842,7 @@ export function DanfeImportModal({ visible, companyId, onClose, onSuccess }: Pro
   );
 }
 
-// ── Styles (DNA TrocaModal + extras pra tabela e upload) ─────────────────
+// ── Styles (DNA TrocaModal + extras pra tabela e picker) ─────────────────
 const s = StyleSheet.create({
   overlay: {
     position: "absolute" as any,
@@ -812,19 +1002,26 @@ const s = StyleSheet.create({
     width: 28, height: 28, borderRadius: 7,
     borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
   },
-  bulkCatInput: {
+
+  // Category trigger (substitui o TextInput livre)
+  catTrigger: {
+    flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(5,6,15,0.6)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.10)",
-    borderRadius: 7, paddingHorizontal: 10, paddingVertical: 6,
-    color: Colors.ink, fontSize: 12, minWidth: 110, height: 30,
-    outlineStyle: "none",
-  } as any,
-  applyBtn: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 7,
-    backgroundColor: "rgba(124,58,237,0.15)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+    borderRadius: 7, paddingHorizontal: 10,
+    height: 30,
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
   },
-  applyTxt: { fontSize: 11, color: "#a78bfa", fontWeight: "700" },
+  catTriggerTxt: { fontSize: 12, color: Colors.ink, fontWeight: "600", flex: 1 },
+  catTriggerTxtPh: { color: Colors.ink3, fontWeight: "400" },
+  catDot: {
+    width: 10, height: 10, borderRadius: 5,
+  },
+  catDotEmpty: {
+    backgroundColor: "transparent",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
+    borderStyle: "dashed",
+  },
 
   // Table
   tableHeader: {
@@ -911,7 +1108,7 @@ const s = StyleSheet.create({
     backgroundColor: Colors.violet,
   },
 
-  // Sucesso (espelha OpenCloseCashModal)
+  // Sucesso
   successHero: {
     alignItems: "center",
     paddingVertical: 22,
@@ -928,6 +1125,90 @@ const s = StyleSheet.create({
   },
   successTitle: { fontSize: 17, fontWeight: "700", color: Colors.ink, textAlign: "center" },
   successSub: { fontSize: 12, color: Colors.ink3, marginTop: 4, textAlign: "center" },
+
+  // Picker overlay
+  pickerOverlay: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerBackdrop: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.40)",
+  },
+  pickerCard: {
+    width: "100%" as any,
+    maxWidth: 380,
+    maxHeight: 460,
+    backgroundColor: "rgba(18,10,35,0.99)",
+    borderRadius: 14,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.40)",
+    overflow: "hidden",
+    zIndex: 1,
+    ...(Platform.OS === "web"
+      ? ({ boxShadow: "0 16px 40px -8px rgba(0,0,0,0.6)" } as any)
+      : {}),
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(124,58,237,0.18)",
+  },
+  pickerTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink, textTransform: "uppercase", letterSpacing: 0.8 },
+  pickerClose: {
+    width: 26, height: 26, borderRadius: 6,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  pickerSearch: {
+    margin: 12,
+    backgroundColor: "rgba(5,6,15,0.6)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+    borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 9,
+    color: Colors.ink, fontSize: 13,
+    outlineStyle: "none",
+  } as any,
+  pickerList: {
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    maxHeight: 280,
+  },
+  pickerEmpty: {
+    fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 18,
+  },
+  pickerItem: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 10, paddingVertical: 9, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  pickerItemName: { flex: 1, fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  pickerItemCount: {
+    fontSize: 10, color: Colors.ink3,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+  },
+  pickerItemCreate: {
+    backgroundColor: "rgba(124,58,237,0.10)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
+    borderStyle: "dashed",
+    marginTop: 4,
+  },
+  pickerItemCreateTxt: { flex: 1, fontSize: 13, color: "#a78bfa", fontWeight: "700" },
+  pickerClear: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 10,
+    borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.18)",
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  pickerClearTxt: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
 });
 
 export default DanfeImportModal;
