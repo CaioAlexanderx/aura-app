@@ -23,6 +23,12 @@ import { hexToName, nameToHex } from "@/utils/colorNames";
 // - Se ambos: matriz NxM com estoque por combinacao
 //
 // Preco unico do produto pai (nao ha preco por variante).
+//
+// 08/05/2026: aceita props parentColor/parentSize/parentStock —
+// quando o pai tem cor+tamanho proprios e stock_qty > 0 mas a
+// combinacao nao esta nas variantes, mesclamos no estado local
+// (chip de cor + tamanho aparecem + matrix preenchida) e marcamos
+// dirty=true pra forcar salvar e migrar pra variante real.
 // ============================================================
 
 const PRESET_COLORS = [
@@ -107,7 +113,7 @@ function AddColorPopover({ onAdd, onCancel, existingHexes }: {
       {/* Preview */}
       <View style={s.previewRow}>
         <View style={[s.previewDot, { backgroundColor: hex }]} />
-        <Text style={s.previewText}>{hexToName(hex)} \u00b7 {hex}</Text>
+        <Text style={s.previewText}>{hexToName(hex)} · {hex}</Text>
       </View>
 
       <View style={s.popoverActions}>
@@ -166,9 +172,17 @@ function AddSizePopover({ onAdd, onCancel, existingSizes }: {
 type Props = {
   productId: string;
   productName: string;
+  /** Cor propria do pai (hex). Quando presente e nao consta nas variantes,
+   *  e adicionada automaticamente como chip e a matrix recebe o stock. */
+  parentColor?: string | null;
+  /** Tamanho proprio do pai. Mesma logica do parentColor. */
+  parentSize?: string | null;
+  /** stock_qty do proprio pai (nao das variantes). Quando > 0 e ha
+   *  parentColor/parentSize, preenche a celula correspondente da matrix. */
+  parentStock?: number | null;
 };
 
-export function ProductVariationsSection({ productId, productName }: Props) {
+export function ProductVariationsSection({ productId, productName, parentColor, parentSize, parentStock }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
 
@@ -179,6 +193,8 @@ export function ProductVariationsSection({ productId, productName }: Props) {
   const [dirty, setDirty] = useState(false);
   const [showColorPopover, setShowColorPopover] = useState(false);
   const [showSizePopover, setShowSizePopover] = useState(false);
+  // Indica se houve mescla do estoque do pai na hidratacao (banner amarelo).
+  const [parentMerged, setParentMerged] = useState(false);
 
   // Fetch inicial
   const { data, isLoading } = useQuery({
@@ -188,15 +204,57 @@ export function ProductVariationsSection({ productId, productName }: Props) {
     staleTime: 30000,
   });
 
-  // Hidrata o estado local ao carregar dados
+  // Hidrata o estado local ao carregar dados, mesclando dados do pai quando
+  // ha estoque orfao (cor+tamanho do pai sem variante correspondente).
   useEffect(() => {
-    if (data) {
-      setColors(data.colors || []);
-      setSizes(data.sizes || []);
-      setMatrix(data.matrix || {});
-      setDirty(false);
+    if (!data) return;
+
+    const fetchedColors: ColorEntry[] = data.colors || [];
+    const fetchedSizes: string[] = data.sizes || [];
+    const fetchedMatrix: MatrixMap = { ...(data.matrix || {}) };
+
+    // Normaliza cor do pai pra hex uppercase. Se nao for hex valido, ignora.
+    const parentHex = parentColor && /^#[0-9A-Fa-f]{6}$/.test(parentColor)
+      ? parentColor.toUpperCase()
+      : null;
+    const parentSizeTrimmed = parentSize && parentSize.trim() ? parentSize.trim() : null;
+    const parentStockNum = parentStock && parentStock > 0 ? parentStock : 0;
+
+    let mergedColors = [...fetchedColors];
+    let mergedSizes = [...fetchedSizes];
+    let merged = false;
+
+    // Inclui cor do pai se nao esta nas variantes
+    if (parentHex && !mergedColors.some(c => c.hex.toUpperCase() === parentHex)) {
+      mergedColors.push({ hex: parentHex, name: hexToName(parentHex) || null });
+      merged = true;
     }
-  }, [data]);
+
+    // Inclui tamanho do pai se nao esta nas variantes
+    if (parentSizeTrimmed && !mergedSizes.includes(parentSizeTrimmed)) {
+      mergedSizes.push(parentSizeTrimmed);
+      merged = true;
+    }
+
+    // Preenche celula da matriz com o stock do pai se ainda nao existe.
+    // matrixKey aceita null pra modos color-only ou size-only.
+    if (parentStockNum > 0 && (parentHex || parentSizeTrimmed)) {
+      const key = matrixKey(parentHex, parentSizeTrimmed);
+      if (fetchedMatrix[key] === undefined || fetchedMatrix[key] === 0) {
+        fetchedMatrix[key] = parentStockNum;
+        merged = true;
+      }
+    }
+
+    setColors(mergedColors);
+    setSizes(mergedSizes);
+    setMatrix(fetchedMatrix);
+    setParentMerged(merged);
+    // Se houve merge, marca dirty=true pra incentivar salvar (formaliza
+    // a migracao do estoque do pai pra variante no backend). Caso
+    // contrario mantem limpo.
+    setDirty(merged);
+  }, [data, parentColor, parentSize, parentStock]);
 
   const mode: VariationsMode = useMemo(() => {
     if (colors.length > 0 && sizes.length > 0) return 'matrix';
@@ -214,9 +272,10 @@ export function ProductVariationsSection({ productId, productName }: Props) {
       toast.success(
         res.created_count === 0
           ? "Produto sem variacoes"
-          : res.created_count + " variac" + (res.created_count === 1 ? "ao salva" : "oes salvas") + " \u00b7 total " + res.total_stock + " un"
+          : res.created_count + " variac" + (res.created_count === 1 ? "ao salva" : "oes salvas") + " · total " + res.total_stock + " un"
       );
       setDirty(false);
+      setParentMerged(false);
     },
     onError: (err: any) => {
       toast.error(err?.data?.error || err?.message || "Erro ao salvar variacoes");
@@ -289,12 +348,29 @@ export function ProductVariationsSection({ productId, productName }: Props) {
           <Text style={s.title}>Cores e Tamanhos</Text>
           <Text style={s.subtitle}>
             {mode === 'none' && "Adicione cores ou tamanhos para cadastrar estoque por variacao."}
-            {mode === 'color' && colors.length + " cor" + (colors.length === 1 ? "" : "es") + " \u00b7 total " + totalStock + " un"}
-            {mode === 'size' && sizes.length + " tamanho" + (sizes.length === 1 ? "" : "s") + " \u00b7 total " + totalStock + " un"}
-            {mode === 'matrix' && (colors.length * sizes.length) + " combinac" + ((colors.length * sizes.length) === 1 ? "ao" : "oes") + " \u00b7 total " + totalStock + " un"}
+            {mode === 'color' && colors.length + " cor" + (colors.length === 1 ? "" : "es") + " · total " + totalStock + " un"}
+            {mode === 'size' && sizes.length + " tamanho" + (sizes.length === 1 ? "" : "s") + " · total " + totalStock + " un"}
+            {mode === 'matrix' && (colors.length * sizes.length) + " combinac" + ((colors.length * sizes.length) === 1 ? "ao" : "oes") + " · total " + totalStock + " un"}
           </Text>
         </View>
       </View>
+
+      {/* Banner: estoque do pai foi mesclado, precisa salvar */}
+      {parentMerged && (
+        <View style={s.parentMergedBanner}>
+          <Icon name="alert" size={12} color={Colors.amber} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.parentMergedTitle}>Estoque do produto pai incluido na grade</Text>
+            <Text style={s.parentMergedDesc}>
+              {parentColor && parentSize
+                ? "A combinacao " + (hexToName(parentColor) || parentColor) + " · " + parentSize + " (" + (parentStock || 0) + " un) veio do pai. Salve pra migrar pra variante."
+                : parentColor
+                  ? (hexToName(parentColor) || parentColor) + " (" + (parentStock || 0) + " un) veio do pai. Salve pra migrar pra variante."
+                  : (parentSize || "") + " (" + (parentStock || 0) + " un) veio do pai. Salve pra migrar pra variante."}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Cores */}
       <View style={s.sectionBlock}>
@@ -483,6 +559,16 @@ const s = StyleSheet.create({
   header: { marginBottom: 12 },
   title: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   subtitle: { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
+
+  // Banner do merge do pai
+  parentMergedBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: "rgba(251,191,36,0.10)",
+    borderWidth: 1, borderColor: "rgba(251,191,36,0.30)",
+    borderRadius: 9, padding: 10, marginBottom: 12,
+  },
+  parentMergedTitle: { fontSize: 11, color: Colors.amber, fontWeight: "700" },
+  parentMergedDesc: { fontSize: 11, color: Colors.ink2, marginTop: 2, lineHeight: 15 },
 
   sectionBlock: { marginBottom: 12 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
