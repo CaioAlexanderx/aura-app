@@ -22,6 +22,9 @@
 // função, fix do bug do Davi (busca não achava por marca/sem acento).
 // 08/05: Fix #6 — breakpoint sm (w<1200) para monitor 14". actBar gap 6px,
 // cart 340px, banner 120px, padding 16px no catálogo.
+// 09/05 (CRITICAL): Modal de troco em vendas single dinheiro — handleFinalize
+// intercepta payment==='dinheiro' && !splitMode e abre CashChangeModal antes
+// do finalizeSale. Não persiste cash_tendered, é só auxílio operacional.
 // 07/05 (tarde): Abertura/Fechamento de Caixa migra da página separada
 // /caixa pra dentro do PDV via CaixaButton no topRow + OpenCloseCashModal
 // (DNA TrocaModal). Bloqueia handleFinalize quando caixa fechado E
@@ -67,6 +70,7 @@ import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/produ
 import { useCaixa } from "@/hooks/useCaixa";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
 import { OpenCloseCashModal } from "@/components/screens/pdv/OpenCloseCashModal";
+import { CashChangeModal } from "@/components/screens/pdv/CashChangeModal";
 
 const PAGE_SIZE = 12;
 
@@ -153,6 +157,8 @@ function CaixaScreenInner() {
   const caixaEnabled = !!(pdvSettings as any)?.caixa_enabled;
   const { sessaoAtiva, isAberto, isLoading: caixaLoading, invalidate: invalidateCaixa } = useCaixa();
   const [showCaixaModal, setShowCaixaModal] = useState(false);
+  // 09/05/2026: modal de troco em vendas single dinheiro
+  const [showChangeModal, setShowChangeModal] = useState(false);
 
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
@@ -335,6 +341,17 @@ function CaixaScreenInner() {
       toast.error("Selecione " + v.missing.join(" e ") + " antes de finalizar a venda");
       return;
     }
+    // 09/05/2026: venda em dinheiro single-payment abre modal de troco
+    // antes de finalizar (auxilio operacional, sem persistir cash_tendered).
+    if (payment === "dinheiro" && !splitMode && totalAfterCoupon > 0) {
+      setShowChangeModal(true);
+      return;
+    }
+    finalizeSale();
+  }
+
+  function handleConfirmCashChange() {
+    setShowChangeModal(false);
     finalizeSale();
   }
 
@@ -649,6 +666,12 @@ function CaixaScreenInner() {
           onClose={() => setShowCaixaModal(false)}
           onSuccess={invalidateCaixa}
         />
+        <CashChangeModal
+          visible={showChangeModal}
+          total={totalAfterCoupon}
+          onCancel={() => setShowChangeModal(false)}
+          onConfirm={handleConfirmCashChange}
+        />
       </View>
     );
   }
@@ -774,6 +797,12 @@ function CaixaScreenInner() {
         sessaoAtiva={sessaoAtiva}
         onClose={() => setShowCaixaModal(false)}
         onSuccess={invalidateCaixa}
+      />
+      <CashChangeModal
+        visible={showChangeModal}
+        total={totalAfterCoupon}
+        onCancel={() => setShowChangeModal(false)}
+        onConfirm={handleConfirmCashChange}
       />
     </View>
   );
