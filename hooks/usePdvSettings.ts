@@ -8,13 +8,19 @@ import { useAuthStore } from "@/stores/auth";
 // Cache infinito por sessao (so muda quando cliente edita).
 // Retorna defaults seguros se ainda nao carregou.
 // Hook expõe `invalidate()` pra forcar re-fetch apos save manual.
+//
+// 09/05/2026: caixa_enabled e crediario_enabled passam a default=true.
+// Antes default era false (gateava recursos), mas decisao do produto e
+// que essas funcionalidades vem ativadas pra todas as empresas — quem
+// nao usa simplesmente desliga em Configuracoes > PDV > Politicas do
+// Caixa. Backend tambem atualizado (migration 106 + ALTER COLUMN DEFAULT).
 // ============================================================
 
 const DEFAULT_SETTINGS: PdvSettings = {
   require_customer:  false,
   require_seller:    false,
-  caixa_enabled:     false,
-  crediario_enabled: false,
+  caixa_enabled:     true,
+  crediario_enabled: true,
 };
 
 export function usePdvSettings() {
