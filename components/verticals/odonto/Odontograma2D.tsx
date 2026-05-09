@@ -8,8 +8,8 @@
 // - 4 tipos de dente com paths anatomicos sem bolinhas
 //
 // PR43.7 (2026-04-29): import trocado de react-native-svg pra ./_svgShim
-// (componentes web-only via React.createElement). Destrava build do
-// Cloudflare Pages que estava quebrado por out-of-sync no package-lock.
+// FIX-22 (2026-05-09): arcada superior vestibular recebe scaleY:-1
+// (orientação clínica correta — coroas voltadas para o plano oclusal).
 // ============================================================
 
 import React, { useMemo } from "react";
@@ -475,6 +475,7 @@ function Tooth({ state, view, selected, onPress }: ToothProps) {
 
 // ============================================================
 // Odontograma2D — vista DUAL (vestibular + oclusal)
+// FIX-22: renderRow aceita flipped para inverter arcada superior
 // ============================================================
 export default function Odontograma2D({
   chart,
@@ -487,8 +488,9 @@ export default function Odontograma2D({
     return m;
   }, [chart]);
 
-  const renderRow = (numbers: number[], view: ToothViewMode) => (
-    <View style={styles.archRow}>
+  // flipped=true aplica scaleY:-1 (orientação clínica: coroa para baixo)
+  const renderRow = (numbers: number[], view: ToothViewMode, flipped = false) => (
+    <View style={[styles.archRow, flipped && styles.archRowFlipped]}>
       {numbers.map((n) => {
         const state =
           teethById.get(n) ||
@@ -522,8 +524,9 @@ export default function Odontograma2D({
 
   return (
     <View style={styles.container}>
+      {/* FIX-22: superior vestibular — flipped=true (coroas para baixo) */}
       <Text style={styles.archLabel}>SUPERIOR · VESTIBULAR</Text>
-      {renderRow(FDI_SUPERIOR, "vest")}
+      {renderRow(FDI_SUPERIOR, "vest", true)}
       {renderNumberRow(FDI_SUPERIOR)}
       {renderRow(FDI_SUPERIOR, "occ")}
       <Text style={styles.archLabel}>SUPERIOR · OCLUSAL</Text>
@@ -582,6 +585,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 4,
     alignItems: "flex-end",
+  },
+  // FIX-22: flip vertical para orientação clínica da arcada superior
+  archRowFlipped: {
+    transform: [{ scaleY: -1 }],
   },
   archDivider: {
     height: 1,
