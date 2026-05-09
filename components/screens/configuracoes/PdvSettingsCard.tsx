@@ -16,6 +16,7 @@ import { Card } from "@/components/screens/configuracoes/shared";
 //   - Obrigar identificação do cliente em toda venda
 //   - Obrigar identificação da vendedora em toda venda
 //   - Ativar módulo de Abertura/Fechamento de Caixa
+//   - Ativar Crediário (fiado por cliente) — 09/05/2026
 //
 // Persistido em companies.pdv_settings (jsonb).
 // ============================================================
@@ -65,7 +66,7 @@ export function PdvSettingsCard() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Políticas do Caixa</Text>
-          <Text style={s.desc}>Defina o que é obrigatório em cada venda</Text>
+          <Text style={s.desc}>Defina o que é obrigatório em cada venda e quais funcionalidades sua loja usa</Text>
         </View>
       </View>
 
@@ -123,6 +124,32 @@ export function PdvSettingsCard() {
         <Pressable onPress={function() { router.push("/caixa"); }} style={s.caixaLink}>
           <Icon name="receipt" size={14} color={Colors.violet3} />
           <Text style={s.caixaLinkText}>Gerenciar caixa</Text>
+          <Icon name="chevron_right" size={14} color={Colors.ink3} />
+        </Pressable>
+      )}
+
+      <View style={s.divider} />
+
+      {/* 09/05/2026: Toggle Crediário (fiado) */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Crediário (fiado)</Text>
+          <Text style={s.rowDesc}>Permite vender no fiado e registrar pagamento posterior pelo cadastro do cliente</Text>
+        </View>
+        <Switch
+          value={display.crediario_enabled}
+          onValueChange={function(v) { toggle("crediario_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={display.crediario_enabled ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+
+      {/* Link para a lista de saldos — visivel apenas quando habilitado */}
+      {display.crediario_enabled && (
+        <Pressable onPress={function() { router.push("/clientes?tab=crediario" as any); }} style={s.caixaLink}>
+          <Icon name="users" size={14} color={Colors.violet3} />
+          <Text style={s.caixaLinkText}>Ver clientes com saldo</Text>
           <Icon name="chevron_right" size={14} color={Colors.ink3} />
         </Pressable>
       )}
