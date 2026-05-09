@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 import { useSalesList } from "@/hooks/useSales";
 import { SaleDetailModal } from "@/components/screens/vendas/SaleDetailModal";
+import { FechamentosTab } from "@/components/screens/vendas/FechamentosTab";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
@@ -13,6 +14,11 @@ import type { SalesListItem, SalesFilters } from "@/services/api";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
+//
+// 09/05/2026: Aba "Fechamentos de Caixa" ao lado da listagem de Vendas.
+// Abas no topo logo abaixo do subtitle; tab "vendas" mantem todo
+// comportamento legado, tab "fechamentos" renderiza FechamentosTab
+// (KPIs + filtros multi-CNPJ + tabela + drawer).
 //
 // MULTICNPJ Onda 2.4 (03/05/2026): em modo consolidated, lista vendas
 // agregadas de TODAS as empresas do user. Cada linha tem badge violeta
@@ -97,6 +103,8 @@ export default function VendasScreen() {
   const [search, setSearch] = useState("");
   const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  // 09/05/2026: aba Fechamentos de Caixa (KPIs+lista) ao lado da listagem de Vendas
+  const [activeTab, setActiveTab] = useState<"vendas" | "fechamentos">("vendas");
 
   const range = useMemo(function() { return periodToRange(period); }, [period]);
 
@@ -151,9 +159,30 @@ export default function VendasScreen() {
         </Pressable>
       </View>
       <Text style={s.subtitle}>
-        Conferencia das vendas do Caixa. Veja detalhes, edite o lancamento financeiro
-        ou cancele uma venda inteira.
+        {activeTab === "vendas"
+          ? "Conferencia das vendas do Caixa. Veja detalhes, edite o lancamento financeiro ou cancele uma venda inteira."
+          : "Acompanhamento dos fechamentos de caixa: hero com totais do mes, filtros por empresa e por divergencia, drawer com detalhe."}
       </Text>
+
+      {/* 09/05/2026: tabs Vendas / Fechamentos de Caixa */}
+      <View style={s.tabBar}>
+        <Pressable
+          onPress={function() { setActiveTab("vendas"); }}
+          style={[s.tabBtn, activeTab === "vendas" && s.tabBtnActive]}
+        >
+          <Text style={[s.tabBtnText, activeTab === "vendas" && s.tabBtnTextActive]}>Vendas</Text>
+        </Pressable>
+        <Pressable
+          onPress={function() { setActiveTab("fechamentos"); }}
+          style={[s.tabBtn, activeTab === "fechamentos" && s.tabBtnActive]}
+        >
+          <Text style={[s.tabBtnText, activeTab === "fechamentos" && s.tabBtnTextActive]}>Fechamentos de Caixa</Text>
+        </Pressable>
+      </View>
+
+      {activeTab === "fechamentos" && <FechamentosTab />}
+
+      {activeTab === "vendas" && (<>
 
       {/* MULTICNPJ Onda 2.4: banner consolidado */}
       {showCompanyBadge && (
@@ -162,7 +191,7 @@ export default function VendasScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.consolidatedTitle}>
               {consolidatedView
-                ? `Vendas consolidadas \u00b7 ${companyCount} empresas`
+                ? `Vendas consolidadas · ${companyCount} empresas`
                 : `Visualizando vendas desta empresa`}
             </Text>
             <Text style={s.consolidatedSub}>
@@ -217,8 +246,8 @@ export default function VendasScreen() {
                     </View>
                     <Text style={s.breakdownMeta}>
                       {b.total_sales} venda{b.total_sales !== 1 ? "s" : ""}
-                      {b.cancelled_sales > 0 ? ` \u00b7 ${b.cancelled_sales} cancelada${b.cancelled_sales !== 1 ? "s" : ""}` : ""}
-                      {" \u00b7 ticket " + fmt(b.avg_ticket)}
+                      {b.cancelled_sales > 0 ? ` · ${b.cancelled_sales} cancelada${b.cancelled_sales !== 1 ? "s" : ""}` : ""}
+                      {" · ticket " + fmt(b.avg_ticket)}
                     </Text>
                   </View>
                   <Text style={s.breakdownRevenue}>{fmt(b.revenue)}</Text>
@@ -372,6 +401,8 @@ export default function VendasScreen() {
         </View>
       )}
 
+      </>)}
+
       {/* MODAL DE DETALHES — em consolidated, passa companyId+companyName do sale clicado */}
       <SaleDetailModal
         visible={!!selectedSale}
@@ -484,4 +515,11 @@ const s = StyleSheet.create({
 
   moreHint: { padding: 14, alignItems: "center", borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4 },
   moreHintText: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
+  // 09/05/2026: tab bar Vendas/Fechamentos
+  tabBar: { flexDirection: "row", gap: 4, marginTop: 4, marginBottom: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  tabBtn: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  tabBtnActive: { borderBottomColor: Colors.violet },
+  tabBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  tabBtnTextActive: { color: Colors.violet3, fontWeight: "700" },
+
 });
