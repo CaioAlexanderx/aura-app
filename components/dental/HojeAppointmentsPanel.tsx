@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
@@ -10,35 +10,42 @@ import { DentalColors } from "@/constants/dental-tokens";
 // ============================================================
 // HojeAppointmentsPanel — Lista de proximos atendimentos do dia
 // PR19 (2026-04-27): bug fix — status 'confirmado' nao existe no
-// enum dental_appointment_status. Substituido por aprovado +
-// avaliacao (valores reais).
-// PR24 (2026-04-28): botao "Prontuario" ao lado do "Iniciar"
-// abre PatientHub na aba prontuario via deep-link.
+//   enum → substituido por aprovado + avaliacao.
+// PR24 (2026-04-28): botao "Prontuario" ao lado do "Iniciar".
+// FIX-11 (2026-05-09): STATUS_META — escala canonica:
+//   Azul=Agendado, Laranja=Confirmado, Amarelo=Em atendimento, Verde=Concluido.
+// FIX-17 (2026-05-09): botao Cancelar inline por linha com confirmacao.
 // ============================================================
 
 interface DentalAppointment {
   id: string;
-  patient_id?: string;       // PR24: pra atalho de prontuario (BE retorna c.id AS patient_id)
-  customer_id?: string;      // PR24: alias do patient_id
+  patient_id?: string;
+  customer_id?: string;
   patient_name: string;
   patient_phone?: string;
   scheduled_at: string;
   duration_min: number;
   chief_complaint?: string;
-  status: "agendado" | "avaliacao" | "aprovado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
+  status: "agendado" | "confirmado" | "avaliacao" | "aprovado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
   chair?: string;
   professional_name?: string;
   professional_color?: string;
 }
 
+// FIX-11: escala canonica de cores
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  agendado:       { label: "Agendado",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)" },
-  aprovado:       { label: "Aprovado",       color: "#10B981", bg: "rgba(16,185,129,0.14)" },
-  avaliacao:      { label: "Avaliacao",      color: "#06B6D4", bg: "rgba(6,182,212,0.14)" },
-  em_atendimento: { label: "Em atendimento", color: "#F59E0B", bg: "rgba(245,158,11,0.14)" },
+  agendado:       { label: "Agendado",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
+  confirmado:     { label: "Confirmado",      color: "#F97316", bg: "rgba(249,115,22,0.14)"  },
+  avaliacao:      { label: "Avaliacao",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
+  aprovado:       { label: "Aprovado",        color: "#A78BFA", bg: "rgba(167,139,250,0.14)" },
+  em_atendimento: { label: "Em atendimento",  color: "#F59E0B", bg: "rgba(245,158,11,0.14)"  },
+  concluido:      { label: "Concluido",       color: "#10B981", bg: "rgba(16,185,129,0.14)"  },
+  faltou:         { label: "Faltou",          color: "#EF4444", bg: "rgba(239,68,68,0.14)"   },
+  cancelado:      { label: "Cancelado",       color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
 };
 
-const VISIBLE_STATUSES = new Set(["agendado", "aprovado", "em_atendimento"]);
+const VISIBLE_STATUSES = new Set(["agendado", "confirmado", "avaliacao", "aprovado", "em_atendimento"]);
+const CANCELABLE_STATUSES = new Set(["agendado", "confirmado", "avaliacao", "aprovado"]);
 const MAX_ROWS = 6;
 
 function todayISO(): string {
@@ -57,15 +64,17 @@ function formatTime(iso: string): string {
 
 function emptyMessage(): { title: string; sub: string } {
   const h = new Date().getHours();
-  if (h < 12) return { title: "Manha livre",  sub: "Nenhum atendimento agendado para hoje. Bom momento pra colocar a clinica em ordem." };
+  if (h < 12) return { title: "Manha livre",    sub: "Nenhum atendimento agendado para hoje. Bom momento pra colocar a clinica em ordem." };
   if (h < 18) return { title: "Tarde tranquila", sub: "Sem proximos atendimentos no dia. Aproveite pra revisar pacientes em recall." };
-  return                { title: "Dia encerrado",  sub: "Sem atendimentos restantes hoje. Confira a agenda de amanha pra se preparar." };
+  return              { title: "Dia encerrado",   sub: "Sem atendimentos restantes hoje. Confira a agenda de amanha pra se preparar." };
 }
 
 export function HojeAppointmentsPanel() {
   const cid = useAuthStore().company?.id;
   const router = useRouter();
+  const qc = useQueryClient();
   const today = todayISO();
+  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["dental-hoje-appointments", cid, today],
@@ -75,6 +84,19 @@ export function HojeAppointmentsPanel() {
       ),
     enabled: !!cid,
     staleTime: 30000,
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: (id: string) =>
+      request(`/companies/${cid}/dental/appointments/${id}`, {
+        method: "PATCH",
+        body: { status: "cancelado" },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dental-hoje-appointments"] });
+      qc.invalidateQueries({ queryKey: ["dental-agenda"] });
+      setCancelConfirm(null);
+    },
   });
 
   const upcoming = useMemo(() => {
@@ -138,38 +160,95 @@ export function HojeAppointmentsPanel() {
         <View>
           {visible.map((a) => {
             const meta = STATUS_META[a.status] || STATUS_META.agendado;
+            const isCancelConfirming = cancelConfirm === a.id;
+            const canceling = cancelMut.isPending && cancelConfirm === a.id;
             return (
-              <View key={a.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
-                <Text style={{ width: 50, fontSize: 13, fontWeight: "700", color: DentalColors.cyan, fontFamily: "JetBrains Mono, monospace" as any }}>
-                  {formatTime(a.scheduled_at)}
-                </Text>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "600", color: DentalColors.ink, marginBottom: 2 }}>
-                    {a.patient_name || "Paciente sem nome"}
+              <View key={a.id}>
+                {/* Main row */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: isCancelConfirming ? 0 : 1, borderBottomColor: DentalColors.border }}>
+                  <Text style={{ width: 46, fontSize: 13, fontWeight: "700", color: DentalColors.cyan, fontFamily: "JetBrains Mono, monospace" as any }}>
+                    {formatTime(a.scheduled_at)}
                   </Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11, color: DentalColors.ink2 }}>
-                    {a.chief_complaint || "Consulta"}
-                    {a.professional_name ? `  ·  ${a.professional_name}` : ""}
-                    {a.duration_min ? `  ·  ${a.duration_min}min` : ""}
-                  </Text>
-                </View>
-                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: meta.bg }}>
-                  <Text style={{ fontSize: 9, fontWeight: "700", color: meta.color, letterSpacing: 0.4, textTransform: "uppercase" }}>
-                    {meta.label}
-                  </Text>
-                </View>
-                {a.status === "agendado" || a.status === "aprovado" || a.status === "em_atendimento" ? (
-                  <View style={{ flexDirection: "row", gap: 6 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "600", color: DentalColors.ink, marginBottom: 2 }}>
+                      {a.patient_name || "Paciente sem nome"}
+                    </Text>
+                    <Text numberOfLines={1} style={{ fontSize: 11, color: DentalColors.ink2 }}>
+                      {a.chief_complaint || "Consulta"}
+                      {a.professional_name ? `  ·  ${a.professional_name}` : ""}
+                      {a.duration_min ? `  ·  ${a.duration_min}min` : ""}
+                    </Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: meta.bg }}>
+                    <Text style={{ fontSize: 9, fontWeight: "700", color: meta.color, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                      {meta.label}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 5 }}>
+                    {/* Prontuário */}
                     {(a.customer_id || a.patient_id) ? (
-                      <Pressable onPress={() => router.push(`/dental/(clinic)/pacientes?open_patient=${a.customer_id || a.patient_id}&tab=prontuario` as any)} style={{ backgroundColor: "rgba(124,58,237,0.12)", borderWidth: 1, borderColor: "rgba(124,58,237,0.30)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 }} accessibilityLabel={`Abrir prontuario de ${a.patient_name || "paciente"}`}>
-                        <Text style={{ color: DentalColors.violet, fontSize: 10, fontWeight: "700" }}>📋 Prontuario</Text>
+                      <Pressable
+                        onPress={() => router.push(`/dental/(clinic)/pacientes?open_patient=${a.customer_id || a.patient_id}&tab=prontuario` as any)}
+                        style={{ backgroundColor: "rgba(124,58,237,0.12)", borderWidth: 1, borderColor: "rgba(124,58,237,0.30)", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6 }}
+                        accessibilityLabel={`Prontuario de ${a.patient_name || "paciente"}`}
+                      >
+                        <Text style={{ color: DentalColors.violet, fontSize: 10, fontWeight: "700" }}>📋</Text>
                       </Pressable>
                     ) : null}
-                    <Pressable onPress={() => router.push(`/dental/consulta/${a.id}` as any)} style={{ backgroundColor: DentalColors.cyan, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 }} accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}>
-                      <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>▶ Iniciar</Text>
+                    {/* Iniciar / Retornar */}
+                    {a.status === "em_atendimento" ? (
+                      <Pressable
+                        onPress={() => router.push(`/dental/consulta/${a.id}` as any)}
+                        style={{ backgroundColor: "#F59E0B", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}
+                        accessibilityLabel={`Retornar atendimento de ${a.patient_name || "paciente"}`}
+                      >
+                        <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>↩ Retornar</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => router.push(`/dental/consulta/${a.id}` as any)}
+                        style={{ backgroundColor: DentalColors.cyan, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}
+                        accessibilityLabel={`Iniciar consulta de ${a.patient_name || "paciente"}`}
+                      >
+                        <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>▶ Iniciar</Text>
+                      </Pressable>
+                    )}
+                    {/* Cancelar — mostra botão ✕ para statuses canceláveis */}
+                    {CANCELABLE_STATUSES.has(a.status) && !isCancelConfirming && (
+                      <Pressable
+                        onPress={() => setCancelConfirm(a.id)}
+                        style={{ backgroundColor: "rgba(239,68,68,0.08)", borderWidth: 1, borderColor: "rgba(239,68,68,0.25)", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6 }}
+                        accessibilityLabel={`Cancelar consulta de ${a.patient_name || "paciente"}`}
+                      >
+                        <Text style={{ fontSize: 10, color: "#EF4444", fontWeight: "700" }}>✕</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+                {/* Confirmação de cancelamento inline */}
+                {isCancelConfirming && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: DentalColors.border, backgroundColor: "rgba(239,68,68,0.04)", borderRadius: 8, marginBottom: 2 }}>
+                    <Text style={{ flex: 1, fontSize: 12, color: "#EF4444" }}>
+                      Cancelar{" "}<Text style={{ fontWeight: "700" }}>{a.patient_name}</Text>?
+                    </Text>
+                    <Pressable
+                      onPress={() => cancelMut.mutate(a.id)}
+                      disabled={canceling}
+                      style={{ backgroundColor: "#EF4444", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 }}
+                    >
+                      {canceling
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={{ fontSize: 12, color: "#fff", fontWeight: "700" }}>Confirmar</Text>
+                      }
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setCancelConfirm(null)}
+                      style={{ backgroundColor: DentalColors.surface, borderWidth: 1, borderColor: DentalColors.border, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 }}
+                    >
+                      <Text style={{ fontSize: 12, color: DentalColors.ink2, fontWeight: "600" }}>Nao</Text>
                     </Pressable>
                   </View>
-                ) : null}
+                )}
               </View>
             );
           })}

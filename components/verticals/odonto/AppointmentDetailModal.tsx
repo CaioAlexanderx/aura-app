@@ -5,11 +5,10 @@
 //
 // Item 1  (2026-04-27): Modal centrado (fade, backdrop escuro centralizado).
 // Item 10 (2026-04-27): Assinatura vinculada ao fim do atendimento.
-//   - "Concluir consulta" abre SignatureRequestModal.
-//   - Se paciente assinar -> BE transiciona pra concluido automaticamente.
-//   - Se fechar sem assinar -> so fecha o drawer, nao conclui.
-//   - Botao avulso "Coletar assinatura" removido.
 // PR24 (2026-04-28): atalho "Abrir prontuario" no footer.
+// FIX-16 (2026-05-09): transicao agendado → confirmado + botao "Confirmar".
+// FIX-21 (2026-05-09): seletor de status com chips (Nao confirmada,
+//   Confirmada, Falta justificada, Falta, Paciente no consultorio).
 // ============================================================
 import { useState } from "react";
 import { useRouter } from "expo-router";
@@ -28,21 +27,33 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  agendado: "Agendado",
-  avaliacao: "Em avaliacao",
-  aprovado: "Aprovado",
-  em_atendimento: "Em atendimento",
-  concluido: "Concluido",
-  cancelado: "Cancelado",
-  faltou: "Faltou",
-  confirmado: "Confirmado",
+  agendado:             "Agendado",
+  confirmado:           "Confirmado",
+  avaliacao:            "Em avaliacao",
+  aprovado:             "Aprovado",
+  em_atendimento:       "Em atendimento",
+  concluido:            "Concluido",
+  cancelado:            "Cancelado",
+  faltou:               "Faltou",
+  falta_justificada:    "Falta justificada",
+  paciente_consultorio: "Paciente no consultorio",
 };
+
+// Chips de status disponíveis para seleção rápida (FIX-21)
+const STATUS_CHIPS: Array<{ value: string; label: string; color: string }> = [
+  { value: "agendado",             label: "Nao confirmada",        color: "#06B6D4" },
+  { value: "confirmado",           label: "Confirmada",            color: "#F97316" },
+  { value: "paciente_consultorio", label: "Paciente no consult.",  color: "#A78BFA" },
+  { value: "falta_justificada",    label: "Falta justificada",     color: "#F59E0B" },
+  { value: "faltou",               label: "Falta",                 color: "#EF4444" },
+];
 
 export function AppointmentDetailModal({ visible, appointmentId, onClose }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
   const router = useRouter();
   const [signatureOpen, setSignatureOpen] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-appointment", cid, appointmentId],
@@ -59,6 +70,8 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dental-agenda"] });
       qc.invalidateQueries({ queryKey: ["dental-appointment"] });
+      qc.invalidateQueries({ queryKey: ["dental-hoje-appointments"] });
+      setShowStatusPicker(false);
     },
   });
 
@@ -67,10 +80,11 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
 
   function canTransitionTo(target: string): boolean {
     const transitions: Record<string, string[]> = {
-      agendado: ["avaliacao", "em_atendimento", "cancelado", "faltou"],
-      avaliacao: ["aprovado", "cancelado"],
-      aprovado: ["em_atendimento", "cancelado"],
-      em_atendimento: ["concluido", "cancelado"],
+      agendado:             ["confirmado", "avaliacao", "em_atendimento", "cancelado", "faltou"],
+      confirmado:           ["em_atendimento", "cancelado", "faltou"],
+      avaliacao:            ["aprovado", "cancelado"],
+      aprovado:             ["em_atendimento", "cancelado"],
+      em_atendimento:       ["concluido", "cancelado"],
     };
     return (transitions[status] || []).includes(target);
   }
@@ -82,18 +96,17 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
   }
 
   function handleSigned() {
-    // Assinatura foi capturada pelo WS -> BE ja transicionou pra concluido.
-    // Fecha o modal de assinatura e tambem o modal principal.
     setSignatureOpen(false);
     onClose();
   }
 
   function handleConcluirClick() {
-    // Abre assinatura vinculada ao documento gerado.
-    // Se o paciente assinar -> handleSigned fecha tudo.
-    // Se fechar sem assinar -> apenas fecha a assinatura (nao conclui).
     setSignatureOpen(true);
   }
+
+  // Status válidos para o chip selector (não mostra status já concluídos/cancelados)
+  const CHIP_APPLICABLE = new Set(["agendado", "confirmado", "avaliacao", "aprovado"]);
+  const showChips = appt && CHIP_APPLICABLE.has(status);
 
   const backdropWebBlur = Platform.OS === "web" ? {
     backdropFilter: "blur(4px)",
@@ -108,12 +121,45 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
           <View style={s.header}>
             <View>
               <Text style={s.title}>Detalhes</Text>
-              {status && <View style={s.statusPill}><Text style={s.statusPillText}>{STATUS_LABELS[status] || status}</Text></View>}
+              {status && (
+                <Pressable onPress={() => showChips && setShowStatusPicker(p => !p)} style={s.statusPill}>
+                  <Text style={s.statusPillText}>{STATUS_LABELS[status] || status}</Text>
+                  {showChips && <Text style={{ fontSize: 9, color: "#06B6D4", marginLeft: 4 }}>{showStatusPicker ? "▲" : "▼"}</Text>}
+                </Pressable>
+              )}
             </View>
             <Pressable onPress={onClose} hitSlop={8}>
               <Icon name="x" size={20} color={Colors.ink3} />
             </Pressable>
           </View>
+
+          {/* FIX-21: Seletor de status por chips */}
+          {showStatusPicker && showChips && (
+            <View style={s.statusPickerWrap}>
+              <Text style={s.statusPickerLabel}>Definir status</Text>
+              <View style={s.statusChipsRow}>
+                {STATUS_CHIPS.map((chip) => {
+                  const isActive = status === chip.value;
+                  return (
+                    <Pressable
+                      key={chip.value}
+                      onPress={() => !isActive && statusMut.mutate(chip.value)}
+                      disabled={statusMut.isPending}
+                      style={[
+                        s.statusChip,
+                        { borderColor: chip.color, backgroundColor: isActive ? chip.color + "22" : "transparent" },
+                      ]}
+                    >
+                      {statusMut.isPending && status !== chip.value ? null : null}
+                      <Text style={[s.statusChipText, { color: chip.color }, isActive && { fontWeight: "800" }]}>
+                        {isActive ? "● " : ""}{chip.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           {isLoading ? (
             <View style={{ padding: 40, alignItems: "center" }}>
@@ -158,7 +204,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                   <Text style={s.concludeNoteText}>A assinatura do paciente sera coletada ao concluir</Text>
                 </View>
               )}
-              {/* PR24: atalho pro prontuario do paciente */}
+              {/* Atalho pro prontuario do paciente */}
               {(appt.customer_id || appt.patient_id) && (
                 <Pressable
                   onPress={() => {
@@ -171,6 +217,12 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                 </Pressable>
               )}
               <View style={s.footer}>
+                {/* FIX-16: botao Confirmar quando agendado */}
+                {canTransitionTo("confirmado") && (
+                  <Pressable onPress={() => statusMut.mutate("confirmado")} style={[s.btn, s.btnConfirm]} disabled={statusMut.isPending}>
+                    {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>✓ Confirmar</Text>}
+                  </Pressable>
+                )}
                 {canTransitionTo("em_atendimento") && (
                   <Pressable onPress={() => statusMut.mutate("em_atendimento")} style={[s.btn, s.btnPrimary]} disabled={statusMut.isPending}>
                     {statusMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Iniciar atendimento</Text>}
@@ -179,7 +231,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                 {canTransitionTo("concluido") && (
                   <Pressable onPress={handleConcluirClick} style={[s.btn, s.btnSuccess]} disabled={statusMut.isPending}>
                     <Icon name="edit" size={14} color="#fff" />
-                    <Text style={s.btnPrimaryText}>Concluir + Coletar Assinatura</Text>
+                    <Text style={s.btnPrimaryText}>Concluir + Assinatura</Text>
                   </Pressable>
                 )}
                 {canTransitionTo("cancelado") && (
@@ -187,7 +239,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
                     <Text style={s.btnDangerText}>Cancelar</Text>
                   </Pressable>
                 )}
-                {!canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && (
+                {!canTransitionTo("confirmado") && !canTransitionTo("em_atendimento") && !canTransitionTo("concluido") && !canTransitionTo("cancelado") && (
                   <Pressable onPress={onClose} style={[s.btn, s.btnGhost]}>
                     <Text style={s.btnGhostText}>Fechar</Text>
                   </Pressable>
@@ -225,8 +277,14 @@ const s = StyleSheet.create({
   sheet: { backgroundColor: Colors.bg2 || "#0f0f1e", borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "85%", borderWidth: 1, borderColor: Colors.border },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 12 },
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
-  statusPill: { alignSelf: "flex-start", backgroundColor: "rgba(6,182,212,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 6 },
+  statusPill: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(6,182,212,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 6 },
   statusPillText: { fontSize: 11, color: "#06B6D4", fontWeight: "600" },
+  // FIX-21: Status picker
+  statusPickerWrap: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 4, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: "rgba(6,182,212,0.04)" },
+  statusPickerLabel: { fontSize: 10, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
+  statusChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  statusChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  statusChipText: { fontSize: 11, fontWeight: "600" },
   body: { padding: 20, gap: 8, paddingBottom: 30 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 10 },
   rowLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
@@ -244,7 +302,8 @@ const s = StyleSheet.create({
   concludeNote: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
   concludeNoteText: { fontSize: 11, color: Colors.ink3 },
   footer: { flexDirection: "row", gap: 8, padding: 16, flexWrap: "wrap" },
-  btn: { flex: 1, minWidth: 120, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
+  btn: { flex: 1, minWidth: 110, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
+  btnConfirm: { backgroundColor: "#F97316" },
   btnPrimary: { backgroundColor: Colors.violet || "#6d28d9" },
   btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   btnSuccess: { backgroundColor: "#10B981" },
