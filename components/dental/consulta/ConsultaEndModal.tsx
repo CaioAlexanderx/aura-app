@@ -1,6 +1,8 @@
 // ============================================================
 // ConsultaEndModal — Encerramento da consulta com edicao livre.
 // PR34 (2026-04-28): backdrop centrado + sheet com maxWidth.
+// FIX-7 (2026-05-09): removido texto "Tudo aqui e editavel...";
+//   layout mais limpo com instrucao minima.
 // ============================================================
 
 import { useState } from "react";
@@ -22,6 +24,7 @@ interface Props {
   toothChanges: ToothChange[];
   transcript: VoiceSegment[];
   procedureSeed: string;
+  evolutionDraft?: string;
   patientName?: string;
   patientPhone?: string;
   onClose: () => void;
@@ -43,7 +46,7 @@ function buildTranscriptSummary(segments: VoiceSegment[]): string {
 
 export function ConsultaEndModal({
   open, appointmentId, patientId, toothChanges, transcript,
-  procedureSeed, patientName, patientPhone, onClose, onDone,
+  procedureSeed, evolutionDraft, patientName, patientPhone, onClose, onDone,
 }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
@@ -53,9 +56,13 @@ export function ConsultaEndModal({
 
   const [showSignature, setShowSignature] = useState(false);
 
-  const [evolution, setEvolution] = useState(
-    procedureSeed ? `Procedimento: ${procedureSeed}.\n\nSem intercorrencias. Paciente respondeu bem.` : "Procedimento realizado conforme planejado. Sem intercorrencias.",
-  );
+  const [evolution, setEvolution] = useState(() => {
+    // Seed: draft do ConsultaShell tem prioridade, depois procedureSeed
+    if (evolutionDraft && evolutionDraft.trim()) return evolutionDraft;
+    return procedureSeed
+      ? `Procedimento: ${procedureSeed}.\n\nSem intercorrencias. Paciente respondeu bem.`
+      : "Procedimento realizado conforme planejado. Sem intercorrencias.";
+  });
   const [toothNotes, setToothNotes] = useState(buildToothChangesText(toothChanges));
   const [transcriptSummary, setTranscriptSummary] = useState(buildTranscriptSummary(transcript));
   const [whatsappDraft, setWhatsappDraft] = useState(
@@ -118,12 +125,15 @@ export function ConsultaEndModal({
           maxHeight: "92%", padding: 18,
           width: "100%", maxWidth: 640,
         }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
-            Encerrar consulta
-          </Text>
-          <Text style={{ fontSize: 11, color: DentalColors.ink3, marginBottom: 14 }}>
-            Tudo aqui e editavel. Revise antes de salvar — depois, vai pro prontuario.
-          </Text>
+          {/* FIX-7: cabecalho sem o texto verboso */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink }}>
+              Encerrar consulta
+            </Text>
+            <Pressable onPress={onClose} style={{ padding: 4 }}>
+              <Text style={{ fontSize: 16, color: DentalColors.ink3 }}>✕</Text>
+            </Pressable>
+          </View>
 
           <ScrollView style={{ maxHeight: 460 }}>
             <SummaryCard title="📋 Procedimento realizado">

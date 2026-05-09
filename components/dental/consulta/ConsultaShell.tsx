@@ -2,14 +2,16 @@
 // ConsultaShell — Orquestrador do Modo Consulta.
 // PR32 #6 (2026-04-28): Anotar via Web Speech API.
 // PR44 #10 #19 (2026-04-29): UAT bugs P0
-//   - state hidratado do useDentalConsultaStore (Zustand) — ao
-//     minimizar, state sobrevive route unmount; ao reentrar, retoma.
+//   - state hidratado do useDentalConsultaStore (Zustand).
 //   - saveEvolutionMut: PATCH apenas clinical_notes sem mudar status.
-//     Botao "Salvar evolucao" na ConsultaTopbar permite salvar parcial.
+// FIX-19 (2026-05-09): campo de anotacoes de evolucao livre (evolutionDraft)
+//   adicionado ao layout ativo; saveEvolutionMut inclui draft.
+// FIX-20 (2026-05-09): intro stage renderizado como popup card
+//   (fundo escuro centrado); cancelar navega para /agenda.
 // ============================================================
 
 import { useEffect, useMemo, useReducer, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, useWindowDimensions, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { request } from "@/services/api";
@@ -89,6 +91,7 @@ function buildTeethFromChart(chart?: ChartResp | null, overrides?: Record<number
 
 type Action =
   | { type: "start" }
+  | { type: "set_draft"; text: string }   // FIX-19
   | { type: "tooth_change"; change: ToothChange }
   | { type: "transcript_append"; segment: VoiceSegment }
   | { type: "transcript_command"; segment: VoiceSegment }
@@ -98,6 +101,7 @@ type Action =
 function reducer(s: ConsultaState, a: Action): ConsultaState {
   switch (a.type) {
     case "start": return { ...s, stage: "active", startedAt: new Date().toISOString() };
+    case "set_draft": return { ...s, evolutionDraft: a.text };    // FIX-19
     case "tooth_change":
       return { ...s, toothChanges: [...s.toothChanges.filter((c) => c.tooth_number !== a.change.tooth_number), a.change] };
     case "transcript_append":
@@ -122,7 +126,6 @@ export function ConsultaShell({ appointmentId }: Props) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
 
-  // PR44 #10: hidratacao do estado a partir do store Zustand
   const consultaStore = useDentalConsultaStore();
   const [state, dispatch] = useReducer(
     reducer,
@@ -130,8 +133,6 @@ export function ConsultaShell({ appointmentId }: Props) {
     (id) => consultaStore.get(id) || initialState
   );
 
-  // PR44 #10: sincroniza state -> store sempre que muda. Permite minimizar e
-  // voltar sem perder toothChanges/transcript.
   useEffect(() => {
     consultaStore.set(appointmentId, state);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,11 +199,9 @@ export function ConsultaShell({ appointmentId }: Props) {
     onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar dente"),
   });
 
-  // PR44 #19: salvar evolucao parcial sem encerrar consulta
+  // FIX-19: saveEvolution inclui evolutionDraft + feedback se vazio
   const saveEvolutionMut = useMutation({
     mutationFn: () => {
-      // Compila transcript + toothChanges em texto narrativo. Mesma logica
-      // que o ConsultaEndModal usa, mas SEM mudar status.
       const transcriptText = state.transcript
         .filter((t) => !t.isCommand)
         .map((t) => `[${new Date(t.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}] ${t.text}`)
@@ -211,9 +210,13 @@ export function ConsultaShell({ appointmentId }: Props) {
         .map((c) => `Dente ${c.tooth_number}: ${c.prev_status} → ${c.status}${c.notes ? ` (${c.notes})` : ""}`)
         .join("\n");
       const fullNotes = [
+        state.evolutionDraft?.trim() && `— Anotações —\n${state.evolutionDraft.trim()}`,
         transcriptText && `— Transcrição da consulta —\n${transcriptText}`,
         toothText && `— Alterações no odontograma —\n${toothText}`,
       ].filter(Boolean).join("\n\n");
+      if (!fullNotes.trim()) {
+        return Promise.reject(Object.assign(new Error("vazio"), { _vazio: true }));
+      }
       return request(`/companies/${cid}/dental/appointments/${appointmentId}`, {
         method: "PATCH",
         body: { clinical_notes: fullNotes },
@@ -223,7 +226,14 @@ export function ConsultaShell({ appointmentId }: Props) {
       qc.invalidateQueries({ queryKey: ["dental-appt", cid, appointmentId] });
       toast.success("Evolução salva");
     },
-    onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar evolução"),
+    onError: (e: any) => {
+      if ((e as any)?._vazio) {
+        toast.info?.("Adicione anotações, use a voz ou edite o odontograma antes de salvar.") ||
+          toast.success("Nada novo para salvar ainda.");
+      } else {
+        toast.error(e?.data?.error || "Erro ao salvar evolução");
+      }
+    },
   });
 
   function onToothSelect(t: ToothData) { setSelectedTooth(t); }
@@ -262,22 +272,39 @@ export function ConsultaShell({ appointmentId }: Props) {
     }});
   }
 
+  // FIX-20: intro stage como popup card (fundo escuro + card centrado)
   if (state.stage === "intro") {
     return (
-      <View style={{ flex: 1, backgroundColor: DentalColors.bg }}>
-        {apptQ.isLoading ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <ActivityIndicator color={DentalColors.cyan} />
-            <Text style={{ color: DentalColors.ink3, fontSize: 11 }}>Carregando consulta...</Text>
-          </View>
-        ) : (
-          <ConsultaIntro
-            patient={patient} appointment={appointment} appointmentId={appointmentId}
-            patientId={patientId || ""} loading={apptQ.isFetching}
-            onStart={() => dispatch({ type: "start" })}
-            onCancel={() => router.back()} onBriefReady={setBriefSeed}
-          />
-        )}
+      <View style={{
+        flex: 1,
+        backgroundColor: "rgba(5,3,12,0.92)",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 16,
+      }}>
+        <View style={{
+          width: "100%", maxWidth: 680,
+          maxHeight: "96%",
+          backgroundColor: DentalColors.bg,
+          borderRadius: 20,
+          borderWidth: 1, borderColor: DentalColors.border,
+          overflow: "hidden",
+        }}>
+          {apptQ.isLoading ? (
+            <View style={{ padding: 48, alignItems: "center", gap: 10 }}>
+              <ActivityIndicator color={DentalColors.cyan} />
+              <Text style={{ color: DentalColors.ink3, fontSize: 11 }}>Carregando consulta...</Text>
+            </View>
+          ) : (
+            <ConsultaIntro
+              patient={patient} appointment={appointment} appointmentId={appointmentId}
+              patientId={patientId || ""} loading={apptQ.isFetching}
+              onStart={() => dispatch({ type: "start" })}
+              onCancel={() => router.replace("/dental/(clinic)/agenda" as any)}
+              onBriefReady={setBriefSeed}
+            />
+          )}
+        </View>
       </View>
     );
   }
@@ -311,8 +338,34 @@ export function ConsultaShell({ appointmentId }: Props) {
           <View style={{ flex: 1.1, borderRightWidth: 1, borderRightColor: DentalColors.border }}>
             <ConsultaVoicePanel transcript={state.transcript} onAppendSegment={onVoiceSegment} onCommand={onVoiceCommand} />
           </View>
-          <View style={{ flex: 1 }}>
-            <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
+          {/* FIX-19: painel direito com anotacoes + AI */}
+          <View style={{ flex: 1, flexDirection: "column" }}>
+            <View style={{
+              paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6,
+              borderBottomWidth: 1, borderBottomColor: DentalColors.border,
+            }}>
+              <Text style={{ fontSize: 8, color: DentalColors.ink3, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 }}>
+                ANOTAÇÕES
+              </Text>
+              <TextInput
+                value={state.evolutionDraft || ""}
+                onChangeText={(t) => dispatch({ type: "set_draft", text: t })}
+                placeholder="Anotacoes de evolucao... (salvo com Salvar evolucao)"
+                placeholderTextColor={DentalColors.ink3}
+                multiline
+                style={{
+                  fontSize: 11, color: DentalColors.ink,
+                  backgroundColor: DentalColors.bg2,
+                  borderRadius: 6, padding: 6,
+                  minHeight: 52, maxHeight: 80,
+                  textAlignVertical: "top" as const,
+                  borderWidth: 1, borderColor: DentalColors.border,
+                }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ConsultaAiPanel appointmentId={appointmentId} patientId={patientId || ''} briefSeed={briefSeed || undefined} />
+            </View>
           </View>
         </View>
       ) : null}
@@ -333,7 +386,7 @@ export function ConsultaShell({ appointmentId }: Props) {
             <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>📋 Prontuario</Text>
           </Pressable>
           <Pressable onPress={() => setShowVoiceMobile(true)} style={{ flex: 1, backgroundColor: DentalColors.red, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>🎙 Voz / IA</Text>
+            <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>🎤 Voz / IA</Text>
           </Pressable>
         </View>
       ) : null}
@@ -346,6 +399,18 @@ export function ConsultaShell({ appointmentId }: Props) {
               <Text style={{ color: DentalColors.ink2, fontSize: 14 }}>✕</Text>
             </Pressable>
           </View>
+          {/* FIX-19 mobile: campo de anotacoes no painel prontuario */}
+          <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
+            <Text style={{ fontSize: 8, color: DentalColors.ink3, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 }}>ANOTAÇÕES</Text>
+            <TextInput
+              value={state.evolutionDraft || ""}
+              onChangeText={(t) => dispatch({ type: "set_draft", text: t })}
+              placeholder="Anotacoes de evolucao..."
+              placeholderTextColor={DentalColors.ink3}
+              multiline
+              style={{ fontSize: 11, color: DentalColors.ink, backgroundColor: DentalColors.bg, borderRadius: 6, padding: 6, minHeight: 50, textAlignVertical: "top" as const, borderWidth: 1, borderColor: DentalColors.border }}
+            />
+          </View>
           <ConsultaProntuarioPanel patient={patient} planItems={[]} timeline={[]} />
         </View>
       ) : null}
@@ -353,7 +418,7 @@ export function ConsultaShell({ appointmentId }: Props) {
       {!isDesktop && showVoiceMobile ? (
         <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "70%", zIndex: 100, backgroundColor: DentalColors.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderTopColor: DentalColors.border, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24, flexDirection: "column" }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
-            <Text style={{ color: DentalColors.ink, fontSize: 13, fontWeight: "700" }}>🎙 Voz + IA Aura</Text>
+            <Text style={{ color: DentalColors.ink, fontSize: 13, fontWeight: "700" }}>🎤 Voz + IA Aura</Text>
             <Pressable onPress={() => setShowVoiceMobile(false)}>
               <Text style={{ color: DentalColors.ink2, fontSize: 14 }}>✕</Text>
             </Pressable>
@@ -377,10 +442,11 @@ export function ConsultaShell({ appointmentId }: Props) {
         open={state.stage === "ended"}
         appointmentId={appointmentId} patientId={patientId || null}
         toothChanges={state.toothChanges} transcript={state.transcript}
-        procedureSeed={appointment?.chief_complaint || ""} patientName={patient?.name} patientPhone={patient?.phone || undefined}
+        procedureSeed={appointment?.chief_complaint || ""}
+        evolutionDraft={state.evolutionDraft}
+        patientName={patient?.name} patientPhone={patient?.phone || undefined}
         onClose={() => dispatch({ type: "hide_end" })}
         onDone={() => {
-          // PR44 #10: limpa snapshot ao concluir (libera memoria)
           consultaStore.clear(appointmentId);
           router.replace("/dental/(clinic)/hoje");
         }}
