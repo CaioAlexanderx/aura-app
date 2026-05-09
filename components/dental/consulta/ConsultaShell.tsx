@@ -8,6 +8,8 @@
 //   adicionado ao layout ativo; saveEvolutionMut inclui draft.
 // FIX-20 (2026-05-09): intro stage renderizado como popup card
 //   (fundo escuro centrado); cancelar navega para /agenda.
+// #12 (2026-05-09): ConsultaCheckoutModal exibido apos onDone;
+//   limpeza do store + navegacao movida para onClose do checkout.
 // ============================================================
 
 import { useEffect, useMemo, useReducer, useState } from "react";
@@ -39,6 +41,7 @@ import { ExamRequestModal } from "./ExamRequestModal";
 import { AgendarProximoModal } from "./AgendarProximoModal";
 import { ConsultaEndModal } from "./ConsultaEndModal";
 import { VoiceTranscription } from "./VoiceTranscription";
+import { ConsultaCheckoutModal } from "./ConsultaCheckoutModal";
 
 interface Props { appointmentId: string; }
 
@@ -146,6 +149,8 @@ export function ConsultaShell({ appointmentId }: Props) {
   const [showCamera, setShowCamera] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [showVoiceTranscript, setShowVoiceTranscript] = useState(false);
+  // #12: checkout exibido apos encerramento da consulta
+  const [showCheckout, setShowCheckout] = useState(false);
 
   const apptQ = useQuery({
     queryKey: ["dental-appt", cid, appointmentId],
@@ -447,8 +452,8 @@ export function ConsultaShell({ appointmentId }: Props) {
         patientName={patient?.name} patientPhone={patient?.phone || undefined}
         onClose={() => dispatch({ type: "hide_end" })}
         onDone={() => {
-          consultaStore.clear(appointmentId);
-          router.replace("/dental/(clinic)/hoje");
+          // #12: abre checkout em vez de navegar direto
+          setShowCheckout(true);
         }}
       />
       <WebcamCapture visible={showCamera} onClose={() => setShowCamera(false)} onCapture={onIntraoralCapture} title="Camera intraoral" hint="Aproxime o foco da regiao a documentar" facing="environment" />
@@ -458,6 +463,18 @@ export function ConsultaShell({ appointmentId }: Props) {
         onTranscript={onVoiceTranscript}
         title="Anotar via voz"
         hint={patient?.name ? `Atendimento de ${patient.name} - fale sua observacao` : "Fale sua observacao"}
+      />
+      {/* #12: checkout pos-consulta */}
+      <ConsultaCheckoutModal
+        open={showCheckout}
+        appointmentId={appointmentId}
+        patientId={patientId}
+        patientName={patient?.name}
+        onClose={() => {
+          setShowCheckout(false);
+          consultaStore.clear(appointmentId);
+          router.replace("/dental/(clinic)/hoje");
+        }}
       />
     </View>
   );
