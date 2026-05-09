@@ -38,6 +38,9 @@ export type PdvSettings = {
   require_customer: boolean;
   require_seller: boolean;
   caixa_enabled: boolean;
+  // 09/05/2026: toggle por funcionalidade — ligavel/desligavel em
+  // Configuracoes > PDV > Politicas do Caixa.
+  crediario_enabled: boolean;
 };
 
 export var authApi = {
