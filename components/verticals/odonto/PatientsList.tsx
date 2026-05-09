@@ -5,8 +5,8 @@
 // shell odonto (mockup-pacientes-v1.html aprovado pelo user):
 //
 //  - Header: titulo + 2 acoes (Importar CSV / Novo paciente)
-//  - Stats bar: 4 KPIs (Ativos / Retornar / Aniversariantes / Convenios)
-//  - Toolbar: search + 4 filter pills + view toggle Grid/Lista
+//  - Stats bar: 4 KPIs (Ativos/Total / Retornar / Aniversariantes / Convenios)
+//  - Toolbar: search + filter pills + view toggle Grid/Lista
 //  - Bulk bar: aparece quando ha selecao multipla
 //  - Grid (cards com avatar + tags) ou Lista (tabela compacta)
 //
@@ -14,6 +14,10 @@
 // (has_allergies, has_insurance, inactive_days). Backend PR30 ja
 // retorna last_visit_at + next_appointment_at. Bulk actions e
 // importar CSV continuam placeholders ate ter backend dedicado.
+//
+// #1  (2026-05-09): stats mostram ativos/total; filtro por plano
+//     (cycling chip) + toggle Ativos/Todos — client-side.
+// #14 (2026-05-09): codigo sequencial #NNN visivel em card e lista.
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -61,6 +65,16 @@ interface BackendPatient {
   next_appointment_at?: string | null;
   last_visit_at?: string | null;
   is_vip?: boolean;
+}
+
+/** Considera paciente ativo se tem proximo agendamento OU visitou nos ultimos 180 dias. */
+function isActive(p: BackendPatient): boolean {
+  if (p.next_appointment_at) return true;
+  if (!p.last_visit_at) return false;
+  try {
+    const cutoff = Date.now() - 180 * 86400000;
+    return new Date(p.last_visit_at).getTime() > cutoff;
+  } catch { return false; }
 }
 
 function isBirthdayWithin(birthDate: string | null | undefined, days = 7): boolean {
@@ -129,10 +143,14 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  // PR31: filtros server-side
+  // Server-side filters (PR31)
   const [filterAlergias, setFilterAlergias] = useState(false);
   const [filterConvenio, setFilterConvenio] = useState(false);
-  const [filterInactive, setFilterInactive] = useState(false); // 100+ dias sem visita
+  const [filterInactive, setFilterInactive] = useState(false);
+  // Client-side filters (#1)
+  const [filterPlano, setFilterPlano] = useState<string | null>(null);
+  const [filterActive, setFilterActive] = useState(false);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
 
@@ -160,18 +178,48 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
 
   const allPatients: BackendPatient[] = ((data as any)?.patients) || [];
 
-  // Stats client-side a partir do que veio (filtrado). Pra stats globais
-  // precisaria endpoint dedicado /dental/patients/stats - fica pra futuro.
+  // Planos disponiveis para o cycling chip (#1)
+  const availablePlans = useMemo(() => {
+    const plans = new Set<string>();
+    allPatients.forEach((p) => {
+      if (p.insurance_name && p.insurance_name.trim()) {
+        plans.add(p.insurance_name.trim());
+      }
+    });
+    return Array.from(plans).sort();
+  }, [allPatients]);
+
+  // Cicla plano: null -> plano1 -> plano2 -> ... -> null
+  function cyclePlan() {
+    if (!filterPlano || availablePlans.length === 0) {
+      setFilterPlano(availablePlans[0] || null);
+    } else {
+      const idx = availablePlans.indexOf(filterPlano);
+      setFilterPlano(idx >= availablePlans.length - 1 ? null : availablePlans[idx + 1]);
+    }
+  }
+
+  // Stats client-side (#1: agora distingue ativos/total)
   const stats = useMemo(() => {
     const total = allPatients.length;
+    const active = allPatients.filter(isActive).length;
     const aniversariantes = allPatients.filter((p) => isBirthdayWithin(p.birth_date, 7)).length;
     const semRetorno = allPatients.filter((p) => !p.next_appointment_at).length;
     const comConvenio = allPatients.filter((p) => p.insurance_name && p.insurance_name.trim()).length;
-    return { total, aniversariantes, semRetorno, comConvenio };
+    return { total, active, aniversariantes, semRetorno, comConvenio };
   }, [allPatients]);
 
-  // Filtros client-side ja foram delegados ao backend - lista vem filtrada
-  const filtered = allPatients;
+  // Client-side: plano + active (#1)
+  const filtered = useMemo(() => {
+    let list = allPatients;
+    if (filterPlano) {
+      list = list.filter((p) => p.insurance_name?.trim() === filterPlano);
+    }
+    if (filterActive) {
+      list = list.filter(isActive);
+    }
+    return list;
+  }, [allPatients, filterPlano, filterActive]);
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -193,7 +241,7 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
     toast.info(`${label} - em breve`);
   }
 
-  const anyFilterActive = filterAlergias || filterConvenio || filterInactive;
+  const anyFilterActive = filterAlergias || filterConvenio || filterInactive || !!filterPlano || filterActive;
 
   return (
     <View style={{ gap: 16 }}>
@@ -203,8 +251,8 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
           <Text style={s.eyebrow}>OPERAÇÃO</Text>
           <Text style={s.h1}>Pacientes</Text>
           <Text style={s.sub}>
-            {stats.total} pacientes
-            {anyFilterActive ? " (com filtros aplicados)" : " ativos"}
+            {stats.active} ativos de {stats.total} total
+            {anyFilterActive ? " (com filtros aplicados)" : ""}
             {stats.aniversariantes > 0 ? ` · ${stats.aniversariantes} aniversariantes nesta semana` : ""}
           </Text>
         </View>
@@ -222,7 +270,8 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
 
       {/* STATS BAR */}
       <View style={s.statsRow}>
-        <Stat label="ATIVOS" value={String(stats.total)} delta={null} accent="cyan" />
+        {/* #1: mostra ativos/total */}
+        <Stat label="ATIVOS" value={`${stats.active}/${stats.total}`} delta="dos últimos 180 dias" accent="cyan" />
         <Stat label="SEM RETORNO" value={String(stats.semRetorno)} delta={stats.semRetorno > 0 ? "convidar" : null} accent="amber" />
         <Stat label="ANIVERSARIANTES" value={String(stats.aniversariantes)} delta="proximos 7 dias" accent="violet" />
         <Stat label="CONVÊNIOS" value={String(stats.comConvenio)} delta={`${stats.total > 0 ? Math.round((stats.comConvenio / stats.total) * 100) : 0}% da base`} accent="cyan" />
@@ -240,26 +289,45 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
             onChangeText={setSearch}
           />
         </View>
-        {/* PR31: Convenio agora e toggle real (has_insurance) */}
+
+        {/* #1: toggle Ativos */}
+        <Pressable onPress={() => setFilterActive((v) => !v)} style={[s.chip, filterActive && s.chipActive]}>
+          <Text style={[s.chipText, filterActive && s.chipTextActive]}>
+            {filterActive ? "Ativos ✓" : "Ativos: Todos"}
+          </Text>
+        </Pressable>
+
+        {/* PR31: Convenio server-side */}
         <Pressable onPress={() => setFilterConvenio((v) => !v)} style={[s.chip, filterConvenio && s.chipActive]}>
           <Text style={[s.chipText, filterConvenio && s.chipTextActive]}>
             {filterConvenio ? "Com convenio ✓" : "Convenio: Todos"}
           </Text>
         </Pressable>
-        {/* PR31: Ultima visita agora e toggle Inativos 100+d */}
+
+        {/* #1: Plano cycling chip */}
+        <Pressable
+          onPress={cyclePlan}
+          style={[s.chip, filterPlano != null && s.chipActive]}
+          disabled={availablePlans.length === 0}
+        >
+          <Text style={[s.chipText, filterPlano != null && s.chipTextActive]}>
+            {filterPlano ? `Plano: ${filterPlano.length > 14 ? filterPlano.slice(0, 12) + "…" : filterPlano} ✓` : "Plano: Todos"}
+          </Text>
+        </Pressable>
+
+        {/* PR31: Ultima visita */}
         <Pressable onPress={() => setFilterInactive((v) => !v)} style={[s.chip, filterInactive && s.chipActive]}>
           <Text style={[s.chipText, filterInactive && s.chipTextActive]}>
             {filterInactive ? "Inativos 100+d ✓" : "Ultima visita: Qualquer"}
           </Text>
         </Pressable>
+
         <Pressable onPress={() => setFilterAlergias((v) => !v)} style={[s.chip, filterAlergias && s.chipActive]}>
           <Text style={[s.chipText, filterAlergias && s.chipTextActive]}>
             Alergias {filterAlergias ? "✓" : ""}
           </Text>
         </Pressable>
-        <Pressable onPress={() => notImplemented("Filtro tags")} style={s.chip}>
-          <Text style={s.chipText}>Tags</Text>
-        </Pressable>
+
         <View style={s.viewToggle}>
           <Pressable onPress={() => setViewMode("grid")} style={[s.viewBtn, viewMode === "grid" && s.viewBtnActive]}>
             <Icon name="grid" size={12} color={viewMode === "grid" ? "#fff" : DentalColors.ink3} />
@@ -302,10 +370,11 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
         </View>
       ) : viewMode === "grid" ? (
         <View style={s.grid}>
-          {filtered.map((p) => (
+          {filtered.map((p, idx) => (
             <PatientCard
               key={p.id}
               patient={p}
+              index={idx + 1}
               selected={selectedIds.has(p.id)}
               onToggleSelect={() => toggleSelect(p.id)}
               onOpen={() => onOpenPatient(patientToLite(p))}
@@ -314,22 +383,25 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginHorizontal: -4 }}>
-          <View style={{ minWidth: 720, gap: 4, paddingHorizontal: 4 }}>
+          <View style={{ minWidth: 760, gap: 4, paddingHorizontal: 4 }}>
             <View style={s.listHeader}>
               <View style={s.listCellCheck}>
                 <Pressable onPress={selectedCount === filtered.length ? clearSelection : selectAll} style={[s.checkBox, selectedCount === filtered.length && s.checkBoxOn]}>
                   {selectedCount === filtered.length && <Text style={s.checkMark}>✓</Text>}
                 </Pressable>
               </View>
+              {/* #14: coluna codigo */}
+              <Text style={[s.listHeaderText, { width: 44 }]}>#</Text>
               <Text style={[s.listHeaderText, { flex: 2 }]}>PACIENTE</Text>
               <Text style={[s.listHeaderText, { width: 140 }]}>TELEFONE</Text>
               <Text style={[s.listHeaderText, { width: 110 }]}>ULTIMA VISITA</Text>
-              <Text style={[s.listHeaderText, { width: 90 }]}>CONVENIO</Text>
+              <Text style={[s.listHeaderText, { width: 100 }]}>PLANO</Text>
             </View>
-            {filtered.map((p) => (
+            {filtered.map((p, idx) => (
               <PatientRow
                 key={p.id}
                 patient={p}
+                index={idx + 1}
                 selected={selectedIds.has(p.id)}
                 onToggleSelect={() => toggleSelect(p.id)}
                 onOpen={() => onOpenPatient(patientToLite(p))}
@@ -345,13 +417,14 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
   );
 }
 
-function PatientCard({ patient, selected, onToggleSelect, onOpen }: { patient: BackendPatient; selected: boolean; onToggleSelect: () => void; onOpen: () => void }) {
+function PatientCard({ patient, index, selected, onToggleSelect, onOpen }: { patient: BackendPatient; index: number; selected: boolean; onToggleSelect: () => void; onOpen: () => void }) {
   const initials = (patient.full_name || patient.name || "?").split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   const hasBday = isBirthdayWithin(patient.birth_date, 7);
   const hasAlergia = !!(patient.allergies && patient.allergies.trim());
   const lastVisitDays = daysBetween(patient.last_visit_at);
   const isInactive = lastVisitDays != null && lastVisitDays > 100;
   const photoUrl = (patient as any).photo_url as string | null | undefined;
+  const code = `#${String(index).padStart(3, "0")}`;
 
   return (
     <Pressable onPress={onOpen} style={[s.card, selected && s.cardSelected]}>
@@ -362,14 +435,21 @@ function PatientCard({ patient, selected, onToggleSelect, onOpen }: { patient: B
         {selected && <Text style={s.checkMark}>✓</Text>}
       </Pressable>
 
+      {/* #14: badge de codigo no canto inferior-esquerdo do avatar area */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        {photoUrl ? (
-          <Image source={{ uri: photoUrl }} style={s.cardAvatar} />
-        ) : (
-          <View style={s.cardAvatarFallback}>
-            <Text style={s.cardAvatarText}>{initials}</Text>
+        <View style={{ position: "relative" }}>
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={s.cardAvatar} />
+          ) : (
+            <View style={s.cardAvatarFallback}>
+              <Text style={s.cardAvatarText}>{initials}</Text>
+            </View>
+          )}
+          {/* codigo sequencial */}
+          <View style={s.patientCode}>
+            <Text style={s.patientCodeText}>{code}</Text>
           </View>
-        )}
+        </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.cardName} numberOfLines={1}>{patient.full_name || patient.name}</Text>
           <Text style={s.cardMeta}>
@@ -418,10 +498,11 @@ function PatientCard({ patient, selected, onToggleSelect, onOpen }: { patient: B
   );
 }
 
-function PatientRow({ patient, selected, onToggleSelect, onOpen }: { patient: BackendPatient; selected: boolean; onToggleSelect: () => void; onOpen: () => void }) {
+function PatientRow({ patient, index, selected, onToggleSelect, onOpen }: { patient: BackendPatient; index: number; selected: boolean; onToggleSelect: () => void; onOpen: () => void }) {
   const initials = (patient.full_name || patient.name || "?").split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   const lastVisitDays = daysBetween(patient.last_visit_at);
   const photoUrl = (patient as any).photo_url as string | null | undefined;
+  const code = `#${String(index).padStart(3, "0")}`;
 
   return (
     <Pressable onPress={onOpen} style={[s.listRow, selected && s.listRowSelected]}>
@@ -430,6 +511,8 @@ function PatientRow({ patient, selected, onToggleSelect, onOpen }: { patient: Ba
           {selected && <Text style={s.checkMark}>✓</Text>}
         </Pressable>
       </View>
+      {/* #14: codigo */}
+      <Text style={[s.listCode, { width: 44 }]} numberOfLines={1}>{code}</Text>
       {photoUrl ? (
         <Image source={{ uri: photoUrl }} style={s.listAvatar} />
       ) : (
@@ -447,7 +530,7 @@ function PatientRow({ patient, selected, onToggleSelect, onOpen }: { patient: Ba
       <Text style={[s.listText, { width: 110 }]} numberOfLines={1}>
         {patient.last_visit_at ? `${fmtDate(patient.last_visit_at)} (${lastVisitDays}d)` : "Nunca"}
       </Text>
-      <Text style={[s.listText, { width: 90 }]} numberOfLines={1}>{patient.insurance_name || "Particular"}</Text>
+      <Text style={[s.listText, { width: 100 }]} numberOfLines={1}>{patient.insurance_name || "Particular"}</Text>
     </Pressable>
   );
 }
@@ -571,6 +654,10 @@ const s = StyleSheet.create({
   nextAppt: { padding: 8, borderRadius: 8, backgroundColor: DentalColors.cyanGhost, borderLeftWidth: 3, borderLeftColor: DentalColors.cyan },
   nextApptText: { fontSize: 10, color: DentalColors.ink2 },
 
+  // #14: badge de codigo no avatar
+  patientCode: { position: "absolute", bottom: -4, left: -4, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6, backgroundColor: "rgba(6,182,212,0.20)", borderWidth: 1, borderColor: DentalColors.cyanBorder },
+  patientCodeText: { fontSize: 9, fontWeight: "700", color: DentalColors.cyan, letterSpacing: 0.5 },
+
   tag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   tagText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.4 },
 
@@ -586,6 +673,8 @@ const s = StyleSheet.create({
   listName: { fontSize: 13, fontWeight: "600", color: DentalColors.ink },
   listMeta: { fontSize: 10, color: DentalColors.ink3, marginTop: 2 },
   listText: { fontSize: 11, color: DentalColors.ink2 },
+  // #14: codigo na lista
+  listCode: { fontSize: 11, color: DentalColors.cyan, fontWeight: "700", fontVariant: ["tabular-nums"] as any },
 
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", padding: 20 },
   modal: { width: "100%", maxWidth: 520, backgroundColor: DentalColors.bg2, borderWidth: 1, borderColor: DentalColors.border, borderRadius: 16, padding: 24 },
