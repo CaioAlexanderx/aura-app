@@ -16,6 +16,8 @@ import { DentalSectionHeader } from "@/components/dental/DentalSectionHeader";
 // PR16 (2026-04-27): KPI cards e section headers tokenizados
 // com DentalColors, padrao visual rico do shell negocio.
 // Item 4 (2026-04-27): Widget de aniversarios proximos 7 dias.
+// #18 (2026-05-09): KPI "Proximos 7 dias" usa query separada
+//   amanha+6 para excluir hoje do contador.
 // ============================================================
 
 const fmt = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -63,9 +65,23 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
   });
   const birthdays: Array<{ id: string; full_name: string; birth_date: string; days_until: number }> = bdayData?.patients || [];
 
+  // #18: proximos 7 dias excluindo hoje (amanha..+6d)
+  const tomorrowStart = new Date();
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  tomorrowStart.setHours(0, 0, 0, 0);
+  const next7End = new Date(tomorrowStart);
+  next7End.setDate(next7End.getDate() + 6);
+  next7End.setHours(23, 59, 59, 999);
+  const { data: next7Data } = useQuery({
+    queryKey: ["dental-agenda-next7", company?.id, tomorrowStart.toDateString()],
+    queryFn: () => request<any>(`/companies/${company!.id}/dental/agenda?start=${encodeURIComponent(tomorrowStart.toISOString())}&end=${encodeURIComponent(next7End.toISOString())}`),
+    enabled: !!company?.id,
+    staleTime: 300000,
+  });
+  const next7Count = ((next7Data as any)?.appointments || []).length;
+
   const d = (data as any) || {};
   const hoje = d.consultas_hoje || {};
-  const semana = d.consultas_semana || { total: 0, ativos: 0 };
   const fat = d.faturamento_mes || { realizado: 0, previsto: 0 };
   const parcVenc = d.parcelas_vencidas || { qtd: 0, valor: 0 };
   const parc7d = d.parcelas_proximas_7d || { qtd: 0, valor: 0 };
@@ -108,8 +124,8 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
           <DentalKpiCard value={String(hoje.faltas || 0)} label="Faltas" color={DentalColors.red} icon="alert" />
         </View>
         <View style={[z.row, { marginTop: 8 }]}>
-          <DentalKpiCard value={String(semana.ativos || 0)} label="Proximos 7 dias" color={DentalColors.cyan} icon="calendar"
-            sublabel={`${semana.total || 0} no total`} />
+          <DentalKpiCard value={String(next7Count)} label="Proximos 7 dias" color={DentalColors.cyan} icon="calendar"
+            sublabel="amanha + 6 dias" />
         </View>
       </Fragment>
     ),

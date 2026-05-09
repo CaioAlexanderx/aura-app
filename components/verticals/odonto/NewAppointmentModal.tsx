@@ -8,6 +8,8 @@
 // - Seletor de duração manual ao lado das pills
 // - Label "Observações" em vez de "Queixa principal"
 // - Formulário compacto (padding 14, gap 8)
+// #13 (2026-05-09): busca de paciente só dispara com 2+ chars;
+//   lista não exibida antes de digitar (privacidade).
 // ============================================================
 import { useState, useEffect, createElement } from "react";
 import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -58,11 +60,11 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
     }
   }, [visible, initialDateTime]);
 
-  // Busca de pacientes
+  // #13: busca so dispara com 2+ chars
   const { data: patientsData } = useQuery({
     queryKey: ["dental-patients-picker", cid, search],
     queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(search)}&limit=20`),
-    enabled: !!cid && visible && !patientId,
+    enabled: !!cid && visible && !patientId && search.trim().length >= 2,
     staleTime: 30000,
   });
 
@@ -177,22 +179,30 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
                     <Icon name="search" size={14} color={Colors.ink3} />
                     <TextInput style={s.searchInput} placeholder="Buscar paciente..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
                   </View>
-                  {patients.slice(0, 6).map((p: any) => (
-                    <Pressable key={p.id} onPress={() => { setPatientId(p.id); setPatientName(p.full_name || p.name); }} style={s.patientItem}>
-                      <Text style={s.patientItemName}>{p.full_name || p.name}</Text>
-                      <Text style={s.patientItemMeta}>{p.phone || ""}</Text>
-                    </Pressable>
-                  ))}
-                  {patients.length === 0 && search.trim() && (
+                  {/* #13: gate — so exibe lista com 2+ chars */}
+                  {search.trim().length >= 2 ? (
                     <>
-                      <Text style={s.hint}>Nenhum paciente encontrado</Text>
-                      <Pressable onPress={() => setShowNewPatient(true)} style={s.quickRegBtn}>
-                        <Icon name="plus" size={13} color="#06B6D4" />
-                        <Text style={s.quickRegText}>Cadastrar "{search}" como novo paciente</Text>
-                      </Pressable>
+                      {patients.slice(0, 8).map((p: any) => (
+                        <Pressable key={p.id} onPress={() => { setPatientId(p.id); setPatientName(p.full_name || p.name); }} style={s.patientItem}>
+                          <Text style={s.patientItemName}>{p.full_name || p.name}</Text>
+                          <Text style={s.patientItemMeta}>{p.phone || ""}</Text>
+                        </Pressable>
+                      ))}
+                      {patients.length === 0 && (
+                        <>
+                          <Text style={s.hint}>Nenhum paciente encontrado</Text>
+                          <Pressable onPress={() => setShowNewPatient(true)} style={s.quickRegBtn}>
+                            <Icon name="plus" size={13} color="#06B6D4" />
+                            <Text style={s.quickRegText}>Cadastrar "{search}" como novo paciente</Text>
+                          </Pressable>
+                        </>
+                      )}
                     </>
+                  ) : (
+                    <Text style={s.hint}>
+                      {search.trim().length === 1 ? "Continue digitando..." : "Digite o nome, CPF ou telefone para buscar"}
+                    </Text>
                   )}
-                  {patients.length === 0 && !search.trim() && <Text style={s.hint}>Comece a digitar para buscar</Text>}
                 </>
               )}
 
