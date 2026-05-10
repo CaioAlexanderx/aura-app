@@ -230,7 +230,7 @@ export function ProntuarioTab({ patient, onVoice }: { patient: PatientLite; onVo
         </TouchableOpacity>
       )}
       {!entries.length
-        ? <View style={st.center}><Text style={st.errTitle}>Sem registros</Text><Text style={st.errMsg}>Use o botao de voz ou salve documentos pela aba Doc</Text></View>
+        ? <View style={st.center}><Text style={st.errTitle}>Sem registros</Text><Text style={st.errMsg}>Use o botão de voz ou salve documentos pela aba Doc</Text></View>
         : <ScrollView style={st.tab}><ProntuarioTimeline entries={entries} patientName={patient.full_name||patient.name} /></ScrollView>
       }
     </View>
