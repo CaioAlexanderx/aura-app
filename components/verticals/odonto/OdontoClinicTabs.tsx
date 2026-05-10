@@ -153,7 +153,7 @@ export function AgendaTab() {
       <View style={v.toggleRow}>
         <Pressable onPress={() => setViewMode("calendar")} style={[v.toggleBtn, viewMode === "calendar" && v.toggleBtnActive]}>
           <Icon name="calendar" size={13} color={viewMode === "calendar" ? "#fff" : Colors.ink3} />
-          <Text style={[v.toggleText, viewMode === "calendar" && v.toggleTextActive]}>Calendario</Text>
+          <Text style={[v.toggleText, viewMode === "calendar" && v.toggleTextActive]}>Calendário</Text>
         </Pressable>
         <Pressable onPress={() => setViewMode("list")} style={[v.toggleBtn, viewMode === "list" && v.toggleBtnActive]}>
           <Icon name="list" size={13} color={viewMode === "list" ? "#fff" : Colors.ink3} />
