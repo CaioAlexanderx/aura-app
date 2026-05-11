@@ -54,12 +54,22 @@ export type PaymentSlice = {
   pct: number;
 };
 
+// Backend (selectPriorities em narrativeGenerator.js) retorna:
+//   { action, impact, cta_label, cta_url }
+// + reportGenerator adiciona { num }.
+// Os campos legacy (title/description/text/icon_type) sao mantidos como
+// opcionais por seguranca caso o shape mude no futuro.
 export type Priority = {
   num: number;
+  action?: string;
+  impact?: string;
+  cta_label?: string;
+  cta_url?: string;
+  // legacy
   title?: string;
   description?: string;
-  icon_type?: string;
   text?: string;
+  icon_type?: string;
 };
 
 export type WowInsight = {
