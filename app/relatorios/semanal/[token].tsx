@@ -3,10 +3,9 @@
 // Acessada via link no email semanal: /relatorios/semanal/<token>
 // Token JWT valido por 30 dias, validado pelo backend.
 //
-// Gating por plano (espelha o template do email):
-//   Essencial   -> KPIs + curva diaria + top produtos + pagamentos + narrativas
-//   Negocio+    -> + heatmap + clientes dormentes
-//   Expansao+   -> + AI Insights banner
+// Visual: fundo animado com orbs violetas + cards com glassmorphism
+// (backdrop-filter, semi-transparente). Web-only — RN nativa renderiza
+// sem os orbs e cai num fallback solido.
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -32,24 +31,99 @@ import {
   type WeeklyReportKpis,
 } from "@/services/weeklyReportApi";
 
+// ─── CSS injection (web only) — orbs animados + glass ────────
+if (typeof document !== "undefined" && !document.getElementById("aura-report-styles")) {
+  const s = document.createElement("style");
+  s.id = "aura-report-styles";
+  s.textContent = `
+    @keyframes auraOrb1 {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      33%      { transform: translate3d(60px, -80px, 0) scale(1.15); }
+      66%      { transform: translate3d(-40px, 50px, 0) scale(0.92); }
+    }
+    @keyframes auraOrb2 {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      33%      { transform: translate3d(-70px, 60px, 0) scale(1.2); }
+      66%      { transform: translate3d(80px, -50px, 0) scale(0.88); }
+    }
+    @keyframes auraOrb3 {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      33%      { transform: translate3d(40px, 40px, 0) scale(0.9); }
+      66%      { transform: translate3d(-60px, -70px, 0) scale(1.1); }
+    }
+    @keyframes auraFadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .aura-report-bg {
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 0%,   rgba(124, 58, 237, 0.18) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 60% at 80% 100%, rgba(76, 29, 149, 0.22)  0%, transparent 55%),
+        #08090f !important;
+      min-height: 100vh;
+    }
+    .aura-orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(90px);
+      pointer-events: none;
+      will-change: transform;
+      z-index: 0;
+    }
+    .aura-orb-1 {
+      width: 520px; height: 520px;
+      top: -140px; left: -100px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.55) 0%, transparent 70%);
+      animation: auraOrb1 26s ease-in-out infinite;
+    }
+    .aura-orb-2 {
+      width: 420px; height: 420px;
+      top: 30%; right: -120px;
+      background: radial-gradient(circle, rgba(76, 29, 149, 0.55) 0%, transparent 70%);
+      animation: auraOrb2 32s ease-in-out infinite;
+    }
+    .aura-orb-3 {
+      width: 480px; height: 480px;
+      bottom: -120px; left: 25%;
+      background: radial-gradient(circle, rgba(167, 139, 250, 0.45) 0%, transparent 70%);
+      animation: auraOrb3 29s ease-in-out infinite;
+    }
+    .aura-fade-in {
+      animation: auraFadeIn 0.6s ease-out both;
+    }
+    html, body { background-color: #08090f; }
+  `;
+  document.head.appendChild(s);
+}
+
 // ─── Constantes de design (alinhado ao email) ────────────────
 const C = {
-  bg:        "#08090f",
-  card:      "#0f1019",
-  cardAlt:   "#0c0d18",
-  border:    "#1e293b",
-  borderAcc: "#1e1b4b",
-  text:      "#e2e8f0",
-  textMuted: "#94a3b8",
-  textDim:   "#64748b",
-  textFaint: "#475569",
-  brand:     "#7c3aed",
-  brandSoft: "#c4b5fd",
-  brandDark: "#4c1d95",
-  good:      "#34d399",
-  warn:      "#fbbf24",
-  bad:       "#f87171",
+  bg:          "#08090f",
+  card:        "rgba(15, 16, 25, 0.55)",
+  cardSolid:   "#0f1019",
+  cardAlt:     "rgba(12, 13, 24, 0.7)",
+  border:      "rgba(255, 255, 255, 0.06)",
+  borderGlass: "rgba(255, 255, 255, 0.08)",
+  borderAcc:   "rgba(124, 58, 237, 0.25)",
+  text:        "#e2e8f0",
+  textMuted:   "#94a3b8",
+  textDim:     "#64748b",
+  textFaint:   "#475569",
+  brand:       "#7c3aed",
+  brandSoft:   "#c4b5fd",
+  brandDark:   "#4c1d95",
+  good:        "#34d399",
+  warn:        "#fbbf24",
+  bad:         "#f87171",
 };
+
+// Glass mixin (web only): backdrop-filter passa direto pro DOM via RN-Web
+const GLASS = Platform.OS === "web"
+  ? ({
+      backdropFilter: "blur(24px) saturate(160%)",
+      WebkitBackdropFilter: "blur(24px) saturate(160%)",
+    } as any)
+  : {};
 
 // ─── Helpers ─────────────────────────────────────────────────
 function fmtBRL(v: number, opts: { compact?: boolean } = {}): string {
@@ -84,6 +158,23 @@ function healthColor(score: number): string {
   return C.bad;
 }
 
+// ─── Background animado (web only) ───────────────────────────
+function AnimatedBackground() {
+  if (Platform.OS !== "web") return null;
+  // Renderiza divs HTML diretas — React aceita JSX intrinsics no tree RN-Web
+  // @ts-ignore
+  return (
+    <>
+      {/* @ts-ignore */}
+      <div className="aura-orb aura-orb-1" />
+      {/* @ts-ignore */}
+      <div className="aura-orb aura-orb-2" />
+      {/* @ts-ignore */}
+      <div className="aura-orb aura-orb-3" />
+    </>
+  );
+}
+
 // ─── Pagina ──────────────────────────────────────────────────
 export default function WeeklyReportPage() {
   const params = useLocalSearchParams();
@@ -103,6 +194,7 @@ export default function WeeklyReportPage() {
         setError(null);
         if (Platform.OS === "web" && typeof document !== "undefined") {
           document.title = `Relatório semanal — ${r.data.company.name}`;
+          document.body.classList.add("aura-report-bg");
         }
       } else {
         setError(r.error);
@@ -124,6 +216,7 @@ export default function WeeklyReportPage() {
 function LoadingView() {
   return (
     <View style={styles.fullCenter}>
+      <AnimatedBackground />
       <ActivityIndicator size="large" color={C.brand} />
       <Text style={[styles.muted, { marginTop: 16 }]}>Carregando relatório...</Text>
     </View>
@@ -135,7 +228,8 @@ function ErrorView({ error }: { error: WeeklyReportError }) {
   const isInvalid = error.code === "invalid" || error.code === "missing_token";
   return (
     <View style={styles.fullCenter}>
-      <View style={[styles.card, { maxWidth: 480, padding: 32, alignItems: "center" }]}>
+      <AnimatedBackground />
+      <View style={[styles.card, GLASS, { maxWidth: 480, padding: 32, alignItems: "center" }]}>
         <Text style={{ fontSize: 48, marginBottom: 12 }}>
           {isExpired ? "⏳" : isInvalid ? "🔒" : "⚠️"}
         </Text>
@@ -159,169 +253,175 @@ function ReportView({ report }: { report: WeeklyReport }) {
   const { company, period, kpis, health, daily_revenue, top_products, payments, priorities, wow_insight, narratives, heatmap, dormant, stale_products, gating } = report;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ alignItems: "center", paddingVertical: 32, paddingHorizontal: 16 }}>
-      <View style={{ width: "100%", maxWidth: 760 }}>
-        {/* Header */}
-        <View style={[styles.card, { padding: 24, marginBottom: 16 }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
-            {company.logo_url ? (
-              <Image source={{ uri: company.logo_url }} style={{ width: 48, height: 48, borderRadius: 12, marginRight: 12 }} />
-            ) : (
-              <View style={{ width: 48, height: 48, borderRadius: 12, marginRight: 12, backgroundColor: C.brandDark, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: C.brandSoft, fontSize: 20, fontWeight: "800" }}>{company.name.slice(0, 1).toUpperCase()}</Text>
-              </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.brandLabel}>Aura<Text style={{ color: C.brand }}>.</Text> · Relatório semanal</Text>
-              <Text style={styles.h2}>{company.name}</Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-            <Pill icon="📅" label={period.label} />
-            <Pill icon="#" label={`Edição ${period.edition}`} />
-            <Pill icon="✉" label={period.sent_at} />
-          </View>
-        </View>
-
-        {/* Health Score */}
-        <HealthCard
-          score={health.score}
-          kpis={kpis}
-          dormantCount={dormant?.count || 0}
-          staleProductsCount={stale_products?.length || 0}
-        />
-
-        {/* KPI grid */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <KpiCard label="Receita"        value={fmtBRL(kpis.revenue)}                 deltaPct={kpis.revenue_delta}   dir={kpis.revenue_dir}   color={C.brandSoft} />
-          <KpiCard label="Vendas"         value={String(kpis.sales)}                   deltaPct={null}                 dir="up"                 sublabel={`${kpis.active_days} dias ativos`} />
-          <KpiCard label="Ticket médio"   value={fmtBRL(kpis.avg_ticket)}              deltaPct={kpis.ticket_delta}    dir={kpis.ticket_dir} />
-          <KpiCard label="Clientes únicos" value={String(kpis.new_customers)}          deltaAbs={kpis.customers_delta} dir={kpis.customers_dir} />
-        </View>
-
-        {/* Daily Revenue Bar Chart */}
-        <Section title="Receita por dia" subtitle="Comparativo entre os dias úteis da semana">
-          <DailyChart data={daily_revenue} />
-        </Section>
-
-        {/* WOW Insight */}
-        {wow_insight && (
-          <View style={[styles.card, styles.wowCard, { padding: 20, marginBottom: 16 }]}>
-            <View style={{ flexDirection: "row" }}>
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.brandDark, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                <Text style={{ fontSize: 18 }}>{iconFor(wow_insight.icon_type)}</Text>
-              </View>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <AnimatedBackground />
+      <ScrollView
+        style={{ flex: 1, backgroundColor: "transparent" }}
+        contentContainerStyle={{ alignItems: "center", paddingVertical: 32, paddingHorizontal: 16, position: "relative", zIndex: 1 }}
+      >
+        <View style={{ width: "100%", maxWidth: 760 }}>
+          {/* Header */}
+          <View style={[styles.card, GLASS, { padding: 24, marginBottom: 16 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+              {company.logo_url ? (
+                <Image source={{ uri: company.logo_url }} style={{ width: 48, height: 48, borderRadius: 12, marginRight: 12 }} />
+              ) : (
+                <View style={{ width: 48, height: 48, borderRadius: 12, marginRight: 12, backgroundColor: C.brandDark, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: C.brandSoft, fontSize: 20, fontWeight: "800" }}>{company.name.slice(0, 1).toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
-                <Text style={[styles.caption, { marginBottom: 4, color: C.brand }]}>INSIGHT DA SEMANA</Text>
-                <Text style={[styles.body, { lineHeight: 22 }]}>{stripHtml(wow_insight.text)}</Text>
+                <Text style={styles.brandLabel}>Aura<Text style={{ color: C.brand }}>.</Text> · Relatório semanal</Text>
+                <Text style={styles.h2}>{company.name}</Text>
               </View>
             </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
+              <Pill icon="📅" label={period.label} />
+              <Pill icon="#" label={`Edição ${period.edition}`} />
+              <Pill icon="✉" label={period.sent_at} />
+            </View>
           </View>
-        )}
 
-        {/* Priorities */}
-        {priorities && priorities.length > 0 && (
-          <Section title={`${priorities.length === 1 ? "1 prioridade" : `${priorities.length} prioridades`} para a próxima semana`}>
-            <View style={{ gap: 16 }}>
-              {priorities.map((p) => (
-                <PriorityRow key={p.num} priority={p} />
-              ))}
+          {/* Health Score */}
+          <HealthCard
+            score={health.score}
+            kpis={kpis}
+            dormantCount={dormant?.count || 0}
+            staleProductsCount={stale_products?.length || 0}
+          />
+
+          {/* KPI grid */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <KpiCard label="Receita"        value={fmtBRL(kpis.revenue)}                 deltaPct={kpis.revenue_delta}   dir={kpis.revenue_dir}   color={C.brandSoft} />
+            <KpiCard label="Vendas"         value={String(kpis.sales)}                   deltaPct={null}                 dir="up"                 sublabel={`${kpis.active_days} dias ativos`} />
+            <KpiCard label="Ticket médio"   value={fmtBRL(kpis.avg_ticket)}              deltaPct={kpis.ticket_delta}    dir={kpis.ticket_dir} />
+            <KpiCard label="Clientes únicos" value={String(kpis.new_customers)}          deltaAbs={kpis.customers_delta} dir={kpis.customers_dir} />
+          </View>
+
+          {/* Daily Revenue Bar Chart */}
+          <Section title="Receita por dia" subtitle="Comparativo entre os dias úteis da semana">
+            <DailyChart data={daily_revenue} />
+          </Section>
+
+          {/* WOW Insight */}
+          {wow_insight && (
+            <View style={[styles.card, GLASS, styles.wowCard, { padding: 20, marginBottom: 16 }]}>
+              <View style={{ flexDirection: "row" }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.brandDark, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                  <Text style={{ fontSize: 18 }}>{iconFor(wow_insight.icon_type)}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.caption, { marginBottom: 4, color: C.brand }]}>INSIGHT DA SEMANA</Text>
+                  <Text style={[styles.body, { lineHeight: 22 }]}>{stripHtml(wow_insight.text)}</Text>
+                </View>
+              </View>
             </View>
-          </Section>
-        )}
+          )}
 
-        {/* Narratives */}
-        {narratives && (
-          <Section title="Análise da semana">
-            <NarrativeCard title="Receita & vendas" text={narratives.revenue} />
-            <NarrativeCard title="Produtos" text={narratives.products} />
-            <NarrativeCard title="Pagamentos" text={narratives.payments} />
-          </Section>
-        )}
+          {/* Priorities */}
+          {priorities && priorities.length > 0 && (
+            <Section title={`${priorities.length === 1 ? "1 prioridade" : `${priorities.length} prioridades`} para a próxima semana`}>
+              <View style={{ gap: 16 }}>
+                {priorities.map((p) => (
+                  <PriorityRow key={p.num} priority={p} />
+                ))}
+              </View>
+            </Section>
+          )}
 
-        {/* Top Products */}
-        {top_products && top_products.length > 0 && (
-          <Section title="Top 5 produtos" subtitle="Produtos com maior receita na semana">
-            <View style={{ gap: 8 }}>
-              {top_products.map((p) => (
-                <TopProductRow key={p.rank} product={p} />
-              ))}
+          {/* Narratives */}
+          {narratives && (
+            <Section title="Análise da semana">
+              <NarrativeCard title="Receita & vendas" text={narratives.revenue} />
+              <NarrativeCard title="Produtos" text={narratives.products} />
+              <NarrativeCard title="Pagamentos" text={narratives.payments} />
+            </Section>
+          )}
+
+          {/* Top Products */}
+          {top_products && top_products.length > 0 && (
+            <Section title="Top 5 produtos" subtitle="Produtos com maior receita na semana">
+              <View style={{ gap: 8 }}>
+                {top_products.map((p) => (
+                  <TopProductRow key={p.rank} product={p} />
+                ))}
+              </View>
+            </Section>
+          )}
+
+          {/* Payments */}
+          {payments && payments.length > 0 && (
+            <Section title="Pagamentos" subtitle="Distribuição por método">
+              <View style={{ gap: 10 }}>
+                {payments.map((p) => (
+                  <PaymentBar key={p.name} name={p.name} pct={p.pct} />
+                ))}
+              </View>
+            </Section>
+          )}
+
+          {/* Heatmap (Negocio+) */}
+          {gating.show_heatmap && heatmap && heatmap.length > 0 && (
+            <Section title="Mapa de calor de vendas" subtitle="Seg–Sáb × hora do dia (intensidade = vendas)">
+              <Heatmap data={heatmap} />
+            </Section>
+          )}
+
+          {/* Dormant customers (Negocio+) */}
+          {gating.show_dormant && dormant && dormant.topDormant && dormant.topDormant.length > 0 && (
+            <Section title="Clientes que sumiram" subtitle={`${dormant.count} cliente${dormant.count === 1 ? "" : "s"} sem comprar há mais de 30 dias`}>
+              <View style={{ gap: 8 }}>
+                {dormant.topDormant.slice(0, 3).map((c) => (
+                  <DormantRow key={c.id} customer={c} />
+                ))}
+              </View>
+            </Section>
+          )}
+
+          {/* Stale products */}
+          {stale_products && stale_products.length > 0 && (
+            <Section title="Produtos parados" subtitle="Em estoque, sem venda há 14+ dias">
+              <View style={{ gap: 8 }}>
+                {stale_products.slice(0, 3).map((p) => (
+                  <StaleProductRow key={p.id} product={p} />
+                ))}
+              </View>
+            </Section>
+          )}
+
+          {/* AI Insights placeholder (Expansao+) */}
+          {gating.show_ai && (
+            <View style={[styles.card, GLASS, { padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.brand }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+                <Text style={{ fontSize: 20, marginRight: 8 }}>✨</Text>
+                <Text style={[styles.caption, { color: C.brand }]}>AI INSIGHTS · PLANO EXPANSÃO</Text>
+              </View>
+              <Text style={[styles.body, { lineHeight: 22 }]}>
+                {narratives?.revenue || "Insights personalizados gerados por IA para esta semana."}
+              </Text>
             </View>
-          </Section>
-        )}
+          )}
 
-        {/* Payments */}
-        {payments && payments.length > 0 && (
-          <Section title="Pagamentos" subtitle="Distribuição por método">
-            <View style={{ gap: 10 }}>
-              {payments.map((p) => (
-                <PaymentBar key={p.name} name={p.name} pct={p.pct} />
-              ))}
-            </View>
-          </Section>
-        )}
+          {/* CTA */}
+          <View style={{ alignItems: "center", marginTop: 8, marginBottom: 24 }}>
+            <Pressable
+              onPress={() => Linking.openURL("https://app.getaura.com.br")}
+              style={({ pressed }) => [styles.button, { paddingHorizontal: 28 }, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={styles.buttonText}>Abrir painel completo →</Text>
+            </Pressable>
+          </View>
 
-        {/* Heatmap (Negocio+) */}
-        {gating.show_heatmap && heatmap && heatmap.length > 0 && (
-          <Section title="Mapa de calor de vendas" subtitle="Seg–Sáb × hora do dia (intensidade = vendas)">
-            <Heatmap data={heatmap} />
-          </Section>
-        )}
-
-        {/* Dormant customers (Negocio+) */}
-        {gating.show_dormant && dormant && dormant.topDormant && dormant.topDormant.length > 0 && (
-          <Section title="Clientes que sumiram" subtitle={`${dormant.count} cliente${dormant.count === 1 ? "" : "s"} sem comprar há mais de 30 dias`}>
-            <View style={{ gap: 8 }}>
-              {dormant.topDormant.slice(0, 3).map((c) => (
-                <DormantRow key={c.id} customer={c} />
-              ))}
-            </View>
-          </Section>
-        )}
-
-        {/* Stale products */}
-        {stale_products && stale_products.length > 0 && (
-          <Section title="Produtos parados" subtitle="Em estoque, sem venda há 14+ dias">
-            <View style={{ gap: 8 }}>
-              {stale_products.slice(0, 3).map((p) => (
-                <StaleProductRow key={p.id} product={p} />
-              ))}
-            </View>
-          </Section>
-        )}
-
-        {/* AI Insights placeholder (Expansao+) */}
-        {gating.show_ai && (
-          <View style={[styles.card, { padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.brand }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-              <Text style={{ fontSize: 20, marginRight: 8 }}>✨</Text>
-              <Text style={[styles.caption, { color: C.brand }]}>AI INSIGHTS · PLANO EXPANSÃO</Text>
-            </View>
-            <Text style={[styles.body, { lineHeight: 22 }]}>
-              {narratives?.revenue || "Insights personalizados gerados por IA para esta semana."}
+          {/* Footer */}
+          <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: C.border, alignItems: "center" }}>
+            <Text style={[styles.footer, { textAlign: "center" }]}>
+              Aura<Text style={{ color: C.brand }}>.</Text> · Tecnologia para Negócios{"\n"}
+              Relatório gerado automaticamente · Plano <Text style={{ textTransform: "capitalize" }}>{company.plan}</Text>
             </Text>
           </View>
-        )}
-
-        {/* CTA */}
-        <View style={{ alignItems: "center", marginTop: 8, marginBottom: 24 }}>
-          <Pressable
-            onPress={() => Linking.openURL("https://app.getaura.com.br")}
-            style={({ pressed }) => [styles.button, { paddingHorizontal: 28 }, pressed && { opacity: 0.85 }]}
-          >
-            <Text style={styles.buttonText}>Abrir painel completo →</Text>
-          </Pressable>
         </View>
-
-        {/* Footer */}
-        <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: C.border, alignItems: "center" }}>
-          <Text style={[styles.footer, { textAlign: "center" }]}>
-            Aura<Text style={{ color: C.brand }}>.</Text> · Tecnologia para Negócios{"\n"}
-            Relatório gerado automaticamente · Plano <Text style={{ textTransform: "capitalize" }}>{company.plan}</Text>
-          </Text>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -402,20 +502,17 @@ function buildHealthComment(
 ): string {
   const parts: string[] = [];
 
-  // Lead com a banda
   if (score >= 85) parts.push("Semana sólida — indicadores no verde.");
   else if (score >= 70) parts.push("Semana com bons indicadores; ainda há margem.");
   else if (score >= 50) parts.push("Semana exige atenção — pontos a corrigir.");
   else parts.push("Atenção: indicadores críticos esta semana.");
 
-  // Destaque positivo
   if (kpis.revenue_dir === "up" && kpis.revenue_delta >= 5) {
     parts.push(`Receita subiu ${kpis.revenue_delta.toFixed(1)}% comparado à semana anterior.`);
   } else if (kpis.revenue_dir === "down" && kpis.revenue_delta <= -5) {
     parts.push(`Receita caiu ${Math.abs(kpis.revenue_delta).toFixed(1)}% — investigue fechamentos ou queda de fluxo.`);
   }
 
-  // Preocupação principal
   if (kpis.ticket_dir === "down" && kpis.ticket_delta <= -5) {
     parts.push(`Ticket médio recuou ${Math.abs(kpis.ticket_delta).toFixed(1)}% — pode indicar promoções agressivas ou mix com produtos mais baratos.`);
   } else if (staleProductsCount >= 3) {
@@ -450,8 +547,7 @@ function HealthCard({
   const pct = Math.max(0, Math.min(100, score)) / 100;
 
   return (
-    <View style={[styles.card, { padding: 24, marginBottom: 16 }]}>
-      {/* Cabeçalho: número grande + banda + narrativa */}
+    <View style={[styles.card, GLASS, { padding: 24, marginBottom: 16 }]}>
       <View style={{ flexDirection: "row", marginBottom: 20, flexWrap: "wrap", gap: 20 }}>
         <View style={{ minWidth: 140, alignItems: "flex-start" }}>
           <Text style={[styles.caption, { marginBottom: 8 }]}>SAÚDE DO NEGÓCIO</Text>
@@ -462,7 +558,7 @@ function HealthCard({
           <View style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: color + "22", borderRadius: 999, alignSelf: "flex-start" }}>
             <Text style={{ color, fontSize: 11, fontWeight: "800", letterSpacing: 0.5 }}>{band.toUpperCase()}</Text>
           </View>
-          <View style={{ marginTop: 12, width: 140, height: 6, backgroundColor: C.cardAlt, borderRadius: 3, overflow: "hidden" }}>
+          <View style={{ marginTop: 12, width: 140, height: 6, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
             <View style={{ height: 6, width: `${pct * 100}%` as any, backgroundColor: color, borderRadius: 3 }} />
           </View>
         </View>
@@ -471,7 +567,6 @@ function HealthCard({
         </View>
       </View>
 
-      {/* Drivers */}
       <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 16, gap: 12 }}>
         <Text style={[styles.caption, { marginBottom: 4 }]}>O QUE INFLUENCIA A PONTUAÇÃO</Text>
         {drivers.map((d, i) => (
@@ -489,7 +584,7 @@ function DriverRow({ driver }: { driver: Driver }) {
     C.textMuted;
   return (
     <View style={{ flexDirection: "row", alignItems: "center" }}>
-      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.cardAlt, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
         <Text style={{ fontSize: 16 }}>{driver.icon}</Text>
       </View>
       <View style={{ flex: 1, marginRight: 8 }}>
@@ -504,7 +599,7 @@ function DriverRow({ driver }: { driver: Driver }) {
 // ─── Subcomponentes ──────────────────────────────────────────
 function Pill({ icon, label }: { icon: string; label: string }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.cardAlt, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
       <Text style={{ color: C.textDim, fontSize: 11, marginRight: 6 }}>{icon}</Text>
       <Text style={{ color: C.textMuted, fontSize: 12 }}>{label}</Text>
     </View>
@@ -513,7 +608,7 @@ function Pill({ icon, label }: { icon: string; label: string }) {
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <View style={[styles.card, { padding: 20, marginBottom: 16 }]}>
+    <View style={[styles.card, GLASS, { padding: 20, marginBottom: 16 }]}>
       <Text style={styles.h3}>{title}</Text>
       {subtitle ? <Text style={[styles.muted, { marginTop: 2, marginBottom: 16 }]}>{subtitle}</Text> : <View style={{ height: 12 }} />}
       {children}
@@ -534,7 +629,7 @@ function KpiCard({
 }) {
   const hasDelta = deltaPct != null || deltaAbs != null;
   return (
-    <View style={[styles.card, { flexBasis: 0, flexGrow: 1, minWidth: 150, padding: 16 }]}>
+    <View style={[styles.card, GLASS, { flexBasis: 0, flexGrow: 1, minWidth: 150, padding: 16 }]}>
       <Text style={styles.caption}>{label.toUpperCase()}</Text>
       <Text style={{ color: color || C.text, fontSize: 22, fontWeight: "800", marginTop: 6 }} numberOfLines={1}>{value}</Text>
       {hasDelta && dir && (
@@ -581,8 +676,6 @@ function DailyChart({ data }: { data: DailyRevenuePoint[] }) {
 }
 
 function PriorityRow({ priority }: { priority: Priority }) {
-  // Shape canonico do backend (selectPriorities): { num, action, impact, cta_label, cta_url }
-  // Fallback para legacy fields (text/title/description) por seguranca.
   const main = stripHtml(priority.action || priority.text || priority.title || "");
   const sub  = stripHtml(priority.impact || priority.description || "");
   const ctaLabel = priority.cta_label;
@@ -640,7 +733,7 @@ function PaymentBar({ name, pct }: { name: string; pct: number }) {
         <Text style={[styles.body, { fontSize: 13 }]}>{name}</Text>
         <Text style={{ color: C.brandSoft, fontWeight: "700", fontSize: 13 }}>{pct.toFixed(1)}%</Text>
       </View>
-      <View style={{ height: 6, backgroundColor: C.cardAlt, borderRadius: 3, overflow: "hidden" }}>
+      <View style={{ height: 6, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
         <View style={{ height: 6, width: `${Math.min(100, Math.max(0, pct))}%` as any, backgroundColor: C.brand, borderRadius: 3 }} />
       </View>
     </View>
@@ -648,7 +741,6 @@ function PaymentBar({ name, pct }: { name: string; pct: number }) {
 }
 
 function Heatmap({ data }: { data: { dow: number; hour: number; sale_count: number; revenue: number }[] }) {
-  // dow: 1=seg, ..., 6=sab. Mostrar horas 6-23 para evitar matriz vazia.
   const DAYS_LABELS = ["", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   const hours = Array.from({ length: 18 }, (_, i) => i + 6); // 06h-23h
   const max = Math.max(...data.map((c) => c.sale_count), 1);
@@ -656,7 +748,6 @@ function Heatmap({ data }: { data: { dow: number; hour: number; sale_count: numb
   data.forEach((c) => { cellMap[`${c.dow}-${c.hour}`] = c.sale_count; });
   return (
     <View>
-      {/* Hour labels */}
       <View style={{ flexDirection: "row", marginBottom: 4, marginLeft: 36 }}>
         {hours.filter((h) => h % 3 === 0).map((h) => (
           <Text key={h} style={{ color: C.textFaint, fontSize: 9, flex: 1, textAlign: "center" }}>{h}h</Text>
@@ -676,7 +767,7 @@ function Heatmap({ data }: { data: { dow: number; hour: number; sale_count: numb
                     flex: 1,
                     height: 18,
                     borderRadius: 3,
-                    backgroundColor: v === 0 ? C.cardAlt : `rgba(124, 58, 237, ${0.2 + intensity * 0.8})`,
+                    backgroundColor: v === 0 ? "rgba(255,255,255,0.04)" : `rgba(124, 58, 237, ${0.25 + intensity * 0.75})`,
                   }}
                 />
               );
@@ -706,7 +797,7 @@ function DormantRow({ customer }: { customer: { name: string; total_spent: numbe
 function StaleProductRow({ product }: { product: { name: string; category: string; stock_qty: number; days_idle: number | null } }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border }}>
-      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.cardAlt, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
         <Text style={{ fontSize: 14 }}>📦</Text>
       </View>
       <View style={{ flex: 1, marginRight: 12 }}>
@@ -738,12 +829,16 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: C.borderAcc,
+    borderColor: C.borderGlass,
     borderRadius: 16,
+    // Sombra sutil para destacar do bg animado (web only fica fofo)
+    ...(Platform.OS === "web" ? ({
+      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+    } as any) : {}),
   },
   wowCard: {
     borderColor: C.brand,
-    backgroundColor: C.cardAlt,
+    backgroundColor: "rgba(76, 29, 149, 0.25)",
   },
   brandLabel: {
     color: C.textMuted,
@@ -787,6 +882,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
+    ...(Platform.OS === "web" ? ({
+      boxShadow: "0 8px 24px rgba(124, 58, 237, 0.4)",
+    } as any) : {}),
   },
   buttonText: {
     color: "#fff",
