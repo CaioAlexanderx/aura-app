@@ -29,6 +29,7 @@ import {
   type TopProduct,
   type WeeklyReport,
   type WeeklyReportError,
+  type WeeklyReportKpis,
 } from "@/services/weeklyReportApi";
 
 // ─── Constantes de design (alinhado ao email) ────────────────
@@ -183,14 +184,12 @@ function ReportView({ report }: { report: WeeklyReport }) {
         </View>
 
         {/* Health Score */}
-        <View style={[styles.card, { padding: 24, marginBottom: 16, alignItems: "center" }]}>
-          <Text style={[styles.caption, { marginBottom: 8 }]}>SAÚDE DO NEGÓCIO</Text>
-          <Text style={{ color: healthColor(health.score), fontSize: 56, fontWeight: "800", lineHeight: 64 }}>
-            {health.score}
-            <Text style={{ color: C.textDim, fontSize: 22 }}>/100</Text>
-          </Text>
-          <Text style={[styles.muted, { marginTop: 4 }]}>{health.label}</Text>
-        </View>
+        <HealthCard
+          score={health.score}
+          kpis={kpis}
+          dormantCount={dormant?.count || 0}
+          staleProductsCount={stale_products?.length || 0}
+        />
 
         {/* KPI grid */}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
@@ -323,6 +322,182 @@ function ReportView({ report }: { report: WeeklyReport }) {
         </View>
       </View>
     </ScrollView>
+  );
+}
+
+// ─── Saúde do Negócio (card rico) ────────────────────────────
+
+type HealthBand = "Excelente" | "Bom" | "Atenção" | "Crítico";
+
+function healthBand(score: number): HealthBand {
+  if (score >= 85) return "Excelente";
+  if (score >= 70) return "Bom";
+  if (score >= 50) return "Atenção";
+  return "Crítico";
+}
+
+type DriverSentiment = "good" | "neutral" | "bad";
+
+type Driver = {
+  icon: string;
+  label: string;
+  value: string;
+  detail: string;
+  sentiment: DriverSentiment;
+};
+
+function buildDrivers(
+  kpis: WeeklyReportKpis,
+  dormantCount: number,
+  staleProductsCount: number,
+): Driver[] {
+  const revSent: DriverSentiment =
+    kpis.revenue_delta >= 5 ? "good" : kpis.revenue_delta >= -5 ? "neutral" : "bad";
+  const ticketSent: DriverSentiment =
+    kpis.ticket_delta >= 5 ? "good" : kpis.ticket_delta >= -5 ? "neutral" : "bad";
+  const daysSent: DriverSentiment =
+    kpis.active_days >= 6 ? "good" : kpis.active_days >= 4 ? "neutral" : "bad";
+  const staleSent: DriverSentiment =
+    staleProductsCount === 0 ? "good" : staleProductsCount < 3 ? "neutral" : "bad";
+
+  return [
+    {
+      icon: "📈",
+      label: "Crescimento de receita",
+      value: `${kpis.revenue_delta > 0 ? "+" : ""}${kpis.revenue_delta.toFixed(1)}%`,
+      detail: "vs. semana anterior",
+      sentiment: revSent,
+    },
+    {
+      icon: "🎟️",
+      label: "Ticket médio",
+      value: `${kpis.ticket_delta > 0 ? "+" : ""}${kpis.ticket_delta.toFixed(1)}%`,
+      detail: "vs. semana anterior",
+      sentiment: ticketSent,
+    },
+    {
+      icon: "📅",
+      label: "Dias com vendas",
+      value: `${kpis.active_days}/6`,
+      detail: "da semana útil (seg–sáb)",
+      sentiment: daysSent,
+    },
+    {
+      icon: "📦",
+      label: "Produtos parados",
+      value: String(staleProductsCount),
+      detail: dormantCount > 0
+        ? `${dormantCount} cliente${dormantCount === 1 ? "" : "s"} sumido${dormantCount === 1 ? "" : "s"} (30+ dias)`
+        : "sem vendas há 14+ dias",
+      sentiment: staleSent,
+    },
+  ];
+}
+
+function buildHealthComment(
+  score: number,
+  kpis: WeeklyReportKpis,
+  dormantCount: number,
+  staleProductsCount: number,
+): string {
+  const parts: string[] = [];
+
+  // Lead com a banda
+  if (score >= 85) parts.push("Semana sólida — indicadores no verde.");
+  else if (score >= 70) parts.push("Semana com bons indicadores; ainda há margem.");
+  else if (score >= 50) parts.push("Semana exige atenção — pontos a corrigir.");
+  else parts.push("Atenção: indicadores críticos esta semana.");
+
+  // Destaque positivo
+  if (kpis.revenue_dir === "up" && kpis.revenue_delta >= 5) {
+    parts.push(`Receita subiu ${kpis.revenue_delta.toFixed(1)}% comparado à semana anterior.`);
+  } else if (kpis.revenue_dir === "down" && kpis.revenue_delta <= -5) {
+    parts.push(`Receita caiu ${Math.abs(kpis.revenue_delta).toFixed(1)}% — investigue fechamentos ou queda de fluxo.`);
+  }
+
+  // Preocupação principal
+  if (kpis.ticket_dir === "down" && kpis.ticket_delta <= -5) {
+    parts.push(`Ticket médio recuou ${Math.abs(kpis.ticket_delta).toFixed(1)}% — pode indicar promoções agressivas ou mix com produtos mais baratos.`);
+  } else if (staleProductsCount >= 3) {
+    parts.push(`${staleProductsCount} produtos parados drenam capital de giro — priorize promover ou remarcar.`);
+  } else if (dormantCount > 10) {
+    parts.push(`${dormantCount} clientes não voltam há 30+ dias; vale uma ação de reativação.`);
+  }
+
+  if (parts.length === 1) {
+    parts.push("Mantenha o ritmo operacional e foque nos detalhes apontados abaixo.");
+  }
+
+  return parts.join(" ");
+}
+
+function HealthCard({
+  score,
+  kpis,
+  dormantCount,
+  staleProductsCount,
+}: {
+  score: number;
+  kpis: WeeklyReportKpis;
+  dormantCount: number;
+  staleProductsCount: number;
+}) {
+  const band = healthBand(score);
+  const color = healthColor(score);
+  const drivers = buildDrivers(kpis, dormantCount, staleProductsCount);
+  const comment = buildHealthComment(score, kpis, dormantCount, staleProductsCount);
+
+  const pct = Math.max(0, Math.min(100, score)) / 100;
+
+  return (
+    <View style={[styles.card, { padding: 24, marginBottom: 16 }]}>
+      {/* Cabeçalho: número grande + banda + narrativa */}
+      <View style={{ flexDirection: "row", marginBottom: 20, flexWrap: "wrap", gap: 20 }}>
+        <View style={{ minWidth: 140, alignItems: "flex-start" }}>
+          <Text style={[styles.caption, { marginBottom: 8 }]}>SAÚDE DO NEGÓCIO</Text>
+          <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+            <Text style={{ color, fontSize: 56, fontWeight: "800", lineHeight: 60 }}>{score}</Text>
+            <Text style={{ color: C.textDim, fontSize: 18, fontWeight: "600", marginLeft: 2 }}>/100</Text>
+          </View>
+          <View style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: color + "22", borderRadius: 999, alignSelf: "flex-start" }}>
+            <Text style={{ color, fontSize: 11, fontWeight: "800", letterSpacing: 0.5 }}>{band.toUpperCase()}</Text>
+          </View>
+          <View style={{ marginTop: 12, width: 140, height: 6, backgroundColor: C.cardAlt, borderRadius: 3, overflow: "hidden" }}>
+            <View style={{ height: 6, width: `${pct * 100}%` as any, backgroundColor: color, borderRadius: 3 }} />
+          </View>
+        </View>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <Text style={[styles.body, { lineHeight: 22 }]}>{comment}</Text>
+        </View>
+      </View>
+
+      {/* Drivers */}
+      <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 16, gap: 12 }}>
+        <Text style={[styles.caption, { marginBottom: 4 }]}>O QUE INFLUENCIA A PONTUAÇÃO</Text>
+        {drivers.map((d, i) => (
+          <DriverRow key={i} driver={d} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function DriverRow({ driver }: { driver: Driver }) {
+  const color =
+    driver.sentiment === "good" ? C.good :
+    driver.sentiment === "bad"  ? C.bad  :
+    C.textMuted;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.cardAlt, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+        <Text style={{ fontSize: 16 }}>{driver.icon}</Text>
+      </View>
+      <View style={{ flex: 1, marginRight: 8 }}>
+        <Text style={[styles.body, { fontSize: 13, fontWeight: "600" }]}>{driver.label}</Text>
+        <Text style={[styles.muted, { fontSize: 11, marginTop: 1 }]}>{driver.detail}</Text>
+      </View>
+      <Text style={{ color, fontSize: 15, fontWeight: "800" }}>{driver.value}</Text>
+    </View>
   );
 }
 
