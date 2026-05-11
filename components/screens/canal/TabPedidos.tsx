@@ -1,3 +1,13 @@
+// ============================================================
+// AURA. — Canal Digital · TabPedidos
+// 03/05: Pix manual flow — comprovante anexado + Aprovar/Rejeitar.
+// 11/05: Confirmação manual de pagamento — quick-action "✓ Pago" no
+//   card da lista + botão "Confirmar pagamento recebido" no detalhe,
+//   agora cobrindo pedidos com status `pending_payment` (cliente NÃO
+//   clicou "Já paguei" no site, mas o lojista viu o Pix cair). O
+//   endpoint backend `approve-payment` já aceita esse status — só a
+//   UI estava restrita a `awaiting_approval`.
+// ============================================================
 import { useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
@@ -36,6 +46,16 @@ const CHIPS = [
   { key: "delivered",          label: "Entregues" },
 ];
 
+// Pedidos onde o lojista pode confirmar pagamento manualmente.
+// - `awaiting_approval`: cliente clicou "Já paguei" + anexou comprovante
+// - `pending_payment`: cliente NÃO clicou "Já paguei" mas Pix pode ter
+//   sido pago de qualquer jeito (cliente esqueceu, fechou aba, etc).
+//   Lojista valida no extrato e confirma manualmente.
+function canApprovePayment(order: any): boolean {
+  if (!order) return false;
+  return order.status === "awaiting_approval" || order.status === "pending_payment";
+}
+
 function timeAgo(iso: string) {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (min < 1) return "agora";
@@ -56,6 +76,8 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [working, setWorking] = useState(false);
+  // ID do pedido que está com a quick-action em andamento (loading state inline)
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const { orders, kpi, isLoading, refetch, updateStatus, isUpdating } = useDigitalOrders(filter);
 
   // companyId pode vir via prop OU ser pego do hook (fallback usa qualquer endpoint que ja tem cid)
@@ -75,18 +97,28 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
     setOrder(null);
   }
 
-  async function approvePayment() {
-    if (!order || !cid) return;
-    setWorking(true);
+  // Chamada genérica do endpoint approve-payment. Aceita pedidos em
+  // `awaiting_approval` ou `pending_payment` (validação no backend).
+  // `fromList` indica se foi acionado via quick-action no card (loading
+  // inline) ou via modal (loading global).
+  async function approvePayment(targetOrder: any, opts?: { fromList?: boolean }) {
+    if (!targetOrder || !cid) return;
+    const fromList = !!opts?.fromList;
+    if (fromList) {
+      setApprovingId(targetOrder.id);
+    } else {
+      setWorking(true);
+    }
     try {
-      await api.post(`/companies/${cid}/digital-channel/orders/${order.id}/approve-payment`, {});
-      toast.success("Pagamento aprovado!");
-      setOrder(null);
+      await api.post(`/companies/${cid}/digital-channel/orders/${targetOrder.id}/approve-payment`, {});
+      toast.success("Pagamento confirmado · pedido #" + targetOrder.order_number);
+      if (!fromList) setOrder(null);
       refetch();
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao aprovar pagamento");
+      toast.error(err?.message || "Erro ao confirmar pagamento");
     } finally {
-      setWorking(false);
+      if (fromList) setApprovingId(null);
+      else setWorking(false);
     }
   }
 
@@ -159,8 +191,10 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
         orders.map((o: any) => {
           const st = STATUS_MAP[o.status] || STATUS_MAP.cancelled;
           const isAwaiting = o.status === "awaiting_approval";
+          const isPendingPayment = o.status === "pending_payment";
+          const showApproveQuick = canApprovePayment(o);
           return (
-            <Pressable key={o.id} style={[s.card, isAwaiting && s.cardHighlight]} onPress={() => setOrder(o)}>
+            <Pressable key={o.id} style={[s.card, isAwaiting && s.cardHighlight, isPendingPayment && s.cardWarn]} onPress={() => setOrder(o)}>
               <View style={s.cardTop}>
                 <Text style={s.cardNum}>#{o.order_number}</Text>
                 <View style={[s.badge, { backgroundColor: st.bg }]}>
@@ -184,6 +218,27 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                   <Text style={s.proofBadgeText}>Comprovante anexado</Text>
                 </View>
               )}
+              {/* Quick action: confirmar pagamento direto da lista — não abre modal.
+                  Aparece sempre que o pedido aceita aprovação (pending_payment ou awaiting_approval).
+                  Em RN, Pressable filho consome o evento de toque sem disparar o pai. */}
+              {showApproveQuick && (
+                <View style={s.quickRow}>
+                  <Pressable
+                    onPress={() => approvePayment(o, { fromList: true })}
+                    disabled={approvingId === o.id}
+                    style={[s.quickBtn, approvingId === o.id && { opacity: 0.6 }]}
+                  >
+                    {approvingId === o.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Icon name="check" size={12} color="#fff" />
+                        <Text style={s.quickBtnText}>Confirmar pagamento</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              )}
             </Pressable>
           );
         })
@@ -203,6 +258,8 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
               const st = STATUS_MAP[order.status] || STATUS_MAP.cancelled;
               const nextSt = NEXT_STATUS[order.status];
               const isAwaiting = order.status === "awaiting_approval";
+              const isPendingPayment = order.status === "pending_payment";
+              const canApprove = canApprovePayment(order);
               const canCancel = !["delivered", "cancelled"].includes(order.status);
               return (
                 <>
@@ -233,7 +290,9 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                             ? "Cliente paga no momento da entrega/retirada"
                             : isAwaiting
                               ? "Cliente avisou que pagou — confirme abaixo"
-                              : "Aguardando cliente pagar"}
+                              : isPendingPayment
+                                ? "Cliente ainda não confirmou no site. Se o Pix já caiu na sua conta, confirme manualmente abaixo."
+                                : "Aguardando cliente pagar"}
                       </Text>
 
                       {order.payment_proof_url && (
@@ -295,7 +354,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                     )}
 
                     {/* Caixa de motivo de rejeição (aparece quando user clica em Rejeitar) */}
-                    {isAwaiting && showRejectInput && (
+                    {canApprove && showRejectInput && (
                       <View style={[cs.card, { borderColor: "#fecaca", backgroundColor: "#fef2f2" }]}>
                         <Text style={[cs.fieldLabel, { color: "#dc2626" }]}>Motivo da rejeição (opcional)</Text>
                         <TextInput
@@ -313,17 +372,20 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                   </ScrollView>
 
                   <View style={s.sheetFoot}>
-                    {isAwaiting && !showRejectInput && (
+                    {/* Fluxo de aprovação cobre awaiting_approval E pending_payment.
+                        Awaiting tem comprovante; pending_payment não tem (cliente esqueceu).
+                        Em ambos, o lojista pode aprovar/rejeitar. */}
+                    {canApprove && !showRejectInput && (
                       <>
                         <Pressable onPress={() => setShowRejectInput(true)} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
                           <Text style={s.cancelText}>Rejeitar</Text>
                         </Pressable>
-                        <Pressable onPress={approvePayment} disabled={working} style={[s.advBtn, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
-                          <Text style={s.advText}>{working ? "..." : "✓ Aprovar pagamento"}</Text>
+                        <Pressable onPress={() => approvePayment(order)} disabled={working} style={[s.advBtn, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
+                          <Text style={s.advText}>{working ? "..." : (isPendingPayment ? "✓ Confirmar pagamento recebido" : "✓ Aprovar pagamento")}</Text>
                         </Pressable>
                       </>
                     )}
-                    {isAwaiting && showRejectInput && (
+                    {canApprove && showRejectInput && (
                       <>
                         <Pressable onPress={() => { setShowRejectInput(false); setRejectReason(""); }} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
                           <Text style={s.cancelText}>Voltar</Text>
@@ -333,12 +395,12 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                         </Pressable>
                       </>
                     )}
-                    {!isAwaiting && canCancel && (
+                    {!canApprove && canCancel && (
                       <Pressable onPress={cancel} disabled={isUpdating} style={[s.cancelBtn, isUpdating && { opacity: 0.6 }]}>
                         <Text style={s.cancelText}>Cancelar pedido</Text>
                       </Pressable>
                     )}
-                    {!isAwaiting && !!nextSt && (
+                    {!canApprove && !!nextSt && (
                       <Pressable onPress={advance} disabled={isUpdating} style={[s.advBtn, isUpdating && { opacity: 0.6 }]}>
                         <Text style={s.advText}>{isUpdating ? "..." : `→ ${STATUS_MAP[nextSt]?.label}`}</Text>
                       </Pressable>
@@ -390,6 +452,7 @@ const s = StyleSheet.create({
   emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
   card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
   cardHighlight: { borderColor: "#fecaca", borderWidth: 2, backgroundColor: "#fff5f5" },
+  cardWarn: { borderColor: "#fde68a", borderWidth: 2, backgroundColor: "#fffbeb" },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
   cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
@@ -400,6 +463,12 @@ const s = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: "700" },
   proofBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
   proofBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
+  quickRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  quickBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.green, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
+  },
+  quickBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", overflow: "hidden" },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
