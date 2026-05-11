@@ -29,6 +29,10 @@
 // /caixa pra dentro do PDV via CaixaButton no topRow + OpenCloseCashModal
 // (DNA TrocaModal). Bloqueia handleFinalize quando caixa fechado E
 // pdv_settings.caixa_enabled. PDF de fechamento via cashClosePdf.ts.
+// 11/05: Scanner global — useGlobalBarcodeScanner ouve teclas em toda
+// a tela do PDV (não precisa mais clicar no campo a cada bipe). O hook
+// é desativado quando há modal aberto pra não capturar digitação interna.
+// ActBarcode vira indicador de status + entrada manual fallback.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -41,6 +45,7 @@ import { useCart, PAYMENTS } from "@/hooks/useCart";
 import { useCustomers } from "@/hooks/useCustomers";
 import { usePdvSettings, validateSaleAgainstSettings } from "@/hooks/usePdvSettings";
 import { usePagination } from "@/hooks/usePagination";
+import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 
 import { couponsApi, employeesApi, pdvApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
@@ -159,6 +164,8 @@ function CaixaScreenInner() {
   const [showCaixaModal, setShowCaixaModal] = useState(false);
   // 09/05/2026: modal de troco em vendas single dinheiro
   const [showChangeModal, setShowChangeModal] = useState(false);
+  // 11/05/2026: último código bipado (feedback visual no card ActBarcode)
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
   const { data: empData } = useQuery({
     queryKey: ["employees", company?.id],
@@ -260,9 +267,24 @@ function CaixaScreenInner() {
     selectCustomer(v.id, v.name, c?.phone || null);
   }
 
+  // Mostra o código bipado por ~800ms no card pra dar feedback visual
+  // que o bipe foi capturado. Timeout único — bipes sucessivos resetam.
+  const scanFeedbackTimerRef = useRef<any>(null);
+  function flashScanFeedback(code: string) {
+    setLastScannedCode(code);
+    if (scanFeedbackTimerRef.current) clearTimeout(scanFeedbackTimerRef.current);
+    scanFeedbackTimerRef.current = setTimeout(() => {
+      setLastScannedCode(null);
+      scanFeedbackTimerRef.current = null;
+    }, 800);
+  }
+  useEffect(() => () => { if (scanFeedbackTimerRef.current) clearTimeout(scanFeedbackTimerRef.current); }, []);
+
   async function handleScan(code: string) {
     const cleaned = (code || "").trim();
     if (!cleaned) return;
+    flashScanFeedback(cleaned);
+
     const localProduct = products.find(p => p.barcode === cleaned);
     if (localProduct) { handleAddProduct(localProduct); return; }
 
@@ -394,6 +416,21 @@ function CaixaScreenInner() {
     });
     toast.success("Orçamento gerado");
   }
+
+  // Scanner global — sempre ativo no PDV exceto quando há modal full-screen
+  // aberto (caixa, troca, variante, novo cliente, troco) ou tela de venda
+  // concluída. Hook ignora teclas em campos de texto automaticamente.
+  const scannerListening =
+    !lastSale &&
+    !pendingProduct &&
+    !showCaixaModal &&
+    !showTroca &&
+    !showChangeModal &&
+    !showNewCustomer;
+  useGlobalBarcodeScanner({
+    onScan: handleScan,
+    enabled: scannerListening,
+  });
 
   const displayItems: CartDisplayItem[] = cart.map(it => {
     const base = it.productId.split("__")[0];
@@ -554,7 +591,7 @@ function CaixaScreenInner() {
             <MerchantBanner height={vp.sm ? 120 : 200} />
 
             <View style={[s.actBar, IS_WEB && ({ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: vp.sm ? 6 : 10, position: "relative", zIndex: 50 } as any)]}>
-              <ActBarcode onScan={handleScan} />
+              <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
               <ActPerson
                 kind="vendedora"
                 shortcut="F2"
@@ -700,7 +737,7 @@ function CaixaScreenInner() {
         <MerchantBanner height={160} />
 
         <View style={[{ gap: 10, marginBottom: 16 }, IS_WEB && ({ position: "relative", zIndex: 50 } as any)]}>
-          <ActBarcode onScan={handleScan} />
+          <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
           <ActPerson
             kind="vendedora"
             shortcut="F2"
