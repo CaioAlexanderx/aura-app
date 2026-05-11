@@ -222,8 +222,8 @@ function ReportView({ report }: { report: WeeklyReport }) {
 
         {/* Priorities */}
         {priorities && priorities.length > 0 && (
-          <Section title="3 prioridades para a próxima semana">
-            <View style={{ gap: 12 }}>
+          <Section title={`${priorities.length === 1 ? "1 prioridade" : `${priorities.length} prioridades`} para a próxima semana`}>
+            <View style={{ gap: 16 }}>
               {priorities.map((p) => (
                 <PriorityRow key={p.num} priority={p} />
               ))}
@@ -406,20 +406,29 @@ function DailyChart({ data }: { data: DailyRevenuePoint[] }) {
 }
 
 function PriorityRow({ priority }: { priority: Priority }) {
-  const txt = stripHtml(priority.text || priority.description || priority.title || "");
+  // Shape canonico do backend (selectPriorities): { num, action, impact, cta_label, cta_url }
+  // Fallback para legacy fields (text/title/description) por seguranca.
+  const main = stripHtml(priority.action || priority.text || priority.title || "");
+  const sub  = stripHtml(priority.impact || priority.description || "");
+  const ctaLabel = priority.cta_label;
+  const ctaUrl   = priority.cta_url;
+  if (!main && !sub) return null;
   return (
     <View style={{ flexDirection: "row" }}>
       <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.brand, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
         <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>{priority.num}</Text>
       </View>
       <View style={{ flex: 1, paddingTop: 4 }}>
-        {priority.title && priority.text ? (
-          <>
-            <Text style={[styles.body, { fontWeight: "700", marginBottom: 4 }]}>{stripHtml(priority.title)}</Text>
-            <Text style={[styles.muted, { lineHeight: 20 }]}>{txt}</Text>
-          </>
-        ) : (
-          <Text style={[styles.body, { lineHeight: 22 }]}>{txt}</Text>
+        {main && (
+          <Text style={[styles.body, { fontWeight: "600", lineHeight: 22, marginBottom: sub ? 4 : 0 }]}>{main}</Text>
+        )}
+        {sub && (
+          <Text style={[styles.muted, { lineHeight: 20, marginBottom: ctaLabel && ctaUrl ? 8 : 0 }]}>{sub}</Text>
+        )}
+        {ctaLabel && ctaUrl && (
+          <Pressable onPress={() => Linking.openURL(ctaUrl)}>
+            <Text style={{ color: C.brand, fontSize: 13, fontWeight: "700" }}>{ctaLabel} →</Text>
+          </Pressable>
         )}
       </View>
     </View>
