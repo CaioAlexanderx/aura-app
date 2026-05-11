@@ -70,7 +70,10 @@ function AuthGuard() {
     // acessiveis sem login. (clinic) e auth-required entao NAO entra aqui.
     const onInvite       = segments[0] === "invite";
     const onPublicDental = segments[0] === "dental" && (segments[1] === "book" || segments[1] === "portal");
-    if (onInvite || onPublicDental) return;
+    // Relatorios semanais (link com JWT vindo do email) sao publicos —
+    // token na URL eh a autenticacao. Bypass de qualquer guard de sessao.
+    const onPublicReport = segments[0] === "relatorios";
+    if (onInvite || onPublicDental || onPublicReport) return;
 
     // Shell dental autenticado (qualquer rota /dental/* que NAO seja publica).
     // expo-router omite groups (parenteses) na pathname, entao /dental/(clinic)/hoje
