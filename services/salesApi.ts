@@ -94,6 +94,11 @@ export type SalesFilters = {
   seller_id?: string;
   customer_id?: string;
   q?: string;
+  // 11/05/2026: filtro de busca por codigo de barras do produto.
+  // Backend (sales.js buildWhere) lista vendas que contem item cujo
+  // product.barcode OU variant.barcode bate. Usado pela TrocaModal pra
+  // localizar venda original via codigo bipado pelo cliente.
+  product_barcode?: string;
   limit?: number;
   offset?: number;
 };
@@ -107,6 +112,7 @@ export var salesApi = {
     if (filters?.seller_id) qs.push("seller_id=" + encodeURIComponent(filters.seller_id));
     if (filters?.customer_id) qs.push("customer_id=" + encodeURIComponent(filters.customer_id));
     if (filters?.q) qs.push("q=" + encodeURIComponent(filters.q));
+    if (filters?.product_barcode) qs.push("product_barcode=" + encodeURIComponent(filters.product_barcode));
     if (filters?.limit) qs.push("limit=" + filters.limit);
     if (filters?.offset) qs.push("offset=" + filters.offset);
     var suffix = qs.length ? "?" + qs.join("&") : "";
