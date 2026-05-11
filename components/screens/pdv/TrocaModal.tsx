@@ -3,6 +3,11 @@
 // Fluxo 4 passos: buscar venda → selecionar devoluções →
 // adicionar novos itens → confirmar + enviar
 // Depende de migration 101 (sales.type + troca_returned_items)
+//
+// 11/05/2026: Step 1 ganha busca avançada — range de datas (default
+// últimos 7 dias, max 30 dias atrás) + toggle modo "Cliente/número"
+// (q) vs "Código de barras" (product_barcode, lista vendas com aquele
+// produto). Backend filtro implementado em PR Aura-backend#57.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -27,10 +32,22 @@ type NewEntry = {
   product_name_snapshot: string;
 };
 type Step = 1 | 2 | 3 | 4;
+type SearchMode = "text" | "barcode";
 
 const fmt = (v: number) => "R$ " + v.toFixed(2).replace(".", ",");
-const todayISO = () =>
-  new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
+// Helpers de data — YYYY-MM-DD no fuso SP, idênticos ao usado no PDV/Caixa
+function todayISO() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+function daysAgoISO(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+const MAX_DAYS_BACK = 30;     // janela máxima de troca
+const DEFAULT_DAYS_BACK = 7;  // default ao abrir o modal
 
 // ─── component ───────────────────────────────────────────────
 export function TrocaModal({
@@ -47,7 +64,11 @@ export function TrocaModal({
   onSuccess?: (result: any) => void;
 }) {
   const [step, setStep] = useState<Step>(1);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<SearchMode>("text");
+  const [searchQuery, setSearchQuery] = useState("");        // cliente/número (modo text)
+  const [barcodeQuery, setBarcodeQuery] = useState("");      // código de barras (modo barcode)
+  const [dateFrom, setDateFrom] = useState<string>(daysAgoISO(DEFAULT_DAYS_BACK));
+  const [dateTo, setDateTo] = useState<string>(todayISO());
   const [loadingSales, setLoadingSales] = useState(false);
   const [recentSales, setRecentSales] = useState<SalesListItem[]>([]);
   const [selectedSale, setSelectedSale] = useState<SaleDetailFull | null>(null);
@@ -58,29 +79,49 @@ export function TrocaModal({
   const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [submitting, setSubmitting] = useState(false);
 
+  // Limite mínimo do range — usado no <input min=...> do date picker
+  const minDate = useMemo(() => daysAgoISO(MAX_DAYS_BACK), []);
+  const today = useMemo(() => todayISO(), []);
+
+  // Garante que dateFrom nunca seja anterior ao limite (max 30 dias atrás).
+  // Se o user mexer no dateTo e o range ficar > 30d, ajusta dateFrom pra
+  // manter dentro da janela.
+  useEffect(() => {
+    if (dateFrom < minDate) setDateFrom(minDate);
+    if (dateFrom > dateTo) setDateFrom(dateTo);
+  }, [dateFrom, dateTo, minDate]);
+
   const loadSales = useCallback(() => {
     if (!visible || !companyId) return;
-    const day = todayISO();
     setLoadingSales(true);
+    const params: any = {
+      date_from: dateFrom + "T00:00:00",
+      date_to: dateTo + "T23:59:59",
+      status: "active",
+      limit: 30,
+    };
+    if (searchMode === "text" && searchQuery.trim()) {
+      params.q = searchQuery.trim();
+    } else if (searchMode === "barcode" && barcodeQuery.trim()) {
+      params.product_barcode = barcodeQuery.trim();
+    }
     salesApi
-      .list(companyId, {
-        date_from: day + "T00:00:00",
-        date_to: day + "T23:59:59",
-        status: "active",
-        q: searchQuery || undefined,
-        limit: 15,
-      })
+      .list(companyId, params)
       .then(res => setRecentSales(res.sales || []))
       .catch(() => setRecentSales([]))
       .finally(() => setLoadingSales(false));
-  }, [visible, companyId, searchQuery]);
+  }, [visible, companyId, searchMode, searchQuery, barcodeQuery, dateFrom, dateTo]);
 
   useEffect(() => { loadSales(); }, [loadSales]);
 
   useEffect(() => {
     if (!visible) {
       setStep(1);
+      setSearchMode("text");
       setSearchQuery("");
+      setBarcodeQuery("");
+      setDateFrom(daysAgoISO(DEFAULT_DAYS_BACK));
+      setDateTo(todayISO());
       setSelectedSale(null);
       setReturnEntries([]);
       setNewEntries([]);
@@ -202,6 +243,9 @@ export function TrocaModal({
       : "0 24px 60px -10px rgba(124,58,237,0.22)",
   });
 
+  // Range em dias para hint
+  const rangeDays = Math.max(0, Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000) + 1);
+
   return (
     <View style={s.overlay}>
       <Pressable style={s.backdrop} onPress={onClose} />
@@ -247,29 +291,141 @@ export function TrocaModal({
           {/* ══ Step 1 ══ */}
           {step === 1 && (
             <>
-              <Text style={s.sectionTitle}>Selecione a venda original</Text>
-              <TextInput
-                style={s.input as any}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Buscar por cliente ou número…"
-                placeholderTextColor={Colors.ink3}
-                autoFocus
-              />
+              <Text style={s.sectionTitle}>Localizar venda original</Text>
+
+              {/* Range de datas */}
+              <View style={s.dateRow}>
+                <View style={s.dateField}>
+                  <Text style={s.dateLabel}>De</Text>
+                  {IS_WEB ? (
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      min={minDate}
+                      max={dateTo}
+                      onChange={(e: any) => setDateFrom(e.target.value)}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 9,
+                        background: Glass.bgInput as any,
+                        border: "1px solid " + (Glass.bgInputBorder as any),
+                        color: Colors.ink as any,
+                        fontSize: 13,
+                        outline: "none",
+                        width: "100%",
+                      }}
+                    />
+                  ) : (
+                    <TextInput
+                      style={s.input as any}
+                      value={dateFrom}
+                      onChangeText={setDateFrom}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={Colors.ink3}
+                    />
+                  )}
+                </View>
+                <View style={s.dateField}>
+                  <Text style={s.dateLabel}>Até</Text>
+                  {IS_WEB ? (
+                    <input
+                      type="date"
+                      value={dateTo}
+                      min={dateFrom}
+                      max={today}
+                      onChange={(e: any) => setDateTo(e.target.value)}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 9,
+                        background: Glass.bgInput as any,
+                        border: "1px solid " + (Glass.bgInputBorder as any),
+                        color: Colors.ink as any,
+                        fontSize: 13,
+                        outline: "none",
+                        width: "100%",
+                      }}
+                    />
+                  ) : (
+                    <TextInput
+                      style={s.input as any}
+                      value={dateTo}
+                      onChangeText={setDateTo}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={Colors.ink3}
+                    />
+                  )}
+                </View>
+              </View>
+              <Text style={s.rangeHint}>
+                {rangeDays === 1 ? "1 dia" : `${rangeDays} dias`} · janela máxima de {MAX_DAYS_BACK} dias atrás
+              </Text>
+
+              {/* Toggle modo de busca */}
+              <View style={s.modeRow}>
+                <Pressable
+                  onPress={() => setSearchMode("text")}
+                  style={[s.modeBtn, searchMode === "text" && s.modeBtnActive]}
+                >
+                  <Icon name="user" size={12} color={searchMode === "text" ? "#fff" : Colors.ink3} />
+                  <Text style={[s.modeBtnTxt, searchMode === "text" && { color: "#fff" }]}>
+                    Cliente/número
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setSearchMode("barcode")}
+                  style={[s.modeBtn, searchMode === "barcode" && s.modeBtnActive]}
+                >
+                  <Icon name="barcode" size={12} color={searchMode === "barcode" ? "#fff" : Colors.ink3} />
+                  <Text style={[s.modeBtnTxt, searchMode === "barcode" && { color: "#fff" }]}>
+                    Código de barras
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Input adapta conforme modo */}
+              {searchMode === "text" ? (
+                <TextInput
+                  style={s.input as any}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Buscar por nome do cliente ou vendedora…"
+                  placeholderTextColor={Colors.ink3}
+                  autoFocus
+                />
+              ) : (
+                <TextInput
+                  style={s.input as any}
+                  value={barcodeQuery}
+                  onChangeText={setBarcodeQuery}
+                  placeholder="Bipe ou digite o código de barras do produto…"
+                  placeholderTextColor={Colors.ink3}
+                  autoFocus
+                  returnKeyType="search"
+                />
+              )}
+
+              {/* Resultados */}
               {loadingSales || loadingDetail ? (
                 <View style={s.centered}><ActivityIndicator color={Colors.violet} /></View>
               ) : recentSales.length === 0 ? (
-                <Text style={s.emptyTxt}>Nenhuma venda ativa encontrada para hoje.</Text>
+                <Text style={s.emptyTxt}>
+                  {searchMode === "barcode" && barcodeQuery.trim()
+                    ? "Nenhuma venda com esse código de barras no período."
+                    : "Nenhuma venda ativa encontrada no período."}
+                </Text>
               ) : (
                 recentSales.map(sale => (
                   <Pressable key={sale.id} style={s.saleRow} onPress={() => pickSale(sale.id)}>
                     <View style={{ flex: 1 }}>
                       <Text style={s.saleName} numberOfLines={1}>
-                        {(sale as any).customer_name || sale.customer?.name || "Sem cliente"}{" "}
-                        · {new Date(sale.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {(sale as any).customer_name || sale.customer?.name || "Sem cliente"}
                       </Text>
                       <Text style={s.saleSub}>
-                        {(sale as any).item_count ?? (sale as any).items_count ?? 0} itens · {fmt(sale.total_amount)}
+                        {new Date(sale.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                        {" "}às{" "}
+                        {new Date(sale.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {" · "}
+                        {(sale as any).items_count ?? 0} itens · {fmt(sale.total_amount)}
                       </Text>
                     </View>
                     <Text style={{ color: Colors.ink3, fontSize: 18 }}>›</Text>
@@ -553,6 +709,51 @@ const s = StyleSheet.create({
     backgroundColor: Glass.bgInput, borderWidth: 1, borderColor: Glass.bgInputBorder,
     color: Colors.ink, fontSize: 13, outlineStyle: "none",
   } as any,
+  // ─── Step 1 — range de datas + toggle modo ───────────────
+  dateRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  dateField: { flex: 1, gap: 4 },
+  dateLabel: {
+    fontSize: 10, fontWeight: "700", color: Colors.ink3,
+    textTransform: "uppercase", letterSpacing: 0.8,
+  },
+  rangeHint: {
+    fontSize: 10,
+    color: Colors.ink3,
+    marginTop: -4,
+    marginBottom: 4,
+    fontStyle: "italic",
+  },
+  modeRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 4,
+  },
+  modeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: Glass.lineFaint,
+    borderWidth: 1,
+    borderColor: Glass.lineBorderCard,
+  },
+  modeBtnActive: {
+    backgroundColor: Colors.violet,
+    borderColor: Colors.violet,
+  },
+  modeBtnTxt: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.ink3,
+  },
+  // ──────────────────────────────────────────────────────────
   centered: { alignItems: "center", padding: 24 },
   emptyTxt: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
   saleRow: {
