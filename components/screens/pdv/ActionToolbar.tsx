@@ -15,12 +15,16 @@
 //   pressionar F1 ou clicar no botão × dentro do popover.
 //   Os demais popovers (Vendedora/Cliente/Cupom) mantêm dismiss externo
 //   pois selecionam um valor e fecham naturalmente.
+// 11/05 · ActBarcode redesenhado — scanner agora é GLOBAL (hook
+//   useGlobalBarcodeScanner em pdv.tsx). Card vira indicador de status
+//   "Escutando · pode bipar". F1/clique abre popover apenas pra entrada
+//   manual (caso scanner USB falhe ou produto não tenha código).
+//   Pulse dot verde no ícone enquanto está ouvindo.
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ScannerInput } from "@/components/ScannerInput";
 import { IS_WEB, webOnly } from "./types";
 
 // ─── Shared card shell ───────────────────────────────────────
@@ -110,15 +114,30 @@ function Shortcut({ k }: { k: string }) {
 }
 
 // ═══════════ 1) Barcode scanner card ═══════════
-// O popover do scanner NÃO fecha ao clicar fora — fica aberto até o
-// operador clicar no card novamente, pressionar F1 ou clicar no × do popup.
-// Isso permite bipagem contínua de múltiplos produtos sem reabrir.
-export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
-  const [scanning, setScanning] = useState(false);
+// Scanner agora é GLOBAL (useGlobalBarcodeScanner em pdv.tsx). Este card
+// reflete o estado em tempo real:
+//   - Padrão: "Escutando · pode bipar" com pulse verde no ícone
+//   - Após bipe: mostra brevemente o código lido + scan-line animado
+//   - F1 ou clique: abre popover de ENTRADA MANUAL (fallback quando
+//     scanner falha ou produto não tem código de barras)
+//
+// Props:
+//   listening — scanner global está ativo (mostra pulse + label correto)
+//   lastCode  — último código lido (mostrado por ~800ms após bipe)
+//   onScan    — entrada manual também dispara onScan
+export function ActBarcode({
+  onScan,
+  listening = true,
+  lastCode = null,
+}: {
+  onScan: (code: string) => void;
+  listening?: boolean;
+  lastCode?: string | null;
+}) {
   const [open, setOpen] = useState(false);
-  const [lastCode, setLastCode] = useState<string | null>(null);
+  const [manual, setManual] = useState("");
 
-  // F1 shortcut: toggle scanner popover
+  // F1 shortcut: toggle manual-entry popover
   useEffect(() => {
     if (!IS_WEB) return;
     function handler(e: KeyboardEvent) {
@@ -131,44 +150,102 @@ export function ActBarcode({ onScan }: { onScan: (code: string) => void }) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const active = !!lastCode || scanning;
+  // Quando popover abre, dá foco no input manual.
+  const manualInputRef = useRef<TextInput | null>(null);
+  useEffect(() => {
+    if (open && manualInputRef.current) {
+      // Pequeno delay pro popover montar antes do focus.
+      const t = setTimeout(() => {
+        const el: any = manualInputRef.current;
+        if (el && typeof el.focus === "function") el.focus();
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
 
-  // Promove z-index quando aberto para ficar acima das irmãs e do product grid.
+  const showingLastCode = !!lastCode;
+  const active = listening || showingLastCode;
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
+
+  // Subtítulo: prioriza último código (feedback de bipe), depois status.
+  const subtitle = showingLastCode
+    ? lastCode!
+    : listening
+      ? "Escutando · pode bipar"
+      : "Scanner pausado";
+
+  function submitManual() {
+    const code = manual.trim();
+    if (!code) return;
+    onScan(code);
+    setManual("");
+    setOpen(false);
+  }
 
   return (
     <View style={wrapStyle}>
-      <ActCard active={active} empty={!active} scanning={scanning} onClick={() => setOpen(o => !o)}>
+      <ActCard active={active} empty={!active} scanning={showingLastCode} onClick={() => setOpen(o => !o)}>
         <ActIco active={active}>
           <Icon name="barcode" size={18} color={active ? "#a78bfa" : Colors.ink3} />
+          {/* Pulse dot verde no canto do ícone enquanto está ouvindo */}
+          {IS_WEB && listening && !showingLastCode && (
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: -2,
+                right: -2,
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#22c55e",
+                boxShadow: "0 0 6px #22c55e",
+                animation: "caixaPulse 1.6s ease-in-out infinite",
+                pointerEvents: "none",
+              } as any}
+            />
+          )}
         </ActIco>
-        <ActBody k="Leitor · código de barras" v={scanning ? "Escaneando…" : (lastCode || "Aponte ou digite")} isActive={active} isEmpty={!active} />
+        <ActBody
+          k="Leitor · código de barras"
+          v={subtitle}
+          isActive={active}
+          isEmpty={!active}
+        />
         <Shortcut k="F1" />
       </ActCard>
       {open && (
         <PopShell align="left">
-          {/* Cabeçalho com título + botão de fechar explícito */}
           <View style={popS.scannerHeader}>
-            <Text style={popS.title}>Bipar código de barras</Text>
+            <Text style={popS.title}>Entrada manual</Text>
             <Pressable onPress={() => setOpen(false)} style={popS.closeBtn}>
               <Icon name="x" size={14} color={Colors.ink3} />
             </Pressable>
           </View>
-          <ScannerInput
-            placeholder="Bipe ou digite o código…"
-            onScan={r => {
-              setScanning(true);
-              setLastCode(r.code);
-              onScan(r.code);
-              // Mantém o popover ABERTO — operador pode bipar o próximo produto
-              // imediatamente. ScannerInput limpa e refoca o campo sozinho.
-              // Após 800ms reseta o feedback visual (scan line + lastCode).
-              setTimeout(() => {
-                setScanning(false);
-                setLastCode(null);
-              }, 800);
-            }}
-          />
+
+          <Text style={popS.manualHint}>
+            Scanner USB/Bluetooth funciona automaticamente — bipe a qualquer momento. Use este campo apenas para digitar um código manualmente.
+          </Text>
+
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TextInput
+              ref={manualInputRef}
+              value={manual}
+              onChangeText={setManual}
+              onSubmitEditing={submitManual}
+              placeholder="Digite o código…"
+              placeholderTextColor={Colors.ink3}
+              style={[popS.input, { flex: 1 }] as any}
+              returnKeyType="search"
+            />
+            <Pressable
+              onPress={submitManual}
+              disabled={!manual.trim()}
+              style={[popS.applyWide, !manual.trim() && { opacity: 0.5 }]}
+            >
+              <Text style={popS.applyWideTxt}>Adicionar</Text>
+            </Pressable>
+          </View>
         </PopShell>
       )}
     </View>
@@ -563,6 +640,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    position: "relative",
   },
   actBody: { flex: 1, minWidth: 0 },
   actK: {
@@ -619,6 +697,12 @@ const popS = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  manualHint: {
+    fontSize: 11,
+    color: Colors.ink3,
+    lineHeight: 16,
+    marginBottom: 12,
   },
   title: {
     fontSize: 10,
