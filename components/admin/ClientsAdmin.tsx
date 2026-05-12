@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -25,6 +25,8 @@ type Client360 = {
   vertical_active: VerticalKey | null;
   vertical_enabled_at: string | null;
   suggested_vertical: string | null;
+  // 12/05/2026: acessos extras pagos manualmente (vem do backend)
+  extra_seats_granted?: number;
 };
 
 type ActivityData = {
@@ -90,6 +92,18 @@ var MODULE_CATALOG: Array<{ key: string; label: string; minPlan: string }> = [
 
 var PLAN_LABEL_MAP: Record<string, string> = { essencial: "Essencial", negocio: "Negocio+", expansao: "Expansao" };
 
+// 12/05/2026: seats inclusos por plano (espelho do src/services/memberSeats.js no backend).
+// Hardcoded aqui pra UI calcular "X de Y seats" sem precisar fetch extra. Se mudar no backend,
+// atualizar aqui — divergencia gera display incorreto mas nao falha funcional (backend e a
+// fonte da verdade).
+var SEATS_PER_PLAN: Record<string, number> = { essencial: 1, negocio: 3, expansao: 5, personalizado: 999 };
+var SEAT_PRICE_BRL = 19;
+
+function seatsIncludedFor(plan: string, extra: number): number {
+  var base = SEATS_PER_PLAN[(plan || "").toLowerCase()] ?? 1;
+  return base + Math.max(0, extra || 0);
+}
+
 // Catalogo de verticais — cor tematica, icone e se esta pronta ou em desenvolvimento.
 // 'ready=false' mostra badge "em breve" e ainda permite ativacao (mostra tela de
 // "modulo em desenvolvimento" pro cliente) pra sinalizar interesse.
@@ -126,10 +140,12 @@ export function ClientsAdmin() {
   var [filter, setFilter] = useState("all");
   var [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // 12/05/2026: estados das novas secoes (notas + estender trial)
+  // 12/05/2026: estados das novas secoes (notas + estender trial + extra seats)
   var [noteDraft, setNoteDraft] = useState("");
   var [trialDaysStr, setTrialDaysStr] = useState("7");
   var [trialReason, setTrialReason] = useState("");
+  var [extraSeatsStr, setExtraSeatsStr] = useState("0");
+  var [extraSeatsReason, setExtraSeatsReason] = useState("");
 
   var { data, isLoading } = useQuery<{ total: number; clients: Client360[] }>({
     queryKey: ["admin-clients-360"],
@@ -139,6 +155,15 @@ export function ClientsAdmin() {
   });
 
   var selectedClient = selectedId ? (data?.clients || []).find(function(c) { return c.id === selectedId; }) : null;
+
+  // 12/05/2026: sincroniza input de extra seats com o valor atual do cliente
+  // quando seleciona novo cliente ou quando o backend invalida a query.
+  useEffect(function() {
+    if (selectedClient) {
+      setExtraSeatsStr(String(selectedClient.extra_seats_granted ?? 0));
+      setExtraSeatsReason("");
+    }
+  }, [selectedClient?.id, selectedClient?.extra_seats_granted]);
 
   var { data: activityData, isLoading: loadingActivity } = useQuery<ActivityData>({
     queryKey: ["admin-client-activity", selectedId],
@@ -202,7 +227,7 @@ export function ClientsAdmin() {
     onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar vertical"); },
   });
 
-  // 12/05/2026: notas + estender trial mutations
+  // 12/05/2026: notas + estender trial + extra seats mutations
   var notesMutation = useMutation({
     mutationFn: function(p: { companyId: string; body: string }) { return adminApi.notes.create(p.companyId, p.body); },
     onSuccess: function() {
@@ -223,6 +248,22 @@ export function ClientsAdmin() {
       toast.success("Trial estendido com sucesso");
     },
     onError: function(err: any) { toast.error(err?.data?.error || "Erro ao estender trial"); },
+  });
+
+  var extraSeatsMutation = useMutation({
+    mutationFn: function(p: { companyId: string; count: number; reason?: string }) {
+      return adminApi.setExtraSeats(p.companyId, p.count, p.reason);
+    },
+    onSuccess: function(result: any) {
+      qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      setExtraSeatsReason("");
+      if (result?.changed === false) {
+        toast.info("Sem alteracao — count ja estava em " + result.extra_seats_granted);
+      } else {
+        toast.success("Acessos extras: " + result.extra_seats_granted);
+      }
+    },
+    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao atualizar acessos"); },
   });
 
   if (isLoading) return <ListSkeleton rows={4} showCards />;
@@ -287,6 +328,20 @@ export function ClientsAdmin() {
     });
   }
 
+  function handleSaveExtraSeats() {
+    if (!selectedClient) return;
+    var n = parseInt(extraSeatsStr, 10);
+    if (!isFinite(n) || n < 0 || n > 100) {
+      toast.error("Informe entre 0 e 100 acessos");
+      return;
+    }
+    extraSeatsMutation.mutate({
+      companyId: selectedClient.id,
+      count: n,
+      reason: extraSeatsReason.trim() || undefined,
+    });
+  }
+
   // Slide-over do cliente selecionado
   if (selectedClient) {
     var sc = selectedClient;
@@ -298,6 +353,13 @@ export function ClientsAdmin() {
     var trialRel = relativeDays(sc.trial_ends_at);
     var showTrialSection = sc.billing_status === "trial" || !!sc.trial_ends_at;
     var notes = notesData?.notes || [];
+    // 12/05/2026: derivacoes pra secao Acessos extras
+    var currentExtraSeats = sc.extra_seats_granted ?? 0;
+    var basePlanSeats = SEATS_PER_PLAN[(sc.plan || "").toLowerCase()] ?? 1;
+    var totalSeats = seatsIncludedFor(sc.plan, currentExtraSeats);
+    var pendingExtraSeats = parseInt(extraSeatsStr, 10);
+    var pendingValid = isFinite(pendingExtraSeats) && pendingExtraSeats >= 0 && pendingExtraSeats <= 100;
+    var pendingChanged = pendingValid && pendingExtraSeats !== currentExtraSeats;
 
     return (
       <View>
@@ -324,6 +386,11 @@ export function ClientsAdmin() {
           <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
           <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>{sc.tax_regime === "mei" ? "MEI" : "Simples"}</Text></View>
           <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>Desde {sc.created_at ? new Date(sc.created_at).toLocaleDateString("pt-BR") : "?"}</Text></View>
+          {currentExtraSeats > 0 && (
+            <View style={[s.badge, { backgroundColor: Colors.violet + "20" }]}>
+              <Text style={[s.badgeText, { color: Colors.violet3 }]}>+{currentExtraSeats} {currentExtraSeats === 1 ? "acesso extra" : "acessos extras"}</Text>
+            </View>
+          )}
         </View>
 
         {/* 12/05/2026: Estender Trial — visivel quando billing_status=trial ou trial_ends_at set */}
@@ -408,6 +475,74 @@ export function ClientsAdmin() {
           <Text style={s.planHint}>
             Alterar plano aqui ajusta apenas os modulos visiveis.
             Nao altera a cobranca no Asaas — faca isso separadamente se necessario.
+          </Text>
+        </View>
+
+        {/* 12/05/2026: Acessos extras — caso Alynne/Encanto Presentes */}
+        <View style={s.section}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={s.sectionTitle}>Acessos extras (equipe)</Text>
+            {extraSeatsMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+          <View style={s.seatsSummaryGrid}>
+            <View style={s.seatsBox}>
+              <Text style={s.seatsBoxLabel}>No plano</Text>
+              <Text style={s.seatsBoxValue}>{basePlanSeats}</Text>
+              <Text style={s.seatsBoxSub}>{PLAN_LABEL_MAP[(sc.plan || "").toLowerCase()] || sc.plan}</Text>
+            </View>
+            <View style={s.seatsBox}>
+              <Text style={s.seatsBoxLabel}>Extras pagos</Text>
+              <Text style={[s.seatsBoxValue, currentExtraSeats > 0 && { color: Colors.violet3 }]}>+{currentExtraSeats}</Text>
+              <Text style={s.seatsBoxSub}>R$ {currentExtraSeats * SEAT_PRICE_BRL}/mes</Text>
+            </View>
+            <View style={s.seatsBox}>
+              <Text style={s.seatsBoxLabel}>Total</Text>
+              <Text style={[s.seatsBoxValue, { color: Colors.green }]}>{totalSeats}</Text>
+              <Text style={s.seatsBoxSub}>{totalSeats === 1 ? "acesso" : "acessos"}</Text>
+            </View>
+          </View>
+          <View style={s.trialFormRow}>
+            <View style={{ width: 110 }}>
+              <Text style={s.fieldLabel}>Extras (total)</Text>
+              <TextInput
+                value={extraSeatsStr}
+                onChangeText={setExtraSeatsStr}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                placeholder="0"
+                placeholderTextColor={Colors.ink3}
+                style={s.trialDaysInput}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.fieldLabel}>Motivo (opcional)</Text>
+              <TextInput
+                value={extraSeatsReason}
+                onChangeText={setExtraSeatsReason}
+                placeholder="ex: cliente pagou 1 acesso extra em 12/05"
+                placeholderTextColor={Colors.ink3}
+                style={s.trialReasonInput}
+              />
+            </View>
+          </View>
+          <Pressable
+            onPress={handleSaveExtraSeats}
+            disabled={extraSeatsMutation.isPending || !pendingValid || !pendingChanged}
+            style={[
+              s.trialBtn,
+              (extraSeatsMutation.isPending || !pendingValid || !pendingChanged) && { opacity: 0.5 },
+            ]}
+          >
+            <Text style={s.trialBtnText}>
+              {pendingChanged && pendingValid
+                ? "Salvar (" + pendingExtraSeats + " extras = " + seatsIncludedFor(sc.plan, pendingExtraSeats) + " total)"
+                : "Salvar acessos extras"}
+            </Text>
+          </Pressable>
+          <Text style={s.trialHint}>
+            Define o numero ABSOLUTO de seats extras (R$ {SEAT_PRICE_BRL}/mes cada) acima do plano. Soma com
+            os inclusos pra expandir o limite de equipe. O cliente nao paga automaticamente — marque
+            apenas quando o pagamento for confirmado. Acao registrada em admin_audit_log.
           </Text>
         </View>
 
@@ -661,6 +796,11 @@ export function ClientsAdmin() {
               <Text style={s.clientMeta}>{client.owner_email} · {client.tx_count} tx · {fmtK(client.total_revenue)}</Text>
             </View>
             <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
+            {(client.extra_seats_granted ?? 0) > 0 && (
+              <View style={[s.badge, { backgroundColor: Colors.violet + "20" }]}>
+                <Text style={[s.badgeText, { color: Colors.violet3 }]}>+{client.extra_seats_granted}</Text>
+              </View>
+            )}
             {vMeta && <View style={[s.badge, { backgroundColor: vMeta.color + "18" }]}><Text style={[s.badgeText, { color: vMeta.color }]}>{vMeta.icon}</Text></View>}
             <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
             <Icon name="chevron_right" size={14} color={Colors.ink3} />
@@ -777,6 +917,12 @@ var s = StyleSheet.create({
   trialBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
   trialBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   trialHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
+  // 12/05/2026: Acessos extras (seats)
+  seatsSummaryGrid: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  seatsBox: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
+  seatsBoxLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.4, fontWeight: "700", marginBottom: 4 },
+  seatsBoxValue: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  seatsBoxSub: { fontSize: 9, color: Colors.ink3, marginTop: 2, fontWeight: "600" },
   // 12/05/2026: Notas internas
   noteInput: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingVertical: 10, paddingHorizontal: 12, fontSize: 13, color: Colors.ink, minHeight: 60, textAlignVertical: "top" },
   noteBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 8 },

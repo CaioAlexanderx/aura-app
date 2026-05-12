@@ -36,7 +36,7 @@ export type AdminNote = {
 };
 export type AdminAuditLog = {
   id: number;
-  action: string;            // 'extend_trial' | etc
+  action: string;            // 'extend_trial' | 'set_extra_seats' | etc
   payload: Record<string, any> | null;
   reason: string | null;
   created_at: string;
@@ -51,6 +51,11 @@ export type ExtendTrialResponse = {
   trial_ends_at: string;
   previous_trial_ends_at: string | null;
   days_added: number;
+};
+export type SetExtraSeatsResponse = {
+  extra_seats_granted: number;
+  previous_extra_seats_granted: number;
+  changed: boolean;
 };
 
 export var adminApi = {
@@ -87,6 +92,16 @@ export var adminApi = {
     return request<ExtendTrialResponse>(
       "/admin/clients/" + companyId + "/extend-trial",
       { method: "PATCH", body: { days: days, reason: reason || null }, retry: 0 }
+    );
+  },
+  // 12/05/2026 (tarde) — Acessos extras pagos (caso Alynne/Encanto)
+  // count e o numero absoluto desejado (0-100). Backend grava em
+  // companies.extra_seats_granted e propaga pra summarizeSeats em
+  // todas as rotas /members/*.
+  setExtraSeats: function(companyId: string, count: number, reason?: string) {
+    return request<SetExtraSeatsResponse>(
+      "/admin/clients/" + companyId + "/extra-seats",
+      { method: "PATCH", body: { count: count, reason: reason || null }, retry: 0 }
     );
   },
   auditLog: function(params?: { company_id?: string; action?: string; limit?: number }) {
