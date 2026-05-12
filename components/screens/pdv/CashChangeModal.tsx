@@ -11,6 +11,11 @@ import { Icon } from "@/components/Icon";
 // e splitMode=false. Pede o valor recebido do cliente, calcula o troco
 // em tempo real e bloqueia confirmar se o valor pago < total da venda.
 //
+// 12/05/2026: ganhou prop opcional `totalLabel`. Em split-mode o PDV
+// passa "Parcela em dinheiro" pra deixar claro que o valor exibido
+// e a parcela dinheiro, nao o total da venda. Default permanece
+// "Valor da venda" pra single-mode.
+//
 // NÃO persiste cash_tendered no backend nesta versão (decisao do user
 // 09/05/2026) — é apenas auxílio operacional. Confirmar dispara o
 // finalizeSale normalmente, sem alterar o payload.
@@ -19,6 +24,7 @@ import { Icon } from "@/components/Icon";
 type Props = {
   visible: boolean;
   total: number;
+  totalLabel?: string;  // 12/05/2026: customizavel pra split-mode
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -58,7 +64,7 @@ function parseCash(input: string): number {
 }
 
 export function CashChangeModal(props: Props) {
-  const { visible, total, onCancel, onConfirm } = props;
+  const { visible, total, totalLabel, onCancel, onConfirm } = props;
   const [paidStr, setPaidStr] = useState("");
   const inputRef = useRef<TextInput>(null);
 
@@ -110,7 +116,7 @@ export function CashChangeModal(props: Props) {
           </View>
 
           <View style={s.totalRow}>
-            <Text style={s.totalLabel}>Valor da venda</Text>
+            <Text style={s.totalLabel}>{totalLabel || "Valor da venda"}</Text>
             <Text style={s.totalValue}>{fmt(total)}</Text>
           </View>
 

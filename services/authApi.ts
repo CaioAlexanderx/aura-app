@@ -41,6 +41,10 @@ export type PdvSettings = {
   // 09/05/2026: toggle por funcionalidade — ligavel/desligavel em
   // Configuracoes > PDV > Politicas do Caixa.
   crediario_enabled: boolean;
+  // 12/05/2026: controla se o modal de troco abre quando o pagamento
+  // e em dinheiro (single ou parcela dinheiro em split-mode). Default
+  // true em DEFAULT_SETTINGS — operador batuto/fila grande pode desligar.
+  cash_tender_modal_enabled: boolean;
 };
 
 export var authApi = {

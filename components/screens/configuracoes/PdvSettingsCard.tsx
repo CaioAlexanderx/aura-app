@@ -17,6 +17,7 @@ import { Card } from "@/components/screens/configuracoes/shared";
 //   - Obrigar identificação da vendedora em toda venda
 //   - Ativar módulo de Abertura/Fechamento de Caixa
 //   - Ativar Crediário (fiado por cliente) — 09/05/2026
+//   - Modal de troco em venda dinheiro — 12/05/2026
 //
 // Persistido em companies.pdv_settings (jsonb).
 // ============================================================
@@ -127,6 +128,23 @@ export function PdvSettingsCard() {
           <Icon name="chevron_right" size={14} color={Colors.ink3} />
         </Pressable>
       )}
+
+      <View style={s.divider} />
+
+      {/* 12/05/2026: Toggle modal de troco em venda dinheiro */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Modal de troco em dinheiro</Text>
+          <Text style={s.rowDesc}>Ao finalizar venda em dinheiro, abre um auxílio para calcular o troco (single ou parcela dinheiro em multi-pagamento)</Text>
+        </View>
+        <Switch
+          value={display.cash_tender_modal_enabled !== false}
+          onValueChange={function(v) { toggle("cash_tender_modal_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={display.cash_tender_modal_enabled !== false ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
 
       <View style={s.divider} />
 
