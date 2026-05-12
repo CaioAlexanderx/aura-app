@@ -101,7 +101,10 @@ export default function DashboardScreen() {
   var [redirecting, setRedirecting] = useState(false);
   var [refreshing, setRefreshing] = useState(false);
 
-  // Query: ramifica entre per-company e consolidated
+  // Query: ramifica entre per-company e consolidated.
+  // 11/05/2026: staleTime 60s -> 15s + refetchOnWindowFocus true. KPI
+  // "Vendas Hoje" e operacional ao vivo; cache longo confunde lojista
+  // quando uma venda nova nao aparece logo (Eryca Finesse 11/05).
   var { data, isLoading, isError, isFetching } = useQuery({
     queryKey: consolidatedView ? ["dashboard", "me"] : ["dashboard", company?.id],
     queryFn: function () {
@@ -111,7 +114,8 @@ export default function DashboardScreen() {
     },
     enabled: (consolidatedView || !!company?.id) && !!token && !isDemo && !redirecting,
     retry: 1,
-    staleTime: 60000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(function() {
