@@ -33,6 +33,11 @@
 // a tela do PDV (não precisa mais clicar no campo a cada bipe). O hook
 // é desativado quando há modal aberto pra não capturar digitação interna.
 // ActBarcode vira indicador de status + entrada manual fallback.
+// 12/05: Modal de troco cobre split-mode (parcelas em dinheiro) e
+// respeita pdv_settings.cash_tender_modal_enabled. handleFinalize
+// computa cashAmount = soma das parcelas dinheiro (split) ou
+// totalAfterCoupon (single). Em split unbalanced o modal nao abre —
+// finalizeSale dispara o erro de balanceamento como antes.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Dimensions } from "react-native";
@@ -160,10 +165,18 @@ function CaixaScreenInner() {
   // Caixa habilitado? Toggle vive em pdv_settings.caixa_enabled (Configurações > PDV).
   // Quando false, o módulo todo fica invisível no PDV — comportamento legado preservado.
   const caixaEnabled = !!(pdvSettings as any)?.caixa_enabled;
+  // 12/05/2026: Modal de troco habilitado? Default true (preserva 09/05). Operador
+  // batuto pode desligar em Configuracoes > PDV > Politicas do Caixa.
+  const cashTenderEnabled = (pdvSettings as any)?.cash_tender_modal_enabled !== false;
   const { sessaoAtiva, isAberto, isLoading: caixaLoading, invalidate: invalidateCaixa } = useCaixa();
   const [showCaixaModal, setShowCaixaModal] = useState(false);
   // 09/05/2026: modal de troco em vendas single dinheiro
+  // 12/05/2026: agora cobre split-mode tambem; cashModalAmount armazena o
+  // valor a ser pago em dinheiro (single = totalAfterCoupon, split = soma
+  // das parcelas dinheiro).
   const [showChangeModal, setShowChangeModal] = useState(false);
+  const [cashModalAmount, setCashModalAmount] = useState(0);
+  const [cashModalIsSplit, setCashModalIsSplit] = useState(false);
   // 11/05/2026: último código bipado (feedback visual no card ActBarcode)
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
@@ -363,9 +376,22 @@ function CaixaScreenInner() {
       toast.error("Selecione " + v.missing.join(" e ") + " antes de finalizar a venda");
       return;
     }
-    // 09/05/2026: venda em dinheiro single-payment abre modal de troco
-    // antes de finalizar (auxilio operacional, sem persistir cash_tendered).
-    if (payment === "dinheiro" && !splitMode && totalAfterCoupon > 0) {
+
+    // 12/05/2026: calcula valor a receber em dinheiro tanto em single
+    // (totalAfterCoupon se payment=dinheiro) quanto em split (soma das
+    // parcelas dinheiro). Em split-mode unbalanced, deixa o modal de
+    // troco fora — finalizeSale dispara o toast de balanceamento e
+    // o operador corrige antes.
+    const splitOk = !splitMode || splitIsBalanced;
+    const cashAmount = splitMode
+      ? splitPayments
+          .filter(p => p.method === "dinheiro")
+          .reduce((s, p) => s + (Number(p.value) || 0), 0)
+      : (payment === "dinheiro" ? totalAfterCoupon : 0);
+
+    if (cashTenderEnabled && cashAmount > 0 && splitOk) {
+      setCashModalAmount(cashAmount);
+      setCashModalIsSplit(splitMode);
       setShowChangeModal(true);
       return;
     }
@@ -705,7 +731,8 @@ function CaixaScreenInner() {
         />
         <CashChangeModal
           visible={showChangeModal}
-          total={totalAfterCoupon}
+          total={cashModalAmount}
+          totalLabel={cashModalIsSplit ? "Parcela em dinheiro" : undefined}
           onCancel={() => setShowChangeModal(false)}
           onConfirm={handleConfirmCashChange}
         />
@@ -837,7 +864,8 @@ function CaixaScreenInner() {
       />
       <CashChangeModal
         visible={showChangeModal}
-        total={totalAfterCoupon}
+        total={cashModalAmount}
+        totalLabel={cashModalIsSplit ? "Parcela em dinheiro" : undefined}
         onCancel={() => setShowChangeModal(false)}
         onConfirm={handleConfirmCashChange}
       />
