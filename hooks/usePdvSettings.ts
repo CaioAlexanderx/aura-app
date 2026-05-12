@@ -14,13 +14,18 @@ import { useAuthStore } from "@/stores/auth";
 // que essas funcionalidades vem ativadas pra todas as empresas — quem
 // nao usa simplesmente desliga em Configuracoes > PDV > Politicas do
 // Caixa. Backend tambem atualizado (migration 106 + ALTER COLUMN DEFAULT).
+//
+// 12/05/2026: cash_tender_modal_enabled — default true. Controla se o
+// modal de troco em venda dinheiro abre (single ou parcela dinheiro
+// em split-mode). Operador batuto/fila grande pode desligar.
 // ============================================================
 
 const DEFAULT_SETTINGS: PdvSettings = {
-  require_customer:  false,
-  require_seller:    false,
-  caixa_enabled:     true,
-  crediario_enabled: true,
+  require_customer:          false,
+  require_seller:            false,
+  caixa_enabled:             true,
+  crediario_enabled:         true,
+  cash_tender_modal_enabled: true,
 };
 
 export function usePdvSettings() {
