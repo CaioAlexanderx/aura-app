@@ -5,6 +5,12 @@
 // Padrão idêntico ao usado na Sidebar Premium v2 — vive fora do
 // React render pra não re-injetar a cada mount e pra play bem com
 // CSS keyframes.
+//
+// 12/05/2026: ações inline (edit/link/delete) ficavam invisíveis
+// em touch screens porque dependiam de :hover. @media (hover: none)
+// força opacity:1 + pointer-events:auto !important pra tablets e
+// notebooks com tela touch. Bug reportado pela Eryca ("não consigo
+// deletar"). Desktop com mouse mantém UX limpa de hover-reveal.
 // ============================================================
 import { useEffect } from "react";
 import { Platform } from "react-native";
@@ -33,7 +39,14 @@ export function useEstoquePremiumStyles() {
       ".aura-est-rise { animation: auraEstRiseIn 0.55s cubic-bezier(0.4,0,0.2,1) both; }\n" +
       ".aura-est-search-shimmer { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, rgba(124,58,237,0.06) 50%, transparent 70%); animation: auraEstPillSweep 5s ease-in-out infinite; }\n" +
       ".aura-est-card-actions { opacity: 0; transition: opacity 0.2s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }\n" +
-      ".aura-est-card:hover .aura-est-card-actions { opacity: 1; pointer-events: auto; }\n";
+      ".aura-est-card:hover .aura-est-card-actions { opacity: 1; pointer-events: auto; }\n" +
+      // 12/05/2026: touch devices (tablet, notebook com tela touch) nao tem :hover.
+      // Sem isso, edit/link/delete ficam permanentemente invisiveis (Eryca 12/05).
+      // !important beats inline opacity:0 do ProductTableWeb.
+      "@media (hover: none) {\n" +
+      "  .aura-est-row-actions { opacity: 1 !important; }\n" +
+      "  .aura-est-card-actions { opacity: 1 !important; pointer-events: auto !important; }\n" +
+      "}\n";
     document.head.appendChild(st);
   }, []);
 }
