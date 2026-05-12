@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request, adminApi, type VerticalKey } from "@/services/api";
+import type { AdminNote } from "@/services/adminApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -33,6 +34,17 @@ type ActivityData = {
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
 var fmtK = function(n: number) { return n >= 1000 ? "R$ " + (n/1000).toFixed(1).replace(".",",") + "k" : fmt(n); };
+
+// Formata "em X dias" / "ha X dias" baseado em delta entre data e hoje.
+function relativeDays(iso: string | null): { label: string; expired: boolean } {
+  if (!iso) return { label: "sem data", expired: false };
+  var target = new Date(iso).getTime();
+  var now = Date.now();
+  var deltaDays = Math.ceil((target - now) / 86400000);
+  if (deltaDays > 0) return { label: "em " + deltaDays + (deltaDays === 1 ? " dia" : " dias"), expired: false };
+  if (deltaDays === 0) return { label: "hoje", expired: false };
+  return { label: "ha " + Math.abs(deltaDays) + (Math.abs(deltaDays) === 1 ? " dia" : " dias"), expired: true };
+}
 
 var HEALTH_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   healthy:   { bg: Colors.greenD, text: Colors.green, label: "Saudavel" },
@@ -83,12 +95,12 @@ var PLAN_LABEL_MAP: Record<string, string> = { essencial: "Essencial", negocio: 
 // "modulo em desenvolvimento" pro cliente) pra sinalizar interesse.
 type VerticalMeta = { key: VerticalKey; label: string; color: string; icon: string; ready: boolean };
 var VERTICAL_META: VerticalMeta[] = [
-  { key: "odonto",   label: "Odontologia",   color: "#06b6d4", icon: "\uD83E\uDE7A", ready: true  }, // cyan 🦷
-  { key: "barber",   label: "Barber / Salao", color: Colors.amber, icon: "\u2702\uFE0F", ready: true  }, // amber ✂️
-  { key: "food",     label: "Food Service",  color: "#fb7185", icon: "\uD83C\uDF7D\uFE0F", ready: true  }, // coral 🍽️
-  { key: "estetica", label: "Estetica",      color: Colors.ink3, icon: "\u2728", ready: false }, // em dev ✨
-  { key: "pet",      label: "Pet Shop",      color: Colors.ink3, icon: "\uD83D\uDC3E", ready: false }, // em dev 🐾
-  { key: "academia", label: "Academia",      color: Colors.ink3, icon: "\uD83C\uDFCB\uFE0F", ready: false }, // em dev 🏋️
+  { key: "odonto",   label: "Odontologia",   color: "#06b6d4", icon: "🩺", ready: true  }, // cyan 🦷
+  { key: "barber",   label: "Barber / Salao", color: Colors.amber, icon: "✂️", ready: true  }, // amber ✂️
+  { key: "food",     label: "Food Service",  color: "#fb7185", icon: "🍽️", ready: true  }, // coral 🍽️
+  { key: "estetica", label: "Estetica",      color: Colors.ink3, icon: "✨", ready: false }, // em dev ✨
+  { key: "pet",      label: "Pet Shop",      color: Colors.ink3, icon: "🐾", ready: false }, // em dev 🐾
+  { key: "academia", label: "Academia",      color: Colors.ink3, icon: "🏋️", ready: false }, // em dev 🏋️
 ];
 
 // Calcula visibilidade real de um modulo pra uma empresa,
@@ -114,6 +126,11 @@ export function ClientsAdmin() {
   var [filter, setFilter] = useState("all");
   var [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // 12/05/2026: estados das novas secoes (notas + estender trial)
+  var [noteDraft, setNoteDraft] = useState("");
+  var [trialDaysStr, setTrialDaysStr] = useState("7");
+  var [trialReason, setTrialReason] = useState("");
+
   var { data, isLoading } = useQuery<{ total: number; clients: Client360[] }>({
     queryKey: ["admin-clients-360"],
     queryFn: function() { return request("/admin/clients-360"); },
@@ -128,6 +145,14 @@ export function ClientsAdmin() {
     queryFn: function() { return request("/admin/clients/" + selectedId + "/activity"); },
     enabled: !!selectedId,
     staleTime: 120_000,
+  });
+
+  // 12/05/2026: notas internas do cliente selecionado
+  var { data: notesData, isLoading: loadingNotes } = useQuery<{ notes: AdminNote[] }>({
+    queryKey: ["admin-client-notes", selectedId],
+    queryFn: function() { return adminApi.notes.list(selectedId!); },
+    enabled: !!selectedId,
+    staleTime: 30_000,
   });
 
   var toggleMutation = useMutation({
@@ -177,6 +202,29 @@ export function ClientsAdmin() {
     onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar vertical"); },
   });
 
+  // 12/05/2026: notas + estender trial mutations
+  var notesMutation = useMutation({
+    mutationFn: function(p: { companyId: string; body: string }) { return adminApi.notes.create(p.companyId, p.body); },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["admin-client-notes", selectedId] });
+      setNoteDraft("");
+      toast.success("Nota adicionada");
+    },
+    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao adicionar nota"); },
+  });
+
+  var trialMutation = useMutation({
+    mutationFn: function(p: { companyId: string; days: number; reason?: string }) {
+      return adminApi.extendTrial(p.companyId, p.days, p.reason);
+    },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      setTrialReason("");
+      toast.success("Trial estendido com sucesso");
+    },
+    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao estender trial"); },
+  });
+
   if (isLoading) return <ListSkeleton rows={4} showCards />;
 
   var clients = data?.clients || [];
@@ -217,6 +265,28 @@ export function ClientsAdmin() {
     verticalMutation.mutate({ companyId: client.id, vertical: nextVertical });
   }
 
+  // 12/05/2026: handlers das novas secoes
+  function handleAddNote() {
+    if (!selectedClient) return;
+    var trimmed = noteDraft.trim();
+    if (!trimmed) { toast.info("Digite uma nota antes de adicionar"); return; }
+    notesMutation.mutate({ companyId: selectedClient.id, body: trimmed });
+  }
+
+  function handleExtendTrial() {
+    if (!selectedClient) return;
+    var n = parseInt(trialDaysStr, 10);
+    if (!isFinite(n) || n <= 0 || n > 365) {
+      toast.error("Informe entre 1 e 365 dias");
+      return;
+    }
+    trialMutation.mutate({
+      companyId: selectedClient.id,
+      days: n,
+      reason: trialReason.trim() || undefined,
+    });
+  }
+
   // Slide-over do cliente selecionado
   if (selectedClient) {
     var sc = selectedClient;
@@ -224,6 +294,10 @@ export function ClientsAdmin() {
     var bc = BILLING_LABELS[sc.billing_status] || { label: sc.billing_status, color: Colors.ink3 };
     var pc = PLAN_C[sc.plan] || { color: Colors.ink3, label: sc.plan || "?" };
     var act = activityData;
+    // 12/05/2026: deriva info do trial pra secao Estender Trial
+    var trialRel = relativeDays(sc.trial_ends_at);
+    var showTrialSection = sc.billing_status === "trial" || !!sc.trial_ends_at;
+    var notes = notesData?.notes || [];
 
     return (
       <View>
@@ -251,6 +325,59 @@ export function ClientsAdmin() {
           <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>{sc.tax_regime === "mei" ? "MEI" : "Simples"}</Text></View>
           <View style={[s.badge, { backgroundColor: Colors.bg4 }]}><Text style={[s.badgeText, { color: Colors.ink3 }]}>Desde {sc.created_at ? new Date(sc.created_at).toLocaleDateString("pt-BR") : "?"}</Text></View>
         </View>
+
+        {/* 12/05/2026: Estender Trial — visivel quando billing_status=trial ou trial_ends_at set */}
+        {showTrialSection && (
+          <View style={s.section}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <Text style={s.sectionTitle}>Estender trial</Text>
+              {trialMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+            </View>
+            <View style={s.trialStatusRow}>
+              <Text style={s.trialStatusLabel}>Trial atual</Text>
+              <Text style={[s.trialStatusValue, trialRel.expired && { color: Colors.red }]}>
+                {sc.trial_ends_at
+                  ? new Date(sc.trial_ends_at).toLocaleDateString("pt-BR") + " (" + trialRel.label + ")"
+                  : "sem trial ativo"}
+              </Text>
+            </View>
+            <View style={s.trialFormRow}>
+              <View style={{ width: 90 }}>
+                <Text style={s.fieldLabel}>Dias</Text>
+                <TextInput
+                  value={trialDaysStr}
+                  onChangeText={setTrialDaysStr}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  placeholder="7"
+                  placeholderTextColor={Colors.ink3}
+                  style={s.trialDaysInput}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fieldLabel}>Motivo (opcional)</Text>
+                <TextInput
+                  value={trialReason}
+                  onChangeText={setTrialReason}
+                  placeholder="ex: cliente pediu prazo extra"
+                  placeholderTextColor={Colors.ink3}
+                  style={s.trialReasonInput}
+                />
+              </View>
+            </View>
+            <Pressable
+              onPress={handleExtendTrial}
+              disabled={trialMutation.isPending}
+              style={[s.trialBtn, trialMutation.isPending && { opacity: 0.5 }]}
+            >
+              <Text style={s.trialBtnText}>Estender trial</Text>
+            </Pressable>
+            <Text style={s.trialHint}>
+              Se o trial ja vencer, conta a partir de hoje. Se ativo, soma ao final atual.
+              Acao registrada em admin_audit_log com seu user + motivo.
+            </Text>
+          </View>
+        )}
 
         {/* Seletor de plano */}
         <View style={s.section}>
@@ -300,7 +427,7 @@ export function ClientsAdmin() {
                 !sc.vertical_active && { borderColor: Colors.ink3, backgroundColor: Colors.bg4 },
               ]}
             >
-              <Text style={s.verticalIcon}>\u2014</Text>
+              <Text style={s.verticalIcon}>—</Text>
               <Text style={[s.verticalLabel, !sc.vertical_active && { color: Colors.ink }]}>Nenhuma</Text>
               {!sc.vertical_active && <Text style={[s.verticalMeta, { color: Colors.ink3 }]}>atual</Text>}
             </Pressable>
@@ -407,6 +534,50 @@ export function ClientsAdmin() {
           </View>
         )}
 
+        {/* 12/05/2026: Notas internas (CRM basico) */}
+        <View style={s.section}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={s.sectionTitle}>Notas internas</Text>
+            {notesMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+          <TextInput
+            value={noteDraft}
+            onChangeText={setNoteDraft}
+            placeholder="ex: cliente ligou pedindo treinamento da NFC-e em 14/05"
+            placeholderTextColor={Colors.ink3}
+            multiline
+            numberOfLines={3}
+            style={s.noteInput}
+          />
+          <Pressable
+            onPress={handleAddNote}
+            disabled={notesMutation.isPending || !noteDraft.trim()}
+            style={[s.noteBtn, (notesMutation.isPending || !noteDraft.trim()) && { opacity: 0.5 }]}
+          >
+            <Text style={s.noteBtnText}>Adicionar nota</Text>
+          </Pressable>
+
+          {loadingNotes ? (
+            <ActivityIndicator color={Colors.violet3} style={{ padding: 16 }} />
+          ) : notes.length === 0 ? (
+            <Text style={s.notesEmpty}>Nenhuma nota ainda. Use o campo acima pra registrar contato/observacao.</Text>
+          ) : (
+            <View style={{ marginTop: 12 }}>
+              {notes.map(function(n) {
+                return (
+                  <View key={n.id} style={s.noteRow}>
+                    <View style={s.noteHead}>
+                      <Text style={s.noteAuthor}>{n.author_name || n.author_email || "Staff"}</Text>
+                      <Text style={s.noteDate}>{new Date(n.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</Text>
+                    </View>
+                    <Text style={s.noteBody}>{n.body}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
         {/* Modulos — com logica REAL de visibilidade (override > plano) */}
         <View style={s.section}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -487,7 +658,7 @@ export function ClientsAdmin() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.clientName} numberOfLines={1}>{displayName}</Text>
-              <Text style={s.clientMeta}>{client.owner_email} \u00b7 {client.tx_count} tx \u00b7 {fmtK(client.total_revenue)}</Text>
+              <Text style={s.clientMeta}>{client.owner_email} · {client.tx_count} tx · {fmtK(client.total_revenue)}</Text>
             </View>
             <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
             {vMeta && <View style={[s.badge, { backgroundColor: vMeta.color + "18" }]}><Text style={[s.badgeText, { color: vMeta.color }]}>{vMeta.icon}</Text></View>}
@@ -595,6 +766,27 @@ var s = StyleSheet.create({
   },
   soonText: { fontSize: 8, color: Colors.amber, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
   verticalHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
+  // 12/05/2026: Estender Trial
+  trialStatusRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, marginBottom: 12 },
+  trialStatusLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  trialStatusValue: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
+  trialFormRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  fieldLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
+  trialDaysInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingVertical: 10, paddingHorizontal: 12, fontSize: 14, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  trialReasonInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingVertical: 10, paddingHorizontal: 12, fontSize: 12, color: Colors.ink },
+  trialBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  trialBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  trialHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
+  // 12/05/2026: Notas internas
+  noteInput: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingVertical: 10, paddingHorizontal: 12, fontSize: 13, color: Colors.ink, minHeight: 60, textAlignVertical: "top" },
+  noteBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 8 },
+  noteBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  notesEmpty: { fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 16, lineHeight: 16 },
+  noteRow: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, padding: 12, marginBottom: 8 },
+  noteHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  noteAuthor: { fontSize: 11, color: Colors.violet3, fontWeight: "700" },
+  noteDate: { fontSize: 10, color: Colors.ink3 },
+  noteBody: { fontSize: 12, color: Colors.ink, lineHeight: 18 },
 });
 
 export default ClientsAdmin;
