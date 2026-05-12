@@ -25,6 +25,34 @@ export type CreateAccessCodeBody = {
   expires_at?: string | null;
 };
 
+// 12/05/2026 — Onda 1 Gestao Aura v2
+export type AdminNote = {
+  id: number;
+  body: string;
+  created_at: string;
+  author_user_id: string;
+  author_name: string | null;
+  author_email: string | null;
+};
+export type AdminAuditLog = {
+  id: number;
+  action: string;            // 'extend_trial' | etc
+  payload: Record<string, any> | null;
+  reason: string | null;
+  created_at: string;
+  company_id: string | null;
+  staff_user_id: string;
+  staff_name: string | null;
+  staff_email: string | null;
+  company_trade_name: string | null;
+  company_legal_name: string | null;
+};
+export type ExtendTrialResponse = {
+  trial_ends_at: string;
+  previous_trial_ends_at: string | null;
+  days_added: number;
+};
+
 export var adminApi = {
   dashboard: function() { return request<any>("/admin/dashboard"); },
   clients: function() { return request<any>("/admin/clients"); },
@@ -41,6 +69,33 @@ export var adminApi = {
     return request<{ company: any; changed: boolean; message: string }>(
       "/admin/clients/" + companyId + "/vertical", { method: "PATCH", body: { vertical: vertical }, retry: 0 }
     );
+  },
+  // 12/05/2026 — Notas CRM
+  notes: {
+    list: function(companyId: string) {
+      return request<{ notes: AdminNote[] }>("/admin/clients/" + companyId + "/notes");
+    },
+    create: function(companyId: string, body: string) {
+      return request<{ note: AdminNote }>(
+        "/admin/clients/" + companyId + "/notes",
+        { method: "POST", body: { body: body }, retry: 0 }
+      );
+    },
+  },
+  // 12/05/2026 — Estender trial + audit log
+  extendTrial: function(companyId: string, days: number, reason?: string) {
+    return request<ExtendTrialResponse>(
+      "/admin/clients/" + companyId + "/extend-trial",
+      { method: "PATCH", body: { days: days, reason: reason || null }, retry: 0 }
+    );
+  },
+  auditLog: function(params?: { company_id?: string; action?: string; limit?: number }) {
+    var qs: string[] = [];
+    if (params?.company_id) qs.push("company_id=" + encodeURIComponent(params.company_id));
+    if (params?.action)     qs.push("action=" + encodeURIComponent(params.action));
+    if (params?.limit)      qs.push("limit=" + params.limit);
+    var suffix = qs.length ? "?" + qs.join("&") : "";
+    return request<{ logs: AdminAuditLog[] }>("/admin/audit-log" + suffix);
   },
   accessCodes: {
     list: function(params?: { type?: string; is_active?: boolean; q?: string; limit?: number }) {
