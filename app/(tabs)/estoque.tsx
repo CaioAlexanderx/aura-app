@@ -471,7 +471,8 @@ export default function EstoqueScreen() {
     );
   }
 
-  // Helper: 4 botões de ação do header (reusados em wide e narrow)
+  // Helper: 5 botões de ação do header (reusados em wide e narrow)
+  // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
   const ActionButtons = () => (
     <>
       <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
@@ -490,12 +491,56 @@ export default function EstoqueScreen() {
           <Text style={s.danfeBtnText}>Importar DANFE</Text>
         </Pressable>
       )}
+      {/* 12/05/2026: botao Selecionar — toggle bulk mode. So aparece se ja tem produto e usuario nao e demo. */}
+      {!isDemo && products.length > 0 && (
+        <Pressable
+          onPress={() => { if (bulkMode) { exitBulkMode(); } else { setBulkMode(true); } }}
+          style={[s.bulkBtn, bulkMode && s.bulkBtnActive]}
+        >
+          <Icon name="check" size={14} color={bulkMode ? "#fff" : Colors.violet3} />
+          <Text style={[s.bulkBtnText, bulkMode && { color: "#fff" }]}>
+            {bulkMode ? "Sair da selecao" : "Selecionar"}
+          </Text>
+        </Pressable>
+      )}
       <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
         <Icon name="package" size={14} color="#fff" />
         <Text style={s.addBtnText}>+ Produto</Text>
       </Pressable>
     </>
   );
+
+  // 12/05/2026: barra de acoes em lote. Renderizada quando bulkMode=true.
+  // Mostra contador + select-all + delete + cancel. Botoes propagam pros
+  // handlers ja existentes (handleSelectAll, setShowBulkConfirm, exitBulkMode).
+  const BulkActionBar = () => {
+    if (!bulkMode) return null;
+    const allSelected = filtered.length > 0 && bulkSelected.size === filtered.length;
+    return (
+      <View style={s.bulkBar}>
+        <Text style={s.bulkCount}>
+          {bulkSelected.size} de {filtered.length} selecionado{bulkSelected.size === 1 ? "" : "s"}
+        </Text>
+        <Pressable onPress={handleSelectAll} style={s.bulkAction} disabled={filtered.length === 0}>
+          <Text style={s.bulkActionText}>
+            {allSelected ? "Limpar selecao" : "Selecionar todos"}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { if (bulkSelected.size > 0) setShowBulkConfirm(true); }}
+          disabled={bulkSelected.size === 0}
+          style={[s.bulkAction, s.bulkDeleteAction, bulkSelected.size === 0 && { opacity: 0.4 }]}
+        >
+          <Text style={[s.bulkActionText, { color: Colors.red }]}>
+            Excluir{bulkSelected.size > 0 ? " (" + bulkSelected.size + ")" : ""}
+          </Text>
+        </Pressable>
+        <Pressable onPress={exitBulkMode} style={s.bulkAction}>
+          <Text style={s.bulkActionText}>Cancelar</Text>
+        </Pressable>
+      </View>
+    );
+  };
 
   return (
     <View style={s.wrapper}>
@@ -666,6 +711,9 @@ export default function EstoqueScreen() {
               <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
             )}
 
+            {/* 12/05/2026: barra de acoes em lote — visivel apenas quando bulkMode=true */}
+            <BulkActionBar />
+
             {/* List view: ProductTableWeb / ProductGridWeb (wide) ou ProductRow (narrow) */}
             {isWebWide ? (
               <View style={{ marginBottom: 12 } as any}>
@@ -817,8 +865,11 @@ const s = StyleSheet.create({
   toolbar: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
   catBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   catBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  bulkBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
-  bulkBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  // 12/05/2026: bulkBtn agora vive no header (junto com Servico/Lote/DANFE/Produto).
+  // bulkBtnActive aplica quando bulkMode=true pra dar feedback visual.
+  bulkBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
+  bulkBtnActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  bulkBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   dupBtn: { backgroundColor: Colors.amberD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: "rgba(245,158,11,0.3)" },
   dupBtnText: { fontSize: 12, color: Colors.amber, fontWeight: "700" },
   bulkBar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
