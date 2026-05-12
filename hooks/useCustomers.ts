@@ -9,7 +9,7 @@ import type { Customer } from "@/components/screens/clientes/types";
 // MULTICNPJ Sessao 2 Onda 2.3 (03/05/2026):
 // Hook ramifica entre /me/customers (consolidated) e /companies/:id/customers
 // (per-company). Backend ja retorna lista UNICA owner-scoped em ambos os
-// endpoints — vendedora membro so de Loja A ainda ve clientes registrados
+// endpoints -- vendedora membro so de Loja A ainda ve clientes registrados
 // em Loja B do mesmo dono.
 //
 // Mutations (POST/PATCH/DELETE) em modo consolidated:
@@ -18,6 +18,11 @@ import type { Customer } from "@/components/screens/clientes/types";
 //
 // Crediario (mai/2026): backend retorna credit_balance via LEFT JOIN
 // com customer_credit_balances. Mapeio pra Customer.creditBalance.
+//
+// 11/05/2026 -- PLAN-01: Clientes basico no Essencial. Limite por plano
+// (1k/5k/ilimitado) controlado em customers.js. 403 do POST/PATCH agora
+// significa LIMITE ATINGIDO (com body.limit, body.current), nao bloqueio
+// de plano. Toasts contextualizados com upgrade path quando aplicavel.
 
 // Processa deletes em lotes para nao sobrecarregar o servidor
 async function deleteBatched(
@@ -68,10 +73,28 @@ function parseBirthday(val: string): string | undefined {
   return undefined;
 }
 
+// Plano → mensagem de upgrade contextual para 403 com body.limit.
+// Como tirar o gate principal, 403 hoje so dispara quando atinge
+// o limite do plano (customers.js).
+function limitUpgradeMessage(plan: string, body: any): string {
+  const limit = body?.limit;
+  const current = body?.current;
+  if (!limit) return body?.error || "Limite de clientes atingido.";
+  switch ((plan || "").toLowerCase()) {
+    case "essencial":
+      return `Voce atingiu ${current ?? limit} de ${limit} clientes do Essencial. Faça upgrade pro Negocio (5.000 clientes) ou Expansao (ilimitado).`;
+    case "negocio":
+      return `Voce atingiu ${current ?? limit} de ${limit} clientes do Negocio. Faça upgrade pro Expansao (ilimitado).`;
+    default:
+      return body?.error || `Limite de ${limit} clientes atingido.`;
+  }
+}
+
 export function useCustomers() {
   const { company, token, isDemo, consolidatedView, availableCompanies } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
+  const plan = company?.plan || "essencial";
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // MULTICNPJ Onda 2.3: em modo consolidated, mutations precisam de uma
@@ -95,6 +118,9 @@ export function useCustomers() {
     staleTime: 30000,
   });
 
+  // Apos PLAN-01, 403 no GET nao deveria mais ocorrer (gate removido em
+  // private.js). Mantenho a flag por seguranca caso volte algum gate
+  // futuro (ex: trial expirado bloqueando tudo).
   const planBlocked = (fetchError as any)?.status === 403;
 
   const customers: Customer[] = useMemo(function () {
@@ -106,8 +132,10 @@ export function useCustomers() {
 
   // Companies count vem do response em consolidated (pra FE decidir mostrar badge)
   const companyCount = (apiData as any)?.company_count || (availableCompanies?.length || 1);
+  // Limite do plano (vem do response do BE)
+  const planLimit = (apiData as any)?.plan_limit || null;
 
-  // Helper de invalidacao — invalida ambos os keys pra cobrir os dois modos
+  // Helper de invalidacao -- invalida ambos os keys pra cobrir os dois modos
   function invalidateCustomers() {
     qc.invalidateQueries({ queryKey: ["customers"] });
   }
@@ -124,15 +152,20 @@ export function useCustomers() {
       toast.success("Cliente cadastrado!");
     },
     onError: function (err: any) {
-      if (err instanceof ApiError && err.status === 403) toast.error("Clientes disponivel a partir do plano Negocio.");
-      else toast.error(err?.message || "Erro ao salvar cliente");
+      // PLAN-01: 403 do POST agora indica LIMITE ATINGIDO (gate principal removido).
+      // Backend retorna { error, limit, current } pra montar mensagem contextual.
+      if (err instanceof ApiError && err.status === 403) {
+        toast.error(limitUpgradeMessage(plan, err.body));
+      } else {
+        toast.error(err?.message || "Erro ao salvar cliente");
+      }
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: function (params: { id: string; body: any; sourceCompanyId?: string | null }) {
       // Em consolidated, usa o company_id do proprio cliente (sourceCompanyId)
-      // se disponivel — mais correto que primary, pq o BE espera owner-scope.
+      // se disponivel -- mais correto que primary, pq o BE espera owner-scope.
       // Backend customers.js owner-scoped permite editar de qualquer loja
       // do mesmo dono, mas usar o original e mais explicito.
       const targetCid = params.sourceCompanyId || mutationCompanyId;
@@ -159,8 +192,7 @@ export function useCustomers() {
       toast.success("Cliente excluido");
     },
     onError: function (err: any) {
-      if (err instanceof ApiError && err.status === 403) toast.error("Funcionalidade disponivel a partir do plano Negocio.");
-      else toast.error("Erro ao excluir cliente");
+      toast.error(err?.message || "Erro ao excluir cliente");
     },
   });
 
@@ -204,7 +236,7 @@ export function useCustomers() {
     deleteMutation.mutate({ custId: id, sourceCompanyId });
   }
 
-  // Bulk delete em lotes de 10 — nao sobrecarrega o servidor
+  // Bulk delete em lotes de 10 -- nao sobrecarrega o servidor
   async function bulkDeleteCustomers(ids: string[]) {
     if (!mutationCompanyId || isDemo || ids.length === 0) return;
     setBulkDeleting(true);
@@ -249,6 +281,9 @@ export function useCustomers() {
     // MULTICNPJ Onda 2.3: info pra UI condicionar badge da loja
     consolidatedView,
     companyCount,
+    // PLAN-01: limite do plano (pra UI mostrar progress "X/Y clientes")
+    planLimit,
+    plan,
     // Helper pra UI invalidar saldo apos receber pagamento
     invalidateCustomers,
   };

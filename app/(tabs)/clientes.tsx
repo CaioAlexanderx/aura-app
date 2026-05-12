@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useCustomers } from "@/hooks/useCustomers";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -24,11 +25,79 @@ import { Icon } from "@/components/Icon";
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const PAGE_SIZE = 20;
 
+// PLAN-01 (11/05/2026): UpgradeCard local pras tabs avancadas (Ranking,
+// Retencao, Avaliacoes) que sao Negocio+. Mostra o conteudo da tab como
+// teaser dentro do card -- educa o user sobre o que tem no upgrade em vez
+// de esconder a aba. CTA navega pra /(tabs)/planos.
+function UpgradeCard({ title, description, features }: {
+  title: string;
+  description: string;
+  features: string[];
+}) {
+  return (
+    <View style={u.wrap}>
+      <View style={u.iconWrap}>
+        <Icon name="star" size={20} color={Colors.violet3} />
+      </View>
+      <Text style={u.title}>{title}</Text>
+      <Text style={u.desc}>{description}</Text>
+      <View style={u.featuresList}>
+        {features.map(f => (
+          <View key={f} style={u.featureRow}>
+            <Icon name="check" size={12} color={Colors.green} />
+            <Text style={u.featureText}>{f}</Text>
+          </View>
+        ))}
+      </View>
+      <Pressable
+        onPress={() => router.push("/(tabs)/planos")}
+        style={u.cta}
+      >
+        <Text style={u.ctaText}>Conhecer o plano Negocio</Text>
+      </Pressable>
+      <Text style={u.hint}>A partir de R$ 169/mes -- ative quando quiser</Text>
+    </View>
+  );
+}
+
+const u = StyleSheet.create({
+  wrap: {
+    backgroundColor: Colors.bg3,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 8,
+  },
+  iconWrap: {
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: Colors.violetD,
+    borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 14,
+  },
+  title: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginBottom: 6, textAlign: "center" },
+  desc: { fontSize: 13, color: Colors.ink3, textAlign: "center", marginBottom: 20, lineHeight: 18, maxWidth: 380 },
+  featuresList: { gap: 10, marginBottom: 20, alignSelf: "stretch", maxWidth: 380, marginHorizontal: "auto" },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  featureText: { fontSize: 13, color: Colors.ink, flex: 1 },
+  cta: {
+    backgroundColor: Colors.violet,
+    borderRadius: 12,
+    paddingHorizontal: 22, paddingVertical: 12,
+    marginBottom: 10,
+  },
+  ctaText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  hint: { fontSize: 11, color: Colors.ink3, textAlign: "center" },
+});
+
 export default function ClientesScreen() {
   const {
     customers, isLoading, isDemo, planBlocked, bulkDeleting,
     addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers,
     consolidatedView, companyCount,
+    plan, planLimit,
   } = useCustomers();
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -43,6 +112,10 @@ export default function ClientesScreen() {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  // PLAN-01: tabs avancadas (Ranking, Retencao, Avaliacoes) sao Negocio+.
+  // Essencial ve as tabs mas o conteudo vira UpgradeCard.
+  const isEssencial = plan === "essencial";
 
   const filtered = customers.filter(c => {
     if (!search) return true;
@@ -105,6 +178,13 @@ export default function ClientesScreen() {
     ? `Voce selecionou ${bulkSelected.size} clientes. Esta acao nao pode ser desfeita e pode levar alguns segundos.`
     : "Esta acao nao pode ser desfeita. Os clientes selecionados serao removidos permanentemente.";
 
+  // PLAN-01: mostra contagem X / limite no card de resumo.
+  // Estimulo natural pra upgrade quando se aproxima do limite.
+  const customerCountLabel = planLimit && planLimit < 999999
+    ? `${customers.length} / ${planLimit.toLocaleString("pt-BR")}`
+    : String(customers.length);
+  const nearLimit = planLimit && planLimit < 999999 && customers.length / planLimit >= 0.85;
+
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
       <View style={s.headerRow}>
@@ -131,16 +211,39 @@ export default function ClientesScreen() {
         </View>
       )}
 
+      {/* PLAN-01: aviso de limite proximo (>=85% do plano) */}
+      {nearLimit && (
+        <Pressable onPress={() => router.push("/(tabs)/planos")} style={s.nearLimitBanner}>
+          <Icon name="alert" size={14} color={Colors.amber} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.nearLimitTitle}>
+              {customers.length >= planLimit
+                ? `Limite do plano atingido (${planLimit.toLocaleString("pt-BR")} clientes)`
+                : `Voce esta perto do limite (${customers.length} / ${planLimit.toLocaleString("pt-BR")})`}
+            </Text>
+            <Text style={s.nearLimitSub}>Toque para ver opcoes de upgrade</Text>
+          </View>
+          <Icon name="chevron_right" size={16} color={Colors.amber} />
+        </Pressable>
+      )}
+
       {planBlocked && (
-        <View style={s.planBlock}><Text style={s.planBlockText}>Clientes disponivel a partir do plano Negocio.</Text></View>
+        <View style={s.planBlock}><Text style={s.planBlockText}>Sem acesso ao modulo de clientes neste momento.</Text></View>
       )}
 
       <View style={s.summaryRow}>
-        <View style={s.card}><Text style={s.cardLabel}>TOTAL CLIENTES</Text><Text style={s.cardValue}>{customers.length}</Text></View>
-        <View style={s.card}><Text style={s.cardLabel}>FATURAMENTO TOTAL</Text><Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text></View>
+        <View style={s.card}>
+          <Text style={s.cardLabel}>TOTAL CLIENTES</Text>
+          <Text style={s.cardValue}>{customerCountLabel}</Text>
+        </View>
+        <View style={s.card}>
+          <Text style={s.cardLabel}>FATURAMENTO TOTAL</Text>
+          <Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text>
+        </View>
       </View>
 
-      {tab === 0 && !planBlocked && !isDemo && !consolidatedView && <RetentionCard />}
+      {/* RetentionCard so pra Negocio+ (chama endpoint /retention que e Negocio+). */}
+      {tab === 0 && !planBlocked && !isDemo && !consolidatedView && !isEssencial && <RetentionCard />}
 
       {showAdd && !editTarget && <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />}
       {editTarget && <AddCustomerForm initialData={editTarget} onSave={handleEdit} onCancel={() => setEditTarget(null)} />}
@@ -149,6 +252,10 @@ export default function ClientesScreen() {
         {TABS.map((t, i) => (
           <Pressable key={t} onPress={() => handleTabSelect(i)} style={[s.tab, tab === i && s.tabActive]}>
             <Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text>
+            {/* PLAN-01: cadeado discreto nas tabs avancadas pro Essencial */}
+            {isEssencial && i > 0 && (
+              <Icon name="lock" size={10} color={tab === i ? "#fff" : Colors.ink3} />
+            )}
           </Pressable>
         ))}
       </ScrollView>
@@ -228,9 +335,45 @@ export default function ClientesScreen() {
         </View>
       )}
 
-      {tab === 1 && <RankingTab customers={customers} />}
-      {tab === 2 && <RetentionTab />}
-      {tab === 3 && <ReviewsList />}
+      {/* PLAN-01: tabs avancadas com UpgradeCard pro Essencial */}
+      {tab === 1 && (isEssencial ? (
+        <UpgradeCard
+          title="Ranking de clientes"
+          description="Veja seus clientes ordenados por faturamento, visitas e ticket medio. Identifique seus VIPs e quem precisa de atencao."
+          features={[
+            "Top clientes por LTV (faturamento total)",
+            "Top por frequencia (numero de visitas)",
+            "Ticket medio por cliente",
+            "Status automatico: VIP, Frequente, Novo, Inativo",
+          ]}
+        />
+      ) : <RankingTab customers={customers} />)}
+
+      {tab === 2 && (isEssencial ? (
+        <UpgradeCard
+          title="Retencao e clientes em risco"
+          description="Saiba quem voltou e quem nao voltou. Reaja antes de perder um bom cliente."
+          features={[
+            "Taxa de retencao mensal",
+            "Clientes em risco (30-90 dias sem comprar)",
+            "Clientes perdidos (90+ dias)",
+            "Comparativo: novos vs voltando",
+          ]}
+        />
+      ) : <RetentionTab />)}
+
+      {tab === 3 && (isEssencial ? (
+        <UpgradeCard
+          title="Avaliacoes de clientes"
+          description="Receba avaliacoes apos cada compra e construa reputacao publica."
+          features={[
+            "Pedido automatico de avaliacao apos a venda",
+            "Resumo: estrelas medias + total de reviews",
+            "Comentarios publicos no Canal Digital",
+            "Notificacao quando voce recebe uma avaliacao",
+          ]}
+        />
+      ) : <ReviewsList />)}
 
       <ConfirmDialog visible={!!deleteTarget} title="Excluir cliente?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive
         onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }}
@@ -264,7 +407,7 @@ const s = StyleSheet.create({
   card:             { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, flex: 1, minWidth: IS_WIDE ? 140 : "45%", margin: 4 },
   cardLabel:        { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
   cardValue:        { fontSize: 20, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
-  tab:              { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  tab:              { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabActive:        { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText:          { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   tabTextActive:    { color: "#fff", fontWeight: "600" },
@@ -295,4 +438,19 @@ const s = StyleSheet.create({
   },
   consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
   consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
+  // PLAN-01: banner near-limit
+  nearLimitBanner: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    backgroundColor: Colors.amberD,
+    borderWidth: 1,
+    borderColor: Colors.amber + "44",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  nearLimitTitle: { fontSize: 13, color: Colors.amber, fontWeight: "700" },
+  nearLimitSub: { fontSize: 11, color: Colors.amber, opacity: 0.85, marginTop: 1 },
 });

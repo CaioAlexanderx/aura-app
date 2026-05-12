@@ -7,7 +7,12 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   painel: 'essencial', financeiro: 'essencial', nfe: 'essencial',
   contabilidade: 'essencial', suporte: 'essencial', pdv: 'essencial',
   estoque: 'essencial', configuracoes: 'essencial',
-  folha: 'negocio', agendamento: 'negocio', clientes: 'negocio',
+  // 11/05/2026 -- Clientes basico movido pro Essencial (gate de plano
+  // removido em private.js do backend). Limite 1000 registros; CRM
+  // avancado (ranking, retencao, aniversariantes, crediario) continua
+  // gateado por Negocio+ no proprio modulo Clientes via tabs.
+  clientes: 'essencial',
+  folha: 'negocio', agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
   agentes: 'expansao',
 };
@@ -55,7 +60,7 @@ export function useVisibleModules(): Set<string> {
     if (permData && !permData.is_owner && permData.permissions) {
       var allowed = new Set<string>();
 
-      // FIX: painel is NO LONGER hardcoded — controlled by permissions.painel
+      // FIX: painel is NO LONGER hardcoded -- controlled by permissions.painel
       // If painel permission is not explicitly set, default to true for backward compat
       var painelPerm = permData.permissions.painel;
       if (painelPerm === undefined || painelPerm === true) {
