@@ -1,7 +1,10 @@
+import { useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform, ActivityIndicator, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { router } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
+import { useQuery } from "@tanstack/react-query";
+import { authApi, request } from "@/services/api";
 import { maskPhone } from "@/utils/masks";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -129,11 +132,51 @@ const pcg = StyleSheet.create({
 export default function ConfiguracoesScreen() {
   // MULTICNPJ Onda 2.6: detecta consolidatedView e divide a tela em
   // secoes globais (sempre visiveis) vs per-company (com gate em consolidated).
-  const { user, company, isDemo, availableCompanies, consolidatedView, switchCompany } = useAuthStore();
+  const { user, company, isDemo, token, availableCompanies, consolidatedView, switchCompany } = useAuthStore();
   const profile = useConfigProfile();
+
+  // ============================================================
+  // 12/05/2026 — FIX EquipeGate stale plan (caso Maria/Encanto):
+  // Plano no JWT pode estar desatualizado se o staff mudou via Gestao
+  // Aura enquanto o cliente ainda esta logado. Refetch /auth/me no mount
+  // pra atualizar o store. Cliente ve mudancas sem precisar logout/login.
+  // ============================================================
+  useEffect(() => {
+    if (!token || !company?.id) return;
+    authApi.me(token)
+      .then((fresh) => {
+        if (fresh?.company?.plan && fresh.company.plan !== company.plan) {
+          useAuthStore.getState().updateCompany({ plan: fresh.company.plan });
+        }
+        if (fresh?.company?.module_overrides) {
+          useAuthStore.getState().updateCompany({ module_overrides: fresh.company.module_overrides });
+        }
+        if (fresh?.company?.vertical_active !== undefined) {
+          useAuthStore.getState().updateCompany({ vertical_active: fresh.company.vertical_active });
+        }
+      })
+      .catch(() => { /* silencioso — se /me falhar, segue com cache */ });
+  }, [token, company?.id]);
+
+  // ============================================================
+  // 12/05/2026 — Gate baseado em CAPACIDADE de equipe, nao em plano hardcoded.
+  // /members/billing retorna seats_included que considera plano + extra_seats_granted.
+  // Cobre plano Negocio+ (sempre tem 3+) E plano Essencial com seats extras pagos
+  // manualmente via Gestao Aura (PR Aura-backend#65). Gate solta quando
+  // seats_included > 1 (cabe pelo menos titular + 1 funcionario).
+  // ============================================================
+  const { data: billingData } = useQuery({
+    queryKey: ["members-billing", company?.id],
+    queryFn: () => request<any>("/companies/" + company!.id + "/members/billing"),
+    enabled: !!token && !!company?.id && !consolidatedView,
+    staleTime: 30_000,
+  });
+  const seatsIncluded = billingData?.seats_included ?? null;
+  // Enquanto billing carrega, fallback no plan store-side pra evitar flicker do gate.
+  // Quando carregar, seats_included > 1 = libera. Cobre essencial+extra_seats.
   const plan    = company?.plan || "essencial";
   const planDat = PLANS[plan] || PLANS.essencial;
-  const isEssencial = plan === "essencial";
+  const hasTeamCapacity = seatsIncluded !== null ? seatsIncluded > 1 : plan !== "essencial";
   const totalCompanies = availableCompanies?.length || 1;
 
   function handleSwitchToCompany(companyId: string) {
@@ -292,11 +335,13 @@ export default function ConfiguracoesScreen() {
             </>
           )}
 
-          {/* EQUIPE — per-company (members/permissoes sao por empresa) */}
+          {/* EQUIPE — per-company (members/permissoes sao por empresa)
+              12/05/2026: gate por CAPACIDADE (seats_included > 1) em vez de plano hardcoded.
+              Cobre plano Negocio+ e plano Essencial com extra_seats_granted > 0. */}
           {!consolidatedView && (
             <>
               <SectionTitle title="Equipe" />
-              {isEssencial ? <EquipeGate /> : <MembersSection />}
+              {hasTeamCapacity ? <MembersSection /> : <EquipeGate />}
             </>
           )}
 
