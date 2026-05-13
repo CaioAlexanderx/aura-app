@@ -30,6 +30,11 @@ import type { SalesListItem, SalesFilters } from "@/services/api";
 // usa company.id internamente e ainda nao suporta company override
 // (Onda 2.6 vai adaptar). User troca pra empresa especifica antes de
 // editar lancamentos do PDV.
+//
+// 13/05/2026: fix periodToRange — substituido new Date(y,m,d) por
+// Date.UTC(y,m,d,3,0,0) para calcular meia-noite SP corretamente
+// independente do fuso do navegador (bug: vendas do dia anterior
+// apareciam na listagem do dia seguinte quando browser em UTC).
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
@@ -70,21 +75,28 @@ var fmtDate = function(iso: string) {
 
 function periodToRange(period: PeriodKey): { from?: string; to?: string } {
   if (period === "all") return {};
-  const now = new Date();
-  const tzNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  const startOfDay = new Date(tzNow.getFullYear(), tzNow.getMonth(), tzNow.getDate());
-
+  // SP = UTC-3 fixo (DST abolido em 2019). Subtrai 3h de "agora" e le
+  // a data em UTC — funciona independente do fuso do navegador.
+  // A abordagem anterior (new Date(y,m,d)) criava meia-noite no fuso
+  // LOCAL do browser, causando inclusao de vendas do dia anterior quando
+  // o browser estava em UTC (bug relatado por Maria/Encanto Presentes).
+  var now = new Date();
+  var spNow = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  var y = spNow.getUTCFullYear();
+  var m = spNow.getUTCMonth();
+  var d = spNow.getUTCDate();
+  // Meia-noite SP em UTC = mesmo dia SP, hora 03:00 UTC.
+  var spMidnightUTC = function(year: number, month: number, day: number): string {
+    return new Date(Date.UTC(year, month, day, 3, 0, 0)).toISOString();
+  };
   if (period === "today") {
-    return { from: startOfDay.toISOString() };
+    return { from: spMidnightUTC(y, m, d) };
   }
   if (period === "week") {
-    const sevenAgo = new Date(startOfDay);
-    sevenAgo.setDate(sevenAgo.getDate() - 6);
-    return { from: sevenAgo.toISOString() };
+    return { from: new Date(Date.UTC(y, m, d - 6, 3, 0, 0)).toISOString() };
   }
   if (period === "month") {
-    const monthStart = new Date(tzNow.getFullYear(), tzNow.getMonth(), 1);
-    return { from: monthStart.toISOString() };
+    return { from: spMidnightUTC(y, m, 1) };
   }
   return {};
 }
