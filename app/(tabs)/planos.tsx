@@ -9,53 +9,130 @@ import { billingApi } from "@/services/api";
 import { router } from "expo-router";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
-const AURA_WHATSAPP = "https://wa.me/5511956305269?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20a%20consultoria%20Aura";
+const AURA_WHATSAPP = "https://wa.me/5511956305269?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20a%20consultoria%20da%20Aura";
 
+// PLAN-01/02 (12/05/2026): feature list expandida pra refletir tudo
+// que cada plano entrega. Decisao comercial: percepcao do consumidor
+// e dirigida por contagem visual de bullets -- concorrentes (Bling/Tiny/
+// ContaAzul) listam 12-18 features por plano. Antes tinhamos 7/9/9, o
+// que parecia magro em comparativo direto.
+//
+// Regra: so feature REAL que existe no produto -- nada inventado.
+// Estrutura: cada plano tem "core" (categorias principais com 1-2 linhas
+// cada) cobrindo Vendas/Estoque/Fiscal/Financeiro/Clientes/Equipe/etc.
 const PLANS = [
   {
     key: "essencial", name: "Essencial", subtitle: "Para comecar",
     monthly: 89, features: [
-      "PDV + cupom fiscal",
-      "Venda pelo celular ou computador",
-      "Cadastro de clientes e produtos",
-      "Controle de estoque",
-      "Emissao de NF (ate 50/mes)",
-      "Financeiro completo",
-      "1 acesso · Suporte por chat",
+      // Vendas (PDV)
+      "PDV completo no celular ou computador",
+      "Cupom fiscal e cancelamento de venda",
+      "Troca de produtos e descontos por cupom",
+      // Estoque
+      "Estoque com codigo de barras e scanner",
+      "Variantes (cor, tamanho, sabor, voltagem)",
+      "Importacao em massa via CSV (ate 1.000)",
+      "Etiquetas para impressao com codigo de barras",
+      // Fiscal
+      "NF-e e NFC-e (ate 50 emissoes/mes)",
+      "Importacao de NF-e via XML",
+      // Clientes (PLAN-01)
+      "Clientes (ate 1.000 cadastros)",
+      "Historico de compras por cliente",
+      // Equipe (PLAN-02)
+      "Equipe (ate 3 vendedores)",
+      "Atribuicao de vendas por vendedor no caixa",
+      // Financeiro
+      "Financeiro completo (contas a pagar e receber)",
+      "Conciliacao bancaria (OFX)",
+      "DRE basica e categorizacao automatica",
+      "Lancamentos recorrentes",
+      "Recebimento por Pix com QR Code",
+      // Contabil
+      "Apoio contabil guiado (MEI e Simples Nacional)",
+      "Calculo de DAS-MEI e guias fiscais",
+      // Suporte
+      "1 acesso de usuario",
+      "Suporte via chat com Analista de Negocios",
     ],
   },
   {
     key: "negocio", name: "Negocio", subtitle: "Para crescer", popular: true,
     monthly: 169, features: [
-      "Tudo do Essencial",
-      "CRM e historico de clientes",
-      "Estoque completo com baixa automatica",
-      "NF-e, NFC-e e NFS-e",
-      "Loja online inclusa (Canal Digital)",
-      "Financeiro completo (DRE + fluxo de caixa)",
-      "Folha de pagamento e relatorios contabeis",
-      "Camada vertical: Odonto, Beauty, Food ou Pet",
-      "3 acessos · Suporte prioritario",
+      "Tudo do Essencial, e mais:",
+      // Clientes
+      "Clientes (ate 5.000 cadastros)",
+      "CRM avancado: ranking de clientes por LTV",
+      "Retencao: clientes em risco e perdidos",
+      "Aniversariantes com cupom automatico",
+      "Avaliacoes de clientes pos-venda",
+      "Crediario (fiado) por cliente",
+      // Equipe
+      "Equipe (ate 50 funcionarios)",
+      "Folha de pagamento (INSS, IRRF, FGTS)",
+      "Holerite individual por e-mail",
+      "Ranking de vendas por vendedor",
+      "Comissoes automaticas por venda",
+      // Fiscal
+      "NF-e e NFC-e ilimitadas",
+      "NFS-e (servicos) ilimitada",
+      // Operacao
+      "Agenda online para servicos",
+      "Estoque com baixa automatica via PDV",
+      // Canais
+      "Canal Digital: loja online inclusa",
+      "Dominio personalizado .com.br opcional",
+      "WhatsApp Business com templates",
+      // Verticais
+      "Modulo Vertical incluso: Odonto, Beauty, Food ou Pet",
+      // Acessos e gestao
+      "Ate 3 usuarios com login e permissoes",
+      "Gestao de equipe com perfis de acesso",
+      // Financeiro avancado
+      "Fluxo de caixa projetado",
+      "Categorizacao com IA",
+      // Suporte
+      "Suporte prioritario com Analista de Negocios",
     ],
   },
   {
     key: "expansao", name: "Expansao", subtitle: "Para escalar",
     monthly: 269, features: [
-      "Tudo do Negocio",
-      "Gateway personalizado (use sua maquininha)",
-      "API + integracoes ilimitadas",
-      "HUB Social (Instagram + WhatsApp)",
-      "Automacoes avancadas nas redes sociais",
-      "IA avancada em cada modulo",
-      "Multi-CNPJ · NFS-e ilimitada",
-      "Camada vertical completa do seu setor",
-      "Acessos ilimitados · Customer Success dedicado",
+      "Tudo do Negocio, e mais:",
+      // Limites
+      "Clientes e funcionarios ilimitados",
+      "Usuarios com login ilimitados",
+      // Multi-CNPJ
+      "Multi-CNPJ: gerencie varios negocios",
+      "Visao consolidada de todas as suas empresas",
+      "Lista unica de clientes entre os CNPJs",
+      // IA avancada
+      "5 agentes de IA: vendas, estoque, fiscal, marketing, financeiro",
+      "Insights prescritivos por IA",
+      "Alertas inteligentes (anomalias de despesa)",
+      // Financeiro premium
+      "Projecao de fluxo de caixa com cenarios",
+      "DRE Simples para o contador",
+      "Metas de vendas por vendedor com acompanhamento",
+      "Reativacao automatica de clientes inativos",
+      "Margem por produto e ranking de lucratividade",
+      // Verticais
+      "Todos os modulos verticais inclusos (Odonto, Beauty, Food, Pet, e mais)",
+      // Integracoes
+      "Gateway de pagamento personalizado (use sua maquininha)",
+      "Multi-gateway: Asaas, Stone, Cielo, etc.",
+      "API completa para integracoes",
+      "HUB Social: Instagram e WhatsApp em automacao",
+      // Atendimento
+      "Customer Success dedicado",
+      "Onboarding personalizado",
     ],
   },
 ];
 
 const ADDONS = [
-  { name: "Usuario adicional", price: "R$ 19/mes", desc: "Para cada pessoa a mais na equipe, por mes" },
+  { name: "Usuario adicional", price: "R$ 19/mes", desc: "Para cada pessoa a mais com login no app, por mes" },
+  { name: "Modulo vertical extra", price: "R$ 39/mes", desc: "A partir do Negocio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) alem do incluso no seu plano" },
   { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuracao, treinamento, automacoes e integracoes personalizadas para o seu negocio", cta: true },
 ];
 
@@ -89,7 +166,7 @@ export default function PlanosScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: IS ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" }}>
-      <Text style={s.title}>Planos Aura.</Text>
+      <Text style={s.title}>Planos da Aura.</Text>
       <Text style={s.subtitle}>Escolha o plano ideal para o seu negocio</Text>
 
       {trialActive && <View style={s.trialBanner}><Text style={s.trialText}>Periodo de teste - {trialDays} dias restantes</Text></View>}
@@ -123,9 +200,22 @@ export default function PlanosScreen() {
               {annual && <Text style={s.yearlyTotal}>Total anual: {fmtR(yr)}</Text>}
               {annual && <Text style={s.yearlySave}>Economia de {fmtR(savings(plan.monthly))}/ano</Text>}
               <View style={s.featuresList}>
-                {plan.features.map(f => (
-                  <View key={f} style={s.featureRow}><Icon name="check" size={12} color={Colors.green} /><Text style={s.featureText}>{f}</Text></View>
-                ))}
+                {plan.features.map((f, idx) => {
+                  // "Tudo do X, e mais:" vira heading destacado.
+                  const isHeading = f.startsWith("Tudo do");
+                  return (
+                    <View key={f + idx} style={s.featureRow}>
+                      {isHeading ? (
+                        <Text style={s.featureHeading}>{f}</Text>
+                      ) : (
+                        <>
+                          <Icon name="check" size={12} color={Colors.green} />
+                          <Text style={s.featureText}>{f}</Text>
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
               <Pressable style={[s.planBtn, isCurrent && s.planBtnCurrent]} onPress={() => handleChoosePlan(plan.key)}>
                 <Text style={[s.planBtnText, isCurrent && s.planBtnTextCurrent]}>{isCurrent ? "Plano atual" : "Escolher plano"}</Text>
@@ -171,7 +261,7 @@ const s = StyleSheet.create({
   discountBadge: { backgroundColor: Colors.green, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   discountText: { fontSize: 9, color: "#fff", fontWeight: "700" },
   savingsHint: { fontSize: 12, color: Colors.green, textAlign: "center", marginBottom: 20, fontWeight: "500" },
-  plansRow: { flexDirection: IS ? "row" : "column", gap: 12, marginBottom: 32 },
+  plansRow: { flexDirection: IS ? "row" : "column", gap: 12, marginBottom: 32, alignItems: "flex-start" },
   planCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1.5, borderColor: Colors.border },
   planPopular: { borderColor: Colors.violet, borderWidth: 2 },
   planCurrent: { borderColor: Colors.green + "66" },
@@ -185,9 +275,10 @@ const s = StyleSheet.create({
   pricePeriod: { fontSize: 12, color: Colors.ink3 },
   yearlyTotal: { fontSize: 13, color: Colors.ink, fontWeight: "600", marginBottom: 2 },
   yearlySave: { fontSize: 11, color: Colors.green, fontWeight: "500", marginBottom: 16 },
-  featuresList: { gap: 8, marginBottom: 20, marginTop: 8 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  featureText: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
+  featuresList: { gap: 7, marginBottom: 20, marginTop: 8 },
+  featureRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  featureText: { fontSize: 12.5, color: Colors.ink, fontWeight: "500", flex: 1, lineHeight: 17 },
+  featureHeading: { fontSize: 12, fontWeight: "800", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4, marginBottom: 2 },
   planBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   planBtnCurrent: { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.green + "44" },
   planBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
