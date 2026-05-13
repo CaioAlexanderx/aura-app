@@ -8,6 +8,22 @@
 // últimos 7 dias, max 30 dias atrás) + toggle modo "Cliente/número"
 // (q) vs "Código de barras" (product_barcode, lista vendas com aquele
 // produto). Backend filtro implementado em PR Aura-backend#57.
+//
+// 12/05/2026 (CROSS-FILIAL — PR Aura-backend#68 — pedido Davi):
+//   - Step 1 text mode: passa a usar GET /pdv/sales-for-troca, que
+//     retorna vendas de qualquer filial do mesmo group_root.
+//   - Step 1 barcode mode: mantém GET /pdv/sales (same-filial only)
+//     porque o novo endpoint ainda não suporta product_barcode.
+//     Banner discreto avisa o operador. TODO: estender backend.
+//   - Cards de venda mostram badge "🏢 Filial X" quando is_cross_filial.
+//   - Step 4 ganha callout com 3 informações quando cross-filial:
+//     NFC-e (origem), dinheiro (esta filial), comissão (split).
+//   - handleSubmit trata 503 MIGRATION_111_PENDING e 409 NFC-e >24h.
+//   - Como GET /sales-for-troca já devolve items inline, evitamos a
+//     2ª round-trip ao salesApi.get — sintetizamos SaleDetailFull a
+//     partir do payload da busca. Trocamos sale_item.id (ausente
+//     no payload) por chave sintética "synth-<saleId>-<idx>".
+//   Doc: Aura/BACKLOG_TROCA_CROSS_FILIAL.md
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -17,8 +33,9 @@ import {
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { salesApi } from "@/services/api";
-import type { SalesListItem, SaleDetailFull, SaleDetailsItem } from "@/services/api";
+import type { SaleDetailFull, SaleDetailsItem } from "@/services/api";
 import { trocaApi } from "@/services/trocaApi";
+import type { SaleForTroca } from "@/services/trocaApi";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 
@@ -34,6 +51,26 @@ type NewEntry = {
 type Step = 1 | 2 | 3 | 4;
 type SearchMode = "text" | "barcode";
 
+// SaleRow é o tipo unificado renderizado no Step 1 (novo endpoint ou
+// fallback do barcode mode). is_cross_filial é definido por SaleForTroca;
+// no barcode mode (SalesListItem) sempre será false (same-filial).
+type SaleRow = {
+  id: string;
+  total_amount: number;
+  created_at: string;
+  payment_method: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  cpf_cnpj: string | null;
+  seller_id: string | null;
+  seller_name: string | null;
+  company_id: string;
+  company_name: string;
+  is_cross_filial: boolean;
+  item_count: number;
+  items?: SaleForTroca["items"]; // só populado no text mode (novo endpoint)
+};
+
 const fmt = (v: number) => "R$ " + v.toFixed(2).replace(".", ",");
 
 // Helpers de data — YYYY-MM-DD no fuso SP, idênticos ao usado no PDV/Caixa
@@ -45,8 +82,12 @@ function daysAgoISO(days: number) {
   d.setDate(d.getDate() - days);
   return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
+function daysBetween(fromISO: string, toISO: string) {
+  const ms = new Date(toISO).getTime() - new Date(fromISO).getTime();
+  return Math.max(1, Math.round(ms / 86400000) + 1);
+}
 
-const MAX_DAYS_BACK = 30;     // janela máxima de troca
+const MAX_DAYS_BACK = 90;     // janela máxima do novo endpoint (era 30 no antigo)
 const DEFAULT_DAYS_BACK = 7;  // default ao abrir o modal
 
 // ─── component ───────────────────────────────────────────────
@@ -65,13 +106,18 @@ export function TrocaModal({
 }) {
   const [step, setStep] = useState<Step>(1);
   const [searchMode, setSearchMode] = useState<SearchMode>("text");
-  const [searchQuery, setSearchQuery] = useState("");        // cliente/número (modo text)
-  const [barcodeQuery, setBarcodeQuery] = useState("");      // código de barras (modo barcode)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [barcodeQuery, setBarcodeQuery] = useState("");
   const [dateFrom, setDateFrom] = useState<string>(daysAgoISO(DEFAULT_DAYS_BACK));
   const [dateTo, setDateTo] = useState<string>(todayISO());
   const [loadingSales, setLoadingSales] = useState(false);
-  const [recentSales, setRecentSales] = useState<SalesListItem[]>([]);
+  // 12/05/2026: lista unificada (SaleRow) para text mode (novo endpoint
+  // cross-filial) e barcode mode (endpoint antigo, same-filial).
+  const [recentSales, setRecentSales] = useState<SaleRow[]>([]);
   const [selectedSale, setSelectedSale] = useState<SaleDetailFull | null>(null);
+  // Guardamos o SaleRow original do Step 1 pra Step 4 saber se a venda
+  // selecionada é cross-filial e qual o company_name de origem.
+  const [selectedSaleRow, setSelectedSaleRow] = useState<SaleRow | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [returnEntries, setReturnEntries] = useState<ReturnEntry[]>([]);
   const [newEntries, setNewEntries] = useState<NewEntry[]>([]);
@@ -79,38 +125,83 @@ export function TrocaModal({
   const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [submitting, setSubmitting] = useState(false);
 
-  // Limite mínimo do range — usado no <input min=...> do date picker
   const minDate = useMemo(() => daysAgoISO(MAX_DAYS_BACK), []);
   const today = useMemo(() => todayISO(), []);
 
-  // Garante que dateFrom nunca seja anterior ao limite (max 30 dias atrás).
-  // Se o user mexer no dateTo e o range ficar > 30d, ajusta dateFrom pra
-  // manter dentro da janela.
   useEffect(() => {
     if (dateFrom < minDate) setDateFrom(minDate);
     if (dateFrom > dateTo) setDateFrom(dateTo);
   }, [dateFrom, dateTo, minDate]);
 
+  // ── Loader ─────────────────────────────────────────────────
+  // text mode → novo endpoint cross-filial
+  // barcode mode → endpoint antigo (same-filial)
+  // ──────────────────────────────────────────────────────────
   const loadSales = useCallback(() => {
     if (!visible || !companyId) return;
     setLoadingSales(true);
-    const params: any = {
-      date_from: dateFrom + "T00:00:00",
-      date_to: dateTo + "T23:59:59",
-      status: "active",
-      limit: 30,
-    };
-    if (searchMode === "text" && searchQuery.trim()) {
-      params.q = searchQuery.trim();
-    } else if (searchMode === "barcode" && barcodeQuery.trim()) {
-      params.product_barcode = barcodeQuery.trim();
+
+    if (searchMode === "text") {
+      const days = Math.min(MAX_DAYS_BACK, daysBetween(dateFrom, today));
+      const params: any = { days, limit: 30 };
+      if (searchQuery.trim()) params.q = searchQuery.trim();
+      trocaApi
+        .searchSalesForTroca(companyId, params)
+        .then((rows) => {
+          const mapped: SaleRow[] = (rows || []).map((r) => ({
+            id: r.id,
+            total_amount: parseFloat(String(r.total_amount)),
+            created_at: r.created_at,
+            payment_method: r.payment_method,
+            customer_id: r.customer_id,
+            customer_name: r.customer_name,
+            cpf_cnpj: r.cpf_cnpj,
+            seller_id: r.seller_id,
+            seller_name: r.seller_name,
+            company_id: r.company_id,
+            company_name: r.company_name || "—",
+            is_cross_filial: !!r.is_cross_filial,
+            item_count: parseInt(String(r.item_count || 0), 10),
+            items: r.items,
+          }));
+          setRecentSales(mapped);
+        })
+        .catch(() => setRecentSales([]))
+        .finally(() => setLoadingSales(false));
+    } else {
+      // barcode mode — endpoint antigo (mesma filial só)
+      const params: any = {
+        date_from: dateFrom + "T00:00:00",
+        date_to: dateTo + "T23:59:59",
+        status: "active",
+        limit: 30,
+      };
+      if (barcodeQuery.trim()) params.product_barcode = barcodeQuery.trim();
+      salesApi
+        .list(companyId, params)
+        .then((res) => {
+          const mapped: SaleRow[] = (res.sales || []).map((s: any) => ({
+            id: s.id,
+            total_amount: parseFloat(s.total_amount),
+            created_at: s.created_at,
+            payment_method: s.payment_method,
+            customer_id: s.customer_id || s.customer?.id || null,
+            customer_name: s.customer_name || s.customer?.name || null,
+            cpf_cnpj: s.cpf_cnpj || s.customer?.cpf_cnpj || null,
+            seller_id: s.seller_id || null,
+            seller_name: s.seller_name || null,
+            company_id: companyId, // same-filial por design no endpoint antigo
+            company_name: "",
+            is_cross_filial: false,
+            item_count: s.items_count ?? 0,
+            items: undefined,
+          }));
+          setRecentSales(mapped);
+        })
+        .catch(() => setRecentSales([]))
+        .finally(() => setLoadingSales(false));
     }
-    salesApi
-      .list(companyId, params)
-      .then(res => setRecentSales(res.sales || []))
-      .catch(() => setRecentSales([]))
-      .finally(() => setLoadingSales(false));
-  }, [visible, companyId, searchMode, searchQuery, barcodeQuery, dateFrom, dateTo]);
+  }, [visible, companyId, searchMode, searchQuery, barcodeQuery, dateFrom, dateTo, today]);
 
   useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -123,6 +214,7 @@ export function TrocaModal({
       setDateFrom(daysAgoISO(DEFAULT_DAYS_BACK));
       setDateTo(todayISO());
       setSelectedSale(null);
+      setSelectedSaleRow(null);
       setReturnEntries([]);
       setNewEntries([]);
       setProductSearch("");
@@ -130,13 +222,52 @@ export function TrocaModal({
     }
   }, [visible]);
 
-  async function pickSale(saleId: string) {
+  // ── Pick sale ───────────────────────────────────────────────
+  // Em text mode (sale.items presente) sintetizamos SaleDetailFull
+  // direto do payload — evita 2ª round-trip. Em barcode mode caímos
+  // no salesApi.get (same-filial, então funciona normalmente).
+  // ──────────────────────────────────────────────────────────
+  async function pickSale(saleRow: SaleRow) {
     setLoadingDetail(true);
     try {
-      const detail = await salesApi.get(companyId, saleId);
-      setSelectedSale(detail);
-      setReturnEntries(detail.items.map(it => ({ item: it, returnQty: 0 })));
-      setStep(2);
+      if (saleRow.items && saleRow.items.length > 0) {
+        const synth: SaleDetailFull = {
+          sale: {
+            id: saleRow.id,
+            total_amount: saleRow.total_amount,
+            payment_method: saleRow.payment_method,
+            created_at: saleRow.created_at,
+            company_id: saleRow.company_id,
+          } as any,
+          customer: saleRow.customer_id
+            ? ({
+                id: saleRow.customer_id,
+                name: saleRow.customer_name || "Sem cliente",
+                cpf_cnpj: saleRow.cpf_cnpj,
+              } as any)
+            : (null as any),
+          items: saleRow.items.map((it, idx) => ({
+            id: "synth-" + saleRow.id + "-" + idx,
+            product_id: it.product_id,
+            variant_id: it.variant_id,
+            product_name: it.product_name_snapshot,
+            product_name_snapshot: it.product_name_snapshot,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+          })) as any,
+        } as any;
+        setSelectedSale(synth);
+        setSelectedSaleRow(saleRow);
+        setReturnEntries(synth.items.map((it: any) => ({ item: it, returnQty: 0 })));
+        setStep(2);
+      } else {
+        // Barcode mode fallback — busca detalhe via salesApi.get (same-filial).
+        const detail = await salesApi.get(companyId, saleRow.id);
+        setSelectedSale(detail);
+        setSelectedSaleRow(saleRow);
+        setReturnEntries(detail.items.map((it: any) => ({ item: it, returnQty: 0 })));
+        setStep(2);
+      }
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível carregar a venda");
     } finally {
@@ -145,8 +276,8 @@ export function TrocaModal({
   }
 
   function changeReturnQty(itemId: string, delta: number) {
-    setReturnEntries(prev =>
-      prev.map(e =>
+    setReturnEntries((prev) =>
+      prev.map((e) =>
         e.item.id !== itemId
           ? e
           : { ...e, returnQty: Math.max(0, Math.min(Number(e.item.quantity), e.returnQty + delta)) }
@@ -156,13 +287,13 @@ export function TrocaModal({
 
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
-    const src = q ? products.filter(p => (p.name || "").toLowerCase().includes(q)) : products;
+    const src = q ? products.filter((p) => (p.name || "").toLowerCase().includes(q)) : products;
     return src.slice(0, 20);
   }, [products, productSearch]);
 
   function addProduct(p: any) {
-    setNewEntries(prev => {
-      const idx = prev.findIndex(e => e.product_id === p.id && !e.variant_id);
+    setNewEntries((prev) => {
+      const idx = prev.findIndex((e) => e.product_id === p.id && !e.variant_id);
       if (idx >= 0)
         return prev.map((e, i) => (i === idx ? { ...e, quantity: e.quantity + 1 } : e));
       return [
@@ -179,19 +310,23 @@ export function TrocaModal({
   }
 
   function changeNewQty(idx: number, delta: number) {
-    setNewEntries(prev =>
+    setNewEntries((prev) =>
       prev.map((e, i) => (i !== idx ? e : { ...e, quantity: Math.max(1, e.quantity + delta) }))
     );
   }
 
   function removeNew(idx: number) {
-    setNewEntries(prev => prev.filter((_, i) => i !== idx));
+    setNewEntries((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  const returnedItems = returnEntries.filter(e => e.returnQty > 0);
+  const returnedItems = returnEntries.filter((e) => e.returnQty > 0);
   const returnedValue = returnedItems.reduce((s, e) => s + e.returnQty * e.item.unit_price, 0);
   const newValue      = newEntries.reduce((s, e) => s + e.quantity * e.unit_price, 0);
   const netAmount     = parseFloat((newValue - returnedValue).toFixed(2));
+
+  const isCrossFilial = !!selectedSaleRow?.is_cross_filial;
+  const originCompanyName = selectedSaleRow?.company_name || "outra filial";
+  const originSellerName = selectedSaleRow?.seller_name || "vendedor da origem";
 
   async function handleSubmit() {
     if (returnedItems.length === 0 && newEntries.length === 0) {
@@ -203,21 +338,43 @@ export function TrocaModal({
     try {
       const result = await trocaApi.create(companyId, {
         original_sale_id: selectedSale.sale.id,
-        returned_items: returnedItems.map(e => ({
+        returned_items: returnedItems.map((e) => ({
           product_id: e.item.product_id,
-          variant_id: e.item.variant_id,
+          variant_id: (e.item as any).variant_id,
           quantity: e.returnQty,
           unit_price: e.item.unit_price,
-          product_name_snapshot: e.item.product_name,
+          product_name_snapshot: (e.item as any).product_name,
         })),
         new_items: newEntries,
         payment_method: netAmount > 0 ? paymentMethod : undefined,
       });
-      toast.success("Troca registrada com sucesso!");
+      toast.success(
+        result.cross_filial
+          ? "Troca cross-filial registrada com sucesso!"
+          : "Troca registrada com sucesso!"
+      );
       onSuccess?.(result);
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao registrar troca");
+      // Cross-filial bloqueado por migration pendente (defesa pre-deploy).
+      if (e?.code === "MIGRATION_111_PENDING" || (e?.message || "").includes("migration 111")) {
+        toast.error(
+          "Troca cross-filial indisponível por instantes. Tente novamente em 1 minuto ou contate o suporte."
+        );
+      }
+      // NFC-e >24h — fora da janela de cancelamento.
+      else if ((e?.message || "").toLowerCase().includes("24 horas")) {
+        toast.error(
+          "NFC-e original com mais de 24h. Esta troca precisa de NF-e modelo 55 (em desenvolvimento)."
+        );
+      }
+      // Venda cancelada / não encontrada / outros 4xx.
+      else if ((e?.message || "").toLowerCase().includes("cancelada")) {
+        toast.error("A venda original foi cancelada e não pode ser trocada.");
+      }
+      else {
+        toast.error(e?.message || "Erro ao registrar troca");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -243,8 +400,9 @@ export function TrocaModal({
       : "0 24px 60px -10px rgba(124,58,237,0.22)",
   });
 
-  // Range em dias para hint
   const rangeDays = Math.max(0, Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000) + 1);
+
+  const hasCrossFilialInList = recentSales.some((s) => s.is_cross_filial);
 
   return (
     <View style={s.overlay}>
@@ -292,6 +450,31 @@ export function TrocaModal({
           {step === 1 && (
             <>
               <Text style={s.sectionTitle}>Localizar venda original</Text>
+
+              {/* Banner cross-filial — só quando há resultado fora da filial atual */}
+              {searchMode === "text" && hasCrossFilialInList && (
+                <View style={s.crossBanner}>
+                  <View style={s.crossBannerIcon}>
+                    <Text style={{ fontSize: 14 }}>🏢</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.crossBannerTitle}>Busca em todas as suas filiais</Text>
+                    <Text style={s.crossBannerSub}>
+                      Vendas com badge azul foram feitas em outra filial do seu grupo. Você pode trocá-las normalmente — a NFC-e nova sai sob o CNPJ da loja de origem.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Aviso barcode mode — same-filial only */}
+              {searchMode === "barcode" && (
+                <View style={s.warnBanner}>
+                  <Text style={{ fontSize: 12 }}>⚠️</Text>
+                  <Text style={s.warnBannerTxt}>
+                    Busca por código de barras está limitada a esta filial. Use <Text style={{ fontWeight: "700" }}>Cliente/número</Text> pra buscar em todas as filiais do grupo.
+                  </Text>
+                </View>
+              )}
 
               {/* Range de datas */}
               <View style={s.dateRow}>
@@ -382,13 +565,12 @@ export function TrocaModal({
                 </Pressable>
               </View>
 
-              {/* Input adapta conforme modo */}
               {searchMode === "text" ? (
                 <TextInput
                   style={s.input as any}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Buscar por nome do cliente ou vendedora…"
+                  placeholder="Buscar por nome do cliente, CPF, vendedora ou produto…"
                   placeholderTextColor={Colors.ink3}
                   autoFocus
                 />
@@ -414,18 +596,28 @@ export function TrocaModal({
                     : "Nenhuma venda ativa encontrada no período."}
                 </Text>
               ) : (
-                recentSales.map(sale => (
-                  <Pressable key={sale.id} style={s.saleRow} onPress={() => pickSale(sale.id)}>
+                recentSales.map((sale) => (
+                  <Pressable key={sale.id} style={s.saleRow} onPress={() => pickSale(sale)}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.saleName} numberOfLines={1}>
-                        {(sale as any).customer_name || sale.customer?.name || "Sem cliente"}
-                      </Text>
+                      <View style={s.saleRowTopLine}>
+                        <Text style={s.saleName} numberOfLines={1}>
+                          {sale.customer_name || "Sem cliente"}
+                        </Text>
+                        {sale.is_cross_filial ? (
+                          <View style={s.badgeFilial}>
+                            <Text style={s.badgeFilialIcon}>🏢</Text>
+                            <Text style={s.badgeFilialTxt} numberOfLines={1}>
+                              {sale.company_name}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={s.saleSub}>
                         {new Date(sale.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
                         {" "}às{" "}
                         {new Date(sale.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                         {" · "}
-                        {(sale as any).items_count ?? 0} itens · {fmt(sale.total_amount)}
+                        {sale.item_count} itens · {fmt(sale.total_amount)}
                       </Text>
                     </View>
                     <Text style={{ color: Colors.ink3, fontSize: 18 }}>›</Text>
@@ -440,17 +632,25 @@ export function TrocaModal({
             <>
               <Text style={s.sectionTitle}>O que o cliente está devolvendo?</Text>
               <View style={s.saleInfoBox}>
-                <Text style={s.saleInfoTxt}>
-                  {new Date(selectedSale.sale.created_at).toLocaleDateString("pt-BR")} · {fmt(selectedSale.sale.total_amount)}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <Text style={s.saleInfoTxt}>
+                    {new Date(selectedSale.sale.created_at).toLocaleDateString("pt-BR")} · {fmt(selectedSale.sale.total_amount)}
+                  </Text>
+                  {isCrossFilial && (
+                    <View style={s.badgeFilialInline}>
+                      <Text style={s.badgeFilialIcon}>🏢</Text>
+                      <Text style={s.badgeFilialTxt} numberOfLines={1}>{originCompanyName}</Text>
+                    </View>
+                  )}
+                </View>
                 {selectedSale.customer && (
                   <Text style={s.saleInfoSub}>{selectedSale.customer.name}</Text>
                 )}
               </View>
-              {returnEntries.map(entry => (
+              {returnEntries.map((entry) => (
                 <View key={entry.item.id} style={s.itemRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.itemName} numberOfLines={1}>{entry.item.product_name}</Text>
+                    <Text style={s.itemName} numberOfLines={1}>{(entry.item as any).product_name}</Text>
                     <Text style={s.itemSub}>{fmt(entry.item.unit_price)} · orig.: {entry.item.quantity}</Text>
                   </View>
                   <View style={s.qtyRow}>
@@ -520,7 +720,7 @@ export function TrocaModal({
                 {filteredProducts.length === 0 ? (
                   <Text style={s.emptyTxt}>Nenhum produto encontrado.</Text>
                 ) : (
-                  filteredProducts.map(p => (
+                  filteredProducts.map((p) => (
                     <Pressable key={p.id} style={s.productRow} onPress={() => addProduct(p)}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.itemName} numberOfLines={1}>{p.name}</Text>
@@ -555,12 +755,66 @@ export function TrocaModal({
           {step === 4 && (
             <>
               <Text style={s.sectionTitle}>Revisar e confirmar</Text>
+
+              {/* Callout cross-filial — 3 informações pro operador */}
+              {isCrossFilial && (
+                <View style={s.crossCallout}>
+                  <View style={s.crossCalloutHeader}>
+                    <View style={s.crossCalloutHeaderIco}>
+                      <Text style={{ fontSize: 12 }}>🏢</Text>
+                    </View>
+                    <Text style={s.crossCalloutTitle}>
+                      Troca cross-filial · venda original na{" "}
+                      <Text style={{ fontWeight: "800", color: "#a78bfa" }}>{originCompanyName}</Text>
+                    </Text>
+                  </View>
+
+                  <View style={s.crossCalloutItem}>
+                    <Text style={s.crossCalloutItemIco}>📄</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.crossCalloutItemTitle}>
+                        NFC-e nova sob CNPJ <Text style={{ fontWeight: "700" }}>{originCompanyName}</Text>
+                      </Text>
+                      <Text style={s.crossCalloutItemSub}>
+                        Cupom mantém o endereço da loja de origem — não desta filial.
+                      </Text>
+                    </View>
+                  </View>
+
+                  {netAmount > 0 && (
+                    <View style={s.crossCalloutItem}>
+                      <Text style={s.crossCalloutItemIco}>💳</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.crossCalloutItemTitle}>
+                          Diferença {fmt(netAmount)} cai no caixa <Text style={{ fontWeight: "700" }}>desta loja</Text>
+                        </Text>
+                        <Text style={s.crossCalloutItemSub}>
+                          Maquininha desta filial recebe o valor; conciliação bancária do dia bate.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  <View style={s.crossCalloutItem}>
+                    <Text style={s.crossCalloutItemIco}>👥</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.crossCalloutItemTitle}>
+                        Comissão: <Text style={{ fontWeight: "700" }}>{originSellerName}</Text> + você (diferença)
+                      </Text>
+                      <Text style={s.crossCalloutItemSub}>
+                        Devolução neutraliza a venda do vendedor original; diferença fica no seu ranking.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {returnedItems.length > 0 && (
                 <View style={s.summaryBox}>
                   <Text style={s.summaryLabel}>Devolvido (−)</Text>
-                  {returnedItems.map(e => (
+                  {returnedItems.map((e) => (
                     <View key={e.item.id} style={s.summaryRow}>
-                      <Text style={s.summaryItem} numberOfLines={1}>{e.returnQty}× {e.item.product_name}</Text>
+                      <Text style={s.summaryItem} numberOfLines={1}>{e.returnQty}× {(e.item as any).product_name}</Text>
                       <Text style={[s.summaryVal, { color: Colors.red }]}>−{fmt(e.returnQty * e.item.unit_price)}</Text>
                     </View>
                   ))}
@@ -597,7 +851,7 @@ export function TrocaModal({
                 <View style={{ gap: 6 }}>
                   <Text style={s.subsectionLabel}>Pagamento da diferença</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {PAY_OPTS.map(opt => (
+                    {PAY_OPTS.map((opt) => (
                       <Pressable
                         key={opt.key}
                         style={[s.payChip, paymentMethod === opt.key && s.payChipActive]}
@@ -709,11 +963,38 @@ const s = StyleSheet.create({
     backgroundColor: Glass.bgInput, borderWidth: 1, borderColor: Glass.bgInputBorder,
     color: Colors.ink, fontSize: 13, outlineStyle: "none",
   } as any,
-  // ─── Step 1 — range de datas + toggle modo ───────────────
-  dateRow: {
+  // ─── Step 1 — banners + date range + toggle ───────────────
+  crossBanner: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: "rgba(59,130,246,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(59,130,246,0.25)",
+    marginBottom: 6,
+  },
+  crossBannerIcon: {
+    width: 26, height: 26, borderRadius: 7,
+    backgroundColor: "rgba(59,130,246,0.18)",
+    alignItems: "center", justifyContent: "center",
+  },
+  crossBannerTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink, marginBottom: 2 },
+  crossBannerSub: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  warnBanner: {
     flexDirection: "row",
     gap: 8,
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(245,158,11,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.2)",
+    marginBottom: 4,
   },
+  warnBannerTxt: { fontSize: 11, color: Colors.ink3, flex: 1, lineHeight: 16 },
+  dateRow: { flexDirection: "row", gap: 8 },
   dateField: { flex: 1, gap: 4 },
   dateLabel: {
     fontSize: 10, fontWeight: "700", color: Colors.ink3,
@@ -726,33 +1007,15 @@ const s = StyleSheet.create({
     marginBottom: 4,
     fontStyle: "italic",
   },
-  modeRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 4,
-  },
+  modeRow: { flexDirection: "row", gap: 6, marginTop: 4 },
   modeBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
     backgroundColor: Glass.lineFaint,
-    borderWidth: 1,
-    borderColor: Glass.lineBorderCard,
+    borderWidth: 1, borderColor: Glass.lineBorderCard,
   },
-  modeBtnActive: {
-    backgroundColor: Colors.violet,
-    borderColor: Colors.violet,
-  },
-  modeBtnTxt: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.ink3,
-  },
+  modeBtnActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  modeBtnTxt: { fontSize: 11, fontWeight: "600", color: Colors.ink3 },
   // ──────────────────────────────────────────────────────────
   centered: { alignItems: "center", padding: 24 },
   emptyTxt: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
@@ -763,8 +1026,41 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Glass.lineBorderCard,
     marginBottom: 4,
   },
+  saleRowTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap" as any,
+    marginBottom: 2,
+  },
   saleName: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   saleSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  // ─── Badge cross-filial — azul + ícone ────────────────────
+  badgeFilial: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(59,130,246,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(59,130,246,0.3)",
+    maxWidth: 240,
+  },
+  badgeFilialInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(59,130,246,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(59,130,246,0.3)",
+  },
+  badgeFilialIcon: { fontSize: 10 },
+  badgeFilialTxt: { fontSize: 10, fontWeight: "600", color: "#93c5fd" },
   saleInfoBox: {
     padding: 10, borderRadius: 8,
     backgroundColor: "rgba(124,58,237,0.08)",
@@ -799,6 +1095,43 @@ const s = StyleSheet.create({
     borderWidth: 1, borderStyle: "dashed" as any, borderColor: "rgba(124,58,237,0.35)",
     alignItems: "center", justifyContent: "center",
   },
+  // ─── Step 4 — cross-filial callout ────────────────────────
+  crossCallout: {
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "rgba(59,130,246,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(59,130,246,0.25)",
+    gap: 8,
+    marginBottom: 6,
+  },
+  crossCalloutHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  crossCalloutHeaderIco: {
+    width: 22, height: 22, borderRadius: 6,
+    backgroundColor: "rgba(59,130,246,0.18)",
+    alignItems: "center", justifyContent: "center",
+  },
+  crossCalloutTitle: {
+    fontSize: 12, fontWeight: "700", color: Colors.ink, flex: 1,
+  },
+  crossCalloutItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(0,0,0,0.18)",
+    borderRadius: 8,
+  },
+  crossCalloutItemIco: { fontSize: 14, marginTop: 1 },
+  crossCalloutItemTitle: { fontSize: 12, fontWeight: "600", color: Colors.ink, marginBottom: 2 },
+  crossCalloutItemSub: { fontSize: 11, color: Colors.ink3, lineHeight: 15 },
+  // ──────────────────────────────────────────────────────────
   summaryBox: {
     backgroundColor: Glass.lineFaint, borderRadius: 10,
     borderWidth: 1, borderColor: Glass.lineBorderCard,
