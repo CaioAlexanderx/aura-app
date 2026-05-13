@@ -9,6 +9,17 @@
 // (q) vs "Código de barras" (product_barcode, lista vendas com aquele
 // produto). Backend filtro implementado em PR Aura-backend#57.
 //
+// 13/05/2026 (FASE C — NF-e/55 devolução — PR Aura-backend#70):
+//   - handleSubmit envia nfce_strategy='cancel_reissue' por default.
+//   - Quando NFC-e original >24h ou CUSTOMER_ADDRESS_REQUIRED, abre um
+//     formulário inline de endereço do cliente (customers não armazena
+//     endereço completo) e re-submete com nfce_strategy='devolucao_55'
+//     + customer_address { street, number, neighborhood, city, state,
+//       zip, ibge }.
+//   - NFCE_ORIGINAL_ANONIMA bloqueia com toast claro (cliente anônimo
+//     na NFC-e original não suporta emissão de devolução fiscal).
+//   Doc: Aura/BACKLOG_TROCA_CROSS_FILIAL.md (Fase C)
+//
 // 12/05/2026 (CROSS-FILIAL — PR Aura-backend#68 — pedido Davi):
 //   - Step 1 text mode: passa a usar GET /pdv/sales-for-troca, que
 //     retorna vendas de qualquer filial do mesmo group_root.
@@ -125,6 +136,21 @@ export function TrocaModal({
   const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [submitting, setSubmitting] = useState(false);
 
+  // 13/05/2026 (Fase C — NF-e/55 devolução): formulário de endereço
+  // aparece quando NFC-e original >24h ou backend retorna 400
+  // CUSTOMER_ADDRESS_REQUIRED. Endereço NÃO é armazenado em customers
+  // (schema atual), então capturamos no momento da troca.
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [customerAddress, setCustomerAddress] = useState({
+    street: "",
+    number: "S/N",
+    neighborhood: "",
+    city: "",
+    state: "",
+    zip: "",
+    ibge: "",
+  });
+
   const minDate = useMemo(() => daysAgoISO(MAX_DAYS_BACK), []);
   const today = useMemo(() => todayISO(), []);
 
@@ -219,6 +245,11 @@ export function TrocaModal({
       setNewEntries([]);
       setProductSearch("");
       setPaymentMethod("dinheiro");
+      setShowAddressForm(false);
+      setCustomerAddress({
+        street: "", number: "S/N", neighborhood: "",
+        city: "", state: "", zip: "", ibge: "",
+      });
     }
   }, [visible]);
 
@@ -328,15 +359,25 @@ export function TrocaModal({
   const originCompanyName = selectedSaleRow?.company_name || "outra filial";
   const originSellerName = selectedSaleRow?.seller_name || "vendedor da origem";
 
-  async function handleSubmit() {
+  // 13/05/2026 (Fase C): handleSubmit aceita strategy + address overrides
+  // para permitir retry com devolucao_55 após o backend pedir endereço.
+  //
+  // Strategy default: 'cancel_reissue' — tenta cancelar a NFC-e original
+  // e emitir nova (válido só <24h). Se backend rejeita com "24 horas",
+  // re-tentamos com 'devolucao_55' + customer_address.
+  async function handleSubmit(
+    strategyOverride?: "cancel_reissue" | "devolucao_55",
+    addressOverride?: typeof customerAddress
+  ) {
     if (returnedItems.length === 0 && newEntries.length === 0) {
       toast.error("Adicione ao menos um item à troca");
       return;
     }
     if (!selectedSale) return;
+    const strategy = strategyOverride || "cancel_reissue";
     setSubmitting(true);
     try {
-      const result = await trocaApi.create(companyId, {
+      const body: any = {
         original_sale_id: selectedSale.sale.id,
         returned_items: returnedItems.map((e) => ({
           product_id: e.item.product_id,
@@ -347,7 +388,12 @@ export function TrocaModal({
         })),
         new_items: newEntries,
         payment_method: netAmount > 0 ? paymentMethod : undefined,
-      });
+        nfce_strategy: strategy,
+      };
+      if (strategy === "devolucao_55") {
+        body.customer_address = addressOverride || customerAddress;
+      }
+      const result = await trocaApi.create(companyId, body);
       toast.success(
         result.cross_filial
           ? "Troca cross-filial registrada com sucesso!"
@@ -362,10 +408,24 @@ export function TrocaModal({
           "Troca cross-filial indisponível por instantes. Tente novamente em 1 minuto ou contate o suporte."
         );
       }
-      // NFC-e >24h — fora da janela de cancelamento.
-      else if ((e?.message || "").toLowerCase().includes("24 horas")) {
+      // Fase C — NFC-e original anônima: impossível emitir NF-e/55 (exige CPF do destinatário).
+      else if (e?.code === "NFCE_ORIGINAL_ANONIMA") {
         toast.error(
-          "NFC-e original com mais de 24h. Esta troca precisa de NF-e modelo 55 (em desenvolvimento)."
+          "Cliente da venda original era anônimo (sem CPF na NFC-e). Não dá pra emitir devolução fiscal."
+        );
+      }
+      // Fase C — backend pede endereço do cliente: abre formulário inline.
+      else if (e?.code === "CUSTOMER_ADDRESS_REQUIRED") {
+        setShowAddressForm(true);
+        toast.info(
+          "Preencha o endereço do cliente para emitir NF-e/55 de devolução."
+        );
+      }
+      // Fase C — NFC-e >24h: backend cancel_reissue rejeitou. Switch pra devolucao_55.
+      else if ((e?.message || "").toLowerCase().includes("24 horas")) {
+        setShowAddressForm(true);
+        toast.info(
+          "NFC-e original tem mais de 24h. Esta troca emite NF-e modelo 55 — preencha o endereço do cliente."
         );
       }
       // Venda cancelada / não encontrada / outros 4xx.
@@ -378,6 +438,24 @@ export function TrocaModal({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // 13/05/2026 (Fase C): valida + submete o formulário de endereço pra
+  // retentar a troca com strategy='devolucao_55'.
+  function handleAddressSubmit() {
+    const missing: string[] = [];
+    if (!customerAddress.street.trim())       missing.push("rua");
+    if (!customerAddress.neighborhood.trim()) missing.push("bairro");
+    if (!customerAddress.city.trim())         missing.push("cidade");
+    if (!customerAddress.state.trim())        missing.push("UF");
+    if (!customerAddress.zip.trim())          missing.push("CEP");
+    if (!customerAddress.ibge.trim())         missing.push("código IBGE");
+    if (missing.length) {
+      toast.error("Preencha: " + missing.join(", "));
+      return;
+    }
+    setShowAddressForm(false);
+    handleSubmit("devolucao_55", customerAddress);
   }
 
   if (!visible) return null;
@@ -883,6 +961,134 @@ export function TrocaModal({
           )}
         </ScrollView>
       </View>
+
+      {/* 13/05/2026 (Fase C) — Sub-modal endereço cliente pra devolução NF-e/55 */}
+      {showAddressForm && (
+        <View style={s.addressOverlay} pointerEvents="auto">
+          <Pressable
+            style={s.addressBackdrop}
+            onPress={() => setShowAddressForm(false)}
+          />
+          <View style={[s.addressPanel, IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]}>
+            <View style={s.header}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={s.headerIco}>
+                  <Icon name="map" size={16} color="#a78bfa" />
+                </View>
+                <Text style={s.headerTitle}>Endereço do cliente</Text>
+              </View>
+              <Pressable onPress={() => setShowAddressForm(false)} style={s.closeBtn}>
+                <Icon name="x" size={16} color={Colors.ink3} />
+              </Pressable>
+            </View>
+            <ScrollView style={s.body} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
+              <Text style={s.addressSub}>
+                Necessário para emitir NF-e modelo 55 de devolução (NFC-e original tem mais de 24h, fora da janela de cancelamento SEFAZ).
+              </Text>
+
+              <View style={s.addressFieldRow}>
+                <View style={{ flex: 3 }}>
+                  <Text style={s.dateLabel}>Rua</Text>
+                  <TextInput
+                    style={s.input as any}
+                    value={customerAddress.street}
+                    onChangeText={(v) => setCustomerAddress((p) => ({ ...p, street: v }))}
+                    placeholder="Av. Brasil, Rua dos Pinheiros..."
+                    placeholderTextColor={Colors.ink3}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.dateLabel}>Número</Text>
+                  <TextInput
+                    style={s.input as any}
+                    value={customerAddress.number}
+                    onChangeText={(v) => setCustomerAddress((p) => ({ ...p, number: v }))}
+                    placeholder="123 ou S/N"
+                    placeholderTextColor={Colors.ink3}
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginTop: 8 }}>
+                <Text style={s.dateLabel}>Bairro</Text>
+                <TextInput
+                  style={s.input as any}
+                  value={customerAddress.neighborhood}
+                  onChangeText={(v) => setCustomerAddress((p) => ({ ...p, neighborhood: v }))}
+                  placeholder="Centro, Vila Mariana..."
+                  placeholderTextColor={Colors.ink3}
+                />
+              </View>
+
+              <View style={[s.addressFieldRow, { marginTop: 8 }]}>
+                <View style={{ flex: 2 }}>
+                  <Text style={s.dateLabel}>Cidade</Text>
+                  <TextInput
+                    style={s.input as any}
+                    value={customerAddress.city}
+                    onChangeText={(v) => setCustomerAddress((p) => ({ ...p, city: v }))}
+                    placeholder="Jacareí"
+                    placeholderTextColor={Colors.ink3}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.dateLabel}>UF</Text>
+                  <TextInput
+                    style={s.input as any}
+                    value={customerAddress.state}
+                    onChangeText={(v) => setCustomerAddress((p) => ({ ...p, state: v.toUpperCase().slice(0, 2) }))}
+                    placeholder="SP"
+                    placeholderTextColor={Colors.ink3}
+                    maxLength={2}
+                  />
+                </View>
+              </View>
+
+              <View style={[s.addressFieldRow, { marginTop: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.dateLabel}>CEP</Text>
+                  <TextInput
+                    style={s.input as any}
+                    value={customerAddress.zip}
+                    onChangeText={(v) => setCustomerAddress((p) => ({ ...p, zip: v.replace(/\D/g, "").slice(0, 8) }))}
+                    placeholder="01310100"
+                    placeholderTextColor={Colors.ink3}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.dateLabel}>Código IBGE</Text>
+                  <TextInput
+                    style={s.input as any}
+                    value={customerAddress.ibge}
+                    onChangeText={(v) => setCustomerAddress((p) => ({ ...p, ibge: v.replace(/\D/g, "").slice(0, 7) }))}
+                    placeholder="3550308 (consulta IBGE)"
+                    placeholderTextColor={Colors.ink3}
+                  />
+                </View>
+              </View>
+
+              <Text style={s.addressHint}>
+                Tip: código IBGE da cidade pode ser consultado em ibge.gov.br. Cidades do Vale do Paraíba/SP costumam começar com 35.
+              </Text>
+
+              <View style={[s.stepFooter, { marginTop: 12 }]}>
+                <Pressable style={s.btnSec} onPress={() => setShowAddressForm(false)}>
+                  <Text style={s.btnSecTxt}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.btnPri, submitting && { opacity: 0.6 }, { minWidth: 200 }]}
+                  onPress={handleAddressSubmit}
+                  disabled={submitting}
+                >
+                  {submitting
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={s.btnPriTxt}>Emitir NF-e de devolução</Text>}
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1183,4 +1389,41 @@ const s = StyleSheet.create({
     minWidth: 100,
   },
   btnPriTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  // ─── Fase C — Address form overlay ───────────────────────
+  addressOverlay: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 1200,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addressBackdrop: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  addressPanel: {
+    width: "100%" as any,
+    maxWidth: 560,
+    maxHeight: "90vh" as any,
+    borderRadius: 16,
+    overflow: "hidden" as any,
+    zIndex: 1,
+  },
+  addressSub: {
+    fontSize: 12,
+    color: Colors.ink3,
+    lineHeight: 17,
+    marginBottom: 6,
+  },
+  addressFieldRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  addressHint: {
+    fontSize: 10,
+    color: Colors.ink3,
+    fontStyle: "italic",
+    marginTop: 6,
+  },
 });
