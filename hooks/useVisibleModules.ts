@@ -12,7 +12,12 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // avancado (ranking, retencao, aniversariantes, crediario) continua
   // gateado por Negocio+ no proprio modulo Clientes via tabs.
   clientes: 'essencial',
-  folha: 'negocio', agendamento: 'negocio',
+  // 12/05/2026 -- PLAN-02: Equipe basica (CRUD de funcionarios/vendedores)
+  // movida pro Essencial. Limite 3 ativos. Folha de pagamento de fato
+  // (salario, holerite, comissao, ranking) continua Negocio+ via UpgradeCard
+  // dentro do proprio modulo.
+  folha: 'essencial',
+  agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
   agentes: 'expansao',
 };
