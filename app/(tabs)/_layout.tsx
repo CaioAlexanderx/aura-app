@@ -41,7 +41,9 @@ const NAV: NavSection[] = [
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
   // /vendas (Item 3 Eryca) — conferencia das vendas do PDV. Visibilidade
   // herdada de "pdv" pra evitar criar modulo novo: quem ve Caixa ve Vendas.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "pdv" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  // /crediario (14/05/2026) — dashboard inadimplencia + regua de cobranca.
+  // Mesmo gate de plano (negocio+) e modulo (pdv) que Vendas.
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "pdv", plan: "negocio" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},
@@ -383,13 +385,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
   // ============================================================
   // Web — novo design Premium v2 (08/05/2026)
-  // - Aurora drift no fundo
-  // - Brand com halo + spin
-  // - Workspace card via CompanySwitcher (variant card)
-  // - Sections em cards
-  // - Active state com tile colorido + gradient bg
-  // - Footer ações refinadas
-  // - Collapse arrow no header (e no body quando collapsed)
   // ============================================================
   const sbBg = isDark
     ? "linear-gradient(180deg, #0a0c1f 0%, #06081a 100%)"
@@ -413,8 +408,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       background: sbBg,
       borderRight: "1px solid " + sbBorder,
       transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-      // CSS variables pra hover rules ficarem theme-aware (fix bug 08/05/2026
-      // onde cor de hover #f0edff dava texto branco em fundo claro no light mode)
       ["--aura-sb-ink" as any]: C.ink,
       ["--aura-sb-violet3" as any]: C.violet3,
     } as any}>
@@ -640,10 +633,6 @@ function MBar() {
   );
 
   // Items pro menu "Mais" = todos do filteredNav que NAO estao nas tabs fixas.
-  // Achata mantendo ordem global do layout.
-  // Configuracoes e injetada manualmente no fim porque nao mora no NAV
-  // (NAV alimenta tambem a Sidebar desktop, e la Configuracoes ja tem botao
-  // fixo dedicado no rodape — duplicaria se entrasse no NAV).
   const filteredMore = useMemo(() => {
     const flat: NavItem[] = [];
     for (const section of filteredNav) {
@@ -727,11 +716,6 @@ export default function TabsLayout() {
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
-  // MOBILE WEB: flex column com height:100vh.
-  // `minHeight: 0` no wrapper do Slot e `flexShrink: 0` na MBar sao essenciais:
-  // sem isso, quando o conteudo da tela e alto (ex: Caixa, Estoque), o flex:1
-  // nao comprime (default min-height:auto em flex items) e empurra a MBar para
-  // fora da viewport, deixando o usuario sem navegacao.
   if (w && isNarrow) return (
     <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative", overflow: "hidden" } as any}>
       <ToastContainer />

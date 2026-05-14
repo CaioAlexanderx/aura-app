@@ -1,0 +1,274 @@
+import { useState, useCallback } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Dimensions, Platform } from "react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
+import { useAuthStore } from "@/stores/auth";
+import { creditApi } from "@/services/creditApi";
+import { toast } from "@/components/Toast";
+import type { AgingRow } from "@/services/creditApi";
+
+const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
+
+var fmt = function(n: number) {
+  return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+var fmtDate = function(iso: string) {
+  try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }); }
+  catch { return ""; }
+};
+
+const SCORE_COLORS: Record<string, string> = {
+  premium: Colors.green, bom: "#34d399", regular: Colors.amber,
+  restrito: "#f97316", bloqueado: Colors.red,
+};
+
+const AGING_LABELS: Record<string, string> = {
+  a_vencer: "A vencer", "1_30_dias": "1-30 dias",
+  "31_60_dias": "31-60 dias", "61_90_dias": "61-90 dias", acima_90: "90+ dias",
+};
+
+const AGING_COLORS: Record<string, string> = {
+  a_vencer: Colors.violet3, "1_30_dias": Colors.amber,
+  "31_60_dias": "#f97316", "61_90_dias": Colors.red, acima_90: "#7f1d1d",
+};
+
+const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
+
+export default function CrediarioScreen() {
+  const { company } = useAuthStore();
+  const qc = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const [triggeringId, setTriggeringId] = useState<string | null>(null);
+
+  const dashQ = useQuery({
+    queryKey: ["credit-dashboard", company?.id],
+    queryFn: () => creditApi.getDashboard(company!.id),
+    enabled: !!company?.id,
+    staleTime: 60_000,
+  });
+
+  const agingQ = useQuery({
+    queryKey: ["credit-aging", company?.id],
+    queryFn: () => creditApi.getAging(company!.id),
+    enabled: !!company?.id,
+    staleTime: 60_000,
+  });
+
+  const triggerMut = useMutation({
+    mutationFn: ({ installmentId, customerId }: { installmentId: string; customerId: string }) =>
+      creditApi.triggerCollection(company!.id, installmentId),
+    onSuccess: (data) => {
+      toast.success("Cobrança disparada!");
+      qc.invalidateQueries({ queryKey: ["credit-dashboard"] });
+    },
+    onError: (err: any) => toast.error(err?.data?.error || "Erro ao disparar cobrança"),
+    onSettled: () => setTriggeringId(null),
+  });
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] }),
+      qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] }),
+    ]);
+    setRefreshing(false);
+  }, [company?.id]);
+
+  const kpis = dashQ.data?.kpis;
+  const topDefaulters = dashQ.data?.top_defaulters || [];
+  const aging: AgingRow[] = agingQ.data || [];
+  const agingMap = Object.fromEntries(aging.map(r => [r.faixa, r]));
+  const agingTotal = aging.reduce((s, r) => s + Number(r.amount), 0) || 1;
+
+  const isLoading = dashQ.isLoading || agingQ.isLoading;
+
+  return (
+    <ScrollView
+      style={s.screen}
+      contentContainerStyle={s.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
+    >
+      {/* Header */}
+      <View style={s.headerRow}>
+        <View>
+          <Text style={s.pageTitle}>Crediário</Text>
+          <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
+        </View>
+        <Pressable onPress={() => router.push("/crediario/settings" as any)} style={s.settingsBtn}>
+          <Icon name="settings" size={15} color={Colors.violet3} />
+          <Text style={s.settingsBtnText}>Régua</Text>
+        </Pressable>
+      </View>
+
+      {isLoading && (
+        <View style={s.loadingBox}>
+          <ActivityIndicator color={Colors.violet3} size="large" />
+          <Text style={s.loadingText}>Carregando...</Text>
+        </View>
+      )}
+
+      {!isLoading && kpis && (
+        <>
+          {/* KPI Hero */}
+          <View style={s.kpiGrid}>
+            <View style={[s.kpiCard, s.kpiCardAccent]}>
+              <Text style={s.kpiLabel}>A RECEBER</Text>
+              <Text style={[s.kpiValue, { color: Colors.violet3 }]}>{fmt(kpis.total_open_amount)}</Text>
+              <Text style={s.kpiMeta}>{kpis.total_open_count} parcelas abertas</Text>
+            </View>
+            <View style={[s.kpiCard, { borderColor: Colors.red + "44" }]}>
+              <Text style={s.kpiLabel}>EM ATRASO</Text>
+              <Text style={[s.kpiValue, { color: Colors.red }]}>{fmt(kpis.overdue_amount)}</Text>
+              <Text style={s.kpiMeta}>{kpis.overdue_count} parcelas · {kpis.defaulting_customers} clientes</Text>
+            </View>
+            <View style={[s.kpiCard, { borderColor: Colors.green + "44" }]}>
+              <Text style={s.kpiLabel}>RECEBIDO NO MÊS</Text>
+              <Text style={[s.kpiValue, { color: Colors.green }]}>{fmt(kpis.paid_this_month_amount)}</Text>
+              <Text style={s.kpiMeta}>{kpis.paid_this_month_count} pagamentos</Text>
+            </View>
+            {kpis.critical_amount > 0 && (
+              <View style={[s.kpiCard, { borderColor: "#7f1d1d" }]}>
+                <Text style={s.kpiLabel}>CRÍTICO (90+ dias)</Text>
+                <Text style={[s.kpiValue, { color: "#ef4444" }]}>{fmt(kpis.critical_amount)}</Text>
+                <Text style={s.kpiMeta}>{kpis.critical_count} parcelas em risco</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Aging */}
+          {aging.length > 0 && (
+            <View style={s.sectionCard}>
+              <Text style={s.sectionTitle}>Distribuição por vencimento</Text>
+              {AGING_ORDER.map(faixa => {
+                const row = agingMap[faixa];
+                if (!row) return null;
+                const pct = Math.round((Number(row.amount) / agingTotal) * 100);
+                const color = AGING_COLORS[faixa];
+                return (
+                  <View key={faixa} style={s.agingRow}>
+                    <Text style={s.agingLabel}>{AGING_LABELS[faixa]}</Text>
+                    <View style={s.agingBarWrap}>
+                      <View style={[s.agingBar, { width: `${Math.max(pct, 2)}%` as any, backgroundColor: color }]} />
+                    </View>
+                    <Text style={[s.agingAmount, { color }]}>{fmt(row.amount)}</Text>
+                    <Text style={s.agingCount}>{row.count}x</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Top devedores */}
+          {topDefaulters.length > 0 && (
+            <View style={s.sectionCard}>
+              <Text style={s.sectionTitle}>Maiores inadimplências</Text>
+              {topDefaulters.map((d) => {
+                const isTrig = triggeringId === d.customer_id;
+                const daysLate = d.oldest_due_date
+                  ? Math.max(0, Math.floor((Date.now() - new Date(d.oldest_due_date).getTime()) / 86400000))
+                  : 0;
+                return (
+                  <View key={d.customer_id} style={s.debtorRow}>
+                    <View style={s.debtorLeft}>
+                      <Text style={s.debtorName} numberOfLines={1}>{d.customer_name}</Text>
+                      <View style={s.debtorMeta}>
+                        <Text style={s.debtorMetaText}>
+                          {d.overdue_count} parcela{d.overdue_count !== 1 ? "s" : ""} · {daysLate}d de atraso
+                        </Text>
+                        {d.credit_score !== undefined && (
+                          <View style={[s.scorePill, { backgroundColor: (SCORE_COLORS[d.credit_status] || Colors.amber) + "22" }]}>
+                            <Text style={[s.scorePillText, { color: SCORE_COLORS[d.credit_status] || Colors.amber }]}>
+                              {d.credit_score}pts
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <View style={s.debtorRight}>
+                      <Text style={s.debtorAmount}>{fmt(d.total_overdue)}</Text>
+                      {d.phone && (
+                        <Pressable
+                          onPress={() => {
+                            // pega a primeira parcela do cliente pra disparar (simplificado)
+                            setTriggeringId(d.customer_id);
+                            // nota: instalmentId seria carregado via listInstallments
+                            // aqui fazemos toast informativo
+                            toast.info("Acesse o cliente para disparar cobrança individual.");
+                            setTriggeringId(null);
+                          }}
+                          style={s.triggerBtn}
+                          disabled={isTrig}
+                        >
+                          {isTrig
+                            ? <ActivityIndicator size="small" color={Colors.violet3} />
+                            : <Icon name="message" size={13} color={Colors.violet3} />
+                          }
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {topDefaulters.length === 0 && kpis.overdue_count === 0 && (
+            <View style={s.emptyState}>
+              <Icon name="check" size={32} color={Colors.green} />
+              <Text style={s.emptyTitle}>Tudo em dia!</Text>
+              <Text style={s.emptyText}>Nenhuma parcela em atraso. Continue assim.</Text>
+            </View>
+          )}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+const s = StyleSheet.create({
+  screen: { flex: 1 },
+  content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 48, maxWidth: 900, alignSelf: "center", width: "100%" },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
+  pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.4 },
+  pageSubtitle: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  settingsBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
+  settingsBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+
+  loadingBox: { paddingVertical: 60, alignItems: "center", gap: 16 },
+  loadingText: { fontSize: 13, color: Colors.ink3 },
+
+  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
+  kpiCard: { flex: 1, minWidth: IS_WIDE ? 180 : "45%", backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  kpiCardAccent: { borderColor: Colors.violet + "55" },
+  kpiLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 8 },
+  kpiValue: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
+  kpiMeta: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
+
+  sectionCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
+  sectionTitle: { fontSize: 11, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 14 },
+
+  agingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  agingLabel: { fontSize: 11, color: Colors.ink3, width: 72 },
+  agingBarWrap: { flex: 1, height: 6, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" },
+  agingBar: { height: "100%", borderRadius: 3 },
+  agingAmount: { fontSize: 11, fontWeight: "700", width: 90, textAlign: "right" },
+  agingCount: { fontSize: 10, color: Colors.ink3, width: 28, textAlign: "right" },
+
+  debtorRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border },
+  debtorLeft: { flex: 1, gap: 4 },
+  debtorName: { fontSize: 13, fontWeight: "600", color: Colors.ink },
+  debtorMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
+  debtorMetaText: { fontSize: 10.5, color: Colors.ink3 },
+  scorePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  scorePillText: { fontSize: 9.5, fontWeight: "700" },
+  debtorRight: { alignItems: "flex-end", gap: 6 },
+  debtorAmount: { fontSize: 14, fontWeight: "800", color: Colors.red },
+  triggerBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+
+  emptyState: { alignItems: "center", paddingVertical: 48, gap: 10 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink },
+  emptyText: { fontSize: 13, color: Colors.ink3, textAlign: "center" },
+});
