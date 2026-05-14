@@ -19,7 +19,7 @@ export default function CanalDigitalScreen() {
   const [tab, setTab] = useState(0);
   const { company } = useAuthStore();
   const {
-    config, products, isLoading,
+    config, isLoading,
     saveConfig, isSaving,
     requestDomain, isRequestingDomain,
     uploadImage, isUploadingImage,
@@ -77,7 +77,7 @@ export default function CanalDigitalScreen() {
               isSettingUpPix={isSettingUpPix}
             />
           )}
-          {tab === 1 && <TabVitrine config={config} products={products} saveConfig={saveConfig} isSaving={isSaving} />}
+          {tab === 1 && <TabVitrine config={config} saveConfig={saveConfig} isSaving={isSaving} />}
           {tab === 2 && <TabEntrega config={config} saveConfig={saveConfig} isSaving={isSaving} />}
           {tab === 3 && <TabPedidos />}
         </>
