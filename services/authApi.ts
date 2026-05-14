@@ -20,7 +20,18 @@ export type LoginResponse = {
   } | null;
   code_applied?: { type: string; plan: string; discount_pct: number; trial_days: number } | null;
 };
-export type RegisterBody = { name: string; email: string; password: string; company_name?: string; phone?: string; cnpj?: string; access_code?: string };
+// feat/terms-acceptance: terms_accepted e terms_version adicionados para registro de aceite
+export type RegisterBody = {
+  name: string;
+  email: string;
+  password: string;
+  company_name?: string;
+  phone?: string;
+  cnpj?: string;
+  access_code?: string;
+  terms_accepted?: boolean;
+  terms_version?: string;
+};
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string };
 
