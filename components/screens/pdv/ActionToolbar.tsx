@@ -1,25 +1,14 @@
 // ============================================================
-// AURA. -- PDV/Caixa · Action Toolbar (5 cards)
-// Scanner · Vendedora · Cliente · Cupom · Troca
+// AURA. -- PDV/Caixa · Action Toolbar (5–6 cards)
+// Scanner · Vendedora · Cliente · Cupom · Troca · [Crediário]
 // Each card follows the Claude Design "act-btn" pattern from the mockup.
-// 24/04 · theme-aware glass bg + dropdown z-index hardening (popovers
-// agora ficam acima dos cards de produto em ambos os temas).
-// 05/05 · popover ganha minWidth 320 + right:0 pra nao cortar conteudo
-// quando o card pai esta estreito (1440x900 com 4 cards).
-// 06/05 · scanner nao fecha popover apos bipe — leitura continua
-//   sem precisar clicar novamente no card entre cada produto.
-// 07/05 · ActTroca — 5º card, abre TrocaModal via onOpen() callback.
-//   Shortcut F5. Sem popover proprio (modal e gerenciado em pdv.tsx).
+// 24/04 · theme-aware glass bg + dropdown z-index hardening.
+// 05/05 · popover ganha minWidth 320 + right:0.
+// 06/05 · scanner não fecha popover após bipe.
+// 07/05 · ActTroca — 5º card, F5, sem popover.
 // 07/05 · fix scanner: removido mousedown outside-click do ActBarcode.
-//   Popover do scanner agora SÓ fecha ao clicar no card novamente,
-//   pressionar F1 ou clicar no botão × dentro do popover.
-//   Os demais popovers (Vendedora/Cliente/Cupom) mantêm dismiss externo
-//   pois selecionam um valor e fecham naturalmente.
-// 11/05 · ActBarcode redesenhado — scanner agora é GLOBAL (hook
-//   useGlobalBarcodeScanner em pdv.tsx). Card vira indicador de status
-//   "Escutando · pode bipar". F1/clique abre popover apenas pra entrada
-//   manual (caso scanner USB falhe ou produto não tenha código).
-//   Pulse dot verde no ícone enquanto está ouvindo.
+// 11/05 · ActBarcode redesenhado — scanner GLOBAL, card vira indicador.
+// 14/05 · ActCrediario — 6º card opcional (crediario_enabled), F6.
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
@@ -114,17 +103,6 @@ function Shortcut({ k }: { k: string }) {
 }
 
 // ═══════════ 1) Barcode scanner card ═══════════
-// Scanner agora é GLOBAL (useGlobalBarcodeScanner em pdv.tsx). Este card
-// reflete o estado em tempo real:
-//   - Padrão: "Escutando · pode bipar" com pulse verde no ícone
-//   - Após bipe: mostra brevemente o código lido + scan-line animado
-//   - F1 ou clique: abre popover de ENTRADA MANUAL (fallback quando
-//     scanner falha ou produto não tem código de barras)
-//
-// Props:
-//   listening — scanner global está ativo (mostra pulse + label correto)
-//   lastCode  — último código lido (mostrado por ~800ms após bipe)
-//   onScan    — entrada manual também dispara onScan
 export function ActBarcode({
   onScan,
   listening = true,
@@ -137,7 +115,6 @@ export function ActBarcode({
   const [open, setOpen] = useState(false);
   const [manual, setManual] = useState("");
 
-  // F1 shortcut: toggle manual-entry popover
   useEffect(() => {
     if (!IS_WEB) return;
     function handler(e: KeyboardEvent) {
@@ -150,11 +127,9 @@ export function ActBarcode({
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Quando popover abre, dá foco no input manual.
   const manualInputRef = useRef<TextInput | null>(null);
   useEffect(() => {
     if (open && manualInputRef.current) {
-      // Pequeno delay pro popover montar antes do focus.
       const t = setTimeout(() => {
         const el: any = manualInputRef.current;
         if (el && typeof el.focus === "function") el.focus();
@@ -167,7 +142,6 @@ export function ActBarcode({
   const active = listening || showingLastCode;
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
-  // Subtítulo: prioriza último código (feedback de bipe), depois status.
   const subtitle = showingLastCode
     ? lastCode!
     : listening
@@ -187,7 +161,6 @@ export function ActBarcode({
       <ActCard active={active} empty={!active} scanning={showingLastCode} onClick={() => setOpen(o => !o)}>
         <ActIco active={active}>
           <Icon name="barcode" size={18} color={active ? "#a78bfa" : Colors.ink3} />
-          {/* Pulse dot verde no canto do ícone enquanto está ouvindo */}
           {IS_WEB && listening && !showingLastCode && (
             <span
               aria-hidden
@@ -222,11 +195,9 @@ export function ActBarcode({
               <Icon name="x" size={14} color={Colors.ink3} />
             </Pressable>
           </View>
-
           <Text style={popS.manualHint}>
             Scanner USB/Bluetooth funciona automaticamente — bipe a qualquer momento. Use este campo apenas para digitar um código manualmente.
           </Text>
-
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TextInput
               ref={manualInputRef}
@@ -387,9 +358,7 @@ export function ActPerson({
 
           {kind === "vendedora" && (
             <View style={{ borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.2)", paddingTop: 10, marginTop: 6 }}>
-              <Text style={{ fontSize: 10, color: Colors.ink3, marginBottom: 4 }}>
-                ou digite um nome livre:
-              </Text>
+              <Text style={{ fontSize: 10, color: Colors.ink3, marginBottom: 4 }}>ou digite um nome livre:</Text>
               <View style={{ flexDirection: "row", gap: 6 }}>
                 <TextInput
                   value={freeText}
@@ -421,10 +390,7 @@ export function ActPerson({
 
           {addable && onAddNew && (
             <Pressable
-              onPress={() => {
-                onAddNew();
-                setOpen(false);
-              }}
+              onPress={() => { onAddNew(); setOpen(false); }}
               style={popS.addNew}
             >
               <View style={popS.addIco}>
@@ -436,10 +402,7 @@ export function ActPerson({
 
           {value && (
             <Pressable
-              onPress={() => {
-                onChange(null);
-                setOpen(false);
-              }}
+              onPress={() => { onChange(null); setOpen(false); }}
               style={popS.removeBtn}
             >
               <Text style={popS.removeTxt}>Remover {label.toLowerCase()}</Text>
@@ -472,10 +435,7 @@ export function ActCoupon({
   useEffect(() => {
     if (!IS_WEB) return;
     function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false);
-        setErr("");
-      }
+      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setErr(""); }
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -484,10 +444,7 @@ export function ActCoupon({
   useEffect(() => {
     if (!IS_WEB) return;
     function handler(e: KeyboardEvent) {
-      if (e.key === "F4") {
-        e.preventDefault();
-        setOpen(o => !o);
-      }
+      if (e.key === "F4") { e.preventDefault(); setOpen(o => !o); }
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -532,10 +489,7 @@ export function ActCoupon({
             <TextInput
               autoFocus
               value={code}
-              onChangeText={v => {
-                setCode(v.toUpperCase());
-                setErr("");
-              }}
+              onChangeText={v => { setCode(v.toUpperCase()); setErr(""); }}
               placeholder="DIGITE O CÓDIGO"
               placeholderTextColor={Colors.ink3}
               style={[popS.input, { flex: 1, letterSpacing: 1.2 }] as any}
@@ -548,13 +502,7 @@ export function ActCoupon({
           </View>
           {err ? <Text style={[popS.hint, { color: Colors.red }]}>{err}</Text> : null}
           {value && (
-            <Pressable
-              onPress={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              style={popS.removeBtn}
-            >
+            <Pressable onPress={() => { onChange(null); setOpen(false); }} style={popS.removeBtn}>
               <Text style={popS.removeTxt}>Remover cupom</Text>
             </Pressable>
           )}
@@ -565,16 +513,12 @@ export function ActCoupon({
 }
 
 // ═══════════ 4) Troca card ═══════════
-// Não tem popover próprio — chama onOpen() que abre o TrocaModal em pdv.tsx.
-// Shortcut F5.
+// Sem popover — chama onOpen() que abre TrocaModal. Shortcut F5.
 export function ActTroca({ onOpen }: { onOpen: () => void }) {
   useEffect(() => {
     if (!IS_WEB) return;
     function handler(e: KeyboardEvent) {
-      if (e.key === "F5") {
-        e.preventDefault();
-        onOpen();
-      }
+      if (e.key === "F5") { e.preventDefault(); onOpen(); }
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -587,6 +531,44 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
       </ActIco>
       <ActBody k="Troca de produto" v="Iniciar troca" isEmpty />
       <Shortcut k="F5" />
+    </ActCard>
+  );
+}
+
+// ═══════════ 5) Crediário parcelado card ═══════════
+// Sem popover próprio — chama onOpen() que abre CreditInstallmentModal.
+// Shortcut F6. Renderizado apenas quando pdv_settings.crediario_enabled = true.
+// Fica "ativo" (roxo) quando há cliente selecionado na venda, sinalizando
+// que o crediário está pronto para usar. Expandir o grid para 6 colunas
+// é responsabilidade do layout pai (pdv.tsx) quando este card está presente.
+export function ActCrediario({
+  onOpen,
+  hasCustomer = false,
+}: {
+  onOpen: () => void;
+  hasCustomer?: boolean;
+}) {
+  useEffect(() => {
+    if (!IS_WEB) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "F6") { e.preventDefault(); onOpen(); }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onOpen]);
+
+  return (
+    <ActCard active={hasCustomer} onClick={onOpen}>
+      <ActIco active={hasCustomer}>
+        <Icon name="percent" size={18} color={hasCustomer ? "#a78bfa" : Colors.ink3} />
+      </ActIco>
+      <ActBody
+        k="Crediário parcelado"
+        v={hasCustomer ? "Pronto para parcelar" : "Selecione um cliente"}
+        isActive={hasCustomer}
+        isEmpty={!hasCustomer}
+      />
+      <Shortcut k="F6" />
     </ActCard>
   );
 }
@@ -681,9 +663,8 @@ const popS = StyleSheet.create({
     minWidth: 320,
     maxWidth: 420,
   },
-  popLeft: { left: 0 as any },
+  popLeft:  { left: 0 as any },
   popRight: { right: 0 as any },
-  // Cabeçalho do scanner: título + botão ×
   scannerHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -698,12 +679,7 @@ const popS = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
   },
-  manualHint: {
-    fontSize: 11,
-    color: Colors.ink3,
-    lineHeight: 16,
-    marginBottom: 12,
-  },
+  manualHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 12 },
   title: {
     fontSize: 10,
     fontWeight: "700",
@@ -724,74 +700,21 @@ const popS = StyleSheet.create({
     outlineStyle: "none",
     textTransform: "uppercase" as any,
   } as any,
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 9,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
+  item:       { flexDirection: "row", alignItems: "center", gap: 10, padding: 9, paddingHorizontal: 10, borderRadius: 8 },
   itemActive: { backgroundColor: "rgba(124,58,237,0.15)" },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.violet,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  avatarTxt: { fontSize: 11, color: "#fff", fontWeight: "700" },
-  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  itemSub: {
-    fontSize: 10,
-    color: Colors.ink3,
-    marginTop: 1,
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-  },
-  applyBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: Colors.violet,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  applyWide: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: Colors.violet,
-    justifyContent: "center",
-    alignItems: "center",
-    minWidth: 84,
-  },
+  avatar:     { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  avatarTxt:  { fontSize: 11, color: "#fff", fontWeight: "700" },
+  itemName:   { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  itemSub:    { fontSize: 10, color: Colors.ink3, marginTop: 1, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace" },
+  applyBtn:   { width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
+  applyWide:  { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violet, justifyContent: "center", alignItems: "center", minWidth: 84 },
   applyWideTxt: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  hint: { fontSize: 10, color: Colors.ink3, marginTop: 8 },
-  addNew: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    marginTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(124,58,237,0.2)",
-  },
-  addIco: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(124,58,237,0.12)",
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "rgba(124,58,237,0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addTxt: { color: Colors.violet3, fontSize: 12, fontWeight: "600" },
-  removeBtn: { paddingVertical: 8, alignItems: "center", marginTop: 4 },
-  removeTxt: { color: Colors.red, fontSize: 11, fontWeight: "600" },
+  hint:       { fontSize: 10, color: Colors.ink3, marginTop: 8 },
+  addNew:     { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, marginTop: 4, borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.2)" },
+  addIco:     { width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(124,58,237,0.12)", borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.4)", alignItems: "center", justifyContent: "center" },
+  addTxt:     { color: Colors.violet3, fontSize: 12, fontWeight: "600" },
+  removeBtn:  { paddingVertical: 8, alignItems: "center", marginTop: 4 },
+  removeTxt:  { color: Colors.red, fontSize: 11, fontWeight: "600" },
 });
 
 export default null;

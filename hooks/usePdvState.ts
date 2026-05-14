@@ -5,10 +5,9 @@
 // CaixaScreenInner. O componente pdv.tsx fica responsável
 // apenas pela camada de layout/renderização.
 //
-// 14/05/2026: adicionada interceptação do crediário parcelado
-// em handleFinalize() — showCrediario + handleCrediarioConfirm.
-// scannerListening inclui !showCrediario para não capturar
-// digitação dentro da modal.
+// 14/05/2026: interceptação do crediário parcelado em
+// handleFinalize() — showCrediario + handleCrediarioConfirm.
+// handleOpenCrediario() — atalho direto via botão ActCrediario (F6).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -92,7 +91,7 @@ export function usePdvState() {
   const [cashModalAmount,  setCashModalAmount]  = useState(0);
   const [cashModalIsSplit, setCashModalIsSplit] = useState(false);
 
-  // ── Crediário parcelado (14/05/2026) ──────────────────────────
+  // ── Crediário parcelado ───────────────────────────────────────
   const [showCrediario, setShowCrediario] = useState(false);
 
   // ── Scanner ───────────────────────────────────────────────────
@@ -310,7 +309,7 @@ export function usePdvState() {
       return;
     }
 
-    // 14/05/2026: Crediário Parcelado — intercepta antes do modal de troco.
+    // Crediário Parcelado — intercepta antes do modal de troco.
     // Abre CreditInstallmentModal; finalizeSale é chamado em
     // handleCrediarioConfirm após a confirmação das parcelas.
     if (payment === "crediario" && !splitMode) {
@@ -343,11 +342,25 @@ export function usePdvState() {
     finalizeSale();
   }
 
-  // Parcelas criadas no backend — fecha modal e conclui o ciclo local
-  // (limpa carrinho + mostra SaleComplete via finalizeSale).
+  // Parcelas criadas no backend — fecha modal e conclui o ciclo local.
   function handleCrediarioConfirm() {
     setShowCrediario(false);
     finalizeSale();
+  }
+
+  // Atalho direto do botão ActCrediario (F6) — não passa por handleFinalize.
+  // Valida pré-condições, seta payment='crediario' e abre a modal.
+  function handleOpenCrediario() {
+    if (cart.length === 0) {
+      toast.info("Adicione produtos ao carrinho antes de usar o crediário");
+      return;
+    }
+    if (!selectedCustomerId) {
+      toast.error("Selecione um cliente para usar o crediário parcelado");
+      return;
+    }
+    setPayment("crediario");
+    setShowCrediario(true);
   }
 
   async function handleValidateCoupon(code: string) {
@@ -491,12 +504,13 @@ export function usePdvState() {
     // Crediário parcelado
     showCrediario,
     handleCrediarioConfirm,
+    handleOpenCrediario,
     closeCrediario: () => setShowCrediario(false),
     // Scanner
     lastScannedCode, scannerListening,
     // Employees / NFC-e
     employees, autoEmitNfce,
-    // Cart (exposto para CartPanel e modais)
+    // Cart
     payment, setPayment, lastSale, newSale, isProcessing,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
@@ -510,7 +524,7 @@ export function usePdvState() {
     // Produtos / busca
     products, query, setQuery, cat, setCat, showOutOfStock, setShowOutOfStock,
     categories, outOfStockCount, paginated, page, totalPages, filteredTotal, goTo, qtyById,
-    // Estados de modais (com openers/closers nomeados)
+    // Modais (openers/closers nomeados)
     pendingProduct,
     closePendingProduct: () => setPendingProduct(null),
     showNewCustomer,
@@ -524,7 +538,7 @@ export function usePdvState() {
     handleScan, handleAddProduct, handleVariantSelected, handleFinalize,
     handleValidateCoupon, handleGenerateQuote,
     pickCustomerWithPhone,
-    // Dados derivados para renderização
+    // Dados derivados
     cartHeadRef, cartProps, orderSuffix,
     subtotal, discountAmount, totalFinal, discountLabel,
     requiredHints, activeSellerValue, activeCustomerValue, displayItems,
