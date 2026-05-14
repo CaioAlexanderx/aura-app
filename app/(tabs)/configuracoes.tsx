@@ -140,6 +140,10 @@ export default function ConfiguracoesScreen() {
   // Plano no JWT pode estar desatualizado se o staff mudou via Gestao
   // Aura enquanto o cliente ainda esta logado. Refetch /auth/me no mount
   // pra atualizar o store. Cliente ve mudancas sem precisar logout/login.
+  //
+  // 13/05/2026: refetch agora tambem sincroniza extra_seats_granted (campo
+  // novo exposto pelo auth.js shapeCompany). Sem isso, fallback do gate
+  // seguia com 0 mesmo apos o staff aplicar +1 acesso via Gestao Aura.
   // ============================================================
   useEffect(() => {
     if (!token || !company?.id) return;
@@ -154,6 +158,12 @@ export default function ConfiguracoesScreen() {
         if (fresh?.company?.vertical_active !== undefined) {
           useAuthStore.getState().updateCompany({ vertical_active: fresh.company.vertical_active });
         }
+        // FIX 13/05/2026: sincroniza extra_seats_granted pro fallback do gate.
+        if ((fresh?.company as any)?.extra_seats_granted !== undefined) {
+          useAuthStore.getState().updateCompany({
+            extra_seats_granted: (fresh.company as any).extra_seats_granted,
+          } as any);
+        }
       })
       .catch(() => { /* silencioso — se /me falhar, segue com cache */ });
   }, [token, company?.id]);
@@ -164,6 +174,12 @@ export default function ConfiguracoesScreen() {
   // Cobre plano Negocio+ (sempre tem 3+) E plano Essencial com seats extras pagos
   // manualmente via Gestao Aura (PR Aura-backend#65). Gate solta quando
   // seats_included > 1 (cabe pelo menos titular + 1 funcionario).
+  //
+  // 13/05/2026 — Fallback secundario (caso Maria/Encanto): quando /members/billing
+  // falha ou cache stale, ainda libera Equipe se company.extra_seats_granted > 0
+  // (pago manualmente via Gestao Aura). Sem isso, Essencial+extra_seat caia no
+  // fallback `plan !== "essencial"` (false) e mostrava gate apesar do pagamento.
+  // Backend auth.js (mesmo dia) expoe extra_seats_granted no /auth/me.
   // ============================================================
   const { data: billingData } = useQuery({
     queryKey: ["members-billing", company?.id],
@@ -176,7 +192,11 @@ export default function ConfiguracoesScreen() {
   // Quando carregar, seats_included > 1 = libera. Cobre essencial+extra_seats.
   const plan    = company?.plan || "essencial";
   const planDat = PLANS[plan] || PLANS.essencial;
-  const hasTeamCapacity = seatsIncluded !== null ? seatsIncluded > 1 : plan !== "essencial";
+  // 13/05/2026: fallback secundario via company.extra_seats_granted (caso Maria).
+  const extraSeatsGranted = (((company as any)?.extra_seats_granted ?? 0) as number) > 0;
+  const hasTeamCapacity = seatsIncluded !== null
+    ? seatsIncluded > 1
+    : (plan !== "essencial" || extraSeatsGranted);
   const totalCompanies = availableCompanies?.length || 1;
 
   function handleSwitchToCompany(companyId: string) {
@@ -337,7 +357,7 @@ export default function ConfiguracoesScreen() {
 
           {/* EQUIPE — per-company (members/permissoes sao por empresa)
               12/05/2026: gate por CAPACIDADE (seats_included > 1) em vez de plano hardcoded.
-              Cobre plano Negocio+ e plano Essencial com extra_seats_granted > 0. */}
+              13/05/2026: fallback secundario via company.extra_seats_granted > 0 (caso Maria). */}
           {!consolidatedView && (
             <>
               <SectionTitle title="Equipe" />
