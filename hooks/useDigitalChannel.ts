@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { request, companiesApi } from "@/services/api";
+import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -26,12 +26,10 @@ export function useDigitalChannel() {
     staleTime: 60_000,
   });
 
-  const { data: productsData } = useQuery({
-    queryKey: ['products', cid],
-    queryFn: () => companiesApi.products(cid!),
-    enabled: !!cid,
-    staleTime: 60_000,
-  });
+  // FIX (14/05/2026): produtos removidos deste hook.
+  // Antes: companiesApi.products(cid!) carregava TODOS os produtos sem limite.
+  // Davi tem 4950+ produtos — carregar tudo de uma vez travava/derrubava a aba do browser.
+  // Solução: TabVitrine faz sua própria query paginada (60 por vez + busca por nome).
 
   const saveMutation = useMutation({
     mutationFn: (body: any) => digitalChannelApi.save(cid!, body),
@@ -65,7 +63,6 @@ export function useDigitalChannel() {
   const setupPixMutation = useMutation({
     mutationFn: (body: any) => digitalChannelApi.setupPix(cid!, body),
     onSuccess: () => {
-      // Atualiza company no Zustand store para refletir asaas_subconta_id
       useAuthStore.getState().hydrate();
       qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
       toast.success('Pix ativado com sucesso!');
@@ -73,12 +70,8 @@ export function useDigitalChannel() {
     onError: (err: any) => toast.error(err?.message || 'Erro ao ativar Pix'),
   });
 
-  const allProducts = productsData?.products || productsData || [];
-  const productsList = Array.isArray(allProducts) ? allProducts : [];
-
   return {
     config: config || {},
-    products: productsList,
     isLoading,
     saveConfig: saveMutation.mutateAsync,
     isSaving: saveMutation.isPending,
