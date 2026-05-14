@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   View, Text, TextInput, Pressable, ActivityIndicator,
   StyleSheet, Platform, ScrollView, Image, Animated, Easing,
-  useWindowDimensions,
+  useWindowDimensions, Linking,
 } from "react-native";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
@@ -16,6 +16,9 @@ import { maskCNPJ, maskPhone } from "@/utils/masks";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
+// Versao dos Termos de Uso vigente — atualizar aqui quando publicar nova versao
+const TERMS_VERSION = "2026-03-26";
+const TERMS_URL = "https://getaura.com.br/termos";
 const isWeb = Platform.OS === "web";
 
 // Inject the same CSS from login.tsx (reuses .v2-* classes if already present)
@@ -74,6 +77,10 @@ if (typeof document !== "undefined" && !document.getElementById("aura-login-v2-c
       animation: floatParticle var(--dur) ease-in-out infinite;
       animation-delay: var(--delay);
     }
+    .v2-terms-link {
+      color: #7c3aed; font-weight: 600; text-decoration: underline; cursor: pointer;
+    }
+    .v2-terms-link:hover { color: #6d28d9; }
   `;
   document.head.appendChild(st);
 }
@@ -144,6 +151,55 @@ function saveCnpjData(data: any) {
   } catch {}
 }
 
+// Componente de checkbox de Termos reutilizavel
+function TermsCheckbox({ accepted, onToggle }: { accepted: boolean; onToggle: () => void }) {
+  function openTerms() {
+    if (isWeb && typeof window !== "undefined") {
+      window.open(TERMS_URL, "_blank", "noopener,noreferrer");
+    } else {
+      Linking.openURL(TERMS_URL).catch(() => {});
+    }
+  }
+
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={s.termsRow}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: accepted }}
+    >
+      {/* Checkbox box */}
+      <View style={[
+        s.checkboxBox,
+        accepted && s.checkboxBoxChecked,
+      ]}>
+        {accepted && <Icon name="check" size={11} color="#fff" />}
+      </View>
+
+      {/* Texto com link */}
+      <View style={{ flex: 1 }}>
+        <Text style={s.termsText}>
+          {"Li e aceito os "}
+          {isWeb ? (
+            <Text
+              style={s.termsLink}
+              onPress={(e) => { e.stopPropagation?.(); openTerms(); }}
+              {...(isWeb ? { className: "v2-terms-link" } as any : {})}
+            >
+              Termos de Uso
+            </Text>
+          ) : (
+            <Text style={s.termsLink} onPress={openTerms}>
+              Termos de Uso
+            </Text>
+          )}
+          {" da Aura."}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function RegisterScreen() {
   const { invite_token, invite_email } = useLocalSearchParams<{ invite_token?: string; invite_email?: string }>();
   const isInviteFlow = !!invite_token;
@@ -166,6 +222,8 @@ export default function RegisterScreen() {
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
+  // Aceite dos Termos de Uso — obrigatorio para prosseguir no cadastro
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const { register, isLoading } = useAuthStore();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -216,17 +274,18 @@ export default function RegisterScreen() {
   const passNumber = /[0-9]/.test(senha);
   const passMatch = senha === confirmarSenha && confirmarSenha.length > 0;
   const passValid = passLength && passUpper && passNumber;
-  const step1Valid = nome.length > 0 && email.includes("@") && passValid && passMatch;
+  // termsAccepted e obrigatorio para avancar — previne POST sem aceite
+  const step1Valid = nome.length > 0 && email.includes("@") && passValid && passMatch && termsAccepted;
   const cnpjValid = cnpj.replace(/\D/g, "").length === 14 && !!cnpjFound && !cnpjError;
   const contatoValid = telefoneContato.replace(/\D/g, "").length >= 10;
   const step2Valid = empresa.length > 0 && contatoValid && cnpjValid;
 
-  function nextStep() { if (!step1Valid) { toast.error("Preencha todos os campos corretamente"); return; } setStep(1); }
+  function nextStep() { if (!step1Valid) { toast.error(!termsAccepted ? "Voce precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; } setStep(1); }
 
   async function handleInviteRegister() {
-    if (!step1Valid) { toast.error("Preencha todos os campos corretamente"); return; }
+    if (!step1Valid) { toast.error(!termsAccepted ? "Voce precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; }
     try {
-      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha });
+      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, terms_accepted: true, terms_version: TERMS_VERSION });
       if (invite_token) {
         try {
           await inviteApi.accept(invite_token);
@@ -245,7 +304,7 @@ export default function RegisterScreen() {
     if (!contatoValid) { toast.error("Informe seu telefone para contato."); return; }
     if (!empresa) { toast.error("Preencha o nome da empresa"); return; }
     try {
-      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefoneContato.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, ""), access_code: codigo.trim() || undefined });
+      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefoneContato.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, ""), access_code: codigo.trim() || undefined, terms_accepted: true, terms_version: TERMS_VERSION });
       toast.success("Conta criada com sucesso!");
       const hasTrialCode = codigo.trim() && codeValid === true;
       setTimeout(() => router.replace(hasTrialCode ? "/(tabs)/onboarding" : "/(tabs)/checkout"), 300);
@@ -311,6 +370,9 @@ export default function RegisterScreen() {
             {confirmarSenha.length > 0 && !passMatch && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas nao conferem</Text>}
           </View>
 
+          {/* Aceite dos Termos de Uso — obrigatorio (feat/terms-acceptance) */}
+          <TermsCheckbox accepted={termsAccepted} onToggle={() => setTermsAccepted(!termsAccepted)} />
+
           {isInviteFlow ? (
             <Pressable style={[s.btn, (isLoading || !step1Valid) && { opacity: 0.6 }]} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={handleInviteRegister} disabled={isLoading || !step1Valid}>
               {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta e aceitar convite</Text>}
@@ -372,8 +434,6 @@ export default function RegisterScreen() {
     return (
       <div style={{
         minHeight: "100vh", width: "100%", position: "relative",
-        // FIX: overflow-x hidden para conter orbs/partículas lateralmente,
-        // mas overflow-y auto permite scroll em viewports pequenas.
         overflowX: "hidden", overflowY: "auto",
         background: `
           radial-gradient(ellipse at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 55%),
@@ -415,8 +475,6 @@ export default function RegisterScreen() {
             </div>
           </div>
         ) : (
-          // FIX: layout narrow agora usa padding vertical em vez de justify-content: center,
-          // para que o card seja acessível mesmo quando maior que a viewport.
           <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "60px 20px 60px", position: "relative", zIndex: 2 } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
             {card}
@@ -426,8 +484,6 @@ export default function RegisterScreen() {
     );
   }
 
-  // FIX: flex:1 garante que o ScrollView ocupa toda a tela no mobile nativo,
-  // permitindo scroll quando o teclado abre ou o conteúdo ultrapassa a viewport.
   return (
     <ScrollView
       style={{ flex: 1 }}
@@ -480,4 +536,10 @@ const s = StyleSheet.create({
   footerText: { fontSize: 13, color: Colors.ink3 },
   link: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   footerTag: { fontSize: 11, color: Colors.ink3, textAlign: "center", opacity: 0.5 },
+  // Termos de Uso
+  termsRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 16, marginTop: 2, paddingVertical: 4 },
+  checkboxBox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: "transparent", alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
+  checkboxBoxChecked: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  termsText: { fontSize: 12, color: Colors.ink3, lineHeight: 18, flexWrap: "wrap" },
+  termsLink: { color: Colors.violet3, fontWeight: "600" },
 });
