@@ -5,8 +5,9 @@
 // Todos os modais estão em components/screens/pdv/PdvModals.
 // Este arquivo é responsável apenas pela camada de layout/JSX.
 //
-// Histórico completo: veja commits anteriores + usePdvState.ts.
-// 14/05/2026: decomposição + integração CreditInstallmentModal.
+// 14/05/2026: decomposição + CreditInstallmentModal + ActCrediario.
+// ActCrediario (F6) aparece na actBar quando crediario_enabled=true;
+// grid passa de 5 para 6 colunas condicionalmente.
 // ============================================================
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
@@ -22,7 +23,9 @@ import { CaixaBackdrop } from "@/components/screens/pdv/CaixaBackdrop";
 import { CaixaDesignStyle, IS_WEB } from "@/components/screens/pdv/types";
 import { SearchBox } from "@/components/screens/pdv/SearchBox";
 import { MerchantBanner } from "@/components/screens/pdv/MerchantBanner";
-import { ActBarcode, ActPerson, ActCoupon, ActTroca } from "@/components/screens/pdv/ActionToolbar";
+import {
+  ActBarcode, ActPerson, ActCoupon, ActTroca, ActCrediario,
+} from "@/components/screens/pdv/ActionToolbar";
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
@@ -37,20 +40,23 @@ const PAGE_SIZE = 12;
 function CaixaScreenInner() {
   const st = usePdvState();
 
-  // ── Aliases ───────────────────────────────────────────────────
+  // ── Aliases ────────────────────────────────────────────────────
   const { company, isDemo, isNegocioPlus, clientesEnabled, vp, wide } = st;
   const { caixaEnabled, sessaoAtiva, isAberto, caixaLoading, invalidateCaixa } = st;
   const { employees, autoEmitNfce, scannerListening, lastScannedCode } = st;
   const { query, setQuery, cat, setCat, showOutOfStock, setShowOutOfStock } = st;
   const { categories, outOfStockCount, paginated, page, totalPages, filteredTotal, goTo, qtyById } = st;
-  const { selectedCustomerId, selectedCustomerName } = st;
+  const { selectedCustomerId, selectedCustomerName, crediarioEnabled } = st;
   const { couponApplied, setCouponApplied, clearCoupon } = st;
   const { activeSellerValue, activeCustomerValue, customerOptions, pickCustomerWithPhone } = st;
   const { handleScan, handleAddProduct, handleVariantSelected, handleValidateCoupon } = st;
-  const { selectEmployee, setSellerName } = st;
+  const { handleOpenCrediario, selectEmployee, setSellerName } = st;
   const { cartProps, cartHeadRef, orderSuffix } = st;
 
-  // ── Bloco de modais — renderizado uma única vez (cobre wide + mobile)
+  // Número de colunas da actBar: 6 quando crediário está habilitado, 5 caso contrário.
+  const actCols = crediarioEnabled ? 6 : 5;
+
+  // ── Bloco de modais ────────────────────────────────────────────
   const modals = (
     <PdvModals
       showNewCustomer={st.showNewCustomer}
@@ -83,7 +89,7 @@ function CaixaScreenInner() {
     />
   );
 
-  // ── Tela de venda concluída ───────────────────────────────────
+  // ── Tela de venda concluída ────────────────────────────────────
   if (st.lastSale) {
     if (wide) {
       return (
@@ -97,7 +103,7 @@ function CaixaScreenInner() {
     return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} />;
   }
 
-  // ── Toggle de produtos sem estoque ────────────────────────────
+  // ── Toggle de produtos sem estoque ─────────────────────────────
   function StockToggle() {
     if (outOfStockCount === 0) return null;
     return (
@@ -114,7 +120,7 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Grid de produtos ──────────────────────────────────────────
+  // ── Grid de produtos ───────────────────────────────────────────
   function ProductSection({ columns }: { columns: number }) {
     if (st.products.length === 0)
       return (
@@ -147,7 +153,7 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Layout wide (desktop) ─────────────────────────────────────
+  // ── Layout wide (desktop) ──────────────────────────────────────
   if (wide) {
     return (
       <View style={s.root}>
@@ -156,7 +162,7 @@ function CaixaScreenInner() {
 
         <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: `1fr ${st.cartWidth}px` } as any)]}>
 
-          {/* ── Catálogo (coluna esquerda) ─────────────────────── */}
+          {/* Catálogo (coluna esquerda) */}
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
             contentContainerStyle={{ padding: vp.sm ? 16 : 28, paddingBottom: 48 }}
@@ -198,10 +204,13 @@ function CaixaScreenInner() {
 
               <MerchantBanner height={vp.sm ? 120 : 200} />
 
-              {/* Action toolbar */}
+              {/* Action toolbar — 5 ou 6 colunas */}
               <View style={[s.actBar, IS_WEB && ({
-                display: "grid", gridTemplateColumns: "repeat(5, 1fr)",
-                gap: vp.sm ? 6 : 10, position: "relative", zIndex: 50,
+                display: "grid",
+                gridTemplateColumns: `repeat(${actCols}, 1fr)`,
+                gap: vp.sm ? 6 : 10,
+                position: "relative",
+                zIndex: 50,
               } as any)]}>
                 <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
                 <ActPerson
@@ -232,6 +241,12 @@ function CaixaScreenInner() {
                   onValidate={handleValidateCoupon}
                 />
                 <ActTroca onOpen={st.openTroca} />
+                {crediarioEnabled && (
+                  <ActCrediario
+                    onOpen={handleOpenCrediario}
+                    hasCustomer={!!selectedCustomerId}
+                  />
+                )}
               </View>
 
               <View style={s.catRow}>
@@ -251,7 +266,7 @@ function CaixaScreenInner() {
             </View>
           </ScrollView>
 
-          {/* ── CartPanel (coluna direita, sticky) ────────────── */}
+          {/* CartPanel (coluna direita, sticky) */}
           <View style={[
             s.cartWrap,
             { width: st.cartWidth },
@@ -266,7 +281,7 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Layout mobile ─────────────────────────────────────────────
+  // ── Layout mobile ──────────────────────────────────────────────
   return (
     <View style={{ flex: 1 }}>
       <CaixaDesignStyle />
@@ -326,6 +341,12 @@ function CaixaScreenInner() {
             onValidate={handleValidateCoupon}
           />
           <ActTroca onOpen={st.openTroca} />
+          {crediarioEnabled && (
+            <ActCrediario
+              onOpen={handleOpenCrediario}
+              hasCustomer={!!selectedCustomerId}
+            />
+          )}
         </View>
 
         <View style={s.catRow}>
