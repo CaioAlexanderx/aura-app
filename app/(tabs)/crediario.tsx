@@ -93,9 +93,12 @@ export default function CrediarioScreen() {
     >
       {/* Header */}
       <View style={s.headerRow}>
-        <View>
-          <Text style={s.pageTitle}>Crediário</Text>
-          <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
+        <View style={s.headerTitleGroup}>
+          <View style={s.headerIconBox}><Icon name="percent" size={18} color={Colors.violet3} /></View>
+          <View>
+            <Text style={s.pageTitle}>Crediário</Text>
+            <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
+          </View>
         </View>
         <Pressable onPress={() => router.push("/crediario/settings" as any)} style={s.settingsBtn}>
           <Icon name="settings" size={15} color={Colors.violet3} />
@@ -192,10 +195,7 @@ export default function CrediarioScreen() {
                       {d.phone && (
                         <Pressable
                           onPress={() => {
-                            // pega a primeira parcela do cliente pra disparar (simplificado)
                             setTriggeringId(d.customer_id);
-                            // nota: instalmentId seria carregado via listInstallments
-                            // aqui fazemos toast informativo
                             toast.info("Acesse o cliente para disparar cobrança individual.");
                             setTriggeringId(null);
                           }}
@@ -231,7 +231,9 @@ export default function CrediarioScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 48, maxWidth: 900, alignSelf: "center", width: "100%" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  headerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.4 },
   pageSubtitle: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
   settingsBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
@@ -270,5 +272,5 @@ const s = StyleSheet.create({
 
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink },
-  emptyText: { fontSize: 13, color: Colors.ink3, textAlign: "center" },
+  emptyText: { fontSize: 13, color: Colors.ink3 },
 });
