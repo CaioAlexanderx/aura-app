@@ -17,6 +17,11 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // (salario, holerite, comissao, ranking) continua Negocio+ via UpgradeCard
   // dentro do proprio modulo.
   folha: 'essencial',
+  // 15/05/2026 -- vendas e crediario ganham modulos proprios, separados do pdv.
+  // Antes herdavam visibilidade de pdv (quem via Caixa via Vendas automaticamente).
+  // Agora cada um tem sua chave de permissao independente.
+  vendas: 'essencial',
+  crediario: 'negocio',
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
   agentes: 'expansao',
@@ -24,15 +29,20 @@ var MODULE_PLAN_MAP: Record<string, string> = {
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
 // Mapeamento: chave de permissao do toggle -> modulos do sidebar
+// REGRA: toda nova tela/modulo deve ter entrada aqui E em MODULE_PLAN_MAP.
 var PERM_TO_MODULES: Record<string, string[]> = {
   painel:        ['painel'],
   pdv:           ['pdv'],
+  // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
+  vendas:        ['vendas', 'crediario'],
   estoque:       ['estoque'],
   clientes:      ['clientes', 'canal'],
   financeiro:    ['financeiro', 'nfe'],
   relatorios:    ['contabilidade', 'suporte'],
   folha:         ['folha', 'agendamento'],
   configuracoes: ['configuracoes'],
+  // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
+  agentes:       ['agentes'],
 };
 
 export function useVisibleModules(): Set<string> {
