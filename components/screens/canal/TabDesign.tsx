@@ -1,13 +1,10 @@
 // ============================================================
 // AURA. — Canal Digital · Aba Design (v2)
-// Editor lado-a-lado (Shopify-grade) com preview iframe live
-// • Identidade visual: paleta primary+accent (presets + custom), dark mode
-// • Tipografia: classic | modern | humanist
-// • Card style: editorial | minimal | image-heavy
+// Editor lado-a-lado com preview iframe live
+// • Identidade visual, tipografia, card style, dark mode
 // • Announcement bar
-// • Banners (até 3): kicker, headline, body, CTA, tone, tint, image upload
-// • Salva via useDigitalChannel.saveConfig (debounced)
-// • Preview recarrega ao salvar (via key prop bump)
+// • Banners (até 3) com tone/tint/imagem
+// • Service cards (até 4) com ícone/título/corpo
 // ============================================================
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
@@ -20,31 +17,31 @@ import { toast } from "@/components/Toast";
 import {
   IS_WIDE, COLOR_PRESETS, PALETTE_PRESETS, ACCENT_PRESETS,
   FONT_OPTIONS, CARD_STYLES, BANNER_TONES, BANNER_TINTS,
+  SERVICE_ICONS, ServiceIconPreview,
   Field, ChipToggle, ToggleRow, SectionTitle, cs,
 } from "./shared";
 
 type Banner = {
-  kicker?: string;
-  headline?: string;
-  body?: string;
-  cta?: string;
+  kicker?: string; headline?: string; body?: string; cta?: string;
   tone?: "split" | "editorial" | "centered";
   tint?: "brand" | "accent";
-  image_url?: string | null;
+  image_url?: string | null; enabled?: boolean;
+};
+
+type ServiceCard = {
+  icon?: string;
+  title?: string;
+  body?: string;
   enabled?: boolean;
 };
 
 type Cfg = {
-  primary_color?: string;
-  accent_color?: string;
-  dark_mode?: boolean;
-  font_family?: string;
-  card_style?: string;
+  primary_color?: string; accent_color?: string;
+  dark_mode?: boolean; font_family?: string; card_style?: string;
   announcement_bar?: string;
   banners?: Banner[];
-  is_published?: boolean;
-  slug?: string;
-  storefront_url?: string;
+  service_cards?: ServiceCard[];
+  is_published?: boolean; slug?: string; storefront_url?: string;
 };
 
 const BACKEND_BASE = (
@@ -63,19 +60,36 @@ const DEFAULT_BANNERS: Banner[] = [
   { kicker: "", headline: "", body: "", cta: "", tone: "centered",  tint: "brand",  image_url: null, enabled: false },
 ];
 
+const DEFAULT_SERVICE_CARDS: ServiceCard[] = [
+  { icon: "truck",   title: "Entrega rápida",      body: "Confirmação no WhatsApp", enabled: true },
+  { icon: "pkg",     title: "Embalagem cuidadosa", body: "Pronta pra presentear",   enabled: true },
+  { icon: "shield",  title: "Pagamento seguro",    body: "Pix e demais opções",     enabled: true },
+  { icon: "sparkle", title: "Curadoria editada",   body: "Produtos selecionados",   enabled: true },
+];
+
 function normalizeBanners(input: any): Banner[] {
   if (!Array.isArray(input)) return DEFAULT_BANNERS;
-  const arr: Banner[] = input.slice(0, 3).map((b: any, i: number) => ({
-    kicker: b?.kicker || "",
-    headline: b?.headline || "",
-    body: b?.body || "",
-    cta: b?.cta || "",
+  const arr: Banner[] = input.slice(0, 3).map((b: any) => ({
+    kicker: b?.kicker || "", headline: b?.headline || "",
+    body: b?.body || "", cta: b?.cta || "",
     tone: ["split", "editorial", "centered"].includes(b?.tone) ? b.tone : "split",
     tint: ["brand", "accent"].includes(b?.tint) ? b.tint : "brand",
     image_url: b?.image_url || null,
     enabled: b?.enabled !== false,
   }));
   while (arr.length < 3) arr.push({ ...DEFAULT_BANNERS[arr.length], enabled: false });
+  return arr;
+}
+
+function normalizeServiceCards(input: any): ServiceCard[] {
+  if (!Array.isArray(input) || !input.length) return DEFAULT_SERVICE_CARDS;
+  const arr: ServiceCard[] = input.slice(0, 4).map((c: any) => ({
+    icon: c?.icon || "sparkle",
+    title: c?.title || "",
+    body:  c?.body  || "",
+    enabled: c?.enabled !== false,
+  }));
+  while (arr.length < 4) arr.push({ ...DEFAULT_SERVICE_CARDS[arr.length], enabled: false });
   return arr;
 }
 
@@ -91,7 +105,6 @@ export function TabDesign({
   isUploadingImage: boolean;
   deleteImage: (type: any) => Promise<any>;
 }) {
-  // Local draft state — auto-save com debounce
   const [primary, setPrimary]   = useState(config.primary_color || "#7c3aed");
   const [accent, setAccent]     = useState(config.accent_color  || "#a78bfa");
   const [dark, setDark]         = useState(!!config.dark_mode);
@@ -99,10 +112,10 @@ export function TabDesign({
   const [cardStyle, setCardStyle] = useState(config.card_style  || "editorial");
   const [annBar, setAnnBar]     = useState(config.announcement_bar || "");
   const [banners, setBanners]   = useState<Banner[]>(normalizeBanners(config.banners));
+  const [serviceCards, setServiceCards] = useState<ServiceCard[]>(normalizeServiceCards(config.service_cards));
   const [device, setDevice]     = useState<"desktop" | "mobile">(IS_WIDE ? "desktop" : "mobile");
   const [previewKey, setPreviewKey] = useState(0);
 
-  // Sync if config changes externally (after save invalidation)
   useEffect(() => { setPrimary(config.primary_color || "#7c3aed"); }, [config.primary_color]);
   useEffect(() => { setAccent(config.accent_color   || "#a78bfa"); }, [config.accent_color]);
   useEffect(() => { setDark(!!config.dark_mode); }, [config.dark_mode]);
@@ -110,18 +123,15 @@ export function TabDesign({
   useEffect(() => { setCardStyle(config.card_style || "editorial"); }, [config.card_style]);
   useEffect(() => { setAnnBar(config.announcement_bar || ""); }, [config.announcement_bar]);
   useEffect(() => { setBanners(normalizeBanners(config.banners)); }, [JSON.stringify(config.banners)]);
+  useEffect(() => { setServiceCards(normalizeServiceCards(config.service_cards)); }, [JSON.stringify(config.service_cards)]);
 
-  // Debounced save
   const saveTimer = useRef<any>(null);
-  const dirtyRef = useRef(false);
-  function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[] }) {
-    dirtyRef.current = true;
+  function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[]; service_cards?: ServiceCard[] }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
         await saveConfig(patch);
         setPreviewKey((k) => k + 1);
-        dirtyRef.current = false;
       } catch (err: any) {
         toast.error(err?.message || "Erro ao salvar");
       }
@@ -136,12 +146,19 @@ export function TabDesign({
     });
   }
 
+  function updateServiceCard(idx: number, patch: Partial<ServiceCard>) {
+    setServiceCards((prev) => {
+      const next = prev.map((c, i) => (i === idx ? { ...c, ...patch } : c));
+      scheduleSave({ service_cards: next });
+      return next;
+    });
+  }
+
   async function pickAndUploadImage(type: "logo" | `banner_${number}`) {
     if (Platform.OS !== "web") {
       toast.info("Upload de imagem disponível na versão web por enquanto");
       return;
     }
-    // Web: usa <input type=file> programatico
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/jpeg,image/png,image/webp";
@@ -157,9 +174,7 @@ export function TabDesign({
         const dataUrl = reader.result as string;
         const base64 = dataUrl.split(",")[1];
         try {
-          const res = await uploadImage({
-            type, content: base64, content_type: file.type,
-          });
+          const res = await uploadImage({ type, content: base64, content_type: file.type });
           setPreviewKey((k) => k + 1);
           if (type.startsWith("banner_")) {
             const idx = parseInt(type.split("_")[1], 10);
@@ -177,12 +192,10 @@ export function TabDesign({
   }
 
   const previewUrl = useMemo(() => previewUrlFor(config.slug), [config.slug]);
-
   const wide = IS_WIDE;
 
   const editor = (
     <ScrollView style={s.editorScroll} contentContainerStyle={{ paddingBottom: 80 }}>
-      {/* CORES */}
       <SectionTitle title="Identidade visual" />
       <View style={cs.card}>
         <Text style={cs.fieldLabel}>Cor primária</Text>
@@ -232,7 +245,6 @@ export function TabDesign({
           hint="Inverte fundo e texto, mantendo a paleta" />
       </View>
 
-      {/* TIPOGRAFIA */}
       <SectionTitle title="Tipografia" />
       <View style={cs.card}>
         <Text style={cs.fieldLabel}>Fonte dos títulos</Text>
@@ -244,7 +256,6 @@ export function TabDesign({
           onChange={(v) => { setCardStyle(v); scheduleSave({ card_style: v }); }} />
       </View>
 
-      {/* ANNOUNCEMENT BAR */}
       <SectionTitle title="Anúncio (faixa superior)" />
       <View style={cs.card}>
         <Field label="Texto exibido no topo (desktop)" value={annBar}
@@ -253,11 +264,9 @@ export function TabDesign({
         <Text style={cs.hint}>Deixe vazio para esconder a faixa.</Text>
       </View>
 
-      {/* BANNERS */}
       <SectionTitle title="Banners do topo" />
       <Text style={cs.hint}>
-        Até 3 banners se alternam automaticamente no carrossel da home. Cada banner tem um estilo (tom)
-        e uma cor de fundo (tinte). Pode adicionar imagem de fundo opcional.
+        Até 3 banners se alternam automaticamente no carrossel da home.
       </Text>
       {banners.map((b, idx) => (
         <View key={idx} style={cs.card}>
@@ -325,6 +334,46 @@ export function TabDesign({
         </View>
       ))}
 
+      <SectionTitle title="Cards de benefícios (rodapé)" />
+      <Text style={cs.hint}>
+        4 cards exibidos abaixo da grade de produtos. Cada um tem ícone, título e descrição curta.
+      </Text>
+      {serviceCards.map((c, idx) => (
+        <View key={idx} style={cs.card}>
+          <View style={s.bannerHead}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={s.svcIconChip}>
+                <ServiceIconPreview icon={c.icon || "sparkle"} size={18} />
+              </View>
+              <Text style={s.bannerTitle}>Card {idx + 1}</Text>
+            </View>
+            <ToggleRow label="Ativo" value={!!c.enabled}
+              onChange={(v) => updateServiceCard(idx, { enabled: v })} />
+          </View>
+          <Field label="Título" value={c.title || ""}
+            onChange={(v) => updateServiceCard(idx, { title: v })}
+            placeholder="Ex: Entrega rápida" />
+          <Field label="Descrição" value={c.body || ""}
+            onChange={(v) => updateServiceCard(idx, { body: v })}
+            placeholder="Ex: Confirmação no WhatsApp" />
+          <Text style={cs.fieldLabel}>Ícone</Text>
+          <View style={s.iconGrid}>
+            {SERVICE_ICONS.map((opt) => {
+              const active = opt.value === (c.icon || "sparkle");
+              return (
+                <Pressable key={opt.value}
+                  onPress={() => updateServiceCard(idx, { icon: opt.value })}
+                  style={[s.iconChip, active && s.iconChipActive]}>
+                  <ServiceIconPreview icon={opt.value} size={20}
+                    color={active ? Colors.violet3 : Colors.ink} />
+                  <Text style={[s.iconChipLabel, active && { color: Colors.violet3, fontWeight: "600" }]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+
       {!config.is_published && (
         <View style={[cs.infoCard, { marginTop: 16 }]}>
           <Icon name="info" size={16} color={Colors.amber} />
@@ -366,12 +415,14 @@ export function TabDesign({
       </View>
       <View style={[s.previewFrame, device === "mobile" && s.previewFrameMobile]}>
         {previewUrl && Platform.OS === "web" ? (
-          // @ts-ignore — iframe é HTML, só renderiza na web
+          // @ts-ignore
           <iframe
             key={previewKey}
             src={previewUrl}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             style={{
-              width: "100%", height: "100%", border: 0, borderRadius: device === "mobile" ? 28 : 8,
+              width: "100%", height: "100%", border: 0,
+              borderRadius: device === "mobile" ? 28 : 8,
               background: "#fff",
             }}
             title="Preview da loja"
@@ -446,6 +497,12 @@ const s = StyleSheet.create({
   uploadDrop: { borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed", padding: 20, alignItems: "center", gap: 6, backgroundColor: Colors.bg4 },
   uploadText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   uploadHint: { fontSize: 11, color: Colors.ink3 },
+
+  svcIconChip: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  iconChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+  iconChipActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  iconChipLabel: { fontSize: 11, color: Colors.ink, fontWeight: "500" },
 
   savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
   savingText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
