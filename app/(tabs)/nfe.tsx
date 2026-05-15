@@ -15,6 +15,9 @@ import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm } from "@/components/screens/nfe/EmitNfceForm";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
+// IS_NARROW: breakpoint para KPI cards compactos em telas estreitas (<500px)
+const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : false;
+
 // Mai/2026 audit: refetch dinâmico quando há nota em status='processando' +
 // botão de refresh manual + ESC fecha modal de cancel.
 function NfeScreenInner() {
@@ -286,9 +289,13 @@ const s = StyleSheet.create({
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
     alignItems: "center", justifyContent: "center",
   },
-  kpis: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 4 },
-  kv: { fontSize: 20, fontWeight: "800", color: Colors.ink },
+  // Mobile fix: flexWrap pra quando o 4º card (crítico) aparece;
+  // minWidth "30%" garante 3 cards por linha em mobile sem espremer.
+  kpis: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  kpi: { flex: 1, minWidth: IS_WIDE ? 140 : "30%", backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 4 },
+  // Mobile fix: fontSize reduzido em telas estreitas pra valores monetários
+  // não transbordar os ~86px de largura interna disponível por card.
+  kv: { fontSize: IS_NARROW ? 13 : 20, fontWeight: "800", color: Colors.ink },
   kl: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   processingBanner: {
     flexDirection: "row", alignItems: "center", gap: 10,

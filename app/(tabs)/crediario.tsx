@@ -10,9 +10,12 @@ import { toast } from "@/components/Toast";
 import type { AgingRow } from "@/services/creditApi";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
+// IS_NARROW: breakpoint para KPI cards — valores monetários em fontSize 22
+// transbordavam os ~129px de largura interna disponível em telas <500px.
+const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : false;
 
 var fmt = function(n: number) {
-  return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 var fmtDate = function(iso: string) {
@@ -246,7 +249,9 @@ const s = StyleSheet.create({
   kpiCard: { flex: 1, minWidth: IS_WIDE ? 180 : "45%", backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
   kpiCardAccent: { borderColor: Colors.violet + "55" },
   kpiLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 8 },
-  kpiValue: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
+  // Mobile fix: fontSize 22 transbordava em cards de ~129px de largura interna
+  // em telas <500px (valores como "R$ 1.200,00" → ~144px). Reduzido pra 16.
+  kpiValue: { fontSize: IS_NARROW ? 16 : 22, fontWeight: "800", letterSpacing: -0.5 },
   kpiMeta: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
 
   sectionCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
@@ -255,7 +260,7 @@ const s = StyleSheet.create({
   agingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   agingLabel: { fontSize: 11, color: Colors.ink3, width: 72 },
   agingBarWrap: { flex: 1, height: 6, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" },
-  agingBar: { height: "100%", borderRadius: 3 },
+  agingBar: { height: "100%" as any, borderRadius: 3 },
   agingAmount: { fontSize: 11, fontWeight: "700", width: 90, textAlign: "right" },
   agingCount: { fontSize: 10, color: Colors.ink3, width: 28, textAlign: "right" },
 
