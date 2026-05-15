@@ -39,11 +39,11 @@ const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
   { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
-  // /vendas (Item 3 Eryca) — conferencia das vendas do PDV. Visibilidade
-  // herdada de "pdv" pra evitar criar modulo novo: quem ve Caixa ve Vendas.
+  // /vendas (15/05/2026) — modulo proprio "vendas"; nao herda mais do pdv.
+  // Permite controlar visibilidade separadamente do Caixa (ex: Kaila/Vitoria).
   // /crediario (14/05/2026) — dashboard inadimplencia + regua de cobranca.
-  // Mesmo gate de plano (negocio+) e modulo (pdv) que Vendas.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "pdv", plan: "negocio" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  // Modulo proprio "crediario" (negocio+); nao herda mais do pdv.
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario", plan: "negocio" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},
