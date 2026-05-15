@@ -257,6 +257,7 @@ export default function EstoqueScreen() {
   // Web-wide habilita Hero + KpiStrip + Table/Grid + multi-select cat.
   // Em narrow web ou native, mantém o layout antigo (compat 100%).
   const isWebWide = Platform.OS === "web" && screenW > TABLE_BREAKPOINT;
+  const isMobileNarrow = Platform.OS === "web" && screenW < 500;
   const showRailDefault = Platform.OS === "web" && screenW >= RAIL_BREAKPOINT;
 
   const [activeTab, setActiveTab] = useState(0);
@@ -475,32 +476,32 @@ export default function EstoqueScreen() {
   // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
   const ActionButtons = () => (
     <>
-      <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={s.serviceBtn}>
+      <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
         <Icon name="star" size={14} color={Colors.violet3} />
-        <Text style={s.serviceBtnText}>+ Servico</Text>
+        {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Servico</Text>}
       </Pressable>
       {!isDemo && (
-        <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtn}>
+        <Pressable onPress={() => setShowBatchModal(true)} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}>
           <Icon name="layers" size={14} color={Colors.violet3} />
-          <Text style={s.batchBtnText}>+ Em lote</Text>
+          {!isMobileNarrow && <Text style={s.batchBtnText}>+ Em lote</Text>}
         </Pressable>
       )}
       {!isDemo && (
-        <Pressable onPress={() => setShowDanfeModal(true)} style={s.danfeBtn}>
+        <Pressable onPress={() => setShowDanfeModal(true)} style={[s.danfeBtn, isMobileNarrow && s.btnIconOnly]}>
           <Icon name="file_text" size={14} color={Colors.violet3} />
-          <Text style={s.danfeBtnText}>Importar DANFE</Text>
+          {!isMobileNarrow && <Text style={s.danfeBtnText}>Importar DANFE</Text>}
         </Pressable>
       )}
       {/* 12/05/2026: botao Selecionar — toggle bulk mode. So aparece se ja tem produto e usuario nao e demo. */}
       {!isDemo && products.length > 0 && (
         <Pressable
           onPress={() => { if (bulkMode) { exitBulkMode(); } else { setBulkMode(true); } }}
-          style={[s.bulkBtn, bulkMode && s.bulkBtnActive]}
+          style={[s.bulkBtn, bulkMode && s.bulkBtnActive, isMobileNarrow && s.btnIconOnly]}
         >
           <Icon name="check" size={14} color={bulkMode ? "#fff" : Colors.violet3} />
-          <Text style={[s.bulkBtnText, bulkMode && { color: "#fff" }]}>
+          {!isMobileNarrow && <Text style={[s.bulkBtnText, bulkMode && { color: "#fff" }]}>
             {bulkMode ? "Sair da selecao" : "Selecionar"}
-          </Text>
+          </Text>}
         </Pressable>
       )}
       <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
@@ -851,6 +852,7 @@ const s = StyleSheet.create({
   danfeBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   batchBtnSmall: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   batchBtnSmallText: { fontSize: 12, color: "#fff", fontWeight: "700" },
+  btnIconOnly: { paddingHorizontal: 10, gap: 0 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 20 },
