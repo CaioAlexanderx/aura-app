@@ -306,10 +306,10 @@ export default function FinanceiroScreen() {
         )}
 
         {/* Tabs (6 abas — V2). Scroll horizontal em mobile pra caber todas. */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: IS_WIDE ? 8 : 6 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: IS_NARROW ? 4 : IS_WIDE ? 8 : 6 }}>
           {TABS.map(function(tab, i) {
             return <Pressable key={tab} onPress={function() { handleTabSelect(i); }} style={[s.tab, IS_NARROW ? s.tabNarrow : null, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
-              <Text style={[s.tabText, activeTab === i && s.tabTextActive]}>{tab}</Text>
+              <Text style={[s.tabText, IS_NARROW && s.tabTextNarrow, activeTab === i && s.tabTextActive]}>{tab}</Text>
             </Pressable>;
           })}
         </ScrollView>
@@ -409,9 +409,10 @@ var s = StyleSheet.create({
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   // Tab compacta em mobile — caber mais antes de scroll horizontal.
-  tabNarrow: { paddingHorizontal: 12, paddingVertical: 8 },
+  tabNarrow: { paddingHorizontal: 8, paddingVertical: 7 },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  tabTextNarrow: { fontSize: 11 },
   tabTextActive: { color: "#fff", fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
