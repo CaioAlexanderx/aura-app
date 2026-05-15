@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { IS_WIDE, TABS } from "@/components/screens/canal/shared";
 import { TabMeuSite } from "@/components/screens/canal/TabMeuSite";
+import { TabDesign } from "@/components/screens/canal/TabDesign";
 import { TabVitrine } from "@/components/screens/canal/TabVitrine";
 import { TabEntrega } from "@/components/screens/canal/TabEntrega";
 import { TabPedidos } from "@/components/screens/canal/TabPedidos";
@@ -23,6 +24,7 @@ export default function CanalDigitalScreen() {
     saveConfig, isSaving,
     requestDomain, isRequestingDomain,
     uploadImage, isUploadingImage,
+    deleteImage,
     setupPix, isSettingUpPix,
   } = useDigitalChannel();
   const plan = company?.plan || "essencial";
@@ -52,7 +54,7 @@ export default function CanalDigitalScreen() {
         <View style={s.heroIcon}><Icon name="globe" size={22} color={Colors.violet3} /></View>
         <View style={{ flex: 1 }}>
           <Text style={s.heroTitle}>Sua loja online em minutos</Text>
-          <Text style={s.heroDesc}>Configure sua vitrine, personalize e compartilhe o link.</Text>
+          <Text style={s.heroDesc}>Configure, personalize e compartilhe o link.</Text>
         </View>
         {config.is_published && storefrontUrl && (
           <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn}>
@@ -77,9 +79,19 @@ export default function CanalDigitalScreen() {
               isSettingUpPix={isSettingUpPix}
             />
           )}
-          {tab === 1 && <TabVitrine config={config} saveConfig={saveConfig} isSaving={isSaving} />}
-          {tab === 2 && <TabEntrega config={config} saveConfig={saveConfig} isSaving={isSaving} />}
-          {tab === 3 && <TabPedidos />}
+          {tab === 1 && (
+            <TabDesign
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+              uploadImage={uploadImage}
+              isUploadingImage={isUploadingImage}
+              deleteImage={deleteImage}
+            />
+          )}
+          {tab === 2 && <TabVitrine config={config} saveConfig={saveConfig} isSaving={isSaving} />}
+          {tab === 3 && <TabEntrega config={config} saveConfig={saveConfig} isSaving={isSaving} />}
+          {tab === 4 && <TabPedidos />}
         </>
       )}
     </ScrollView>
@@ -87,7 +99,7 @@ export default function CanalDigitalScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1 }, content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  screen: { flex: 1 }, content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 1280, alignSelf: "center", width: "100%" },
   hero: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.violetD, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
   heroIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, flexShrink: 0 },
   heroTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
