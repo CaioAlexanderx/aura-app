@@ -1,15 +1,15 @@
 import { View, Text, StyleSheet, TextInput, Pressable, Dimensions, Platform, Switch } from "react-native";
+import Svg, { Path, Circle, Rect, Ellipse } from "react-native-svg";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 
 export const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-// v2: aba Design pra cores, tipografia, cards, banners
+// v2: aba Design pra cores, tipografia, cards, banners, service strip
 export const TABS = ["Meu Site", "Design", "Vitrine", "Entrega", "Pedidos"];
 
 export const COLOR_PRESETS = ["#7c3aed", "#059669", "#dc2626", "#d97706", "#2563eb", "#db2777", "#0891b2", "#374151"];
 
-// Paletas curadas (primary, accent, label) — espelha o mockup
 export const PALETTE_PRESETS: Array<[string, string, string]> = [
   ["#3a5a47", "#c47a51", "Botânica"],
   ["#7c3aed", "#a78bfa", "Aura (violeta)"],
@@ -43,6 +43,75 @@ export const BANNER_TINTS: Array<{ value: string; label: string }> = [
   { value: "brand",  label: "Primária" },
   { value: "accent", label: "Destaque" },
 ];
+
+// Ícones disponíveis para service cards (espelha ALLOWED_ICONS no backend)
+export const SERVICE_ICONS: Array<{ value: string; label: string }> = [
+  { value: "truck",   label: "Entrega" },
+  { value: "pkg",     label: "Embalagem" },
+  { value: "shield",  label: "Segurança" },
+  { value: "sparkle", label: "Estrela" },
+  { value: "leaf",    label: "Folha" },
+  { value: "heart",   label: "Coração" },
+  { value: "pix",     label: "Pix" },
+  { value: "card",    label: "Cartão" },
+  { value: "receipt", label: "Recibo" },
+  { value: "bag",     label: "Sacola" },
+  { value: "user",    label: "Cliente" },
+];
+
+// Mini SVG inline pra preview do ícone na UI do editor
+export function ServiceIconPreview({ icon, size = 18, color = Colors.violet3 }: { icon: string; size?: number; color?: string }) {
+  const sw = 1.6;
+  switch (icon) {
+    case "truck":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M3 16V6h12v10M15 9h4l2 4v3h-6"/>
+        <Circle cx={7} cy={18} r={2}/><Circle cx={17} cy={18} r={2}/>
+      </Svg>;
+    case "pkg":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M3 7v10l9 4 9-4V7l-9-4-9 4z"/><Path d="M3 7l9 4 9-4M12 11v10"/>
+      </Svg>;
+    case "shield":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3z"/>
+      </Svg>;
+    case "leaf":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M21 3c-7 0-13 4-13 12v6M21 3c0 7-4 13-12 13"/>
+      </Svg>;
+    case "heart":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M12 20s-7-4.5-7-10a4 4 0 017-2.7A4 4 0 0119 10c0 5.5-7 10-7 10z"/>
+      </Svg>;
+    case "pix":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="m12 3 9 9-9 9-9-9 9-9z"/><Path d="M9 12h6M12 9v6"/>
+      </Svg>;
+    case "card":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Rect x={3} y={6} width={18} height={12} rx={2}/><Path d="M3 10h18M7 15h2"/>
+      </Svg>;
+    case "receipt":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><Path d="M9 8h6M9 12h6M9 16h4"/>
+      </Svg>;
+    case "bag":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M5 7h14l-1 13H6L5 7z"/><Path d="M9 7V5a3 3 0 016 0v2"/>
+      </Svg>;
+    case "user":
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Circle cx={12} cy={8} r={4}/><Path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>
+      </Svg>;
+    case "sparkle":
+    case "star":
+    default:
+      return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6L12 16.8 6.7 19.6l1.1-6-4.4-4.2 6-.8L12 3z"/>
+      </Svg>;
+  }
+}
 
 export function Field({ label, value, onChange, placeholder, multiline }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean;
