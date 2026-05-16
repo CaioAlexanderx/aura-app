@@ -60,13 +60,16 @@ function TotaisGrid({ totais, label }: { totais: CaixaTotais; label: string }) {
 }
 
 const tg = StyleSheet.create({
-  card:        { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 6 },
+  // 15/05/2026 (Davi): padding 16->12, gap 6->4 → economiza ~30px verticais
+  // numa screen onde 6 linhas + total empilham. Em monitor 13/14 (1366×768)
+  // a screen + fechamentoCard ultrapassava o fold mesmo com ScrollView.
+  card:        { backgroundColor: Colors.bg3, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 4 },
   label:       { fontSize: 11, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
   row:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   name:        { fontSize: 13, color: Colors.ink3 },
   value:       { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   valueActive: { color: Colors.ink },
-  divider:     { height: 1, backgroundColor: Colors.border, marginVertical: 6 },
+  divider:     { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   totalLabel:  { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   totalValue:  { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
 });
@@ -77,12 +80,10 @@ export default function CaixaScreen() {
   const { company } = useAuthStore();
   const { sessaoAtiva, isAberto, isLoading, isFetching, invalidate } = useCaixa();
 
-  // Estado de abertura
   const [trocoInput, setTrocoInput] = useState("0,00");
   const [abrindo,    setAbrindo]    = useState(false);
 
-  // Estado de fechamento
-  const [mostrando,       setMostrando]       = useState(false); // exibe form de fechamento
+  const [mostrando,       setMostrando]       = useState(false);
   const [dinheiroInput,   setDinheiroInput]   = useState("");
   const [obsInput,        setObsInput]        = useState("");
   const [fechando,        setFechando]        = useState(false);
@@ -129,7 +130,6 @@ export default function CaixaScreen() {
     );
   }
 
-  // Calcula diferença ao vivo enquanto operador digita
   const dinheiroContado = parseMoeda(dinheiroInput);
   const dinheiroEsperado = sessaoAtiva
     ? sessaoAtiva.troco_inicial + (sessaoAtiva.totais_ao_vivo?.dinheiro || 0)
@@ -208,7 +208,6 @@ export default function CaixaScreen() {
 
             <TotaisGrid totais={sessaoAtiva.totais_ao_vivo} label="Totais ao vivo" />
 
-            {/* Botão para mostrar/ocultar form de fechamento */}
             {!mostrando && (
               <Pressable onPress={function() { setMostrando(true); }} style={s.dangerBtn}>
                 <Icon name="lock" size={16} color="#fff" />
@@ -216,7 +215,6 @@ export default function CaixaScreen() {
               </Pressable>
             )}
 
-            {/* Form de fechamento */}
             {mostrando && (
               <View style={s.fechamentoCard}>
                 <Text style={s.fechamentoTitle}>Fechamento do caixa</Text>
@@ -244,7 +242,6 @@ export default function CaixaScreen() {
                   />
                 </View>
 
-                {/* Diferença ao vivo */}
                 {diferenca !== null && (
                   <View style={[s.diffBanner, diferenca === 0 && s.diffOk, diferenca < 0 && s.diffNeg]}>
                     <Icon
@@ -316,7 +313,12 @@ export default function CaixaScreen() {
 
 const s = StyleSheet.create({
   screen:    { flex: 1 },
-  content:   { padding: 20, paddingBottom: 48, maxWidth: 600, alignSelf: "center", width: "100%", gap: 12 },
+  // 15/05/2026 (Davi 13/14"): paddingBottom 48 -> 100 pra limpar bottom
+  // tab bar do Expo Router (que sobrepõe a ScrollView). Sem isso, o
+  // histLink e o botão "Confirmar fechamento" sumiam embaixo da tab bar.
+  // padding lateral 20 -> 16 + gap 12 -> 10 economizam espaço sem
+  // prejudicar legibilidade.
+  content:   { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, maxWidth: 600, alignSelf: "center", width: "100%", gap: 10 },
   centered:  { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 13, color: Colors.ink3 },
 
@@ -325,8 +327,8 @@ const s = StyleSheet.create({
   backBtn:     { padding: 4 },
   headerTitle: { fontSize: 20, fontWeight: "700", color: Colors.ink, flex: 1 },
 
-  // Status card
-  statusCard:   { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  // Status card — padding 16 -> 12
+  statusCard:   { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: Colors.border },
   statusFechado:{ backgroundColor: Colors.bg3 },
   statusAberto: { backgroundColor: Colors.greenD + "22", borderColor: Colors.green + "44" },
   statusDot:    { width: 10, height: 10, borderRadius: 5 },
@@ -335,25 +337,24 @@ const s = StyleSheet.create({
   statusTitle:  { fontSize: 15, fontWeight: "700", color: Colors.ink },
   statusDesc:   { fontSize: 12, color: Colors.ink3, marginTop: 2 },
 
-  // Labels
   sectionLabel: { fontSize: 12, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4 },
   inputLabel:   { fontSize: 12, color: Colors.ink3, marginBottom: 4 },
 
-  // Input de valor
-  inputCard:   { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, gap: 6 },
+  // Input — paddingVertical 12 -> 10
+  inputCard:   { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 10, gap: 6 },
   inputPrefix: { fontSize: 16, color: Colors.ink3, fontWeight: "500" },
   input:       { flex: 1, fontSize: 20, color: Colors.ink, fontWeight: "700" },
 
-  // Botões
-  primaryBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14 },
+  // Botões — paddingVertical 14 -> 12
+  primaryBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 12 },
   primaryBtnText:  { fontSize: 15, color: "#fff", fontWeight: "700" },
-  dangerBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.red || "#ef4444", borderRadius: 12, paddingVertical: 14 },
-  cancelBtn:       { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border },
+  dangerBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.red || "#ef4444", borderRadius: 12, paddingVertical: 12 },
+  cancelBtn:       { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border },
   cancelBtnText:   { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
   btnDisabled:     { opacity: 0.5 },
 
-  // Fechamento
-  fechamentoCard:  { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 10 },
+  // Fechamento — padding 16 -> 12, gap 10 -> 8
+  fechamentoCard:  { backgroundColor: Colors.bg3, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 8 },
   fechamentoTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
   fechamentoDesc:  { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
   confRow:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -363,11 +364,11 @@ const s = StyleSheet.create({
   diffOk:          { backgroundColor: Colors.greenD },
   diffNeg:         { backgroundColor: "#ef44440f" },
   diffText:        { fontSize: 13, fontWeight: "600", color: Colors.violet3 },
-  obsInput:        { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, minHeight: 56 },
+  obsInput:        { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: Colors.ink, minHeight: 48 },
   fechamentoBtns:  { flexDirection: "row", gap: 10, marginTop: 4 },
   fecharConfirmBtn:{ flex: 2 },
 
-  // Histórico
-  histLink:     { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
+  // Histórico — padding 14 -> 12
+  histLink:     { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
   histLinkText: { flex: 1, fontSize: 14, color: Colors.violet3, fontWeight: "600" },
 });
