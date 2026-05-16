@@ -39,7 +39,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View, Text, Pressable, StyleSheet, TextInput,
-  ActivityIndicator, ScrollView,
+  ActivityIndicator, ScrollView, Platform,
 } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -1110,7 +1110,7 @@ const s = StyleSheet.create({
   panel: {
     width: "100%" as any,
     maxWidth: 560,
-    maxHeight: "90vh" as any,
+    maxHeight: "92vh" as any,
     borderRadius: 16,
     overflow: "hidden" as any,
     zIndex: 1,
@@ -1372,8 +1372,11 @@ const s = StyleSheet.create({
   payChipTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink },
   stepFooter: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    marginTop: 16, paddingTop: 12,
+    marginTop: 16, paddingTop: 12, paddingBottom: 8,
     borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.12)",
+    // 15/05/2026 (Davi 13/14"): sticky bottom no web pra que Avancar/Confirmar
+    // troca fiquem visiveis mesmo com lista grande de novos itens no step 3.
+    ...(Platform.OS === "web" ? { position: "sticky" as any, bottom: -1, zIndex: 10, backgroundColor: Colors.bg3, marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 } : {}),
   },
   footerTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink3 },
   btnSec: {
@@ -1405,7 +1408,7 @@ const s = StyleSheet.create({
   addressPanel: {
     width: "100%" as any,
     maxWidth: 560,
-    maxHeight: "90vh" as any,
+    maxHeight: "92vh" as any,
     borderRadius: 16,
     overflow: "hidden" as any,
     zIndex: 1,
