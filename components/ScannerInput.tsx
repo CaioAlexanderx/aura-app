@@ -1,22 +1,23 @@
 // ============================================================
 // AURA. — ScannerInput (redesign 22/04)
-// Separacao visual forte do campo de busca. Features UX:
-// - Label "SCANNER" em caps violeta (claro = nao e busca)
-// - Icone barcode (nao search) + borda accent violeta
-// - Glow/ring violeta quando focado (comunicando "ouvindo")
-// - Dot verde pulsante no topo quando focado (pronto p/ bipe)
-// - Placeholder direto: "Bipe o codigo ou digite..."
-// - Camera com icone proprio (camera, nao search)
-// - Hint textual substituido por tooltip discreto no info icon
 //
 // fix(câmera): facingMode 'environment' era constraint exato — lançava
 // OverconstrainedError em dispositivos sem câmera traseira (desktops).
 // Trocado por { ideal: 'environment' } para fallback gracioso.
 // fix(scanFrame): usava state `scanning` (stale closure) — loop nunca
 // rodava ao abrir câmera. Substituído por isScanningRef.
+//
+// 16/05/2026 (Davi mobile): botão da câmera estava sumindo em narrow
+// viewport (mobile web e telas <480px). Causas e correções:
+// • cameraBtn agora flexShrink:0 — nunca encolhe nem sai do layout.
+// • Em narrow (<480px) o botão fica 40×40 (era 48×48) — economiza
+//   espaço sem perder o ícone.
+// • Em native (Expo mobile) onde BarcodeDetector não existe, o botão
+//   continua aparecendo mas mostra toast informativo dizendo pra usar
+//   scanner USB/teclado.
 // ============================================================
 import { useState, useRef, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -39,10 +40,12 @@ export function ScannerInput({ onScan, placeholder }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number>(0);
-  // Ref para controlar o loop de scan sem depender de state (evita stale closure)
   const isScanningRef = useRef(false);
 
-  // Handle barcode scanner input (USB scanners type + Enter)
+  // Narrow viewport detection — mobile/small monitors get tighter layout
+  const { width: vw } = useWindowDimensions();
+  const isNarrow = vw < 480;
+
   function handleSubmit() {
     const code = inputValue.trim();
     if (!code) return;
@@ -80,17 +83,21 @@ export function ScannerInput({ onScan, placeholder }: Props) {
         if (isScanningRef.current) animRef.current = requestAnimationFrame(scanFrame);
       });
     } else {
-      // BarcodeDetector not supported — keep loop alive so UI stays up
       if (isScanningRef.current) animRef.current = requestAnimationFrame(scanFrame);
     }
   }
 
-  // Camera QR scanning
   const startCamera = useCallback(async () => {
-    if (!isWeb || typeof navigator === 'undefined') return;
+    if (!isWeb || typeof navigator === 'undefined') {
+      toast.info('Câmera disponível no navegador. Use Chrome no celular ou um scanner USB.');
+      return;
+    }
+    // Detecta suporte ao BarcodeDetector antes de pedir permissão da câmera
+    if (typeof window !== 'undefined' && !('BarcodeDetector' in window)) {
+      toast.info('Seu navegador não detecta códigos automaticamente. Recomendamos Chrome ou Edge.');
+      // Continua mesmo assim — alguns navegadores podem ler manualmente
+    }
     try {
-      // facingMode como "ideal" faz fallback para câmera frontal em desktops
-      // (constraint exato 'environment' lançava OverconstrainedError sem câmera traseira)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }
       });
@@ -137,7 +144,6 @@ export function ScannerInput({ onScan, placeholder }: Props) {
 
   useEffect(() => { return () => { stopCamera(); }; }, []);
 
-  // Render camera feed into a container
   useEffect(() => {
     if (!cameraActive || !isWeb || !videoRef.current) return;
     const container = document.getElementById('aura-scanner-feed');
@@ -149,7 +155,6 @@ export function ScannerInput({ onScan, placeholder }: Props) {
     }
   }, [cameraActive]);
 
-  // Pulse animation for "ready" dot (web only; subtle on native)
   useEffect(() => {
     if (!isWeb || !isFocused) return;
     var styleId = 'aura-scanner-pulse-kf';
@@ -164,6 +169,9 @@ export function ScannerInput({ onScan, placeholder }: Props) {
   var readyDotStyle: any = isWeb && isFocused
     ? { animation: 'auraPulse 1.4s ease-in-out infinite' }
     : {};
+
+  // Tamanho do botão da câmera adaptativo
+  const camBtnSize = isNarrow ? 40 : 48;
 
   return (
     <View style={z.container}>
@@ -192,12 +200,12 @@ export function ScannerInput({ onScan, placeholder }: Props) {
       {showHint && (
         <View style={z.hintBox}>
           <Text style={z.hintText}>
-            Scanners USB/Bluetooth funcionam automaticamente ao escanear. Tambem aceita digitacao manual.
+            Scanners USB/Bluetooth funcionam automaticamente ao escanear. Também aceita digitação manual ou leitura por câmera (botão à direita).
           </Text>
         </View>
       )}
 
-      {/* Input + camera */}
+      {/* Input + camera (camera sempre visivel em web; em native mostra toast informativo) */}
       <View style={z.inputRow}>
         <View style={[z.inputWrap, isFocused && z.inputWrapFocused]}>
           <Icon name="barcode" size={18} color={isFocused ? Colors.violet3 : Colors.ink3} />
@@ -209,33 +217,42 @@ export function ScannerInput({ onScan, placeholder }: Props) {
             onSubmitEditing={handleSubmit}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder={placeholder || 'Bipe o codigo ou digite...'}
+            placeholder={placeholder || 'Bipe o código ou digite...'}
             placeholderTextColor={Colors.ink3}
             autoFocus
             returnKeyType="search"
           />
         </View>
-        {isWeb && (
-          <Pressable
-            onPress={cameraActive ? stopCamera : startCamera}
-            style={[z.cameraBtn, cameraActive && z.cameraBtnActive]}
-          >
-            <Icon name={cameraActive ? 'x' : 'camera'} size={18} color={cameraActive ? '#fff' : Colors.violet3} />
-          </Pressable>
-        )}
+        {/* Botão da câmera: SEMPRE renderizado (web ativa de fato, native mostra toast).
+            flexShrink:0 + width fixo garante que nunca é cortado em narrow viewport. */}
+        <Pressable
+          onPress={cameraActive ? stopCamera : startCamera}
+          style={[
+            z.cameraBtn,
+            { width: camBtnSize, height: camBtnSize },
+            cameraActive && z.cameraBtnActive,
+          ]}
+          accessibilityLabel={cameraActive ? "Fechar câmera" : "Ler código com a câmera"}
+        >
+          <Icon
+            name={cameraActive ? 'x' : 'camera'}
+            size={isNarrow ? 16 : 18}
+            color={cameraActive ? '#fff' : Colors.violet3}
+          />
+        </Pressable>
       </View>
 
       {cameraActive && isWeb && (
         <View style={z.cameraContainer}>
           <div id="aura-scanner-feed" style={{ width: '100%', maxWidth: 400, borderRadius: 12, overflow: 'hidden', position: 'relative' } as any}>
-            <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 13 } as any}>Carregando camera...</div>
+            <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 13 } as any}>Carregando câmera...</div>
           </div>
           <View style={z.cameraOverlay}>
             <View style={z.scanLine} />
           </View>
-          <Text style={z.cameraHint}>Aponte para o codigo de barras ou QR Code</Text>
+          <Text style={z.cameraHint}>Aponte para o código de barras ou QR Code</Text>
           {!('BarcodeDetector' in (typeof window !== 'undefined' ? window : {})) && (
-            <Text style={z.cameraFallback}>Seu navegador nao suporta leitura automatica. Use Chrome para melhor experiencia.</Text>
+            <Text style={z.cameraFallback}>Seu navegador não suporta leitura automática. Use Chrome para melhor experiência.</Text>
           )}
         </View>
       )}
@@ -254,22 +271,28 @@ const z = StyleSheet.create({
   infoBtn: { padding: 4, borderRadius: 4 },
   hintBox: { backgroundColor: Colors.bg4, borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   hintText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
-  inputRow: { flexDirection: 'row', gap: 8 },
+  inputRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
   inputWrap: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: Colors.bg3, borderRadius: 12,
     paddingHorizontal: 14, borderWidth: 1.5, borderColor: Colors.border,
+    minWidth: 0,
     ...(isWeb ? { transition: 'border-color 0.15s ease, box-shadow 0.15s ease' } as any : {}),
   },
   inputWrapFocused: {
     borderColor: Colors.violet3,
     ...(isWeb ? { boxShadow: '0 0 0 3px rgba(139, 92, 246, 0.15)' } as any : {}),
   },
-  input: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 13, fontWeight: '500' },
+  input: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 13, fontWeight: '500', minWidth: 0 },
+  // flexShrink: 0 garante que o botão nunca é cortado mesmo em viewport ultra-narrow.
   cameraBtn: {
-    width: 48, height: 48, borderRadius: 12,
-    backgroundColor: Colors.violetD, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.border2,
+    borderRadius: 12,
+    backgroundColor: Colors.violetD,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    flexShrink: 0,
   },
   cameraBtnActive: { backgroundColor: Colors.red, borderColor: Colors.red },
   cameraContainer: { marginTop: 12, alignItems: 'center', backgroundColor: Colors.bg3, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: Colors.border },
