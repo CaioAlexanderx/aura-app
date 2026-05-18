@@ -5,11 +5,10 @@
 // vendedor, e cada item tem qty controls + badge "já devolvido em
 // troca anterior" quando aplicável.
 //
-// Filtro de busca no topo filtra itens por nome — não vendas.
-// Botão "Devolver tudo desta venda" no header de cada grupo.
-//
-// Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx
-// 17/05/2026 (FASE A — UI Redesign)
+// 17/05/2026 — `item.id` recebido nos ReturnEntries usa
+// SaleForTrocaItem.original_sale_item_id (sale_items.id real do backend
+// v2) quando disponível; senão cai num fallback sintético "synth-..."
+// que sinaliza ao TrocaModal pra NÃO usar caminho v2.
 // ============================================================
 import { useState, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, TextInput } from "react-native";
@@ -24,11 +23,23 @@ type Props = {
   onChangeEntries: (next: ReturnEntry[]) => void;
 };
 
-// Identidade estável de um item dentro de uma venda — usada como
-// chave em returnEntries quando o backend não devolve sale_item.id
-// (text mode synth + barcode mode quando salesApi.get falha).
+// Chave estável (saleId + productId + variantId) usada como índice no map.
 function itemKey(saleId: string, productId: string | null, variantId: string | null | undefined) {
   return `${saleId}::${productId || "null"}::${variantId || "null"}`;
+}
+
+// Resolve o id que será gravado em ReturnEntry.item.id:
+//   - prefere SaleForTrocaItem.original_sale_item_id (UUID real do v2 backend)
+//   - fallback "synth-<saleId>-<productId>-<idx>" (v1 backend antigo)
+// O TrocaModal usa o prefixo "synth-" pra decidir se cai em v1.
+function resolveItemId(
+  sale: SelectedSaleRow,
+  item: SelectedSaleRow["items"][number],
+  idx: number
+): string {
+  const real = (item as any).original_sale_item_id as string | undefined;
+  if (real && typeof real === "string" && real.length > 0) return real;
+  return `synth-${sale.id}-${item.product_id || "null"}-${idx}`;
 }
 
 export function Step2Returns({
@@ -39,7 +50,6 @@ export function Step2Returns({
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // ─── Lookup map de returnEntries por (saleId, productId, variantId)
   const entriesByKey = useMemo(() => {
     const m = new Map<string, ReturnEntry>();
     for (const e of returnEntries) {
@@ -62,6 +72,7 @@ export function Step2Returns({
   function setQty(
     sale: SelectedSaleRow,
     item: SelectedSaleRow["items"][number],
+    idx: number,
     nextQty: number
   ) {
     const k = itemKey(sale.id, item.product_id || null, (item as any).variant_id || null);
@@ -69,7 +80,6 @@ export function Step2Returns({
     const clamped = Math.max(0, Math.min(Number(item.quantity), nextQty));
 
     if (clamped === 0) {
-      // Remove entry
       onChangeEntries(returnEntries.filter((e) => {
         const ek = itemKey(e.saleId, e.item.product_id || null, (e.item as any).variant_id || null);
         return ek !== k;
@@ -83,9 +93,8 @@ export function Step2Returns({
         return ek === k ? { ...e, returnQty: clamped } : e;
       }));
     } else {
-      // Cria nova entrada — guarda metadata da venda pra UI agrupar e fiscal saber origem
       const itemAsSaleDetailsItem: any = {
-        id: `synth-${sale.id}-${item.product_id || "null"}`,
+        id: resolveItemId(sale, item, idx),
         product_id: item.product_id,
         variant_id: (item as any).variant_id,
         product_name: item.product_name_snapshot,
@@ -111,18 +120,16 @@ export function Step2Returns({
     const keptIds = new Set(returnEntries.map((e) =>
       itemKey(e.saleId, e.item.product_id || null, (e.item as any).variant_id || null)
     ));
-    for (const item of sale.items) {
+    sale.items.forEach((item, idx) => {
       const k = itemKey(sale.id, item.product_id || null, (item as any).variant_id || null);
-      if (keptIds.has(k)) {
-        // já tem entrada — atualiza pra qtd máxima
-      } else {
+      if (!keptIds.has(k)) {
         additions.push({
           saleId: sale.id,
           saleDate: sale.created_at,
           saleCompanyName: sale.company_name || "—",
           sellerName: sale.seller_name,
           item: {
-            id: `synth-${sale.id}-${item.product_id || "null"}`,
+            id: resolveItemId(sale, item, idx),
             product_id: item.product_id,
             variant_id: (item as any).variant_id,
             product_name: item.product_name_snapshot,
@@ -134,7 +141,7 @@ export function Step2Returns({
           previouslyReturnedQty: 0,
         });
       }
-    }
+    });
     const updated = returnEntries.map((e) => {
       if (e.saleId !== sale.id) return e;
       const matchingItem = sale.items.find((i) =>
@@ -151,7 +158,6 @@ export function Step2Returns({
     onChangeEntries(returnEntries.filter((e) => e.saleId !== saleId));
   }
 
-  // ─── Render ──────────────────────────────────────────────────
   const filterQ = filter.trim().toLowerCase();
   const totalReturnedValue = returnEntries.reduce(
     (s, e) => s + e.returnQty * Number(e.item.unit_price), 0
@@ -165,7 +171,6 @@ export function Step2Returns({
         Use +/− em cada item. Itens aparecem agrupados por venda — pode devolver de várias.
       </Text>
 
-      {/* Filter */}
       <TextInput
         style={s.input as any}
         value={filter}
@@ -174,7 +179,6 @@ export function Step2Returns({
         placeholderTextColor={Colors.ink3}
       />
 
-      {/* Sale groups */}
       {selectedSales.length === 0 ? (
         <Text style={s.emptyTxt}>Nenhuma venda selecionada — volte ao Step 1.</Text>
       ) : (
@@ -253,7 +257,7 @@ export function Step2Returns({
                     filteredItems.map((item, idx) => {
                       const currentQty = getQty(sale.id, item.product_id || null, (item as any).variant_id);
                       const maxQty = Number(item.quantity);
-                      const hasPrev = false; // placeholder — backend v2 trará isso
+                      const hasPrev = false;
 
                       return (
                         <View
@@ -280,7 +284,7 @@ export function Step2Returns({
                           <View style={s.qtyRow}>
                             <Pressable
                               style={[s.qtyBtn, currentQty === 0 && s.qtyBtnDisabled]}
-                              onPress={() => setQty(sale, item, currentQty - 1)}
+                              onPress={() => setQty(sale, item, idx, currentQty - 1)}
                               disabled={currentQty === 0}
                             >
                               <Text style={s.qtyBtnTxt}>−</Text>
@@ -290,7 +294,7 @@ export function Step2Returns({
                             </Text>
                             <Pressable
                               style={[s.qtyBtn, currentQty >= maxQty && s.qtyBtnDisabled]}
-                              onPress={() => setQty(sale, item, currentQty + 1)}
+                              onPress={() => setQty(sale, item, idx, currentQty + 1)}
                               disabled={currentQty >= maxQty}
                             >
                               <Text style={s.qtyBtnTxt}>+</Text>
@@ -307,7 +311,6 @@ export function Step2Returns({
         })
       )}
 
-      {/* Mini-resumo */}
       <View style={s.stepFooter}>
         <View>
           <Text style={s.footerLabel}>Total devolvendo</Text>
@@ -321,26 +324,21 @@ export function Step2Returns({
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────
 const s = StyleSheet.create({
   sectionTitle: {
     fontSize: 15, fontWeight: "700", color: Colors.ink, marginBottom: 2, letterSpacing: -0.2,
   },
   sectionSub: { fontSize: 12, color: Colors.ink3, marginBottom: 14 },
-
   input: {
     backgroundColor: Glass.bgInput,
     borderWidth: 1, borderColor: Glass.bgInputBorder,
     color: Colors.ink, paddingVertical: 10, paddingHorizontal: 12,
     borderRadius: 9, fontSize: 13, marginBottom: 12,
   },
-
   emptyTxt: {
     color: Colors.ink3, fontSize: 12, fontStyle: "italic",
     textAlign: "center", paddingVertical: 20,
   },
-
-  // Group
   group: {
     backgroundColor: IS_DARK_MODE ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
     borderWidth: 1, borderColor: IS_DARK_MODE ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
@@ -358,7 +356,6 @@ const s = StyleSheet.create({
   groupTitle: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   groupMeta: { fontSize: 11, color: Colors.ink3 },
   groupActions: { flexDirection: "row", gap: 6, alignItems: "center", flexShrink: 0 },
-
   smallBtn: {
     backgroundColor: "rgba(124,58,237,0.15)",
     borderWidth: 1, borderColor: "rgba(124,58,237,0.3)",
@@ -370,17 +367,13 @@ const s = StyleSheet.create({
     paddingVertical: 5, paddingHorizontal: 8, borderRadius: 7,
   },
   smallBtnGhostTxt: { color: Colors.ink3, fontSize: 11, fontWeight: "500" },
-
-  // Item list
   itemList: { paddingVertical: 4 },
   itemRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingVertical: 10, paddingHorizontal: 14,
     borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.03)",
   },
-  itemName: {
-    fontSize: 13, fontWeight: "500", color: Colors.ink,
-  },
+  itemName: { fontSize: 13, fontWeight: "500", color: Colors.ink },
   itemMetaRow: {
     flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap",
   },
@@ -390,8 +383,6 @@ const s = StyleSheet.create({
     paddingVertical: 1, paddingHorizontal: 5, borderRadius: 4,
   },
   badgePrevReturnTxt: { fontSize: 10, fontWeight: "600", color: "#fbbf24" },
-
-  // Qty
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
   qtyBtn: {
     width: 28, height: 28, borderRadius: 7,
@@ -406,8 +397,6 @@ const s = StyleSheet.create({
     color: Colors.ink3, fontSize: 14, fontWeight: "700",
   },
   qtyValOn: { color: Colors.violet3 },
-
-  // Badge filial
   badgeFilial: {
     flexDirection: "row", alignItems: "center", gap: 3,
     backgroundColor: "rgba(96,165,250,0.15)",
@@ -416,8 +405,6 @@ const s = StyleSheet.create({
   },
   badgeFilialIcon: { fontSize: 9 },
   badgeFilialTxt: { fontSize: 10, fontWeight: "700", color: "#60a5fa", maxWidth: 100 },
-
-  // Step footer
   stepFooter: {
     marginTop: 16, padding: 14,
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
