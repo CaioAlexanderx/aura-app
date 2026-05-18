@@ -11,7 +11,7 @@
 // Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx (Step 3 com scanner)
 // ============================================================
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
+import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 
 // ─── Modes genéricos (string para aceitar Step1SearchMode | Step3SearchMode)
@@ -19,7 +19,7 @@ import { Icon } from "@/components/Icon";
 export type SearchModeChip<TMode extends string> = {
   key: TMode;
   label: string;
-  icon: string; // nome no Icon registry
+  icon: string; // nome no Icon registry (com underscore: file_text, qr_code, etc)
   placeholder: string;
 };
 
@@ -72,19 +72,20 @@ export function placeholderFor<TMode extends string>(
 
 // ─── Configs pré-prontas pra Step 1 e Step 3 ───────────────────
 // Mantém os labels/placeholders em um lugar só pra consistência.
+// Icon names seguem o registry em components/Icon.tsx (underscore).
 import type { Step1SearchMode, Step3SearchMode } from "./types";
 
 export const STEP1_MODES: SearchModeChip<Step1SearchMode>[] = [
   {
     key: "text",
     label: "Cliente/CPF",
-    icon: "user",
+    icon: "users",
     placeholder: "Buscar por nome do cliente, CPF, vendedora ou produto...",
   },
   {
     key: "order",
     label: "Nº pedido",
-    icon: "file-text",
+    icon: "file_text",
     placeholder: "Digite o número do pedido (ex: V-5432)...",
   },
   {
@@ -96,7 +97,7 @@ export const STEP1_MODES: SearchModeChip<Step1SearchMode>[] = [
   {
     key: "qr",
     label: "QR cupom",
-    icon: "qr-code",
+    icon: "qr_code",
     placeholder: "Aponte a câmera ou cole a chave de acesso da NFC-e...",
   },
 ];
@@ -117,7 +118,7 @@ export const STEP3_MODES: SearchModeChip<Step3SearchMode>[] = [
   {
     key: "qr",
     label: "QR Code",
-    icon: "qr-code",
+    icon: "qr_code",
     placeholder: "Aponte a câmera ou cole o código QR do produto",
   },
 ];
