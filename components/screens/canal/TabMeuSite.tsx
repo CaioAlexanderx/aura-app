@@ -5,7 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { BASE_URL } from "@/services/api";
-import { Field, SectionTitle, StatusBadge, cs } from "./shared";
+import { Field, SectionTitle, StatusBadge, cs, IS_WIDE } from "./shared";
 import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
 
 type Props = {
@@ -160,6 +160,13 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const asaasConfigured = !!(company as any)?.asaas_subconta_id;
   const dobRequired = pixCompanyType === "INDIVIDUAL" || pixCompanyType === "MEI";
 
+  // Fase 3 — Rec #9: mini-mockup le banner[0] enabled+image se houver.
+  const banners: any[] = Array.isArray(config.banners) ? config.banners : [];
+  const heroBanner = banners.find((b) => b && b.enabled !== false && b.image_url) || banners.find((b) => b && b.enabled !== false) || null;
+  const heroImage: string | null = heroBanner?.image_url || null;
+  const heroHeadline: string = (heroBanner?.headline || tagline || description || "Bem-vindo ao nosso site").toString();
+  const mockHeight = IS_WIDE ? 180 : 140;
+
   const PIX_KEY_TYPES: { value: "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM"; label: string }[] = [
     { value: "CPF", label: "CPF" },
     { value: "CNPJ", label: "CNPJ" },
@@ -174,24 +181,75 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     { value: "INDIVIDUAL", label: "Pessoa Fisica" },
   ];
 
+  function copyStorefrontUrl() {
+    if (Platform.OS === "web" && typeof navigator !== "undefined") {
+      try { navigator.clipboard?.writeText(storefrontUrl); } catch {}
+    }
+    toast.info("Link copiado!");
+  }
+
   return (
     <View>
-      <View style={[s.previewCard, { borderTopWidth: 4, borderTopColor: color }]}>
-        <View style={s.previewHeader}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <Text style={[s.previewBrand, { color }]}>{siteName || "Meu Negocio"}</Text>
-            <View style={[s.publishedBadge, { backgroundColor: published ? Colors.greenD : Colors.bg4 }]}>
-              <View style={[s.publishedDot, { backgroundColor: published ? Colors.green : Colors.ink3 }]} />
-              <Text style={[s.publishedLabel, { color: published ? Colors.green : Colors.ink3 }]}>{published ? "Publicado" : "Rascunho"}</Text>
+      {/* Fase 3 — Rec #9: mini-mockup sticky (sticky soh no web; em RN nativo cai como bloco normal) */}
+      <View
+        style={[
+          s.mockupWrap,
+          Platform.OS === "web" ? ({ position: "sticky" as any, top: 0, zIndex: 10 } as any) : null,
+        ]}
+      >
+        <View style={s.mockupFrame}>
+          {/* Mini-topbar */}
+          <View style={s.mockupTopbar}>
+            <View style={s.mockupLogoSlot}>
+              {config.logo_url ? (
+                <Image source={{ uri: config.logo_url }} style={s.mockupLogoImg} resizeMode="cover" />
+              ) : (
+                <View style={[s.mockupLogoFallback, { backgroundColor: color }]}>
+                  <Text style={s.mockupLogoInitial}>{(siteName || "A").charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={s.mockupBrand} numberOfLines={1}>{siteName || "Meu Negocio"}</Text>
+            <View style={[s.mockupStatus, { backgroundColor: published ? Colors.greenD : Colors.bg4 }]}>
+              <View style={[s.mockupStatusDot, { backgroundColor: published ? Colors.green : Colors.ink3 }]} />
+              <Text style={[s.mockupStatusText, { color: published ? Colors.green : Colors.ink3 }]}>
+                {published ? "Publicada" : "Rascunho"}
+              </Text>
             </View>
           </View>
-          <Text style={s.previewTagline}>{tagline || description || "Bem-vindo ao nosso site"}</Text>
+
+          {/* Mini-hero/banner — usa imagem do banner ou gradiente da cor primaria */}
+          <View style={[s.mockupHero, { height: mockHeight, backgroundColor: color }]}>
+            {heroImage ? (
+              <Image source={{ uri: heroImage }} style={s.mockupHeroImg} resizeMode="cover" />
+            ) : null}
+            {/* Overlay com darken sutil pra dar leitura do texto */}
+            <View style={s.mockupHeroOverlay} pointerEvents="none" />
+            <View style={s.mockupHeroContent} pointerEvents="none">
+              <Text style={s.mockupHeroHeadline} numberOfLines={2}>{heroHeadline}</Text>
+              <View style={s.mockupHeroCta}>
+                <View style={s.mockupHeroCtaInner} />
+              </View>
+            </View>
+          </View>
         </View>
-        <View style={s.urlRow}>
-          <Icon name="globe" size={12} color={Colors.violet3} />
-          <Text style={s.urlText} numberOfLines={1}>{storefrontUrl}</Text>
-          <Pressable onPress={() => { if (Platform.OS === "web" && typeof navigator !== "undefined") navigator.clipboard?.writeText(storefrontUrl); toast.info("Link copiado!"); }} style={s.urlCopy}><Text style={s.urlCopyText}>Copiar</Text></Pressable>
-          {Platform.OS === "web" && <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={[s.urlCopy, { backgroundColor: Colors.violetD }]}><Text style={s.urlCopyText}>Abrir</Text></Pressable>}
+
+        {/* Acoes abaixo do mockup */}
+        <View style={s.mockupActions}>
+          <Pressable onPress={copyStorefrontUrl} style={s.mockupBtnGhost}>
+            <Icon name="copy" size={13} color={Colors.violet3} />
+            <Text style={s.mockupBtnGhostText}>Copiar link</Text>
+          </Pressable>
+          {Platform.OS === "web" && (
+            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.mockupBtnPrimary}>
+              <Icon name="globe" size={13} color="#fff" />
+              <Text style={s.mockupBtnPrimaryText}>Ver loja</Text>
+            </Pressable>
+          )}
+        </View>
+        <View style={s.mockupUrlRow}>
+          <Icon name="globe" size={11} color={Colors.ink3} />
+          <Text style={s.mockupUrlText} numberOfLines={1}>{storefrontUrl}</Text>
         </View>
       </View>
 
@@ -351,17 +409,143 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 }
 
 const s = StyleSheet.create({
-  previewCard: { backgroundColor: Colors.bg3, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
-  previewHeader: { padding: 20 },
-  previewBrand: { fontSize: 20, fontWeight: "800" },
-  previewTagline: { fontSize: 13, color: Colors.ink3, marginTop: 4, lineHeight: 18 },
-  publishedBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  publishedDot: { width: 6, height: 6, borderRadius: 3 },
-  publishedLabel: { fontSize: 10, fontWeight: "700" },
-  urlRow: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 16, paddingVertical: 10 },
-  urlText: { flex: 1, fontSize: 11, color: Colors.violet3, fontWeight: "500" },
-  urlCopy: { backgroundColor: Colors.bg4, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
-  urlCopyText: { fontSize: 10, color: Colors.violet3, fontWeight: "600" },
+  // Fase 3 — Rec #9: mini-mockup (substitui o preview plano)
+  mockupWrap: {
+    backgroundColor: Colors.bg3,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    padding: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  mockupFrame: {
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "#fff",
+  },
+  mockupTopbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  mockupLogoSlot: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    overflow: "hidden",
+    backgroundColor: Colors.bg4,
+    flexShrink: 0,
+  },
+  mockupLogoImg: { width: "100%", height: "100%" },
+  mockupLogoFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  mockupLogoInitial: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  mockupBrand: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.ink,
+  },
+  mockupStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flexShrink: 0,
+  },
+  mockupStatusDot: { width: 5, height: 5, borderRadius: 3 },
+  mockupStatusText: { fontSize: 10, fontWeight: "700" },
+  mockupHero: {
+    width: "100%",
+    overflow: "hidden",
+    position: "relative",
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+  },
+  mockupHeroImg: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    width: "100%",
+    height: "100%",
+  },
+  mockupHeroOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  mockupHeroContent: {
+    padding: 14,
+    gap: 8,
+    width: "70%",
+  },
+  mockupHeroHeadline: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 17,
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  mockupHeroCta: {
+    width: 80,
+    height: 18,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mockupHeroCtaInner: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.ink,
+    opacity: 0.5,
+  },
+  mockupActions: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  mockupBtnGhost: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: Colors.bg4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  mockupBtnGhostText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  mockupBtnPrimary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: Colors.violet,
+  },
+  mockupBtnPrimaryText: { fontSize: 11, color: "#fff", fontWeight: "700" },
+  mockupUrlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 2,
+  },
+  mockupUrlText: { flex: 1, fontSize: 10, color: Colors.ink3, fontWeight: "500" },
+
   // Identidade visual
   imgRow: { flexDirection: "row", alignItems: "flex-start", gap: 16, marginBottom: 4 },
   logoPreview: { width: 80, height: 80, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", flexShrink: 0 },
