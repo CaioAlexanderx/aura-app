@@ -5,7 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { BASE_URL } from "@/services/api";
-import { Field, SectionTitle, StatusBadge, COLOR_PRESETS, cs } from "./shared";
+import { Field, SectionTitle, StatusBadge, cs } from "./shared";
 import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
 
 type Props = {
@@ -29,6 +29,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [whatsapp, setWhatsapp] = useState(maskPhone(config.whatsapp || ""));
   const [instagram, setInstagram] = useState(config.instagram || "");
   const [address, setAddress] = useState(config.address || "");
+  // primary_color continua no payload mas a UI de edicao mora em Tab Design (Rec #1)
   const [color, setColor] = useState(config.primary_color || "#7c3aed");
   const [published, setPublished] = useState(config.is_published ?? false);
   const [domainInput, setDomainInput] = useState("");
@@ -64,18 +65,6 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setPixHolderCity(config.pix_holder_city || "");
     setPayOnDelivery(config.pay_on_delivery_enabled === true);
   }, [config.exists]);
-
-  function openColorPicker() {
-    if (Platform.OS !== "web") return;
-    try {
-      const input = document.createElement("input"); input.type = "color"; input.value = color;
-      input.style.cssText = "position:fixed;top:-100px;left:-100px;opacity:0";
-      document.body.appendChild(input);
-      input.addEventListener("change", (e: any) => { setColor(e.target.value); try { document.body.removeChild(input); } catch {} });
-      input.addEventListener("blur", () => { try { document.body.removeChild(input); } catch {} });
-      input.click();
-    } catch {}
-  }
 
   function pickImage(type: "logo" | "banner") {
     if (Platform.OS !== "web") return;
@@ -220,20 +209,14 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegocio" />
         <Field label="Telefone" value={phone} onChange={(v) => setPhone(maskPhone(v))} placeholder="(12) 3333-0000" />
         <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacarei/SP" />
-        <Text style={cs.fieldLabel}>Cor principal</Text>
-        <View style={cs.colorRow}>
-          {COLOR_PRESETS.map(c => <Pressable key={c} onPress={() => setColor(c)} style={[cs.colorDot, { backgroundColor: c }, color === c && cs.colorDotActive]} />)}
-          {Platform.OS === "web" && <Pressable onPress={openColorPicker} style={[cs.colorDot, { backgroundColor: color, borderWidth: 2, borderColor: Colors.border2 }]} />}
-        </View>
         <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes"}</Text></Pressable>
       </View>
 
-      {/* Identidade Visual */}
-      <SectionTitle title="Identidade visual" />
+      {/* Logo (cor principal e capa/banner foram movidas pra Tab Design — Rec #1) */}
+      <SectionTitle title="Logo" />
       <View style={cs.card}>
-        <Text style={cs.hint}>Personalize o visual da sua loja com logo e imagem de capa.</Text>
+        <Text style={cs.hint}>Imagem que aparece no cabecalho da loja. Cor principal e banners ficam em Design.</Text>
 
-        {/* Logo */}
         <Text style={cs.fieldLabel}>Logo</Text>
         <View style={s.imgRow}>
           <View style={s.logoPreview}>
@@ -259,32 +242,6 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             )}
           </View>
         </View>
-
-        <View style={cs.divider} />
-
-        {/* Banner / Capa */}
-        <Text style={cs.fieldLabel}>Capa / Banner</Text>
-        <View style={s.bannerPreview}>
-          {config.cover_url ? (
-            <Image source={{ uri: config.cover_url }} style={{ width: "100%", height: "100%", borderRadius: 10 }} resizeMode="cover" />
-          ) : (
-            <View style={[s.bannerPlaceholder, { backgroundColor: color + "22" }]}>
-              <Icon name="image" size={22} color={color} />
-              <Text style={[s.bannerPlaceholderText, { color }]}>Sem capa</Text>
-            </View>
-          )}
-        </View>
-        {Platform.OS === "web" && (
-          <Pressable
-            onPress={() => pickImage("banner")}
-            disabled={isUploadingImage}
-            style={[s.imgBtn, { marginTop: 8 }, isUploadingImage && uploadingType === "banner" && { opacity: 0.6 }]}
-          >
-            <Icon name="upload" size={13} color={Colors.violet3} />
-            <Text style={s.imgBtnText}>{uploadingType === "banner" ? "Enviando..." : config.cover_url ? "Trocar capa" : "Enviar capa"}</Text>
-          </Pressable>
-        )}
-        <Text style={[cs.hint, { marginTop: 8, marginBottom: 0 }]}>Horizontal, min. 1200x400px. PNG ou JPG, max. 5MB</Text>
       </View>
 
       {/* Pagamentos — chave Pix manual + entrega */}
