@@ -19,7 +19,7 @@ import type {
 } from "./types";
 import { fmtBRL } from "./types";
 import { FiscalBadge } from "./FiscalBadge";
-import { AddressForm } from "./AddressForm";
+import { AddressForm, validateAddress } from "./AddressForm";
 import { PaymentSplitForm, RefundSplitForm } from "./SplitForm";
 
 const IS_WEB = Platform.OS === "web";
@@ -55,7 +55,6 @@ export function inferFiscalStrategy(
   if (returnEntries.length === 0) {
     return { strategy: "none", cancelReissueCount: 0, devolucao55Count: 0 };
   }
-  // Considera apenas vendas que têm pelo menos 1 item sendo devolvido
   const salesWithReturn = new Set(returnEntries.map((e) => e.saleId));
   const involved = selectedSales.filter((s) => salesWithReturn.has(s.id));
   if (involved.length === 0) {
@@ -90,7 +89,6 @@ export function Step4Confirm({
   const needsAddress =
     fiscal.strategy === "devolucao_55" || fiscal.strategy === "per_origin";
 
-  // Customer banner (do primeiro selectedSale com customer)
   const customer = selectedSales.find((s) => s.customer_name)?.customer_name || "Cliente sem cadastro";
   const customerInitial = (customer || "C")[0].toUpperCase();
 
@@ -252,7 +250,6 @@ export function canConfirmStep4(args: {
     }
   }
   if (fiscalStrategy === "devolucao_55" || fiscalStrategy === "per_origin") {
-    const { validateAddress } = require("./AddressForm");
     const missing = validateAddress(customerAddress);
     if (missing.length) {
       return { ok: false, reason: "Preencha o endereço do cliente: " + missing.join(", ") };
@@ -263,7 +260,6 @@ export function canConfirmStep4(args: {
 
 // ─── Styles ──────────────────────────────────────────────────
 const s = StyleSheet.create({
-  // Customer banner
   customerBanner: {
     flexDirection: "row", alignItems: "center", gap: 12,
     padding: 12, marginBottom: 14,
@@ -280,13 +276,11 @@ const s = StyleSheet.create({
   customerName: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   customerSub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
 
-  // Grid 2 cols
   grid: IS_WEB
     ? ({ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 } as any)
     : { flexDirection: "column" as const, gap: 18 },
   col: { gap: 0 },
 
-  // Summary boxes
   box: {
     padding: 12, marginBottom: 10,
     backgroundColor: IS_DARK_MODE ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.02)",
@@ -310,7 +304,6 @@ const s = StyleSheet.create({
   boxTotalLabel: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
   boxTotalVal: { fontSize: 13, fontWeight: "700" },
 
-  // Net box
   netBox: {
     padding: 16, marginBottom: 4,
     backgroundColor: "rgba(124,58,237,0.1)",
@@ -323,7 +316,6 @@ const s = StyleSheet.create({
   },
   netVal: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5 },
 
-  // Zero box (netAmount === 0)
   zeroBox: {
     padding: 20, alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.03)",
