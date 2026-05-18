@@ -21,9 +21,11 @@ import {
   Field, ChipToggle, ToggleRow, SectionTitle, cs,
 } from "./shared";
 
+type BannerTone = "split" | "editorial" | "centered" | "image-clean";
+
 type Banner = {
   kicker?: string; headline?: string; body?: string; cta?: string;
-  tone?: "split" | "editorial" | "centered";
+  tone?: BannerTone;
   tint?: "brand" | "accent";
   image_url?: string | null; enabled?: boolean;
 };
@@ -72,7 +74,7 @@ const SERVICE_CARD_TEMPLATES: { icon: string; title: string; body: string }[] = 
 ];
 
 // Helper text dinamico por tone do banner (Rec #10).
-const BANNER_TONE_HELPERS: Record<"split" | "editorial" | "centered", { title: string; body: string }> = {
+const BANNER_TONE_HELPERS: Record<BannerTone, { title: string; body: string }> = {
   split: {
     title: "Dividido:",
     body: "texto à esquerda + arte/imagem à direita. Use headlines de 1 linha (até ~40 caracteres).",
@@ -85,18 +87,32 @@ const BANNER_TONE_HELPERS: Record<"split" | "editorial" | "centered", { title: s
     title: "Centralizado:",
     body: "todo o texto centralizado no banner. Bom pra anúncios curtos com CTA.",
   },
+  "image-clean": {
+    title: "Imagem + legenda:",
+    body: "a imagem ocupa o quadro inteiro. Headline, descrição e botão aparecem em faixa branca logo abaixo. Recomendado quando sua imagem já tem texto/marca embutidos.",
+  },
 };
+
+// Tones validos no normalize — image-clean entrou na Fase 2.
+const VALID_TONES: BannerTone[] = ["split", "editorial", "centered", "image-clean"];
 
 function normalizeBanners(input: any): Banner[] {
   if (!Array.isArray(input)) return DEFAULT_BANNERS;
-  const arr: Banner[] = input.slice(0, 3).map((b: any) => ({
-    kicker: b?.kicker || "", headline: b?.headline || "",
-    body: b?.body || "", cta: b?.cta || "",
-    tone: ["split", "editorial", "centered"].includes(b?.tone) ? b.tone : "split",
-    tint: ["brand", "accent"].includes(b?.tint) ? b.tint : "brand",
-    image_url: b?.image_url || null,
-    enabled: b?.enabled !== false,
-  }));
+  const arr: Banner[] = input.slice(0, 3).map((b: any) => {
+    const rawTone = VALID_TONES.includes(b?.tone) ? (b.tone as BannerTone) : "split";
+    const imageUrl = b?.image_url || null;
+    // Auto-corrige legado: banner com imagem mas tone antigo (split/editorial/centered)
+    // O backend ja renderiza como image-clean nesse caso — frontend espelha localmente.
+    const tone: BannerTone = imageUrl ? "image-clean" : (rawTone === "image-clean" ? "split" : rawTone);
+    return {
+      kicker: b?.kicker || "", headline: b?.headline || "",
+      body: b?.body || "", cta: b?.cta || "",
+      tone,
+      tint: ["brand", "accent"].includes(b?.tint) ? b.tint : "brand",
+      image_url: imageUrl,
+      enabled: b?.enabled !== false,
+    };
+  });
   while (arr.length < 3) arr.push({ ...DEFAULT_BANNERS[arr.length], enabled: false });
   return arr;
 }
@@ -110,6 +126,119 @@ function normalizeServiceCards(input: any): ServiceCard[] {
     body:  c?.body  || "",
     enabled: c?.enabled !== false,
   }));
+}
+
+// ============================================================
+// BannerLayoutPicker — grid 2x2 (mobile) ou 1x4 (desktop) com
+// thumbnails CSS-puros (View posicionado, sem SVG/imagem). O 4o
+// layout "image-clean" so e' selecionavel quando banner.image_url
+// existe; os 3 originais ficam disabled nesse caso.
+// ============================================================
+function BannerLayoutThumb({ tone }: { tone: BannerTone }) {
+  // Container interno do thumb — 70x40 aproximado
+  if (tone === "image-clean") {
+    return (
+      <View style={thumb.frame}>
+        {/* Top 70% — simula imagem */}
+        <View style={[thumb.imageBlock, { backgroundColor: Colors.bg4 }]}>
+          <View style={thumb.imageInner} />
+        </View>
+        {/* Bottom 30% — faixa branca com headline + cta */}
+        <View style={thumb.captionBand}>
+          <View style={thumb.captionLine} />
+          <View style={thumb.captionDot} />
+        </View>
+      </View>
+    );
+  }
+  if (tone === "split") {
+    return (
+      <View style={thumb.frame}>
+        {/* Esquerda 60% — 2 linhas de texto */}
+        <View style={thumb.splitLeft}>
+          <View style={[thumb.textLine, { width: "80%" }]} />
+          <View style={[thumb.textLine, { width: "55%", marginTop: 4 }]} />
+        </View>
+        {/* Direita 40% — circulo arte */}
+        <View style={thumb.splitRight}>
+          <View style={thumb.splitCircle} />
+        </View>
+      </View>
+    );
+  }
+  if (tone === "editorial") {
+    return (
+      <View style={thumb.frame}>
+        {/* Letra A gigante */}
+        <Text style={thumb.editorialLetter}>A</Text>
+        {/* Retangulo pequeno no canto direito-inferior */}
+        <View style={thumb.editorialCorner} />
+      </View>
+    );
+  }
+  // centered
+  return (
+    <View style={thumb.frame}>
+      <View style={thumb.centeredInner}>
+        <View style={[thumb.textLine, { width: "70%" }]} />
+        <View style={[thumb.textLine, { width: "45%", marginTop: 4 }]} />
+        <View style={[thumb.centeredCta, { marginTop: 5 }]} />
+      </View>
+    </View>
+  );
+}
+
+function BannerLayoutPicker({
+  value, onChange, hasImage,
+}: {
+  value: BannerTone;
+  onChange: (v: BannerTone) => void;
+  hasImage: boolean;
+}) {
+  // Quando ha imagem, "image-clean" e' a unica selecionavel e fica auto-selecionada.
+  // Os 3 originais aparecem desabilitados (visivel mas nao clicavel).
+  // Quando NAO ha imagem, image-clean nao aparece de jeito nenhum.
+  const baseOpts: Array<{ tone: BannerTone; label: string }> = [
+    { tone: "split",       label: "Dividido" },
+    { tone: "editorial",   label: "Editorial" },
+    { tone: "centered",    label: "Centralizado" },
+  ];
+  const opts = hasImage
+    ? [...baseOpts, { tone: "image-clean" as BannerTone, label: "Imagem + legenda" }]
+    : baseOpts;
+
+  return (
+    <View style={pickerStyles.grid}>
+      {opts.map((opt) => {
+        const isImageClean = opt.tone === "image-clean";
+        const active = opt.tone === value;
+        const disabled = hasImage && !isImageClean;
+        const Wrap: any = disabled ? View : Pressable;
+        const wrapProps: any = disabled ? {} : { onPress: () => onChange(opt.tone) };
+        return (
+          <Wrap
+            key={opt.tone}
+            {...wrapProps}
+            style={[
+              pickerStyles.card,
+              active && pickerStyles.cardActive,
+              disabled && pickerStyles.cardDisabled,
+            ]}
+          >
+            <BannerLayoutThumb tone={opt.tone} />
+            <Text style={[pickerStyles.label, active && pickerStyles.labelActive]} numberOfLines={1}>
+              {opt.label}
+            </Text>
+            {disabled && (
+              <Text style={pickerStyles.disabledHint} numberOfLines={2}>
+                Disponível quando o banner é só texto, sem imagem
+              </Text>
+            )}
+          </Wrap>
+        );
+      })}
+    </View>
+  );
 }
 
 export function TabDesign({
@@ -210,7 +339,16 @@ export function TabDesign({
           if (type.startsWith("banner_")) {
             const idx = parseInt(type.split("_")[1], 10);
             if (res?.image_url) {
-              setBanners((prev) => prev.map((b, i) => i === idx ? { ...b, image_url: res.image_url, enabled: true } : b));
+              // Fase 2: ao subir imagem, auto-seta tone='image-clean' (backend ja renderiza assim).
+              setBanners((prev) => {
+                const next = prev.map((b, i) =>
+                  i === idx
+                    ? { ...b, image_url: res.image_url, enabled: true, tone: "image-clean" as BannerTone }
+                    : b
+                );
+                scheduleSave({ banners: next });
+                return next;
+              });
             }
           }
         } catch (err: any) {
@@ -308,8 +446,9 @@ export function TabDesign({
         Até 3 banners se alternam automaticamente no carrossel da home.
       </Text>
       {banners.map((b, idx) => {
-        const toneKey = (b.tone || "split") as "split" | "editorial" | "centered";
-        const toneHelper = BANNER_TONE_HELPERS[toneKey];
+        const toneKey = (b.tone || "split") as BannerTone;
+        const toneHelper = BANNER_TONE_HELPERS[toneKey] || BANNER_TONE_HELPERS.split;
+        const hasImage = !!b.image_url;
         return (
         <View key={idx} style={cs.card}>
           <View style={s.bannerHead}>
@@ -331,9 +470,13 @@ export function TabDesign({
             onChange={(v) => updateBanner(idx, { cta: v })}
             placeholder="Ex: Ver coleção" />
 
-          <Text style={cs.fieldLabel}>Estilo do banner</Text>
-          <ChipToggle options={BANNER_TONES} value={b.tone || "split"}
-            onChange={(v: any) => updateBanner(idx, { tone: v })} />
+          <Text style={cs.fieldLabel}>Layout do banner</Text>
+          {/* Fase 2 — picker visual de 4 thumbs (3 quando sem imagem). Auto-lock em image-clean quando ha b.image_url. */}
+          <BannerLayoutPicker
+            value={toneKey}
+            hasImage={hasImage}
+            onChange={(v) => updateBanner(idx, { tone: v })}
+          />
 
           {/* Rec #10 — helper text dinamico por tone */}
           <View style={s.toneHelper}>
@@ -361,7 +504,8 @@ export function TabDesign({
                   onPress={async () => {
                     try {
                       await deleteImage(`banner_${idx}` as any);
-                      updateBanner(idx, { image_url: null });
+                      // Fase 2: ao remover imagem, restaura tone='split' (default original).
+                      updateBanner(idx, { image_url: null, tone: "split" });
                     } catch (err: any) { toast.error(err?.message); }
                   }}>
                   <Icon name="trash" size={14} color="#dc2626" />
@@ -553,6 +697,167 @@ export function TabDesign({
     </View>
   );
 }
+
+// ============================================================
+// Estilos do BannerLayoutPicker (Fase 2)
+// ============================================================
+const pickerStyles = StyleSheet.create({
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  card: {
+    // 2x2 em mobile (cada card ~48%), 1x4 em desktop (~23%).
+    width: IS_WIDE ? "23%" : "48%",
+    minWidth: 110,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bg4,
+    padding: 8,
+    alignItems: "center",
+    gap: 6,
+  },
+  cardActive: {
+    borderWidth: 2,
+    borderColor: Colors.violet,
+    backgroundColor: Colors.violetD,
+    padding: 7, // compensa borda extra pra nao "pular" 1px
+  },
+  cardDisabled: {
+    opacity: 0.4,
+  },
+  label: {
+    fontSize: 11,
+    color: Colors.ink,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  labelActive: {
+    color: Colors.violet3,
+  },
+  disabledHint: {
+    fontSize: 9,
+    color: Colors.ink3,
+    textAlign: "center",
+    lineHeight: 12,
+  },
+});
+
+// Schematics CSS-puros pros 4 layouts. Cada thumb fica num frame ~70x40px.
+const thumb = StyleSheet.create({
+  frame: {
+    width: 72,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: "hidden",
+    position: "relative",
+  },
+  // image-clean: top 70% imagem + bottom 30% caption band
+  imageBlock: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
+    height: "70%",
+  },
+  imageInner: {
+    position: "absolute",
+    top: "30%", left: "20%", right: "20%", bottom: "20%",
+    backgroundColor: Colors.violetD,
+    borderRadius: 2,
+  },
+  captionBand: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0,
+    height: "30%",
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  captionLine: {
+    height: 2,
+    width: 26,
+    backgroundColor: Colors.ink3,
+    borderRadius: 1,
+  },
+  captionDot: {
+    width: 8,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.violet,
+  },
+  // split: esquerda 60% texto + direita 40% circulo
+  splitLeft: {
+    position: "absolute",
+    top: 0, bottom: 0, left: 0,
+    width: "60%",
+    paddingHorizontal: 5,
+    justifyContent: "center",
+  },
+  splitRight: {
+    position: "absolute",
+    top: 0, bottom: 0, right: 0,
+    width: "40%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  splitCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.violet,
+    opacity: 0.55,
+  },
+  textLine: {
+    height: 2.5,
+    backgroundColor: Colors.ink3,
+    borderRadius: 1,
+  },
+  // editorial: letra A gigante + retangulo pequeno no canto
+  editorialLetter: {
+    position: "absolute",
+    top: -4,
+    left: 2,
+    fontSize: 38,
+    fontWeight: "700",
+    fontStyle: "italic",
+    color: Colors.violet,
+    opacity: 0.35,
+    // serif fallback
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
+  },
+  editorialCorner: {
+    position: "absolute",
+    bottom: 5,
+    right: 5,
+    width: 22,
+    height: 4,
+    borderRadius: 1,
+    backgroundColor: Colors.ink3,
+  },
+  // centered: 2 linhas centralizadas + cta
+  centeredInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  centeredCta: {
+    width: 18,
+    height: 5,
+    borderRadius: 2,
+    backgroundColor: Colors.violet,
+  },
+});
 
 const s = StyleSheet.create({
   sideBySide: { flexDirection: "row", gap: 16, alignItems: "stretch", minHeight: 720 },
