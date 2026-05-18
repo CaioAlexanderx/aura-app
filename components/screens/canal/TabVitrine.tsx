@@ -12,7 +12,11 @@
 //   mas a UI não usa mais. Não dropar — manteremos o schema intacto.
 //
 // UI:
-//   - UM Switch por linha: "Aparece na vitrine".
+//   - UM Switch por linha, reflete diretamente `featured.has(id)`.
+//   - Em modo automático todos os switches mostram OFF (featured é vazio) MAS
+//     o banner explica que todos estão visíveis. Clicar ON em modo automático
+//     adiciona aquele produto a featured e transita pra curadoria (só ele vai
+//     aparecer). É o comportamento pré-Fase 4 exato.
 //   - Dual-mode banner no topo:
 //       featured.size === 0 → verde "modo automático: todos aparecem".
 //       featured.size  >  0 → âmbar "modo personalizado: só X de Y aparecem"
@@ -104,15 +108,17 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
   // Modo automático = featured vazio (todos visíveis na vitrine pública).
   const isAutoMode = featured.size === 0;
 
-  // Deriva flag is_in_storefront client-side:
-  //   - Modo automático: todos os produtos estão visíveis.
-  //   - Modo curadoria : apenas os IDs em featured.
+  // Cada produto ganha 2 derived flags:
+  //   - is_marked    : está em featured (= switch ON, sempre)
+  //   - is_in_storefront : aparece de fato na loja pública (auto OU is_marked)
   const products = useMemo(() => rawProducts.map((p: any) => {
     const id = p.id || p.product_id;
+    const isMarked = featured.has(id);
     return {
       ...p,
       _id: id,
-      is_in_storefront: isAutoMode ? true : featured.has(id),
+      is_marked: isMarked,
+      is_in_storefront: isAutoMode ? true : isMarked,
     };
   }), [rawProducts, featured, isAutoMode]);
 
@@ -152,31 +158,16 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
     }, SAVE_DEBOUNCE_MS);
   }
 
-  // Toggle único por produto: "aparece na vitrine".
-  // Atenção: no modo automático (featured vazio), o switch já está ON pra todos.
-  // Desligar um produto pela primeira vez "promove" pra modo curadoria, marcando
-  // TODOS OS OUTROS DA PÁGINA VISÍVEL — caso contrário só esse ficaria visível.
-  // Para evitar essa armadilha conceitual em listas grandes (4950 produtos),
-  // o comportamento aqui é mais conservador: desligar no modo automático apenas
-  // ADICIONA todos os outros visíveis na página atual. Para curadoria global,
-  // o usuário usa o bulk "Marcar todos" e depois ajusta.
-  //
-  // NOTA: na pratica recomendamos que o usuario inicie pela visao "marcar todos"
-  // e depois desmarque o que nao quer. UX guidance vem do banner dual-mode.
+  // Toggle simples: add/remove de featured. Switch sempre reflete featured.has(id).
+  // - Em modo automático, todos os switches mostram OFF (featured vazio).
+  //   Clicar ON em qualquer produto adiciona a featured e transita pra curadoria
+  //   com SÓ esse produto visível. Banner amarelo aparece dizendo "X de Y".
+  // - Em modo curadoria, ON/OFF adiciona/remove. Se chegar em vazio, volta pra auto.
   function toggleVisible(id: string) {
     setFeatured((prev) => {
       const next = new Set(prev);
-      if (isAutoMode) {
-        // Entrando em modo curadoria: marcar todos os produtos visíveis da página
-        // atual menos o que foi desligado. Comportamento conservador para evitar
-        // que o usuário esconda 4949 produtos sem perceber.
-        products.forEach((p) => {
-          if (p._id !== id) next.add(p._id);
-        });
-      } else {
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       scheduleSave(next);
       return next;
     });
@@ -228,6 +219,8 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
   }
 
   // Bulk "Marcar": adicionar selecionados ao featured.
+  // Em modo automatico, marcar 5 produtos transita pra curadoria com SO esses 5
+  // visiveis. Banner amarelo aparece explicando.
   function bulkMark() {
     if (selected.size === 0) return;
     const next = new Set(featured);
@@ -237,15 +230,11 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
   }
 
   // Bulk "Desmarcar": remover selecionados do featured.
-  // Se estamos em modo automatico, o "Desmarcar" sozinho nao faria sentido —
-  // promove pra modo curadoria com TODOS os visiveis menos os selecionados.
+  // Em modo automatico, "desmarcar" nao faz nada (nada esta marcado).
   function bulkUnmark() {
     if (selected.size === 0) return;
+    if (isAutoMode) return; // no-op em modo automatico
     const next = new Set(featured);
-    if (isAutoMode) {
-      // Promover para curadoria: marcar todos da pagina atual, depois remover selecionados.
-      products.forEach((p) => next.add(p._id));
-    }
     selected.forEach((id) => next.delete(id));
     setFeatured(next);
     scheduleSave(next);
@@ -274,10 +263,10 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
             <Icon name="check" size={18} color={Colors.green} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.modeTitle}>Modo automático: todos os produtos</Text>
+            <Text style={s.modeTitle}>Modo automático: todos os produtos aparecem</Text>
             <Text style={s.modeDesc}>
-              Sua loja mostra todos os <Text style={s.modeStrong}>{total}</Text> produtos ativos.
-              Desligue o interruptor de algum produto abaixo pra entrar em modo curadoria e exibir só os que escolher.
+              Sua loja mostra todos os <Text style={s.modeStrong}>{total}</Text> produtos ativos por padrão.
+              Marque produtos abaixo pra entrar em modo curadoria e exibir só os escolhidos.
             </Text>
           </View>
         </View>
@@ -383,9 +372,11 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
             <Pressable onPress={bulkMark} style={[s.bulkBtn, { backgroundColor: Colors.greenD, borderColor: Colors.green }]}>
               <Text style={[s.bulkBtnText, { color: Colors.green }]}>Marcar na vitrine</Text>
             </Pressable>
-            <Pressable onPress={bulkUnmark} style={[s.bulkBtn, { backgroundColor: Colors.redD, borderColor: Colors.red }]}>
-              <Text style={[s.bulkBtnText, { color: Colors.red }]}>Desmarcar</Text>
-            </Pressable>
+            {!isAutoMode && (
+              <Pressable onPress={bulkUnmark} style={[s.bulkBtn, { backgroundColor: Colors.redD, borderColor: Colors.red }]}>
+                <Text style={[s.bulkBtnText, { color: Colors.red }]}>Desmarcar</Text>
+              </Pressable>
+            )}
             <Pressable onPress={clearSelection} style={s.bulkBtn}>
               <Text style={s.bulkBtnText}>Limpar seleção</Text>
             </Pressable>
@@ -412,14 +403,17 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
         <View style={cs.card}>
           {visibleProducts.map((prod: any) => {
             const id = prod._id;
+            const isMarked = prod.is_marked;
             const isInStorefront = prod.is_in_storefront;
             const isSelected = selected.has(id);
             const stock = prod.stock_qty ?? prod.stock ?? prod.quantity ?? null;
 
-            // Linha "na vitrine" recebe leve highlight violeta.
-            // Linha "oculta" fica esmaecida.
-            const rowBg = isInStorefront ? Colors.violetD : "transparent";
-            const rowOpacity = isInStorefront ? 1 : 0.6;
+            // Visual da linha:
+            //   - Em curadoria + marcado: bg violet (destaque visual)
+            //   - Em curadoria + nao marcado: opacity 0.6 (esmaecido, NAO aparece)
+            //   - Em auto: bg transparente padrao (todos aparecem igual)
+            const rowBg = !isAutoMode && isMarked ? Colors.violetD : "transparent";
+            const rowOpacity = !isAutoMode && !isMarked ? 0.6 : 1;
 
             return (
               <HoverRow key={id} style={[s.prodRow, { backgroundColor: rowBg, opacity: rowOpacity }]}>
@@ -442,8 +436,8 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
                       )}
                     </View>
                   ) : (
-                    <View style={[s.prodIcon, { backgroundColor: isInStorefront ? Colors.violetD : Colors.bg4 }]}>
-                      <Icon name="package" size={18} color={isInStorefront ? Colors.violet3 : Colors.ink3} />
+                    <View style={[s.prodIcon, { backgroundColor: isMarked ? Colors.violetD : Colors.bg4 }]}>
+                      <Icon name="package" size={18} color={isMarked ? Colors.violet3 : Colors.ink3} />
                     </View>
                   )}
                   <View style={s.prodInfo}>
@@ -460,11 +454,13 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
                   {showPrices && (
                     <Text style={s.prodPrice}>R$ {(parseFloat(prod.price) || 0).toFixed(2)}</Text>
                   )}
-                  {/* Switch único: "Aparece na vitrine" */}
+                  {/* Switch único reflete diretamente featured.has(id).
+                      Em modo automatico mostra OFF (mas o banner explica
+                      que todos aparecem por padrao). */}
                   <View style={s.switchWrap}>
-                    <Text style={s.switchSideLabel}>Aparece na vitrine</Text>
+                    <Text style={s.switchSideLabel}>{isAutoMode ? "Marcar" : "Aparece na vitrine"}</Text>
                     <Switch
-                      value={isInStorefront}
+                      value={isMarked}
                       onValueChange={() => toggleVisible(id)}
                       trackColor={{ true: Colors.violet, false: Colors.bg4 }}
                       thumbColor="#fff"
