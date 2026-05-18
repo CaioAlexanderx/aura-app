@@ -46,6 +46,9 @@ const PATHS: Record<string, string> = {
     percent: "M19 5L5 19 M6.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M17.5 20a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
   tag:            "M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z M7 7h.01",
   barcode:        "M3 5v14 M6 5v14 M9 5v14 M12 5v14 M15 5v14 M18 5v14 M21 5v14",
+  // QR-Code — 3 cantos (typical finder patterns) + retalho de modulos.
+  // Usado em PDV troca v2: Step 1 (QR cupom NFC-e) e Step 3 (QR produto).
+  qr_code:        "M3 3h7v7H3z M5 5h3v3H5z M14 3h7v7h-7z M16 5h3v3h-3z M3 14h7v7H3z M5 16h3v3H5z M14 14h3v3h-3z M19 14h2v2h-2z M14 19h2v2h-2z M19 19h2v2h-2z",
   camera:         "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z M12 17a4 4 0 100-8 4 4 0 000 8z",
   // ── People ──────────────────────────────────────────────────
   users:          "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
@@ -129,7 +132,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     headset: "H", brain: "I", globe: "G", lock: "L", unlock: "L", plus: "+",
     minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
     download: "D", upload: "U", copy: "C", refresh: "R", repeat: "T", eye: "O", menu: "=",
-    grid: "#", clock: "T", tag: "#", barcode: "|||", camera: "O",
+    grid: "#", clock: "T", tag: "#", barcode: "|||", qr_code: "[#]", camera: "O",
     drag_handle: "=", eye_off: "O", shield: "U",
     tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
   };
