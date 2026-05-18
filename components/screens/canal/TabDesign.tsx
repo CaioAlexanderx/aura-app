@@ -60,12 +60,32 @@ const DEFAULT_BANNERS: Banner[] = [
   { kicker: "", headline: "", body: "", cta: "", tone: "centered",  tint: "brand",  image_url: null, enabled: false },
 ];
 
-const DEFAULT_SERVICE_CARDS: ServiceCard[] = [
-  { icon: "truck",   title: "Entrega rápida",      body: "Confirmação no WhatsApp", enabled: true },
-  { icon: "pkg",     title: "Embalagem cuidadosa", body: "Pronta pra presentear",   enabled: true },
-  { icon: "shield",  title: "Pagamento seguro",    body: "Pix e demais opções",     enabled: true },
-  { icon: "sparkle", title: "Curadoria editada",   body: "Produtos selecionados",   enabled: true },
+// Rec #5 — service cards comecam vazios (opt-in via biblioteca de templates).
+const DEFAULT_SERVICE_CARDS: ServiceCard[] = [];
+
+// Templates oferecidos no empty state — 1 clique adiciona em service_cards[].
+const SERVICE_CARD_TEMPLATES: { icon: string; title: string; body: string }[] = [
+  { icon: "truck",  title: "Entrega rápida",        body: "Retirada ou delivery rápido" },
+  { icon: "shield", title: "Pagamento seguro",      body: "Pix com confirmação" },
+  { icon: "pkg",    title: "Frete grátis",          body: "Acima de um valor mínimo" },
+  { icon: "heart",  title: "Atendimento WhatsApp",  body: "Resposta no mesmo dia" },
 ];
+
+// Helper text dinamico por tone do banner (Rec #10).
+const BANNER_TONE_HELPERS: Record<"split" | "editorial" | "centered", { title: string; body: string }> = {
+  split: {
+    title: "Dividido:",
+    body: "texto à esquerda + arte/imagem à direita. Use headlines de 1 linha (até ~40 caracteres).",
+  },
+  editorial: {
+    title: "Editorial:",
+    body: "a headline vira uma palavra-arte gigante no fundo. Use só 1-2 palavras curtas (ex: 'Verão', 'Nova coleção').",
+  },
+  centered: {
+    title: "Centralizado:",
+    body: "todo o texto centralizado no banner. Bom pra anúncios curtos com CTA.",
+  },
+};
 
 function normalizeBanners(input: any): Banner[] {
   if (!Array.isArray(input)) return DEFAULT_BANNERS;
@@ -82,15 +102,14 @@ function normalizeBanners(input: any): Banner[] {
 }
 
 function normalizeServiceCards(input: any): ServiceCard[] {
-  if (!Array.isArray(input) || !input.length) return DEFAULT_SERVICE_CARDS;
-  const arr: ServiceCard[] = input.slice(0, 4).map((c: any) => ({
+  // Rec #5 — array vazio e' valido (empty state). Nao injetamos defaults.
+  if (!Array.isArray(input)) return DEFAULT_SERVICE_CARDS;
+  return input.slice(0, 4).map((c: any) => ({
     icon: c?.icon || "sparkle",
     title: c?.title || "",
     body:  c?.body  || "",
     enabled: c?.enabled !== false,
   }));
-  while (arr.length < 4) arr.push({ ...DEFAULT_SERVICE_CARDS[arr.length], enabled: false });
-  return arr;
 }
 
 export function TabDesign({
@@ -154,6 +173,18 @@ export function TabDesign({
     });
   }
 
+  function addServiceCard(card: ServiceCard) {
+    setServiceCards((prev) => {
+      if (prev.length >= 4) {
+        toast.info("Maximo de 4 cards");
+        return prev;
+      }
+      const next = [...prev, { ...card, enabled: true }];
+      scheduleSave({ service_cards: next });
+      return next;
+    });
+  }
+
   async function pickAndUploadImage(type: "logo" | `banner_${number}`) {
     if (Platform.OS !== "web") {
       toast.info("Upload de imagem disponível na versão web por enquanto");
@@ -196,6 +227,14 @@ export function TabDesign({
 
   const editor = (
     <ScrollView style={s.editorScroll} contentContainerStyle={{ paddingBottom: 80 }}>
+      {/* Rec #1 — header explicativo: visual mora aqui; contato/Pix ficam em Meu Site. */}
+      <View style={s.tabIntro}>
+        <Icon name="info" size={14} color={Colors.violet3} />
+        <Text style={s.tabIntroText}>
+          Aqui você define o visual da loja. Logo, contato e Pix ficam em <Text style={{ fontWeight: "700" }}>Meu Site</Text>.
+        </Text>
+      </View>
+
       <SectionTitle title="Identidade visual" />
       <View style={cs.card}>
         <Text style={cs.fieldLabel}>Cor primária</Text>
@@ -268,7 +307,10 @@ export function TabDesign({
       <Text style={cs.hint}>
         Até 3 banners se alternam automaticamente no carrossel da home.
       </Text>
-      {banners.map((b, idx) => (
+      {banners.map((b, idx) => {
+        const toneKey = (b.tone || "split") as "split" | "editorial" | "centered";
+        const toneHelper = BANNER_TONE_HELPERS[toneKey];
+        return (
         <View key={idx} style={cs.card}>
           <View style={s.bannerHead}>
             <Text style={s.bannerTitle}>Banner {idx + 1}</Text>
@@ -292,6 +334,14 @@ export function TabDesign({
           <Text style={cs.fieldLabel}>Estilo do banner</Text>
           <ChipToggle options={BANNER_TONES} value={b.tone || "split"}
             onChange={(v: any) => updateBanner(idx, { tone: v })} />
+
+          {/* Rec #10 — helper text dinamico por tone */}
+          <View style={s.toneHelper}>
+            <Text style={s.toneHelperText}>
+              <Text style={s.toneHelperTitle}>{toneHelper.title}</Text>{" "}
+              {toneHelper.body}
+            </Text>
+          </View>
 
           <Text style={[cs.fieldLabel, { marginTop: 14 }]}>Cor de fundo</Text>
           <ChipToggle options={BANNER_TINTS} value={b.tint || "brand"}
@@ -332,47 +382,91 @@ export function TabDesign({
             </Pressable>
           )}
         </View>
-      ))}
+        );
+      })}
 
       <SectionTitle title="Cards de benefícios (rodapé)" />
       <Text style={cs.hint}>
-        4 cards exibidos abaixo da grade de produtos. Cada um tem ícone, título e descrição curta.
+        Cards curtos exibidos abaixo da grade de produtos. Até 4, cada um com ícone, título e descrição.
       </Text>
-      {serviceCards.map((c, idx) => (
-        <View key={idx} style={cs.card}>
-          <View style={s.bannerHead}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={s.svcIconChip}>
-                <ServiceIconPreview icon={c.icon || "sparkle"} size={18} />
-              </View>
-              <Text style={s.bannerTitle}>Card {idx + 1}</Text>
-            </View>
-            <ToggleRow label="Ativo" value={!!c.enabled}
-              onChange={(v) => updateServiceCard(idx, { enabled: v })} />
+
+      {/* Rec #5 — empty state com biblioteca de templates */}
+      {serviceCards.length === 0 ? (
+        <View style={s.svcEmpty}>
+          <View style={s.svcEmptyIcon}>
+            <View style={s.svcEmptySquare} />
+            <View style={s.svcEmptySquare} />
+            <View style={s.svcEmptySquare} />
+            <View style={s.svcEmptySquare} />
           </View>
-          <Field label="Título" value={c.title || ""}
-            onChange={(v) => updateServiceCard(idx, { title: v })}
-            placeholder="Ex: Entrega rápida" />
-          <Field label="Descrição" value={c.body || ""}
-            onChange={(v) => updateServiceCard(idx, { body: v })}
-            placeholder="Ex: Confirmação no WhatsApp" />
-          <Text style={cs.fieldLabel}>Ícone</Text>
-          <View style={s.iconGrid}>
-            {SERVICE_ICONS.map((opt) => {
-              const active = opt.value === (c.icon || "sparkle");
-              return (
-                <Pressable key={opt.value}
-                  onPress={() => updateServiceCard(idx, { icon: opt.value })}
-                  style={[s.iconChip, active && s.iconChipActive]}>
-                  <ServiceIconPreview icon={opt.value} size={20}
-                    color={active ? Colors.violet3 : Colors.ink} />
-                  <Text style={[s.iconChipLabel, active && { color: Colors.violet3, fontWeight: "600" }]}>{opt.label}</Text>
-                </Pressable>
-              );
-            })}
+          <Text style={s.svcEmptyTitle}>Nenhum card configurado</Text>
+          <Text style={s.svcEmptyHint}>Escolha um modelo abaixo ou crie um do zero</Text>
+
+          <View style={s.svcTemplateGrid}>
+            {SERVICE_CARD_TEMPLATES.map((tpl) => (
+              <Pressable key={tpl.title} style={s.svcTemplateCard}
+                onPress={() => addServiceCard(tpl)}>
+                <View style={s.svcTemplateIcon}>
+                  <ServiceIconPreview icon={tpl.icon} size={20} color={Colors.violet3} />
+                </View>
+                <Text style={s.svcTemplateTitle}>{tpl.title}</Text>
+                <Text style={s.svcTemplateBody} numberOfLines={2}>{tpl.body}</Text>
+              </Pressable>
+            ))}
           </View>
+
+          <Pressable style={s.svcEmptyBtn}
+            onPress={() => addServiceCard({ icon: "sparkle", title: "", body: "" })}>
+            <Icon name="plus" size={14} color={Colors.violet3} />
+            <Text style={s.svcEmptyBtnText}>Criar do zero</Text>
+          </Pressable>
         </View>
-      ))}
+      ) : (
+        <>
+          {serviceCards.map((c, idx) => (
+            <View key={idx} style={cs.card}>
+              <View style={s.bannerHead}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={s.svcIconChip}>
+                    <ServiceIconPreview icon={c.icon || "sparkle"} size={18} />
+                  </View>
+                  <Text style={s.bannerTitle}>Card {idx + 1}</Text>
+                </View>
+                <ToggleRow label="Ativo" value={!!c.enabled}
+                  onChange={(v) => updateServiceCard(idx, { enabled: v })} />
+              </View>
+              <Field label="Título" value={c.title || ""}
+                onChange={(v) => updateServiceCard(idx, { title: v })}
+                placeholder="Ex: Entrega rápida" />
+              <Field label="Descrição" value={c.body || ""}
+                onChange={(v) => updateServiceCard(idx, { body: v })}
+                placeholder="Ex: Confirmação no WhatsApp" />
+              <Text style={cs.fieldLabel}>Ícone</Text>
+              <View style={s.iconGrid}>
+                {SERVICE_ICONS.map((opt) => {
+                  const active = opt.value === (c.icon || "sparkle");
+                  return (
+                    <Pressable key={opt.value}
+                      onPress={() => updateServiceCard(idx, { icon: opt.value })}
+                      style={[s.iconChip, active && s.iconChipActive]}>
+                      <ServiceIconPreview icon={opt.value} size={20}
+                        color={active ? Colors.violet3 : Colors.ink} />
+                      <Text style={[s.iconChipLabel, active && { color: Colors.violet3, fontWeight: "600" }]}>{opt.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+          {serviceCards.length < 4 && (
+            <Pressable style={s.svcAddBtn}
+              onPress={() => addServiceCard({ icon: "sparkle", title: "", body: "" })}>
+              <Icon name="plus" size={14} color={Colors.violet3} />
+              <Text style={s.svcAddBtnText}>Adicionar card ({serviceCards.length}/4)</Text>
+            </Pressable>
+          )}
+        </>
+      )}
 
       {!config.is_published && (
         <View style={[cs.infoCard, { marginTop: 16 }]}>
@@ -466,6 +560,16 @@ const s = StyleSheet.create({
   previewSide: { flex: 1 },
   editorScroll: { flex: 1 },
 
+  // Rec #1 — header explicativo da tab
+  tabIntro: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: Colors.violetD,
+    borderLeftWidth: 3, borderLeftColor: Colors.violet,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 8, marginBottom: 12,
+  },
+  tabIntroText: { flex: 1, fontSize: 12, color: Colors.violet3, lineHeight: 17 },
+
   previewWrap: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", padding: 12 },
   previewBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 10, gap: 8 },
   deviceToggle: { flexDirection: "row", backgroundColor: Colors.bg4, borderRadius: 10, padding: 3, gap: 2 },
@@ -488,6 +592,16 @@ const s = StyleSheet.create({
   bannerHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   bannerTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
 
+  // Rec #10 — helper text por tone
+  toneHelper: {
+    backgroundColor: Colors.violetD,
+    borderLeftWidth: 3, borderLeftColor: Colors.violet,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 6, marginTop: 8,
+  },
+  toneHelperText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  toneHelperTitle: { fontWeight: "700", color: Colors.violet3 },
+
   imagePreview: { flexDirection: "row", gap: 12, alignItems: "stretch" },
   imageThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: Colors.bg4 },
   smallBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border },
@@ -503,6 +617,55 @@ const s = StyleSheet.create({
   iconChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
   iconChipActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
   iconChipLabel: { fontSize: 11, color: Colors.ink, fontWeight: "500" },
+
+  // Rec #5 — empty state de service cards
+  svcEmpty: {
+    borderRadius: 14,
+    borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed",
+    backgroundColor: Colors.bg4,
+    padding: 20, alignItems: "center",
+  },
+  svcEmptyIcon: {
+    width: 44, height: 44,
+    flexDirection: "row", flexWrap: "wrap",
+    gap: 3, marginBottom: 12, alignItems: "center", justifyContent: "center",
+  },
+  svcEmptySquare: { width: 18, height: 18, borderRadius: 4, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border },
+  svcEmptyTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
+  svcEmptyHint: { fontSize: 12, color: Colors.ink3, marginBottom: 16, textAlign: "center" },
+  svcTemplateGrid: {
+    flexDirection: "row", flexWrap: "wrap",
+    gap: 8, marginBottom: 14, width: "100%",
+  },
+  svcTemplateCard: {
+    width: "48%", minWidth: 140,
+    borderRadius: 10, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.bg3,
+    padding: 12, gap: 6,
+  },
+  svcTemplateIcon: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: Colors.violetD,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 4,
+  },
+  svcTemplateTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink },
+  svcTemplateBody: { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
+  svcEmptyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 8, backgroundColor: Colors.bg3,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  svcEmptyBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  svcAddBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.bg4,
+    borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed",
+    marginTop: 4,
+  },
+  svcAddBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
 
   savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
   savingText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
