@@ -7,8 +7,13 @@
 //   clicou "Já paguei" no site, mas o lojista viu o Pix cair). O
 //   endpoint backend `approve-payment` já aceita esse status — só a
 //   UI estava restrita a `awaiting_approval`.
+// 18/05: Audit Rec #8 — chips de filtro de 7 status granulares pra 4
+//   grupos cliente-facing (Precisa agir / Em curso / Concluídos /
+//   Cancelados) + "Todos". O status interno continua visível no card
+//   e no detalhe; só o filtro foi agrupado. "Precisa agir" tem badge
+//   de contagem porque é o que demanda ação imediata.
 // ============================================================
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
   Modal, ActivityIndicator, Linking, Image, TextInput,
@@ -36,15 +41,25 @@ const NEXT_STATUS: Record<string, string> = {
   ready:     "delivered",
 };
 
-const CHIPS = [
-  { key: "all",                label: "Todos" },
-  { key: "awaiting_approval",  label: "Aguardando aprov." },
-  { key: "pending_payment",    label: "Pix gerado" },
-  { key: "confirmed",          label: "Novos" },
-  { key: "preparing",          label: "Preparo" },
-  { key: "ready",              label: "Prontos" },
-  { key: "delivered",          label: "Entregues" },
+// Audit Rec #8: chips consolidados em 4 grupos cliente-facing (+ Todos).
+// O status granular do backend continua intacto — só o filtro agrupa.
+// "Precisa agir" é o único com badge de contagem porque demanda ação.
+type ChipKey = "all" | "precisa-agir" | "em-curso" | "concluidos" | "cancelados";
+
+const CHIPS: { key: ChipKey; label: string }[] = [
+  { key: "all",          label: "Todos" },
+  { key: "precisa-agir", label: "Precisa agir" },
+  { key: "em-curso",     label: "Em curso" },
+  { key: "concluidos",   label: "Concluídos" },
+  { key: "cancelados",   label: "Cancelados" },
 ];
+
+const GROUP_STATUSES: Record<Exclude<ChipKey, "all">, string[]> = {
+  "precisa-agir": ["pending_payment", "awaiting_approval"],
+  "em-curso":     ["confirmed", "preparing", "ready"],
+  "concluidos":   ["delivered"],
+  "cancelados":   ["cancelled"],
+};
 
 // Pedidos onde o lojista pode confirmar pagamento manualmente.
 // - `awaiting_approval`: cliente clicou "Já paguei" + anexou comprovante
@@ -70,7 +85,7 @@ function fmt(v: number | string) {
 }
 
 export function TabPedidos({ companyId }: { companyId?: string } = {}) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<ChipKey>("all");
   const [order, setOrder] = useState<any>(null);
   const [proofZoom, setProofZoom] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -78,10 +93,32 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   const [working, setWorking] = useState(false);
   // ID do pedido que está com a quick-action em andamento (loading state inline)
   const [approvingId, setApprovingId] = useState<string | null>(null);
-  const { orders, kpi, isLoading, refetch, updateStatus, isUpdating } = useDigitalOrders(filter);
+  // Hook sempre busca "all" — filtro de grupo é aplicado client-side
+  // pra mapear N status granulares -> 1 chip sem precisar mudar a API.
+  const { orders, kpi, counts, isLoading, refetch, updateStatus, isUpdating } = useDigitalOrders("all");
 
   // companyId pode vir via prop OU ser pego do hook (fallback usa qualquer endpoint que ja tem cid)
   const cid = companyId || (orders[0]?.company_id) || null;
+
+  // Filtragem client-side por grupo. Os status do backend continuam
+  // chegando intactos — só agrupamos pra UI.
+  const filteredOrders = useMemo(() => {
+    if (filter === "all") return orders;
+    const allow = GROUP_STATUSES[filter];
+    if (!allow) return orders;
+    return orders.filter((o: any) => allow.includes(o.status));
+  }, [orders, filter]);
+
+  // Contagem do badge "Precisa agir" — usa counts.* do backend quando
+  // disponível (mais preciso, conta tudo no DB), fallback no client.
+  const precisaAgirCount = useMemo(() => {
+    const fromCounts =
+      (counts?.pending_payment || 0) + (counts?.awaiting_approval || 0);
+    if (fromCounts > 0) return fromCounts;
+    return orders.filter((o: any) =>
+      GROUP_STATUSES["precisa-agir"].includes(o.status)
+    ).length;
+  }, [counts, orders]);
 
   async function advance() {
     if (!order) return;
@@ -165,13 +202,22 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
         </View>
       </View>
 
-      {/* Filter Chips */}
+      {/* Filter Chips — 5 chips (Todos + 4 grupos). Audit Rec #8. */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
-        {CHIPS.map((c) => (
-          <Pressable key={c.key} onPress={() => setFilter(c.key)} style={[cs.filterChip, filter === c.key && cs.filterChipActive]}>
-            <Text style={[cs.filterText, filter === c.key && cs.filterTextActive]}>{c.label}</Text>
-          </Pressable>
-        ))}
+        {CHIPS.map((c) => {
+          const active = filter === c.key;
+          const showBadge = c.key === "precisa-agir" && precisaAgirCount > 0;
+          return (
+            <Pressable key={c.key} onPress={() => setFilter(c.key)} style={[cs.filterChip, active && cs.filterChipActive]}>
+              <Text style={[cs.filterText, active && cs.filterTextActive]}>{c.label}</Text>
+              {showBadge && (
+                <View style={s.chipBadge}>
+                  <Text style={s.chipBadgeText}>{precisaAgirCount}</Text>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       <Pressable onPress={() => refetch()} style={s.refreshBtn}>
@@ -181,14 +227,14 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
 
       {isLoading ? (
         <ActivityIndicator size="small" color={Colors.violet} style={{ marginTop: 32 }} />
-      ) : orders.length === 0 ? (
+      ) : filteredOrders.length === 0 ? (
         <View style={s.empty}>
           <Text style={s.emptyIcon}>📦</Text>
           <Text style={s.emptyTitle}>Nenhum pedido aqui</Text>
           <Text style={s.emptyDesc}>Quando clientes fizerem pedidos pelo site, eles aparecerão aqui.</Text>
         </View>
       ) : (
-        orders.map((o: any) => {
+        filteredOrders.map((o: any) => {
           const st = STATUS_MAP[o.status] || STATUS_MAP.cancelled;
           const isAwaiting = o.status === "awaiting_approval";
           const isPendingPayment = o.status === "pending_payment";
@@ -463,6 +509,14 @@ const s = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: "700" },
   proofBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
   proofBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
+  // Badge de contagem dentro do chip "Precisa agir" — vermelho/contraste
+  // pra puxar olho. Aparece só quando count > 0.
+  chipBadge: {
+    marginLeft: 6, backgroundColor: "#dc2626", borderRadius: 999,
+    minWidth: 18, height: 18, paddingHorizontal: 5,
+    alignItems: "center", justifyContent: "center",
+  },
+  chipBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800", lineHeight: 12 },
   quickRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   quickBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
