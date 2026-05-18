@@ -6,7 +6,14 @@
     "enabled": true
   },
   "build": {
-    "command": "npx expo export -p web"
+    // 17/05/2026 (hotfix): react-native-svg é importado por canal/shared.tsx,
+    // odontograma, dental sparkline, etc., mas não está no package-lock.json
+    // (foi instalado fora do npm save em algum momento e sumiu do lockfile).
+    // Pré-instalamos --no-save antes do expo export pra desbloquear o build
+    // do Cloudflare sem precisar regenerar o lockfile (632KB).
+    // TODO: PR follow-up pra adicionar react-native-svg em package.json +
+    // package-lock.json de forma definitiva.
+    "command": "npm install --no-save react-native-svg@15.8.0 --legacy-peer-deps --silent && npx expo export -p web"
   },
   "assets": {
     "directory": "dist",
