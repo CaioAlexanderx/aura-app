@@ -6,8 +6,13 @@
 // Este arquivo é responsável apenas pela camada de layout/JSX.
 //
 // 14/05/2026: decomposição + CreditInstallmentModal + ActCrediario.
-// ActCrediario (F6) aparece na actBar quando crediario_enabled=true;
-// grid passa de 5 para 6 colunas condicionalmente.
+//
+// 17/05/2026 (Davi 13/14"): actBar com `repeat(${actCols}, 1fr)` forçava
+// 5/6 colunas em qualquer largura — em 1366×768 @125% scale isso dava
+// ~117px/card e truncava todos os labels (L. V.S. C.V em vez de "Scanner",
+// "Vendedora", "Cliente"). Agora usa `auto-fit, minmax(140px, 1fr)`:
+// cards quebram em 2/3 linhas automaticamente conforme a largura,
+// mantendo labels legíveis sempre.
 // ============================================================
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
@@ -40,7 +45,6 @@ const PAGE_SIZE = 12;
 function CaixaScreenInner() {
   const st = usePdvState();
 
-  // ── Aliases ────────────────────────────────────────────────────
   const { company, isDemo, isNegocioPlus, clientesEnabled, vp, wide } = st;
   const { caixaEnabled, sessaoAtiva, isAberto, caixaLoading, invalidateCaixa } = st;
   const { employees, autoEmitNfce, scannerListening, lastScannedCode } = st;
@@ -53,10 +57,6 @@ function CaixaScreenInner() {
   const { handleOpenCrediario, selectEmployee, setSellerName } = st;
   const { cartProps, cartHeadRef, orderSuffix } = st;
 
-  // Número de colunas da actBar: 6 quando crediário está habilitado, 5 caso contrário.
-  const actCols = crediarioEnabled ? 6 : 5;
-
-  // ── Bloco de modais ────────────────────────────────────────────
   const modals = (
     <PdvModals
       showNewCustomer={st.showNewCustomer}
@@ -89,7 +89,6 @@ function CaixaScreenInner() {
     />
   );
 
-  // ── Tela de venda concluída ────────────────────────────────────
   if (st.lastSale) {
     if (wide) {
       return (
@@ -103,7 +102,6 @@ function CaixaScreenInner() {
     return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} />;
   }
 
-  // ── Toggle de produtos sem estoque ─────────────────────────────
   function StockToggle() {
     if (outOfStockCount === 0) return null;
     return (
@@ -120,7 +118,6 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Grid de produtos ───────────────────────────────────────────
   function ProductSection({ columns }: { columns: number }) {
     if (st.products.length === 0)
       return (
@@ -162,7 +159,6 @@ function CaixaScreenInner() {
 
         <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: `1fr ${st.cartWidth}px` } as any)]}>
 
-          {/* Catálogo (coluna esquerda) */}
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
             contentContainerStyle={{ padding: vp.sm ? 16 : 28, paddingBottom: 48 }}
@@ -170,7 +166,6 @@ function CaixaScreenInner() {
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
 
-              {/* Top row */}
               <View style={s.topRow}>
                 {caixaEnabled && (
                   <CaixaButton
@@ -204,10 +199,14 @@ function CaixaScreenInner() {
 
               <MerchantBanner height={vp.sm ? 120 : 200} />
 
-              {/* Action toolbar — 5 ou 6 colunas */}
+              {/* Action toolbar — auto-fit grid: quebra em 2/3 linhas se não couber */}
               <View style={[s.actBar, IS_WEB && ({
                 display: "grid",
-                gridTemplateColumns: `repeat(${actCols}, 1fr)`,
+                // 17/05/2026: era `repeat(${actCols}, 1fr)` — forçava N colunas e
+                // truncava labels em viewports menores. auto-fit + minmax(140px)
+                // mantém cards com largura mínima legível e wrap em múltiplas
+                // linhas conforme a largura disponível.
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
                 gap: vp.sm ? 6 : 10,
                 position: "relative",
                 zIndex: 50,
@@ -266,7 +265,6 @@ function CaixaScreenInner() {
             </View>
           </ScrollView>
 
-          {/* CartPanel (coluna direita, sticky) */}
           <View style={[
             s.cartWrap,
             { width: st.cartWidth },
@@ -282,6 +280,7 @@ function CaixaScreenInner() {
   }
 
   // ── Layout mobile ──────────────────────────────────────────────
+  // Em mobile usa grid auto-fit também (2 colunas em <360px, 3 em >360px).
   return (
     <View style={{ flex: 1 }}>
       <CaixaDesignStyle />
@@ -310,8 +309,19 @@ function CaixaScreenInner() {
 
         <MerchantBanner height={160} />
 
-        {/* Action toolbar mobile */}
-        <View style={[{ gap: 10, marginBottom: 16 }, IS_WEB && ({ position: "relative", zIndex: 50 } as any)]}>
+        {/* Action toolbar mobile — grid 2-3 colunas com wrap */}
+        <View style={[
+          { marginBottom: 16 },
+          IS_WEB
+            ? ({
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gap: 8,
+                position: "relative",
+                zIndex: 50,
+              } as any)
+            : { gap: 10 },
+        ]}>
           <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
           <ActPerson
             kind="vendedora" shortcut="F2"
