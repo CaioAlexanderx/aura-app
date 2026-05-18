@@ -42,6 +42,7 @@ type Cfg = {
   dark_mode?: boolean; font_family?: string; card_style?: string;
   announcement_bar?: string;
   banners?: Banner[];
+  banner_rotation_seconds?: number;
   service_cards?: ServiceCard[];
   is_published?: boolean; slug?: string; storefront_url?: string;
 };
@@ -95,6 +96,17 @@ const BANNER_TONE_HELPERS: Record<BannerTone, { title: string; body: string }> =
 
 // Tones validos no normalize — image-clean entrou na Fase 2.
 const VALID_TONES: BannerTone[] = ["split", "editorial", "centered", "image-clean"];
+
+// Fase 3 — Rec #6: tempo entre slides do carrossel.
+const ROTATION_MIN = 3;
+const ROTATION_MAX = 15;
+const ROTATION_DEFAULT = 7;
+function clampRotation(n: number): number {
+  if (!Number.isFinite(n)) return ROTATION_DEFAULT;
+  if (n < ROTATION_MIN) return ROTATION_MIN;
+  if (n > ROTATION_MAX) return ROTATION_MAX;
+  return Math.round(n);
+}
 
 function normalizeBanners(input: any): Banner[] {
   if (!Array.isArray(input)) return DEFAULT_BANNERS;
@@ -260,6 +272,8 @@ export function TabDesign({
   const [cardStyle, setCardStyle] = useState(config.card_style  || "editorial");
   const [annBar, setAnnBar]     = useState(config.announcement_bar || "");
   const [banners, setBanners]   = useState<Banner[]>(normalizeBanners(config.banners));
+  const [rotateSeconds, setRotateSeconds] = useState<number>(clampRotation(config.banner_rotation_seconds ?? ROTATION_DEFAULT));
+  const [rotateText, setRotateText] = useState<string>(String(clampRotation(config.banner_rotation_seconds ?? ROTATION_DEFAULT)));
   const [serviceCards, setServiceCards] = useState<ServiceCard[]>(normalizeServiceCards(config.service_cards));
   const [device, setDevice]     = useState<"desktop" | "mobile">(IS_WIDE ? "desktop" : "mobile");
   const [previewKey, setPreviewKey] = useState(0);
@@ -271,10 +285,15 @@ export function TabDesign({
   useEffect(() => { setCardStyle(config.card_style || "editorial"); }, [config.card_style]);
   useEffect(() => { setAnnBar(config.announcement_bar || ""); }, [config.announcement_bar]);
   useEffect(() => { setBanners(normalizeBanners(config.banners)); }, [JSON.stringify(config.banners)]);
+  useEffect(() => {
+    const next = clampRotation(config.banner_rotation_seconds ?? ROTATION_DEFAULT);
+    setRotateSeconds(next);
+    setRotateText(String(next));
+  }, [config.banner_rotation_seconds]);
   useEffect(() => { setServiceCards(normalizeServiceCards(config.service_cards)); }, [JSON.stringify(config.service_cards)]);
 
   const saveTimer = useRef<any>(null);
-  function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[]; service_cards?: ServiceCard[] }) {
+  function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[]; service_cards?: ServiceCard[]; banner_rotation_seconds?: number }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -292,6 +311,27 @@ export function TabDesign({
       scheduleSave({ banners: next });
       return next;
     });
+  }
+
+  function handleRotateChange(raw: string) {
+    // aceita soh digitos
+    const digits = raw.replace(/[^0-9]/g, "");
+    setRotateText(digits);
+    if (digits === "") return; // espera o usuario terminar de digitar
+    const n = parseInt(digits, 10);
+    if (!Number.isFinite(n)) return;
+    const clamped = clampRotation(n);
+    setRotateSeconds(clamped);
+    scheduleSave({ banner_rotation_seconds: clamped });
+  }
+
+  function handleRotateBlur() {
+    // ao sair do campo, normaliza pra valor clampado e re-sincroniza o texto
+    const n = parseInt(rotateText || String(ROTATION_DEFAULT), 10);
+    const clamped = clampRotation(Number.isFinite(n) ? n : ROTATION_DEFAULT);
+    setRotateSeconds(clamped);
+    setRotateText(String(clamped));
+    scheduleSave({ banner_rotation_seconds: clamped });
   }
 
   function updateServiceCard(idx: number, patch: Partial<ServiceCard>) {
@@ -442,9 +482,34 @@ export function TabDesign({
       </View>
 
       <SectionTitle title="Banners do topo" />
-      <Text style={cs.hint}>
-        Até 3 banners se alternam automaticamente no carrossel da home.
-      </Text>
+      <View style={cs.card}>
+        <Text style={cs.hint}>
+          Até 3 banners se alternam automaticamente no carrossel da home.
+        </Text>
+
+        {/* Fase 3 — Rec #6: tempo entre slides do carrossel */}
+        <View style={s.rotateRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={cs.fieldLabel}>Tempo entre slides</Text>
+          </View>
+          <View style={s.rotateInputBox}>
+            <TextInput
+              style={s.rotateInput}
+              value={rotateText}
+              onChangeText={handleRotateChange}
+              onBlur={handleRotateBlur}
+              keyboardType="numeric"
+              maxLength={2}
+              placeholder="7"
+              placeholderTextColor={Colors.ink3}
+            />
+            <Text style={s.rotateSuffix}>segundos</Text>
+          </View>
+        </View>
+        <Text style={cs.hint}>
+          Quanto tempo cada banner fica visível antes de trocar pro próximo (entre {ROTATION_MIN} e {ROTATION_MAX}).
+        </Text>
+      </View>
       {banners.map((b, idx) => {
         const toneKey = (b.tone || "split") as BannerTone;
         const toneHelper = BANNER_TONE_HELPERS[toneKey] || BANNER_TONE_HELPERS.split;
@@ -896,6 +961,40 @@ const s = StyleSheet.create({
 
   bannerHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   bannerTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+
+  // Fase 3 — Rec #6: input compacto pra tempo entre slides
+  rotateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  rotateInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  rotateInput: {
+    width: 60,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bg4,
+    fontSize: 14,
+    color: Colors.ink,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  rotateSuffix: {
+    fontSize: 12,
+    color: Colors.ink3,
+    fontWeight: "500",
+  },
 
   // Rec #10 — helper text por tone
   toneHelper: {
