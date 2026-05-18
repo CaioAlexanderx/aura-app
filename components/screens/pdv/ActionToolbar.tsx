@@ -9,11 +9,11 @@
 // 07/05 · fix scanner: removido mousedown outside-click do ActBarcode.
 // 11/05 · ActBarcode redesenhado — scanner GLOBAL, card vira indicador.
 // 14/05 · ActCrediario — 6º card opcional (crediario_enabled), F6.
-// 16/05 · COMPACT MODE em viewports estreitos (<960px). Caso Davi:
-//          em monitor 13/14" (1366×768 @125%) o body text ficava com
-//          ~30px de largura e truncava labels K/V pra "L. V.S. C.V"
-//          (1 letra + ellipsis). Agora colapsa pra icon + shortcut
-//          centralizados — limpo, legível, mantém shortcut F1-F6.
+// 16/05 · COMPACT MODE em viewports estreitos (<960px).
+// 17/05 · Threshold ajustado para <480px (só mobile portrait). Em viewports
+//          médios (480-960px) o grid `auto-fit, minmax(140px, 1fr)` no
+//          pdv.tsx quebra cards em 2 linhas automaticamente — não precisa
+//          mais colapsar pro modo compact. Caso Davi 13/14".
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
@@ -22,11 +22,12 @@ import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
 
 // ─── Layout breakpoint ───────────────────────────────────────
-// Abaixo de 960px (típico monitor 13/14" @125% scale ou tablet em paisagem)
-// colapsa cards pra icon + shortcut sem texto. Acima: layout normal.
+// Apenas mobile portrait (<480px) colapsa pra icon+shortcut. Acima disso,
+// o grid auto-fit do pdv.tsx faz wrap em múltiplas linhas mantendo cards
+// horizontais completos com labels K/V legíveis.
 function useCompactMode(): boolean {
   const { width } = useWindowDimensions();
-  return width < 960;
+  return width < 480;
 }
 
 // ─── Shared card shell ───────────────────────────────────────
@@ -522,7 +523,6 @@ const s = StyleSheet.create({
     padding: 10, paddingHorizontal: 12,
     borderRadius: 12, position: "relative", minWidth: 0,
   },
-  // Compact mode: stack icon on top, shortcut below. Card vira "tile" quadrado.
   actBtnCompact: {
     flexDirection: "column", alignItems: "center", justifyContent: "center",
     gap: 4, padding: 8, paddingHorizontal: 8,
@@ -537,7 +537,6 @@ const s = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     flexShrink: 0, position: "relative",
   },
-  // Compact: icone um pouco maior pra preencher o card
   actIcoCompact: {
     width: 36, height: 36, borderRadius: 10,
   },
@@ -555,7 +554,6 @@ const s = StyleSheet.create({
     borderRadius: 4, backgroundColor: Glass.lineSoft, color: Colors.ink3,
     letterSpacing: 0.4, flexShrink: 0,
   },
-  // Compact: shortcut maior, mais legível embaixo do icone
   shortcutCompact: {
     fontSize: 10, paddingHorizontal: 6, paddingVertical: 2,
   },
