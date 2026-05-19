@@ -15,6 +15,10 @@ export type Product = {
   size: string;
   image_url?: string;
   has_variants?: boolean;
+  // 19/05/2026: barcodes das variantes ativas vinculadas a este pai.
+  // Backend GET /products devolve via ARRAY_AGG; usado pelo scanner local
+  // do Estoque pra achar o pai bipando barcode de uma variante.
+  variant_barcodes?: string[];
   ncm?: string;
 };
 
