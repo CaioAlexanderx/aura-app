@@ -15,11 +15,13 @@ import FoodScreen from '@/components/verticals/FoodScreen';
 // Odonto NAO renderiza mais aqui — tem porta dedicada em
 // /dental/(clinic)/hoje (decisao 2026-04-25). Bookmarks antigos
 // ou deep-links que apontem pra /vertical sao redirecionados.
+//
+// Food (Fase 0 — 2026-05-18): mesmo padrao do odonto. Porta
+// dedicada em /food/(salao)/mesas. FoodScreen.tsx mantido por
+// retrocompat e como referencia de tabs/KPIs do mockup original,
+// mas nao roda mais embedded aqui.
 // ============================================================
 
-// Labels das 6 verticais. Apenas 3 tem tela implementada;
-// as outras (estetica, pet, academia) mostram placeholder
-// "modulo em desenvolvimento".
 const VERTICAL_NAMES: Record<string, string> = {
   odonto: 'Odontologia',
   barber: 'Barbearia / Salao',
@@ -29,7 +31,8 @@ const VERTICAL_NAMES: Record<string, string> = {
   academia: 'Academia',
 };
 
-const READY_VERTICALS = ['barber', 'food'];
+// Apenas barber renderiza embedded aqui agora. Odonto e food tem porta dedicada.
+const READY_VERTICALS = ['barber'];
 
 export default function VerticalTab() {
   const { company } = useAuthStore();
@@ -40,6 +43,11 @@ export default function VerticalTab() {
     return <Redirect href="/dental/(clinic)/hoje" />;
   }
 
+  // Food tem porta dedicada — redireciona pra la.
+  if (activeVertical === 'food') {
+    return <Redirect href="/food/(salao)/mesas" />;
+  }
+
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
       <PageHeader
@@ -48,7 +56,6 @@ export default function VerticalTab() {
       />
 
       {activeVertical === 'barber' && <BarberScreen />}
-      {activeVertical === 'food' && <FoodScreen />}
 
       {!activeVertical && (
         <View style={s.noVertical}>
@@ -59,7 +66,7 @@ export default function VerticalTab() {
         </View>
       )}
 
-      {activeVertical && !READY_VERTICALS.includes(activeVertical) && (
+      {activeVertical && !READY_VERTICALS.includes(activeVertical) && activeVertical !== 'odonto' && activeVertical !== 'food' && (
         <View style={s.noVertical}>
           <Text style={s.noIcon}>🚧</Text>
           <Text style={s.noTitle}>Modulo em desenvolvimento</Text>

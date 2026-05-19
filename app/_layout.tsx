@@ -60,33 +60,24 @@ function AuthGuard() {
     const onCheckout = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
 
-    // Contas @getaura.com.br sao internas Aura. Ja sao detectadas como
-    // is_staff=true em useAuthStore (bypassa billing gate). Aqui bypassam
-    // tambem o verify-email gate — sao confiaveis por construcao e exigir
-    // verificacao so prende contas de teste internas.
     const isInternalAura = ((user?.email || "") as string).toLowerCase().endsWith("@getaura.com.br");
 
-    // Paginas publicas dental — agendamento e portal do paciente sao
-    // acessiveis sem login. (clinic) e auth-required entao NAO entra aqui.
     const onInvite       = segments[0] === "invite";
     const onPublicDental = segments[0] === "dental" && (segments[1] === "book" || segments[1] === "portal");
-    // Relatorios semanais (link com JWT vindo do email) sao publicos —
-    // token na URL eh a autenticacao. Bypass de qualquer guard de sessao.
     const onPublicReport = segments[0] === "relatorios";
     if (onInvite || onPublicDental || onPublicReport) return;
 
     // Shell dental autenticado (qualquer rota /dental/* que NAO seja publica).
-    // expo-router omite groups (parenteses) na pathname, entao /dental/(clinic)/hoje
-    // aparece como segments=["dental", "hoje"]. Como ja excluimos book/portal acima,
-    // qualquer outro segments[0]="dental" eh shell autenticado.
     const onDentalClinic = segments[0] === "dental";
 
-    // Vertical odonto: redirect /(tabs) -> /dental/(clinic)/hoje.
-    // Decisao 2026-04-25 (memory: plano_aura_odonto_portal):
-    // odonto vira porta dedicada. Modulos genericos do Aura ERP
-    // continuam acessiveis via deep-link, mas o roteamento default
-    // leva ao shell dental.
+    // Shell food autenticado — /food/(salao)/* aparece como segments[0]="food".
+    // Fase 0 (2026-05-18): nao ha rotas publicas em /food/* ainda. Quando
+    // Fase 4 (cardapio QR /m/[tableId]) entrar, a rota sera /m/* (fora de
+    // /food), entao /food/* continua sendo 100% autenticado.
+    const onFoodSalao = segments[0] === "food";
+
     const isOdonto = (company as any)?.vertical_active === "odonto";
+    const isFood   = (company as any)?.vertical_active === "food";
 
     // 1. Not logged in → login
     if (!token && !inAuth) {
@@ -95,34 +86,44 @@ function AuthGuard() {
     }
 
     // 2. Logged in but email not verified → verify-email
-    //    Bypass para contas internas Aura (@getaura.com.br).
     if (token && !isDemo && user && !emailVerified && !isInternalAura && !onVerify) {
       router.replace("/(auth)/verify-email");
       return;
     }
 
     // 3. Logged in + verified (ou interno) → bounce out of auth pages.
-    //    Odonto vai pro shell dental, demais vao pro (tabs).
+    //    Odonto vai pro shell dental, food vai pro shell food, demais vao pro (tabs).
     if (token && (emailVerified || isDemo || isInternalAura) && inAuth && !onVerify) {
-      router.replace(isOdonto ? "/dental/(clinic)/hoje" : "/(tabs)");
+      router.replace(
+        isOdonto ? "/dental/(clinic)/hoje" :
+        isFood   ? "/food/(salao)/mesas"   :
+        "/(tabs)"
+      );
       return;
     }
     if (token && (emailVerified || isInternalAura) && onVerify) {
-      router.replace(isOdonto ? "/dental/(clinic)/hoje" : "/(tabs)");
+      router.replace(
+        isOdonto ? "/dental/(clinic)/hoje" :
+        isFood   ? "/food/(salao)/mesas"   :
+        "/(tabs)"
+      );
       return;
     }
 
     // 3.5 Odonto navegando em /(tabs) → redireciona pro shell dental.
-    //     Excecao: /(tabs)/checkout precisa continuar funcionando para
-    //     billing gate (passo 4) atender odonto tambem.
     if (token && (emailVerified || isDemo || isInternalAura) && isOdonto && inTabs && !onCheckout) {
       router.replace("/dental/(clinic)/hoje");
       return;
     }
 
-    // 4. Billing gate. Aplica em (tabs) E em /dental/(clinic) — usuario
-    //    odonto sem billing ativo tambem precisa passar pelo checkout.
-    //    isStaff (que inclui @getaura.com.br) ja bypassa needsCheckout.
+    // 3.6 Food navegando em /(tabs) → redireciona pro shell food.
+    //     Excecao: /(tabs)/checkout precisa funcionar para billing gate.
+    if (token && (emailVerified || isDemo || isInternalAura) && isFood && inTabs && !onCheckout) {
+      router.replace("/food/(salao)/mesas");
+      return;
+    }
+
+    // 4. Billing gate. Aplica em (tabs), /dental/(clinic) E /food/(salao).
     const billingStatus  = (company as any)?.billing_status;
     const hasActiveBilling = billingStatus === "active" || trialActive;
 
@@ -131,7 +132,7 @@ function AuthGuard() {
 
     const needsCheckout = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
 
-    if (token && needsCheckout && (inTabs || onDentalClinic) && !onCheckout) {
+    if (token && needsCheckout && (inTabs || onDentalClinic || onFoodSalao) && !onCheckout) {
       router.replace("/(tabs)/checkout");
       return;
     }
