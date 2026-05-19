@@ -75,6 +75,19 @@ export var adminApi = {
       "/admin/clients/" + companyId + "/vertical", { method: "PATCH", body: { vertical: vertical }, retry: 0 }
     );
   },
+  // 19/05/2026 — Sub-vertical (Fase B1 do benchmark de mercado)
+  // Sub-segmentacao manual via Gestao Aura. Whitelist por vertical principal
+  // (varejo: calcados, moda, perfumaria, etc).
+  setSubVertical: function(companyId: string, subVertical: string | null) {
+    return request<{ company: any; changed: boolean; message: string }>(
+      "/admin/clients/" + companyId + "/sub-vertical", { method: "PATCH", body: { sub_vertical: subVertical }, retry: 0 }
+    );
+  },
+  subVerticalOptions: function() {
+    return request<{ by_vertical: Record<string, string[]> }>(
+      "/admin/sub-verticals/options"
+    );
+  },
   // 12/05/2026 — Notas CRM
   notes: {
     list: function(companyId: string) {
