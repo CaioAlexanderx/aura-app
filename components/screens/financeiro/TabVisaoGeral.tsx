@@ -13,6 +13,9 @@ import type { Transaction, PeriodKey } from "./types";
 import { HealthScoreHero, RunwayCard, BiggestLever } from "./v2";
 // Onda 3: cashflow chart enriquecido (history + projection com banda confianca)
 import { CashflowChart } from "./v2/Onda3Cards";
+// Fase A (19/05/2026): comparativos visuais (mes-vs-anterior, YoY, custom).
+import { ComparativeSection } from "./v2/ComparativeSection";
+import type { ComparativePeriod } from "@/hooks/useFinancialComparative";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 // Multi-CNPJ: precisa saber se esta em modo consolidado pra ajustar comportamento
 // dos cards v2 (legendas, hints "abra a empresa especifica", etc).
@@ -40,6 +43,21 @@ type Props = {
   onEdit?: (tx: Transaction) => void;
 };
 
+// PeriodKey tem mais opcoes que ComparativePeriod do hook. Mapeia os comparaveis.
+// "all" e "prev_year" nao tem comparativo natural — escondemos a secao.
+function periodToComparative(p: PeriodKey): ComparativePeriod | null {
+  switch (p) {
+    case "today":
+    case "week":
+    case "month":
+    case "year":
+    case "custom":
+      return p;
+    default:
+      return null; // all, prev_year
+  }
+}
+
 export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete, onEdit }: Props) {
   // Multi-CNPJ: detecta modo consolidado pra ajustar UI dos cards v2.
   // Em consolidated, BiggestLever mostra "Soma de todas as empresas" + dica
@@ -64,6 +82,9 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
 
   // Contadores rapidos pros subtitles dos accordions
   var pendingCount = transactions.filter(function(t) { return t.status === "pending"; }).length;
+
+  // Fase A: comparativo so renderiza quando o periodo eh comparavel.
+  var compPeriod = periodToComparative(period);
 
   return (
     <View>
@@ -144,6 +165,19 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
           <CashflowChart data={insights.cashflow} consolidated={consolidatedView} />
         </View>
       </CollapsibleSection>
+
+      {/* Fase A (19/05/2026): comparativo entre o periodo atual e um modo
+          comparativo (anterior, YoY, custom). Renderiza apenas quando period
+          tem comparativo natural — "all" e "prev_year" escondem a secao. */}
+      {compPeriod != null && (
+        <CollapsibleSection
+          id="comparativo"
+          title="Comparativo"
+          subtitle="Compare o periodo atual com mes anterior, ano passado ou periodo customizado"
+        >
+          <ComparativeSection period={compPeriod} customStart={customStart} customEnd={customEnd} />
+        </CollapsibleSection>
+      )}
 
       <CollapsibleSection
         id="analise-rapida"
