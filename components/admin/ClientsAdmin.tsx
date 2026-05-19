@@ -25,6 +25,8 @@ type Client360 = {
   vertical_active: VerticalKey | null;
   vertical_enabled_at: string | null;
   suggested_vertical: string | null;
+  // 19/05/2026: sub-segmentacao manual via Gestao Aura (Fase B1 do benchmark).
+  sub_vertical: string | null;
   // 12/05/2026: acessos extras pagos manualmente (vem do backend)
   extra_seats_granted?: number;
 };
@@ -227,6 +229,23 @@ export function ClientsAdmin() {
     onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar vertical"); },
   });
 
+  // 19/05/2026 — Fase B1 benchmark: sub-vertical manual.
+  var subVerticalMutation = useMutation({
+    mutationFn: function(p: { companyId: string; subVertical: string | null }) { return adminApi.setSubVertical(p.companyId, p.subVertical); },
+    onSuccess: function(result: any) {
+      qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      toast.success(result.message || "Sub-vertical atualizada");
+    },
+    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar sub-vertical"); },
+  });
+
+  // Carrega opcoes de sub-vertical do backend (1x — cached na sessao)
+  var subVerticalOptionsQuery = useQuery({
+    queryKey: ["admin-sub-verticals-options"],
+    queryFn: function() { return adminApi.subVerticalOptions(); },
+    staleTime: 5 * 60 * 1000, // 5min
+  });
+
   // 12/05/2026: notas + estender trial + extra seats mutations
   var notesMutation = useMutation({
     mutationFn: function(p: { companyId: string; body: string }) { return adminApi.notes.create(p.companyId, p.body); },
@@ -304,6 +323,12 @@ export function ClientsAdmin() {
   function handleChangeVertical(client: Client360, nextVertical: VerticalKey | null) {
     if (client.vertical_active === nextVertical) return;
     verticalMutation.mutate({ companyId: client.id, vertical: nextVertical });
+  }
+
+  // 19/05/2026: troca sub-vertical via dropdown. null = limpar.
+  function handleChangeSubVertical(client: Client360, nextSubVertical: string | null) {
+    if (client.sub_vertical === nextSubVertical) return;
+    subVerticalMutation.mutate({ companyId: client.id, subVertical: nextSubVertical });
   }
 
   // 12/05/2026: handlers das novas secoes
@@ -595,6 +620,65 @@ export function ClientsAdmin() {
             {sc.suggested_vertical ? " Sugestao baseada no CNAE: " + sc.suggested_vertical + "." : ""}
             {" "}Sem custo extra no alpha — R$69/mes no pricing oficial.
           </Text>
+        </View>
+
+        {/* 19/05/2026 — Sub-vertical (Fase B1 benchmark de mercado) */}
+        <View style={s.section}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={s.sectionTitle}>Sub-vertical</Text>
+            {subVerticalMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+          </View>
+          <Text style={s.verticalHint}>
+            Subsegmentacao usada pelo benchmark de mercado pra agrupar clientes
+            similares (ex: varejo de calcados vs varejo de moda).
+          </Text>
+          {(function() {
+            var options = subVerticalOptionsQuery.data?.by_vertical || {};
+            var key: string = sc.vertical_active ? sc.vertical_active : "null";
+            var list: string[] = options[key] || [];
+            if (list.length === 0) {
+              // Vertical sem whitelist — usa input livre
+              return (
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 10, alignItems: "center" }}>
+                  <Text style={[s.verticalHint, { color: Colors.ink }]}>Atual:</Text>
+                  <Text style={[s.verticalHint, { color: sc.sub_vertical ? Colors.violet3 : Colors.ink3, fontWeight: "600" }]}>
+                    {sc.sub_vertical || "nenhuma"}
+                  </Text>
+                  <Text style={[s.verticalHint, { fontStyle: "italic" }]}>
+                    (sem whitelist pra esta vertical — peca pro time setar via DB se precisar)
+                  </Text>
+                </View>
+              );
+            }
+            return (
+              <View style={s.verticalGrid}>
+                <Pressable
+                  onPress={function() { handleChangeSubVertical(sc, null); }}
+                  disabled={!sc.sub_vertical || subVerticalMutation.isPending}
+                  style={[s.verticalOption, !sc.sub_vertical && { borderColor: Colors.ink3, backgroundColor: Colors.bg4 }]}
+                >
+                  <Text style={s.verticalIcon}>—</Text>
+                  <Text style={[s.verticalLabel, !sc.sub_vertical && { color: Colors.ink }]}>Nenhuma</Text>
+                  {!sc.sub_vertical && <Text style={[s.verticalMeta, { color: Colors.ink3 }]}>atual</Text>}
+                </Pressable>
+                {list.map(function(sv: string) {
+                  var active = sc.sub_vertical === sv;
+                  return (
+                    <Pressable
+                      key={sv}
+                      onPress={function() { handleChangeSubVertical(sc, sv); }}
+                      disabled={active || subVerticalMutation.isPending}
+                      style={[s.verticalOption, active && { borderColor: Colors.violet, backgroundColor: Colors.violetD }]}
+                    >
+                      <Text style={s.verticalIcon}>•</Text>
+                      <Text style={[s.verticalLabel, active && { color: Colors.violet3 }]}>{sv}</Text>
+                      {active && <Text style={[s.verticalMeta, { color: Colors.violet3 }]}>ativo</Text>}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            );
+          })()}
         </View>
 
         {/* Health Breakdown */}
