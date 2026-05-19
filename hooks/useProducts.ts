@@ -22,6 +22,16 @@ async function deleteBatched(
 }
 
 function mapApiProduct(p: any): Product {
+  // 19/05/2026: depois da migration que move estoque pras variants
+  // (zera products.stock_qty no pai), o stock exibido pra produtos
+  // com variantes precisa vir da soma das variant.stock_qty —
+  // backend devolve em `variants_stock_total`. Singletons sem variantes
+  // continuam usando o stock_qty cru do produto.
+  const hasVariants = !!p.has_variants;
+  const rawStock = parseInt(p.stock_qty ?? p.stock_quantity ?? p.stock) || 0;
+  const variantsStock = parseInt(p.variants_stock_total) || 0;
+  const stock = hasVariants ? variantsStock : rawStock;
+
   return {
     id: p.id || p.product_id || String(Math.random()),
     name: p.name || p.product_name || "Produto",
@@ -30,7 +40,7 @@ function mapApiProduct(p: any): Product {
     category: p.category || "Produtos",
     price: parseFloat(p.price || p.sale_price) || 0,
     cost: parseFloat(p.cost || p.cost_price) || 0,
-    stock: parseInt(p.stock_qty ?? p.stock_quantity ?? p.stock) || 0,
+    stock,
     minStock: parseInt(p.stock_min ?? p.min_stock ?? p.minStock) || 0,
     unit: p.unit || "un",
     brand: p.brand || "",
@@ -38,7 +48,8 @@ function mapApiProduct(p: any): Product {
     color: p.color || "",
     size: p.size || "",
     image_url: p.image_url || "",
-    has_variants: !!p.has_variants,
+    has_variants: hasVariants,
+    variant_barcodes: Array.isArray(p.variant_barcodes) ? p.variant_barcodes : [],
     ncm: p.ncm || "",
   };
 }

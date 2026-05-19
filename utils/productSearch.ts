@@ -22,6 +22,13 @@
 // buscar por nome de cor ("preto"). Agora hexToName traduz e adiciona o
 // nome traduzido ao haystack ao lado do hex literal — busca por nome
 // passa a casar e busca por hex (raro mas válido) continua funcionando.
+//
+// 19/05/2026: depois da migration de variantes (Davi), o pai tem
+// barcode=NULL e cada variante carrega seu barcode em product_variants.
+// Backend devolve agora um array `variant_barcodes` por produto.
+// Incluimos esse array no haystack pra que o scanner local e a busca
+// textual encontrem o pai a partir do codigo de barras de qualquer
+// uma das suas variantes.
 
 import { hexToName } from "@/utils/colorNames";
 
@@ -42,6 +49,7 @@ export type SearchableProduct = {
   color?: string | null;
   size?: string | null;
   brand?: string | null;
+  variant_barcodes?: string[] | null;
 };
 
 // Constrói uma string única (já normalizada) com todos os campos
@@ -52,9 +60,15 @@ export type SearchableProduct = {
 // 08/05: se `color` for hex, expandimos pra incluir o nome traduzido pt-BR
 // no haystack (ex.: "#000000" → "preto" também entra). Isso permite que
 // `buscar("preto")` ache produtos cadastrados via color picker.
+//
+// 19/05: variant_barcodes — depois da migration de variantes, o pai tem
+// barcode=NULL. Cada variante carrega seu proprio barcode. Inclui todos
+// no haystack pra busca/scanner local achar o pai a partir do codigo de
+// uma variante.
 export function buildProductHaystack(p: SearchableProduct | any): string {
   const colorRaw = p?.color ? String(p.color) : "";
   const colorTranslated = colorRaw ? hexToName(colorRaw) : "";
+  const variantBcs = Array.isArray(p?.variant_barcodes) ? p.variant_barcodes.filter(Boolean).join(" ") : "";
   return normalizeText(
     [
       p?.name,
@@ -68,6 +82,7 @@ export function buildProductHaystack(p: SearchableProduct | any): string {
       colorTranslated && colorTranslated !== colorRaw ? colorTranslated : null,
       p?.size,
       p?.brand,
+      variantBcs || null,
     ]
       .filter(Boolean)
       .join(" ")
