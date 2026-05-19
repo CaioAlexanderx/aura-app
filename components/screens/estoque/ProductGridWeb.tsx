@@ -8,6 +8,9 @@
 // hover-reveal no canto inferior direito do card. Paridade com
 // ProductTableWeb. CSS .aura-est-card-actions vive em
 // useEstoquePremiumStyles.
+//
+// 19/05/2026 — badge VAR no thumbnail (paridade com ProductTableWeb).
+// Indica visualmente que clicar no card abre o editor de variantes.
 // ============================================================
 import { Platform } from "react-native";
 import { useColors, useThemeStore } from "@/constants/colors";
@@ -37,6 +40,7 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
 
   const accent = C.violet;
   const surface = isDark ? "rgba(20,14,38,0.55)" : "rgba(255,255,255,0.70)";
+  const surfaceSolid = isDark ? "#0e0820" : "#ffffff";
   const border = isDark ? "rgba(120,100,240,0.18)" : "rgba(109,40,217,0.10)";
 
   // Botão de ação inline. backdrop-filter + bg semitransparente pra ler em
@@ -120,6 +124,20 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                   background: "#fbbf24", color: "#5b3a00",
                   fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase",
                 } as any}>baixo</span>
+              ) : null}
+              {/* 19/05/2026: badge VAR no canto inferior esquerdo do thumbnail.
+                  Indica visualmente que clicar no card abre o editor de variantes.
+                  Espelha o badge do ProductTableWeb (linha 110). */}
+              {p.has_variants ? (
+                <span style={{
+                  position: "absolute", bottom: 8, left: 8, padding: "2px 6px", borderRadius: 5,
+                  background: isDark ? "rgba(10,6,24,0.78)" : "rgba(255,255,255,0.92)",
+                  backdropFilter: "blur(10px)",
+                  color: isDark ? "#f0edff" : "#1a1a2e",
+                  fontSize: 9, fontWeight: 800, letterSpacing: "0.08em",
+                  border: "1px solid " + (isDark ? "rgba(255,255,255,0.18)" : "rgba(109,40,217,0.20)"),
+                  boxShadow: "0 2px 6px rgba(20,10,40,0.18)",
+                } as any}>VAR</span>
               ) : null}
               {bulkMode ? (
                 <span style={{
