@@ -18,6 +18,12 @@ function getDetectedRegime(): string | null {
   try { if (typeof localStorage === "undefined") return null; var cfg = JSON.parse(localStorage.getItem("aura_config") || "{}"); return cfg.detectedRegime || null; } catch { return null; }
 }
 
+// FIX 19/05/2026 (Caio): pro-labore deixa de ser auto-calculado como 28% da
+// receita (raramente bate com o que o cliente retira de fato). Agora:
+// - toggle "pro-labore ativo" do contrato social continua existindo
+// - quando ativo, mostra um campo R$ manual obrigatorio (sem default automatico)
+// - Fator R passa a refletir o valor real informado (nao um % artificial)
+// Sem toggle ou sem valor: pro-labore = 0, retirada como distribuicao de lucro.
 export function TabRetirada({ transactions }: Props) {
   var { company } = useAuthStore();
   var realIncome = useMemo(function() { return transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
@@ -30,6 +36,7 @@ export function TabRetirada({ transactions }: Props) {
   var [customRevenue, setCustomRevenue] = useState("");
   var [customExpenses, setCustomExpenses] = useState("");
   var [proLaboreEnabled, setProLaboreEnabled] = useState(cfg.needsProLabore);
+  var [customProLabore, setCustomProLabore] = useState("");
 
   var rev = r2(parseFloat(customRevenue.replace(/[^0-9.,]/g, "").replace(",", ".")) || realIncome);
   var exp = r2(parseFloat(customExpenses.replace(/[^0-9.,]/g, "").replace(",", ".")) || realExpenses);
@@ -37,13 +44,15 @@ export function TabRetirada({ transactions }: Props) {
   var das = r2(regime === "mei" ? cfg.dasFixed : rev * cfg.dasRate);
   var lucroOp = r2(rev - exp - das);
 
+  // Pro-labore manual (sem default automatico). Toggle off -> 0. Toggle on
+  // sem valor digitado -> 0 (mostra hint pedindo pra preencher).
   var proLabore = 0, inss = 0, fatorR = 0;
   if (proLaboreEnabled && regime === "simples") {
-    var minProLabore = rev * 0.28;
-    proLabore = r2(Math.max(minProLabore, 1412));
+    proLabore = r2(parseFloat(customProLabore.replace(/[^0-9.,]/g, "").replace(",", ".")) || 0);
     inss = r2(proLabore * 0.11);
     fatorR = rev > 0 ? Math.round((proLabore / rev) * 100) : 0;
   }
+  var proLaboreMissing = proLaboreEnabled && regime === "simples" && proLabore === 0;
 
   var maxRetirada = r2(Math.max(0, lucroOp - proLabore - inss));
   var seguraRetirada = r2(Math.max(0, maxRetirada * 0.85));
@@ -64,9 +73,20 @@ export function TabRetirada({ transactions }: Props) {
           <View style={s.proLaboreToggle}>
             <View style={{ flex: 1 }}>
               <Text style={s.proLaboreLabel}>Pro-labore no contrato social</Text>
-              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Fator R sera calculado na simulacao" : "Sem pro-labore — retirada como distribuicao de lucro"}</Text>
+              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Informe o valor mensal abaixo. Fator R sera calculado em cima dele." : "Sem pro-labore — retirada como distribuicao de lucro"}</Text>
             </View>
             <Switch value={proLaboreEnabled} onValueChange={setProLaboreEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
+          </View>
+        )}
+        {proLaboreEnabled && regime === "simples" && (
+          <View style={s.proLaboreInputWrap}>
+            <Text style={s.proLaboreInputLabel}>Pro-labore mensal (R$)</Text>
+            <TextInput style={[s.proLaboreInput, proLaboreMissing && s.proLaboreInputMissing]} value={customProLabore} onChangeText={setCustomProLabore} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
+            {proLaboreMissing ? (
+              <Text style={s.proLaboreInputHint}>Informe o valor mensal para calcular Fator R e INSS.</Text>
+            ) : proLabore > 0 ? (
+              <Text style={s.proLaboreInputOk}>INSS estimado: {fmt(inss)} · Fator R: {fatorR}%</Text>
+            ) : null}
           </View>
         )}
       </View>
@@ -90,7 +110,7 @@ export function TabRetirada({ transactions }: Props) {
           <View style={s.impactCard}><Text style={s.impactTitle}>Se voce retirar o valor seguro:</Text>
             <View style={s.impactRow}><Text style={s.impactLabel}>Caixa apos retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
             <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria ({regime === "mei" ? "DAS fixo" : "DAS 6%"})</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
-            {proLaboreEnabled && regime === "simples" && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(r2(proLabore + inss))}</Text></View>}
+            {proLaboreEnabled && regime === "simples" && proLabore > 0 && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(r2(proLabore + inss))}</Text></View>}
             <View style={[s.impactRow, { borderBottomWidth: 0 }]}><Text style={s.impactLabel}>Status</Text><View style={[s.impactBadge, { backgroundColor: caixaApos >= 0 ? Colors.greenD : Colors.redD }]}><Text style={[s.impactBadgeText, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{caixaApos >= 0 ? "Saudavel" : "Risco"}</Text></View></View>
           </View>
 
@@ -102,22 +122,22 @@ export function TabRetirada({ transactions }: Props) {
             {exp > 0 && <WRow label="(-) Despesas operacionais" value={exp} color={Colors.red} />}
             <WRow label={regime === "mei" ? "(-) DAS fixo mensal" : "(-) DAS estimado (" + (cfg.dasRate*100).toFixed(0) + "%)"}  value={das} color={Colors.red} />
             <WRow label="= Lucro operacional" value={lucroOp} bold />
-            {proLaboreEnabled && regime === "simples" && <View><View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View><WRow label={"(-) Pro-labore (" + fatorR + "% da receita)"} value={proLabore} color={Colors.amber} /><WRow label="(-) INSS (11%)" value={inss} color={Colors.red} /></View>}
+            {proLaboreEnabled && regime === "simples" && proLabore > 0 && <View><View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View><WRow label={"(-) Pro-labore (Fator R " + fatorR + "%)"} value={proLabore} color={Colors.amber} /><WRow label="(-) INSS (11%)" value={inss} color={Colors.red} /></View>}
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado final</Text></View>
             <WRow label="Retirada segura (85%)" value={seguraRetirada} highlight color={Colors.green} />
           </View>
 
-          {proLaboreEnabled && regime === "simples" && (
+          {proLaboreEnabled && regime === "simples" && proLabore > 0 && (
             <View style={s.fatorCard}><View style={s.fatorTop}><View><Text style={s.fatorTitle}>Monitor Fator R</Text><Text style={s.fatorValue}>{fatorR}%</Text></View><View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}><Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text></View></View>
               <View style={s.fatorBar}><View style={[s.fatorFill, { width: Math.min(fatorR, 100) + "%", backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} /><View style={s.fatorMark} /></View>
               <View style={s.fatorLabels}><Text style={s.fatorLabelLeft}>0%</Text><Text style={s.fatorLabel28}>28%</Text><Text style={s.fatorLabelRight}>100%</Text></View>
-              <Text style={s.fatorHint}>{fatorR >= 28 ? "Pro-labore " + (fatorR - 28) + " pontos acima do minimo. Folga para Anexo III." : "Pro-labore " + (28 - fatorR) + " pontos abaixo. Considere aumentar para evitar Anexo V."}</Text>
+              <Text style={s.fatorHint}>{fatorR >= 28 ? "Pro-labore " + (fatorR - 28) + " pontos acima do minimo. Folga para Anexo III." : "Pro-labore " + (28 - fatorR) + " pontos abaixo do minimo. Considere aumentar para evitar Anexo V."}</Text>
             </View>
           )}
 
-          {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"\u2022"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"\u2022"} Limite: R$ 81.000/ano ({fmt(r2(81000/12))})/mes</Text><Text style={s.meiInfoText}>{"\u2022"} Receita anual estimada: {fmt(r2(rev * 12))} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
+          {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"•"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"•"} Limite: R$ 81.000/ano ({fmt(r2(81000/12))})/mes</Text><Text style={s.meiInfoText}>{"•"} Receita anual estimada: {fmt(r2(rev * 12))} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
 
-          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Valores para referencia e apoio a decisao. Resultados baseados nos lancamentos registrados.</Text></View>
+          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Valores para referencia e apoio a decisao. Resultados baseados nos lancamentos registrados e no pro-labore informado.</Text></View>
         </View>
       )}
     </View>
@@ -140,6 +160,12 @@ var s = StyleSheet.create({
   proLaboreToggle: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.border },
   proLaboreLabel: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   proLaboreHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  proLaboreInputWrap: { backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.border, gap: 6 },
+  proLaboreInputLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  proLaboreInput: { backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: Colors.ink, fontWeight: "600" },
+  proLaboreInputMissing: { borderColor: Colors.amber },
+  proLaboreInputHint: { fontSize: 10, color: Colors.amber, fontStyle: "italic" },
+  proLaboreInputOk: { fontSize: 10, color: Colors.violet3 },
   inputRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
   inputLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
   input: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: Colors.ink, fontWeight: "600" },

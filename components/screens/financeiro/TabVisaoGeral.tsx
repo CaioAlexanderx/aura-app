@@ -4,8 +4,6 @@ import { EmptyState } from "@/components/EmptyState";
 import { SmartBalance } from "./SmartBalance";
 import { SparklineBar } from "./SparklineBar";
 import { PendingCards } from "./PendingCards";
-import { IncomeDetail } from "./IncomeDetail";
-import { ExpenseDetail } from "./ExpenseDetail";
 import { ReconciliationSection } from "./ReconciliationSection";
 import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
@@ -65,8 +63,6 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
   }
 
   // Contadores rapidos pros subtitles dos accordions
-  var incomeCount = transactions.filter(function(t) { return t.type === "income"; }).length;
-  var expenseCount = transactions.filter(function(t) { return t.type === "expense"; }).length;
   var pendingCount = transactions.filter(function(t) { return t.status === "pending"; }).length;
 
   return (
@@ -123,7 +119,13 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
 
       <SparklineBar transactions={transactions} />
 
-      {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand === */}
+      {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand ===
+          REDESIGN 19/05/2026: removidas as secoes "Receitas - analise detalhada" e
+          "Despesas - analise detalhada" daqui. Elas duplicavam quase 1:1 o conteudo
+          das abas Receitas/Despesas (IncomeDetail/ExpenseDetail = top categorias,
+          top 5, tendencia diaria, formas de pagamento). Quem quer detalhe clica
+          na aba dedicada. Visao Geral fica focada em "headline + saude" sem repetir
+          os mesmos KPIs com delta% em 3 lugares. */}
       <CollapsibleSection
         id="pendencias"
         title="Pendências"
@@ -131,24 +133,6 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         defaultExpanded
       >
         <PendingCards transactions={transactions} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="receitas-detalhe"
-        title="Receitas — análise detalhada"
-        subtitle={incomeCount + " lancamento" + (incomeCount === 1 ? "" : "s") + " · categorias, top 5, tendência diária"}
-        defaultExpanded
-      >
-        <IncomeDetail transactions={transactions} previousIncome={previousSummary ? previousSummary.income : null} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="despesas-detalhe"
-        title="Despesas — análise detalhada"
-        subtitle={expenseCount + " lancamento" + (expenseCount === 1 ? "" : "s") + " · categorias, top 5, formas de pagamento"}
-        defaultExpanded
-      >
-        <ExpenseDetail transactions={transactions} previousExpenses={previousSummary ? previousSummary.expenses : null} />
       </CollapsibleSection>
 
       <CollapsibleSection
