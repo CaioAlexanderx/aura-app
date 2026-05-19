@@ -56,6 +56,16 @@ export type PdvSettings = {
   // e em dinheiro (single ou parcela dinheiro em split-mode). Default
   // true em DEFAULT_SETTINGS — operador batuto/fila grande pode desligar.
   cash_tender_modal_enabled: boolean;
+  // 18/05/2026 (Fase 0 Aura Food, migration 118): quando true, o PDV
+  // passa a operar em modo "fechar mesa" em vez de venda avulsa.
+  // Toggle so aparece em Configuracoes > PDV para empresas com
+  // vertical_active=food. Opcional pra backward compat — empresas
+  // sem migration 118 retornam undefined.
+  food_mode_enabled?: boolean;
+  // 18/05/2026 (Fase 0 Aura Food, migration 118): taxa de servico
+  // sobre subtotal da comanda. 0 = desativado. Aparece como linha
+  // separada no fechamento da mesa. Default 10 (10%).
+  service_fee_pct?: number;
 };
 
 export var authApi = {
