@@ -12,6 +12,11 @@
 //   - Pontos visiveis em todos os dias (current+previous)
 //   - Label do MAX de cada serie ancorado no pico
 //   - KPIs com delta absoluto em R$ alem do delta %
+//
+// v3 (20/05/2026, fix esticamento):
+//   - Mede largura real do container via onLayout
+//   - Remove viewBox + preserveAspectRatio do SVG
+//   - SVG renderiza em pixels absolutos sem distorcao
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet, TextInput, Platform } from "react-native";
@@ -224,11 +229,16 @@ function LegendItem({ dot, dashed, label }: { dot: string; dashed: boolean; labe
 // ... N) — se as series tem tamanhos diferentes (raro: meses 30/31 dias),
 // alinha pelo max. Eixo Y comeca em 0 (sempre incluido) e vai ate max+15%.
 //
-// v2: ticks Y rotulados + grid horizontal + pontos clicaveis + label max
+// v3 (20/05/2026): mede largura real via onLayout pra evitar esticamento.
+// Antes usava viewBox 600x200 com preserveAspectRatio='none' — quando o
+// container era largo (1500px), os elementos eram esticados horizontalmente
+// e os textos achatados. Agora W vem do measure real do container.
 function ComparativeChart({ current, previous }: { current: DailyPoint[]; previous: DailyPoint[] }) {
-  var W = 600;
-  var H = 200;
-  var PAD = { top: 16, right: 16, bottom: 16, left: 56 };
+  // W comeca em 600 (fallback) e atualiza no primeiro render pos-layout.
+  // H fixo em 220 — altura constante independente da largura.
+  var [W, setW] = useState<number>(600);
+  var H = 220;
+  var PAD = { top: 20, right: 24, bottom: 16, left: 60 };
 
   var chart = useMemo(function () {
     var n = Math.max(current.length, previous.length);
@@ -298,105 +308,112 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
       curMaxValue: curVals.length > 0 ? curVals[curMaxIdx] : 0,
       prevMaxValue: prevVals.length > 0 ? prevVals[prevMaxIdx] : 0,
     };
-  }, [current, previous]);
+  // W entra como dep do useMemo pra recalcular quando o container muda de largura
+  // (ex: redimensionamento de janela na web)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, previous, W]);
 
-  if (!chart) {
-    return (
-      <View style={s.chartEmpty}>
-        <Text style={s.placeholderText}>Sem pontos no periodo.</Text>
-      </View>
-    );
-  }
-
-  // Grid + labels Y. flatMap retorna 2 elementos por tick (Line + SvgText)
-  // sem precisar de Fragment — JSX renderiza arrays planos nativamente.
-  var gridAndLabels = chart.ticks.flatMap(function (t, i) {
-    var isZero = Math.abs(t.value) < 0.5;
-    return [
-      <Line
-        key={"tick-line-" + i}
-        x1={PAD.left}
-        x2={W - PAD.right}
-        y1={t.y}
-        y2={t.y}
-        stroke={isZero ? Colors.ink3 : Colors.border}
-        strokeWidth={isZero ? 1 : 0.5}
-        strokeDasharray={isZero ? "4,3" : "2,4"}
-        opacity={isZero ? 0.7 : 0.4}
-      />,
-      <SvgText
-        key={"tick-text-" + i}
-        x={PAD.left - 8}
-        y={t.y + 3}
-        fontSize="9"
-        fontWeight="600"
-        fill={Colors.ink3}
-        textAnchor="end"
-      >
-        {fmtBRLCompact(t.value)}
-      </SvgText>,
-    ];
-  });
-
+  // Container View captura largura real via onLayout. SVG fica com w/h em pixels
+  // absolutos — sem viewBox e sem preserveAspectRatio, evita esticamento.
   return (
-    <Svg width="100%" height={H} viewBox={"0 0 " + W + " " + H} preserveAspectRatio="none">
-      {/* Grid horizontal + labels Y */}
-      {gridAndLabels}
+    <View
+      style={{ width: "100%", height: H }}
+      onLayout={function (e) {
+        var w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - W) > 1) setW(w);
+      }}
+    >
+      {chart ? (
+        <Svg width={W} height={H}>
+          {/* Grid horizontal + labels Y */}
+          {chart.ticks.flatMap(function (t, i) {
+            var isZero = Math.abs(t.value) < 0.5;
+            return [
+              <Line
+                key={"tick-line-" + i}
+                x1={PAD.left}
+                x2={W - PAD.right}
+                y1={t.y}
+                y2={t.y}
+                stroke={isZero ? Colors.ink3 : Colors.border}
+                strokeWidth={isZero ? 1 : 0.5}
+                strokeDasharray={isZero ? "4,3" : "2,4"}
+                opacity={isZero ? 0.7 : 0.4}
+              />,
+              <SvgText
+                key={"tick-text-" + i}
+                x={PAD.left - 8}
+                y={t.y + 3}
+                fontSize="10"
+                fontWeight="600"
+                fill={Colors.ink3}
+                textAnchor="end"
+              >
+                {fmtBRLCompact(t.value)}
+              </SvgText>,
+            ];
+          })}
 
-      {/* Previous (comparativo) — cinza pontilhado, atras */}
-      <Path d={chart.previousPath} stroke={Colors.ink3} strokeWidth={1.8} strokeDasharray="4,4" fill="none" opacity={0.7} />
-      {/* Pontos da previous (sutis) */}
-      {chart.previousPoints.map(function (p, i) {
-        return <Circle key={"prev-pt-" + i} cx={p.x} cy={p.y} r={i === chart.prevMaxIdx ? 3 : 1.5} fill={Colors.ink3} opacity={0.65} />;
-      })}
+          {/* Previous (comparativo) — cinza pontilhado, atras */}
+          <Path d={chart.previousPath} stroke={Colors.ink3} strokeWidth={1.8} strokeDasharray="4,4" fill="none" opacity={0.7} />
+          {/* Pontos da previous (sutis) */}
+          {chart.previousPoints.map(function (p, i) {
+            return <Circle key={"prev-pt-" + i} cx={p.x} cy={p.y} r={i === chart.prevMaxIdx ? 3 : 1.5} fill={Colors.ink3} opacity={0.65} />;
+          })}
 
-      {/* Current — violeta solido, na frente */}
-      <Path d={chart.currentPath} stroke={Colors.violet} strokeWidth={2.4} fill="none" />
-      {/* Pontos da current */}
-      {chart.currentPoints.map(function (p, i) {
-        var isMax = i === chart.curMaxIdx;
-        var isLast = i === chart.currentPoints.length - 1;
-        return (
-          <Circle
-            key={"cur-pt-" + i}
-            cx={p.x}
-            cy={p.y}
-            r={isMax || isLast ? 3.5 : 2}
-            fill={Colors.violet}
-            stroke={isMax || isLast ? "#fff" : "transparent"}
-            strokeWidth={isMax || isLast ? 1.2 : 0}
-          />
-        );
-      })}
+          {/* Current — violeta solido, na frente */}
+          <Path d={chart.currentPath} stroke={Colors.violet} strokeWidth={2.4} fill="none" />
+          {/* Pontos da current */}
+          {chart.currentPoints.map(function (p, i) {
+            var isMax = i === chart.curMaxIdx;
+            var isLast = i === chart.currentPoints.length - 1;
+            return (
+              <Circle
+                key={"cur-pt-" + i}
+                cx={p.x}
+                cy={p.y}
+                r={isMax || isLast ? 4 : 2.2}
+                fill={Colors.violet}
+                stroke={isMax || isLast ? "#fff" : "transparent"}
+                strokeWidth={isMax || isLast ? 1.4 : 0}
+              />
+            );
+          })}
 
-      {/* Label do MAX da current (sobre o pico) */}
-      {chart.currentPoints.length > 0 && chart.curMaxValue > 0 && (
-        <SvgText
-          x={chart.currentPoints[chart.curMaxIdx].x}
-          y={Math.max(PAD.top + 8, chart.currentPoints[chart.curMaxIdx].y - 8)}
-          fontSize="10"
-          fontWeight="700"
-          fill={Colors.violet}
-          textAnchor="middle"
-        >
-          {fmtBRLCompact(chart.curMaxValue)}
-        </SvgText>
+          {/* Label do MAX da current (sobre o pico) */}
+          {chart.currentPoints.length > 0 && chart.curMaxValue > 0 && (
+            <SvgText
+              x={chart.currentPoints[chart.curMaxIdx].x}
+              y={Math.max(PAD.top + 8, chart.currentPoints[chart.curMaxIdx].y - 10)}
+              fontSize="11"
+              fontWeight="700"
+              fill={Colors.violet}
+              textAnchor="middle"
+            >
+              {fmtBRLCompact(chart.curMaxValue)}
+            </SvgText>
+          )}
+          {/* Label do MAX da previous (sutil) — so renderiza se nao colidir com label da current */}
+          {chart.previousPoints.length > 0 && chart.prevMaxValue > 0 && Math.abs(chart.curMaxIdx - chart.prevMaxIdx) > 2 && (
+            <SvgText
+              x={chart.previousPoints[chart.prevMaxIdx].x}
+              y={Math.max(PAD.top + 8, chart.previousPoints[chart.prevMaxIdx].y - 10)}
+              fontSize="10"
+              fontWeight="600"
+              fill={Colors.ink3}
+              textAnchor="middle"
+              opacity={0.85}
+            >
+              {fmtBRLCompact(chart.prevMaxValue)}
+            </SvgText>
+          )}
+        </Svg>
+      ) : (
+        <View style={s.chartEmpty}>
+          <Text style={s.placeholderText}>Sem pontos no periodo.</Text>
+        </View>
       )}
-      {/* Label do MAX da previous (sutil) — so renderiza se nao colidir com label da current */}
-      {chart.previousPoints.length > 0 && chart.prevMaxValue > 0 && Math.abs(chart.curMaxIdx - chart.prevMaxIdx) > 2 && (
-        <SvgText
-          x={chart.previousPoints[chart.prevMaxIdx].x}
-          y={Math.max(PAD.top + 8, chart.previousPoints[chart.prevMaxIdx].y - 8)}
-          fontSize="9"
-          fontWeight="600"
-          fill={Colors.ink3}
-          textAnchor="middle"
-          opacity={0.85}
-        >
-          {fmtBRLCompact(chart.prevMaxValue)}
-        </SvgText>
-      )}
-    </Svg>
+    </View>
   );
 }
 
