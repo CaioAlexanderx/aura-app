@@ -6,10 +6,16 @@
 //
 // Modos: mes anterior (default), YoY, custom-vs-custom.
 // Tudo dentro de uma CollapsibleSection na TabVisaoGeral.
+//
+// v2 (19/05/2026 noite, pos-merge):
+//   - Eixo Y com 5 ticks rotulados + grid horizontal
+//   - Pontos visiveis em todos os dias (current+previous)
+//   - Label do MAX de cada serie ancorado no pico
+//   - KPIs com delta absoluto em R$ alem do delta %
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet, TextInput, Platform } from "react-native";
-import Svg, { Path, Line, Circle } from "react-native-svg";
+import Svg, { Path, Line, Circle, Text as SvgText } from "react-native-svg";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import {
@@ -44,6 +50,15 @@ function fmtDelta(v: number | null): { text: string; color: string; arrow: "up" 
   var arrow: "up" | "down" = v > 0 ? "up" : "down";
   var sign = v > 0 ? "+" : "";
   return { text: sign + v.toFixed(1).replace(".", ",") + "%", color: v > 0 ? Colors.green : Colors.red, arrow };
+}
+
+// Formata o delta absoluto em R$ com sinal: "+R$ 5,0k" ou "−R$ 17,8k" ou "—"
+function fmtDeltaAbs(current: number, previous: number): { text: string; arrow: "up" | "down" | "flat" } {
+  var diff = current - previous;
+  if (Math.abs(diff) < 1) return { text: "—", arrow: "flat" };
+  var arrow: "up" | "down" = diff > 0 ? "up" : "down";
+  var sign = diff > 0 ? "+" : "−";
+  return { text: sign + fmtBRLCompact(Math.abs(diff)), arrow };
 }
 
 // dd/mm/aaaa → yyyy-mm-dd (null se invalido)
@@ -174,6 +189,7 @@ export function ComparativeSection({ period, customStart, customEnd }: Props) {
 
 function KpiCard({ label, current, previous, delta, positiveIsGood }: { label: string; current: number; previous: number; delta: number | null; positiveIsGood: boolean }) {
   var d = fmtDelta(delta);
+  var dAbs = fmtDeltaAbs(current, previous);
   // Pra despesa, "subiu" é ruim (vermelho), "caiu" é bom (verde). Inverte a cor logica do delta.
   var deltaColor = d.color;
   if (!positiveIsGood && d.arrow !== "flat") {
@@ -186,8 +202,9 @@ function KpiCard({ label, current, previous, delta, positiveIsGood }: { label: s
       <View style={s.kpiDeltaRow}>
         <Icon name={d.arrow === "up" ? "arrow_up_right" : d.arrow === "down" ? "arrow_down_right" : "minus"} size={11} color={deltaColor} />
         <Text style={[s.kpiDelta, { color: deltaColor }]}>{d.text}</Text>
-        <Text style={s.kpiPrev}>· ant. {fmtBRLCompact(previous)}</Text>
+        <Text style={[s.kpiDeltaAbs, { color: deltaColor }]}>· {dAbs.text}</Text>
       </View>
+      <Text style={s.kpiPrev}>ant. {fmtBRLCompact(previous)}</Text>
     </View>
   );
 }
@@ -205,27 +222,29 @@ function LegendItem({ dot, dashed, label }: { dot: string; dashed: boolean; labe
 // Renderiza 2 linhas sobrepostas (current e previous) com escala alinhada
 // pelo maior valor das 2 series. Eixo X normalizado por indice (dia 1, 2,
 // ... N) — se as series tem tamanhos diferentes (raro: meses 30/31 dias),
-// alinha pelo max. Eixo Y comeca em 0 e vai ate o max+10% pra dar respiro.
+// alinha pelo max. Eixo Y comeca em 0 (sempre incluido) e vai ate max+15%.
+//
+// v2: ticks Y rotulados + grid horizontal + pontos clicaveis + label max
 function ComparativeChart({ current, previous }: { current: DailyPoint[]; previous: DailyPoint[] }) {
   var W = 600;
-  var H = 180;
-  var PAD = { top: 16, right: 12, bottom: 20, left: 12 };
+  var H = 200;
+  var PAD = { top: 16, right: 16, bottom: 16, left: 56 };
 
   var chart = useMemo(function () {
     var n = Math.max(current.length, previous.length);
     if (n === 0) return null;
 
-    // Usa "net" como linha principal (saldo dia a dia). Pode trocar pra income se preferir.
+    // Usa "net" como linha principal (saldo dia a dia).
     var curVals = current.map(function (d) { return d.net; });
     var prevVals = previous.map(function (d) { return d.net; });
 
-    var allVals = curVals.concat(prevVals);
-    var maxV = Math.max.apply(null, allVals.length > 0 ? allVals : [0]);
-    var minV = Math.min.apply(null, allVals.length > 0 ? allVals : [0]);
+    var allVals = curVals.concat(prevVals).concat([0]); // sempre inclui 0 no range pra grafico nao ficar "flutuando"
+    var maxV = Math.max.apply(null, allVals);
+    var minV = Math.min.apply(null, allVals);
     if (maxV === minV) { maxV += 1; minV -= 1; }
     var span = maxV - minV;
-    var paddedMax = maxV + span * 0.1;
-    var paddedMin = minV - span * 0.1;
+    var paddedMax = maxV + span * 0.15;
+    var paddedMin = minV - span * 0.05;
     var paddedSpan = paddedMax - paddedMin;
 
     function x(i: number): number {
@@ -248,12 +267,36 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
       return parts.join(" ");
     }
 
+    // 5 ticks Y igualmente espacados entre paddedMin e paddedMax
+    var ticks: Array<{ value: number; y: number }> = [];
+    var TICK_COUNT = 4;
+    for (var i = 0; i <= TICK_COUNT; i++) {
+      var v = paddedMin + (i / TICK_COUNT) * paddedSpan;
+      ticks.push({ value: v, y: y(v) });
+    }
+
+    // Pontos por indice (current + previous)
+    var currentPoints = curVals.map(function (v, i) { return { x: x(i), y: y(v), value: v }; });
+    var previousPoints = prevVals.map(function (v, i) { return { x: x(i), y: y(v), value: v }; });
+
+    // Indices do MAX de cada serie (label ancorado no pico)
+    var curMaxIdx = 0;
+    for (var i = 1; i < curVals.length; i++) { if (curVals[i] > curVals[curMaxIdx]) curMaxIdx = i; }
+    var prevMaxIdx = 0;
+    for (var i = 1; i < prevVals.length; i++) { if (prevVals[i] > prevVals[prevMaxIdx]) prevMaxIdx = i; }
+
     var zeroY = y(0);
     return {
       currentPath: buildPath(curVals),
       previousPath: buildPath(prevVals),
       zeroY: zeroY > PAD.top && zeroY < H - PAD.bottom ? zeroY : null,
-      currentEndPoint: curVals.length > 0 ? { x: x(curVals.length - 1), y: y(curVals[curVals.length - 1]) } : null,
+      ticks: ticks,
+      currentPoints: currentPoints,
+      previousPoints: previousPoints,
+      curMaxIdx: curMaxIdx,
+      prevMaxIdx: prevMaxIdx,
+      curMaxValue: curVals.length > 0 ? curVals[curMaxIdx] : 0,
+      prevMaxValue: prevVals.length > 0 ? prevVals[prevMaxIdx] : 0,
     };
   }, [current, previous]);
 
@@ -266,22 +309,95 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
   }
 
   return (
-    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      {/* Linha zero (apenas se cruzar o range) */}
-      {chart.zeroY != null && (
-        <Line x1={PAD.left} x2={W - PAD.right} y1={chart.zeroY} y2={chart.zeroY} stroke={Colors.border} strokeWidth={1} strokeDasharray="3,3" />
-      )}
+    <Svg width="100%" height={H} viewBox={"0 0 " + W + " " + H} preserveAspectRatio="none">
+      {/* Grid horizontal + labels Y */}
+      {chart.ticks.map(function (t, i) {
+        var isZero = Math.abs(t.value) < 0.5;
+        return (
+          <React.Fragment key={"tick-" + i}>
+            <Line
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={t.y}
+              y2={t.y}
+              stroke={isZero ? Colors.ink3 : Colors.border}
+              strokeWidth={isZero ? 1 : 0.5}
+              strokeDasharray={isZero ? "4,3" : "2,4"}
+              opacity={isZero ? 0.7 : 0.4}
+            />
+            <SvgText
+              x={PAD.left - 8}
+              y={t.y + 3}
+              fontSize="9"
+              fontWeight="600"
+              fill={Colors.ink3}
+              textAnchor="end"
+            >
+              {fmtBRLCompact(t.value)}
+            </SvgText>
+          </React.Fragment>
+        );
+      })}
+
       {/* Previous (comparativo) — cinza pontilhado, atras */}
-      <Path d={chart.previousPath} stroke={Colors.ink3} strokeWidth={1.8} strokeDasharray="4,4" fill="none" />
+      <Path d={chart.previousPath} stroke={Colors.ink3} strokeWidth={1.8} strokeDasharray="4,4" fill="none" opacity={0.7} />
+      {/* Pontos da previous (sutis) */}
+      {chart.previousPoints.map(function (p, i) {
+        return <Circle key={"prev-pt-" + i} cx={p.x} cy={p.y} r={i === chart.prevMaxIdx ? 3 : 1.5} fill={Colors.ink3} opacity={0.65} />;
+      })}
+
       {/* Current — violeta solido, na frente */}
       <Path d={chart.currentPath} stroke={Colors.violet} strokeWidth={2.4} fill="none" />
-      {/* Ponta atual destacada */}
-      {chart.currentEndPoint && (
-        <Circle cx={chart.currentEndPoint.x} cy={chart.currentEndPoint.y} r={4} fill={Colors.violet} />
+      {/* Pontos da current */}
+      {chart.currentPoints.map(function (p, i) {
+        var isMax = i === chart.curMaxIdx;
+        var isLast = i === chart.currentPoints.length - 1;
+        return (
+          <Circle
+            key={"cur-pt-" + i}
+            cx={p.x}
+            cy={p.y}
+            r={isMax || isLast ? 3.5 : 2}
+            fill={Colors.violet}
+            stroke={isMax || isLast ? "#fff" : "transparent"}
+            strokeWidth={isMax || isLast ? 1.2 : 0}
+          />
+        );
+      })}
+
+      {/* Label do MAX da current (sobre o pico) */}
+      {chart.currentPoints.length > 0 && chart.curMaxValue > 0 && (
+        <SvgText
+          x={chart.currentPoints[chart.curMaxIdx].x}
+          y={Math.max(PAD.top + 8, chart.currentPoints[chart.curMaxIdx].y - 8)}
+          fontSize="10"
+          fontWeight="700"
+          fill={Colors.violet}
+          textAnchor="middle"
+        >
+          {fmtBRLCompact(chart.curMaxValue)}
+        </SvgText>
+      )}
+      {/* Label do MAX da previous (sutil) */}
+      {chart.previousPoints.length > 0 && chart.prevMaxValue > 0 && Math.abs(chart.curMaxIdx - chart.prevMaxIdx) > 2 && (
+        <SvgText
+          x={chart.previousPoints[chart.prevMaxIdx].x}
+          y={Math.max(PAD.top + 8, chart.previousPoints[chart.prevMaxIdx].y - 8)}
+          fontSize="9"
+          fontWeight="600"
+          fill={Colors.ink3}
+          textAnchor="middle"
+          opacity={0.85}
+        >
+          {fmtBRLCompact(chart.prevMaxValue)}
+        </SvgText>
       )}
     </Svg>
   );
 }
+
+// React import for Fragment usage above
+import * as React from "react";
 
 var s = StyleSheet.create({
   selectorRow: { gap: 10, marginBottom: 12 },
@@ -297,12 +413,13 @@ var s = StyleSheet.create({
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customHint: { fontSize: 11, color: Colors.amber, fontStyle: "italic", flexBasis: "100%" },
   kpiRow: { flexDirection: "row", gap: 10, marginBottom: 14, flexWrap: "wrap" },
-  kpiCard: { flex: 1, minWidth: 130, backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border },
+  kpiCard: { flex: 1, minWidth: 150, backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border },
   kpiLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 },
   kpiValue: { fontSize: 18, color: Colors.ink, fontWeight: "800", letterSpacing: -0.3 },
   kpiDeltaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, flexWrap: "wrap" },
   kpiDelta: { fontSize: 12, fontWeight: "700" },
-  kpiPrev: { fontSize: 10, color: Colors.ink3, fontStyle: "italic" },
+  kpiDeltaAbs: { fontSize: 11, fontWeight: "600" },
+  kpiPrev: { fontSize: 10, color: Colors.ink3, fontStyle: "italic", marginTop: 2 },
   chartCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border },
   chartEmpty: { padding: 24, alignItems: "center", justifyContent: "center" },
   legendRow: { flexDirection: "row", gap: 18, marginTop: 10, flexWrap: "wrap" },
