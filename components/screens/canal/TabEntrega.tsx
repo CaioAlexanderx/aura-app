@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Canal Digital · Aba Entrega (Fase 5)
+// AURA. — Canal Digital · Aba Entrega (Fase 5 + polish 20/05/2026)
 // Configura retirada e entrega:
 //  • Retirada: endereço + ETA livre
 //  • Entrega: modo de cobrança (flat | distance), CEP origem,
@@ -8,15 +8,28 @@
 //  • Preview do checkout do cliente
 // Backend (PR paralelo) faz geocoding via BrasilAPI quando
 // origin_zip é salvo. Frontend só envia o CEP em dígitos.
+//
+// Polish 20/05/2026:
+//  • Inputs com prefixo R$ ganham borderRight separando prefixo
+//    do valor + max-width 220 (cabe placeholder sem truncar)
+//  • Modo de cobrança vira 2 mode-cards com descrição
+//  • Separadores horizontais entre sub-seções
+//  • CEP geolocalizado mostra badge verde de sucesso
+//  • Empty state das faixas com CTA proeminente
+//  • Frete grátis em sub-card destacado
+//  • Mobile (<480px): mode-grid stack 1 coluna
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import {
-  View, Text, StyleSheet, Pressable, TextInput, Switch, ActivityIndicator,
+  View, Text, StyleSheet, Pressable, TextInput, Switch, ActivityIndicator, Dimensions,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { IS_WIDE, ChipToggle, Field, SectionTitle, cs } from "./shared";
+import { IS_WIDE, Field, cs } from "./shared";
+
+// Narrow mode: phones estreitas (<480px) precisam stack do mode-grid
+const NARROW = Dimensions.get("window").width < 480;
 
 // ============================================================
 // Tipos & defaults
@@ -56,11 +69,6 @@ const DEFAULT_HOURS: BusinessHours = {
   sab: { open: "09:00", close: "13:00", closed: false },
   dom: { open: "", close: "", closed: true },
 };
-
-const PRICING_OPTIONS: Array<{ value: PricingMode; label: string; hint?: string }> = [
-  { value: "flat",     label: "Taxa única" },
-  { value: "distance", label: "Por distância" },
-];
 
 // ============================================================
 // Normalizadores defensivos
@@ -230,10 +238,9 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
   }
 
   // --- Modo de cobrança ---------------------------------------
-  function handlePricingMode(v: string) {
-    const mode = (v === "distance" ? "distance" : "flat") as PricingMode;
-    setPricingMode(mode);
-    scheduleSave({ delivery_pricing_mode: mode });
+  function handlePricingMode(v: PricingMode) {
+    setPricingMode(v);
+    scheduleSave({ delivery_pricing_mode: v });
   }
 
   // --- Taxa única ---------------------------------------------
@@ -318,8 +325,13 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
     }
   }
 
-  // --- Estado derivado: geocoding falhou ------------------------
+  // --- Estado derivado: geocoding ------------------------------
   const originZipDigits = zipDigits(originZipMasked);
+  const hasGeocode =
+    pricingMode === "distance" &&
+    originZipDigits.length === 8 &&
+    config.origin_lat != null &&
+    config.origin_lng != null;
   const geocodeFailed =
     pricingMode === "distance" &&
     originZipDigits.length === 8 &&
@@ -378,7 +390,8 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                 Aparece pro cliente no checkout depois que ele escolhe "Retirar". Pode ser diferente do endereço do negócio.
               </Text>
 
-              <View style={{ height: 6 }} />
+              <View style={s.sectionSep} />
+
               <Field
                 label="Tempo para ficar pronto"
                 value={pickupEtaText}
@@ -412,19 +425,42 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 
           {deliveryEnabled ? (
             <View style={{ marginTop: 6 }}>
+              {/* --- Modo de cobrança (mode-cards com descrição) --- */}
               <Text style={cs.fieldLabel}>Modo de cobrança</Text>
-              <ChipToggle
-                options={PRICING_OPTIONS}
-                value={pricingMode}
-                onChange={handlePricingMode}
-              />
+              <View style={NARROW ? s.modeGridStack : s.modeGrid}>
+                <Pressable
+                  style={[s.modeCard, pricingMode === "flat" && s.modeCardActive]}
+                  onPress={() => handlePricingMode("flat")}
+                >
+                  <Text style={[s.modeCardName, pricingMode === "flat" && s.modeCardNameActive]}>
+                    Taxa única
+                  </Text>
+                  <Text style={s.modeCardDesc}>
+                    Mesmo valor pra qualquer endereço
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[s.modeCard, pricingMode === "distance" && s.modeCardActive]}
+                  onPress={() => handlePricingMode("distance")}
+                >
+                  <Text style={[s.modeCardName, pricingMode === "distance" && s.modeCardNameActive]}>
+                    Por distância
+                  </Text>
+                  <Text style={s.modeCardDesc}>
+                    Valor varia com km do cliente
+                  </Text>
+                </Pressable>
+              </View>
 
               {/* --- Flat --- */}
               {pricingMode === "flat" && (
-                <View style={{ marginTop: 14 }}>
+                <>
+                  <View style={s.sectionSep} />
                   <Text style={cs.fieldLabel}>Taxa de entrega</Text>
-                  <View style={[s.inlineInput, { maxWidth: 160 }]}>
-                    <Text style={s.inlinePrefix}>R$</Text>
+                  <View style={s.inlineInput}>
+                    <View style={s.inlinePrefixWrap}>
+                      <Text style={s.inlinePrefix}>R$</Text>
+                    </View>
                     <TextInput
                       style={s.inlineField}
                       value={deliveryFeeText}
@@ -437,16 +473,17 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                   <Text style={s.helper}>
                     Mesmo valor pra qualquer endereço dentro da área que você atende.
                   </Text>
-                </View>
+                </>
               )}
 
               {/* --- Distance --- */}
               {pricingMode === "distance" && (
-                <View style={{ marginTop: 14 }}>
+                <>
+                  <View style={s.sectionSep} />
                   <Text style={cs.fieldLabel}>CEP de origem</Text>
-                  <View style={[s.inlineInput, { maxWidth: 160 }]}>
+                  <View style={[s.inlineInput, { maxWidth: 200 }]}>
                     <TextInput
-                      style={[s.inlineField, { paddingLeft: 12 }]}
+                      style={[s.inlineField, { paddingLeft: 4 }]}
                       value={originZipMasked}
                       onChangeText={handleOriginZip}
                       placeholder="00000-000"
@@ -459,6 +496,13 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                     A distância é calculada em km entre esse CEP e o CEP do cliente.
                   </Text>
 
+                  {hasGeocode && (
+                    <View style={s.geoOkBadge}>
+                      <Icon name="check" size={12} color={Colors.green} />
+                      <Text style={s.geoOkText}>CEP geolocalizado</Text>
+                    </View>
+                  )}
+
                   {geocodeFailed && (
                     <View style={s.warnBox}>
                       <Icon name="alert" size={14} color={Colors.amber} />
@@ -468,90 +512,113 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                     </View>
                   )}
 
-                  <Text style={[cs.fieldLabel, { marginTop: 14 }]}>
+                  <View style={s.sectionSep} />
+
+                  <Text style={cs.fieldLabel}>
                     Faixas de cobrança por distância
                   </Text>
-                  {tiers.length === 0 ? (
-                    <Text style={s.helper}>
-                      Adicione até 3 faixas. Ex: "Até 5 km = R$10 · Até 10 km = R$18 · Até 20 km = R$28".
-                    </Text>
-                  ) : null}
 
-                  {tiers.map((t, idx) => (
-                    <View key={idx} style={s.tierRow}>
-                      <View style={s.tierField}>
-                        <TextInput
-                          style={s.tierInput}
-                          value={String(t.max_km || "")}
-                          onChangeText={(v) => {
-                            const num = parseFloat(String(v).replace(",", "."));
-                            updateTier(idx, { max_km: Number.isFinite(num) ? num : 0 });
-                          }}
-                          placeholder="0"
-                          placeholderTextColor={Colors.ink3}
-                          keyboardType="decimal-pad"
-                        />
-                        <Text style={s.tierUnit}>km</Text>
-                      </View>
-                      <View style={s.tierField}>
-                        <Text style={s.tierPrefix}>R$</Text>
-                        <TextInput
-                          style={s.tierInput}
-                          value={fmtMoney(t.fee)}
-                          onChangeText={(v) => {
-                            updateTier(idx, { fee: parseMoney(v) });
-                          }}
-                          placeholder="0,00"
-                          placeholderTextColor={Colors.ink3}
-                          keyboardType="decimal-pad"
-                        />
-                      </View>
-                      <Pressable
-                        onPress={() => removeTier(idx)}
-                        style={s.tierRemove}
-                        accessibilityLabel="Remover faixa"
-                      >
-                        <Icon name="x" size={14} color={Colors.ink3} />
+                  {tiers.length === 0 ? (
+                    <View style={s.tierEmpty}>
+                      <Text style={s.tierEmptyEmoji}>📏</Text>
+                      <Text style={s.tierEmptyTitle}>Nenhuma faixa configurada</Text>
+                      <Text style={s.tierEmptyHint}>
+                        Defina até 3 faixas por distância. Ex: "Até 5 km = R$ 10 · Até 10 km = R$ 18 · Até 20 km = R$ 28".
+                      </Text>
+                      <Pressable style={s.tierEmptyCta} onPress={addTier}>
+                        <Icon name="plus" size={14} color={Colors.violet3} />
+                        <Text style={s.tierEmptyCtaText}>Adicionar primeira faixa</Text>
                       </Pressable>
                     </View>
-                  ))}
+                  ) : (
+                    <>
+                      {tiers.map((t, idx) => (
+                        <View key={idx} style={s.tierRow}>
+                          <View style={s.tierField}>
+                            <TextInput
+                              style={s.tierInput}
+                              value={String(t.max_km || "")}
+                              onChangeText={(v) => {
+                                const num = parseFloat(String(v).replace(",", "."));
+                                updateTier(idx, { max_km: Number.isFinite(num) ? num : 0 });
+                              }}
+                              placeholder="0"
+                              placeholderTextColor={Colors.ink3}
+                              keyboardType="decimal-pad"
+                            />
+                            <Text style={s.tierUnit}>km</Text>
+                          </View>
+                          <View style={s.tierField}>
+                            <View style={s.inlinePrefixWrapSm}>
+                              <Text style={s.tierPrefix}>R$</Text>
+                            </View>
+                            <TextInput
+                              style={s.tierInput}
+                              value={fmtMoney(t.fee)}
+                              onChangeText={(v) => {
+                                updateTier(idx, { fee: parseMoney(v) });
+                              }}
+                              placeholder="0,00"
+                              placeholderTextColor={Colors.ink3}
+                              keyboardType="decimal-pad"
+                            />
+                          </View>
+                          <Pressable
+                            onPress={() => removeTier(idx)}
+                            style={s.tierRemove}
+                            accessibilityLabel="Remover faixa"
+                          >
+                            <Icon name="x" size={14} color={Colors.ink3} />
+                          </Pressable>
+                        </View>
+                      ))}
 
-                  {tiers.length < 3 && (
-                    <Pressable style={s.addTierBtn} onPress={addTier}>
-                      <Icon name="plus" size={14} color={Colors.violet3} />
-                      <Text style={s.addTierText}>Adicionar faixa ({tiers.length}/3)</Text>
-                    </Pressable>
-                  )}
+                      {tiers.length < 3 && (
+                        <Pressable style={s.addTierBtn} onPress={addTier}>
+                          <Icon name="plus" size={14} color={Colors.violet3} />
+                          <Text style={s.addTierText}>Adicionar faixa ({tiers.length}/3)</Text>
+                        </Pressable>
+                      )}
 
-                  {tiers.length > 0 && (
-                    <Text style={s.helper}>
-                      Exemplo: {tiers
-                        .map((t) => `Até ${t.max_km} km = R$${fmtMoney(t.fee)}`)
-                        .join(" · ")}.
-                    </Text>
+                      <Text style={s.helper}>
+                        Exemplo: {tiers
+                          .map((t) => `Até ${t.max_km} km = R$${fmtMoney(t.fee)}`)
+                          .join(" · ")}.
+                      </Text>
+                    </>
                   )}
-                </View>
+                </>
               )}
 
-              {/* --- Frete grátis --- */}
-              <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Frete grátis acima de</Text>
-              <View style={[s.inlineInput, { maxWidth: 160 }]}>
-                <Text style={s.inlinePrefix}>R$</Text>
-                <TextInput
-                  style={s.inlineField}
-                  value={freeAboveText}
-                  onChangeText={handleFreeAbove}
-                  placeholder="Em branco = desativado"
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="decimal-pad"
-                />
+              <View style={s.sectionSep} />
+
+              {/* --- Frete grátis (sub-card destacado) --- */}
+              <View style={s.freteBlock}>
+                <View style={s.freteBlockHead}>
+                  <Text style={s.freteBlockEmoji}>💸</Text>
+                  <Text style={s.freteBlockTitle}>Frete grátis acima de</Text>
+                </View>
+                <View style={s.inlineInput}>
+                  <View style={s.inlinePrefixWrap}>
+                    <Text style={s.inlinePrefix}>R$</Text>
+                  </View>
+                  <TextInput
+                    style={s.inlineField}
+                    value={freeAboveText}
+                    onChangeText={handleFreeAbove}
+                    placeholder="0,00"
+                    placeholderTextColor={Colors.ink3}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <Text style={s.helper}>
+                  Opcional. Cliente que comprar acima desse valor não paga frete.
+                </Text>
               </View>
-              <Text style={s.helper}>
-                Opcional. Deixe em branco pra desativar.
-              </Text>
+
+              <View style={s.sectionSep} />
 
               {/* --- ETA --- */}
-              <View style={{ height: 6 }} />
               <Field
                 label="Tempo estimado de entrega"
                 value={deliveryEtaText}
@@ -724,13 +791,21 @@ const s = StyleSheet.create({
   cardHeadHint: { fontSize: 10, color: Colors.ink3, fontWeight: "500", textAlign: "right", flex: 1 },
   emoji: { fontSize: 16 },
 
-  helper: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: -8, marginBottom: 6 },
+  // Helper text — espaçamento natural abaixo do input (era marginTop:-8, colava)
+  helper: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 4, marginBottom: 0 },
   disabledHint: {
     fontSize: 12, color: Colors.ink3, fontStyle: "italic",
     paddingVertical: 6,
   },
 
-  // Inputs com prefixo/sufixo inline (R$, km)
+  // Separadores entre sub-seções dentro do mesmo card
+  sectionSep: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 16,
+  },
+
+  // Inputs com prefixo/sufixo inline (R$, km) — POLISH: max-width 220, height 44, borderRight no prefix
   inlineInput: {
     flexDirection: "row",
     alignItems: "center",
@@ -738,19 +813,82 @@ const s = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 12,
-    height: 40,
-    marginBottom: 4,
+    paddingHorizontal: 14,
+    height: 44,
+    maxWidth: 220,
+  },
+  inlinePrefixWrap: {
+    paddingRight: 10,
+    marginRight: 10,
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+    height: 22,
+    justifyContent: "center",
   },
   inlinePrefix: {
-    fontSize: 13, color: Colors.ink3, fontWeight: "600",
-    marginRight: 4,
+    fontSize: 13, color: Colors.ink3, fontWeight: "700",
   },
   inlineField: {
     flex: 1,
-    fontSize: 13, color: Colors.ink,
+    fontSize: 14, color: Colors.ink,
     paddingVertical: 0,
     height: "100%",
+    fontWeight: "500",
+  },
+
+  // Mode-cards (Modo de cobrança) — substitui ChipToggle
+  modeGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  modeGridStack: {
+    flexDirection: "column",
+    gap: 8,
+    marginTop: 8,
+  },
+  modeCard: {
+    flex: 1,
+    backgroundColor: Colors.bg4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+  },
+  modeCardActive: {
+    backgroundColor: Colors.violetD,
+    borderColor: Colors.violet,
+  },
+  modeCardName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.ink,
+    marginBottom: 3,
+  },
+  modeCardNameActive: { color: Colors.violet3 },
+  modeCardDesc: {
+    fontSize: 11,
+    color: Colors.ink3,
+    lineHeight: 15,
+  },
+
+  // Geocode success badge
+  geoOkBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: Colors.greenD,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  geoOkText: {
+    fontSize: 10,
+    color: Colors.green,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 
   // Warning âmbar (CEP não geolocalizado)
@@ -763,7 +901,51 @@ const s = StyleSheet.create({
   },
   warnText: { flex: 1, fontSize: 11, color: Colors.amber, lineHeight: 15 },
 
-  // Tiers
+  // Empty state das faixas
+  tierEmpty: {
+    backgroundColor: Colors.bg4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: "dashed",
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    marginTop: 6,
+  },
+  tierEmptyEmoji: { fontSize: 24, marginBottom: 6 },
+  tierEmptyTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.ink,
+    marginBottom: 4,
+  },
+  tierEmptyHint: {
+    fontSize: 11,
+    color: Colors.ink3,
+    lineHeight: 15,
+    textAlign: "center",
+    maxWidth: 360,
+    marginBottom: 12,
+  },
+  tierEmptyCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: Colors.violetD,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+  },
+  tierEmptyCtaText: {
+    fontSize: 12,
+    color: Colors.violet3,
+    fontWeight: "700",
+  },
+
+  // Tiers (filled)
   tierRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -781,15 +963,24 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     height: 40,
   },
+  inlinePrefixWrapSm: {
+    paddingRight: 8,
+    marginRight: 8,
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+    height: 18,
+    justifyContent: "center",
+  },
   tierInput: {
     flex: 1,
     fontSize: 13,
     color: Colors.ink,
     paddingVertical: 0,
     height: "100%",
+    fontWeight: "500",
   },
-  tierUnit: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginLeft: 4 },
-  tierPrefix: { fontSize: 13, color: Colors.ink3, fontWeight: "600", marginRight: 4 },
+  tierUnit: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginLeft: 6 },
+  tierPrefix: { fontSize: 13, color: Colors.ink3, fontWeight: "700" },
   tierRemove: {
     width: 32, height: 32, borderRadius: 8,
     alignItems: "center", justifyContent: "center",
@@ -811,6 +1002,29 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   addTierText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+
+  // Frete grátis em sub-card destacado
+  freteBlock: {
+    backgroundColor: Colors.bg4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+  },
+  freteBlockHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  freteBlockEmoji: { fontSize: 16 },
+  freteBlockTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.ink2,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
 
   // Horário
   hourRow: {
