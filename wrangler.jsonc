@@ -6,14 +6,18 @@
     "enabled": true
   },
   "build": {
+    // Pre-install de deps importadas mas FORA do package-lock.json — evita
+    // regenerar o lockfile (629KB) toda vez que alguém esquece de commitar
+    // o lock junto com o package.json. Mesmo padrão pra react-native-svg.
+    //
     // 17/05/2026 (hotfix): react-native-svg é importado por canal/shared.tsx,
-    // odontograma, dental sparkline, etc., mas não está no package-lock.json
-    // (foi instalado fora do npm save em algum momento e sumiu do lockfile).
-    // Pré-instalamos --no-save antes do expo export pra desbloquear o build
-    // do Cloudflare sem precisar regenerar o lockfile (632KB).
-    // TODO: PR follow-up pra adicionar react-native-svg em package.json +
-    // package-lock.json de forma definitiva.
-    "command": "npm install --no-save react-native-svg@15.8.0 --legacy-peer-deps --silent && npx expo export -p web"
+    //   odontograma, dental sparkline, etc.
+    // 20/05/2026 (hotfix): expo-document-picker + xlsx importados por
+    //   components/admin/ProspecaoAdmin.tsx (admin de leads).
+    //
+    // TODO: PR follow-up pra regenerar lockfile localmente e remover esses
+    // --no-save de forma definitiva.
+    "command": "npm install --no-save react-native-svg@15.8.0 expo-document-picker@~13.0.3 xlsx@^0.18.5 --legacy-peer-deps --silent && npx expo export -p web"
   },
   "assets": {
     "directory": "dist",
