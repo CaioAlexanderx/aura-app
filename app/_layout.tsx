@@ -65,10 +65,11 @@ function AuthGuard() {
     const onInvite       = segments[0] === "invite";
     const onPublicDental = segments[0] === "dental" && (segments[1] === "book" || segments[1] === "portal");
     const onPublicReport = segments[0] === "relatorios";
-    // Fase 4 (2026-05-19): cardápio QR público da mesa em /m/[tableId].
-    // Sem auth — cliente final escaneia QR e abre direto.
+    // Fase 4: cardápio QR público da mesa em /m/[tableId].
     const onPublicQrTable = segments[0] === "m";
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable) return;
+    // Fase 5: storefront público de delivery em /cardapio/[slug].
+    const onPublicCardapio = segments[0] === "cardapio";
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
