@@ -125,9 +125,15 @@ export function ProspecaoAdmin() {
     staleTime: 30_000,
   });
 
+  // FIX: body passado como objeto — request() ja faz JSON.stringify internamente.
+  // Passar JSON.stringify() aqui causava double-serialization → backend recebia
+  // req.body como string em vez de objeto → req.body.leads = undefined → 400.
   var interactionMutation = useMutation({
     mutationFn: function(p: { id: string; body: string; channel: string; new_status?: string; next_followup_at?: string }) {
-      return request("/admin/leads/" + p.id + "/interactions", { method: "POST", body: JSON.stringify({ body: p.body, channel: p.channel, new_status: p.new_status || undefined, next_followup_at: p.next_followup_at || undefined }) });
+      return request("/admin/leads/" + p.id + "/interactions", {
+        method: "POST",
+        body: { body: p.body, channel: p.channel, new_status: p.new_status || undefined, next_followup_at: p.next_followup_at || undefined } as any,
+      });
     },
     onSuccess: function() {
       qc.invalidateQueries({ queryKey: ["admin-leads"] });
@@ -138,9 +144,10 @@ export function ProspecaoAdmin() {
     onError: function() { toast.error("Erro ao registrar"); },
   });
 
+  // FIX: mesma correcao — objeto direto, sem JSON.stringify().
   var importMutation = useMutation({
     mutationFn: function(leads: any[]) {
-      return request("/admin/leads/import", { method: "POST", body: JSON.stringify({ leads }) });
+      return request("/admin/leads/import", { method: "POST", body: { leads } as any });
     },
     onSuccess: function(r: any) {
       qc.invalidateQueries({ queryKey: ["admin-leads"] });
@@ -180,22 +187,24 @@ export function ProspecaoAdmin() {
       var wb = XLSX.read(buf, { type: "array" });
       var ws = wb.Sheets[wb.SheetNames[0]];
       var rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
-      // Normalizar cabecalhos (portugues e ingles)
+      // Normalizar cabecalhos: suporta tanto as colunas do script Python
+      // (nome, telefone, categoria_busca, etc.) quanto variantes em ingles.
       var mapped = rows.map(function(r) {
         return {
-          name:           r.nome || r.name || "",
-          phone:          r.telefone || r.phone || "",
-          city:           r.cidade || r.city || "",
-          category:       r.categoria_busca || r.categoria || r.category || "",
-          address:        r.endereco || r.address || "",
-          website:        r.site || r.website || "",
-          google_rating:  r.nota_google || r.google_rating || null,
+          name:           String(r.nome || r.name || "").trim(),
+          phone:          String(r.telefone || r.phone || "").trim(),
+          city:           String(r.cidade || r.city || "").trim(),
+          category:       String(r.categoria_busca || r.categoria || r.category || "").trim(),
+          address:        String(r.endereco || r.address || "").trim(),
+          website:        String(r.site || r.website || "").trim(),
+          google_rating:  r.nota_google  || r.google_rating  || null,
           google_reviews: r.num_avaliacoes || r.google_reviews || null,
         };
       }).filter(function(r) { return r.name || r.phone; });
-      setImportPreview(mapped.slice(0, 5));
       setImporting(false);
-      if (mapped.length) importMutation.mutate(mapped);
+      if (!mapped.length) { toast.info("Nenhuma linha valida encontrada no arquivo"); return; }
+      setImportPreview(mapped.slice(0, 5));
+      importMutation.mutate(mapped);
     } catch (e) {
       setImporting(false);
       toast.error("Erro ao ler arquivo");
