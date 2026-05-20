@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import { BASE_URL } from "@/services/api";
 import { Field, SectionTitle, StatusBadge, cs, IS_WIDE } from "./shared";
 import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
+import { MpGatewayCard } from "./MpGatewayCard";
 
 type Props = {
   config: any;
@@ -373,6 +374,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           <Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar pagamentos"}</Text>
         </Pressable>
       </View>
+
+      {/* MP Fase 0 (20/05/2026): cartao de credito via Mercado Pago.
+          Card autonomo — gerencia proprio estado via usePaymentGateways hook. */}
+      <MpGatewayCard />
 
       <SectionTitle title="Dominio personalizado" />
       <View style={cs.card}>
