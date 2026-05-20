@@ -65,34 +65,27 @@ function AuthGuard() {
     const onInvite       = segments[0] === "invite";
     const onPublicDental = segments[0] === "dental" && (segments[1] === "book" || segments[1] === "portal");
     const onPublicReport = segments[0] === "relatorios";
-    if (onInvite || onPublicDental || onPublicReport) return;
+    // Fase 4 (2026-05-19): cardápio QR público da mesa em /m/[tableId].
+    // Sem auth — cliente final escaneia QR e abre direto.
+    const onPublicQrTable = segments[0] === "m";
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable) return;
 
-    // Shell dental autenticado (qualquer rota /dental/* que NAO seja publica).
     const onDentalClinic = segments[0] === "dental";
-
-    // Shell food autenticado — /food/(salao)/* aparece como segments[0]="food".
-    // Fase 0 (2026-05-18): nao ha rotas publicas em /food/* ainda. Quando
-    // Fase 4 (cardapio QR /m/[tableId]) entrar, a rota sera /m/* (fora de
-    // /food), entao /food/* continua sendo 100% autenticado.
-    const onFoodSalao = segments[0] === "food";
+    const onFoodSalao    = segments[0] === "food";
 
     const isOdonto = (company as any)?.vertical_active === "odonto";
     const isFood   = (company as any)?.vertical_active === "food";
 
-    // 1. Not logged in → login
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
       return;
     }
 
-    // 2. Logged in but email not verified → verify-email
     if (token && !isDemo && user && !emailVerified && !isInternalAura && !onVerify) {
       router.replace("/(auth)/verify-email");
       return;
     }
 
-    // 3. Logged in + verified (ou interno) → bounce out of auth pages.
-    //    Odonto vai pro shell dental, food vai pro shell food, demais vao pro (tabs).
     if (token && (emailVerified || isDemo || isInternalAura) && inAuth && !onVerify) {
       router.replace(
         isOdonto ? "/dental/(clinic)/hoje" :
@@ -110,27 +103,21 @@ function AuthGuard() {
       return;
     }
 
-    // 3.5 Odonto navegando em /(tabs) → redireciona pro shell dental.
     if (token && (emailVerified || isDemo || isInternalAura) && isOdonto && inTabs && !onCheckout) {
       router.replace("/dental/(clinic)/hoje");
       return;
     }
 
-    // 3.6 Food navegando em /(tabs) → redireciona pro shell food.
-    //     Excecao: /(tabs)/checkout precisa funcionar para billing gate.
     if (token && (emailVerified || isDemo || isInternalAura) && isFood && inTabs && !onCheckout) {
       router.replace("/food/(salao)/mesas");
       return;
     }
 
-    // 4. Billing gate. Aplica em (tabs), /dental/(clinic) E /food/(salao).
-    const billingStatus  = (company as any)?.billing_status;
+    const billingStatus    = (company as any)?.billing_status;
     const hasActiveBilling = billingStatus === "active" || trialActive;
-
-    const memberRole = (company as any)?.member_role || "owner";
-    const isOwner    = memberRole === "owner";
-
-    const needsCheckout = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
+    const memberRole       = (company as any)?.member_role || "owner";
+    const isOwner          = memberRole === "owner";
+    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
 
     if (token && needsCheckout && (inTabs || onDentalClinic || onFoodSalao) && !onCheckout) {
       router.replace("/(tabs)/checkout");
