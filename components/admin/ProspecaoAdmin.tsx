@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   TextInput, ActivityIndicator, Platform, Modal,
@@ -71,6 +71,15 @@ function waLink(phone: string | null) {
   return "https://wa.me/" + digits;
 }
 
+// Extrai cidade do endereco formatado pelo Google Places.
+// Formato tipico: "Rua X, 123 - Bairro Y, Cidade - SP, 12345-000, Brasil"
+// Captura o token antes de " - XX," onde XX e a sigla do estado.
+function extractCity(address: string): string {
+  if (!address) return "";
+  var match = address.match(/,\s*([^,\-]+?)\s*-\s*[A-Z]{2},/);
+  return match ? match[1].trim() : "";
+}
+
 // ── Componente principal ────────────────────────────────────────
 
 export function ProspecaoAdmin() {
@@ -80,8 +89,6 @@ export function ProspecaoAdmin() {
   var [view, setView] = useState<"lista" | "pipeline" | "importar">("lista");
   var [selectedId, setSelectedId] = useState<string | null>(null);
   var [filterStatus, setFilterStatus] = useState("");
-  var [filterCity, setFilterCity] = useState("");
-  var [filterCategory, setFilterCategory] = useState("");
   var [search, setSearch] = useState("");
 
   // Modal de interacao
@@ -94,28 +101,18 @@ export function ProspecaoAdmin() {
 
   // Importacao Excel
   var [importing, setImporting] = useState(false);
-  var [importPreview, setImportPreview] = useState<any[]>([]);
   var [importStats, setImportStats] = useState<{ inserted: number; skipped: number } | null>(null);
 
   var params: Record<string, string> = {};
-  if (filterStatus)   params.status   = filterStatus;
-  if (filterCity)     params.city     = filterCity;
-  if (filterCategory) params.category = filterCategory;
-  if (search)         params.search   = search;
-  var qs = Object.entries(params).map(function([k,v]) { return k+"="+encodeURIComponent(v); }).join("&");
+  if (filterStatus) params.status = filterStatus;
+  if (search)       params.search = search;
+  var qs = Object.entries(params).map(function([k, v]) { return k + "=" + encodeURIComponent(v); }).join("&");
 
   var { data, isLoading } = useQuery<{ leads: Lead[]; pipeline: Record<string, number> }>({
     queryKey: ["admin-leads", qs],
     queryFn: function() { return request("/admin/leads" + (qs ? "?" + qs : "")); },
     enabled: !!token && (isStaff ?? false),
     staleTime: 30_000,
-  });
-
-  var { data: meta } = useQuery<{ cities: string[]; categories: string[] }>({
-    queryKey: ["admin-leads-meta"],
-    queryFn: function() { return request("/admin/leads/meta"); },
-    enabled: !!token && (isStaff ?? false),
-    staleTime: 120_000,
   });
 
   var { data: detailData, isLoading: loadingDetail } = useQuery<{ lead: Lead; interactions: Interaction[] }>({
@@ -125,9 +122,7 @@ export function ProspecaoAdmin() {
     staleTime: 30_000,
   });
 
-  // FIX: body passado como objeto — request() ja faz JSON.stringify internamente.
-  // Passar JSON.stringify() aqui causava double-serialization → backend recebia
-  // req.body como string em vez de objeto → req.body.leads = undefined → 400.
+  // request() ja faz JSON.stringify(body) internamente — passar objeto direto.
   var interactionMutation = useMutation({
     mutationFn: function(p: { id: string; body: string; channel: string; new_status?: string; next_followup_at?: string }) {
       return request("/admin/leads/" + p.id + "/interactions", {
@@ -144,19 +139,19 @@ export function ProspecaoAdmin() {
     onError: function() { toast.error("Erro ao registrar"); },
   });
 
-  // FIX: mesma correcao — objeto direto, sem JSON.stringify().
   var importMutation = useMutation({
     mutationFn: function(leads: any[]) {
       return request("/admin/leads/import", { method: "POST", body: { leads } as any });
     },
     onSuccess: function(r: any) {
       qc.invalidateQueries({ queryKey: ["admin-leads"] });
-      qc.invalidateQueries({ queryKey: ["admin-leads-meta"] });
       setImportStats({ inserted: r.inserted, skipped: r.skipped });
-      setImportPreview([]);
       toast.success("Importado: " + r.inserted + " leads");
     },
-    onError: function() { toast.error("Erro ao importar"); },
+    onError: function(err: any) {
+      var msg = err?.data?.error || "Erro ao importar";
+      toast.error(msg);
+    },
   });
 
   function openInteraction(lead: Lead) {
@@ -178,35 +173,57 @@ export function ProspecaoAdmin() {
 
   async function pickExcel() {
     try {
-      var result = await DocumentPicker.getDocumentAsync({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv"] });
+      var result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "text/csv",
+          "*/*",
+        ],
+      });
       if (result.canceled || !result.assets?.length) return;
       setImporting(true);
       var asset = result.assets[0];
       var res = await fetch(asset.uri);
       var buf = await res.arrayBuffer();
       var wb = XLSX.read(buf, { type: "array" });
-      var ws = wb.Sheets[wb.SheetNames[0]];
+
+      // Prefere aba "Com Telefone" (gerada pelo script Python) — tem leads acionaveis.
+      // Fallback para primeira aba.
+      var sheetName = wb.SheetNames.includes("Com Telefone")
+        ? "Com Telefone"
+        : wb.SheetNames[0];
+      var ws = wb.Sheets[sheetName];
       var rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
-      // Normalizar cabecalhos: suporta tanto as colunas do script Python
-      // (nome, telefone, categoria_busca, etc.) quanto variantes em ingles.
+
       var mapped = rows.map(function(r) {
+        var address = String(r.endereco || r.address || "").trim();
+        // Cidade: coluna explicita (planilhas novas) ou extraida do endereco (planilhas antigas).
+        // Endereco Google Places: "Rua X, 123 - Bairro, Cidade - SP, CEP, Brasil"
+        var city = String(r.cidade || r.city || "").trim() || extractCity(address);
         return {
           name:           String(r.nome || r.name || "").trim(),
           phone:          String(r.telefone || r.phone || "").trim(),
-          city:           String(r.cidade || r.city || "").trim(),
+          city:           city,
           category:       String(r.categoria_busca || r.categoria || r.category || "").trim(),
-          address:        String(r.endereco || r.address || "").trim(),
+          address:        address,
           website:        String(r.site || r.website || "").trim(),
           google_rating:  r.nota_google  || r.google_rating  || null,
           google_reviews: r.num_avaliacoes || r.google_reviews || null,
         };
       }).filter(function(r) { return r.name || r.phone; });
+
       setImporting(false);
-      if (!mapped.length) { toast.info("Nenhuma linha valida encontrada no arquivo"); return; }
-      setImportPreview(mapped.slice(0, 5));
+
+      if (!mapped.length) {
+        toast.info("Nenhuma linha valida encontrada. Verifique o arquivo.");
+        return;
+      }
+
+      toast.info("Importando " + mapped.length + " leads...");
       importMutation.mutate(mapped);
     } catch (e) {
       setImporting(false);
+      console.error("pickExcel error:", e);
       toast.error("Erro ao ler arquivo");
     }
   }
@@ -225,7 +242,6 @@ export function ProspecaoAdmin() {
           <Text style={s.backText}>{"<"} Voltar aos leads</Text>
         </Pressable>
 
-        {/* Header */}
         <View style={s.slideHeader}>
           <View style={[s.statusDot, { backgroundColor: sm.color + "22" }]}>
             <Text style={[s.statusDotText, { color: sm.color }]}>{lead.name[0].toUpperCase()}</Text>
@@ -239,7 +255,6 @@ export function ProspecaoAdmin() {
           </View>
         </View>
 
-        {/* Acoes */}
         <View style={s.actionsRow}>
           {wa && (
             <Pressable
@@ -256,7 +271,6 @@ export function ProspecaoAdmin() {
           </Pressable>
         </View>
 
-        {/* Info */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Dados do lead</Text>
           {[
@@ -279,12 +293,9 @@ export function ProspecaoAdmin() {
           })}
         </View>
 
-        {/* Historico */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Historico de contatos ({interactions.length})</Text>
-          {interactions.length === 0 && (
-            <Text style={s.emptyText}>Nenhum contato registrado ainda.</Text>
-          )}
+          {interactions.length === 0 && <Text style={s.emptyText}>Nenhum contato registrado ainda.</Text>}
           {interactions.map(function(it) {
             return (
               <View key={it.id} style={s.noteRow}>
@@ -298,7 +309,6 @@ export function ProspecaoAdmin() {
           })}
         </View>
 
-        {/* Modal de interacao */}
         {showModal && (
           <Modal transparent animationType="fade" onRequestClose={function() { setShowModal(false); }}>
             <View style={s.modalOverlay}>
@@ -350,8 +360,6 @@ export function ProspecaoAdmin() {
 
   if (selectedId && loadingDetail) return <ActivityIndicator color={Colors.violet3} style={{ padding: 40 }} />;
 
-  // ── Views principais ────────────────────────────────────────
-
   var leads = data?.leads || [];
   var pipeline = data?.pipeline || {};
 
@@ -382,9 +390,7 @@ export function ProspecaoAdmin() {
               );
             })}
           </View>
-          <Text style={{ fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 8 }}>
-            Toque em um status para filtrar a lista
-          </Text>
+          <Text style={{ fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 8 }}>Toque em um status para filtrar a lista</Text>
         </View>
       )}
 
@@ -393,9 +399,9 @@ export function ProspecaoAdmin() {
         <View style={s.section}>
           <Text style={s.sectionTitle}>Importar leads (Excel / CSV)</Text>
           <Text style={s.hintText}>
-            Importe diretamente a planilha gerada pelos scripts Python do Google Maps.
-            Colunas reconhecidas: nome/name, telefone/phone, cidade/city, categoria_busca/category,
-            endereco/address, site/website, nota_google/google_rating, num_avaliacoes/google_reviews.
+            Importe a planilha gerada pelos scripts Python do Google Maps. A aba "Com Telefone" e
+            selecionada automaticamente. Colunas: nome, telefone, categoria_busca, endereco, site,
+            nota_google, num_avaliacoes. Cidade e extraida automaticamente do endereco.
           </Text>
           <Pressable onPress={pickExcel} disabled={importing || importMutation.isPending} style={[s.importBtn, (importing || importMutation.isPending) && { opacity: 0.5 }]}>
             {(importing || importMutation.isPending) ? (
@@ -409,7 +415,7 @@ export function ProspecaoAdmin() {
               <Text style={[s.sectionTitle, { color: Colors.green }]}>Importacao concluida</Text>
               <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
                 <View style={s.statBox}><Text style={[s.statVal, { color: Colors.green }]}>{importStats.inserted}</Text><Text style={s.statLabel}>Inseridos</Text></View>
-                <View style={s.statBox}><Text style={[s.statVal, { color: Colors.amber }]}>{importStats.skipped}</Text><Text style={s.statLabel}>Ignorados (duplicatas)</Text></View>
+                <View style={s.statBox}><Text style={[s.statVal, { color: Colors.amber }]}>{importStats.skipped}</Text><Text style={s.statLabel}>Ignorados</Text></View>
               </View>
             </View>
           )}
@@ -419,7 +425,6 @@ export function ProspecaoAdmin() {
       {/* ── LISTA ── */}
       {view === "lista" && (
         <View>
-          {/* Filtros */}
           <View style={s.filtersRow}>
             <TextInput value={search} onChangeText={setSearch} placeholder="Buscar por nome ou telefone..." placeholderTextColor={Colors.ink3} style={s.searchInput} />
           </View>
@@ -444,8 +449,8 @@ export function ProspecaoAdmin() {
             <View style={s.emptyState}>
               <Icon name="users" size={32} color={Colors.ink3} />
               <Text style={s.emptyTitle}>Nenhum lead ainda</Text>
-              <Text style={s.emptyText}>Importe uma planilha do Google Maps ou cadastre leads manualmente.</Text>
-              <Pressable onPress={function() { setView("importar"); }} style={s.importBtn}>
+              <Text style={s.emptyText}>Importe uma planilha do Google Maps para comecar.</Text>
+              <Pressable onPress={function() { setView("importar"); }} style={[s.importBtn, { marginTop: 16 }]}>
                 <Text style={s.importBtnText}>Importar planilha</Text>
               </Pressable>
             </View>
@@ -460,7 +465,7 @@ export function ProspecaoAdmin() {
                 <Pressable style={{ flex: 1 }} onPress={function() { setSelectedId(lead.id); }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <View style={[s.statusDotSm, { backgroundColor: sm.color + "22" }]}>
-                      <View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: sm.color }]} />
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: sm.color }} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.leadName} numberOfLines={1}>{lead.name}</Text>
@@ -477,10 +482,7 @@ export function ProspecaoAdmin() {
                 </Pressable>
                 <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
                   {wa && (
-                    <Pressable
-                      onPress={function() { if (typeof window !== "undefined") window.open(wa!, "_blank"); }}
-                      style={[s.rowBtn, { borderColor: Colors.green + "44" }]}
-                    >
+                    <Pressable onPress={function() { if (typeof window !== "undefined") window.open(wa!, "_blank"); }} style={[s.rowBtn, { borderColor: Colors.green + "44" }]}>
                       <Text style={[s.rowBtnText, { color: Colors.green }]}>WA</Text>
                     </Pressable>
                   )}
@@ -583,7 +585,7 @@ var s = StyleSheet.create({
   rowBtnText: { fontSize: 11, fontWeight: "700", color: Colors.ink3 },
   emptyState: { alignItems: "center", padding: 40 },
   emptyTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginTop: 12 },
-  emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginTop: 6, lineHeight: 18, marginBottom: 16 },
+  emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginTop: 6, lineHeight: 18 },
   importBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   importBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   hintText: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 16 },
