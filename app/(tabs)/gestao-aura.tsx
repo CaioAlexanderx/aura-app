@@ -7,9 +7,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
-import { DashboardAdmin, ClientsAdmin, ReceitaAdmin, OperacoesAdmin, CrescimentoAdmin } from "@/components/admin";
+import { DashboardAdmin, ClientsAdmin, ReceitaAdmin, OperacoesAdmin, CrescimentoAdmin, ProspecaoAdmin } from "@/components/admin";
 
-var TABS = ["Painel", "Clientes", "Receita", "Operacoes", "Crescimento"];
+var TABS = ["Painel", "Clientes", "Receita", "Operacoes", "Crescimento", "Prospeccao"];
 
 export default function GestaoAuraScreen() {
   var router = useRouter();
@@ -55,6 +55,7 @@ export default function GestaoAuraScreen() {
       {tab === 2 && <ReceitaAdmin />}
       {tab === 3 && <OperacoesAdmin />}
       {tab === 4 && <CrescimentoAdmin />}
+      {tab === 5 && <ProspecaoAdmin />}
     </ScrollView>
   );
 }
