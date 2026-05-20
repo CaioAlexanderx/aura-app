@@ -267,7 +267,7 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
       return parts.join(" ");
     }
 
-    // 5 ticks Y igualmente espacados entre paddedMin e paddedMax
+    // Ticks Y igualmente espacados entre paddedMin e paddedMax
     var ticks: Array<{ value: number; y: number }> = [];
     var TICK_COUNT = 4;
     for (var i = 0; i <= TICK_COUNT; i++) {
@@ -308,36 +308,40 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
     );
   }
 
+  // Grid + labels Y. flatMap retorna 2 elementos por tick (Line + SvgText)
+  // sem precisar de Fragment — JSX renderiza arrays planos nativamente.
+  var gridAndLabels = chart.ticks.flatMap(function (t, i) {
+    var isZero = Math.abs(t.value) < 0.5;
+    return [
+      <Line
+        key={"tick-line-" + i}
+        x1={PAD.left}
+        x2={W - PAD.right}
+        y1={t.y}
+        y2={t.y}
+        stroke={isZero ? Colors.ink3 : Colors.border}
+        strokeWidth={isZero ? 1 : 0.5}
+        strokeDasharray={isZero ? "4,3" : "2,4"}
+        opacity={isZero ? 0.7 : 0.4}
+      />,
+      <SvgText
+        key={"tick-text-" + i}
+        x={PAD.left - 8}
+        y={t.y + 3}
+        fontSize="9"
+        fontWeight="600"
+        fill={Colors.ink3}
+        textAnchor="end"
+      >
+        {fmtBRLCompact(t.value)}
+      </SvgText>,
+    ];
+  });
+
   return (
     <Svg width="100%" height={H} viewBox={"0 0 " + W + " " + H} preserveAspectRatio="none">
       {/* Grid horizontal + labels Y */}
-      {chart.ticks.map(function (t, i) {
-        var isZero = Math.abs(t.value) < 0.5;
-        return (
-          <React.Fragment key={"tick-" + i}>
-            <Line
-              x1={PAD.left}
-              x2={W - PAD.right}
-              y1={t.y}
-              y2={t.y}
-              stroke={isZero ? Colors.ink3 : Colors.border}
-              strokeWidth={isZero ? 1 : 0.5}
-              strokeDasharray={isZero ? "4,3" : "2,4"}
-              opacity={isZero ? 0.7 : 0.4}
-            />
-            <SvgText
-              x={PAD.left - 8}
-              y={t.y + 3}
-              fontSize="9"
-              fontWeight="600"
-              fill={Colors.ink3}
-              textAnchor="end"
-            >
-              {fmtBRLCompact(t.value)}
-            </SvgText>
-          </React.Fragment>
-        );
-      })}
+      {gridAndLabels}
 
       {/* Previous (comparativo) — cinza pontilhado, atras */}
       <Path d={chart.previousPath} stroke={Colors.ink3} strokeWidth={1.8} strokeDasharray="4,4" fill="none" opacity={0.7} />
@@ -378,7 +382,7 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
           {fmtBRLCompact(chart.curMaxValue)}
         </SvgText>
       )}
-      {/* Label do MAX da previous (sutil) */}
+      {/* Label do MAX da previous (sutil) — so renderiza se nao colidir com label da current */}
       {chart.previousPoints.length > 0 && chart.prevMaxValue > 0 && Math.abs(chart.curMaxIdx - chart.prevMaxIdx) > 2 && (
         <SvgText
           x={chart.previousPoints[chart.prevMaxIdx].x}
@@ -395,9 +399,6 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
     </Svg>
   );
 }
-
-// React import for Fragment usage above
-import * as React from "react";
 
 var s = StyleSheet.create({
   selectorRow: { gap: 10, marginBottom: 12 },
