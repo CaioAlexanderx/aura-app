@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { useLeadQueue, priorityReasonLabel, priorityReasonColor, priorityReasonDescription } from "../hooks/useLeadQueue";
 import { useLeadMutations } from "../hooks/useLeadMutations";
 import { InteractionModal } from "../components/InteractionModal";
-import { STATUSES, WA_TEMPLATE } from "../shared/constants";
+import { STATUSES, WA_TEMPLATE_DEFAULT } from "../shared/constants";
 import {
   statusMeta, fmtRelative, fmtDateTime, fmtMoney, fmtPhone,
   waLink, fillWaTemplate, copyToClipboard,
@@ -27,7 +27,7 @@ type Props = {
   onSelectLead?: (id: string) => void;
 };
 
-export function WorkModeView({ waTemplate = WA_TEMPLATE, onSelectLead }: Props) {
+export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }: Props) {
   const { queue, leads, total, byReason, isLoading, isFetching, refetch, invalidate } = useLeadQueue(50);
   const mutations = useLeadMutations();
 
@@ -47,7 +47,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE, onSelectLead }: Props) 
 
   const skipLead = useCallback(() => {
     setCurrentIndex((i) => i + 1);
-    toast.info?.("Pulado");
+    toast.info("Pulado");
   }, []);
 
   // Quando a queue refetched (apos action), garantimos que currentIndex
@@ -60,7 +60,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE, onSelectLead }: Props) 
     }
   }, [currentIndex, leads.length]);
 
-  // ── Ações  ────────────────────────────────────────────────────────────────
+  // ── Acoes ─────────────────────────────────────────────────────────────────
   const handleWhatsApp = useCallback(() => {
     if (!currentLead?.phone) return toast.error("Lead sem telefone");
     const url = waLink(currentLead.phone);
@@ -102,7 +102,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE, onSelectLead }: Props) 
   }, [currentLead, mutations.interaction, invalidate, nextLead]);
 
   // ── Atalhos de teclado (web) ─────────────────────────────────────────────
-  // Definimos um ref pra sempre ter o handler atualizado (closures)
+  // Ref pra sempre ter o handler atualizado (closures)
   const handlersRef = useRef({ handleWhatsApp, handleCopyMsg, handleChangeStatus, handleMarkRotten, nextLead, skipLead });
   handlersRef.current = { handleWhatsApp, handleCopyMsg, handleChangeStatus, handleMarkRotten, nextLead, skipLead };
 
