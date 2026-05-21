@@ -246,7 +246,7 @@ const agg = StyleSheet.create({
 
 export default function EstoqueScreen() {
   useEstoquePremiumStyles();
-  const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useProducts();
+  const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
@@ -311,6 +311,11 @@ export default function EstoqueScreen() {
     }, 80);
     return () => clearTimeout(t);
   }, [scanOpen]);
+
+  // Abre MergeDuplicatesModal automaticamente se backend retornou merge_suggestion
+  useEffect(() => {
+    if (mergeSuggestion) setShowMergeModal(true);
+  }, [mergeSuggestion]);
 
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
   const [sortOrder, setSortOrder] = useState<"recent" | "price_desc" | "price_asc" | "low_stock">("recent");
@@ -772,7 +777,7 @@ export default function EstoqueScreen() {
       {/* === Modais e overlays — fora do ScrollView para renderizar fixos na viewport === */}
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
       <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
-      <MergeDuplicatesModal visible={showMergeModal} onClose={() => setShowMergeModal(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); }} />
+      <MergeDuplicatesModal visible={showMergeModal} onClose={() => { setShowMergeModal(false); clearMergeSuggestion(); }} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); clearMergeSuggestion(); }} />
       <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
       {company?.id && (
         <DanfeImportModal
