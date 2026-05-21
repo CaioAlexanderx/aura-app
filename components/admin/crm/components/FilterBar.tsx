@@ -1,15 +1,15 @@
 // ─── FilterBar ───────────────────────────────────────────────────────────────
 // Barra de filtros reusavel entre Fila, Lista e Kanban. Combina:
 //   - LeadViewChips (saved views pinadas) no topo
-//   - Search input
+//   - Search input (pode ser escondido na Fila)
 //   - Botao expand de filtros (FilterPanel)
-//   - Botao Salvar lente (aparece com filtros ativos)
 //
-// Todos os 3 views usam essa barra; o estado vem do useLeadFiltersStore global.
+// Estado vem do useLeadFiltersStore global — aplicar filtro aqui reflete
+// nas 3 views simultaneamente.
 // ============================================================================
 
 import { useState } from "react";
-import { View, Pressable, TextInput } from "react-native";
+import { View, Pressable, TextInput, Text } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { crmStyles as cs } from "../shared/styles";
@@ -47,7 +47,7 @@ export function FilterBar({ meta, onSaveAsView, hideSearch, hideViews }: Props) 
 
   return (
     <View>
-      {/* Chips de saved views */}
+      {/* Chips de saved views (pinadas) */}
       {!hideViews && (
         <LeadViewChips
           views={views}
@@ -74,16 +74,18 @@ export function FilterBar({ meta, onSaveAsView, hideSearch, hideViews }: Props) 
           onPress={() => setShowFilters(!showFilters)}
           style={[
             cs.filterToggleBtn,
-            !hideSearch ? null : { flex: 1, flexDirection: "row", gap: 6, justifyContent: "center" },
+            hideSearch && { flex: 1, flexDirection: "row", gap: 6, justifyContent: "center" },
             activeCount > 0 && { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
           ]}
         >
           <Icon name="filter" size={14} color={activeCount > 0 ? Colors.violet3 : Colors.ink3} />
-          {activeCount > 0 && <View style={cs.filterBadge as any}><></></View>}
+          {hideSearch && (
+            <Text style={{ fontSize: 12, fontWeight: "700", color: activeCount > 0 ? Colors.violet3 : Colors.ink }}>
+              Filtros
+            </Text>
+          )}
           {activeCount > 0 && (
-            <View style={{ paddingLeft: 4 }}>
-              <FilterBadge n={activeCount} />
-            </View>
+            <Text style={cs.filterBadge}>{activeCount}</Text>
           )}
         </Pressable>
       </View>
@@ -98,22 +100,6 @@ export function FilterBar({ meta, onSaveAsView, hideSearch, hideViews }: Props) 
           onClear={clearFilters}
         />
       )}
-    </View>
-  );
-}
-
-// Pequena badge numerica (n filtros ativos) — visual pequeno, in-button
-function FilterBadge({ n }: { n: number }) {
-  return (
-    <View style={{
-      backgroundColor: Colors.violet3,
-      borderRadius: 999,
-      minWidth: 16, height: 16,
-      paddingHorizontal: 4,
-      alignItems: "center", justifyContent: "center",
-    }}>
-      {/* @ts-ignore */}
-      <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{n}</span>
     </View>
   );
 }
