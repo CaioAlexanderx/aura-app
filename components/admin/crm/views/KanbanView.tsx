@@ -1,7 +1,7 @@
 // ─── KanbanView ──────────────────────────────────────────────────────────────
 // 7 colunas (uma por status), scroll horizontal, DnD HTML5 (web).
-// Cada coluna usa useDropZoneRef via DOM ref. Cards usam useDraggableCardRef.
-// Em mobile, DnD desativa — fica como list-only por coluna (Caio decidiu).
+// Fase 5.1 (21/05): agora suporta FilterBar global — Caio aplica filtro de
+// cidade/categoria/etc e o Kanban responde com as colunas refletindo o subset.
 // ============================================================================
 
 import { useState, useCallback } from "react";
@@ -13,6 +13,7 @@ import { STATUSES } from "../shared/constants";
 import { KanbanColumn } from "../kanban/KanbanColumn";
 import { useDragAndDrop } from "../kanban/useDragAndDrop";
 import { BatchActionBar } from "../components/BatchActionBar";
+import { FilterBar } from "../components/FilterBar";
 import type { Lead, LeadStatus, Cadence } from "@/services/crmApi";
 
 const isWeb = Platform.OS === "web";
@@ -20,18 +21,21 @@ const isWeb = Platform.OS === "web";
 type Props = {
   leadsByStatus: Record<string, Lead[]>;
   pipeline?: Record<string, { count: number; potential_mrr: number }>;
+  meta?: any;
   onSelectLead: (id: string) => void;
   onMoveStatus: (leadId: string, toStatus: LeadStatus) => void;
   waTemplate: string;
   onBatch: (action: any, payload?: any) => void;
   batchPending: boolean;
   cadences: Cadence[];
+  onSaveAsView: () => void;
 };
 
 export function KanbanView({
-  leadsByStatus, pipeline,
+  leadsByStatus, pipeline, meta,
   onSelectLead, onMoveStatus,
   waTemplate, onBatch, batchPending, cadences,
+  onSaveAsView,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -63,6 +67,9 @@ export function KanbanView({
 
   return (
     <View>
+      {/* Barra de filtros (compartilhada via store global) */}
+      <FilterBar meta={meta} onSaveAsView={onSaveAsView} />
+
       {!isWeb && (
         <View style={[cs.section, { backgroundColor: Colors.amber + "12", borderColor: Colors.amber + "44", marginBottom: 12 }]}>
           <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
