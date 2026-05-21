@@ -4,7 +4,7 @@
 // Permite salvar novas credenciais e remover o gateway.
 // ============================================================
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Switch, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, Switch, StyleSheet, ActivityIndicator, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -31,8 +31,8 @@ export function MpGatewayCard() {
   }
 
   async function handleSave() {
-    if (!accessToken.trim()) { toast.error("Informe o Access Token"); return; }
-    if (!publicKey.trim())   { toast.error("Informe a Public Key"); return; }
+    if (!accessToken.trim()) { toast.error("Informe o token de acesso"); return; }
+    if (!publicKey.trim())   { toast.error("Informe a chave pública"); return; }
     await saveGateway({ gateway: "mercadopago", access_token: accessToken.trim(), public_key: publicKey.trim(), sandbox });
     setEditing(false);
     setAccessToken("");
@@ -64,11 +64,11 @@ export function MpGatewayCard() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.title}>Mercado Pago</Text>
-            <Text style={s.subtitle}>Cartao de credito e debito (Fase 1)</Text>
+            <Text style={s.subtitle}>Cartão de crédito e débito</Text>
           </View>
           <View style={[s.badge, mpGateway.sandbox ? s.badgeSandbox : s.badgeProd]}>
             <Text style={[s.badgeText, mpGateway.sandbox ? s.badgeTextSandbox : s.badgeTextProd]}>
-              {mpGateway.sandbox ? "Sandbox" : "Producao"}
+              {mpGateway.sandbox ? "Modo de testes" : "Produção"}
             </Text>
           </View>
         </View>
@@ -76,11 +76,11 @@ export function MpGatewayCard() {
         <View style={cs.divider} />
 
         <View style={s.tokenRow}>
-          <Text style={s.tokenLabel}>Access Token</Text>
+          <Text style={s.tokenLabel}>Token de acesso</Text>
           <Text style={s.tokenValue}>{mpGateway.access_token_masked}</Text>
         </View>
         <View style={s.tokenRow}>
-          <Text style={s.tokenLabel}>Public Key</Text>
+          <Text style={s.tokenLabel}>Chave pública</Text>
           <Text style={s.tokenValue}>{mpGateway.public_key_masked}</Text>
         </View>
 
@@ -109,6 +109,8 @@ export function MpGatewayCard() {
             </Pressable>
           </View>
         )}
+
+        <SupportCta />
       </View>
     );
   }
@@ -122,7 +124,7 @@ export function MpGatewayCard() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Mercado Pago</Text>
-          <Text style={s.subtitle}>{configured ? "Atualizar credenciais" : "Aceitar cartao de credito e debito"}</Text>
+          <Text style={s.subtitle}>{configured ? "Atualizar credenciais" : "Aceitar cartão de crédito e débito"}</Text>
         </View>
       </View>
 
@@ -131,16 +133,15 @@ export function MpGatewayCard() {
       <View style={[cs.infoCard, { marginBottom: 12 }]}>
         <Icon name="alert" size={13} color={Colors.violet3} />
         <Text style={cs.infoText}>
-          Acesse mercadopago.com.br → Seu negocio → Credenciais para encontrar os tokens.
-          Use Sandbox para testes e Producao para receber de verdade.
+          Para encontrar suas chaves, acesse mercadopago.com.br → Seu negócio → Credenciais.
         </Text>
       </View>
 
-      {/* Toggle sandbox / producao */}
+      {/* Toggle testes / producao */}
       <View style={cs.switchRow}>
         <View style={{ flex: 1 }}>
-          <Text style={cs.switchLabel}>Modo sandbox (testes)</Text>
-          <Text style={cs.switchHint}>{sandbox ? "Pagamentos simulados, sem dinheiro real" : "Pagamentos reais — use credenciais de Producao"}</Text>
+          <Text style={cs.switchLabel}>Modo de testes</Text>
+          <Text style={cs.switchHint}>{sandbox ? "Simula pagamentos sem movimentar dinheiro real" : "Pagamentos reais — use suas credenciais de produção"}</Text>
         </View>
         <Switch
           value={sandbox}
@@ -151,7 +152,8 @@ export function MpGatewayCard() {
       </View>
       <View style={cs.divider} />
 
-      <Text style={cs.fieldLabel}>Access Token{sandbox ? " (TEST-...)" : " (APP_USR-...)"}</Text>
+      <Text style={cs.fieldLabel}>Token de acesso</Text>
+      <Text style={s.fieldHint}>Começa com TEST- (testes) ou APP_USR- (produção)</Text>
       <TextInput
         style={cs.input}
         value={accessToken}
@@ -164,7 +166,8 @@ export function MpGatewayCard() {
         spellCheck={false}
       />
 
-      <Text style={cs.fieldLabel}>Public Key{sandbox ? " (TEST-...)" : " (APP_USR-...)"}</Text>
+      <Text style={cs.fieldLabel}>Chave pública</Text>
+      <Text style={s.fieldHint}>Usada pelo sistema para processar os pagamentos</Text>
       <TextInput
         style={cs.input}
         value={publicKey}
@@ -187,7 +190,24 @@ export function MpGatewayCard() {
           <Text style={s.saveBtnText}>{isSaving ? "Salvando..." : configured ? "Salvar" : "Conectar Mercado Pago"}</Text>
         </Pressable>
       </View>
+
+      <SupportCta />
     </View>
+  );
+}
+
+function SupportCta() {
+  return (
+    <Pressable
+      onPress={() => Linking.openURL("mailto:suporte@getaura.com.br")}
+      style={s.supportRow}
+    >
+      <Icon name="help" size={12} color={Colors.ink3} />
+      <Text style={s.supportText}>
+        Precisa de ajuda?{" "}
+        <Text style={s.supportLink}>Fale com o suporte Aura</Text>
+      </Text>
+    </Pressable>
   );
 }
 
@@ -206,8 +226,9 @@ const s = StyleSheet.create({
   badgeTextSandbox: { color: Colors.amber },
   badgeTextProd: { color: Colors.green },
   tokenRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 4 },
-  tokenLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", width: 90 },
+  tokenLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", width: 110 },
   tokenValue: { flex: 1, fontSize: 11, color: Colors.ink, fontFamily: "monospace", letterSpacing: 0.3 },
+  fieldHint: { fontSize: 11, color: Colors.ink3, marginTop: -4, marginBottom: 6 },
   actionsRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
   editBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 11, borderWidth: 1, borderColor: Colors.border2 },
   editBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
@@ -223,4 +244,7 @@ const s = StyleSheet.create({
   formBtns: { flexDirection: "row", gap: 8, marginTop: 4 },
   saveBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center" },
   saveBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  supportRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
+  supportText: { fontSize: 12, color: Colors.ink3 },
+  supportLink: { color: Colors.violet3, fontWeight: "600" },
 });
