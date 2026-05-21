@@ -5,6 +5,9 @@ import { request } from "@/services/api";
 //
 // Sistema novo de variantes: listas simples de cores + tamanhos,
 // matriz de estoque por combinacao, preco unico do pai.
+//
+// 21/05/2026: barcodes adicionado ao GET response e ao SaveVariationsBody.
+// Chave identica ao matrix (ex: "|38" para tamanho-38 sem cor).
 // ============================================================
 
 export type ColorEntry = {
@@ -18,6 +21,9 @@ export type ColorEntry = {
 // Se matriz completa: "hex|size"
 export type MatrixMap = Record<string, number>;
 
+// barcodes usa a mesma chave do matrix: { "hex|size": "7891234567890" }
+export type BarcodesMap = Record<string, string>;
+
 export type VariationsMode = 'none' | 'color' | 'size' | 'matrix';
 
 export type GetVariationsResponse = {
@@ -26,6 +32,7 @@ export type GetVariationsResponse = {
   colors: ColorEntry[];
   sizes: string[];
   matrix: MatrixMap;
+  barcodes: BarcodesMap;   // 21/05/2026: barcode por combinacao
   mode: VariationsMode;
   total_variants: number;
 };
@@ -34,6 +41,7 @@ export type SaveVariationsBody = {
   colors: ColorEntry[];
   sizes: string[];
   matrix: MatrixMap;
+  barcodes?: BarcodesMap;   // 21/05/2026: opcional (omitir = nao altera barcodes existentes nao)
 };
 
 export type SaveVariationsResponse = {
