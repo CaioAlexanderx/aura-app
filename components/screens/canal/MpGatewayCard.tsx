@@ -6,6 +6,8 @@
 // Patch (21/05/2026): validação de prefix do token cruzada com toggle
 // sandbox. Bloqueia save quando lojista cola TEST- com sandbox=false
 // (ou APP_USR- com sandbox=true), com mensagem clara orientando o ajuste.
+// Migration 121 (21/05/2026): input opcional webhook_secret (HMAC do webhook MP).
+// Quando preenchido, backend valida x-signature em /api/v1/webhooks/mp.
 // ============================================================
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, Switch, StyleSheet, ActivityIndicator } from "react-native";
@@ -23,11 +25,13 @@ export function MpGatewayCard() {
   const [accessToken, setAccessToken] = useState("");
   const [publicKey, setPublicKey]     = useState("");
   const [sandbox, setSandbox]         = useState(true);
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const configured = !!mpGateway;
 
   function openForm() {
+    setWebhookSecret("");
     setAccessToken("");
     setPublicKey("");
     setSandbox(mpGateway?.sandbox ?? true);
@@ -76,7 +80,13 @@ export function MpGatewayCard() {
     const prefixErr = validateMpPrefixes(at, pk, sandbox);
     if (prefixErr) { toast.error(prefixErr); return; }
 
-    await saveGateway({ gateway: "mercadopago", access_token: at, public_key: pk, sandbox });
+    const ws = webhookSecret.trim();
+    if (ws && ws.length < 16) {
+      toast.error("A chave secreta do webhook MP é muito curta. Cole a chave completa do painel MP (Webhooks → Configuração de chave secreta).");
+      return;
+    }
+
+    await saveGateway({ gateway: "mercadopago", access_token: at, public_key: pk, sandbox, webhook_secret: ws || null });
     setEditing(false);
     setAccessToken("");
     setPublicKey("");
@@ -126,6 +136,12 @@ export function MpGatewayCard() {
           <Text style={s.tokenLabel}>Chave pública</Text>
           <Text style={s.tokenValue}>{mpGateway.public_key_masked}</Text>
         </View>
+        {mpGateway.webhook_secret_configured && (
+          <View style={s.tokenRow}>
+            <Text style={s.tokenLabel}>Segredo do webhook</Text>
+            <Text style={s.tokenValue}>{mpGateway.webhook_secret_masked || "••••"}</Text>
+          </View>
+        )}
 
         <View style={cs.divider} />
 
@@ -216,6 +232,20 @@ export function MpGatewayCard() {
         value={publicKey}
         onChangeText={setPublicKey}
         placeholder={sandbox ? "TEST-XXXX-XXXX..." : "APP_USR-XXXX-XXXX..."}
+        placeholderTextColor={Colors.ink3}
+        secureTextEntry={false}
+        autoCapitalize="none"
+        autoCorrect={false}
+        spellCheck={false}
+      />
+
+      <Text style={cs.fieldLabel}>Segredo do webhook (opcional)</Text>
+      <Text style={s.fieldHint}>Painel MP → Webhooks → Configuração de chave secreta. Habilita validação HMAC pra rejeitar notificações falsas.</Text>
+      <TextInput
+        style={cs.input}
+        value={webhookSecret}
+        onChangeText={setWebhookSecret}
+        placeholder="Cole a chave secreta do webhook (deixe vazio pra pular)"
         placeholderTextColor={Colors.ink3}
         secureTextEntry={false}
         autoCapitalize="none"
