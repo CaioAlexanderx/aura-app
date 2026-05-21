@@ -1,9 +1,11 @@
 // ─── ProspecaoAdmin (orquestrador slim) ──────────────────────────────────────
 // Responsabilidades:
-//  - State leve: aba atual, selectedId, modal de interacao, waTemplate
-//  - Wire dos hooks (lista, detalhe, mutations, cadencias)
+//  - State leve: aba atual, selectedId, modal de interacao, waTemplate, saveModal
+//  - Wire dos hooks (lista, detalhe, mutations, cadencias, views, queue)
 //  - Renderizar a view ativa + LeadDetailView quando ha selectedId
-//  - Modal de interacao global (acionavel tanto da lista quanto do detalhe)
+//  - Modal de interacao global + Modal salvar lente
+//
+// Fase 5 (21/05/2026): adicionada tab "Fila" (Work Mode) + Saved Views.
 // ============================================================================
 
 import { useMemo, useState } from "react";
@@ -12,23 +14,28 @@ import { Colors } from "@/constants/colors";
 import { crmStyles as cs } from "./shared/styles";
 import { WA_TEMPLATE_DEFAULT } from "./shared/constants";
 import type { ViewMode, ImportStats } from "./shared/types";
-import type { Lead, LeadStatus } from "@/services/crmApi";
+import { viewFiltersToLocal } from "./shared/types";
+import type { Lead, LeadStatus, LeadView } from "@/services/crmApi";
 
-import { useLeadsList } from "./hooks/useLeadsList";
-import { useLeadDetail } from "./hooks/useLeadDetail";
+import { useLeadsList }    from "./hooks/useLeadsList";
+import { useLeadDetail }   from "./hooks/useLeadDetail";
 import { useLeadMutations } from "./hooks/useLeadMutations";
-import { useCadences } from "./hooks/useCadences";
+import { useCadences }     from "./hooks/useCadences";
+import { useLeadViews }    from "./hooks/useLeadViews";
 
 import { LeadsListView } from "./views/LeadsListView";
-import { KanbanView } from "./views/KanbanView";
+import { KanbanView }    from "./views/KanbanView";
 import { LeadDetailView } from "./views/LeadDetailView";
-import { PipelineView } from "./views/PipelineView";
-import { ImportView } from "./views/ImportView";
-import { GoalsView } from "./views/GoalsView";
+import { PipelineView }  from "./views/PipelineView";
+import { ImportView }    from "./views/ImportView";
+import { GoalsView }     from "./views/GoalsView";
+import { WorkModeView }  from "./views/WorkModeView";
 
 import { InteractionModal } from "./components/InteractionModal";
+import { SaveViewModal }    from "./components/SaveViewModal";
 
 const TABS: { key: ViewMode; label: string }[] = [
+  { key: "fila",      label: "Fila" },     // Fase 5: nova tab default
   { key: "lista",     label: "Lista" },
   { key: "kanban",    label: "Kanban" },
   { key: "pipeline",  label: "Pipeline" },
@@ -37,17 +44,19 @@ const TABS: { key: ViewMode; label: string }[] = [
 ];
 
 export function ProspecaoAdmin() {
-  const [view, setView]                         = useState<ViewMode>("lista");
+  const [view, setView]                         = useState<ViewMode>("fila");
   const [selectedId, setSelectedId]             = useState<string | null>(null);
   const [interactionLead, setInteractionLead]   = useState<Lead | null>(null);
   const [waTemplate, setWaTemplate]             = useState(WA_TEMPLATE_DEFAULT);
   const [importStats, setImportStats]           = useState<ImportStats | null>(null);
+  const [showSaveModal, setShowSaveModal]       = useState(false);
 
   // Hooks principais
-  const list      = useLeadsList(view !== "metas");
+  const list      = useLeadsList(view !== "metas" && view !== "fila");
   const detail    = useLeadDetail(selectedId);
   const mutations = useLeadMutations(selectedId);
   const cad       = useCadences(true);
+  const views     = useLeadViews();
 
   // Pipeline derivado (somente count pros chips)
   const pipelineSimple = useMemo(() => {
@@ -74,6 +83,22 @@ export function ProspecaoAdmin() {
     mutations.interaction.mutate({ id: interactionLead.id, ...p }, {
       onSuccess: () => setInteractionLead(null),
     });
+  }
+
+  // ── Saved Views handlers ──────────────────────────────────────────────────
+  function handleApplyView(v: LeadView) {
+    list.setFilters(viewFiltersToLocal(v.filters));
+    // Garante que esta na lista pra ver os resultados
+    if (view !== "lista" && view !== "kanban") setView("lista");
+  }
+
+  function handleSaveAsView() {
+    setShowSaveModal(true);
+  }
+
+  async function handleSaveView(body: any) {
+    await views.create.mutateAsync(body);
+    setShowSaveModal(false);
   }
 
   // ── Detalhe (vista cheia) ─────────────────────────────────────────────────
@@ -129,6 +154,13 @@ export function ProspecaoAdmin() {
       </ScrollView>
 
       {/* Views */}
+      {view === "fila" && (
+        <WorkModeView
+          waTemplate={waTemplate}
+          onSelectLead={setSelectedId}
+        />
+      )}
+
       {view === "lista" && (
         <LeadsListView
           leads={list.leads}
@@ -146,6 +178,9 @@ export function ProspecaoAdmin() {
           batchPending={mutations.batch.isPending}
           cadences={cad.cadences}
           onGoToImport={() => setView("importar")}
+          views={views.views}
+          onApplyView={handleApplyView}
+          onSaveAsView={handleSaveAsView}
         />
       )}
 
@@ -193,6 +228,16 @@ export function ProspecaoAdmin() {
         onClose={() => setInteractionLead(null)}
         onSubmit={handleInteractionSubmit}
         isPending={mutations.interaction.isPending}
+      />
+
+      {/* Modal salvar lente (Fase 5) */}
+      <SaveViewModal
+        visible={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        filters={list.filters}
+        activeFilterCount={list.activeFilterCount}
+        onSave={handleSaveView}
+        isSaving={views.create.isPending}
       />
     </View>
   );
