@@ -4,7 +4,8 @@
 // Permite salvar novas credenciais e remover o gateway.
 // ============================================================
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Switch, StyleSheet, ActivityIndicator, Linking } from "react-native";
+import { View, Text, TextInput, Pressable, Switch, StyleSheet, ActivityIndicator } from "react-native";
+import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -197,9 +198,10 @@ export function MpGatewayCard() {
 }
 
 function SupportCta() {
+  const router = useRouter();
   return (
     <Pressable
-      onPress={() => Linking.openURL("mailto:suporte@getaura.com.br")}
+      onPress={() => router.push("/suporte" as any)}
       style={s.supportRow}
     >
       <Icon name="help" size={12} color={Colors.ink3} />
