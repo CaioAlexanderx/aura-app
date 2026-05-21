@@ -6,6 +6,10 @@
 //  - Modal de interacao global + Modal salvar lente
 //
 // Fase 5 (21/05/2026): adicionada tab "Fila" (Work Mode) + Saved Views.
+// Fase 5.1 (21/05/2026): filtros (city/category/etc) compartilhados entre as
+// 3 views via store global useLeadFiltersStore. Lista/Kanban/Fila usam o
+// mesmo conjunto de filtros — Caio aplica cidade no Kanban, ao trocar pra
+// Fila os leads ja vem filtrados pela mesma cidade.
 // ============================================================================
 
 import { useMemo, useState } from "react";
@@ -51,8 +55,10 @@ export function ProspecaoAdmin() {
   const [importStats, setImportStats]           = useState<ImportStats | null>(null);
   const [showSaveModal, setShowSaveModal]       = useState(false);
 
-  // Hooks principais
-  const list      = useLeadsList(view !== "metas" && view !== "fila");
+  // Hooks principais. useLeadsList agora SEMPRE ativo (exceto em metas/importar)
+  // pra a FilterBar ter `meta` (cidades/categorias) disponivel em todas as views.
+  const listEnabled = view === "lista" || view === "kanban" || view === "fila" || view === "pipeline";
+  const list      = useLeadsList(listEnabled);
   const detail    = useLeadDetail(selectedId);
   const mutations = useLeadMutations(selectedId);
   const cad       = useCadences(true);
@@ -88,8 +94,9 @@ export function ProspecaoAdmin() {
   // ── Saved Views handlers ──────────────────────────────────────────────────
   function handleApplyView(v: LeadView) {
     list.setFilters(viewFiltersToLocal(v.filters));
-    // Garante que esta na lista pra ver os resultados
-    if (view !== "lista" && view !== "kanban") setView("lista");
+    // Diferente da v anterior: NAO troca de view automaticamente. O usuario
+    // aplica a lente onde estiver (Fila/Lista/Kanban) e os filtros valem em
+    // todas via store global. Se quiser ver a lista, ele troca a aba.
   }
 
   function handleSaveAsView() {
@@ -158,6 +165,8 @@ export function ProspecaoAdmin() {
         <WorkModeView
           waTemplate={waTemplate}
           onSelectLead={setSelectedId}
+          meta={list.meta}
+          onSaveAsView={handleSaveAsView}
         />
       )}
 
@@ -188,12 +197,14 @@ export function ProspecaoAdmin() {
         <KanbanView
           leadsByStatus={list.leadsByStatus}
           pipeline={pipelineSimple}
+          meta={list.meta}
           onSelectLead={setSelectedId}
           onMoveStatus={(id, status) => mutations.moveStatus.mutate({ id, status })}
           waTemplate={waTemplate}
           onBatch={handleBatch}
           batchPending={mutations.batch.isPending}
           cadences={cad.cadences}
+          onSaveAsView={handleSaveAsView}
         />
       )}
 
