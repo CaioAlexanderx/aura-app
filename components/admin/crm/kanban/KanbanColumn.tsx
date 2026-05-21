@@ -1,15 +1,18 @@
 // ─── KanbanColumn ────────────────────────────────────────────────────────────
 // Coluna individual do Kanban. Recebe leads filtrados pelo status,
-// dropProps do useDragAndDrop e renderiza um header + scroll dos cards.
+// usa useDropZoneRef pra ser drop-target via DOM nativo,
+// e renderiza header + scroll dos cards.
 // ============================================================================
 
+import { useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { crmStyles as cs } from "../shared/styles";
 import { fmtMoney } from "../shared/helpers";
 import { LeadCard } from "../components/LeadCard";
+import { useDropZoneRef } from "./useDragAndDrop";
 import type { StatusMeta } from "../shared/constants";
-import type { Lead } from "@/services/crmApi";
+import type { Lead, LeadStatus } from "@/services/crmApi";
 
 type Props = {
   status: StatusMeta;
@@ -17,21 +20,31 @@ type Props = {
   potentialMrr?: number;
   selectedIds: Set<string>;
   isHover?: boolean;
-  dropProps?: Record<string, any>;
+  onDropLead: (leadId: string, toStatus: LeadStatus) => void;
+  onHoverChange: (s: LeadStatus | null) => void;
   onCardPress: (id: string) => void;
   onCardLongPress: (id: string) => void;
   onCardDragStart: (id: string) => void;
+  onCardDragEnd: () => void;
   waTemplate?: string;
 };
 
 export function KanbanColumn({
   status, leads, potentialMrr, selectedIds, isHover,
-  dropProps, onCardPress, onCardLongPress, onCardDragStart, waTemplate,
+  onDropLead, onHoverChange,
+  onCardPress, onCardLongPress, onCardDragStart, onCardDragEnd,
+  waTemplate,
 }: Props) {
+  // Ref que aplica os listeners HTML5 drop no nó DOM
+  const dropRef = useDropZoneRef(status.key, onDropLead, onHoverChange);
+
+  // Memoiza handlers do card pra nao recriar a cada render
+  const handleCardPress = useCallback((id: string) => onCardPress(id), [onCardPress]);
+  const handleCardLongPress = useCallback((id: string) => onCardLongPress(id), [onCardLongPress]);
+
   return (
     <View
-      // @ts-ignore — RN Web aceita props HTML5
-      {...(dropProps || {})}
+      ref={dropRef as any}
       style={[
         s.column,
         { borderColor: status.color + (isHover ? "" : "44") },
@@ -63,8 +76,9 @@ export function KanbanColumn({
               draggable
               selected={selectedIds.has(lead.id)}
               onDragStart={onCardDragStart}
-              onPress={() => onCardPress(lead.id)}
-              onLongPress={() => onCardLongPress(lead.id)}
+              onDragEnd={onCardDragEnd}
+              onPress={() => handleCardPress(lead.id)}
+              onLongPress={() => handleCardLongPress(lead.id)}
               waTemplate={waTemplate}
             />
           ))
