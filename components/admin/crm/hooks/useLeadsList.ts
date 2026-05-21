@@ -27,6 +27,11 @@ export function useLeadsList(viewIsActive = true) {
     min_score:     filters.min_score ? Number(filters.min_score) : undefined,
     expected_plan: filters.expected_plan || undefined,
     is_rotten:     filters.is_rotten === "" ? undefined : filters.is_rotten === "true",
+    // Fase 5 (21/05/2026)
+    status_in:     filters.status_in     || undefined,
+    status_not_in: filters.status_not_in || undefined,
+    stale_days:    filters.stale_days ? Number(filters.stale_days) : undefined,
+    recent_hours:  filters.recent_hours ? Number(filters.recent_hours) : undefined,
   }), [filters]);
 
   const queryKey = useMemo(() => ["admin-leads", queryFilters], [queryFilters]);
@@ -77,6 +82,10 @@ export function useLeadsList(viewIsActive = true) {
     if (filters.min_score)     n++;
     if (filters.expected_plan) n++;
     if (filters.is_rotten)     n++;
+    if (filters.status_in)     n++;
+    if (filters.status_not_in) n++;
+    if (filters.stale_days)    n++;
+    if (filters.recent_hours)  n++;
     return n;
   }, [filters]);
 
