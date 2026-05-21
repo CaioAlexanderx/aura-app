@@ -1,5 +1,6 @@
 // ─── LeadsListView ───────────────────────────────────────────────────────────
-// Busca + filtros (expandivel) + lista de leads com multi-selecao.
+// Busca + chips de saved views + filtros (expandivel) + lista de leads
+// com multi-selecao + batch.
 // ============================================================================
 
 import { useState, useCallback } from "react";
@@ -12,9 +13,10 @@ import { fillWaTemplate, copyToClipboard } from "../shared/helpers";
 import { FilterPanel } from "../components/FilterPanel";
 import { LeadCard } from "../components/LeadCard";
 import { BatchActionBar } from "../components/BatchActionBar";
+import { LeadViewChips } from "../components/LeadViewChips";
 import { BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
-import type { Lead, LeadStatus, Cadence } from "@/services/crmApi";
+import type { Lead, LeadStatus, Cadence, LeadView } from "@/services/crmApi";
 import type { LeadListFilters } from "../shared/types";
 
 type Props = {
@@ -33,6 +35,10 @@ type Props = {
   batchPending: boolean;
   cadences: Cadence[];
   onGoToImport: () => void;
+  // ─ Fase 5: Saved Views ─
+  views?: LeadView[];
+  onApplyView?: (view: LeadView) => void;
+  onSaveAsView?: () => void;
 };
 
 export function LeadsListView({
@@ -40,6 +46,7 @@ export function LeadsListView({
   filters, setFilter, clearFilters, activeFilterCount,
   waTemplate, onSelectLead, onInteractionPress,
   onBatch, batchPending, cadences, onGoToImport,
+  views, onApplyView, onSaveAsView,
 }: Props) {
   const [showFilters, setShowFilters]   = useState(false);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -71,14 +78,26 @@ export function LeadsListView({
     if (filters.search)        qs.push("search=" + encodeURIComponent(filters.search));
     const url = BASE_URL + "/admin/leads/export" + (qs.length ? "?" + qs.join("&") : "");
     if (typeof window !== "undefined") {
-      // Inclui token via header nao da no link direto — abre nova aba que envia cookie/Authorization?
-      // Solucao: append token na URL? Servidor aceita ?token= via query — se nao, baixa via fetch+blob.
       window.open(url, "_blank");
     }
   }
 
+  const hasActiveFilters = activeFilterCount > 0 || !!filters.search;
+
   return (
     <View>
+      {/* Saved views chips */}
+      {views && onApplyView && onSaveAsView && (
+        <LeadViewChips
+          views={views}
+          filters={filters}
+          hasActiveFilters={hasActiveFilters}
+          onApplyView={onApplyView}
+          onClearFilters={clearFilters}
+          onSaveAsView={onSaveAsView}
+        />
+      )}
+
       {/* Search + filtros + export */}
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
         <TextInput
