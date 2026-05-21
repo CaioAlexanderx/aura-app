@@ -16,6 +16,9 @@
 //   ganha label/icon proprios (💳 Cartão), copy distinta no detalhe,
 //   e canApprovePayment exclui card (confirmação via webhook MP).
 //   STATUS_MAP.pending_payment vira label genérica.
+// 21/05: Davi pediu fluxo de excluir pedidos teste — botão "Excluir pedido
+//   permanentemente" no modal de detalhe (só aparece em cancelled/pending_payment
+//   sem transação/estoque/nfce). Chama DELETE /orders/:oid, backend valida.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -81,6 +84,20 @@ function canApprovePayment(order: any): boolean {
   return order.status === "awaiting_approval" || order.status === "pending_payment";
 }
 
+// Pode excluir definitivamente quando:
+//   - status === 'cancelled' OU 'pending_payment'
+//   - sem transação financeira/estoque/NFCe vinculados (backend revalida)
+// Botão fica disponível só nesses casos pra evitar perda de histórico.
+function canDeleteOrder(order: any): boolean {
+  if (!order) return false;
+  if (!["cancelled", "pending_payment"].includes(order.status)) return false;
+  if (order.transaction_id) return false;
+  if (order.stock_deducted) return false;
+  if (order.confirmed_at) return false;
+  if (order.nfce_id) return false;
+  return true;
+}
+
 // 21/05/2026: helpers de display do método de pagamento.
 function paymentMethodIcon(method: string | undefined): string {
   if (method === "card") return "💳";
@@ -117,12 +134,13 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   const [proofZoom, setProofZoom] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [working, setWorking] = useState(false);
   // ID do pedido que está com a quick-action em andamento (loading state inline)
   const [approvingId, setApprovingId] = useState<string | null>(null);
   // Hook sempre busca "all" — filtro de grupo é aplicado client-side
   // pra mapear N status granulares -> 1 chip sem precisar mudar a API.
-  const { orders, kpi, counts, isLoading, refetch, updateStatus, isUpdating } = useDigitalOrders("all");
+  const { orders, kpi, counts, isLoading, refetch, updateStatus, isUpdating, deleteOrder, isDeleting } = useDigitalOrders("all");
 
   // companyId pode vir via prop OU ser pego do hook (fallback usa qualquer endpoint que ja tem cid)
   const cid = companyId || (orders[0]?.company_id) || null;
@@ -203,6 +221,15 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
     } finally {
       setWorking(false);
     }
+  }
+
+  async function handleDelete() {
+    if (!order || !cid) return;
+    try {
+      await deleteOrder(order.id);
+      setOrder(null);
+      setShowDeleteConfirm(false);
+    } catch {}
   }
 
   function openProof(url: string) {
@@ -324,7 +351,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
         animationType="slide"
         transparent
         presentationStyle="overFullScreen"
-        onRequestClose={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); }}
+        onRequestClose={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); setShowDeleteConfirm(false); }}
       >
         <View style={s.overlay}>
           <View style={s.sheet}>
@@ -343,7 +370,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                       <Text style={s.sheetTitle}>Pedido #{order.order_number}</Text>
                       <Text style={s.sheetSub}>{timeAgo(order.created_at)}</Text>
                     </View>
-                    <Pressable onPress={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); }} style={s.closeBtn}>
+                    <Pressable onPress={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); setShowDeleteConfirm(false); }} style={s.closeBtn}>
                       <Text style={{ fontSize: 20, color: Colors.ink3 }}>×</Text>
                     </Pressable>
                   </View>
@@ -445,43 +472,75 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                       </View>
                     )}
 
+                    {showDeleteConfirm && (
+                      <View style={[cs.card, { borderColor: "#fecaca", backgroundColor: "#fef2f2", marginTop: 10 }]}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#dc2626", marginBottom: 6 }}>
+                          Excluir pedido permanentemente?
+                        </Text>
+                        <Text style={{ fontSize: 12, color: Colors.ink3, lineHeight: 17 }}>
+                          Esta ação apaga o pedido e seus itens do banco. Não pode ser desfeita. Use só pra pedidos teste.
+                        </Text>
+                      </View>
+                    )}
+
+                    {canDeleteOrder(order) && !showDeleteConfirm && !showRejectInput && (
+                      <Pressable onPress={() => setShowDeleteConfirm(true)} style={{ alignSelf: "center", marginTop: 16, padding: 8 }}>
+                        <Text style={{ fontSize: 12, color: "#dc2626", fontWeight: "600", textDecorationLine: "underline" }}>
+                          Excluir pedido permanentemente
+                        </Text>
+                      </Pressable>
+                    )}
+
                     <View style={{ height: 24 }} />
                   </ScrollView>
 
                   <View style={s.sheetFoot}>
-                    {/* Fluxo de aprovação cobre awaiting_approval E pending_payment.
-                        Awaiting tem comprovante; pending_payment não tem (cliente esqueceu).
-                        Em ambos, o lojista pode aprovar/rejeitar.
-                        Card NÃO entra aqui (canApprovePayment retorna false). */}
-                    {canApprove && !showRejectInput && (
+                    {showDeleteConfirm ? (
                       <>
-                        <Pressable onPress={() => setShowRejectInput(true)} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
-                          <Text style={s.cancelText}>Rejeitar</Text>
-                        </Pressable>
-                        <Pressable onPress={() => approvePayment(order)} disabled={working} style={[s.advBtn, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
-                          <Text style={s.advText}>{working ? "..." : (isPendingPayment ? "✓ Confirmar pagamento recebido" : "✓ Aprovar pagamento")}</Text>
-                        </Pressable>
-                      </>
-                    )}
-                    {canApprove && showRejectInput && (
-                      <>
-                        <Pressable onPress={() => { setShowRejectInput(false); setRejectReason(""); }} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
+                        <Pressable onPress={() => setShowDeleteConfirm(false)} disabled={isDeleting} style={[s.cancelBtn, isDeleting && { opacity: 0.6 }]}>
                           <Text style={s.cancelText}>Voltar</Text>
                         </Pressable>
-                        <Pressable onPress={rejectPayment} disabled={working} style={[s.advBtn, { backgroundColor: "#dc2626" }, working && { opacity: 0.6 }]}>
-                          <Text style={s.advText}>{working ? "..." : "Confirmar rejeição"}</Text>
+                        <Pressable onPress={handleDelete} disabled={isDeleting} style={[s.advBtn, { backgroundColor: "#dc2626" }, isDeleting && { opacity: 0.6 }]}>
+                          <Text style={s.advText}>{isDeleting ? "Excluindo..." : "Excluir definitivamente"}</Text>
                         </Pressable>
                       </>
-                    )}
-                    {!canApprove && canCancel && (
-                      <Pressable onPress={cancel} disabled={isUpdating} style={[s.cancelBtn, isUpdating && { opacity: 0.6 }]}>
-                        <Text style={s.cancelText}>Cancelar pedido</Text>
-                      </Pressable>
-                    )}
-                    {!canApprove && !!nextSt && (
-                      <Pressable onPress={advance} disabled={isUpdating} style={[s.advBtn, isUpdating && { opacity: 0.6 }]}>
-                        <Text style={s.advText}>{isUpdating ? "..." : `→ ${STATUS_MAP[nextSt]?.label}`}</Text>
-                      </Pressable>
+                    ) : (
+                      <>
+                        {/* Fluxo de aprovação cobre awaiting_approval E pending_payment.
+                            Awaiting tem comprovante; pending_payment não tem (cliente esqueceu).
+                            Em ambos, o lojista pode aprovar/rejeitar.
+                            Card NÃO entra aqui (canApprovePayment retorna false). */}
+                        {canApprove && !showRejectInput && (
+                          <>
+                            <Pressable onPress={() => setShowRejectInput(true)} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
+                              <Text style={s.cancelText}>Rejeitar</Text>
+                            </Pressable>
+                            <Pressable onPress={() => approvePayment(order)} disabled={working} style={[s.advBtn, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
+                              <Text style={s.advText}>{working ? "..." : (isPendingPayment ? "✓ Confirmar pagamento recebido" : "✓ Aprovar pagamento")}</Text>
+                            </Pressable>
+                          </>
+                        )}
+                        {canApprove && showRejectInput && (
+                          <>
+                            <Pressable onPress={() => { setShowRejectInput(false); setRejectReason(""); }} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
+                              <Text style={s.cancelText}>Voltar</Text>
+                            </Pressable>
+                            <Pressable onPress={rejectPayment} disabled={working} style={[s.advBtn, { backgroundColor: "#dc2626" }, working && { opacity: 0.6 }]}>
+                              <Text style={s.advText}>{working ? "..." : "Confirmar rejeição"}</Text>
+                            </Pressable>
+                          </>
+                        )}
+                        {!canApprove && canCancel && (
+                          <Pressable onPress={cancel} disabled={isUpdating} style={[s.cancelBtn, isUpdating && { opacity: 0.6 }]}>
+                            <Text style={s.cancelText}>Cancelar pedido</Text>
+                          </Pressable>
+                        )}
+                        {!canApprove && !!nextSt && (
+                          <Pressable onPress={advance} disabled={isUpdating} style={[s.advBtn, isUpdating && { opacity: 0.6 }]}>
+                            <Text style={s.advText}>{isUpdating ? "..." : `→ ${STATUS_MAP[nextSt]?.label}`}</Text>
+                          </Pressable>
+                        )}
+                      </>
                     )}
                   </View>
                 </>
