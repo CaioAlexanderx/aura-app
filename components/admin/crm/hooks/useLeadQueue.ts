@@ -1,20 +1,27 @@
 // ─── useLeadQueue ────────────────────────────────────────────────────────────
-// Fila do dia priorizada. Retorna leads ordenados por priority_score com
-// razao explicita (priority_reason). Atualiza quando leads sao mexidos.
+// Fila do dia priorizada. Aceita filtros do store global (city, category, etc).
+// Fase 5.1: agora a fila respeita os mesmos filtros da Lista/Kanban.
 // ============================================================================
 
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { crmApi, type QueueResponse, type PriorityReason } from "@/services/crmApi";
+import { useLeadFiltersStore, filtersToQuery } from "../shared/useLeadFiltersStore";
 
 export function useLeadQueue(limit = 50) {
   const { token, isStaff } = useAuthStore();
   const qc = useQueryClient();
   const enabled = !!token && (isStaff ?? false);
 
+  // Le filtros do store global pra ficar sincronizado com Lista/Kanban
+  const filters = useLeadFiltersStore((s) => s.filters);
+  const queryFilters = useMemo(() => ({ ...filtersToQuery(filters), limit }), [filters, limit]);
+  const queryKey = useMemo(() => ["admin-leads-queue", queryFilters], [queryFilters]);
+
   const query = useQuery<QueueResponse>({
-    queryKey: ["admin-leads-queue", limit],
-    queryFn:  () => crmApi.leads.queue(limit),
+    queryKey,
+    queryFn: () => crmApi.leads.queue(queryFilters),
     enabled,
     staleTime: 30_000,
   });
@@ -49,11 +56,11 @@ export function priorityReasonLabel(r: PriorityReason): string {
 
 export function priorityReasonColor(r: PriorityReason): string {
   switch (r) {
-    case "followup_overdue": return "#ef4444"; // vermelho
-    case "funnel_stalled":   return "#a855f7"; // roxo
-    case "hot_cold":         return "#f97316"; // laranja
-    case "new_lead":         return "#10b981"; // verde
-    default:                 return "#6b7280"; // cinza
+    case "followup_overdue": return "#ef4444";
+    case "funnel_stalled":   return "#a855f7";
+    case "hot_cold":         return "#f97316";
+    case "new_lead":         return "#10b981";
+    default:                 return "#6b7280";
   }
 }
 
