@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   productsVariationsApi, matrixKey,
-  type ColorEntry, type MatrixMap, type VariationsMode,
+  type ColorEntry, type MatrixMap, type BarcodesMap, type VariationsMode,
 } from "@/services/productsVariationsApi";
 import { hexToName, nameToHex } from "@/utils/colorNames";
 
@@ -29,6 +29,11 @@ import { hexToName, nameToHex } from "@/utils/colorNames";
 // combinacao nao esta nas variantes, mesclamos no estado local
 // (chip de cor + tamanho aparecem + matrix preenchida) e marcamos
 // dirty=true pra forcar salvar e migrar pra variante real.
+//
+// 21/05/2026: barcode por variante.
+// - color/size rows: campo inline EAN / Cód. barras
+// - matrix mode: secao "Codigos de barras" abaixo da grade
+// - estado hidratado do GET barcodes map; persistido no PUT
 // ============================================================
 
 const PRESET_COLORS = [
@@ -190,6 +195,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   const [colors, setColors] = useState<ColorEntry[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
   const [matrix, setMatrix] = useState<MatrixMap>({});
+  const [barcodes, setBarcodes] = useState<BarcodesMap>({});   // 21/05/2026
   const [dirty, setDirty] = useState(false);
   const [showColorPopover, setShowColorPopover] = useState(false);
   const [showSizePopover, setShowSizePopover] = useState(false);
@@ -212,6 +218,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     const fetchedColors: ColorEntry[] = data.colors || [];
     const fetchedSizes: string[] = data.sizes || [];
     const fetchedMatrix: MatrixMap = { ...(data.matrix || {}) };
+    const fetchedBarcodes: BarcodesMap = { ...(data.barcodes || {}) };   // 21/05/2026
 
     // Normaliza cor do pai pra hex uppercase. Se nao for hex valido, ignora.
     const parentHex = parentColor && /^#[0-9A-Fa-f]{6}$/.test(parentColor)
@@ -249,6 +256,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setColors(mergedColors);
     setSizes(mergedSizes);
     setMatrix(fetchedMatrix);
+    setBarcodes(fetchedBarcodes);   // 21/05/2026
     setParentMerged(merged);
     // Se houve merge, marca dirty=true pra incentivar salvar (formaliza
     // a migracao do estoque do pai pra variante no backend). Caso
@@ -263,9 +271,9 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     return 'none';
   }, [colors, sizes]);
 
-  // Save mutation
+  // Save mutation — inclui barcodes no payload (21/05/2026)
   const saveMut = useMutation({
-    mutationFn: () => productsVariationsApi.save(company!.id, productId, { colors, sizes, matrix }),
+    mutationFn: () => productsVariationsApi.save(company!.id, productId, { colors, sizes, matrix, barcodes }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["productVariations", company?.id, productId] });
       qc.invalidateQueries({ queryKey: ["products", company?.id] });
@@ -290,12 +298,17 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   }
   function removeColor(hex: string) {
     setColors(colors.filter(c => c.hex !== hex));
-    // Remove entradas da matrix referentes a essa cor
+    // Remove entradas da matrix e barcodes referentes a essa cor
     const newMatrix = { ...matrix };
+    const newBarcodes = { ...barcodes };
     Object.keys(newMatrix).forEach(k => {
       if (k.startsWith(hex + '|') || k === hex + '|') delete newMatrix[k];
     });
+    Object.keys(newBarcodes).forEach(k => {
+      if (k.startsWith(hex + '|') || k === hex + '|') delete newBarcodes[k];
+    });
     setMatrix(newMatrix);
+    setBarcodes(newBarcodes);
     setDirty(true);
   }
   function addSize(s: string) {
@@ -305,12 +318,17 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   }
   function removeSize(value: string) {
     setSizes(sizes.filter(s => s !== value));
-    // Remove entradas da matrix referentes a esse tamanho
+    // Remove entradas da matrix e barcodes referentes a esse tamanho
     const newMatrix = { ...matrix };
+    const newBarcodes = { ...barcodes };
     Object.keys(newMatrix).forEach(k => {
       if (k.endsWith('|' + value)) delete newMatrix[k];
     });
+    Object.keys(newBarcodes).forEach(k => {
+      if (k.endsWith('|' + value)) delete newBarcodes[k];
+    });
     setMatrix(newMatrix);
+    setBarcodes(newBarcodes);
     setDirty(true);
   }
   function updateStock(hex: string | null, size: string | null, value: string) {
@@ -323,6 +341,21 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     const key = matrixKey(hex, size);
     const v = matrix[key];
     return v === undefined ? "" : String(v);
+  }
+  // 21/05/2026: barcode helpers
+  function barcodeAt(hex: string | null, size: string | null): string {
+    return barcodes[matrixKey(hex, size)] || "";
+  }
+  function updateBarcode(hex: string | null, size: string | null, value: string) {
+    const key = matrixKey(hex, size);
+    const newBarcodes = { ...barcodes };
+    if (value) {
+      newBarcodes[key] = value;
+    } else {
+      delete newBarcodes[key];
+    }
+    setBarcodes(newBarcodes);
+    setDirty(true);
   }
 
   const existingHexSet = useMemo(() => new Set(colors.map(c => c.hex.toUpperCase())), [colors]);
@@ -448,12 +481,13 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
         <View style={s.stockBlock}>
           <Text style={s.stockLabel}>Estoque por variacao</Text>
 
+          {/* ── Color-only: dot + label + stock + barcode ── */}
           {mode === 'color' && (
             <View style={{ gap: 6 }}>
               {colors.map(c => (
                 <View key={c.hex} style={s.stockRow}>
                   <View style={[s.stockRowDot, { backgroundColor: c.hex }]} />
-                  <Text style={s.stockRowLabel}>{c.name || hexToName(c.hex)}</Text>
+                  <Text style={s.stockRowLabel} numberOfLines={1}>{c.name || hexToName(c.hex)}</Text>
                   <TextInput
                     style={s.stockInput}
                     value={stockAt(c.hex, null)}
@@ -463,17 +497,28 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     placeholderTextColor={Colors.ink3}
                   />
                   <Text style={s.stockUnit}>un</Text>
+                  <View style={s.stockRowDivider} />
+                  <TextInput
+                    style={s.barcodeInput}
+                    value={barcodeAt(c.hex, null)}
+                    onChangeText={v => updateBarcode(c.hex, null, v)}
+                    placeholder="EAN / Cód. barras"
+                    placeholderTextColor={Colors.ink3}
+                    keyboardType="default"
+                    returnKeyType="next"
+                  />
                 </View>
               ))}
             </View>
           )}
 
+          {/* ── Size-only: dot + label + stock + barcode ── */}
           {mode === 'size' && (
             <View style={{ gap: 6 }}>
               {sizes.map(sz => (
                 <View key={sz} style={s.stockRow}>
                   <View style={[s.stockRowDot, { backgroundColor: Colors.violet }]} />
-                  <Text style={s.stockRowLabel}>{sz}</Text>
+                  <Text style={s.stockRowLabel} numberOfLines={1}>{sz}</Text>
                   <TextInput
                     style={s.stockInput}
                     value={stockAt(null, sz)}
@@ -483,49 +528,86 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     placeholderTextColor={Colors.ink3}
                   />
                   <Text style={s.stockUnit}>un</Text>
+                  <View style={s.stockRowDivider} />
+                  <TextInput
+                    style={s.barcodeInput}
+                    value={barcodeAt(null, sz)}
+                    onChangeText={v => updateBarcode(null, sz, v)}
+                    placeholder="EAN / Cód. barras"
+                    placeholderTextColor={Colors.ink3}
+                    keyboardType="default"
+                    returnKeyType="next"
+                  />
                 </View>
               ))}
             </View>
           )}
 
+          {/* ── Matrix: grade de estoque + secao de barcodes abaixo ── */}
           {mode === 'matrix' && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View>
-                {/* Header da tabela: linha com tamanhos */}
-                <View style={s.matrixRow}>
-                  <View style={[s.matrixCellHeader, { width: 110 }]}>
-                    <Text style={s.matrixHeaderText}>Cor \\ Tamanho</Text>
-                  </View>
-                  {sizes.map(sz => (
-                    <View key={sz} style={s.matrixCellHeader}>
-                      <Text style={s.matrixHeaderText}>{sz}</Text>
-                    </View>
-                  ))}
-                </View>
-                {/* Linhas: 1 por cor */}
-                {colors.map(c => (
-                  <View key={c.hex} style={s.matrixRow}>
-                    <View style={[s.matrixCellHeader, s.matrixCellHeaderRow, { width: 110 }]}>
-                      <View style={[s.matrixColorDot, { backgroundColor: c.hex }]} />
-                      <Text style={s.matrixRowLabel} numberOfLines={1}>{c.name || hexToName(c.hex)}</Text>
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                  {/* Header da tabela: linha com tamanhos */}
+                  <View style={s.matrixRow}>
+                    <View style={[s.matrixCellHeader, { width: 110 }]}>
+                      <Text style={s.matrixHeaderText}>Cor \\ Tamanho</Text>
                     </View>
                     {sizes.map(sz => (
-                      <View key={sz} style={s.matrixCell}>
-                        <TextInput
-                          style={s.matrixInput}
-                          value={stockAt(c.hex, sz)}
-                          onChangeText={v => updateStock(c.hex, sz, v)}
-                          keyboardType="number-pad"
-                          placeholder="0"
-                          placeholderTextColor={Colors.ink3}
-                          selectTextOnFocus
-                        />
+                      <View key={sz} style={s.matrixCellHeader}>
+                        <Text style={s.matrixHeaderText}>{sz}</Text>
                       </View>
                     ))}
                   </View>
-                ))}
+                  {/* Linhas: 1 por cor */}
+                  {colors.map(c => (
+                    <View key={c.hex} style={s.matrixRow}>
+                      <View style={[s.matrixCellHeader, s.matrixCellHeaderRow, { width: 110 }]}>
+                        <View style={[s.matrixColorDot, { backgroundColor: c.hex }]} />
+                        <Text style={s.matrixRowLabel} numberOfLines={1}>{c.name || hexToName(c.hex)}</Text>
+                      </View>
+                      {sizes.map(sz => (
+                        <View key={sz} style={s.matrixCell}>
+                          <TextInput
+                            style={s.matrixInput}
+                            value={stockAt(c.hex, sz)}
+                            onChangeText={v => updateStock(c.hex, sz, v)}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            placeholderTextColor={Colors.ink3}
+                            selectTextOnFocus
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+
+              {/* Codigos de barras por combinacao (matrix mode) — 21/05/2026 */}
+              <View style={s.matrixBarcodeSection}>
+                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Codigos de barras</Text>
+                <View style={{ gap: 6 }}>
+                  {colors.map(c => sizes.map(sz => (
+                    <View key={matrixKey(c.hex, sz)} style={s.stockRow}>
+                      <View style={[s.stockRowDot, { backgroundColor: c.hex }]} />
+                      <Text style={s.stockRowLabel} numberOfLines={1}>
+                        {(c.name || hexToName(c.hex))} · {sz}
+                      </Text>
+                      <TextInput
+                        style={s.barcodeInput}
+                        value={barcodeAt(c.hex, sz)}
+                        onChangeText={v => updateBarcode(c.hex, sz, v)}
+                        placeholder="EAN / Cód. barras"
+                        placeholderTextColor={Colors.ink3}
+                        keyboardType="default"
+                        returnKeyType="next"
+                      />
+                    </View>
+                  )))}
+                </View>
               </View>
-            </ScrollView>
+            </>
           )}
         </View>
       )}
@@ -606,11 +688,14 @@ const s = StyleSheet.create({
   // Stock grid
   stockBlock: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
   stockLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase" as any, letterSpacing: 0.5, marginBottom: 8 },
-  stockRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 8, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  stockRowDot: { width: 14, height: 14, borderRadius: 7 },
-  stockRowLabel: { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "500" },
-  stockInput: { width: 70, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12, color: Colors.ink, textAlign: "right", fontWeight: "600" },
-  stockUnit: { fontSize: 10, color: Colors.ink3, fontWeight: "600", width: 24 },
+  stockRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 8, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  stockRowDot: { width: 14, height: 14, borderRadius: 7, flexShrink: 0 },
+  stockRowLabel: { minWidth: 36, maxWidth: 90, fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  stockInput: { width: 64, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12, color: Colors.ink, textAlign: "right", fontWeight: "600" },
+  stockUnit: { fontSize: 10, color: Colors.ink3, fontWeight: "600", width: 20 },
+  // 21/05/2026: divider e campo barcode nas linhas de estoque
+  stockRowDivider: { width: 1, height: 20, backgroundColor: Colors.border, flexShrink: 0 },
+  barcodeInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 11, color: Colors.ink, minWidth: 80 },
 
   // Matrix
   matrixRow: { flexDirection: "row", gap: 4, marginBottom: 4 },
@@ -621,6 +706,8 @@ const s = StyleSheet.create({
   matrixRowLabel: { fontSize: 10, color: Colors.ink, fontWeight: "600", flex: 1 },
   matrixCell: { width: 70, height: 34 },
   matrixInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, fontSize: 12, color: Colors.ink, textAlign: "center", fontWeight: "600" },
+  // 21/05/2026: secao de barcodes abaixo da grade de matrix
+  matrixBarcodeSection: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
 
   // Save bar
   saveBar: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
