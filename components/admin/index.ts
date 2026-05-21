@@ -6,4 +6,4 @@ export { CrescimentoAdmin } from './CrescimentoAdmin';
 export { EquipeAdmin } from './EquipeAdmin';
 export { SolicitacoesAdmin } from './SolicitacoesAdmin';
 export { AccessCodesCard } from './AccessCodesCard';
-export { ProspecaoAdmin } from './ProspecaoAdmin';
+export { ProspecaoAdmin } from './crm';
