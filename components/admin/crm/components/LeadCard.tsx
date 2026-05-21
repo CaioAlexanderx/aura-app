@@ -3,9 +3,9 @@
 // 2 layouts: "row" (full-width, lista) e "kanban" (compacto, drag handle).
 //
 // IMPORTANTE — DnD no Kanban (web):
-//   O Pressable do RN Web faz preventDefault em pointerdown, o que bloqueia
-//   o HTML5 DnD. Por isso o ramo "kanban" em web usa <View> (que renderiza
-//   <div>) + onClick HTML5 nativo. Em mobile mantemos Pressable (DnD desativado).
+//   RN Web filtra atributos HTML em <View> / <Pressable>. Por isso usamos
+//   useDraggableCardRef que aplica draggable + listeners via ref nativo no DOM.
+//   Em mobile, DnD desativa (Caio decidiu — list-only).
 // ============================================================================
 
 import { View, Text, Pressable, Platform } from "react-native";
@@ -15,6 +15,7 @@ import type { Lead } from "@/services/crmApi";
 import { statusMeta, fmtRelative, waLink, fillWaTemplate, copyToClipboard, fmtMoney } from "../shared/helpers";
 import { crmStyles as cs } from "../shared/styles";
 import { ScoreBadge } from "./ScoreBadge";
+import { useDraggableCardRef } from "../kanban/useDragAndDrop";
 
 const isWeb = Platform.OS === "web";
 
@@ -37,15 +38,29 @@ type KanbanProps = CommonProps & {
   layout: "kanban";
   draggable?: boolean;
   onDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
 };
 
 type Props = RowProps | KanbanProps;
+
+const NOOP = () => {};
 
 export function LeadCard(props: Props) {
   const { lead, selected, onPress, onLongPress, onPressWa, onPressCopyMsg, onPressInteraction, waTemplate } = props;
   const sm = statusMeta(lead.status);
   const wa = waLink(lead.phone);
   const rel = fmtRelative(lead.last_contact_at);
+
+  const isKanban = props.layout === "kanban";
+  const isDraggable = isKanban && !!(props as KanbanProps).draggable && isWeb;
+
+  // ALWAYS chama o hook (regra dos hooks). Quando layout != kanban, enabled=false.
+  const dragRef = useDraggableCardRef(
+    isDraggable,
+    lead.id,
+    isKanban ? ((props as KanbanProps).onDragStart || NOOP) : NOOP,
+    isKanban ? ((props as KanbanProps).onDragEnd   || NOOP) : NOOP,
+  );
 
   function handleWa() {
     if (onPressWa) return onPressWa();
@@ -60,21 +75,10 @@ export function LeadCard(props: Props) {
   }
 
   // ── Layout Kanban (compacto) ───────────────────────────────────────────────
-  if (props.layout === "kanban") {
-    const isDraggable = !!(props as KanbanProps).draggable && isWeb;
-
+  if (isKanban) {
     const cardStyle = [
       cs.leadRow,
       { padding: 10, marginBottom: 6 },
-      isWeb && {
-        cursor: isDraggable ? "grab" : "pointer",
-        userSelect: "none",
-        WebkitUserSelect: "none",
-        MozUserSelect: "none",
-        msUserSelect: "none",
-        WebkitUserDrag: "element",
-        WebkitTouchCallout: "none",
-      } as any,
       lead.followup_overdue && cs.leadRowOverdue,
       lead.rotten_since && cs.leadRowRotten,
       selected && cs.leadRowSelected,
@@ -115,30 +119,17 @@ export function LeadCard(props: Props) {
       </>
     );
 
-    // Em web, renderiza <View> (= div) com HTML5 DnD nativo + onClick HTML
+    // Em web: View com ref pro DnD via DOM (useDraggableCardRef anexa atributos)
     if (isWeb) {
-      const webProps: Record<string, any> = {
-        onClick: onPress,
-        // long-press substituto: dblclick adiciona pra selecao
-        onDoubleClick: onLongPress,
-      };
-      if (isDraggable) {
-        webProps.draggable = true;
-        webProps.onDragStart = (e: any) => {
-          e.dataTransfer.setData("text/plain", lead.id);
-          e.dataTransfer.effectAllowed = "move";
-          (props as KanbanProps).onDragStart?.(lead.id);
-        };
-      }
       return (
-        // @ts-ignore — RN Web aceita props HTML em View
-        <View style={cardStyle} {...webProps}>
+        // @ts-ignore — RN Web aceita onClick em View
+        <View ref={dragRef} style={cardStyle} onClick={onPress} onDoubleClick={onLongPress}>
           {cardChildren}
         </View>
       );
     }
 
-    // Em mobile, Pressable normal (sem DnD)
+    // Em mobile: Pressable normal sem DnD
     return (
       <Pressable onPress={onPress} onLongPress={onLongPress} style={cardStyle}>
         {cardChildren}
