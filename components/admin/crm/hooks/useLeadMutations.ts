@@ -1,7 +1,9 @@
 // ─── useLeadMutations ────────────────────────────────────────────────────────
 // Concentra todas as mutacoes do lead: interaction, update, batch,
 // applyCadence, recomputeScores, markRotten, import.
-// Invalida queries de forma consistente em todas.
+// Invalida queries de forma consistente em todas (lista + queue + meta + stats).
+// Fase 5.1: invalidacao agora inclui admin-leads-queue (Fila sincroniza com
+// Kanban/Lista em ambos os sentidos).
 // ============================================================================
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,8 +15,10 @@ export function useLeadMutations(selectedLeadId?: string | null) {
 
   function invalidateAll() {
     qc.invalidateQueries({ queryKey: ["admin-leads"] });
+    qc.invalidateQueries({ queryKey: ["admin-leads-queue"] }); // Fase 5.1
     qc.invalidateQueries({ queryKey: ["admin-leads-meta"] });
     qc.invalidateQueries({ queryKey: ["admin-leads-stats"] });
+    qc.invalidateQueries({ queryKey: ["admin-lead-views"] });  // counts das lentes
     if (selectedLeadId) {
       qc.invalidateQueries({ queryKey: ["admin-lead-detail", selectedLeadId] });
     }
@@ -55,15 +59,20 @@ export function useLeadMutations(selectedLeadId?: string | null) {
   });
 
   // ── Mudar status (otimista — usado pelo Kanban DnD) ────────────────────────
+  // Optimistic cobre admin-leads E admin-leads-queue.
   const moveStatus = useMutation({
     mutationFn: (p: { id: string; status: LeadStatus }) =>
       crmApi.leads.update(p.id, { status: p.status }),
     onMutate: async (vars) => {
-      // Cancela queries em voo pra evitar overwrite do optimistic
       await qc.cancelQueries({ queryKey: ["admin-leads"] });
-      // Snapshot pra rollback
-      const snapshots = qc.getQueriesData({ queryKey: ["admin-leads"] });
-      // Optimistic update em TODAS as queries de admin-leads
+      await qc.cancelQueries({ queryKey: ["admin-leads-queue"] });
+
+      const snapshots = [
+        ...qc.getQueriesData({ queryKey: ["admin-leads"] }),
+        ...qc.getQueriesData({ queryKey: ["admin-leads-queue"] }),
+      ];
+
+      // Optimistic em admin-leads (estrutura: { leads, pipeline, ... })
       qc.setQueriesData<any>({ queryKey: ["admin-leads"] }, (old) => {
         if (!old?.leads) return old;
         return {
@@ -71,10 +80,28 @@ export function useLeadMutations(selectedLeadId?: string | null) {
           leads: old.leads.map((l: any) => l.id === vars.id ? { ...l, status: vars.status } : l),
         };
       });
+
+      // Optimistic em admin-leads-queue (estrutura: { leads, total, by_reason })
+      // Se mudou pra converted/lost, removemos da fila (queue enforce esses excludes).
+      const isTerminal = vars.status === "converted" || vars.status === "lost";
+      qc.setQueriesData<any>({ queryKey: ["admin-leads-queue"] }, (old) => {
+        if (!old?.leads) return old;
+        if (isTerminal) {
+          return {
+            ...old,
+            leads: old.leads.filter((l: any) => l.id !== vars.id),
+            total: Math.max(0, old.total - 1),
+          };
+        }
+        return {
+          ...old,
+          leads: old.leads.map((l: any) => l.id === vars.id ? { ...l, status: vars.status } : l),
+        };
+      });
+
       return { snapshots };
     },
     onError: (_err, _vars, ctx: any) => {
-      // Rollback
       ctx?.snapshots?.forEach(([key, data]: any) => qc.setQueryData(key, data));
       toast.error("Erro ao mover lead");
     },
