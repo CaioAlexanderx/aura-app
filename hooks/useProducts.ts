@@ -59,6 +59,7 @@ export function useProducts() {
   const qc = useQueryClient();
   const companyId = company?.id;
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [mergeSuggestion, setMergeSuggestion] = useState<{ nome_base: string; count: number } | null>(null);
 
   const { data: apiData, isLoading } = useQuery({
     queryKey: ["products", companyId],
@@ -100,7 +101,15 @@ export function useProducts() {
 
   const addMutation = useMutation({
     mutationFn: (body: any) => companiesApi.createProduct(companyId!, body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["products", companyId] }); toast.success("Produto cadastrado!"); },
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["products", companyId] });
+      toast.success("Produto cadastrado!");
+      // Se o backend detectou produtos similares sem variantes, expõe a sugestão
+      // para que estoque.tsx possa abrir o MergeDuplicatesModal automaticamente.
+      if (data?.merge_suggestion) {
+        setMergeSuggestion(data.merge_suggestion);
+      }
+    },
     onError: (err: any) => toast.error(err?.message || "Erro ao salvar produto"),
   });
 
@@ -166,5 +175,6 @@ export function useProducts() {
     products, categories, isLoading: isLoading && !isDemo, isDemo, bulkDeleting,
     addProduct, updateProduct, decrementStock, deleteProduct, bulkDeleteProducts,
     isAdding: addMutation.isPending, isUpdating: updateMutation.isPending, isDeleting: deleteMutation.isPending,
+    mergeSuggestion, clearMergeSuggestion: () => setMergeSuggestion(null),
   };
 }
