@@ -1,5 +1,5 @@
 // ─── CRM Comercial (admin) ──────────────────────────────────────────────────
-// Endpoints: /admin/leads, /admin/cadences, /admin/lead-goals
+// Endpoints: /admin/leads, /admin/cadences, /admin/lead-goals, /admin/lead-views
 // ============================================================
 import { request } from "./api";
 
@@ -118,6 +118,44 @@ export type GoalCurrentProgress = {
   month_progress: number;
 };
 
+// ─── Saved Views (Fase 5) ───────────────────────────────────────────────────
+
+export type LeadViewFilters = Omit<LeadFilters, "limit" | "offset">;
+
+export type LeadView = {
+  id: string;
+  name: string;
+  description: string | null;
+  filters: LeadViewFilters;
+  icon: string | null;
+  color: string | null;
+  is_pinned: boolean;
+  is_system: boolean;
+  sort_order: number;
+  created_by: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Computado no GET
+  lead_count?: number | null;
+  count_error?: boolean;
+};
+
+// ─── Fila do dia (Fase 5) ───────────────────────────────────────────────────
+
+export type PriorityReason = "followup_overdue" | "funnel_stalled" | "hot_cold" | "new_lead" | "other";
+
+export type QueueLead = Lead & {
+  priority_score: number;
+  priority_reason: PriorityReason;
+};
+
+export type QueueResponse = {
+  total: number;
+  by_reason: Partial<Record<PriorityReason, number>>;
+  leads: QueueLead[];
+};
+
 // ─── Filtros ─────────────────────────────────────────────────────────────────
 
 export type LeadFilters = {
@@ -134,6 +172,11 @@ export type LeadFilters = {
   is_rotten?: boolean;
   limit?: number;
   offset?: number;
+  // Fase 5 (21/05/2026)
+  status_in?: string;      // CSV "new,contacted,responded"
+  status_not_in?: string;  // CSV "converted,lost"
+  stale_days?: number;     // sem atividade ha N+ dias
+  recent_hours?: number;   // criados ha <N horas
 };
 
 function leadsQs(f: LeadFilters = {}): string {
@@ -149,6 +192,12 @@ function leadsQs(f: LeadFilters = {}): string {
   if (f.min_score)      qs.push(`min_score=${f.min_score}`);
   if (f.expected_plan)  qs.push(`expected_plan=${f.expected_plan}`);
   if (f.is_rotten !== undefined) qs.push(`is_rotten=${f.is_rotten ? "true" : "false"}`);
+  if (f.status_in)      qs.push(`status_in=${encodeURIComponent(f.status_in)}`);
+  if (f.status_not_in)  qs.push(`status_not_in=${encodeURIComponent(f.status_not_in)}`);
+  if (f.stale_days !== undefined && f.stale_days > 0)
+    qs.push(`stale_days=${f.stale_days}`);
+  if (f.recent_hours !== undefined && f.recent_hours > 0)
+    qs.push(`recent_hours=${f.recent_hours}`);
   if (f.limit !== undefined)     qs.push(`limit=${f.limit}`);
   if (f.offset !== undefined)    qs.push(`offset=${f.offset}`);
   return qs.length ? `?${qs.join("&")}` : "";
@@ -173,6 +222,9 @@ export const crmApi = {
       }>("/admin/leads/meta"),
 
     stats: () => request<LeadStats>("/admin/leads/stats"),
+
+    queue: (limit = 50) =>
+      request<QueueResponse>(`/admin/leads/queue?limit=${limit}`),
 
     get: (id: string) =>
       request<{ lead: Lead; interactions: LeadInteraction[] }>(`/admin/leads/${id}`),
@@ -269,5 +321,31 @@ export const crmApi = {
       request<{ goal: LeadGoal }>(`/admin/lead-goals/${id}`, { method: "PATCH", body, retry: 0 }),
     remove: (id: string) =>
       request<{ message: string }>(`/admin/lead-goals/${id}`, { method: "DELETE", retry: 0 }),
+  },
+
+  // ── Saved Views ───────────────────────────────────────────────────────────
+  views: {
+    list: () => request<{ views: LeadView[] }>("/admin/lead-views"),
+    get: (id: string) => request<{ view: LeadView }>(`/admin/lead-views/${id}`),
+    create: (body: {
+      name: string;
+      description?: string;
+      filters: LeadViewFilters;
+      icon?: string;
+      color?: string;
+      is_pinned?: boolean;
+      sort_order?: number;
+    }) => request<{ view: LeadView }>("/admin/lead-views", { method: "POST", body, retry: 0 }),
+    update: (id: string, body: Partial<{
+      name: string;
+      description: string;
+      filters: LeadViewFilters;
+      icon: string;
+      color: string;
+      is_pinned: boolean;
+      sort_order: number;
+    }>) => request<{ view: LeadView }>(`/admin/lead-views/${id}`, { method: "PATCH", body, retry: 0 }),
+    remove: (id: string) =>
+      request<{ message: string }>(`/admin/lead-views/${id}`, { method: "DELETE", retry: 0 }),
   },
 };
