@@ -95,14 +95,13 @@ export type Cadence = {
 
 export type LeadGoal = {
   id: string;
-  reference_month: string; // ISO date YYYY-MM-DD
+  reference_month: string;
   target_contacts: number;
   target_converted: number;
   target_mrr: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
-  // Computados no GET /
   actual_contacts?: number;
   actual_converted?: number;
   actual_mrr?: number;
@@ -136,7 +135,6 @@ export type LeadView = {
   created_by_name?: string | null;
   created_at: string;
   updated_at: string;
-  // Computado no GET
   lead_count?: number | null;
   count_error?: boolean;
 };
@@ -172,11 +170,10 @@ export type LeadFilters = {
   is_rotten?: boolean;
   limit?: number;
   offset?: number;
-  // Fase 5 (21/05/2026)
-  status_in?: string;      // CSV "new,contacted,responded"
-  status_not_in?: string;  // CSV "converted,lost"
-  stale_days?: number;     // sem atividade ha N+ dias
-  recent_hours?: number;   // criados ha <N horas
+  status_in?: string;
+  status_not_in?: string;
+  stale_days?: number;
+  recent_hours?: number;
 };
 
 function leadsQs(f: LeadFilters = {}): string {
@@ -206,10 +203,9 @@ function leadsQs(f: LeadFilters = {}): string {
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const crmApi = {
-  // ── Leads ─────────────────────────────────────────────────────────────────
   leads: {
     list: (filters?: LeadFilters) =>
-      request<{ total: number; pipeline: LeadPipeline; leads: Lead[] }>(`/admin/leads${leadsQs(filters)}`),
+      request<{ total: number; pipeline: LeadPipeline; pipeline_filtered?: LeadPipeline; leads: Lead[] }>(`/admin/leads${leadsQs(filters)}`),
 
     meta: () =>
       request<{
@@ -223,8 +219,11 @@ export const crmApi = {
 
     stats: () => request<LeadStats>("/admin/leads/stats"),
 
-    queue: (limit = 50) =>
-      request<QueueResponse>(`/admin/leads/queue?limit=${limit}`),
+    // Fase 5.1: queue aceita TODOS os filtros agora.
+    queue: (filters?: LeadFilters & { limit?: number }) => {
+      const f = { limit: 50, ...filters };
+      return request<QueueResponse>(`/admin/leads/queue${leadsQs(f)}`);
+    },
 
     get: (id: string) =>
       request<{ lead: Lead; interactions: LeadInteraction[] }>(`/admin/leads/${id}`),
@@ -245,7 +244,6 @@ export const crmApi = {
 
     exportCsvUrl: (filters?: LeadFilters) => `/admin/leads/export${leadsQs(filters)}`,
 
-    // Batch actions
     batch: (
       ids: string[],
       action: "update_status" | "set_expected_plan" | "assign_cadence" | "mark_rotten" | "unmark_rotten" | "set_followup" | "delete",
@@ -283,7 +281,6 @@ export const crmApi = {
     },
   },
 
-  // ── Cadencias ─────────────────────────────────────────────────────────────
   cadences: {
     list: (active?: boolean) => {
       const qs = active === undefined ? "" : `?active=${active ? "true" : "false"}`;
@@ -300,7 +297,6 @@ export const crmApi = {
       ),
   },
 
-  // ── Metas ─────────────────────────────────────────────────────────────────
   goals: {
     list: (year?: number) => {
       const qs = year ? `?year=${year}` : "";
@@ -323,7 +319,6 @@ export const crmApi = {
       request<{ message: string }>(`/admin/lead-goals/${id}`, { method: "DELETE", retry: 0 }),
   },
 
-  // ── Saved Views ───────────────────────────────────────────────────────────
   views: {
     list: () => request<{ views: LeadView[] }>("/admin/lead-views"),
     get: (id: string) => request<{ view: LeadView }>(`/admin/lead-views/${id}`),
