@@ -52,6 +52,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [pixHolderName, setPixHolderName] = useState(config.pix_holder_name || "");
   const [pixHolderCity, setPixHolderCity] = useState(config.pix_holder_city || "");
   const [payOnDelivery, setPayOnDelivery] = useState(config.pay_on_delivery_enabled === true);
+  const [cardEnabled, setCardEnabled] = useState(config.card_enabled !== false);
 
   useEffect(() => {
     if (!config.exists) return;
@@ -65,6 +66,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setPixHolderName(config.pix_holder_name || "");
     setPixHolderCity(config.pix_holder_city || "");
     setPayOnDelivery(config.pay_on_delivery_enabled === true);
+    setCardEnabled(config.card_enabled !== false);
   }, [config.exists]);
 
   function pickImage(type: "logo" | "banner") {
@@ -114,6 +116,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       pix_holder_name: pixHolderName.trim() || null,
       pix_holder_city: pixHolderCity.trim() || null,
       pay_on_delivery_enabled: payOnDelivery,
+      card_enabled: cardEnabled,
     });
   }
 
@@ -307,6 +310,17 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       <SectionTitle title="Pagamentos" />
       <View style={cs.card}>
         <Text style={cs.hint}>Como voce quer receber dos clientes? Pode marcar mais de uma opcao.</Text>
+
+        {/* Migration 121: toggle independente das credenciais MP.
+            Default true. Quando false, has_card vira false mesmo com credenciais. */}
+        <View style={cs.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={cs.switchLabel}>Aceitar cartão de crédito</Text>
+            <Text style={cs.switchHint}>{cardEnabled ? "Cliente vê opção de cartão no checkout (requer Mercado Pago configurado abaixo)" : "Cartão desativado — cliente só vê Pix e/ou pagamento na entrega"}</Text>
+          </View>
+          <Switch value={cardEnabled} onValueChange={setCardEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+        </View>
+        <View style={cs.divider} />
 
         {/* Toggle: pagamento na entrega */}
         <View style={cs.switchRow}>
