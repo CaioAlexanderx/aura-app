@@ -2,6 +2,9 @@
 // Fila do dia (Work Mode). Mostra 1 lead por vez, com priorizacao do backend,
 // botoes grandes de acao rapida, atalhos de teclado (web) e contador de
 // progresso da sessao.
+//
+// Fase 5.1 (21/05): suporta filtros globais (store) — quando Caio aplica city
+// ou category na FilterBar, a fila ja vem filtrada (endpoint /queue aceita).
 // ============================================================================
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -10,7 +13,9 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useLeadQueue, priorityReasonLabel, priorityReasonColor, priorityReasonDescription } from "../hooks/useLeadQueue";
 import { useLeadMutations } from "../hooks/useLeadMutations";
+import { useLeadFiltersStore, countActiveFilters } from "../shared/useLeadFiltersStore";
 import { InteractionModal } from "../components/InteractionModal";
+import { FilterBar } from "../components/FilterBar";
 import { STATUSES, WA_TEMPLATE_DEFAULT } from "../shared/constants";
 import {
   statusMeta, fmtRelative, fmtDateTime, fmtMoney, fmtPhone,
@@ -25,15 +30,24 @@ const isWeb = Platform.OS === "web";
 type Props = {
   waTemplate?: string;
   onSelectLead?: (id: string) => void;
+  meta?: any;
+  onSaveAsView?: () => void;
 };
 
-export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }: Props) {
+export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, meta, onSaveAsView }: Props) {
   const { queue, leads, total, byReason, isLoading, isFetching, refetch, invalidate } = useLeadQueue(50);
   const mutations = useLeadMutations();
+
+  // Pra mostrar resumo de filtros ativos no topo do card
+  const filters       = useLeadFiltersStore((s) => s.filters);
+  const filterCount   = countActiveFilters(filters);
 
   const [currentIndex, setCurrentIndex]       = useState(0);
   const [doneToday, setDoneToday]             = useState(0);
   const [showInteraction, setShowInteraction] = useState(false);
+
+  // Quando filtros mudam, volta pro topo da fila (lead pode ter sido excluido do conjunto)
+  useEffect(() => { setCurrentIndex(0); }, [filters]);
 
   // ── Lead atual ───────────────────────────────────────────────────────────
   const currentLead = leads[currentIndex];
@@ -49,16 +63,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
     setCurrentIndex((i) => i + 1);
     toast.info("Pulado");
   }, []);
-
-  // Quando a queue refetched (apos action), garantimos que currentIndex
-  // nao fica fora dos limites. Como leads vem ordenados, currentIndex=0
-  // continua sendo o "topo da pilha". Mas se Caio pulou alguns, mantem.
-  useEffect(() => {
-    if (currentIndex >= leads.length && leads.length > 0) {
-      // chegou no fim — pode opcionalmente refetch
-      // refetch();
-    }
-  }, [currentIndex, leads.length]);
 
   // ── Acoes ─────────────────────────────────────────────────────────────────
   const handleWhatsApp = useCallback(() => {
@@ -79,7 +83,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
       id: currentLead.id,
       body: { status: newStatus },
     });
-    invalidate(); // refetch queue
+    invalidate();
     nextLead();
   }, [currentLead, mutations.update, invalidate, nextLead]);
 
@@ -102,14 +106,12 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
   }, [currentLead, mutations.interaction, invalidate, nextLead]);
 
   // ── Atalhos de teclado (web) ─────────────────────────────────────────────
-  // Ref pra sempre ter o handler atualizado (closures)
   const handlersRef = useRef({ handleWhatsApp, handleCopyMsg, handleChangeStatus, handleMarkRotten, nextLead, skipLead });
   handlersRef.current = { handleWhatsApp, handleCopyMsg, handleChangeStatus, handleMarkRotten, nextLead, skipLead };
 
   useEffect(() => {
     if (!isWeb) return;
     function onKey(e: KeyboardEvent) {
-      // Ignora se foco esta em input/textarea ou se o modal de interacao esta aberto
       const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || showInteraction) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -123,7 +125,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
         case "arrowright":
         case " ": e.preventDefault(); handlersRef.current.skipLead(); break;
         case "r": handlersRef.current.handleMarkRotten(); break;
-        // 1=new, 2=contacted, 3=responded, 4=interested, 5=demo, 6=converted, 7=lost
         case "1": handlersRef.current.handleChangeStatus("new"); break;
         case "2": handlersRef.current.handleChangeStatus("contacted"); break;
         case "3": handlersRef.current.handleChangeStatus("responded"); break;
@@ -139,11 +140,31 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // FilterBar SEMPRE renderiza (mesmo em loading/empty), pra Caio poder ajustar filtros.
+  const filterBar = onSaveAsView ? (
+    <FilterBar meta={meta} onSaveAsView={onSaveAsView} hideSearch />
+  ) : null;
+
+  // Resumo de filtros ativos pra mostrar no topo do card
+  const activeFilterSummary = (() => {
+    const parts: string[] = [];
+    if (filters.city)          parts.push(filters.city);
+    if (filters.category)      parts.push(filters.category);
+    if (filters.expected_plan) parts.push(`plano ${filters.expected_plan}`);
+    if (filters.min_score)     parts.push(`score ≥ ${filters.min_score}`);
+    if (filters.min_rating)    parts.push(`${filters.min_rating}★+`);
+    if (filters.has_phone)     parts.push("com telefone");
+    return parts.length ? parts.join(" · ") : null;
+  })();
+
   if (isLoading) {
     return (
-      <View style={s.center}>
-        <ActivityIndicator color={Colors.violet3} />
-        <Text style={s.dimText}>Carregando fila...</Text>
+      <View>
+        {filterBar}
+        <View style={s.center}>
+          <ActivityIndicator color={Colors.violet3} />
+          <Text style={s.dimText}>Carregando fila...</Text>
+        </View>
       </View>
     );
   }
@@ -151,22 +172,29 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
   // Fila vazia / acabou
   if (!currentLead) {
     return (
-      <View style={s.center}>
-        <View style={s.emptyIconWrap}>
-          <Icon name="check" size={32} color={Colors.green} />
+      <View>
+        {filterBar}
+        <View style={s.center}>
+          <View style={s.emptyIconWrap}>
+            <Icon name="check" size={32} color={Colors.green} />
+          </View>
+          <Text style={s.emptyTitle}>
+            {leads.length === 0
+              ? (filterCount > 0 ? "Nenhum lead nesses filtros" : "Tudo em dia!")
+              : "Voce zerou a fila"}
+          </Text>
+          <Text style={s.emptyMsg}>
+            {leads.length === 0
+              ? (filterCount > 0
+                ? "Tente afrouxar os filtros (cidade, categoria, etc) ou recarregar."
+                : "Nada urgente pra atacar agora. Bom momento pra prospectar novos leads.")
+              : `Voce processou ${doneToday} lead(s) nesta sessao. Volte mais tarde ou recarregue.`}
+          </Text>
+          <Pressable onPress={() => { setCurrentIndex(0); refetch(); }} style={s.refetchBtn}>
+            <Icon name="refresh" size={14} color={Colors.violet3} />
+            <Text style={s.refetchBtnText}>Recarregar fila</Text>
+          </Pressable>
         </View>
-        <Text style={s.emptyTitle}>
-          {leads.length === 0 ? "Tudo em dia!" : "Voce zerou a fila"}
-        </Text>
-        <Text style={s.emptyMsg}>
-          {leads.length === 0
-            ? "Nada urgente pra atacar agora. Bom momento pra prospectar novos leads."
-            : `Voce processou ${doneToday} lead(s) nesta sessao. Volte mais tarde ou recarregue.`}
-        </Text>
-        <Pressable onPress={() => { setCurrentIndex(0); refetch(); }} style={s.refetchBtn}>
-          <Icon name="refresh" size={14} color={Colors.violet3} />
-          <Text style={s.refetchBtnText}>Recarregar fila</Text>
-        </Pressable>
       </View>
     );
   }
@@ -179,6 +207,18 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
 
   return (
     <View>
+      {filterBar}
+
+      {/* Indicador de filtros ativos quando ha algum */}
+      {activeFilterSummary && (
+        <View style={s.activeFiltersBanner}>
+          <Icon name="filter" size={12} color={Colors.violet3} />
+          <Text style={s.activeFiltersText} numberOfLines={1}>
+            Filtrando por: {activeFilterSummary}
+          </Text>
+        </View>
+      )}
+
       {/* ── Stats topo ──────────────────────────────────────────────────── */}
       <View style={s.statsRow}>
         <View style={s.statBox}>
@@ -223,7 +263,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
 
       {/* ── Card do lead atual ──────────────────────────────────────────── */}
       <View style={[s.leadCard, { borderColor: reasonColor + "66" }]}>
-        {/* Razao em destaque */}
         <View style={[s.reasonBanner, { backgroundColor: reasonColor }]}>
           <Icon name="alert" size={14} color="#fff" />
           <View style={{ flex: 1 }}>
@@ -232,7 +271,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
           </View>
         </View>
 
-        {/* Header: nome + status + score */}
         <Pressable
           onPress={() => onSelectLead?.(currentLead.id)}
           style={s.leadHeader}
@@ -255,7 +293,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
           <Icon name="chevron-right" size={16} color={Colors.ink3} />
         </Pressable>
 
-        {/* Dados chave em grid */}
         <View style={s.dataGrid}>
           {hasPhone && (
             <View style={s.dataItem}>
@@ -303,7 +340,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
           )}
         </View>
 
-        {/* Acoes principais (botoes grandes) */}
         <View style={s.actionsGrid}>
           <Pressable
             onPress={handleWhatsApp}
@@ -335,7 +371,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
           </Pressable>
         </View>
 
-        {/* Avancar status (chips) */}
         <Text style={s.sectionLabel}>Avancar status</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
           {STATUSES.map((st, i) => {
@@ -358,7 +393,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
           })}
         </ScrollView>
 
-        {/* Acoes secundarias */}
         <View style={[s.actionsRow, { marginTop: 14 }]}>
           <Pressable onPress={handleMarkRotten} style={[s.secondaryBtn, { borderColor: Colors.red + "55" }]}>
             <Icon name="archive" size={13} color={Colors.red} />
@@ -373,7 +407,6 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead }:
         </View>
       </View>
 
-      {/* ── Modal de interacao ──────────────────────────────────────────── */}
       <InteractionModal
         visible={showInteraction}
         lead={currentLead as Lead}
@@ -402,6 +435,18 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.violet + "55", backgroundColor: Colors.violetD,
   },
   refetchBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+
+  activeFiltersBanner: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1,
+    borderColor: Colors.violet + "44",
+    backgroundColor: Colors.violetD,
+    marginBottom: 10,
+  },
+  activeFiltersText: {
+    fontSize: 11, color: Colors.violet3, fontWeight: "700", flex: 1,
+  },
 
   statsRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
   statBox: {
