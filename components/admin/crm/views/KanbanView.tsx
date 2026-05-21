@@ -1,11 +1,11 @@
 // ─── KanbanView ──────────────────────────────────────────────────────────────
 // 7 colunas (uma por status), scroll horizontal, DnD HTML5 (web).
-// Cada coluna mostra count + potential MRR. Card chip indica plano/cadencia/rotten.
+// Cada coluna usa useDropZoneRef via DOM ref. Cards usam useDraggableCardRef.
 // Em mobile, DnD desativa — fica como list-only por coluna (Caio decidiu).
 // ============================================================================
 
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, Platform } from "react-native";
+import { View, Text, ScrollView, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { crmStyles as cs } from "../shared/styles";
@@ -45,16 +45,21 @@ export function KanbanView({
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
-  function handleDrop(leadId: string, toStatus: LeadStatus) {
+  const handleDrop = useCallback((leadId: string, toStatus: LeadStatus) => {
     onMoveStatus(leadId, toStatus);
-  }
+  }, [onMoveStatus]);
 
-  function handleBatch(action: any, payload?: any) {
+  const handleBatch = useCallback((action: any, payload?: any) => {
     onBatch({ ids: Array.from(selectedIds), action, payload });
     clearSelection();
-  }
+  }, [selectedIds, onBatch, clearSelection]);
 
   const dnd = useDragAndDrop(handleDrop);
+
+  const handleCardPress = useCallback((id: string) => {
+    if (selectedIds.size > 0) toggleSelect(id);
+    else onSelectLead(id);
+  }, [selectedIds, toggleSelect, onSelectLead]);
 
   return (
     <View>
@@ -82,13 +87,12 @@ export function KanbanView({
                 potentialMrr={entry?.potential_mrr}
                 selectedIds={selectedIds}
                 isHover={dnd.hoverStatus === status.key}
-                dropProps={dnd.getColumnDropProps(status.key)}
-                onCardPress={(id) => {
-                  if (selectedIds.size > 0) toggleSelect(id);
-                  else onSelectLead(id);
-                }}
+                onDropLead={dnd.onDrop}
+                onHoverChange={dnd.onHoverChange}
+                onCardPress={handleCardPress}
                 onCardLongPress={toggleSelect}
                 onCardDragStart={dnd.onCardDragStart}
+                onCardDragEnd={dnd.onCardDragEnd}
                 waTemplate={waTemplate}
               />
             );
