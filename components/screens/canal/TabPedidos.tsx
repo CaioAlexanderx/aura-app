@@ -12,6 +12,10 @@
 //   Cancelados) + "Todos". O status interno continua visível no card
 //   e no detalhe; só o filtro foi agrupado. "Precisa agir" tem badge
 //   de contagem porque é o que demanda ação imediata.
+// 21/05: MP CheckoutPro Fase 2 follow-up — payment_method='card'
+//   ganha label/icon proprios (💳 Cartão), copy distinta no detalhe,
+//   e canApprovePayment exclui card (confirmação via webhook MP).
+//   STATUS_MAP.pending_payment vira label genérica.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -26,7 +30,7 @@ import { toast } from "@/components/Toast";
 import { cs } from "./shared";
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  pending_payment:    { label: "Aguardando Pix",   color: "#d97706", bg: "#fef3c7" },
+  pending_payment:    { label: "Aguardando pagamento", color: "#d97706", bg: "#fef3c7" },
   awaiting_approval:  { label: "Aguardando aprov.", color: "#dc2626", bg: "#fee2e2" },
   confirmed:          { label: "Confirmado",        color: "#2563eb", bg: "#dbeafe" },
   preparing:          { label: "Em preparo",        color: "#7c3aed", bg: "#ede9fe" },
@@ -66,9 +70,32 @@ const GROUP_STATUSES: Record<Exclude<ChipKey, "all">, string[]> = {
 // - `pending_payment`: cliente NÃO clicou "Já paguei" mas Pix pode ter
 //   sido pago de qualquer jeito (cliente esqueceu, fechou aba, etc).
 //   Lojista valida no extrato e confirma manualmente.
+//
+// 21/05/2026: cartão (CheckoutPro) NUNCA aceita confirmação manual —
+// MP só marca como aprovado via webhook após captura real. Botão manual
+// pra card geraria divergencia entre Aura e o que o lojista efetivamente
+// recebeu (pode ter sido recusa antifraude / chargeback).
 function canApprovePayment(order: any): boolean {
   if (!order) return false;
+  if (order.payment_method === "card") return false;
   return order.status === "awaiting_approval" || order.status === "pending_payment";
+}
+
+// 21/05/2026: helpers de display do método de pagamento.
+function paymentMethodIcon(method: string | undefined): string {
+  if (method === "card") return "💳";
+  if (method === "on_delivery") return "💵";
+  return "💸";
+}
+function paymentMethodShortLabel(method: string | undefined): string {
+  if (method === "card") return "Cartão";
+  if (method === "on_delivery") return "Na entrega";
+  return "Pix";
+}
+function paymentMethodLongLabel(method: string | undefined): string {
+  if (method === "card") return "Cartão de crédito (Mercado Pago)";
+  if (method === "on_delivery") return "Pagamento na entrega";
+  return "Pix manual";
 }
 
 function timeAgo(iso: string) {
@@ -240,7 +267,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
           const isPendingPayment = o.status === "pending_payment";
           const showApproveQuick = canApprovePayment(o);
           return (
-            <Pressable key={o.id} style={[s.card, isAwaiting && s.cardHighlight, isPendingPayment && s.cardWarn]} onPress={() => setOrder(o)}>
+            <Pressable key={o.id} style={[s.card, isAwaiting && s.cardHighlight, isPendingPayment && o.payment_method !== "card" && s.cardWarn]} onPress={() => setOrder(o)}>
               <View style={s.cardTop}>
                 <Text style={s.cardNum}>#{o.order_number}</Text>
                 <View style={[s.badge, { backgroundColor: st.bg }]}>
@@ -251,7 +278,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
               <View style={s.cardBottom}>
                 <Text style={s.cardTotal}>{fmt(o.total)}</Text>
                 <Text style={s.cardMeta}>
-                  {o.payment_method === "on_delivery" ? "💵 Na entrega" : "💸 Pix"}
+                  {paymentMethodIcon(o.payment_method)} {paymentMethodShortLabel(o.payment_method)}
                   {" · "}
                   {o.delivery_type === "delivery" ? "🚚 Entrega" : "🏪 Retirada"}
                   {" · "}
@@ -265,7 +292,8 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                 </View>
               )}
               {/* Quick action: confirmar pagamento direto da lista — não abre modal.
-                  Aparece sempre que o pedido aceita aprovação (pending_payment ou awaiting_approval).
+                  Aparece sempre que o pedido aceita aprovação (Pix em pending_payment
+                  ou awaiting_approval). Card NUNCA mostra — webhook MP confirma sozinho.
                   Em RN, Pressable filho consome o evento de toque sem disparar o pai. */}
               {showApproveQuick && (
                 <View style={s.quickRow}>
@@ -305,6 +333,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
               const nextSt = NEXT_STATUS[order.status];
               const isAwaiting = order.status === "awaiting_approval";
               const isPendingPayment = order.status === "pending_payment";
+              const isCard = order.payment_method === "card";
               const canApprove = canApprovePayment(order);
               const canCancel = !["delivered", "cancelled"].includes(order.status);
               return (
@@ -327,18 +356,20 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                     <Text style={s.sec}>Pagamento</Text>
                     <View style={cs.card}>
                       <Text style={s.dLine}>
-                        {order.payment_method === "on_delivery" ? "💵 Pagamento na entrega" : "💸 Pix manual"}
+                        {paymentMethodIcon(order.payment_method)} {paymentMethodLongLabel(order.payment_method)}
                       </Text>
                       <Text style={s.dSub}>
                         {order.payment_status === "confirmed"
-                          ? "✓ Pagamento confirmado"
+                          ? (isCard ? "✓ Pagamento confirmado pelo Mercado Pago" : "✓ Pagamento confirmado")
                           : order.payment_method === "on_delivery"
                             ? "Cliente paga no momento da entrega/retirada"
                             : isAwaiting
                               ? "Cliente avisou que pagou — confirme abaixo"
-                              : isPendingPayment
-                                ? "Cliente ainda não confirmou no site. Se o Pix já caiu na sua conta, confirme manualmente abaixo."
-                                : "Aguardando cliente pagar"}
+                              : isCard && isPendingPayment
+                                ? "Cliente foi para o checkout do Mercado Pago. A confirmação entra automaticamente quando o pagamento for aprovado — você não precisa fazer nada aqui."
+                                : isPendingPayment
+                                  ? "Cliente ainda não confirmou no site. Se o Pix já caiu na sua conta, confirme manualmente abaixo."
+                                  : "Aguardando cliente pagar"}
                       </Text>
 
                       {order.payment_proof_url && (
@@ -420,7 +451,8 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                   <View style={s.sheetFoot}>
                     {/* Fluxo de aprovação cobre awaiting_approval E pending_payment.
                         Awaiting tem comprovante; pending_payment não tem (cliente esqueceu).
-                        Em ambos, o lojista pode aprovar/rejeitar. */}
+                        Em ambos, o lojista pode aprovar/rejeitar.
+                        Card NÃO entra aqui (canApprovePayment retorna false). */}
                     {canApprove && !showRejectInput && (
                       <>
                         <Pressable onPress={() => setShowRejectInput(true)} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>

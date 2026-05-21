@@ -2,6 +2,10 @@
 // MP Fase 0 — Card de configuracao do Mercado Pago
 // Exibe estado "nao configurado" ou "configurado" com tokens mascarados.
 // Permite salvar novas credenciais e remover o gateway.
+//
+// Patch (21/05/2026): validação de prefix do token cruzada com toggle
+// sandbox. Bloqueia save quando lojista cola TEST- com sandbox=false
+// (ou APP_USR- com sandbox=true), com mensagem clara orientando o ajuste.
 // ============================================================
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, Switch, StyleSheet, ActivityIndicator } from "react-native";
@@ -31,10 +35,48 @@ export function MpGatewayCard() {
     setShowRemoveConfirm(false);
   }
 
+  // Patch 21/05/2026 — valida prefix do token contra o modo sandbox.
+  // Token MP sempre começa com APP_USR- (produção) ou TEST- (sandbox).
+  // Inverter os dois é um erro silencioso comum: cliente cola token de
+  // produção mas esquece de desligar "Modo de testes", e o pagamento
+  // só falha quando o consumidor final tenta pagar.
+  function validateMpPrefixes(at: string, pk: string, sb: boolean): string | null {
+    const expected = sb ? "TEST-" : "APP_USR-";
+    const wrong    = sb ? "APP_USR-" : "TEST-";
+    const atUpper  = at.toUpperCase();
+    const pkUpper  = pk.toUpperCase();
+
+    if (atUpper.startsWith(wrong)) {
+      return sb
+        ? "O token de acesso começa com APP_USR- (produção), mas o Modo de testes está ligado. Desligue o Modo de testes ou cole o token TEST-."
+        : "O token de acesso começa com TEST- (testes), mas o Modo de testes está desligado. Ligue o Modo de testes ou cole o token APP_USR-.";
+    }
+    if (pkUpper.startsWith(wrong)) {
+      return sb
+        ? "A chave pública começa com APP_USR- (produção), mas o Modo de testes está ligado."
+        : "A chave pública começa com TEST- (testes), mas o Modo de testes está desligado.";
+    }
+    // Se nem APP_USR- nem TEST-, o lojista colou algo errado (provavelmente
+    // o nome do app ou o Client ID em vez do access_token).
+    if (!atUpper.startsWith("APP_USR-") && !atUpper.startsWith("TEST-")) {
+      return `O token de acesso deve começar com ${expected}. Confira em mercadopago.com.br → Seu negócio → Credenciais.`;
+    }
+    if (!pkUpper.startsWith("APP_USR-") && !pkUpper.startsWith("TEST-")) {
+      return `A chave pública deve começar com ${expected}.`;
+    }
+    return null;
+  }
+
   async function handleSave() {
     if (!accessToken.trim()) { toast.error("Informe o token de acesso"); return; }
     if (!publicKey.trim())   { toast.error("Informe a chave pública"); return; }
-    await saveGateway({ gateway: "mercadopago", access_token: accessToken.trim(), public_key: publicKey.trim(), sandbox });
+
+    const at = accessToken.trim();
+    const pk = publicKey.trim();
+    const prefixErr = validateMpPrefixes(at, pk, sandbox);
+    if (prefixErr) { toast.error(prefixErr); return; }
+
+    await saveGateway({ gateway: "mercadopago", access_token: at, public_key: pk, sandbox });
     setEditing(false);
     setAccessToken("");
     setPublicKey("");
@@ -55,7 +97,7 @@ export function MpGatewayCard() {
     );
   }
 
-  // ── Estado: configurado (mostra tokens mascarados + acoes) ──────────
+  // ── Estado: configurado (mostra tokens mascarados + acoes) ──────
   if (configured && !editing) {
     return (
       <View style={cs.card}>
@@ -116,7 +158,7 @@ export function MpGatewayCard() {
     );
   }
 
-  // ── Estado: formulario (novo ou edicao) ─────────────────────────────
+  // ── Estado: formulario (novo ou edicao) ───────────────────
   return (
     <View style={cs.card}>
       <View style={s.header}>
