@@ -13,6 +13,10 @@ const ordersApi = {
       method: "PATCH",
       body: { status },
     }),
+  remove: (cid: string, oid: string) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}`, {
+      method: "DELETE",
+    }),
 };
 
 export function useDigitalOrders(statusFilter = "all") {
@@ -36,6 +40,15 @@ export function useDigitalOrders(statusFilter = "all") {
       toast.success("Status atualizado");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao atualizar"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (oid: string) => ordersApi.remove(cid!, oid),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["digitalOrders", cid] });
+      toast.success(`Pedido #${data?.order_number || ""} excluído`);
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao excluir pedido"),
   });
 
   const orders: any[] = data?.orders || [];
@@ -67,5 +80,7 @@ export function useDigitalOrders(statusFilter = "all") {
     refetch,
     updateStatus: statusMutation.mutateAsync,
     isUpdating: statusMutation.isPending,
+    deleteOrder: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
   };
 }
