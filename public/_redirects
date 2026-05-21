@@ -1,1 +1,4 @@
-# Intentionally empty — SPA routing handled by wrangler.jsonc
+# Termos de Uso — rewrite sem extensão (Cloudflare Pages)
+/termos /termos.html 200
+
+# SPA routing handled by wrangler.jsonc

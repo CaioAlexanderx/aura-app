@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Termos de Uso — Aura.</title>
+  <meta name="description" content="Termos de Uso da plataforma Aura. Versão 2 — vigente a partir de 21 de maio de 2026." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --violet:    #7c3aed;
+      --violet2:   #6d28d9;
+      --violet3:   #a78bfa;
+      --violetD:   #1e1333;
+      --ink:       #f1f0f5;
+      --ink2:      #c4bfd8;
+      --ink3:      #857fa0;
+      --bg:        #0d0b14;
+      --bg2:       #13101e;
+      --bg3:       #1a1628;
+      --bg4:       #221e34;
+      --border:    rgba(124,58,237,0.18);
+      --border2:   rgba(255,255,255,0.07);
+      --green:     #22c55e;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--ink2);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(13,11,20,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border2);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .topbar-logo { font-size: 18px; font-weight: 800; color: var(--ink); letter-spacing: -0.5px; }
+    .topbar-logo span { color: var(--violet); }
+    .topbar-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      background: var(--violetD); color: var(--violet3);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 2px 10px;
+    }
+    .topbar-version { margin-left: auto; font-size: 11px; color: var(--ink3); }
+
+    .hero {
+      padding: 72px 24px 56px;
+      text-align: center;
+      border-bottom: 1px solid var(--border2);
+      background: radial-gradient(ellipse at 50% 0%, rgba(124,58,237,0.12) 0%, transparent 60%);
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 52px); font-weight: 800; color: var(--ink);
+      letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 12px;
+    }
+    .hero h1 span { color: var(--violet3); }
+    .hero p { font-size: 15px; color: var(--ink3); max-width: 520px; margin: 0 auto 28px; }
+    .hero-meta {
+      display: inline-flex; align-items: center; gap: 20px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 12px; padding: 12px 20px;
+      font-size: 12px; color: var(--ink3);
+    }
+    .hero-meta strong { color: var(--ink2); font-weight: 600; }
+    .hero-meta .sep { opacity: 0.3; }
+
+    .layout {
+      display: grid; grid-template-columns: 240px 1fr;
+      max-width: 1100px; margin: 0 auto; gap: 0; padding: 0 16px; align-items: start;
+    }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+    }
+
+    .sidebar {
+      position: sticky; top: 64px;
+      padding: 40px 0 40px 8px;
+      height: calc(100vh - 64px); overflow-y: auto;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .sidebar-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--ink3); margin-bottom: 14px; padding-left: 12px;
+    }
+    .sidebar nav a {
+      display: block; padding: 7px 12px; border-radius: 8px;
+      font-size: 12px; color: var(--ink3); text-decoration: none;
+      border-left: 2px solid transparent;
+      transition: color .15s, background .15s, border-color .15s; line-height: 1.4;
+    }
+    .sidebar nav a:hover { color: var(--ink2); background: var(--bg3); border-left-color: var(--violet3); }
+    .sidebar nav a.active { color: var(--violet3); background: var(--violetD); border-left-color: var(--violet); }
+
+    .content { padding: 48px 0 80px 48px; border-left: 1px solid var(--border2); min-height: 100vh; }
+    @media (max-width: 768px) { .content { padding: 32px 0; border-left: none; } }
+
+    .section { margin-bottom: 56px; scroll-margin-top: 80px; }
+    .section-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border2);
+    }
+    .section-num {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      background: var(--violetD); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--violet3);
+    }
+    .section h2 { font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -0.3px; }
+    .new-badge {
+      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      background: rgba(34,197,94,0.12); color: var(--green);
+      border: 1px solid rgba(34,197,94,0.2); border-radius: 20px;
+      padding: 2px 8px; margin-left: 4px; vertical-align: middle;
+    }
+
+    .clause { margin-bottom: 20px; }
+    .clause-title {
+      font-size: 13px; font-weight: 700; color: var(--ink);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+    }
+    .clause-title .num { font-size: 11px; color: var(--violet3); font-weight: 600; flex-shrink: 0; }
+    .clause p { margin-bottom: 10px; color: var(--ink2); }
+    .clause p:last-child { margin-bottom: 0; }
+    .clause ul, .clause ol { padding-left: 20px; margin-bottom: 10px; }
+    .clause li { margin-bottom: 6px; color: var(--ink2); }
+    .clause li::marker { color: var(--violet3); }
+
+    .callout {
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-left: 3px solid var(--violet); border-radius: 0 10px 10px 0;
+      padding: 14px 16px; margin: 16px 0;
+      font-size: 13px; color: var(--ink2); line-height: 1.6;
+    }
+    .callout.warn { border-left-color: #f59e0b; background: rgba(245,158,11,0.05); }
+    .callout.green { border-left-color: var(--green); background: rgba(34,197,94,0.05); }
+    .callout strong { color: var(--ink); }
+
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: var(--bg4); color: var(--ink2); font-weight: 600; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border2); }
+    td { padding: 9px 14px; color: var(--ink2); border-bottom: 1px solid rgba(255,255,255,0.04); }
+    tr:last-child td { border-bottom: none; }
+
+    footer { border-top: 1px solid var(--border2); padding: 40px 24px; text-align: center; font-size: 12px; color: var(--ink3); }
+    footer a { color: var(--violet3); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .footer-logo { font-size: 20px; font-weight: 800; color: var(--ink); letter-spacing: -0.5px; margin-bottom: 8px; }
+    .footer-logo span { color: var(--violet); }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-logo">Aura<span>.</span></div>
+  <div class="topbar-badge">Termos de Uso</div>
+  <div class="topbar-version">Versão 2 &mdash; 21 mai 2026</div>
+</header>
+
+<div class="hero">
+  <h1>Termos de <span>Uso</span></h1>
+  <p>Condições que regem o uso da plataforma Aura por você e pela sua empresa.</p>
+  <div class="hero-meta">
+    <span><strong>Versão</strong> 2.0</span>
+    <span class="sep">|</span>
+    <span><strong>Vigência</strong> 21 de maio de 2026</span>
+    <span class="sep">|</span>
+    <span><strong>Empresa</strong> Aura LTDA &mdash; CNPJ 66.088.450/0001-96</span>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">Índice</div>
+    <nav id="toc">
+      <a href="#s1">1. Identificação das Partes</a>
+      <a href="#s2">2. Elegibilidade e Aceite</a>
+      <a href="#s3">3. Conta e Credenciais</a>
+      <a href="#s4">4. Licença de Uso</a>
+      <a href="#s5">5. Planos, Preços e Seats</a>
+      <a href="#s6">6. Alteração de Preços</a>
+      <a href="#s7">7. Cancelamento</a>
+      <a href="#s8">8. Uso Permitido e Proibições</a>
+      <a href="#s9">9. Proteção de Dados (LGPD)</a>
+      <a href="#s10">10. Terceiros e Integrações</a>
+      <a href="#s11">11. Funcionalidades Beta</a>
+      <a href="#s12">12. Disponibilidade</a>
+      <a href="#s13">13. Propriedade Intelectual</a>
+      <a href="#s14">14. Emissão Fiscal</a>
+      <a href="#s15">15. Inteligência Artificial</a>
+      <a href="#s16">16. Crediário</a>
+      <a href="#s17">17. Canal Digital</a>
+      <a href="#s18">18. Multi-CNPJ</a>
+      <a href="#s19">19. Responsabilidade do Usuário</a>
+      <a href="#s20">20. Limitação de Responsabilidade</a>
+      <a href="#s21">21. Suspensão e Encerramento</a>
+      <a href="#s22">22. Indenização</a>
+      <a href="#s23">23. Alteração destes Termos</a>
+      <a href="#s24">24. Comunicações</a>
+      <a href="#s25">25. Disposições Gerais</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div class="callout"><strong>Leia com atenção.</strong> Ao criar uma conta ou utilizar a plataforma Aura, você confirma que leu, entendeu e concorda com estes Termos de Uso. Se estiver contratando em nome de uma pessoa jurídica, declara ter poderes para vinculá-la a este contrato.</div>
+
+    <div class="section" id="s1">
+      <div class="section-header"><div class="section-num">1</div><h2>Identificação das Partes</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">1.1</span> Prestador do Serviço</div><p><strong>Aura LTDA</strong>, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº <strong>66.088.450/0001-96</strong>, com sede na cidade de Jacareí, Estado de São Paulo ("<strong>Aura</strong>", "<strong>nós</strong>" ou "<strong>nosso</strong>").</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">1.2</span> Usuário</div><p>A pessoa física ou jurídica que acessa ou utiliza a plataforma Aura, por conta própria ou como representante de terceiros ("<strong>Usuário</strong>", "<strong>você</strong>" ou "<strong>seu</strong>").</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">1.3</span> Descrição do Serviço</div><p>A Aura é uma plataforma SaaS (Software as a Service) de gestão empresarial para pequenos e médios negócios, que oferece — entre outros recursos — controle de estoque, ponto de venda (PDV), emissão de documentos fiscais eletrônicos, módulo financeiro, crediário, canal de vendas digital, inteligência artificial e funcionalidades segmentadas por vertical de negócio.</p></div>
+    </div>
+
+    <div class="section" id="s2">
+      <div class="section-header"><div class="section-num">2</div><h2>Elegibilidade e Aceite</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">2.1</span> Capacidade Civil</div><p>Para utilizar a Aura, o Usuário deve ter capacidade civil plena (pessoa física maior de 18 anos ou legalmente emancipada) ou ser pessoa jurídica regularmente constituída.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">2.2</span> Representação de Pessoa Jurídica</div><p>Ao criar uma conta em nome de pessoa jurídica, o Usuário declara e garante que possui plenos poderes para vincular a entidade a estes Termos. A Aura não verificará previamente tais poderes, sendo o Usuário integralmente responsável por essa declaração.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">2.3</span> Aceite</div><p>O aceite destes Termos se aperfeiçoa no momento em que o Usuário marca a caixa de confirmação durante o cadastro, indicando que leu e concorda com o presente documento. O uso continuado da plataforma após publicação de nova versão dos Termos, observado o aviso prévio previsto na cláusula 23, também implica aceite da versão atualizada.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">2.4</span> Natureza B2B</div><p>A Aura destina-se prioritariamente a pessoas jurídicas e empreendedores individuais (MEI) em relações B2B (empresa-a-empresa). Microempreendedores Individuais têm assegurado o direito de arrependimento de 7 (sete) dias previsto no art. 49 do CDC para contratos celebrados à distância, nos termos da cláusula 7.4.</p></div>
+    </div>
+
+    <div class="section" id="s3">
+      <div class="section-header"><div class="section-num">3</div><h2>Conta e Credenciais</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">3.1</span> Criação de Conta</div><p>O Usuário deve fornecer informações verdadeiras, precisas e atualizadas durante o cadastro. A Aura pode recusar ou encerrar contas criadas com informações falsas ou incompletas.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">3.2</span> Responsabilidade pelas Credenciais</div><p>O Usuário é o único responsável pela guarda e sigilo de suas credenciais de acesso. Toda ação realizada com as credenciais do Usuário será considerada de sua responsabilidade, salvo notificação imediata de uso não autorizado à Aura.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">3.3</span> Acesso por Terceiros</div><p>O Usuário é responsável por todos os membros de sua equipe que acessem a plataforma por meio de convites ou seats vinculados à sua conta, devendo garantir que estes também cumpram estes Termos.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">3.4</span> Unicidade</div><p>Cada conta está associada a um único e-mail. É vedada a criação de múltiplas contas para burlar limitações de plano, trial ou acesso.</p></div>
+    </div>
+
+    <div class="section" id="s4">
+      <div class="section-header"><div class="section-num">4</div><h2>Licença de Uso</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">4.1</span> Outorga</div><p>Sujeita ao cumprimento destes Termos e ao pagamento regular das mensalidades, a Aura outorga ao Usuário uma licença <strong>limitada, não exclusiva, revogável e intransferível</strong> para acessar e usar a plataforma exclusivamente para suas finalidades comerciais legítimas.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">4.2</span> Restrições</div><p>O Usuário não pode: (a) sublicenciar, revender ou ceder a licença; (b) realizar engenharia reversa ou extrair o código-fonte; (c) criar produtos concorrentes baseados na plataforma; (d) remover avisos de direitos autorais ou marcas.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">4.3</span> Dados do Usuário</div><p>O Usuário retém todos os direitos sobre os dados que inserir. A Aura não reivindica propriedade sobre esses dados e os utilizará apenas conforme descrito na cláusula 9 e na Política de Privacidade.</p></div>
+    </div>
+
+    <div class="section" id="s5">
+      <div class="section-header"><div class="section-num">5</div><h2>Planos, Preços e Seats</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">5.1</span> Planos Disponíveis</div><p>A Aura oferece diferentes planos de assinatura (Essencial, Negócio, Expansão e Personalizado), com funcionalidades, limites de uso e preços definidos na tabela comercial vigente em <a href="https://getaura.com.br/planos" style="color: var(--violet3);">getaura.com.br/planos</a>.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">5.2</span> Período de Teste (Trial)</div><p>Novos Usuários qualificados podem ter acesso a período de teste gratuito cujas condições são: (a) duração conforme indicado no cadastro ou código de acesso; (b) acesso ao plano indicado ou ao plano Essencial; (c) dados disponíveis para exportação por até <strong>30 dias</strong> após encerramento do trial sem conversão; (d) concedido uma única vez por CNPJ e e-mail.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">5.3</span> Seats e Usuários Adicionais</div><p>Cada plano inclui um número de acessos (seats) conforme a tabela comercial vigente. Seats adicionais são cobrados mensalmente pelo valor vigente por seat. O billing owner é responsável pelo pagamento de todos os seats da conta.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">5.4</span> Cobrança</div><p>As mensalidades são cobradas antecipadamente a partir do encerramento do trial ou da data de adesão ao plano pago.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">5.5</span> Inadimplência</div><p>Em caso de inadimplência por mais de 7 dias corridos, a Aura poderá suspender o acesso. Os dados são mantidos por até 90 dias após a suspensão antes de qualquer exclusão.</p></div>
+    </div>
+
+    <div class="section" id="s6">
+      <div class="section-header"><div class="section-num">6</div><h2>Alteração de Preços</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">6.1</span> Aviso Prévio</div><p>Alterações nos preços dos planos vigentes serão comunicadas com no mínimo <strong>30 (trinta) dias</strong> de antecedência, por e-mail e/ou notificação na plataforma.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">6.2</span> Discordância</div><p>O Usuário que discordar do novo preço poderá cancelar antes da data de vigência da alteração, sem cobrança adicional.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">6.3</span> Impostos</div><p>Os preços são em reais (BRL) e podem não incluir tributos incidentes, que serão discriminados na nota fiscal emitida pela Aura.</p></div>
+    </div>
+
+    <div class="section" id="s7">
+      <div class="section-header"><div class="section-num">7</div><h2>Cancelamento</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">7.1</span> Liberdade de Cancelamento</div><p>O Usuário pode cancelar sua assinatura a qualquer momento, sem fidelidade mínima, diretamente nas configurações da plataforma ou por contato com o suporte.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">7.2</span> Efeito do Cancelamento</div><p>O cancelamento produz efeito ao final do período já pago, sem reembolso proporcional da mensalidade em curso.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">7.3</span> Exportação de Dados</div><p>Após o cancelamento, o Usuário tem <strong>90 (noventa) dias</strong> para exportar seus dados, após o que poderão ser excluídos definitivamente.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">7.4</span> Direito de Arrependimento</div><p>Para contratos celebrados exclusivamente por meios digitais (art. 49 do CDC), o Usuário que se enquadre como consumidor — especialmente MEI — tem o direito de rescindir a contratação em 7 (sete) dias corridos do primeiro pagamento, com reembolso integral. Contato: <a href="mailto:suporte@getaura.com.br" style="color: var(--violet3);">suporte@getaura.com.br</a>.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">7.5</span> Encerramento pela Aura</div><p>A Aura pode encerrar a conta com aviso prévio de 15 dias quando o motivo não implicar violação grave, ou imediatamente em casos de uso indevido, fraude ou violação legal.</p></div>
+    </div>
+
+    <div class="section" id="s8">
+      <div class="section-header"><div class="section-num">8</div><h2>Uso Permitido e Proibições</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">8.1</span> Uso Permitido</div><p>A plataforma deve ser utilizada exclusivamente para fins lícitos relacionados à gestão do negócio do Usuário.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">8.2</span> Proibições</div><p>É expressamente vedado: (a) usar a plataforma para fins ilegais ou fraudulentos; (b) engenharia reversa ou extração de código-fonte; (c) desenvolver produto concorrente; (d) enviar malware ou código malicioso; (e) sobrecarregar deliberadamente a infraestrutura; (f) coletar dados de outros usuários sem autorização; (g) emitir documentos fiscais com informações falsas; (h) violar direitos de propriedade intelectual de terceiros; (i) compartilhar credenciais fora do modelo de seats.</p></div>
+    </div>
+
+    <div class="section" id="s9">
+      <div class="section-header"><div class="section-num">9</div><h2>Proteção de Dados (LGPD)</h2></div>
+      <div class="callout">Esta seção apresenta um resumo. O tratamento detalhado encontra-se na <a href="https://getaura.com.br/privacidade" style="color: var(--violet3);">Política de Privacidade</a> e no DPA, que integram estes Termos por referência.</div>
+      <div class="clause"><div class="clause-title"><span class="num">9.1</span> Papéis</div><p>O Usuário é o <strong>controlador</strong> dos dados pessoais de seus clientes e colaboradores. A Aura atua como <strong>operadora</strong>, processando-os conforme instruções do Usuário e a LGPD (Lei 13.709/2018).</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">9.2</span> Responsabilidade do Usuário como Controlador</div><p>O Usuário é responsável por: (a) ter base legal para inserir dados de terceiros na plataforma; (b) informar seus clientes e colaboradores; (c) atender solicitações de direitos dos titulares.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">9.3</span> Prazo de Retenção de Dados</div><p>Após encerramento da conta: <strong>dados operacionais</strong> mantidos por 90 dias (exportáveis); <strong>dados fiscais</strong> (NFC-e, NF-e) mantidos por 5 anos conforme legislação tributária; <strong>logs de acesso</strong> mantidos por 6 meses (Marco Civil da Internet). Após esses prazos, os dados serão excluídos ou anonimizados.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">9.4</span> Portabilidade</div><p>O Usuário pode solicitar exportação de seus dados a qualquer momento dentro dos prazos da cl. 9.3. Solicitações formais atendidas em até 15 dias úteis.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">9.5</span> Notificação de Incidentes</div><p>Em caso de incidente de segurança com dados pessoais, notificaremos o Usuário e a ANPD no prazo previsto na LGPD (art. 48), geralmente em até 72 horas do conhecimento do evento.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">9.6</span> Dados de Menores</div><p>A plataforma não se destina ao tratamento de dados de menores de 18 anos. O Usuário compromete-se a não inserir tais dados.</p></div>
+    </div>
+
+    <div class="section" id="s10">
+      <div class="section-header"><div class="section-num">10</div><h2>Terceiros e Integrações</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">10.1</span> Serviços de Terceiros</div><p>A plataforma integra-se a: SEFAZ e Receita Federal, processadores de pagamento (Mercado Pago, Asaas), armazenamento em nuvem, provedores de comunicação (WhatsApp, e-mail), parceiro de autorização NF-e (Nuvem Fiscal) e serviços de IA (Anthropic).</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">10.2</span> Disponibilidade de Terceiros</div><p>A Aura não controla nem garante a disponibilidade de serviços de terceiros. Interrupções — incluindo indisponibilidade do SEFAZ, órgãos governamentais ou processadores de pagamento — não constituem inadimplemento da Aura.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">10.3</span> Termos de Terceiros</div><p>O uso de funcionalidades integradas a terceiros está sujeito também aos termos desses serviços. O Usuário é responsável por cumpri-los.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">10.4</span> Responsabilidade</div><p>A Aura não se responsabiliza por danos causados por falhas de serviços de terceiros integrados, incluindo órgãos governamentais e parceiros de infraestrutura.</p></div>
+    </div>
+
+    <div class="section" id="s11">
+      <div class="section-header"><div class="section-num">11</div><h2>Funcionalidades Beta e Preview</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">11.1</span> Definição</div><p>Funcionalidades marcadas como "beta", "preview" ou "experimental" estão em fase de testes e podem ser alteradas ou descontinuadas sem aviso prévio.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">11.2</span> Isenção</div><p>O uso de funcionalidades beta é por conta e risco do Usuário. A Aura não oferece garantias e não será responsável por perdas relacionadas ao seu uso.</p></div>
+    </div>
+
+    <div class="section" id="s12">
+      <div class="section-header"><div class="section-num">12</div><h2>Disponibilidade do Serviço</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">12.1</span> Esforços Razoáveis</div><p>A Aura envidará esforços razoáveis para manter a plataforma disponível, com objetivo de disponibilidade de <strong>99% mensais</strong> (excluídas manutenções programadas). Não há SLA vinculante, salvo acordo comercial específico por escrito.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">12.2</span> Manutenções</div><p>Manutenções programadas serão comunicadas com antecedência razoável, preferencialmente em horários de menor uso. Emergências podem ocorrer sem aviso.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">12.3</span> Indisponibilidades Excluídas</div><p>Não ensejarão responsabilidade da Aura: (a) força maior; (b) falhas de terceiros essenciais; (c) manutenções de emergência; (d) ações do próprio Usuário.</p></div>
+    </div>
+
+    <div class="section" id="s13">
+      <div class="section-header"><div class="section-num">13</div><h2>Propriedade Intelectual</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">13.1</span> Titularidade da Aura</div><p>A Aura é titular exclusiva de todos os direitos de propriedade intelectual da plataforma: código-fonte, interfaces, design, marcas, logotipos, algoritmos e documentação.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">13.2</span> Feedback</div><p>Sugestões e feedbacks enviados pelo Usuário poderão ser usados livremente pela Aura, sem obrigação de remuneração ou atribuição.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">13.3</span> Dados Agregados</div><p>Dados agregados e anonimizados gerados pelo uso da plataforma podem ser usados pela Aura para melhoria de produto e benchmarks, respeitada a LGPD.</p></div>
+    </div>
+
+    <div class="section" id="s14">
+      <div class="section-header"><div class="section-num">14</div><h2>Emissão de Documentos Fiscais <span class="new-badge">v2</span></h2></div>
+      <div class="callout warn"><strong>Atenção.</strong> A emissão de documentos fiscais eletrônicos (NFC-e, NF-e, NFS-e) é operação com implicações tributárias diretas. Leia esta seção com especial atenção.</div>
+      <div class="clause"><div class="clause-title"><span class="num">14.1</span> Responsabilidade Tributária</div><p>A Aura fornece infraestrutura tecnológica para transmissão ao SEFAZ. O Usuário é, exclusivamente, o <strong>contribuinte e responsável tributário</strong> perante a Receita Federal, SEFAZ estadual e demais órgãos fazendários. A Aura não é responsável por qualquer obrigação fiscal do Usuário.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">14.2</span> Precisão das Informações</div><p>A corretude das informações fiscais — NCM, CFOP, alíquotas, CST/CSOSN, dados do destinatário e valores — é de <strong>responsabilidade exclusiva do Usuário</strong>. A Aura não verifica a validade fiscal dos dados inseridos.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">14.3</span> Dependência de Terceiros</div><p>A autorização de documentos fiscais depende da disponibilidade do SEFAZ, Receita Federal e parceiro autorizador (Nuvem Fiscal). A Aura não garante esses sistemas e não responde por rejeições ou indisponibilidades governamentais.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">14.4</span> Atualizações Regulatórias</div><p>Mudanças em layouts e regras fiscais determinadas pelo Fisco serão implementadas em prazo razoável. A Aura não se responsabiliza por penalidades decorrentes de normas não implementadas no prazo.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">14.5</span> Certificado Digital</div><p>O certificado digital A1 ou A3 é de responsabilidade do Usuário. A Aura não fornece certificados e não se responsabiliza por vencimentos que impeçam a emissão.</p></div>
+    </div>
+
+    <div class="section" id="s15">
+      <div class="section-header"><div class="section-num">15</div><h2>Funcionalidades de Inteligência Artificial <span class="new-badge">v2</span></h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">15.1</span> Descrição</div><p>A Aura oferece funcionalidades baseadas em IA, incluindo o "Modo Consulta" (assistente de gestão) e o "Vendedor IA Aura" (automação de prospecção), entre outras que possam ser adicionadas.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">15.2</span> Natureza Probabilística</div><p>As respostas de IA têm <strong>natureza probabilística</strong> e podem conter imprecisões, erros ou informações desatualizadas. A Aura não garante exatidão ou adequação de nenhuma resposta gerada por IA.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">15.3</span> Responsabilidade pelas Decisões</div><p>O Usuário é o <strong>único responsável</strong> pelas decisões tomadas com base em sugestões de IA. As respostas não substituem aconselhamento jurídico, contábil, tributário ou financeiro especializado.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">15.4</span> Dados nos Prompts</div><p>Dados inseridos em funcionalidades de IA poderão ser processados por provedores de LLM parceiros (como a Anthropic). O Usuário não deve inserir dados pessoais sensíveis de terceiros sem base legal adequada.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">15.5</span> Automação de Mensagens</div><p>O módulo de automação envia mensagens em nome do Usuário com base em parâmetros por ele configurados. O Usuário é integralmente responsável por: (a) consentimento dos destinatários; (b) cumprimento dos termos das plataformas de comunicação; (c) legislação de proteção de dados e anti-spam.</p></div>
+    </div>
+
+    <div class="section" id="s16">
+      <div class="section-header"><div class="section-num">16</div><h2>Módulo de Crediário <span class="new-badge">v2</span></h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">16.1</span> Natureza da Funcionalidade</div><p>O módulo de crediário é uma <strong>ferramenta de gestão interna</strong> para registro e controle de operações de crédito entre o Usuário e seus clientes. Não constitui prestação de serviços financeiros pela Aura.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">16.2</span> A Aura não é Instituição Financeira</div><p>A Aura <strong>não é instituição financeira</strong>, não integra o SFN, não capta recursos e não participa das relações de crédito entre o Usuário e seus clientes.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">16.3</span> Responsabilidade do Usuário</div><p>O Usuário é exclusivamente responsável pela legalidade de suas práticas de crédito, pela acuracidade dos registros e por quaisquer disputas relacionadas às relações de crédito com seus clientes.</p></div>
+    </div>
+
+    <div class="section" id="s17">
+      <div class="section-header"><div class="section-num">17</div><h2>Canal Digital e Vitrine Online <span class="new-badge">v2</span></h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">17.1</span> Papel da Aura</div><p>O Canal Digital fornece infraestrutura tecnológica para vitrine de vendas online. A Aura atua exclusivamente como <strong>fornecedora de tecnologia</strong> e não é parte da relação de consumo entre o Usuário e seus clientes.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">17.2</span> Responsabilidade do Usuário como Fornecedor</div><p>O Usuário é exclusivamente responsável por: (a) precisão de produtos e preços; (b) cumprimento dos pedidos; (c) política de entrega, trocas e devoluções; (d) obrigações do CDC; (e) emissão de documentos fiscais das vendas.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">17.3</span> Isenção de Responsabilidade</div><p>A Aura não se responsabiliza por: (a) disputas entre Usuário e consumidores; (b) falhas de entrega ou produtos com defeito; (c) cobranças indevidas; (d) reclamações de consumidores perante órgãos de defesa.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">17.4</span> Pagamentos Online</div><p>Pagamentos processados pelo Canal Digital são realizados por gateways de terceiros. A Aura não processa pagamentos, não retém recursos e não se responsabiliza por falhas nos gateways ou chargebacks.</p></div>
+    </div>
+
+    <div class="section" id="s18">
+      <div class="section-header"><div class="section-num">18</div><h2>Contas Multi-CNPJ e Conta Consolidada <span class="new-badge">v2</span></h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">18.1</span> Modelo</div><p>A Aura permite gerenciar múltiplas empresas (CNPJs) sob uma mesma conta, em modelo consolidado com múltiplos perfis de empresa.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">18.2</span> Responsabilidade Contratual</div><p>Em contas multi-CNPJ, a empresa identificada como <strong>billing owner</strong> vincula-se a estes Termos em nome de todas as empresas da conta e é o único responsável pelo pagamento das mensalidades e cumprimento destes Termos.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">18.3</span> Isolamento de Dados</div><p>Os dados operacionais de cada empresa são segregados na plataforma. Funcionalidades consolidadas respeitam as permissões definidas pelo Usuário.</p></div>
+    </div>
+
+    <div class="section" id="s19">
+      <div class="section-header"><div class="section-num">19</div><h2>Responsabilidade do Usuário</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">19.1</span> Uso Adequado</div><p>O Usuário é responsável por todo conteúdo inserido, operação realizada e documento emitido por meio da plataforma.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">19.2</span> Obrigações Fiscais e Regulatórias</div><p>O Usuário é o único responsável pelo cumprimento de todas as obrigações fiscais, tributárias, trabalhistas e regulatórias decorrentes de sua atividade empresarial.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">19.3</span> Veracidade das Informações</div><p>O Usuário declara que todas as informações fornecidas à Aura são verdadeiras, precisas e completas, comprometendo-se a mantê-las atualizadas.</p></div>
+    </div>
+
+    <div class="section" id="s20">
+      <div class="section-header"><div class="section-num">20</div><h2>Limitação de Responsabilidade</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">20.1</span> Exclusões</div><p>Na máxima extensão permitida por lei, a Aura não será responsável por: (a) danos indiretos, incidentais, punitivos ou consequentes; (b) lucros cessantes ou perda de dados; (c) danos por decisões baseadas em IA; (d) falhas de sistemas governamentais ou de terceiros; (e) uso indevido pelo Usuário.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">20.2</span> Cap de Responsabilidade</div><p>A responsabilidade total da Aura fica limitada ao valor total pago pelo Usuário nos <strong>12 (doze) meses</strong> anteriores ao evento que originou o dano.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">20.3</span> Limitações Inafastáveis</div><p>Nada nesta cláusula afastará responsabilidade da Aura por dolo, fraude comprovada ou violação de direitos do consumidor garantidos por lei de ordem pública.</p></div>
+    </div>
+
+    <div class="section" id="s21">
+      <div class="section-header"><div class="section-num">21</div><h2>Suspensão e Encerramento</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">21.1</span> Suspensão Imediata</div><p>A Aura pode suspender imediatamente o acesso em caso de: (a) violação grave dos Termos; (b) atividade fraudulenta ou ilegal; (c) risco à segurança da plataforma; (d) determinação judicial ou de autoridade competente.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">21.2</span> Encerramento com Aviso Prévio</div><p>Para hipóteses que não configurem violação grave, a Aura comunicará o encerramento com aviso prévio de <strong>15 (quinze) dias</strong>, durante os quais o Usuário poderá regularizar a situação ou exportar seus dados.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">21.3</span> Efeitos</div><p>Após o encerramento, o acesso é revogado. Os dados ficam disponíveis pelo prazo da cláusula 9.3, após o que serão excluídos.</p></div>
+    </div>
+
+    <div class="section" id="s22">
+      <div class="section-header"><div class="section-num">22</div><h2>Indenização <span class="new-badge">v2</span></h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">22.1</span> Obrigação do Usuário</div><p>O Usuário concorda em indenizar e isentar a Aura, seus sócios, diretores e colaboradores de quaisquer reclamos, danos, multas e custas judiciais decorrentes de: (a) violação destes Termos ou da legislação; (b) uso ilícito da plataforma; (c) reclamações de terceiros relacionadas a ações do Usuário; (d) irregularidades em documentos fiscais; (e) violação de direitos de terceiros; (f) descumprimento de obrigações tributárias ou regulatórias.</p></div>
+    </div>
+
+    <div class="section" id="s23">
+      <div class="section-header"><div class="section-num">23</div><h2>Alteração destes Termos</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">23.1</span> Direito de Alteração</div><p>A Aura pode alterar estes Termos a qualquer momento para refletir mudanças na plataforma, na legislação ou nas práticas de negócio.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">23.2</span> Aviso para Mudanças Materiais</div><p>Para mudanças <strong>materiais</strong> — que afetem direitos substanciais, limitem funcionalidades, alterem tratamento de dados ou condições de cancelamento — a Aura concederá aviso prévio de no mínimo <strong>15 (quinze) dias</strong> por e-mail e/ou notificação na plataforma.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">23.3</span> Aceite Tácito</div><p>O uso continuado após o período de aviso implica aceite da versão atualizada. O Usuário que discordar pode cancelar antes da data de vigência.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">23.4</span> Histórico de Versões</div><p>A versão anterior será mantida acessível por no mínimo 12 meses após a entrada em vigor da nova versão.</p></div>
+    </div>
+
+    <div class="section" id="s24">
+      <div class="section-header"><div class="section-num">24</div><h2>Comunicações</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">24.1</span> Da Aura ao Usuário</div><p>A Aura se comunicará via: (a) e-mail cadastrado; (b) notificações na plataforma; (c) WhatsApp, quando optado. E-mails consideram-se recebidos 24 horas após o envio.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">24.2</span> Do Usuário à Aura</div><p>Para comunicações formais (notificações legais, solicitações LGPD, disputas): <a href="mailto:juridico@getaura.com.br" style="color: var(--violet3);">juridico@getaura.com.br</a> ou <a href="https://getaura.com.br/suporte" style="color: var(--violet3);">getaura.com.br/suporte</a>.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">24.3</span> Dados Atualizados</div><p>O Usuário é responsável por manter seus dados de contato atualizados. A Aura não se responsabiliza por comunicações não recebidas por dados desatualizados.</p></div>
+    </div>
+
+    <div class="section" id="s25">
+      <div class="section-header"><div class="section-num">25</div><h2>Disposições Gerais</h2></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.1</span> Legislação Aplicável</div><p>Estes Termos são regidos pela legislação brasileira, em especial o Código Civil, o Marco Civil da Internet (Lei 12.965/2014), a LGPD (Lei 13.709/2018) e o CDC (Lei 8.078/1990).</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.2</span> Foro</div><p>Fica eleito o Foro da Comarca de <strong>Jacareí, Estado de São Paulo</strong>, para dirimir controvérsias, com renúncia a qualquer outro, salvo para consumidores que possam invocar o foro do seu domicílio por lei.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.3</span> Integralidade</div><p>Estes Termos, a Política de Privacidade e o DPA constituem o acordo completo entre as partes, substituindo entendimentos anteriores.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.4</span> Separabilidade</div><p>Se qualquer cláusula for considerada inválida, as demais permanecerão em pleno vigor.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.5</span> Renúncia</div><p>A tolerância da Aura quanto a descumprimentos não implica renúncia ao direito de exigir cumprimento futuro.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.6</span> Cessão</div><p>O Usuário não pode ceder seus direitos sem consentimento prévio por escrito da Aura. A Aura pode ceder estes Termos em fusões, aquisições ou venda de ativos, com notificação prévia.</p></div>
+      <div class="clause"><div class="clause-title"><span class="num">25.7</span> Contato</div>
+        <div class="table-wrap"><table><thead><tr><th>Assunto</th><th>Canal</th></tr></thead><tbody>
+          <tr><td>Suporte geral</td><td><a href="mailto:suporte@getaura.com.br" style="color: var(--violet3);">suporte@getaura.com.br</a></td></tr>
+          <tr><td>Questões jurídicas / LGPD</td><td><a href="mailto:juridico@getaura.com.br" style="color: var(--violet3);">juridico@getaura.com.br</a></td></tr>
+          <tr><td>Cancelamentos</td><td>Painel Aura → Configurações → Assinatura</td></tr>
+          <tr><td>Sede</td><td>Jacareí, SP — CNPJ 66.088.450/0001-96</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+
+    <div class="callout green"><strong>Versão 2 — vigente a partir de 21 de maio de 2026.</strong> Esta versão incorpora as melhorias da Análise Jurídica Interna de mai/2026, cobrindo emissão fiscal, IA, crediário, Canal Digital, multi-CNPJ, portabilidade de dados e indenização.</div>
+  </main>
+</div>
+
+<footer>
+  <div class="footer-logo">Aura<span>.</span></div>
+  <p style="margin-bottom: 8px;">Aura LTDA &bull; CNPJ 66.088.450/0001-96 &bull; Jacareí, SP</p>
+  <p style="margin-bottom: 16px;">
+    <a href="https://getaura.com.br/privacidade">Política de Privacidade</a>
+    &nbsp;&bull;&nbsp;
+    <a href="https://getaura.com.br/termos">Termos de Uso</a>
+    &nbsp;&bull;&nbsp;
+    <a href="mailto:juridico@getaura.com.br">Contato Jurídico</a>
+  </p>
+  <p>&copy; 2026 Aura LTDA. Todos os direitos reservados.</p>
+</footer>
+
+<script>
+  const sections = document.querySelectorAll('.section');
+  const navLinks = document.querySelectorAll('#toc a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(l => l.classList.remove('active'));
+        const a = document.querySelector('#toc a[href="#' + entry.target.id + '"]');
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>
