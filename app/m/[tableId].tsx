@@ -1,11 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform, Image } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { maskPhone } from "@/utils/masks";
 
 // ============================================================
 // /m/[tableId] — Cardápio público do QR da mesa. Sem auth.
 // Consome rotas públicas /api/v1/food/table/public/:tableId/*.
 // Mobile-first, tema light pro cliente final.
+//
+// 2026-05-21 (F12 do polish pre-Fase 7): quando o item tem
+// photo_url, renderiza Image em vez do emoji 🍽. Mantém fallback
+// pro emoji nos itens sem foto.
 // ============================================================
 
 const API_BASE = ((typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
@@ -175,7 +180,7 @@ export default function QrTablePage() {
     setSending(false);
   };
 
-  // ─── render ───────────────────────────────────────
+  // ─── render ─────────────────────────────────
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: T.bg, alignItems: "center", justifyContent: "center" }}>
@@ -405,13 +410,22 @@ export default function QrTablePage() {
                 borderWidth: 1, borderColor: T.border,
                 flexDirection: "row", gap: 12,
               }}>
-                <View style={{
-                  width: 72, height: 72, borderRadius: 10,
-                  backgroundColor: "#f0e9e0",
-                  alignItems: "center", justifyContent: "center",
-                }}>
-                  <Text style={{ fontSize: 28 }}>🍽</Text>
-                </View>
+                {/* F12: foto se houver, senão emoji fallback */}
+                {item.photo_url ? (
+                  <Image
+                    source={{ uri: item.photo_url }}
+                    style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: "#f0e9e0" }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={{
+                    width: 72, height: 72, borderRadius: 10,
+                    backgroundColor: "#f0e9e0",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Text style={{ fontSize: 28 }}>🍽</Text>
+                  </View>
+                )}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }} numberOfLines={1}>{item.name}</Text>
                   {item.description && (
@@ -500,3 +514,7 @@ const qtyBtnLight: any = {
   alignItems: "center", justifyContent: "center",
 };
 const qtyTxtLight: any = { color: T.ink, fontSize: 14, fontWeight: "800" };
+
+// Mark customerName usage to avoid TS "declared but never used" if branch optimized away.
+// (keep this no-op to keep diff stable)
+void maskPhone;
