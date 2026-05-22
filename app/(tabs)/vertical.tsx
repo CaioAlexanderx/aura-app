@@ -5,7 +5,6 @@ import { PageHeader } from '@/components/PageHeader';
 import { useAuthStore } from '@/stores/auth';
 import OdontoScreen from '@/components/verticals/OdontoScreen';
 import BarberScreen from '@/components/verticals/BarberScreen';
-import FoodScreen from '@/components/verticals/FoodScreen';
 
 // ============================================================
 // Vertical Tab — Roteia para a tela da vertical ativa.
@@ -17,9 +16,8 @@ import FoodScreen from '@/components/verticals/FoodScreen';
 // ou deep-links que apontem pra /vertical sao redirecionados.
 //
 // Food (Fase 0 — 2026-05-18): mesmo padrao do odonto. Porta
-// dedicada em /food/(salao)/mesas. FoodScreen.tsx mantido por
-// retrocompat e como referencia de tabs/KPIs do mockup original,
-// mas nao roda mais embedded aqui.
+// dedicada em /food/(salao)/mesas. FoodScreen.tsx removido em
+// 2026-05-21 (F1 do polish pré-Fase 7).
 // ============================================================
 
 const VERTICAL_NAMES: Record<string, string> = {
