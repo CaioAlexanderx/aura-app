@@ -8,14 +8,24 @@ import { FoodColors, FoodGradients } from "@/constants/food-tokens";
 import { KdsBoard } from "@/components/food/KdsBoard";
 import { useFoodKds } from "@/hooks/useFoodKds";
 import { useAuthStore } from "@/stores/auth";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { BASE_URL } from "@/services/api";
+import { printThermalUrl, buildComandaUrl, isThermalPrintSupported } from "@/utils/printThermal";
 
 // ============================================================
 // /food/kds — KDS standalone, fora do shell food.
 // Modo TV. Polling 5s. Beep ao detectar pedido novo (Web Audio API).
 // Guard: company.vertical_active === "food".
 //
+// 2026-05-24 (Fase 7): auto-print da comanda termica 80mm ao detectar
+// pedido novo em status=confirmed (gate: pdv_settings.food_comanda_print_enabled
+// + Platform.OS===web). Mesma logica do beep — quando um id aparece
+// pela primeira vez nas colunas confirmed/preparing/ready, dispara
+// printThermalUrl(GET /food/orders/:oid/comanda). Throttle por id
+// no Set knownIdsRef evita reimpressao em cada poll.
+//
 // 2026-05-21 (F3 do polish pre-Fase 7): nome de empresa no header
-// usa trade_name → legal_name (companies nao tem coluna `name`).
+// usa trade_name -> legal_name (companies nao tem coluna `name`).
 //
 // 2026-05-21 (F8 do polish pre-Fase 7): iPad/iOS Safari exige gesto
 // do usuario pra liberar AudioContext (autoplay policy). Antes da
@@ -53,10 +63,8 @@ function unlockAudioContext() {
     const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!Ctx) return;
     if (!_audioCtx) _audioCtx = new Ctx();
-    // resume() retorna Promise em browsers iOS; ignora erro silenciosamente.
     const ctx = _audioCtx as any;
     if (ctx && typeof ctx.resume === "function") ctx.resume().catch(() => {});
-    // dispara beep silencioso pra cimentar o unlock dentro do gesto.
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -87,29 +95,61 @@ function enterFullscreen() {
 }
 
 export default function KdsScreen() {
-  const { company, isHydrated } = useAuthStore();
+  const { company, token, isHydrated } = useAuthStore();
+  const { settings } = usePdvSettings();
   const { confirmed, preparing, ready, counts } = useFoodKds();
   const [soundOn, setSoundOn] = useState(true);
-  // F8: iOS exige gesto pra ativar audio. Em outros browsers consideramos
-  // ja desbloqueado (autoplay sem som funciona, ou o primeiro beep dispara
-  // dentro de outro gesto qualquer da pagina).
   const [audioUnlocked, setAudioUnlocked] = useState<boolean>(() => !isIOSWeb());
   const clock = useClock();
   const knownIdsRef = useRef<Set<string>>(new Set());
+  // Fase 7: rastreia ids ja impressos pra evitar reimpressao na mesma
+  // sessao. Persiste no escopo do componente (limpo no reload da pagina).
+  const printedIdsRef = useRef<Set<string>>(new Set());
 
-  // beep ao detectar pedido novo (id que não estava no poll anterior)
+  // Beep + auto-print ao detectar pedido novo (id que nao estava no poll anterior)
   useEffect(() => {
     const ids = new Set([...confirmed, ...preparing, ...ready].map(o => o.id));
-    if (knownIdsRef.current.size > 0) {
-      for (const id of ids) {
-        if (!knownIdsRef.current.has(id) && soundOn && audioUnlocked) {
+    // primeiro tick: popula knownIds sem disparar beep nem print (evita
+    // imprimir tudo que ja estava na tela ao abrir o KDS).
+    if (knownIdsRef.current.size === 0) {
+      knownIdsRef.current = ids;
+      // populate printed pra nao imprimir tudo que ja existe
+      ids.forEach(id => printedIdsRef.current.add(id));
+      return;
+    }
+
+    let didBeep = false;
+    for (const o of confirmed) {
+      if (!knownIdsRef.current.has(o.id)) {
+        // beep (so o primeiro novo)
+        if (!didBeep && soundOn && audioUnlocked) {
+          playBeep();
+          didBeep = true;
+        }
+        // auto-print comanda (Fase 7)
+        if (
+          settings?.food_comanda_print_enabled === true &&
+          isThermalPrintSupported() &&
+          company?.id &&
+          !printedIdsRef.current.has(o.id)
+        ) {
+          printedIdsRef.current.add(o.id);
+          const url = buildComandaUrl(BASE_URL, company.id, o.id, token);
+          printThermalUrl(url, { silent: true });
+        }
+      }
+    }
+    // mesmo loop pra preparing/ready (caso pedido pule confirmed)
+    if (!didBeep) {
+      for (const o of [...preparing, ...ready]) {
+        if (!knownIdsRef.current.has(o.id) && soundOn && audioUnlocked) {
           playBeep();
           break;
         }
       }
     }
     knownIdsRef.current = ids;
-  }, [confirmed, preparing, ready, soundOn, audioUnlocked]);
+  }, [confirmed, preparing, ready, soundOn, audioUnlocked, settings?.food_comanda_print_enabled, company?.id, token]);
 
   if (!isHydrated) return null;
   if ((company as any)?.vertical_active !== "food") {
@@ -117,7 +157,6 @@ export default function KdsScreen() {
   }
 
   const isWeb = Platform.OS === "web";
-  // F3: nome de empresa via trade_name → legal_name (companies nao tem `name`).
   const businessName =
     ((company as any)?.trade_name) ||
     ((company as any)?.legal_name) ||
@@ -173,6 +212,13 @@ export default function KdsScreen() {
             >
               <Text style={{ fontSize: 14 }}>{soundOn ? "🔊" : "🔇"}</Text>
             </Pressable>
+            {/* Fase 7: indicador visual de impressao automatica ativa */}
+            {settings?.food_comanda_print_enabled === true && isWeb && (
+              <View style={[iconBtnStyle, { backgroundColor: FoodColors.green + "22", borderColor: FoodColors.green + "55" }]}
+                {...(isWeb ? ({ title: "Impressao automatica de comanda ativa" } as any) : {})}>
+                <Text style={{ fontSize: 14 }}>🖨</Text>
+              </View>
+            )}
             <Pressable onPress={enterFullscreen} style={iconBtnStyle}
               {...(isWeb ? ({ title: "Modo TV (fullscreen)" } as any) : {})}>
               <Icon name="grid" size={14} color={FoodColors.ink2} />
@@ -207,10 +253,10 @@ export default function KdsScreen() {
               Clique pra ativar o som
             </Text>
             <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 6, textAlign: "center", maxWidth: 360, lineHeight: 19 }}>
-              O iPad bloqueia áudio até você tocar a tela uma vez. Sem isso o KDS não consegue avisar com beep quando um pedido novo chega da cozinha.
+              O iPad bloqueia audio ate voce tocar a tela uma vez. Sem isso o KDS nao consegue avisar com beep quando um pedido novo chega da cozinha.
             </Text>
             <View style={{ marginTop: 20, backgroundColor: FoodColors.red, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 10 }}>
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Ativar som e começar</Text>
+              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Ativar som e comecar</Text>
             </View>
           </Pressable>
         )}

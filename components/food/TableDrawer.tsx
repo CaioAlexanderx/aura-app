@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, Modal, Platform, ActivityIndicator, Alert } from "react-native";
 import { FoodColors } from "@/constants/food-tokens";
 import { Icon } from "@/components/Icon";
@@ -11,19 +11,26 @@ import {
   type FoodComandaOrder,
 } from "@/hooks/useFoodTables";
 import { AnotarPedidoDrawer } from "@/components/food/AnotarPedidoDrawer";
+import { CloseTableModal } from "@/components/food/CloseTableModal";
+import { request, BASE_URL } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { useQuery } from "@tanstack/react-query";
+import { printThermalUrl, buildCupomUrl } from "@/utils/printThermal";
 
 // ============================================================
 // TableDrawer — drawer lateral 520px (desktop) / modal 88% (mobile)
-// com comanda agregada da mesa + ações do garçom.
+// com comanda agregada da mesa + acoes do garcom.
 //
-// Entrada: table (mesa selecionada no mapa).
-// Backend: GET /food/tables/:id/comanda (Fase 2).
-// Polling 5s pra refletir status do KDS e novos pedidos.
+// 2026-05-24 (Fase 7): botao "Fechar mesa" agora abre CloseTableModal
+// (wizard 4 passos com pagamento + NFC-e + impressao). Mantemos
+// setStatus("free") como escape hatch (link discreto "Fechar sem
+// registrar" dentro do modal) e fallback automatico quando mesa esta
+// vazia (0 pedidos). Apos fechamento c/ NFC-e emitida, drawer mostra
+// botao "Reimprimir cupom termico" enquanto o ultimo sale_id persistir
+// na mesa (via GET /food/tables/:id/last-closed-nfce).
 //
 // 2026-05-21 (F7 do polish pre-Fase 7): window.confirm trocado por
-// Alert.alert cross-platform. Em web RN renderiza Alert.alert via
-// nativo do browser (confirm-like) mas a API e a mesma, evitando
-// branch Platform.OS em todo callback de ação destrutiva.
+// Alert.alert cross-platform.
 // ============================================================
 
 const STATUS_COLORS = {
@@ -48,9 +55,6 @@ interface Props {
   onClose: () => void;
 }
 
-// Helper: prompt confirm cross-platform. Em web usa window.confirm
-// (síncrono, igual ao comportamento antigo). Em native usa Alert.alert
-// com callbacks. Retorna Promise<boolean>.
 function confirmAsync(title: string, message: string): Promise<boolean> {
   if (Platform.OS === "web") {
     if (typeof window === "undefined") return Promise.resolve(true);
@@ -69,33 +73,81 @@ function confirmAsync(title: string, message: string): Promise<boolean> {
   });
 }
 
+// Fase 7: query opcional pra detectar ultima NFC-e emitida da mesa,
+// pra exibir "Reimprimir cupom". Endpoint pode ainda nao existir em
+// backends antigos -> 404/error tratados como "sem nfce" silenciosamente.
+function useLastClosedNfce(tableId: string | null) {
+  const { company, token } = useAuthStore();
+  return useQuery<{ order_id: string | null; nfce_emitida: boolean } | null>({
+    queryKey: ["food-table-last-nfce", company?.id, tableId],
+    queryFn: async () => {
+      try {
+        return await request<any>("/companies/" + company!.id + "/food/tables/" + tableId + "/last-closed-nfce");
+      } catch {
+        return null; // backend ainda nao tem rota -> esconde botao
+      }
+    },
+    enabled: !!token && !!company?.id && !!tableId,
+    staleTime: 30_000,
+    retry: 0,
+  });
+}
+
 export function TableDrawer({ table, onClose }: Props) {
   const visible = !!table;
+  const { company, token } = useAuthStore();
   const { data, isLoading } = useFoodComanda(table?.id || null);
   const answerCall   = useAnswerWaiterCallMutation();
   const setStatus    = useTableStatusMutation();
   const updateOrderStatus = useUpdateOrderStatusMutation();
   const [anotarOpen, setAnotarOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+
+  const lastNfce = useLastClosedNfce(table?.id || null);
 
   const handleAnswer = () => {
     if (data?.waiter_call) answerCall.mutate(data.waiter_call.id);
   };
+
+  // Fase 7: abre CloseTableModal se mesa tem pedidos ativos. Se mesa
+  // esta vazia, mantem fluxo antigo (setStatus=free direto).
   const handleClose = async () => {
     if (!table) return;
-    if (data && data.active_orders_count > 0) {
-      const ok = await confirmAsync(
-        "Fechar mesa",
-        "Mesa tem pedidos ativos. Fechar mesmo assim?"
-      );
-      if (!ok) return;
+    if (data && data.orders.length > 0) {
+      setCloseOpen(true);
+      return;
     }
+    // mesa sem pedidos: confirma e libera direto
+    const ok = await confirmAsync("Liberar mesa", "Marcar mesa como livre?");
+    if (!ok) return;
     await setStatus.mutateAsync({ id: table.id, status: "free" });
     onClose();
   };
+
+  // Force-free (link "Fechar sem registrar" dentro do modal): cancela
+  // todos pedidos abertos e marca mesa como livre.
+  const handleForceFree = async () => {
+    if (!table || !data) return;
+    for (const o of data.orders) {
+      if (o.status !== "delivered" && o.status !== "cancelled") {
+        await updateOrderStatus.mutateAsync({ orderId: o.id, status: "cancelled" });
+      }
+    }
+    await setStatus.mutateAsync({ id: table.id, status: "free" });
+    setCloseOpen(false);
+    onClose();
+  };
+
   const handleCancelOrder = async (orderId: string) => {
     const ok = await confirmAsync("Cancelar pedido", "Cancelar este pedido?");
     if (!ok) return;
     await updateOrderStatus.mutateAsync({ orderId, status: "cancelled" });
+  };
+
+  const handleReprintCupom = () => {
+    if (!company?.id || !lastNfce.data?.order_id) return;
+    const url = buildCupomUrl(BASE_URL, company.id, lastNfce.data.order_id, token);
+    printThermalUrl(url);
   };
 
   const isWeb = Platform.OS === "web";
@@ -171,7 +223,7 @@ export function TableDrawer({ table, onClose }: Props) {
                     <Text style={{ fontSize: 20 }}>🔔</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 12, color: FoodColors.red, fontWeight: "700" }}>
-                        Chamada de garçom
+                        Chamada de garcom
                       </Text>
                       <Text style={{ fontSize: 11, color: FoodColors.ink3 }}>
                         {data.waiter_call.reason}
@@ -217,7 +269,7 @@ export function TableDrawer({ table, onClose }: Props) {
                     )}
                     {data.service_fee_pct > 0 && (
                       <TotalRow
-                        label={"Taxa de serviço (" + data.service_fee_pct + "%)"}
+                        label={"Taxa de servico (" + data.service_fee_pct + "%)"}
                         value={data.service_fee_amount}
                         muted
                       />
@@ -225,6 +277,26 @@ export function TableDrawer({ table, onClose }: Props) {
                     <View style={{ height: 1, backgroundColor: FoodColors.border, marginVertical: 6 }} />
                     <TotalRow label="TOTAL" value={data.total_open} bold />
                   </View>
+                )}
+
+                {/* Fase 7: Reimprimir cupom se mesa fechada com NFC-e ainda referenciada */}
+                {table?.status === "free" && lastNfce.data?.nfce_emitida && lastNfce.data.order_id && (
+                  <Pressable onPress={handleReprintCupom} style={{
+                    flexDirection: "row", alignItems: "center", gap: 10,
+                    backgroundColor: FoodColors.surface2, padding: 12, borderRadius: 10,
+                    borderWidth: 1, borderColor: FoodColors.border,
+                  }}>
+                    <Text style={{ fontSize: 18 }}>🖨</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: FoodColors.ink, fontWeight: "700" }}>
+                        Reimprimir cupom termico
+                      </Text>
+                      <Text style={{ fontSize: 10, color: FoodColors.ink3, marginTop: 2 }}>
+                        Ultima NFC-e emitida nesta mesa
+                      </Text>
+                    </View>
+                    <Icon name="chevron_right" size={14} color={FoodColors.ink3} />
+                  </Pressable>
                 )}
               </>
             )}
@@ -265,6 +337,15 @@ export function TableDrawer({ table, onClose }: Props) {
           tableId={table.id}
           tableNumber={table.number}
           onClose={() => setAnotarOpen(false)}
+        />
+      )}
+
+      {closeOpen && table && data && (
+        <CloseTableModal
+          table={table}
+          comanda={data}
+          onClose={() => { setCloseOpen(false); onClose(); }}
+          onForceFree={handleForceFree}
         />
       )}
     </Modal>
