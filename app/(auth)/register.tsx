@@ -12,7 +12,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { maskCNPJ, maskPhone } from "@/utils/masks";
+import { maskCnpj, maskPhone } from "@/utils/masks";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -259,7 +259,7 @@ export default function RegisterScreen() {
     } finally { setCnpjLoading(false); }
   }
 
-  function handleCnpjChange(v: string) { const masked = maskCNPJ(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked); }
+  function handleCnpjChange(v: string) { const masked = maskCnpj(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked); }
 
   async function handleCodeBlur() {
     const code = codigo.trim(); if (!code) { setCodeValid(null); return; }
