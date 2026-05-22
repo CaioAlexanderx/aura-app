@@ -223,20 +223,20 @@ export function PdvSettingsCard() {
 
           <View style={s.divider} />
 
-          {/* Taxa de servico */}
+          {/* Taxa de servico (food_service_fee_pct — campo dedicado food, separado do service_fee_pct legacy) */}
           <View style={[s.row, { alignItems: "flex-start" }]}>
             <View style={{ flex: 1 }}>
               <Text style={s.rowLabel}>Taxa de serviço padrão</Text>
-              <Text style={s.rowDesc}>Sugestão de gorjeta calculada sobre o subtotal da comanda. 0 = desativada. Aparece como linha separada no fechamento.</Text>
+              <Text style={s.rowDesc}>Sugestão de gorjeta calculada sobre o subtotal da comanda. 0 = desativada. Aparece como linha separada no fechamento (fora da NFC-e).</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <TextInput
-                  value={feeInput || String(display.service_fee_pct ?? "")}
+                  value={feeInput || String(display.food_service_fee_pct ?? "")}
                   onChangeText={setFeeInput}
                   onBlur={() => {
                     const n = Math.max(0, Math.min(30, Number((feeInput || "").replace(/[^\d.]/g, "")) || 0));
                     setFeeInput("");
-                    if (n !== Number(display.service_fee_pct || 0)) {
-                      toggle("service_fee_pct" as keyof PdvSettings, n);
+                    if (n !== Number(display.food_service_fee_pct || 0)) {
+                      toggle("food_service_fee_pct" as keyof PdvSettings, n);
                     }
                   }}
                   keyboardType="decimal-pad"
