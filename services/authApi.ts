@@ -62,10 +62,15 @@ export type PdvSettings = {
   // vertical_active=food. Opcional pra backward compat — empresas
   // sem migration 118 retornam undefined.
   food_mode_enabled?: boolean;
-  // 18/05/2026 (Fase 0 Aura Food, migration 118): taxa de servico
-  // sobre subtotal da comanda. 0 = desativado. Aparece como linha
-  // separada no fechamento da mesa. Default 10 (10%).
+  // 18/05/2026 (Fase 0 Aura Food, migration 118): LEGACY — campo
+  // generico de taxa de servico. Substituido por food_service_fee_pct
+  // na migration 122 (Fase 7). Mantido aqui pra backward compat com
+  // empresas antigas; novas leituras/escritas devem usar food_service_fee_pct.
   service_fee_pct?: number;
+  // 2026-05-22 (Fase 7, migration 122): taxa de servico (gorjeta garcom)
+  // calculada sobre subtotal da comanda. 0..30. Aparece como linha
+  // separada no fechamento da mesa, FORA da NFC-e.
+  food_service_fee_pct?: number;
   // 2026-05-21 (F5 do polish pre-Fase 7, reservado pra Fase 7): quando
   // true, NFC-e da comanda ainda pode ser emitida via "Emitir cupom"
   // manual em vez de auto-emit no fechamento. Defensivo enquanto Fase 7
