@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Text, Pressable, ScrollView, Platform, ActivityIndicator } from "react-native";
 import { FoodColors } from "@/constants/food-tokens";
 import { Icon } from "@/components/Icon";
@@ -8,16 +9,27 @@ import {
   isOrderLate,
   type KdsOrder,
 } from "@/hooks/useFoodKds";
+import { useDispatchBoard } from "@/hooks/useFoodDispatch";
+import { DispatchModal } from "@/components/food/DispatchModal";
+import type { DispatchReadyOrder } from "@/hooks/useFoodDispatch";
 
 // ============================================================
 // KdsBoard — 3 colunas (Aguardando confirmed / Preparando /
 // Pronto pra servir). Cards grandes pra TV.
+//
+// Fase 8 (2026-05-22): cards com channel='delivery_proprio'
+// ganham badge 🏍 + endereço resumido. Coluna "Pronto" ganha
+// atalho "Despachar" direto pra abrir o DispatchModal (sem
+// precisar trocar pra tela /despacho).
 // ============================================================
 
 export function KdsBoard() {
   const { confirmed, preparing, ready, isLoading, counts } = useFoodKds();
   const advance = useAdvanceOrderStatusMutation();
   const toggleItem = useToggleItemKdsStatusMutation();
+  // Reusa o board do despacho só pra acessar lista de motoboys + DispatchReadyOrder shape.
+  const board = useDispatchBoard({ refetchInterval: 30_000 });
+  const [dispatchTarget, setDispatchTarget] = useState<DispatchReadyOrder | null>(null);
 
   if (isLoading) {
     return (
@@ -27,44 +39,66 @@ export function KdsBoard() {
     );
   }
 
+  // Mapeia KdsOrder → DispatchReadyOrder pra reusar o modal.
+  const toDispatchPayload = (o: KdsOrder): DispatchReadyOrder => ({
+    id: o.id,
+    external_short: o.id.slice(0, 6).toUpperCase(),
+    customer_name: o.customer_name || null,
+    customer_phone: null,
+    address_summary: (o as any).address_summary || null,
+    total: Number((o as any).total || 0),
+    ready_at: o.ready_at,
+    waiting_minutes: Number(o.waiting_minutes || 0),
+    notes: o.notes,
+  });
+
   return (
-    <View style={{
-      flex: 1, flexDirection: "row", gap: 12, padding: 12,
-    }}>
-      <Column
-        title="⏳ Aguardando"
-        accent={FoodColors.amber}
-        count={counts.confirmed}
-        orders={confirmed}
-        onAdvance={(o) => advance.mutate({ orderId: o.id, status: "preparing" })}
-        onCancel={(o) => advance.mutate({ orderId: o.id, status: "cancelled" })}
-        advanceLabel="▶ Iniciar"
-        onToggleItem={(orderId, itemId, ks) => toggleItem.mutate({ orderId, itemId, kds_status: ks })}
-      />
-      <Column
-        title="🔥 Preparando"
-        accent={FoodColors.cyan}
-        count={counts.preparing}
-        orders={preparing}
-        onAdvance={(o) => advance.mutate({ orderId: o.id, status: "ready" })}
-        advanceLabel="✓ Pronto"
-        onToggleItem={(orderId, itemId, ks) => toggleItem.mutate({ orderId, itemId, kds_status: ks })}
-      />
-      <Column
-        title="✓ Pronto · servir"
-        accent={FoodColors.green}
-        count={counts.ready}
-        orders={ready}
-        onAdvance={(o) => advance.mutate({ orderId: o.id, status: "delivered" })}
-        advanceLabel="✓ Servido"
-        onToggleItem={(orderId, itemId, ks) => toggleItem.mutate({ orderId, itemId, kds_status: ks })}
-      />
+    <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, flexDirection: "row", gap: 12, padding: 12 }}>
+        <Column
+          title="⏳ Aguardando"
+          accent={FoodColors.amber}
+          count={counts.confirmed}
+          orders={confirmed}
+          onAdvance={(o) => advance.mutate({ orderId: o.id, status: "preparing" })}
+          onCancel={(o) => advance.mutate({ orderId: o.id, status: "cancelled" })}
+          advanceLabel="▶ Iniciar"
+          onToggleItem={(orderId, itemId, ks) => toggleItem.mutate({ orderId, itemId, kds_status: ks })}
+        />
+        <Column
+          title="🔥 Preparando"
+          accent={FoodColors.cyan}
+          count={counts.preparing}
+          orders={preparing}
+          onAdvance={(o) => advance.mutate({ orderId: o.id, status: "ready" })}
+          advanceLabel="✓ Pronto"
+          onToggleItem={(orderId, itemId, ks) => toggleItem.mutate({ orderId, itemId, kds_status: ks })}
+        />
+        <Column
+          title="✓ Pronto · servir"
+          accent={FoodColors.green}
+          count={counts.ready}
+          orders={ready}
+          onAdvance={(o) => advance.mutate({ orderId: o.id, status: "delivered" })}
+          advanceLabel="✓ Servido"
+          onToggleItem={(orderId, itemId, ks) => toggleItem.mutate({ orderId, itemId, kds_status: ks })}
+          onDispatch={(o) => setDispatchTarget(toDispatchPayload(o))}
+        />
+      </View>
+
+      {dispatchTarget && (
+        <DispatchModal
+          order={dispatchTarget}
+          deliverers={board.data?.deliverers || []}
+          onClose={() => setDispatchTarget(null)}
+        />
+      )}
     </View>
   );
 }
 
 function Column({
-  title, accent, count, orders, onAdvance, onCancel, advanceLabel, onToggleItem,
+  title, accent, count, orders, onAdvance, onCancel, advanceLabel, onToggleItem, onDispatch,
 }: {
   title: string;
   accent: string;
@@ -74,6 +108,7 @@ function Column({
   onCancel?: (o: KdsOrder) => void;
   advanceLabel: string;
   onToggleItem: (orderId: string, itemId: string, ks: "pending" | "preparing" | "done") => void;
+  onDispatch?: (o: KdsOrder) => void;
 }) {
   return (
     <View style={{
@@ -107,6 +142,7 @@ function Column({
               onCancel={onCancel ? () => onCancel(o) : undefined}
               advanceLabel={advanceLabel}
               onToggleItem={onToggleItem}
+              onDispatch={onDispatch ? () => onDispatch(o) : undefined}
             />
           ))
         )}
@@ -116,19 +152,22 @@ function Column({
 }
 
 function KdsCard({
-  order, onAdvance, onCancel, advanceLabel, onToggleItem,
+  order, onAdvance, onCancel, advanceLabel, onToggleItem, onDispatch,
 }: {
   order: KdsOrder;
   onAdvance: () => void;
   onCancel?: () => void;
   advanceLabel: string;
   onToggleItem: (orderId: string, itemId: string, ks: "pending" | "preparing" | "done") => void;
+  onDispatch?: () => void;
 }) {
   const late = isOrderLate(order);
   const orderTag = "#" + order.id.slice(0, 6).toUpperCase();
   const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const waiting = Math.floor(Number(order.waiting_minutes || 0));
   const waitMm = String(waiting).padStart(2, "0");
+  const isDeliveryProprio = order.channel === "delivery_proprio";
+  const addressSummary = (order as any).address_summary as string | null | undefined;
 
   const sourceLabel =
     order.channel === "ifood"            ? "iFood" :
@@ -156,6 +195,14 @@ function KdsCard({
           <View style={{ backgroundColor: channelColor, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
             <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{orderTag}</Text>
           </View>
+          {isDeliveryProprio && (
+            <View style={{
+              backgroundColor: FoodColors.amber, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999,
+              flexDirection: "row", alignItems: "center", gap: 3,
+            }}>
+              <Text style={{ fontSize: 11 }}>🏍</Text>
+            </View>
+          )}
           <Text style={{ fontSize: 10, color: FoodColors.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>
             {sourceLabel}
           </Text>
@@ -169,9 +216,15 @@ function KdsCard({
       </View>
 
       {(order.customer_name || order.table_number) && (
-        <Text style={{ fontSize: 11, color: FoodColors.ink3, marginBottom: 6 }}>
+        <Text style={{ fontSize: 11, color: FoodColors.ink3, marginBottom: 4 }}>
           {order.customer_name || (order.table_number ? "Mesa " + order.table_number : "")}
           {time && "  ·  " + time}
+        </Text>
+      )}
+
+      {isDeliveryProprio && addressSummary && (
+        <Text style={{ fontSize: 11, color: FoodColors.amber, marginBottom: 6 }} numberOfLines={2}>
+          📍 {addressSummary}
         </Text>
       )}
 
@@ -233,6 +286,15 @@ function KdsCard({
             backgroundColor: FoodColors.surface, borderWidth: 1, borderColor: FoodColors.border,
           }}>
             <Text style={{ color: FoodColors.ink3, fontSize: 11, fontWeight: "600" }}>🚫</Text>
+          </Pressable>
+        )}
+        {/* Atalho "Despachar" só aparece em pedido delivery_proprio na coluna Pronto */}
+        {onDispatch && isDeliveryProprio && (
+          <Pressable onPress={onDispatch} style={{
+            flex: 1, paddingVertical: 10, borderRadius: 6,
+            backgroundColor: FoodColors.amber, alignItems: "center",
+          }}>
+            <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>🏍 Despachar</Text>
           </Pressable>
         )}
         <Pressable onPress={onAdvance} style={{
