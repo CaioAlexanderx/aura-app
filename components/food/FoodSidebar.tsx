@@ -3,6 +3,7 @@ import { usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { FoodColors } from "@/constants/food-tokens";
+import { useHubStats } from "@/hooks/useFoodHub";
 
 // ============================================================
 // FoodSidebar — Sidebar dedicada do shell Aura Food.
@@ -11,18 +12,21 @@ import { FoodColors } from "@/constants/food-tokens";
 // Fase 8 (2026-05-22): item "Delivery" virou "Despacho"
 // (aponta pra /despacho do delivery próprio). Novo item "iFood"
 // cobre o import CSV (antes em delivery.tsx).
+// Fase 10 (2026-05-22): item "Pedidos" ganha badge de
+// pedidos abertos vindo de useHubStats (polling 30s). Aparece
+// só se houver pedidos em aberto e nao-collapsed.
 //
 // Memory feedback_permissions_todas_telas: cada item tem chave
 // `mod` consultada por useVisibleModules.
 // ============================================================
 
-interface FoodNavItem { route: string; label: string; icon: string; mod: string; }
+interface FoodNavItem { route: string; label: string; icon: string; mod: string; badgeKey?: "openOrders"; }
 interface FoodNavSection { label: string; items: FoodNavItem[]; }
 
 const FOOD_NAV: FoodNavSection[] = [
   { label: "Salão", items: [
     { route: "/food/(salao)/mesas",    label: "Mesas",    icon: "users",     mod: "food.mesas" },
-    { route: "/food/(salao)/pedidos",  label: "Pedidos",  icon: "clipboard", mod: "food.pedidos" },
+    { route: "/food/(salao)/pedidos",  label: "Pedidos",  icon: "clipboard", mod: "food.pedidos", badgeKey: "openOrders" },
   ]},
   { label: "Cardápio & Delivery", items: [
     { route: "/food/(salao)/cardapio", label: "Cardápio", icon: "book",  mod: "food.cardapio" },
@@ -45,6 +49,10 @@ export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onTog
   const router = useRouter();
   const { user, company, logout } = useAuthStore();
   const sw = collapsed ? 64 : 240;
+
+  // Fase 10 — badge de pedidos em aberto (Hub). Polling 30s, falha silenciosa.
+  const { data: hubStats } = useHubStats();
+  const openOrders = hubStats?.open_orders ?? 0;
 
   const businessName =
     ((company as any)?.trade_name) ||
@@ -109,6 +117,7 @@ export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onTog
             {section.items.map((item) => {
               const active = routeMatches(pathname, item.route);
               const webExtras = Platform.OS === "web" ? ({ title: item.label, "data-mod": item.mod } as any) : {};
+              const showBadge = item.badgeKey === "openOrders" && openOrders > 0;
               return (
                 <Pressable
                   key={item.route}
@@ -126,10 +135,15 @@ export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onTog
                   ]}
                 >
                   <View style={[
-                    { width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" },
+                    { width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center", position: "relative" },
                     active && { backgroundColor: FoodColors.red },
                   ]}>
                     <Icon name={item.icon as any} size={14} color={active ? "#fff" : FoodColors.ink3} />
+                    {showBadge && collapsed && (
+                      <View style={{ position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: FoodColors.red, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 9, fontWeight: "800", color: "#fff" }}>{openOrders > 99 ? "99+" : openOrders}</Text>
+                      </View>
+                    )}
                   </View>
                   {!collapsed && (
                     <Text style={[
@@ -138,6 +152,11 @@ export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onTog
                     ]}>
                       {item.label}
                     </Text>
+                  )}
+                  {showBadge && !collapsed && (
+                    <View style={{ minWidth: 20, height: 18, borderRadius: 9, backgroundColor: FoodColors.red, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 10, fontWeight: "800", color: "#fff" }}>{openOrders > 99 ? "99+" : openOrders}</Text>
+                    </View>
                   )}
                 </Pressable>
               );
