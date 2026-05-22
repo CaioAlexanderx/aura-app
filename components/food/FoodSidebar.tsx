@@ -1,1 +1,253 @@
-aW1wb3J0IHsgVmlldywgVGV4dCwgUHJlc3NhYmxlLCBTY3JvbGxWaWV3LCBQbGF0Zm9ybSB9IGZyb20gInJlYWN0LW5hdGl2ZSI7CmltcG9ydCB7IHVzZVBhdGhuYW1lLCB1c2VSb3V0ZXIgfSBmcm9tICJleHBvLXJvdXRlciI7CmltcG9ydCB7IEljb24gfSBmcm9tICJAL2NvbXBvbmVudHMvSWNvbiI7CmltcG9ydCB7IHVzZUF1dGhTdG9yZSB9IGZyb20gIkAvc3RvcmVzL2F1dGgiOwppbXBvcnQgeyBGb29kQ29sb3JzLCBGb29kVG9rZW5zVjIgfSBmcm9tICJAL2NvbnN0YW50cy9mb29kLXRva2VucyI7CmltcG9ydCB7IEdyYWRpZW50QnJhbmRNYXJrLCBOYXZJdGVtVjIgfSBmcm9tICJAL2NvbXBvbmVudHMvZm9vZC9mb3VuZGF0aW9uIjsKCi8vID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQovLyBGb29kU2lkZWJhciDigJQgU2lkZWJhciBkZWRpY2FkYSBkbyBzaGVsbCBBdXJhIEZvb2QuCi8vCi8vIEZhc2UgMTEgKDIwMjYtMDUtMjIpOiByZWZyZXNoIHZpc3VhbCBjb20gRm91bmRhdGlvbiBGYXNlIDkuCi8vIC0gPEdyYWRpZW50QnJhbmRNYXJrLz4gZW0gdmV6IGRvIFNWRyBpbmxpbmUg8J+NvSAobG9nbyBjYW7Dtm5pY2EpLgovLyAtIE5hdiBpdGVtcyB2aWFtIDxOYXZJdGVtVjIvPiDigJQgYWN0aXZlIGJhciBsYXRlcmFsICsgaG92ZXIgdmlvbGV0U29mdC4KLy8gLSBGb290ZXIgYXZhdGFyIGNvbSBsaW5lYXItZ3JhZGllbnQoMTM1ZGVnLCBwcmltYXJ5LCB2aW9sZXQpLgovLyAtIExpZ2h0IGdsYXNzIHN1cmZhY2UgKEZvb2RUb2tlbnNWMi5zdXJmYWNlICsgbGluZSkuCi8vCi8vIEJhY2t3YXJkIGNvbXBhdDogcm90YXMvcGVybXMgaW5hbHRlcmFkYXMgLS0gc8OzIHJlZnJlc2ggdmlzdWFsLgovLyBGYXNlIDggKDIwMjYtMDUtMjIpOiBpdGVtICJEZWxpdmVyeSIgdmlyb3UgIkRlc3BhY2hvIi4gTm92byBpdGVtICJpRm9vZCIuCi8vIE1lbW9yeSBmZWVkYmFja19wZXJtaXNzaW9uc190b2Rhc190ZWxhczogY2hhdmUgYG1vZGAgcG9yIGl0ZW0uCi8vID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQoKaW50ZXJmYWNlIEZvb2ROYXZJdGVtIHsgcm91dGU6IHN0cmluZzsgbGFiZWw6IHN0cmluZzsgaWNvbjogc3RyaW5nOyBtb2Q6IHN0cmluZzsgfQppbnRlcmZhY2UgRm9vZE5hdlNlY3Rpb24geyBsYWJlbDogc3RyaW5nOyBpdGVtczogRm9vZE5hdkl0ZW1bXTsgfQoKY29uc3QgRk9PRF9OQVY6IEZvb2ROYXZTZWN0aW9uW10gPSBbCiAgeyBsYWJlbDogIlNhbMOjbyIsIGl0ZW1zOiBbCiAgICB7IHJvdXRlOiAiL2Zvb2QvKHNhbGFvKS9tZXNhcyIsICAgIGxhYmVsOiAiTWVzYXMiLCAgICBpY29uOiAidXNlcnMiLCAgICAgbW9kOiAiZm9vZC5tZXNhcyIgfSwKICAgIHsgcm91dGU6ICIvZm9vZC8oc2FsYW8pL3BlZGlkb3MiLCAgbGFiZWw6ICJQZWRpZG9zIiwgIGljb246ICJjbGlwYm9hcmQiLCBtb2Q6ICJmb29kLnBlZGlkb3MiIH0sCiAgXX0sCiAgeyBsYWJlbDogIkNhcmTDoXBpbyAmIERlbGl2ZXJ5IiwgaXRlbXM6IFsKICAgIHsgcm91dGU6ICIvZm9vZC8oc2FsYW8pL2NhcmRhcGlvIiwgbGFiZWw6ICJDYXJkw6FwaW8iLCBpY29uOiAiYm9vayIsICBtb2Q6ICJmb29kLmNhcmRhcGlvIiB9LAogICAgeyByb3V0ZTogIi9mb29kLyhzYWxhbykvZGVzcGFjaG8iLCBsYWJlbDogIkRlc3BhY2hvIiwgaWNvbjogInRydWNrIiwgbW9kOiAiZm9vZC5kZWxpdmVyeSIgfSwKICAgIHsgcm91dGU6ICIvZm9vZC8oc2FsYW8pL21vdG9ib3lzIiwgbGFiZWw6ICJNb3RvYm95cyIsIGljb246ICJiaWtlIiwgIG1vZDogImZvb2QubW90b2JveXMiIH0sCiAgICB7IHJvdXRlOiAiL2Zvb2QvKHNhbGFvKS9pZm9vZCIsICAgIGxhYmVsOiAiaUZvb2QiLCAgICBpY29uOiAiZG93bmxvYWQiLCBtb2Q6ICJmb29kLmRlbGl2ZXJ5IiB9LAogIF19LAogIHsgbGFiZWw6ICJDb25maWd1cmHDp8O1ZXMiLCBpdGVtczogWwogICAgeyByb3V0ZTogIi9mb29kLyhzYWxhbykvY29uZmlndXJhY29lcyIsIGxhYmVsOiAiQ29uZmlndXJhw6fDtWVzIiwgaWNvbjogInNldHRpbmdzIiwgbW9kOiAiZm9vZC5jb25maWciIH0sCiAgXX0sCl07CgpmdW5jdGlvbiByb3V0ZU1hdGNoZXMocGF0aG5hbWU6IHN0cmluZywgcm91dGU6IHN0cmluZyk6IGJvb2xlYW4gewogIGNvbnN0IHN0cmlwcGVkID0gcm91dGUucmVwbGFjZSgvXC9cKFteKV0rXCkvZywgIiIpOwogIHJldHVybiBwYXRobmFtZSA9PT0gc3RyaXBwZWQgfHwgcGF0aG5hbWUgPT09IHJvdXRlIHx8IHBhdGhuYW1lLmVuZHNXaXRoKHN0cmlwcGVkKTsKfQoKZXhwb3J0IGZ1bmN0aW9uIEZvb2RTaWRlYmFyKHsgY29sbGFwc2VkLCBvblRvZ2dsZSB9OiB7IGNvbGxhcHNlZDogYm9vbGVhbjsgb25Ub2dnbGU6ICgpID0+IHZvaWQgfSkgewogIGNvbnN0IHBhdGhuYW1lID0gdXNlUGF0aG5hbWUoKTsKICBjb25zdCByb3V0ZXIgPSB1c2VSb3V0ZXIoKTsKICBjb25zdCB7IHVzZXIsIGNvbXBhbnksIGxvZ291dCB9ID0gdXNlQXV0aFN0b3JlKCk7CiAgY29uc3Qgc3cgPSBjb2xsYXBzZWQgPyA3MiA6IDI1NjsKCiAgY29uc3QgYnVzaW5lc3NOYW1lID0KICAgICgoY29tcGFueSBhcyBhbnkpPy50cmFkZV9uYW1lKSB8fAogICAgKChjb21wYW55IGFzIGFueSk/LmxlZ2FsX25hbWUpIHx8CiAgICAoKGNvbXBhbnkgYXMgYW55KT8ubmFtZSkgfHwKICAgICJBdXJhIEZvb2QiOwoKICBjb25zdCBpc1dlYiA9IFBsYXRmb3JtLk9TID09PSAid2ViIjsKCiAgcmV0dXJuICgKICAgIDxWaWV3IHN0eWxlPXtbCiAgICAgIHsKICAgICAgICB3aWR0aDogc3csIGhlaWdodDogIjEwMCUiLAogICAgICAgIGJhY2tncm91bmRDb2xvcjogaXNXZWIgPyBGb29kVG9rZW5zVjIuc3VyZmFjZSA6IEZvb2RUb2tlbnNWMi5zdXJmYWNlRmxhdCwKICAgICAgICBib3JkZXJSaWdodFdpZHRoOiAxLCBib3JkZXJSaWdodENvbG9yOiBGb29kVG9rZW5zVjIubGluZSwKICAgICAgICBwYWRkaW5nVG9wOiAxOCwgcGFkZGluZ0JvdHRvbTogMTQsCiAgICAgICAgcGFkZGluZ0hvcml6b250YWw6IGNvbGxhcHNlZCA/IDEwIDogMTQsCiAgICAgICAgb3ZlcmZsb3c6ICJoaWRkZW4iIGFzIGFueSwKICAgICAgICB6SW5kZXg6IDEsCiAgICAgIH0sCiAgICAgIGlzV2ViID8gKHsKICAgICAgICBiYWNrZHJvcEZpbHRlcjogImJsdXIoMjRweCkiLAogICAgICAgIFdlYmtpdEJhY2tkcm9wRmlsdGVyOiAiYmx1cigyNHB4KSIsCiAgICAgICAgdHJhbnNpdGlvbjogIndpZHRoIDAuMjVzIGVhc2UsIHBhZGRpbmcgMC4yNXMgZWFzZSIsCiAgICAgIH0gYXMgYW55KSA6IHt9LAogICAgXX0+CiAgICAgIHsvKiBMb2dvICsgY29sbGFwc2UgdG9nZ2xlICovfQogICAgICA8VmlldyBzdHlsZT17eyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsCiAgICAgICAganVzdGlmeUNvbnRlbnQ6IGNvbGxhcHNlZCA/ICJjZW50ZXIiIDogInNwYWNlLWJldHdlZW4iLAogICAgICAgIHBhZGRpbmdIb3Jpem9udGFsOiBjb2xsYXBzZWQgPyAwIDogNiwgcGFkZGluZ0JvdHRvbTogMTYgfX0+CiAgICAgICAgPFByZXNzYWJsZSBvblByZXNzPXsoKSA9PiByb3V0ZXIucHVzaCgiL2Zvb2QvKHNhbGFvKS9tZXNhcyIgYXMgYW55KX0+CiAgICAgICAgICA8VmlldyBzdHlsZT17eyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGdhcDogMTAgfX0+CiAgICAgICAgICAgIDxHcmFkaWVudEJyYW5kTWFyayBzaXplPXszNn0gLz4KICAgICAgICAgICAgeyFjb2xsYXBzZWQgJiYgKAogICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXt7IGZsZXhEaXJlY3Rpb246ICJjb2x1bW4iIH19PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3sgZm9udFNpemU6IDE2LCBmb250V2VpZ2h0OiAiODAwIiwgY29sb3I6IEZvb2RUb2tlbnNWMi5pbmssIGxldHRlclNwYWNpbmc6IC0wLjQsIGxpbmVIZWlnaHQ6IDE4IH19PgogICAgICAgICAgICAgICAgICBBdXJhPFRleHQgc3R5bGU9e3sgY29sb3I6IEZvb2RUb2tlbnNWMi5wcmltYXJ5IH19PiBGb29kPC9UZXh0PgogICAgICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3sgZm9udFNpemU6IDksIGNvbG9yOiBGb29kVG9rZW5zVjIuaW5rNCwgZm9udFdlaWdodDogIjYwMCIsCiAgICAgICAgICAgICAgICAgIGxldHRlclNwYWNpbmc6IDEuMiwgdGV4dFRyYW5zZm9ybTogInVwcGVyY2FzZSIsIG1hcmdpblRvcDogMSB9fT4KICAgICAgICAgICAgICAgICAgUmVzdGF1cmFudGUKICAgICAgICAgICAgICAgIDwvVGV4dD4KICAgICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgICl9CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgPC9QcmVzc2FibGU+CiAgICAgICAgeyFjb2xsYXBzZWQgJiYgKAogICAgICAgICAgPFByZXNzYWJsZSBvblByZXNzPXtvblRvZ2dsZX0gc3R5bGU9e3sgd2lkdGg6IDI2LCBoZWlnaHQ6IDI2LCBib3JkZXJSYWRpdXM6IDgsCiAgICAgICAgICAgIGJhY2tncm91bmRDb2xvcjogRm9vZFRva2Vuc1YyLnByaW1hcnlTb2Z0LCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiIH19PgogICAgICAgICAgICA8SWNvbiBuYW1lPSJjaGV2cm9uX2xlZnQiIHNpemU9ezEzfSBjb2xvcj17Rm9vZFRva2Vuc1YyLnByaW1hcnl9IC8+CiAgICAgICAgICA8L1ByZXNzYWJsZT4KICAgICAgICApfQogICAgICA8L1ZpZXc+CgogICAgICB7Y29sbGFwc2VkICYmICgKICAgICAgICA8UHJlc3NhYmxlIG9uUHJlc3M9e29uVG9nZ2xlfSBzdHlsZT17eyBhbGlnblNlbGY6ICJjZW50ZXIiLCB3aWR0aDogMjYsIGhlaWdodDogMjYsCiAgICAgICAgICBib3JkZXJSYWRpdXM6IDgsIGJhY2tncm91bmRDb2xvcjogRm9vZFRva2Vuc1YyLnByaW1hcnlTb2Z0LAogICAgICAgICAgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiwgbWFyZ2luQm90dG9tOiA4IH19PgogICAgICAgICAgPEljb24gbmFtZT0iY2hldnJvbl9yaWdodCIgc2l6ZT17MTN9IGNvbG9yPXtGb29kVG9rZW5zVjIucHJpbWFyeX0gLz4KICAgICAgICA8L1ByZXNzYWJsZT4KICAgICAgKX0KCiAgICAgIDxWaWV3IHN0eWxlPXt7IGhlaWdodDogMSwgYmFja2dyb3VuZENvbG9yOiBGb29kVG9rZW5zVjIubGluZSwgbWFyZ2luVmVydGljYWw6IDQgfX0gLz4KCiAgICAgIHsvKiBOYXYgKi99CiAgICAgIDxTY3JvbGxWaWV3IHN0eWxlPXt7IGZsZXg6IDEsIG1hcmdpblRvcDogNiB9fSBzaG93c1ZlcnRpY2FsU2Nyb2xsSW5kaWNhdG9yPXtmYWxzZX0+CiAgICAgICAge0ZPT0RfTkFWLm1hcCgoc2VjdGlvbikgPT4gKAogICAgICAgICAgPFZpZXcga2V5PXtzZWN0aW9uLmxhYmVsfSBzdHlsZT17eyBtYXJnaW5Cb3R0b206IGNvbGxhcHNlZCA/IDggOiAxNiB9fT4KICAgICAgICAgICAgeyFjb2xsYXBzZWQgJiYgKAogICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXt7IGZvbnRTaXplOiA5LCBjb2xvcjogRm9vZFRva2Vuc1YyLmluazQsIGZvbnRXZWlnaHQ6ICI3MDAiLAogICAgICAgICAgICAgICAgdGV4dFRyYW5zZm9ybTogInVwcGVyY2FzZSIsIGxldHRlclNwYWNpbmc6IDEuNCwgcGFkZGluZ0hvcml6b250YWw6IDEyLCBtYXJnaW5Cb3R0b206IDYgfX0+CiAgICAgICAgICAgICAgICB7c2VjdGlvbi5sYWJlbH0KICAgICAgICAgICAgICA8L1RleHQ+CiAgICAgICAgICAgICl9CiAgICAgICAgICAgIHtjb2xsYXBzZWQgJiYgPFZpZXcgc3R5bGU9e3sgaGVpZ2h0OiAxLCBiYWNrZ3JvdW5kQ29sb3I6IEZvb2RUb2tlbnNWMi5saW5lLCBtYXJnaW5WZXJ0aWNhbDogNCwgbWFyZ2luSG9yaXpvbnRhbDogNCB9fSAvPn0KICAgICAgICAgICAge3NlY3Rpb24uaXRlbXMubWFwKChpdGVtKSA9PiB7CiAgICAgICAgICAgICAgY29uc3QgYWN0aXZlID0gcm91dGVNYXRjaGVzKHBhdGhuYW1lLCBpdGVtLnJvdXRlKTsKICAgICAgICAgICAgICBjb25zdCB3ZWJFeHRyYXMgPSBpc1dlYiA/ICh7IHRpdGxlOiBpdGVtLmxhYmVsLCAiZGF0YS1tb2QiOiBpdGVtLm1vZCB9IGFzIGFueSkgOiB7fTsKICAgICAgICAgICAgICBjb25zdCBpY29uTm9kZSA9IDxJY29uIG5hbWU9e2l0ZW0uaWNvbiBhcyBhbnl9IHNpemU9ezE2fSBjb2xvcj17YWN0aXZlID8gRm9vZFRva2Vuc1YyLnByaW1hcnkgOiBGb29kVG9rZW5zVjIuaW5rM30gLz47CiAgICAgICAgICAgICAgaWYgKGNvbGxhcHNlZCkgewogICAgICAgICAgICAgICAgcmV0dXJuICgKICAgICAgICAgICAgICAgICAgPFByZXNzYWJsZSBrZXk9e2l0ZW0ucm91dGV9IG9uUHJlc3M9eygpID0+IHJvdXRlci5wdXNoKGl0ZW0ucm91dGUgYXMgYW55KX0gey4uLndlYkV4dHJhc30KICAgICAgICAgICAgICAgICAgICBzdHlsZT17W3sgYWxpZ25TZWxmOiAiY2VudGVyIiwgd2lkdGg6IDM2LCBoZWlnaHQ6IDM2LCBib3JkZXJSYWRpdXM6IDEwLAogICAgICAgICAgICAgICAgICAgICAgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiwgbWFyZ2luQm90dG9tOiAyIH0sCiAgICAgICAgICAgICAgICAgICAgICBhY3RpdmUgJiYgeyBiYWNrZ3JvdW5kQ29sb3I6IEZvb2RUb2tlbnNWMi5wcmltYXJ5U29mdCB9XX0+CiAgICAgICAgICAgICAgICAgICAge2ljb25Ob2RlfQogICAgICAgICAgICAgICAgICA8L1ByZXNzYWJsZT4KICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgfQogICAgICAgICAgICAgIHJldHVybiAoCiAgICAgICAgICAgICAgICA8VmlldyBrZXk9e2l0ZW0ucm91dGV9IHsuLi53ZWJFeHRyYXN9PgogICAgICAgICAgICAgICAgICA8TmF2SXRlbVYyCiAgICAgICAgICAgICAgICAgICAgaWNvbj17aWNvbk5vZGV9CiAgICAgICAgICAgICAgICAgICAgbGFiZWw9e2l0ZW0ubGFiZWx9CiAgICAgICAgICAgICAgICAgICAgYWN0aXZlPXthY3RpdmV9CiAgICAgICAgICAgICAgICAgICAgb25QcmVzcz17KCkgPT4gcm91dGVyLnB1c2goaXRlbS5yb3V0ZSBhcyBhbnkpfQogICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgICk7CiAgICAgICAgICAgIH0pfQogICAgICAgICAgPC9WaWV3PgogICAgICAgICkpfQogICAgICA8L1Njcm9sbFZpZXc+CgogICAgICA8VmlldyBzdHlsZT17eyBoZWlnaHQ6IDEsIGJhY2tncm91bmRDb2xvcjogRm9vZFRva2Vuc1YyLmxpbmUsIG1hcmdpblZlcnRpY2FsOiA2IH19IC8+CgogICAgICB7LyogRm9vdGVyOiBhdmF0YXIgZ3JhZGllbnQgKyBuYW1lICsgYnVzaW5lc3MgKyBhdHRhbGhvcyAqL30KICAgICAgPFZpZXcgc3R5bGU9e3sgcGFkZGluZ1RvcDogNiwgZ2FwOiA0LCBmbGV4U2hyaW5rOiAwIH19PgogICAgICAgIHshY29sbGFwc2VkID8gKAogICAgICAgICAgPD4KICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3sgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDEwLAogICAgICAgICAgICAgIHBhZGRpbmdIb3Jpem9udGFsOiA0LCBtYXJnaW5Cb3R0b206IDggfX0+CiAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e1sKICAgICAgICAgICAgICAgIHsgd2lkdGg6IDM0LCBoZWlnaHQ6IDM0LCBib3JkZXJSYWRpdXM6IDE3LAogICAgICAgICAgICAgICAgICBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiIH0sCiAgICAgICAgICAgICAgICBpc1dlYgogICAgICAgICAgICAgICAgICA/ICh7IGJhY2tncm91bmQ6ICJsaW5lYXItZ3JhZGllbnQoMTM1ZGVnLCAjRUY0NDQ0LCAjN2MzYWVkKSIsCiAgICAgICAgICAgICAgICAgICAgICBib3hTaGFkb3c6ICIwIDRweCAxMnB4IHJnYmEoMjM5LDY4LDY4LDAuMjUpIiB9IGFzIGFueSkKICAgICAgICAgICAgICAgICAgOiB7IGJhY2tncm91bmRDb2xvcjogRm9vZFRva2Vuc1YyLnByaW1hcnkgfSwKICAgICAgICAgICAgICBdfT4KICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXt7IGZvbnRTaXplOiAxMywgZm9udFdlaWdodDogIjgwMCIsIGNvbG9yOiAiI2ZmZiIgfX0+CiAgICAgICAgICAgICAgICAgIHsodXNlcj8ubmFtZSB8fCAiQSIpLmNoYXJBdCgwKS50b1VwcGVyQ2FzZSgpfQogICAgICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgICA8VmlldyBzdHlsZT17eyBmbGV4OiAxIH19PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3sgZm9udFNpemU6IDEyLCBjb2xvcjogRm9vZFRva2Vuc1YyLmluaywgZm9udFdlaWdodDogIjcwMCIgfX0gbnVtYmVyT2ZMaW5lcz17MX0+CiAgICAgICAgICAgICAgICAgIHt1c2VyPy5uYW1lIHx8ICItLS0ifQogICAgICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3sgZm9udFNpemU6IDEwLCBjb2xvcjogRm9vZFRva2Vuc1YyLnByaW1hcnksIG1hcmdpblRvcDogMSwgZm9udFdlaWdodDogIjYwMCIgfX0gbnVtYmVyT2ZMaW5lcz17MX0+CiAgICAgICAgICAgICAgICAgIHtidXNpbmVzc05hbWV9CiAgICAgICAgICAgICAgICA8L1RleHQ+CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgIDxQcmVzc2FibGUgb25QcmVzcz17KCkgPT4gcm91dGVyLnB1c2goIi8odGFicykiIGFzIGFueSl9CiAgICAgICAgICAgICAgc3R5bGU9e3sgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDYsCiAgICAgICAgICAgICAgICBwYWRkaW5nVmVydGljYWw6IDgsIHBhZGRpbmdIb3Jpem9udGFsOiAxMCwgYm9yZGVyUmFkaXVzOiA4LAogICAgICAgICAgICAgICAgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBGb29kVG9rZW5zVjIubGluZTIgfX0KICAgICAgICAgICAgICB7Li4uKGlzV2ViID8gKHsgdGl0bGU6ICJBY2Vzc2FyIG3Ds2R1bG9zIGdlbsOpcmljb3MgZG8gQXVyYSBOZWfDs2NpbyIgfSBhcyBhbnkpIDoge30pfT4KICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJncmlkIiBzaXplPXsxMn0gY29sb3I9e0Zvb2RUb2tlbnNWMi5pbmszfSAvPgogICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXt7IGZvbnRTaXplOiAxMSwgY29sb3I6IEZvb2RUb2tlbnNWMi5pbmszLCBmb250V2VpZ2h0OiAiNjAwIiB9fT5BdXJhIE5lZ8OzY2lvPC9UZXh0PgogICAgICAgICAgICA8L1ByZXNzYWJsZT4KICAgICAgICAgICAgPFByZXNzYWJsZSBvblByZXNzPXtsb2dvdXR9CiAgICAgICAgICAgICAgc3R5bGU9e3sgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDYsCiAgICAgICAgICAgICAgICBwYWRkaW5nVmVydGljYWw6IDgsIHBhZGRpbmdIb3Jpem9udGFsOiAxMCwgYm9yZGVyUmFkaXVzOiA4LAogICAgICAgICAgICAgICAgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBGb29kVG9rZW5zVjIubGluZTIgfX0+CiAgICAgICAgICAgICAgPEljb24gbmFtZT0ibG9nb3V0IiBzaXplPXsxMn0gY29sb3I9e0Zvb2RUb2tlbnNWMi5pbmszfSAvPgogICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXt7IGZvbnRTaXplOiAxMSwgY29sb3I6IEZvb2RUb2tlbnNWMi5pbmszLCBmb250V2VpZ2h0OiAiNjAwIiB9fT5TYWlyPC9UZXh0PgogICAgICAgICAgICA8L1ByZXNzYWJsZT4KICAgICAgICAgIDwvPgogICAgICAgICkgOiAoCiAgICAgICAgICA8PgogICAgICAgICAgICA8VmlldyBzdHlsZT17WwogICAgICAgICAgICAgIHsgYWxpZ25TZWxmOiAiY2VudGVyIiwgd2lkdGg6IDM0LCBoZWlnaHQ6IDM0LCBib3JkZXJSYWRpdXM6IDE3LAogICAgICAgICAgICAgICAgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiwgbWFyZ2luQm90dG9tOiA0IH0sCiAgICAgICAgICAgICAgaXNXZWIKICAgICAgICAgICAgICAgID8gKHsgYmFja2dyb3VuZDogImxpbmVhci1ncmFkaWVudCgxMzVkZWcsICNFRjQ0NDQsICM3YzNhZWQpIiB9IGFzIGFueSkKICAgICAgICAgICAgICAgIDogeyBiYWNrZ3JvdW5kQ29sb3I6IEZvb2RUb2tlbnNWMi5wcmltYXJ5IH0sCiAgICAgICAgICAgIF19CiAgICAgICAgICAgICAgey4uLihpc1dlYiA/ICh7IHRpdGxlOiB1c2VyPy5uYW1lIHx8ICJQZXJmaWwiIH0gYXMgYW55KSA6IHt9KX0+CiAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3sgZm9udFNpemU6IDEzLCBmb250V2VpZ2h0OiAiODAwIiwgY29sb3I6ICIjZmZmIiB9fT4KICAgICAgICAgICAgICAgIHsodXNlcj8ubmFtZSB8fCAiQSIpLmNoYXJBdCgwKS50b1VwcGVyQ2FzZSgpfQogICAgICAgICAgICAgIDwvVGV4dD4KICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICA8UHJlc3NhYmxlIG9uUHJlc3M9eygpID0+IHJvdXRlci5wdXNoKCIvKHRhYnMpIiBhcyBhbnkpfQogICAgICAgICAgICAgIHN0eWxlPXt7IGFsaWduU2VsZjogImNlbnRlciIsIHdpZHRoOiAyOCwgaGVpZ2h0OiAyOCwgYm9yZGVyUmFkaXVzOiA4LAogICAgICAgICAgICAgICAgYmFja2dyb3VuZENvbG9yOiBGb29kVG9rZW5zVjIuc3VyZmFjZSwKICAgICAgICAgICAgICAgIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBqdXN0aWZ5Q29udGVudDogImNlbnRlciIgfX0KICAgICAgICAgICAgICB7Li4uKGlzV2ViID8gKHsgdGl0bGU6ICJBdXJhIE5lZ8OzY2lvIiB9IGFzIGFueSkgOiB7fSl9PgogICAgICAgICAgICAgIDxJY29uIG5hbWU9ImdyaWQiIHNpemU9ezEzfSBjb2xvcj17Rm9vZFRva2Vuc1YyLmluazN9IC8+CiAgICAgICAgICAgIDwvUHJlc3NhYmxlPgogICAgICAgICAgICA8UHJlc3NhYmxlIG9uUHJlc3M9e2xvZ291dH0KICAgICAgICAgICAgICBzdHlsZT17eyBhbGlnblNlbGY6ICJjZW50ZXIiLCB3aWR0aDogMjgsIGhlaWdodDogMjgsIGJvcmRlclJhZGl1czogOCwKICAgICAgICAgICAgICAgIGJhY2tncm91bmRDb2xvcjogRm9vZFRva2Vuc1YyLnN1cmZhY2UsCiAgICAgICAgICAgICAgICBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiIH19CiAgICAgICAgICAgICAgey4uLihpc1dlYiA/ICh7IHRpdGxlOiAiU2FpciIgfSBhcyBhbnkpIDoge30pfT4KICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJsb2dvdXQiIHNpemU9ezEzfSBjb2xvcj17Rm9vZFRva2Vuc1YyLmluazN9IC8+CiAgICAgICAgICAgIDwvUHJlc3NhYmxlPgogICAgICAgICAgPC8+CiAgICAgICAgKX0KICAgICAgPC9WaWV3PgogICAgPC9WaWV3PgogICk7Cn0KCmV4cG9ydCBkZWZhdWx0IEZvb2RTaWRlYmFyOwo=
+import { View, Text, Pressable, ScrollView, Platform } from "react-native";
+import { usePathname, useRouter } from "expo-router";
+import { Icon } from "@/components/Icon";
+import { useAuthStore } from "@/stores/auth";
+import { FoodTokensV2 } from "@/constants/food-tokens";
+import { GradientBrandMark, NavItemV2 } from "@/components/food/foundation";
+import { useHubStats } from "@/hooks/useFoodHub";
+
+// ============================================================
+// FoodSidebar — Sidebar dedicada do shell Aura Food.
+//
+// Fase 11 (2026-05-22): refresh visual com Foundation Fase 9.
+// - <GradientBrandMark/> em vez do SVG inline 🍽 (logo canônica)
+// - Nav items via <NavItemV2/> — active bar lateral + hover violetSoft
+// - Footer avatar com linear-gradient(135deg, primary, violet)
+// - Light glass surface (FoodTokensV2.surface + line)
+//
+// Fase 10 (2026-05-22): item "Pedidos" tem badge dinâmico de
+// pedidos abertos via useHubStats (polling 30s).
+//
+// Backward compat: rotas/perms inalteradas — só refresh visual.
+// Memory feedback_permissions_todas_telas: chave `mod` por item.
+// ============================================================
+
+interface FoodNavItem { route: string; label: string; icon: string; mod: string; badgeKey?: "openOrders"; }
+interface FoodNavSection { label: string; items: FoodNavItem[]; }
+
+const FOOD_NAV: FoodNavSection[] = [
+  { label: "Salão", items: [
+    { route: "/food/(salao)/mesas",    label: "Mesas",    icon: "users",     mod: "food.mesas" },
+    { route: "/food/(salao)/pedidos",  label: "Pedidos",  icon: "clipboard", mod: "food.pedidos", badgeKey: "openOrders" },
+  ]},
+  { label: "Cardápio & Delivery", items: [
+    { route: "/food/(salao)/cardapio", label: "Cardápio", icon: "book",  mod: "food.cardapio" },
+    { route: "/food/(salao)/despacho", label: "Despacho", icon: "truck", mod: "food.delivery" },
+    { route: "/food/(salao)/motoboys", label: "Motoboys", icon: "bike",  mod: "food.motoboys" },
+    { route: "/food/(salao)/ifood",    label: "iFood",    icon: "download", mod: "food.delivery" },
+  ]},
+  { label: "Configurações", items: [
+    { route: "/food/(salao)/configuracoes", label: "Configurações", icon: "settings", mod: "food.config" },
+  ]},
+];
+
+function routeMatches(pathname: string, route: string): boolean {
+  const stripped = route.replace(/\/\([^)]+\)/g, "");
+  return pathname === stripped || pathname === route || pathname.endsWith(stripped);
+}
+
+export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user, company, logout } = useAuthStore();
+  const sw = collapsed ? 72 : 256;
+
+  // Fase 10 — badge de pedidos em aberto (Hub). Polling 30s, falha silenciosa.
+  const { data: hubStats } = useHubStats();
+  const openOrders = hubStats?.open_orders ?? 0;
+
+  const businessName =
+    ((company as any)?.trade_name) ||
+    ((company as any)?.legal_name) ||
+    ((company as any)?.name) ||
+    "Aura Food";
+
+  const isWeb = Platform.OS === "web";
+
+  return (
+    <View style={[
+      {
+        width: sw, height: "100%",
+        backgroundColor: isWeb ? FoodTokensV2.surface : FoodTokensV2.surfaceFlat,
+        borderRightWidth: 1, borderRightColor: FoodTokensV2.line,
+        paddingTop: 18, paddingBottom: 14,
+        paddingHorizontal: collapsed ? 10 : 14,
+        overflow: "hidden" as any,
+        zIndex: 1,
+      },
+      isWeb ? ({
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        transition: "width 0.25s ease, padding 0.25s ease",
+      } as any) : {},
+    ]}>
+      {/* Logo + collapse toggle */}
+      <View style={{ flexDirection: "row", alignItems: "center",
+        justifyContent: collapsed ? "center" : "space-between",
+        paddingHorizontal: collapsed ? 0 : 6, paddingBottom: 16 }}>
+        <Pressable onPress={() => router.push("/food/(salao)/mesas" as any)}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <GradientBrandMark size={36} />
+            {!collapsed && (
+              <View style={{ flexDirection: "column" }}>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: FoodTokensV2.ink, letterSpacing: -0.4, lineHeight: 18 }}>
+                  Aura<Text style={{ color: FoodTokensV2.primary }}> Food</Text>
+                </Text>
+                <Text style={{ fontSize: 9, color: FoodTokensV2.ink4, fontWeight: "600",
+                  letterSpacing: 1.2, textTransform: "uppercase", marginTop: 1 }}>
+                  Restaurante
+                </Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+        {!collapsed && (
+          <Pressable onPress={onToggle} style={{ width: 26, height: 26, borderRadius: 8,
+            backgroundColor: FoodTokensV2.primarySoft, alignItems: "center", justifyContent: "center" }}>
+            <Icon name="chevron_left" size={13} color={FoodTokensV2.primary} />
+          </Pressable>
+        )}
+      </View>
+
+      {collapsed && (
+        <Pressable onPress={onToggle} style={{ alignSelf: "center", width: 26, height: 26,
+          borderRadius: 8, backgroundColor: FoodTokensV2.primarySoft,
+          alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+          <Icon name="chevron_right" size={13} color={FoodTokensV2.primary} />
+        </Pressable>
+      )}
+
+      <View style={{ height: 1, backgroundColor: FoodTokensV2.line, marginVertical: 4 }} />
+
+      {/* Nav */}
+      <ScrollView style={{ flex: 1, marginTop: 6 }} showsVerticalScrollIndicator={false}>
+        {FOOD_NAV.map((section) => (
+          <View key={section.label} style={{ marginBottom: collapsed ? 8 : 16 }}>
+            {!collapsed && (
+              <Text style={{ fontSize: 9, color: FoodTokensV2.ink4, fontWeight: "700",
+                textTransform: "uppercase", letterSpacing: 1.4, paddingHorizontal: 12, marginBottom: 6 }}>
+                {section.label}
+              </Text>
+            )}
+            {collapsed && <View style={{ height: 1, backgroundColor: FoodTokensV2.line, marginVertical: 4, marginHorizontal: 4 }} />}
+            {section.items.map((item) => {
+              const active = routeMatches(pathname, item.route);
+              const webExtras = isWeb ? ({ title: item.label, "data-mod": item.mod } as any) : {};
+              const showBadge = item.badgeKey === "openOrders" && openOrders > 0;
+              const badgeValue = showBadge ? (openOrders > 99 ? "99+" : String(openOrders)) : undefined;
+              const iconNode = <Icon name={item.icon as any} size={16} color={active ? FoodTokensV2.primary : FoodTokensV2.ink3} />;
+
+              if (collapsed) {
+                return (
+                  <Pressable key={item.route} onPress={() => router.push(item.route as any)} {...webExtras}
+                    style={[{ alignSelf: "center", width: 36, height: 36, borderRadius: 10,
+                      alignItems: "center", justifyContent: "center", marginBottom: 2, position: "relative" },
+                      active && { backgroundColor: FoodTokensV2.primarySoft }]}>
+                    {iconNode}
+                    {showBadge && (
+                      <View style={{ position: "absolute", top: -4, right: -4, minWidth: 16, height: 16,
+                        borderRadius: 8, backgroundColor: FoodTokensV2.primary, paddingHorizontal: 4,
+                        alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 9, fontWeight: "800", color: "#fff" }}>{badgeValue}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              }
+              return (
+                <View key={item.route} {...webExtras}>
+                  <NavItemV2
+                    icon={iconNode}
+                    label={item.label}
+                    active={active}
+                    badge={badgeValue}
+                    onPress={() => router.push(item.route as any)}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </ScrollView>
+
+      <View style={{ height: 1, backgroundColor: FoodTokensV2.line, marginVertical: 6 }} />
+
+      {/* Footer: avatar gradient + name + business + atalhos */}
+      <View style={{ paddingTop: 6, gap: 4, flexShrink: 0 }}>
+        {!collapsed ? (
+          <>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
+              paddingHorizontal: 4, marginBottom: 8 }}>
+              <View style={[
+                { width: 34, height: 34, borderRadius: 17,
+                  alignItems: "center", justifyContent: "center" },
+                isWeb
+                  ? ({ background: "linear-gradient(135deg, #EF4444, #7c3aed)",
+                       boxShadow: "0 4px 12px rgba(239,68,68,0.25)" } as any)
+                  : { backgroundColor: FoodTokensV2.primary },
+              ]}>
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>
+                  {(user?.name || "A").charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: FoodTokensV2.ink, fontWeight: "700" }} numberOfLines={1}>
+                  {user?.name || "---"}
+                </Text>
+                <Text style={{ fontSize: 10, color: FoodTokensV2.primary, marginTop: 1, fontWeight: "600" }} numberOfLines={1}>
+                  {businessName}
+                </Text>
+              </View>
+            </View>
+            <Pressable onPress={() => router.push("/(tabs)" as any)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6,
+                paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
+                borderWidth: 1, borderColor: FoodTokensV2.line2 }}
+              {...(isWeb ? ({ title: "Acessar módulos genéricos do Aura Negócio" } as any) : {})}>
+              <Icon name="grid" size={12} color={FoodTokensV2.ink3} />
+              <Text style={{ fontSize: 11, color: FoodTokensV2.ink3, fontWeight: "600" }}>Aura Negócio</Text>
+            </Pressable>
+            <Pressable onPress={logout}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6,
+                paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
+                borderWidth: 1, borderColor: FoodTokensV2.line2 }}>
+              <Icon name="logout" size={12} color={FoodTokensV2.ink3} />
+              <Text style={{ fontSize: 11, color: FoodTokensV2.ink3, fontWeight: "600" }}>Sair</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <View style={[
+              { alignSelf: "center", width: 34, height: 34, borderRadius: 17,
+                alignItems: "center", justifyContent: "center", marginBottom: 4 },
+              isWeb
+                ? ({ background: "linear-gradient(135deg, #EF4444, #7c3aed)" } as any)
+                : { backgroundColor: FoodTokensV2.primary },
+            ]}
+              {...(isWeb ? ({ title: user?.name || "Perfil" } as any) : {})}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>
+                {(user?.name || "A").charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Pressable onPress={() => router.push("/(tabs)" as any)}
+              style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8,
+                backgroundColor: FoodTokensV2.surface,
+                alignItems: "center", justifyContent: "center" }}
+              {...(isWeb ? ({ title: "Aura Negócio" } as any) : {})}>
+              <Icon name="grid" size={13} color={FoodTokensV2.ink3} />
+            </Pressable>
+            <Pressable onPress={logout}
+              style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8,
+                backgroundColor: FoodTokensV2.surface,
+                alignItems: "center", justifyContent: "center" }}
+              {...(isWeb ? ({ title: "Sair" } as any) : {})}>
+              <Icon name="logout" size={13} color={FoodTokensV2.ink3} />
+            </Pressable>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export default FoodSidebar;
