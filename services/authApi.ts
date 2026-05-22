@@ -66,6 +66,17 @@ export type PdvSettings = {
   // sobre subtotal da comanda. 0 = desativado. Aparece como linha
   // separada no fechamento da mesa. Default 10 (10%).
   service_fee_pct?: number;
+  // 2026-05-21 (F5 do polish pre-Fase 7, reservado pra Fase 7): quando
+  // true, NFC-e da comanda ainda pode ser emitida via "Emitir cupom"
+  // manual em vez de auto-emit no fechamento. Defensivo enquanto Fase 7
+  // (auto-emit + impressora termica) nao roda. Backend retorna undefined
+  // se a coluna nao existir.
+  food_nfce_manual_enabled?: boolean;
+  // 2026-05-21 (F5 do polish pre-Fase 7, reservado pra Fase 7): quando
+  // true, ao confirmar um pedido a comanda sai impressa na termica de
+  // cozinha. Inutil enquanto a integracao de impressora nao existe —
+  // toggle fica visivel apenas em Configuracoes > PDV.
+  food_comanda_print_enabled?: boolean;
 };
 
 export var authApi = {

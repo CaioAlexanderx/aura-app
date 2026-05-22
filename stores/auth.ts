@@ -81,6 +81,11 @@ type AuthState = {
   setCompanyLogo: (logo: string) => void;
   // Atualiza campos da company no store (usado apos salvar perfil)
   updateCompany: (partial: Partial<Company & { phone?: string; email?: string; address?: string; cnpj?: string }>) => void;
+  // 2026-05-21 (F6 do polish pre-Fase 7): combate armadilha_plano_stale_jwt.
+  // Refaz /auth/me e atualiza company.plan / module_overrides / vertical sem
+  // perder token nem outras claims. Toda tela com gate condicional (ex:
+  // FoodShell) deve chamar refreshMe no mount.
+  refreshMe: () => Promise<void>;
   // Multi-CNPJ actions (M1-05)
   loadCompanies: () => Promise<void>;
   switchCompany: (companyId: string | "all") => Promise<void>;
@@ -280,6 +285,35 @@ export const useAuthStore = create<AuthState>((set, get) => {
       set({ company: { ...current, ...partial } });
     },
 
+    // 2026-05-21 (F6): refetch /auth/me sem perder token nem refresh. Re-cria
+    // company com claims atuais (plan, module_overrides, vertical_active,
+    // billing_status). Best-effort: erro nao desloga; apenas loga e segue
+    // com state atual.
+    refreshMe: async () => {
+      const tk = get().token;
+      if (!tk) return;
+      try {
+        const meRes: any = await authApi.me(tk);
+        const { user, company } = meRes;
+        const consolidatedFromApi = !!meRes.consolidated_view;
+        const companyCount = meRes.company_count || get().companyCount || 0;
+        const trialEnd = (company as any)?.trial_ends_at;
+        const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
+        const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
+        set({
+          user,
+          company: consolidatedFromApi ? null : (company ?? null),
+          isStaff: staff,
+          trialActive,
+          trialEndsAt: trialEnd || null,
+          consolidatedView: consolidatedFromApi,
+          companyCount,
+        });
+      } catch (err: any) {
+        console.warn("[AUTH] refreshMe failed:", err?.message || err);
+      }
+    },
+
     logout: async () => {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         try { localStorage.setItem("aura_theme", "dark"); } catch {}
@@ -309,7 +343,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
     },
 
-    // ── Multi-CNPJ actions (M1-05) ────────────────────────
+    // ── Multi-CNPJ actions (M1-05) ──────────────────────
 
     loadCompanies: async () => {
       if (!get().token) return;

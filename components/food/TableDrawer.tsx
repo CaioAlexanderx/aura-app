@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, ScrollView, Modal, Platform, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, Modal, Platform, ActivityIndicator, Alert } from "react-native";
 import { FoodColors } from "@/constants/food-tokens";
 import { Icon } from "@/components/Icon";
 import {
@@ -19,6 +19,11 @@ import { AnotarPedidoDrawer } from "@/components/food/AnotarPedidoDrawer";
 // Entrada: table (mesa selecionada no mapa).
 // Backend: GET /food/tables/:id/comanda (Fase 2).
 // Polling 5s pra refletir status do KDS e novos pedidos.
+//
+// 2026-05-21 (F7 do polish pre-Fase 7): window.confirm trocado por
+// Alert.alert cross-platform. Em web RN renderiza Alert.alert via
+// nativo do browser (confirm-like) mas a API e a mesma, evitando
+// branch Platform.OS em todo callback de ação destrutiva.
 // ============================================================
 
 const STATUS_COLORS = {
@@ -43,6 +48,27 @@ interface Props {
   onClose: () => void;
 }
 
+// Helper: prompt confirm cross-platform. Em web usa window.confirm
+// (síncrono, igual ao comportamento antigo). Em native usa Alert.alert
+// com callbacks. Retorna Promise<boolean>.
+function confirmAsync(title: string, message: string): Promise<boolean> {
+  if (Platform.OS === "web") {
+    if (typeof window === "undefined") return Promise.resolve(true);
+    return Promise.resolve(window.confirm(message ? title + "\n\n" + message : title));
+  }
+  return new Promise(resolve => {
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+        { text: "Confirmar", style: "destructive", onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
+}
+
 export function TableDrawer({ table, onClose }: Props) {
   const visible = !!table;
   const { data, isLoading } = useFoodComanda(table?.id || null);
@@ -57,13 +83,18 @@ export function TableDrawer({ table, onClose }: Props) {
   const handleClose = async () => {
     if (!table) return;
     if (data && data.active_orders_count > 0) {
-      if (Platform.OS === "web" && !window.confirm("Mesa tem pedidos ativos. Fechar mesmo assim?")) return;
+      const ok = await confirmAsync(
+        "Fechar mesa",
+        "Mesa tem pedidos ativos. Fechar mesmo assim?"
+      );
+      if (!ok) return;
     }
     await setStatus.mutateAsync({ id: table.id, status: "free" });
     onClose();
   };
   const handleCancelOrder = async (orderId: string) => {
-    if (Platform.OS === "web" && !window.confirm("Cancelar este pedido?")) return;
+    const ok = await confirmAsync("Cancelar pedido", "Cancelar este pedido?");
+    if (!ok) return;
     await updateOrderStatus.mutateAsync({ orderId, status: "cancelled" });
   };
 
