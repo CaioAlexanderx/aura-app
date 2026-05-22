@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -34,6 +34,15 @@ import { hexToName, nameToHex } from "@/utils/colorNames";
 // - color/size rows: campo inline EAN / Cód. barras
 // - matrix mode: secao "Codigos de barras" abaixo da grade
 // - estado hidratado do GET barcodes map; persistido no PUT
+//
+// 21/05/2026 (tarde): AUTO-SAVE no blur. Substitui o botao
+// "Salvar variacoes" por debounce + indicador inline. Bug Eryca:
+// cliente editava estoque na matrix e clicava no botao principal
+// "Atualizar produto" do form (que so chama PATCH /products e
+// nao toca em variantes), entao mudancas nas variantes eram
+// perdidas. Agora qualquer mudanca (estoque, barcode, +/- cor,
+// +/- tamanho) dispara debounce 400ms e PUT /variations
+// automaticamente. Status mostrado em "Salvando…" / "✓ Salvo".
 // ============================================================
 
 const PRESET_COLORS = [
@@ -41,6 +50,12 @@ const PRESET_COLORS = [
   "#06B6D4", "#3B82F6", "#8B5CF6", "#EC4899",
   "#FFFFFF", "#1F2937", "#6B7280", "#92400E",
 ];
+
+// Tempo de espera apos a ultima alteracao antes de disparar o PUT.
+// 400ms eh curto o suficiente pra "blur saves" (clicar em outra celula
+// dispara antes de visualmente perceber atraso) e longo o suficiente pra
+// coalescer rajadas de digitacao na mesma celula.
+const AUTOSAVE_DEBOUNCE_MS = 400;
 
 // ─── Modal inline para adicionar cor ───
 function AddColorPopover({ onAdd, onCancel, existingHexes }: {
@@ -187,6 +202,8 @@ type Props = {
   parentStock?: number | null;
 };
 
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
 export function ProductVariationsSection({ productId, productName, parentColor, parentSize, parentStock }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -202,6 +219,22 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   // Indica se houve mescla do estoque do pai na hidratacao (banner amarelo).
   const [parentMerged, setParentMerged] = useState(false);
 
+  // Auto-save state (21/05/2026)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = useRef(false);
+  // Ref com o estado mais recente — usado dentro do mutationFn pra garantir
+  // que o PUT sempre envie o estado mais atualizado, mesmo que o user
+  // digite entre o agendamento e a execucao do timer.
+  const stateRef = useRef({ colors, sizes, matrix, barcodes });
+  useEffect(() => {
+    stateRef.current = { colors, sizes, matrix, barcodes };
+  }, [colors, sizes, matrix, barcodes]);
+  // Marca se o useEffect de hidratacao deve ignorar a proxima atualizacao
+  // de `data` (pra nao sobrescrever o estado local logo apos um PUT bem-
+  // sucedido que dispara invalidate).
+  const skipNextHydrateRef = useRef(false);
+
   // Fetch inicial
   const { data, isLoading } = useQuery({
     queryKey: ["productVariations", company?.id, productId],
@@ -214,6 +247,16 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   // ha estoque orfao (cor+tamanho do pai sem variante correspondente).
   useEffect(() => {
     if (!data) return;
+    // Se o ultimo PUT acabou de retornar, o invalidate vai trazer dados
+    // identicos ao que ja temos. Pula a hidratacao pra evitar overwrite
+    // de quaisquer alteracoes feitas pelo usuario entre o PUT e o GET.
+    if (skipNextHydrateRef.current) {
+      skipNextHydrateRef.current = false;
+      return;
+    }
+    // Se ha PUT em voo ou agendado, NAO hidrata — o estado local eh a
+    // fonte da verdade durante edicao ativa.
+    if (inFlightRef.current || saveTimerRef.current) return;
 
     const fetchedColors: ColorEntry[] = data.colors || [];
     const fetchedSizes: string[] = data.sizes || [];
@@ -258,10 +301,12 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setMatrix(fetchedMatrix);
     setBarcodes(fetchedBarcodes);   // 21/05/2026
     setParentMerged(merged);
-    // Se houve merge, marca dirty=true pra incentivar salvar (formaliza
-    // a migracao do estoque do pai pra variante no backend). Caso
-    // contrario mantem limpo.
     setDirty(merged);
+    // Se houve merge, dispara auto-save imediato pra formalizar a migracao
+    // do estoque orfao pra variante. Nao precisa do user clicar em nada.
+    if (merged) {
+      scheduleSave(true);
+    }
   }, [data, parentColor, parentSize, parentStock]);
 
   const mode: VariationsMode = useMemo(() => {
@@ -271,30 +316,102 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     return 'none';
   }, [colors, sizes]);
 
+  // ── Auto-save: agenda PUT debounced ──
+  function scheduleSave(immediate = false) {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (immediate) {
+      triggerSave();
+      return;
+    }
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      triggerSave();
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  function triggerSave() {
+    // Se ja tem PUT em voo, re-agenda pra logo depois pra coalescer
+    if (inFlightRef.current) {
+      saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null;
+        triggerSave();
+      }, 200);
+      return;
+    }
+    if (!company?.id || !productId) return;
+    saveMut.mutate();
+  }
+
   // Save mutation — inclui barcodes no payload (21/05/2026)
   const saveMut = useMutation({
-    mutationFn: () => productsVariationsApi.save(company!.id, productId, { colors, sizes, matrix, barcodes }),
+    mutationFn: () => {
+      inFlightRef.current = true;
+      setSaveStatus('saving');
+      // Le do ref pra garantir estado mais recente (o usuario pode ter
+      // digitado MAIS coisas entre o scheduleSave e o efetivo trigger)
+      const snap = stateRef.current;
+      return productsVariationsApi.save(company!.id, productId, {
+        colors: snap.colors,
+        sizes: snap.sizes,
+        matrix: snap.matrix,
+        barcodes: snap.barcodes,
+      });
+    },
     onSuccess: (res) => {
+      // Marca pra pular a proxima hidratacao (o invalidate vai disparar
+      // refetch que retornaria os mesmos dados que ja temos localmente)
+      skipNextHydrateRef.current = true;
       qc.invalidateQueries({ queryKey: ["productVariations", company?.id, productId] });
       qc.invalidateQueries({ queryKey: ["products", company?.id] });
-      toast.success(
-        res.created_count === 0
-          ? "Produto sem variacoes"
-          : res.created_count + " variac" + (res.created_count === 1 ? "ao salva" : "oes salvas") + " · total " + res.total_stock + " un"
-      );
+      setSaveStatus('saved');
       setDirty(false);
       setParentMerged(false);
+      // Toast curto so quando ha mudanca relevante (>0 variantes) e nao
+      // estamos em modo "spam" (vamos limitar via setTimeout)
+      // Por enquanto, sem toast — o indicador inline cobre o feedback.
     },
     onError: (err: any) => {
+      setSaveStatus('error');
       toast.error(err?.data?.error || err?.message || "Erro ao salvar variacoes");
+    },
+    onSettled: () => {
+      inFlightRef.current = false;
     },
   });
 
-  // Handlers
+  // Auto-fade do status "saved" -> "idle" depois de 1.8s
+  useEffect(() => {
+    if (saveStatus !== 'saved') return;
+    const t = setTimeout(() => setSaveStatus('idle'), 1800);
+    return () => clearTimeout(t);
+  }, [saveStatus]);
+
+  // Flush pendente ao desmontar (modal fechado / navegacao)
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        // Sincrono nao da; mas como saveMut.mutate eh fire-and-forget,
+        // disparamos mesmo asssim — react-query mantem o request rodando
+        // independente do componente desmontado.
+        if (dirty && company?.id && productId) {
+          saveMut.mutate();
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handlers — cada um dispara scheduleSave ao final
   function addColor(c: ColorEntry) {
     setColors([...colors, c]);
     setShowColorPopover(false);
     setDirty(true);
+    scheduleSave();
   }
   function removeColor(hex: string) {
     setColors(colors.filter(c => c.hex !== hex));
@@ -310,11 +427,13 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setMatrix(newMatrix);
     setBarcodes(newBarcodes);
     setDirty(true);
+    scheduleSave();
   }
   function addSize(s: string) {
     setSizes([...sizes, s]);
     setShowSizePopover(false);
     setDirty(true);
+    scheduleSave();
   }
   function removeSize(value: string) {
     setSizes(sizes.filter(s => s !== value));
@@ -330,12 +449,14 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setMatrix(newMatrix);
     setBarcodes(newBarcodes);
     setDirty(true);
+    scheduleSave();
   }
   function updateStock(hex: string | null, size: string | null, value: string) {
     const n = parseInt(value) || 0;
     const key = matrixKey(hex, size);
     setMatrix({ ...matrix, [key]: n < 0 ? 0 : n });
     setDirty(true);
+    scheduleSave();
   }
   function stockAt(hex: string | null, size: string | null): string {
     const key = matrixKey(hex, size);
@@ -356,6 +477,18 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     }
     setBarcodes(newBarcodes);
     setDirty(true);
+    scheduleSave();
+  }
+
+  // Handler de onBlur dos inputs — forca flush imediato pra refletir
+  // visualmente "✓ Salvo" antes do user sair da celula (latencia
+  // perceptivel menor que esperar o debounce de 400ms).
+  function handleInputBlur() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      triggerSave();
+    }
   }
 
   const existingHexSet = useMemo(() => new Set(colors.map(c => c.hex.toUpperCase())), [colors]);
@@ -386,20 +519,44 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             {mode === 'matrix' && (colors.length * sizes.length) + " combinac" + ((colors.length * sizes.length) === 1 ? "ao" : "oes") + " · total " + totalStock + " un"}
           </Text>
         </View>
+        {/* Indicador inline de auto-save (substitui o botao "Salvar variacoes" antigo) */}
+        <View style={s.saveStatusBadge}>
+          {saveStatus === 'saving' && (
+            <>
+              <ActivityIndicator size="small" color={Colors.violet3} />
+              <Text style={s.saveStatusText}>Salvando…</Text>
+            </>
+          )}
+          {saveStatus === 'saved' && (
+            <>
+              <Icon name="check" size={11} color={Colors.green} />
+              <Text style={[s.saveStatusText, { color: Colors.green }]}>Salvo</Text>
+            </>
+          )}
+          {saveStatus === 'error' && (
+            <>
+              <Icon name="alert" size={11} color={Colors.red} />
+              <Text style={[s.saveStatusText, { color: Colors.red }]}>Erro</Text>
+            </>
+          )}
+          {saveStatus === 'idle' && dirty && (
+            <Text style={[s.saveStatusText, { color: Colors.amber }]}>Aguardando…</Text>
+          )}
+        </View>
       </View>
 
-      {/* Banner: estoque do pai foi mesclado, precisa salvar */}
+      {/* Banner: estoque do pai foi mesclado (vai migrar automaticamente) */}
       {parentMerged && (
         <View style={s.parentMergedBanner}>
           <Icon name="alert" size={12} color={Colors.amber} />
           <View style={{ flex: 1 }}>
-            <Text style={s.parentMergedTitle}>Estoque do produto pai incluido na grade</Text>
+            <Text style={s.parentMergedTitle}>Migrando estoque do produto pai pra grade…</Text>
             <Text style={s.parentMergedDesc}>
               {parentColor && parentSize
-                ? "A combinacao " + (hexToName(parentColor) || parentColor) + " · " + parentSize + " (" + (parentStock || 0) + " un) veio do pai. Salve pra migrar pra variante."
+                ? "A combinacao " + (hexToName(parentColor) || parentColor) + " · " + parentSize + " (" + (parentStock || 0) + " un) veio do pai e sera salva como variante."
                 : parentColor
-                  ? (hexToName(parentColor) || parentColor) + " (" + (parentStock || 0) + " un) veio do pai. Salve pra migrar pra variante."
-                  : (parentSize || "") + " (" + (parentStock || 0) + " un) veio do pai. Salve pra migrar pra variante."}
+                  ? (hexToName(parentColor) || parentColor) + " (" + (parentStock || 0) + " un) veio do pai e sera salvo como variante."
+                  : (parentSize || "") + " (" + (parentStock || 0) + " un) veio do pai e sera salvo como variante."}
             </Text>
           </View>
         </View>
@@ -479,7 +636,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       {/* Grid de estoque */}
       {mode !== 'none' && (
         <View style={s.stockBlock}>
-          <Text style={s.stockLabel}>Estoque por variacao</Text>
+          <Text style={s.stockLabel}>Estoque por variacao (auto-salva ao mudar)</Text>
 
           {/* ── Color-only: dot + label + stock + barcode ── */}
           {mode === 'color' && (
@@ -492,6 +649,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     style={s.stockInput}
                     value={stockAt(c.hex, null)}
                     onChangeText={v => updateStock(c.hex, null, v)}
+                    onBlur={handleInputBlur}
                     keyboardType="number-pad"
                     placeholder="0"
                     placeholderTextColor={Colors.ink3}
@@ -502,6 +660,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     style={s.barcodeInput}
                     value={barcodeAt(c.hex, null)}
                     onChangeText={v => updateBarcode(c.hex, null, v)}
+                    onBlur={handleInputBlur}
                     placeholder="EAN / Cód. barras"
                     placeholderTextColor={Colors.ink3}
                     keyboardType="default"
@@ -523,6 +682,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     style={s.stockInput}
                     value={stockAt(null, sz)}
                     onChangeText={v => updateStock(null, sz, v)}
+                    onBlur={handleInputBlur}
                     keyboardType="number-pad"
                     placeholder="0"
                     placeholderTextColor={Colors.ink3}
@@ -533,6 +693,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     style={s.barcodeInput}
                     value={barcodeAt(null, sz)}
                     onChangeText={v => updateBarcode(null, sz, v)}
+                    onBlur={handleInputBlur}
                     placeholder="EAN / Cód. barras"
                     placeholderTextColor={Colors.ink3}
                     keyboardType="default"
@@ -572,6 +733,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                             style={s.matrixInput}
                             value={stockAt(c.hex, sz)}
                             onChangeText={v => updateStock(c.hex, sz, v)}
+                            onBlur={handleInputBlur}
                             keyboardType="number-pad"
                             placeholder="0"
                             placeholderTextColor={Colors.ink3}
@@ -598,6 +760,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                         style={s.barcodeInput}
                         value={barcodeAt(c.hex, sz)}
                         onChangeText={v => updateBarcode(c.hex, sz, v)}
+                        onBlur={handleInputBlur}
                         placeholder="EAN / Cód. barras"
                         placeholderTextColor={Colors.ink3}
                         keyboardType="default"
@@ -611,36 +774,25 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
           )}
         </View>
       )}
-
-      {/* Botao salvar */}
-      {dirty && (
-        <View style={s.saveBar}>
-          <Text style={s.saveHint}>
-            {mode === 'none' ? "As variacoes serao removidas." : "Alteracoes nao salvas"}
-          </Text>
-          <Pressable onPress={() => saveMut.mutate()}
-            disabled={saveMut.isPending}
-            style={[s.saveBtn, saveMut.isPending && { opacity: 0.6 }]}>
-            {saveMut.isPending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Icon name="check" size={12} color="#fff" />
-                <Text style={s.saveBtnText}>Salvar variacoes</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
-  header: { marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12 },
   title: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
   subtitle: { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
+
+  // Indicador inline de auto-save no header (21/05/2026)
+  saveStatusBadge: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 6, backgroundColor: Colors.bg3,
+    borderWidth: 1, borderColor: Colors.border,
+    minHeight: 24, minWidth: 70, justifyContent: "center",
+  },
+  saveStatusText: { fontSize: 10.5, color: Colors.violet3, fontWeight: "600" },
 
   // Banner do merge do pai
   parentMergedBanner: {
@@ -708,12 +860,6 @@ const s = StyleSheet.create({
   matrixInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, fontSize: 12, color: Colors.ink, textAlign: "center", fontWeight: "600" },
   // 21/05/2026: secao de barcodes abaixo da grade de matrix
   matrixBarcodeSection: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
-
-  // Save bar
-  saveBar: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
-  saveHint: { flex: 1, fontSize: 11, color: Colors.amber, fontWeight: "600" },
-  saveBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
-  saveBtnText: { fontSize: 12, color: "#fff", fontWeight: "700" },
 });
 
 export default ProductVariationsSection;
