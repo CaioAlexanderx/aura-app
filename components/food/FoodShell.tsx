@@ -6,19 +6,25 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FoodSidebar } from "@/components/food/FoodSidebar";
 import { FoodMBar } from "@/components/food/FoodMBar";
 import { FoodColors, FoodGradients } from "@/constants/food-tokens";
+import { useAuthStore } from "@/stores/auth";
 
 // ============================================================
 // FoodShell — Container do shell Aura Food.
 // Espelha DentalShell mas sem MigrationBanner / Shortcuts / Onboarding
 // (fase 0 = só esqueleto; esses extras entram em fases posteriores).
 //
-// Três modos de renderizacao:
+// Tres modos de renderizacao:
 //   1. Desktop web (>768px): sidebar lateral + content area
 //      com max-width 1320 e padding 24.
 //   2. Mobile web (<=768px): layout column com FoodMBar fixa
 //      no rodape e content area que ocupa toda a viewport menos
 //      a barra. Padding 16 sem max-width.
 //   3. Native: View + ScrollView + FoodMBar.
+//
+// 2026-05-21 (F6 do polish pre-Fase 7): roda refreshMe() no mount
+// para combater armadilha_plano_stale_jwt — plan/module_overrides/
+// vertical_active no JWT poderiam estar desatualizados após o admin
+// trocar plano ou ativar food via Gestão Aura.
 // ============================================================
 
 function useScreenWidth() {
@@ -38,6 +44,16 @@ export function FoodShell({ children }: { children?: ReactNode }) {
   const screenW = useScreenWidth();
   const isNarrow = screenW <= 768;
   const [collapsed, setCollapsed] = useState(false);
+  const refreshMe = useAuthStore(s => s.refreshMe);
+
+  // F6: revalida claims do JWT no mount do shell. Espelha DentalShell
+  // (que ainda nao chama refreshMe, mas o padrao desejado e este).
+  useEffect(() => {
+    if (typeof refreshMe === "function") {
+      refreshMe();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // MOBILE WEB
   if (Platform.OS === "web" && isNarrow) {

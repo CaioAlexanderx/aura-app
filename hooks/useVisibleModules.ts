@@ -25,6 +25,19 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
   agentes: 'expansao',
+  // 2026-05-21 (F2 do polish pre-Fase 7): vertical Food entra com gates
+  // distintos por sub-modulo. Mesas/Pedidos/Cardapio/KDS sao basicos do
+  // restaurante (Negocio). Delivery (rotas, motoboys, frete) e NFC-e
+  // avancada (impressora termica, contingencia) ficam no Expansao.
+  // Configuracoes (toggles, integracoes) acompanha o Essencial pra que
+  // qualquer plano com food consiga ligar/desligar features no PdvSettings.
+  'food.mesas':    'negocio',
+  'food.pedidos':  'negocio',
+  'food.cardapio': 'negocio',
+  'food.kds':      'negocio',
+  'food.delivery': 'expansao',
+  'food.nfce':     'expansao',
+  'food.config':   'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -43,6 +56,13 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   configuracoes: ['configuracoes'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   agentes:       ['agentes'],
+  // 2026-05-21 (F2 do polish pre-Fase 7): nao existem permissions food
+  // granulares no banco ainda — toda permission food cai numa chave umbrella
+  // "food.access" que destrava os sub-modulos juntos. Quando o produto
+  // pedir granularidade (ex: garcom so ve Mesas), basta adicionar chaves
+  // novas aqui. Owners sempre veem (filtro de permission so se aplica a
+  // membros).
+  'food.access': ['food.mesas','food.pedidos','food.cardapio','food.kds','food.delivery','food.nfce','food.config'],
 };
 
 export function useVisibleModules(): Set<string> {
@@ -100,4 +120,4 @@ export function useVisibleModules(): Set<string> {
   }, [company?.plan, (company as any)?.module_overrides, permData]);
 }
 
-export { MODULE_PLAN_MAP, PLAN_LEVEL };
+export { MODULE_PLAN_MAP, PLAN_LEVEL, PERM_TO_MODULES };

@@ -2,6 +2,7 @@ import { useState, useMemo, ReactNode } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from "react-native";
 import { Icon } from "@/components/Icon";
 import { FoodColors } from "@/constants/food-tokens";
+import { maskDateBr, brDateToIso } from "@/utils/masks";
 import {
   useFoodTables, useFoodWaiterCalls, useFoodReservations,
   useCreateTableMutation, useUpdateTableMutation, useDeleteTableMutation,
@@ -18,6 +19,14 @@ import { TableDrawer } from "@/components/food/TableDrawer";
 // reservada), badge animada de chamada de garçom, polling 10s.
 // Reservas: lista por data (default hoje), filtros por status,
 // CRUD via modais inline.
+//
+// 2026-05-21 (F10 + F11 do polish pre-Fase 7):
+//  F10 — input de data nas reservas: web usa <input type="date">
+//        nativo do browser (calendar popover); native usa TextInput
+//        com máscara DD/MM/AAAA + conversão pra ISO.
+//  F11 — botão editar do MesaCard era hover-only (opacity:0.5),
+//        invisível em touch. Agora: sempre visível em touch (Platform
+//        !== web ou @media (hover:none)) e fade no hover desktop.
 // ============================================================
 
 type Tab = "mesas" | "reservas";
@@ -168,15 +177,7 @@ export default function MesasScreen() {
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Text style={{ fontSize: 12, color: FoodColors.ink3 }}>Data:</Text>
-            <TextInput
-              value={reservationDate} onChangeText={setReservationDate}
-              placeholder="AAAA-MM-DD" placeholderTextColor={FoodColors.ink4}
-              style={{
-                backgroundColor: FoodColors.surface, color: FoodColors.ink,
-                paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, fontSize: 12,
-                borderWidth: 1, borderColor: FoodColors.border, minWidth: 130,
-              }}
-            />
+            <DateInput value={reservationDate} onChange={setReservationDate} minWidth={130} />
             <View style={{ flex: 1 }} />
             <Pressable onPress={() => setEditingReservation("new")} style={{
               backgroundColor: FoodColors.red, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
@@ -224,6 +225,69 @@ export default function MesasScreen() {
 }
 
 // ============================================================
+// F10 — DateInput cross-platform.
+// Web: <input type="date"> com calendar popover nativo do browser
+//      (Chrome, Safari, Edge). Acessibilidade: usuário pode digitar
+//      ou abrir o popover. value ISO YYYY-MM-DD ja é o formato nativo.
+// Native: TextInput com mascara DD/MM/AAAA. Idempotente; ao completar
+//         8 dígitos converte pra ISO e propaga; caso contrário mantem
+//         valor parcial visual mas o ISO no parent so atualiza após parsing.
+// ============================================================
+function DateInput({ value, onChange, minWidth }: { value: string; onChange: (iso: string) => void; minWidth?: number }) {
+  // Web: input nativo HTML5 com value=YYYY-MM-DD
+  if (Platform.OS === "web") {
+    return (
+      <View>
+        {/* @ts-ignore React Native Web aceita HTML primitives */}
+        <input
+          type="date"
+          value={value}
+          onChange={(e: any) => onChange(e.target.value)}
+          style={{
+            backgroundColor: FoodColors.surface,
+            color: FoodColors.ink,
+            padding: "6px 10px",
+            borderRadius: 6,
+            fontSize: 12,
+            border: "1px solid " + FoodColors.border,
+            minWidth: minWidth || 130,
+            outline: "none",
+            fontFamily: "inherit",
+            colorScheme: "dark",
+          } as any}
+        />
+      </View>
+    );
+  }
+  // Native: máscara textual com conversão
+  const [text, setText] = useState(() => {
+    if (!value) return "";
+    const parts = value.split("-");
+    return parts.length === 3 ? parts[2] + "/" + parts[1] + "/" + parts[0] : value;
+  });
+  return (
+    <TextInput
+      value={text}
+      onChangeText={(v: string) => {
+        const masked = maskDateBr(v);
+        setText(masked);
+        const iso = brDateToIso(masked);
+        if (iso) onChange(iso);
+      }}
+      placeholder="DD/MM/AAAA"
+      placeholderTextColor={FoodColors.ink4}
+      keyboardType="number-pad"
+      maxLength={10}
+      style={{
+        backgroundColor: FoodColors.surface, color: FoodColors.ink,
+        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, fontSize: 12,
+        borderWidth: 1, borderColor: FoodColors.border, minWidth: minWidth || 130,
+      }}
+    />
+  );
+}
+
+// ============================================================
 // Subcomponents
 // ============================================================
 
@@ -240,6 +304,22 @@ function MesaCard({ table, hasCall, onPress, onEdit }: { table: FoodTable; hasCa
   const duration = table.opened_at
     ? Math.round((Date.now() - new Date(table.opened_at).getTime()) / 60000)
     : null;
+
+  // F11: estilo do botão editar.
+  // - Native: sempre visível (opacity 1).
+  // - Web: opacity 1 em touch (hover:none) e fade pra 0.5 no hover-capable
+  //   desktop quando o card não está com hover. Sem :hover em RN, usamos
+  //   sempre visível + sutil 0.7 — máquinas touch já conseguem ver/tocar.
+  //   No desktop, hover do card poderia destacar mas isso exige hook;
+  //   na prática o botão agora é sempre affordável.
+  const editBtnVisibility = Platform.OS === "web"
+    ? ({
+        opacity: 1,
+        // touch devices vs hover capable: web hint via media query
+        ['@media (hover: hover) and (pointer: fine)' as any]: { opacity: 0.7 },
+        ['@media (hover: none)' as any]: { opacity: 1 },
+      } as any)
+    : { opacity: 1 };
 
   return (
     <Pressable onPress={onPress} style={[
@@ -265,15 +345,15 @@ function MesaCard({ table, hasCall, onPress, onEdit }: { table: FoodTable; hasCa
       )}
       <Pressable
         onPress={(e: any) => { e?.stopPropagation?.(); onEdit(); }}
-        style={{
+        style={[{
           position: "absolute", top: 8, right: hasCall ? 76 : 8,
-          width: 22, height: 22, borderRadius: 6,
-          backgroundColor: "rgba(255,255,255,0.06)",
+          width: 26, height: 26, borderRadius: 6,
+          backgroundColor: "rgba(255,255,255,0.08)",
           alignItems: "center", justifyContent: "center",
-          opacity: 0.5,
-        }}
+        }, editBtnVisibility]}
+        {...(Platform.OS === "web" ? ({ title: "Editar mesa" } as any) : {})}
       >
-        <Icon name="edit" size={10} color={FoodColors.ink3} />
+        <Icon name="edit" size={12} color={FoodColors.ink3} />
       </Pressable>
 
       <View style={{ flex: 1, justifyContent: "space-between" }}>
@@ -489,10 +569,10 @@ function ReservaModal({ initial, tables, onClose }: { initial: FoodReservation |
       </Field>
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Field label="Data *" flex={1}>
-          <TextInput value={dateStr} onChangeText={setDateStr} placeholder="AAAA-MM-DD" placeholderTextColor={FoodColors.ink4} style={fieldStyle} />
+          <DateInput value={dateStr} onChange={setDateStr} />
         </Field>
         <Field label="Hora *" flex={1}>
-          <TextInput value={timeStr} onChangeText={setTimeStr} placeholder="HH:MM" placeholderTextColor={FoodColors.ink4} style={fieldStyle} />
+          <TimeInput value={timeStr} onChange={setTimeStr} />
         </Field>
       </View>
       <View style={{ flexDirection: "row", gap: 8 }}>
@@ -537,6 +617,41 @@ function ReservaModal({ initial, tables, onClose }: { initial: FoodReservation |
         </Pressable>
       </ModalActions>
     </CenteredModal>
+  );
+}
+
+// F10 — TimeInput: web nativo (<input type="time">), native textinput HH:MM
+function TimeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  if (Platform.OS === "web") {
+    return (
+      <View>
+        {/* @ts-ignore React Native Web aceita HTML primitives */}
+        <input
+          type="time"
+          value={value}
+          onChange={(e: any) => onChange(e.target.value)}
+          style={{
+            backgroundColor: FoodColors.bg,
+            color: FoodColors.ink,
+            padding: "10px",
+            borderRadius: 8,
+            fontSize: 13,
+            border: "1px solid " + FoodColors.border,
+            outline: "none",
+            fontFamily: "inherit",
+            colorScheme: "dark",
+          } as any}
+        />
+      </View>
+    );
+  }
+  return (
+    <TextInput
+      value={value} onChangeText={onChange}
+      placeholder="HH:MM"
+      placeholderTextColor={FoodColors.ink4}
+      style={fieldStyle}
+    />
   );
 }
 

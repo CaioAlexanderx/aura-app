@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform, Image } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { maskPhone } from "@/utils/masks";
+
+// ============================================================
+// /cardapio/[slug] — Storefront delivery público. Sem auth.
+//
+// 2026-05-21 (F12 + F14 do polish pre-Fase 7):
+//   F12: photo_url renderizado como Image (fallback emoji 🍽).
+//   F14: quando menu.accepts_online_orders === false mostra banner
+//        amarelo "Loja fechada" no topo e desabilita o botão de envio.
+//   F14b: máscara de telefone (maskPhone) no input de WhatsApp/Telefone.
+// ============================================================
 
 const API_BASE = ((typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
   "https://aura-backend-production-f805.up.railway.app/api/v1");
@@ -99,6 +110,8 @@ export default function CardapioPage() {
 
   const minOrder = menu?.min_order_amount ? Number(menu.min_order_amount) : 0;
   const meetsMin = subtotal >= minOrder;
+  // F14: storefront pode estar fechada (admin desligou accepts_online_orders).
+  const storeClosed = menu && menu.accepts_online_orders === false;
 
   const addItem = (it: FoodItem) => setCart(p => ({ ...p, [it.id]: { item: it, qty: (p[it.id]?.qty || 0) + 1, notes: p[it.id]?.notes || "" } }));
   const changeQty = (id: string, d: number) => setCart(p => {
@@ -110,6 +123,7 @@ export default function CardapioPage() {
 
   const sendOrder = async () => {
     if (lines.length === 0) return;
+    if (storeClosed) { setError("Loja fechada — não estamos recebendo pedidos no momento"); return; }
     if (!customerName || !customerPhone) { setError("Nome e telefone obrigatórios"); return; }
     if (!meetsMin) { setError("Pedido mínimo de R$ " + minOrder.toFixed(2)); return; }
     setSending(true); setError(null);
@@ -179,6 +193,7 @@ export default function CardapioPage() {
   }
 
   if (stage === "cart") {
+    const sendDisabled = storeClosed || !meetsMin || !customerName || !customerPhone || sending;
     return (
       <View style={{ flex: 1, backgroundColor: T.bg }}>
         <View style={{ backgroundColor: T.card, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: T.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -190,6 +205,9 @@ export default function CardapioPage() {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 120 }}>
+          {/* F14 banner topo do carrinho */}
+          {storeClosed && <ClosedBanner />}
+
           {/* items */}
           {lines.map(l => (
             <View key={l.item.id} style={{ backgroundColor: T.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: T.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -208,7 +226,9 @@ export default function CardapioPage() {
           {/* address form */}
           <Text style={sectionLabel}>Seus dados</Text>
           <FieldRow><FInput v={customerName} on={setCustomerName} ph="Nome *" /></FieldRow>
-          <FieldRow><FInput v={customerPhone} on={setCustomerPhone} ph="WhatsApp/Telefone *" kb="phone-pad" /></FieldRow>
+          <FieldRow>
+            <FInput v={customerPhone} on={(v: string) => setCustomerPhone(maskPhone(v))} ph="WhatsApp/Telefone *" kb="phone-pad" />
+          </FieldRow>
 
           <Text style={sectionLabel}>Endereço de entrega</Text>
           <FieldRow><FInput v={street} on={setStreet} ph="Rua" flex={3} /><FInput v={number} on={setNumber} ph="Nº" flex={1} /></FieldRow>
@@ -246,7 +266,7 @@ export default function CardapioPage() {
             <TotalRow l="Total" v={total} big />
           </View>
 
-          {!meetsMin && minOrder > 0 && (
+          {!meetsMin && minOrder > 0 && !storeClosed && (
             <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>
               Pedido mínimo R$ {minOrder.toFixed(2)} — faltam R$ {(minOrder - subtotal).toFixed(2)}
             </Text>
@@ -256,11 +276,11 @@ export default function CardapioPage() {
 
         <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
           <Pressable
-            onPress={sendOrder} disabled={!meetsMin || !customerName || !customerPhone || sending}
+            onPress={sendOrder} disabled={sendDisabled}
             style={{ backgroundColor: T.red, paddingVertical: 14, borderRadius: 10, alignItems: "center",
-              opacity: (!meetsMin || !customerName || !customerPhone || sending) ? 0.4 : 1 }}>
+              opacity: sendDisabled ? 0.4 : 1 }}>
             <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
-              {sending ? "Enviando..." : ("Enviar pedido • R$ " + total.toFixed(2))}
+              {sending ? "Enviando..." : storeClosed ? "Loja fechada" : ("Enviar pedido • R$ " + total.toFixed(2))}
             </Text>
           </Pressable>
         </View>
@@ -284,6 +304,13 @@ export default function CardapioPage() {
         )}
       </View>
 
+      {/* F14 banner topo do menu */}
+      {storeClosed && (
+        <View style={{ padding: 12 }}>
+          <ClosedBanner />
+        </View>
+      )}
+
       <View style={{ backgroundColor: T.card, borderBottomWidth: 1, borderBottomColor: T.border }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 10, gap: 8 }}>
           <CatChip label="Todos" active={!activeCat} onPress={() => setActiveCat(null)} />
@@ -296,16 +323,25 @@ export default function CardapioPage() {
           const qty = cart[item.id]?.qty || 0;
           return (
             <View key={item.id} style={{ backgroundColor: T.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.border, flexDirection: "row", gap: 12 }}>
-              <View style={{ width: 60, height: 60, borderRadius: 10, backgroundColor: "#f0e9e0", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 26 }}>🍽</Text>
-              </View>
+              {/* F12: foto se houver, senão emoji fallback */}
+              {item.photo_url ? (
+                <Image
+                  source={{ uri: item.photo_url }}
+                  style={{ width: 60, height: 60, borderRadius: 10, backgroundColor: "#f0e9e0" }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={{ width: 60, height: 60, borderRadius: 10, backgroundColor: "#f0e9e0", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 26 }}>🍽</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{item.name}</Text>
                 {item.description && <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }} numberOfLines={2}>{item.description}</Text>}
                 <Text style={{ fontSize: 14, color: T.red, fontWeight: "800", marginTop: 4 }}>R$ {Number(item.price).toFixed(2)}</Text>
               </View>
               {qty === 0 ? (
-                <Pressable onPress={() => addItem(item)} style={{ alignSelf: "flex-end", width: 32, height: 32, borderRadius: 10, backgroundColor: T.red, alignItems: "center", justifyContent: "center" }}>
+                <Pressable onPress={() => addItem(item)} disabled={!!storeClosed} style={{ alignSelf: "flex-end", width: 32, height: 32, borderRadius: 10, backgroundColor: T.red, alignItems: "center", justifyContent: "center", opacity: storeClosed ? 0.3 : 1 }}>
                   <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800" }}>+</Text>
                 </Pressable>
               ) : (
@@ -334,6 +370,26 @@ export default function CardapioPage() {
           <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Continuar →</Text>
         </Pressable>
       )}
+    </View>
+  );
+}
+
+// F14: banner amarelo "Loja fechada". Renderizado tanto no topo do
+// menu quanto no topo do cart, para o cliente ver antes de tentar enviar.
+function ClosedBanner() {
+  return (
+    <View style={{
+      backgroundColor: "#fef3c7",
+      borderLeftWidth: 4, borderLeftColor: T.amber,
+      borderRadius: 8, padding: 12, flexDirection: "row", alignItems: "center", gap: 10,
+    }}>
+      <Text style={{ fontSize: 22 }}>🕒</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 13, color: "#92400e", fontWeight: "800" }}>Loja fechada no momento</Text>
+        <Text style={{ fontSize: 11, color: "#92400e", marginTop: 2, lineHeight: 15 }}>
+          Não estamos recebendo pedidos online agora. Você pode navegar no cardápio normalmente.
+        </Text>
+      </View>
     </View>
   );
 }
