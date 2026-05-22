@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable } from "react-native";
+import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -18,6 +18,7 @@ import { Card } from "@/components/screens/configuracoes/shared";
 //   - Ativar módulo de Abertura/Fechamento de Caixa
 //   - Ativar Crediário (fiado por cliente) — 09/05/2026
 //   - Modal de troco em venda dinheiro — 12/05/2026
+//   - Restaurante (Fase 7): NFC-e manual, comanda auto-print, taxa servico
 //
 // Persistido em companies.pdv_settings (jsonb).
 // ============================================================
@@ -27,21 +28,23 @@ export function PdvSettingsCard() {
   const { settings: serverSettings, isLoading, invalidate } = usePdvSettings();
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [feeInput, setFeeInput] = useState<string>("");
 
   // Usa pendingSettings durante save (optimistic), senao usa o do server
   const display = pendingSettings || serverSettings;
+  const isFoodVertical = (company as any)?.vertical_active === "food";
 
-  async function toggle(key: keyof PdvSettings, value: boolean) {
+  async function toggle(key: keyof PdvSettings, value: boolean | number) {
     if (!company?.id || saving) return;
-    const next: PdvSettings = { ...display, [key]: value };
+    const next: PdvSettings = { ...display, [key]: value } as PdvSettings;
     setPendingSettings(next);
     setSaving(true);
     try {
       await pdvSettingsApi.save(company.id, next);
-      invalidate(); // forca React Query a re-buscar (sincroniza com backend)
+      invalidate();
       setPendingSettings(null);
     } catch (err: any) {
-      setPendingSettings(null); // reverte
+      setPendingSettings(null);
       toast.error(err?.data?.error || "Erro ao salvar");
     } finally {
       setSaving(false);
@@ -172,6 +175,83 @@ export function PdvSettingsCard() {
         </Pressable>
       )}
 
+      {/* Fase 7 (Restaurante): so aparece se vertical_active === "food" */}
+      {isFoodVertical && (
+        <>
+          <View style={s.restaurantHeader}>
+            <Text style={s.restaurantHeaderText}>🍽️  RESTAURANTE</Text>
+          </View>
+
+          {/* NFC-e manual */}
+          <View style={s.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowLabel}>Emitir NFC-e ao fechar mesa</Text>
+              <Text style={s.rowDesc}>Mostra um botão no fechamento da mesa pra gerar cupom fiscal (NFC-e). Recurso do plano Negócio+.</Text>
+            </View>
+            <Switch
+              value={display.food_nfce_manual_enabled === true}
+              onValueChange={function(v) { toggle("food_nfce_manual_enabled", v); }}
+              trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+              thumbColor={display.food_nfce_manual_enabled === true ? Colors.violet : Colors.ink3}
+              disabled={saving}
+            />
+          </View>
+
+          <View style={s.divider} />
+
+          {/* Comanda auto-print */}
+          <View style={s.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowLabel}>Imprimir comanda automaticamente</Text>
+              <Text style={s.rowDesc}>Ao confirmar um pedido, manda a comanda 80mm pra impressora da cozinha (apenas no navegador desktop).</Text>
+            </View>
+            <Switch
+              value={display.food_comanda_print_enabled === true}
+              onValueChange={function(v) { toggle("food_comanda_print_enabled", v); }}
+              trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+              thumbColor={display.food_comanda_print_enabled === true ? Colors.violet : Colors.ink3}
+              disabled={saving}
+            />
+          </View>
+
+          {Platform.OS !== "web" && display.food_comanda_print_enabled && (
+            <View style={s.warnBox}>
+              <Icon name="info" size={11} color={Colors.amber} />
+              <Text style={s.warnText}>Auto-impressão só funciona no navegador desktop. No iPad/celular, gerencie comandas manualmente pelo KDS.</Text>
+            </View>
+          )}
+
+          <View style={s.divider} />
+
+          {/* Taxa de servico */}
+          <View style={[s.row, { alignItems: "flex-start" }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowLabel}>Taxa de serviço padrão</Text>
+              <Text style={s.rowDesc}>Sugestão de gorjeta calculada sobre o subtotal da comanda. 0 = desativada. Aparece como linha separada no fechamento.</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <TextInput
+                  value={feeInput || String(display.service_fee_pct ?? "")}
+                  onChangeText={setFeeInput}
+                  onBlur={() => {
+                    const n = Math.max(0, Math.min(30, Number((feeInput || "").replace(/[^\d.]/g, "")) || 0));
+                    setFeeInput("");
+                    if (n !== Number(display.service_fee_pct || 0)) {
+                      toggle("service_fee_pct" as keyof PdvSettings, n);
+                    }
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={Colors.ink4}
+                  style={s.feeInput}
+                />
+                <Text style={{ color: Colors.ink3, fontSize: 13, fontWeight: "700" }}>%</Text>
+                <Text style={{ color: Colors.ink4, fontSize: 11, marginLeft: 4 }}>(0–30)</Text>
+              </View>
+            </View>
+          </View>
+        </>
+      )}
+
       {saving && (
         <View style={s.savingHint}>
           <ActivityIndicator color={Colors.violet3} size="small" />
@@ -201,6 +281,28 @@ const s = StyleSheet.create({
   caixaLinkText: { flex: 1, fontSize: 13, color: Colors.violet3, fontWeight: "600" },
   savingHint:  { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   savingText:  { fontSize: 11, color: Colors.ink3 },
+  // Fase 7 — Restaurante
+  restaurantHeader: {
+    marginTop: 12, marginBottom: 6,
+    paddingTop: 12, paddingBottom: 6,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  restaurantHeaderText: {
+    fontSize: 10, color: Colors.red, fontWeight: "800",
+    letterSpacing: 1,
+  },
+  feeInput: {
+    backgroundColor: Colors.bg3, color: Colors.ink,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
+    borderWidth: 1, borderColor: Colors.border,
+    fontSize: 14, fontWeight: "700", minWidth: 80, textAlign: "center",
+  },
+  warnBox: {
+    flexDirection: "row", gap: 6, alignItems: "flex-start",
+    backgroundColor: Colors.amberD || "rgba(245,158,11,0.1)", padding: 8, borderRadius: 6,
+    borderLeftWidth: 2, borderLeftColor: Colors.amber, marginTop: 4,
+  },
+  warnText: { fontSize: 10, color: Colors.amber, flex: 1, lineHeight: 14 },
 });
 
 export default PdvSettingsCard;
