@@ -6,13 +6,14 @@ import { FoodColors } from "@/constants/food-tokens";
 
 // ============================================================
 // FoodSidebar — Sidebar dedicada do shell Aura Food.
-// Fase 0: 6 itens fixos em 3 secoes, sem custom layout/editor.
-// Reaproveita Icon e useAuthStore.
 //
-// 2026-05-21 (F2 do polish pre-Fase 7): cada item ganha `mod`
-// distinto (food.mesas, food.pedidos, etc) consultado em
-// useVisibleModules — sem isso plano Essencial veria Mesas
-// mesmo sem ter direito.
+// Fase 0: 6 itens fixos.
+// Fase 8 (2026-05-22): item "Delivery" virou "Despacho"
+// (aponta pra /despacho do delivery próprio). Novo item "iFood"
+// cobre o import CSV (antes em delivery.tsx).
+//
+// Memory feedback_permissions_todas_telas: cada item tem chave
+// `mod` consultada por useVisibleModules.
 // ============================================================
 
 interface FoodNavItem { route: string; label: string; icon: string; mod: string; }
@@ -25,8 +26,9 @@ const FOOD_NAV: FoodNavSection[] = [
   ]},
   { label: "Cardápio & Delivery", items: [
     { route: "/food/(salao)/cardapio", label: "Cardápio", icon: "book",  mod: "food.cardapio" },
-    { route: "/food/(salao)/delivery", label: "Delivery", icon: "truck", mod: "food.delivery" },
-    { route: "/food/(salao)/motoboys", label: "Motoboys", icon: "bike",  mod: "food.delivery" },
+    { route: "/food/(salao)/despacho", label: "Despacho", icon: "truck", mod: "food.delivery" },
+    { route: "/food/(salao)/motoboys", label: "Motoboys", icon: "bike",  mod: "food.motoboys" },
+    { route: "/food/(salao)/ifood",    label: "iFood",    icon: "download", mod: "food.delivery" },
   ]},
   { label: "Configurações", items: [
     { route: "/food/(salao)/configuracoes", label: "Configurações", icon: "settings", mod: "food.config" },
@@ -44,7 +46,6 @@ export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onTog
   const { user, company, logout } = useAuthStore();
   const sw = collapsed ? 64 : 240;
 
-  // 2026-05-21 (F3): usa trade_name → legal_name (companies nao tem coluna `name`).
   const businessName =
     ((company as any)?.trade_name) ||
     ((company as any)?.legal_name) ||
