@@ -43,6 +43,7 @@ import { hexToName, nameToHex } from "@/utils/colorNames";
 // perdidas. Agora qualquer mudanca (estoque, barcode, +/- cor,
 // +/- tamanho) dispara debounce 400ms e PUT /variations
 // automaticamente. Status mostrado em "Salvando…" / "✓ Salvo".
+// Toast flutuante "Informacoes salvas" com throttle 2.5s.
 // ============================================================
 
 const PRESET_COLORS = [
@@ -234,6 +235,10 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   // de `data` (pra nao sobrescrever o estado local logo apos um PUT bem-
   // sucedido que dispara invalidate).
   const skipNextHydrateRef = useRef(false);
+  // Throttle do toast "Informacoes salvas" — evita spam quando o user
+  // edita varias celulas rapido (cada blur ~ 1 PUT ~ 1 toast).
+  // Mostra toast no maximo 1x a cada 2.5s.
+  const lastToastAtRef = useRef(0);
 
   // Fetch inicial
   const { data, isLoading } = useQuery({
@@ -371,9 +376,15 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       setSaveStatus('saved');
       setDirty(false);
       setParentMerged(false);
-      // Toast curto so quando ha mudanca relevante (>0 variantes) e nao
-      // estamos em modo "spam" (vamos limitar via setTimeout)
-      // Por enquanto, sem toast — o indicador inline cobre o feedback.
+      // Toast flutuante "Informacoes salvas" — throttle de 2.5s pra nao
+      // inundar a tela se o user editar varias celulas em sequencia
+      // (cada blur dispara um PUT, mas o toast aparece no maximo 1x a cada
+      // 2.5s). Mensagem curta porque o user ja sabe O QUE salvou.
+      const now = Date.now();
+      if (now - lastToastAtRef.current > 2500) {
+        lastToastAtRef.current = now;
+        toast.success("Informacoes salvas");
+      }
     },
     onError: (err: any) => {
       setSaveStatus('error');
