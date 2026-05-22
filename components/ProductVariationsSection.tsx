@@ -302,10 +302,12 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setBarcodes(fetchedBarcodes);   // 21/05/2026
     setParentMerged(merged);
     setDirty(merged);
-    // Se houve merge, dispara auto-save imediato pra formalizar a migracao
-    // do estoque orfao pra variante. Nao precisa do user clicar em nada.
+    // Se houve merge, agenda auto-save debounced pra formalizar a migracao
+    // do estoque orfao pra variante. NAO usa immediate=true porque
+    // stateRef.current ainda nao reflete os sets acima (sync useEffect roda
+    // depois) — o debounce de 400ms da tempo do estado commitar.
     if (merged) {
-      scheduleSave(true);
+      scheduleSave();
     }
   }, [data, parentColor, parentSize, parentStock]);
 
