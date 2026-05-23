@@ -7,9 +7,10 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   productsVariationsApi, matrixKey,
-  type ColorEntry, type MatrixMap, type BarcodesMap, type VariationsMode,
+  type ColorEntry, type MatrixMap, type BarcodesMap, type ImagesMap, type VariationsMode,
 } from "@/services/productsVariationsApi";
 import { hexToName, nameToHex } from "@/utils/colorNames";
+import { VariantImageButton } from "@/components/VariantImageButton";
 
 // ============================================================
 // AURA. -- ProductVariationsSection (reformulado)
@@ -44,6 +45,16 @@ import { hexToName, nameToHex } from "@/utils/colorNames";
 // +/- tamanho) dispara debounce 400ms e PUT /variations
 // automaticamente. Status mostrado em "Salvando…" / "✓ Salvo".
 // Toast flutuante "Informacoes salvas" com throttle 2.5s.
+//
+// 23/05/2026: FOTO POR VARIANTE.
+// - VariantImageButton no inicio de cada linha (color/size/
+//   matrix-barcodes). Click = file picker; upload chama POST
+//   /variant-image que identifica variante por (color, size).
+// - State `images` hidratado do GET /variations.images map.
+// - Upload/delete NAO entra no PUT debounce — chamada propria
+//   pra rota /variant-image (que sobrevive ao soft-delete +
+//   INSERT porque busca por combinacao). Backend tambem
+//   preserva image_url no rewrite via snapshot map.
 // ============================================================
 
 const PRESET_COLORS = [
@@ -214,6 +225,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   const [sizes, setSizes] = useState<string[]>([]);
   const [matrix, setMatrix] = useState<MatrixMap>({});
   const [barcodes, setBarcodes] = useState<BarcodesMap>({});   // 21/05/2026
+  const [images, setImages] = useState<ImagesMap>({});         // 23/05/2026: foto por combinacao
   const [dirty, setDirty] = useState(false);
   const [showColorPopover, setShowColorPopover] = useState(false);
   const [showSizePopover, setShowSizePopover] = useState(false);
@@ -257,6 +269,9 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     // de quaisquer alteracoes feitas pelo usuario entre o PUT e o GET.
     if (skipNextHydrateRef.current) {
       skipNextHydrateRef.current = false;
+      // Mesmo pulando colors/sizes/matrix/barcodes, sincronizamos images
+      // (que vem do server e nao sao afetadas pelo PUT da edicao local).
+      setImages({ ...(data.images || {}) });
       return;
     }
     // Se ha PUT em voo ou agendado, NAO hidrata — o estado local eh a
@@ -267,6 +282,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     const fetchedSizes: string[] = data.sizes || [];
     const fetchedMatrix: MatrixMap = { ...(data.matrix || {}) };
     const fetchedBarcodes: BarcodesMap = { ...(data.barcodes || {}) };   // 21/05/2026
+    const fetchedImages: ImagesMap = { ...(data.images || {}) };         // 23/05/2026
 
     // Normaliza cor do pai pra hex uppercase. Se nao for hex valido, ignora.
     const parentHex = parentColor && /^#[0-9A-Fa-f]{6}$/.test(parentColor)
@@ -305,6 +321,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setSizes(mergedSizes);
     setMatrix(fetchedMatrix);
     setBarcodes(fetchedBarcodes);   // 21/05/2026
+    setImages(fetchedImages);       // 23/05/2026
     setParentMerged(merged);
     setDirty(merged);
     // Se houve merge, agenda auto-save debounced pra formalizar a migracao
@@ -428,17 +445,22 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   }
   function removeColor(hex: string) {
     setColors(colors.filter(c => c.hex !== hex));
-    // Remove entradas da matrix e barcodes referentes a essa cor
+    // Remove entradas da matrix, barcodes e images referentes a essa cor
     const newMatrix = { ...matrix };
     const newBarcodes = { ...barcodes };
+    const newImages = { ...images };
     Object.keys(newMatrix).forEach(k => {
       if (k.startsWith(hex + '|') || k === hex + '|') delete newMatrix[k];
     });
     Object.keys(newBarcodes).forEach(k => {
       if (k.startsWith(hex + '|') || k === hex + '|') delete newBarcodes[k];
     });
+    Object.keys(newImages).forEach(k => {
+      if (k.startsWith(hex + '|') || k === hex + '|') delete newImages[k];
+    });
     setMatrix(newMatrix);
     setBarcodes(newBarcodes);
+    setImages(newImages);
     setDirty(true);
     scheduleSave();
   }
@@ -450,17 +472,22 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   }
   function removeSize(value: string) {
     setSizes(sizes.filter(s => s !== value));
-    // Remove entradas da matrix e barcodes referentes a esse tamanho
+    // Remove entradas da matrix, barcodes e images referentes a esse tamanho
     const newMatrix = { ...matrix };
     const newBarcodes = { ...barcodes };
+    const newImages = { ...images };
     Object.keys(newMatrix).forEach(k => {
       if (k.endsWith('|' + value)) delete newMatrix[k];
     });
     Object.keys(newBarcodes).forEach(k => {
       if (k.endsWith('|' + value)) delete newBarcodes[k];
     });
+    Object.keys(newImages).forEach(k => {
+      if (k.endsWith('|' + value)) delete newImages[k];
+    });
     setMatrix(newMatrix);
     setBarcodes(newBarcodes);
+    setImages(newImages);
     setDirty(true);
     scheduleSave();
   }
@@ -491,6 +518,26 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     setBarcodes(newBarcodes);
     setDirty(true);
     scheduleSave();
+  }
+  // 23/05/2026: image helpers (apenas leitura/atualizacao local — POST/DELETE
+  // sao feitos pelo VariantImageButton; callbacks abaixo sincronizam state)
+  function imageAt(hex: string | null, size: string | null): string | null {
+    return images[matrixKey(hex, size)] || null;
+  }
+  function setImageLocal(hex: string | null, size: string | null, url: string | null) {
+    const key = matrixKey(hex, size);
+    const next = { ...images };
+    if (url) {
+      next[key] = url;
+    } else {
+      delete next[key];
+    }
+    setImages(next);
+    // NAO marca dirty — imagens nao entram no PUT /variations.
+    // Invalida apenas o cache de produtos pra atualizar carousel/listagem
+    // quando aplicavel (o GET /variations vai trazer images atualizado
+    // no proximo fetch automatico — staleTime 30s).
+    qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
   // Handler de onBlur dos inputs — forca flush imediato pra refletir
@@ -649,14 +696,23 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       {/* Grid de estoque */}
       {mode !== 'none' && (
         <View style={s.stockBlock}>
-          <Text style={s.stockLabel}>Estoque por variacao (auto-salva ao mudar)</Text>
+          <Text style={s.stockLabel}>Estoque por variacao (clique na bolinha esquerda pra foto)</Text>
 
-          {/* ── Color-only: dot + label + stock + barcode ── */}
+          {/* ── Color-only: thumb foto + label + stock + barcode ── */}
           {mode === 'color' && (
             <View style={{ gap: 6 }}>
               {colors.map(c => (
                 <View key={c.hex} style={s.stockRow}>
-                  <View style={[s.stockRowDot, { backgroundColor: c.hex }]} />
+                  {/* 23/05/2026: substitui o dot estatico por botao de foto */}
+                  <VariantImageButton
+                    productId={productId}
+                    colorHex={c.hex}
+                    sizeValue={null}
+                    imageUrl={imageAt(c.hex, null)}
+                    fallbackColor={c.hex}
+                    onUploaded={(url) => setImageLocal(c.hex, null, url)}
+                    onDeleted={() => setImageLocal(c.hex, null, null)}
+                  />
                   <Text style={s.stockRowLabel} numberOfLines={1}>{c.name || hexToName(c.hex)}</Text>
                   <TextInput
                     style={s.stockInput}
@@ -684,12 +740,20 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             </View>
           )}
 
-          {/* ── Size-only: dot + label + stock + barcode ── */}
+          {/* ── Size-only: thumb foto + label + stock + barcode ── */}
           {mode === 'size' && (
             <View style={{ gap: 6 }}>
               {sizes.map(sz => (
                 <View key={sz} style={s.stockRow}>
-                  <View style={[s.stockRowDot, { backgroundColor: Colors.violet }]} />
+                  <VariantImageButton
+                    productId={productId}
+                    colorHex={null}
+                    sizeValue={sz}
+                    imageUrl={imageAt(null, sz)}
+                    fallbackColor={Colors.violet}
+                    onUploaded={(url) => setImageLocal(null, sz, url)}
+                    onDeleted={() => setImageLocal(null, sz, null)}
+                  />
                   <Text style={s.stockRowLabel} numberOfLines={1}>{sz}</Text>
                   <TextInput
                     style={s.stockInput}
@@ -717,7 +781,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             </View>
           )}
 
-          {/* ── Matrix: grade de estoque + secao de barcodes abaixo ── */}
+          {/* ── Matrix: grade de estoque + secao de barcodes (com foto) abaixo ── */}
           {mode === 'matrix' && (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -759,13 +823,21 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                 </View>
               </ScrollView>
 
-              {/* Codigos de barras por combinacao (matrix mode) — 21/05/2026 */}
+              {/* Codigos de barras + foto por combinacao (matrix mode) */}
               <View style={s.matrixBarcodeSection}>
-                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Codigos de barras</Text>
+                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Fotos e codigos de barras por combinacao</Text>
                 <View style={{ gap: 6 }}>
                   {colors.map(c => sizes.map(sz => (
                     <View key={matrixKey(c.hex, sz)} style={s.stockRow}>
-                      <View style={[s.stockRowDot, { backgroundColor: c.hex }]} />
+                      <VariantImageButton
+                        productId={productId}
+                        colorHex={c.hex}
+                        sizeValue={sz}
+                        imageUrl={imageAt(c.hex, sz)}
+                        fallbackColor={c.hex}
+                        onUploaded={(url) => setImageLocal(c.hex, sz, url)}
+                        onDeleted={() => setImageLocal(c.hex, sz, null)}
+                      />
                       <Text style={s.stockRowLabel} numberOfLines={1}>
                         {(c.name || hexToName(c.hex))} · {sz}
                       </Text>
@@ -854,7 +926,7 @@ const s = StyleSheet.create({
   stockBlock: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
   stockLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase" as any, letterSpacing: 0.5, marginBottom: 8 },
   stockRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 8, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  stockRowDot: { width: 14, height: 14, borderRadius: 7, flexShrink: 0 },
+  // stockRowDot removido — substituido pelo VariantImageButton (23/05/2026)
   stockRowLabel: { minWidth: 36, maxWidth: 90, fontSize: 12, color: Colors.ink, fontWeight: "500" },
   stockInput: { width: 64, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12, color: Colors.ink, textAlign: "right", fontWeight: "600" },
   stockUnit: { fontSize: 10, color: Colors.ink3, fontWeight: "600", width: 20 },
