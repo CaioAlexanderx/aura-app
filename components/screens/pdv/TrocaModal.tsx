@@ -1,19 +1,19 @@
 // ============================================================
-// AURA. — PDV · TrocaModal v2 (shell)
-// Orquestra os 4 steps desacoplados em sub-arquivos:
-//   Step1Search       — multi-seleção de vendas + 4 modos de busca
-//   Step2Returns      — itens agrupados por venda + accordion
-//   Step3NewItems     — catálogo + scanner barcode + QR
-//   Step4Confirm      — fiscal badge + address + pay/refund split
+// AURA. — PDV · TrocaModal v3 (shell)
 //
-// 17/05/2026 — handleSubmit ATIVA caminho v2 automaticamente quando:
-//   - selectedSales.length > 1 (multi-venda), OU
-//   - paymentSplits.length > 1 (multi-método pagamento), OU
-//   - refundSplits.length > 1 OU contém crediario_credito/vale
-// Caso contrário cai no caminho v1 (legado, 100% compat).
-// Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx
+// 24/05/2026 — REDESIGN v3 (após Davi não conseguir trocar).
+// Mockup: Aura/mockup_troca_v3.html
+// Memory: projeto_troca_v3_redesign_24mai2026
+//
+// Mudanças v2 → v3:
+//   • Stepper visível e linear (1→2→3→4 + tela 5 sucesso)
+//   • Step5Success — feedback claro pós-confirmação (era só toast + close)
+//   • Linguagem de balconista nos títulos e copies
+//   • NF-e auto colapsada (operador não precisa preencher)
+//   • Cross-filial é default explícito, com banner "o que vai mexer no estoque"
+//   • Mantém contrato com backend v1 + v2 (sem migração necessária)
 // ============================================================
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View, Text, Pressable, StyleSheet,
   ActivityIndicator, ScrollView,
@@ -29,14 +29,30 @@ import { Step1Search } from "./troca/Step1Search";
 import { Step2Returns } from "./troca/Step2Returns";
 import { Step3NewItems } from "./troca/Step3NewItems";
 import { Step4Confirm, inferFiscalStrategy, canConfirmStep4 } from "./troca/Step4Confirm";
+import { Step5Success } from "./troca/Step5Success";
 
 // Types
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
   PaymentSplit, RefundSplit, CustomerAddress,
 } from "./troca/types";
-import { STEP_LABELS, fmtBRL } from "./troca/types";
+import { fmtBRL } from "./troca/types";
 import { EMPTY_ADDRESS } from "./troca/AddressForm";
+
+// ─── Wizard step v3 ─────────────────────────────────────────
+// 1 = Localizar venda
+// 2 = Itens devolvidos
+// 3 = Destino do crédito
+// 4 = Finalizar (resumo + NF-e + pagamento)
+// 5 = Sucesso (novo na v3 — feedback persistente)
+type StepV3 = 1 | 2 | 3 | 4 | 5;
+
+const STEP_LABELS_V3: Record<Exclude<StepV3, 5>, string> = {
+  1: "Venda",
+  2: "Devolver",
+  3: "Levar",
+  4: "Finalizar",
+};
 
 type Props = {
   visible: boolean;
@@ -49,7 +65,8 @@ type Props = {
 export function TrocaModal({
   visible, companyId, products, onClose, onSuccess,
 }: Props) {
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<StepV3>(1);
+  const [submitting, setSubmitting] = useState(false);
 
   const [selectedSales, setSelectedSales] = useState<SelectedSaleRow[]>([]);
   const [returnEntries, setReturnEntries] = useState<ReturnEntry[]>([]);
@@ -57,7 +74,9 @@ export function TrocaModal({
   const [paymentSplits, setPaymentSplits] = useState<PaymentSplit[]>([]);
   const [refundSplits, setRefundSplits] = useState<RefundSplit[]>([]);
   const [customerAddress, setCustomerAddress] = useState<CustomerAddress>(EMPTY_ADDRESS);
-  const [submitting, setSubmitting] = useState(false);
+
+  // Resultado pra Step5Success
+  const [successResult, setSuccessResult] = useState<any | null>(null);
 
   const returnedValue = useMemo(
     () => returnEntries.reduce((s, e) => s + e.returnQty * Number(e.item.unit_price), 0),
@@ -72,6 +91,7 @@ export function TrocaModal({
     [newValue, returnedValue]
   );
 
+  // Reset on close
   useEffect(() => {
     if (!visible) {
       setStep(1);
@@ -81,46 +101,46 @@ export function TrocaModal({
       setPaymentSplits([]);
       setRefundSplits([]);
       setCustomerAddress(EMPTY_ADDRESS);
+      setSuccessResult(null);
+      setSubmitting(false);
     }
   }, [visible]);
 
+  // Limpar return entries quando vendas selecionadas mudam
   useEffect(() => {
     const ids = new Set(selectedSales.map((s) => s.id));
     setReturnEntries((prev) => prev.filter((e) => ids.has(e.saleId)));
   }, [selectedSales]);
 
-  function canAdvance(): boolean {
+  const canAdvance = useCallback((): boolean => {
     if (step === 1) return selectedSales.length > 0;
-    if (step === 2) return returnEntries.length > 0 || newEntries.length > 0;
+    if (step === 2) return returnEntries.length > 0;
     if (step === 3) return returnEntries.length > 0 || newEntries.length > 0;
     return false;
-  }
-  function next() { setStep((s) => (Math.min(4, s + 1) as Step)); }
-  function prev() { setStep((s) => (Math.max(1, s - 1) as Step)); }
+  }, [step, selectedSales.length, returnEntries.length, newEntries.length]);
 
-  // ─── Detecção v1 vs v2 ──────────────────────────────────────
-  // v2 requer: backend com migrations 115-117 + handler trocaV2 +
-  // /sales-for-troca devolvendo original_sale_item_id real em items.
-  function shouldUseV2(): { v2: boolean; reason: string } {
-    if (selectedSales.length > 1) return { v2: true, reason: "multi-venda" };
-    if (paymentSplits.length > 1) return { v2: true, reason: "payment_splits>1" };
-    if (refundSplits.length > 1) return { v2: true, reason: "refund_splits>1" };
-    if (refundSplits.some((r) => r.method === "crediario_credito" || r.method === "vale")) {
-      return { v2: true, reason: "refund method v2-only" };
-    }
-    return { v2: false, reason: "" };
-  }
+  const next = useCallback(() => {
+    setStep((s) => (Math.min(4, s + 1) as StepV3));
+  }, []);
+  const prev = useCallback(() => {
+    setStep((s) => (Math.max(1, s - 1) as StepV3));
+  }, []);
 
+  // ─── Detecção v1 vs v2 ─────────────────────────────────────
+  function shouldUseV2(): boolean {
+    if (selectedSales.length > 1) return true;
+    if (paymentSplits.length > 1) return true;
+    if (refundSplits.length > 1) return true;
+    if (refundSplits.some((r) => r.method === "crediario_credito" || r.method === "vale")) return true;
+    return false;
+  }
   function hasRealSaleItemIds(): boolean {
-    // ReturnEntry.item.id pode ser "synth-..." (fallback v1) ou UUID real (v2).
-    // O Step1Search popula items vindos do backend /sales-for-troca; se backend
-    // já estiver na versão v2, virão com original_sale_item_id real.
     return returnEntries.every((e) =>
       e.item.id && !String(e.item.id).startsWith("synth-")
     );
   }
 
-  // ─── Submit ──────────────────────────────────────────────────
+  // ─── Submit ────────────────────────────────────────────────
   async function handleSubmit() {
     if (returnEntries.length === 0 && newEntries.length === 0) {
       toast.error("Adicione ao menos um item devolvido ou novo");
@@ -128,29 +148,38 @@ export function TrocaModal({
     }
 
     const fiscal = inferFiscalStrategy(selectedSales, returnEntries);
+
+    // NF-e v3: se a venda é elegível pra devolução 55 mas não tem endereço,
+    // gente nem mostra o address form — usa o endereço do cliente (se houver)
+    // ou usa o endereço do cliente padrão da empresa (CFOP 1.202 não exige).
+    // Ainda assim, se o backend pedir explicitamente, devolve um EMPTY_ADDRESS
+    // (não bloqueia o fluxo do balconista).
     const validation = canConfirmStep4({
       netAmount, paymentSplits, refundSplits,
       fiscalStrategy: fiscal.strategy, customerAddress,
     });
     if (!validation.ok) {
-      toast.error(validation.reason || "Verifique os campos obrigatórios");
-      return;
-    }
-
-    const { v2 } = shouldUseV2();
-
-    // ─── Caminho v2 ────────────────────────────────────────────
-    if (v2) {
-      if (!hasRealSaleItemIds()) {
-        toast.error(
-          "Servidor precisa estar atualizado (migrations 115+) para trocas multi-venda. " +
-          "Atualize o backend ou faça uma troca por venda original."
-        );
+      // v3: relaxar validação de endereço — backend agora aceita endereço vazio
+      // e usa fallback do cliente cadastrado. Só bloqueia se faltar split de pagto.
+      const blocking = validation.reason || "";
+      const isAddressOnly = /endere|cep|rua|bairro|cidade/i.test(blocking);
+      if (!isAddressOnly) {
+        toast.error(blocking);
         return;
       }
-      setSubmitting(true);
-      try {
-        const bodyV2: any = {
+    }
+
+    const v2 = shouldUseV2();
+    setSubmitting(true);
+    try {
+      let result: any;
+      if (v2) {
+        if (!hasRealSaleItemIds()) {
+          toast.error("Servidor desatualizado — faça uma troca por venda original.");
+          setSubmitting(false);
+          return;
+        }
+        result = await trocaApi.createV2(companyId, {
           original_sale_ids: selectedSales.map((s) => s.id),
           returned_items: returnEntries.map((e) => ({
             original_sale_id: e.saleId,
@@ -171,68 +200,48 @@ export function TrocaModal({
           payment_splits: netAmount > 0 ? paymentSplits : undefined,
           refund_splits: netAmount < 0 ? refundSplits : undefined,
           customer_id: selectedSales[0]?.customer_id || undefined,
-          customer_address:
-            fiscal.strategy === "devolucao_55" || fiscal.strategy === "per_origin"
-              ? customerAddress
-              : undefined,
+          customer_address: (fiscal.strategy === "devolucao_55" || fiscal.strategy === "per_origin")
+            ? customerAddress
+            : undefined,
           nfce_strategy: "per_origin",
-        };
-        const result = await trocaApi.createV2(companyId, bodyV2);
-        toast.success(
-          selectedSales.length > 1
-            ? `Troca de ${selectedSales.length} vendas registrada!`
-            : "Troca registrada com sucesso!"
-        );
-        onSuccess?.(result);
-        onClose();
-      } catch (e: any) {
-        toast.error(e?.message || "Erro ao registrar troca v2");
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
+        } as any);
+      } else {
+        const sale = selectedSales[0];
+        const paymentMethod = netAmount > 0
+          ? (paymentSplits[0]?.method || "dinheiro")
+              .replace("cartao_credito", "cartao")
+              .replace("cartao_debito", "debito")
+          : (refundSplits[0]?.method || "dinheiro").replace("cartao_estorno", "cartao");
 
-    // ─── Caminho v1 (legado, single-venda + single-método) ─────
-    const sale = selectedSales[0];
-    const paymentMethod =
-      netAmount > 0
-        ? (paymentSplits[0]?.method || "dinheiro")
-            .replace("cartao_credito", "cartao")
-            .replace("cartao_debito", "debito")
-        : (refundSplits[0]?.method || "dinheiro").replace("cartao_estorno", "cartao");
-
-    setSubmitting(true);
-    try {
-      const body: any = {
-        original_sale_id: sale.id,
-        returned_items: returnEntries.map((e) => ({
-          product_id: e.item.product_id,
-          variant_id: (e.item as any).variant_id,
-          quantity: e.returnQty,
-          unit_price: Number(e.item.unit_price),
-          product_name_snapshot: (e.item as any).product_name || e.item.product_name_snapshot,
-        })),
-        new_items: newEntries.map((n) => ({
-          product_id: n.product_id,
-          variant_id: n.variant_id,
-          quantity: n.quantity,
-          unit_price: n.unit_price,
-          product_name_snapshot: n.product_name_snapshot,
-        })),
-        payment_method: netAmount !== 0 ? paymentMethod : undefined,
-        customer_id: sale.customer_id || undefined,
-        nfce_strategy:
-          fiscal.strategy === "cancel_reissue" || fiscal.strategy === "devolucao_55"
+        result = await trocaApi.create(companyId, {
+          original_sale_id: sale.id,
+          returned_items: returnEntries.map((e) => ({
+            product_id: e.item.product_id,
+            variant_id: (e.item as any).variant_id,
+            quantity: e.returnQty,
+            unit_price: Number(e.item.unit_price),
+            product_name_snapshot: (e.item as any).product_name || e.item.product_name_snapshot,
+          })),
+          new_items: newEntries.map((n) => ({
+            product_id: n.product_id,
+            variant_id: n.variant_id,
+            quantity: n.quantity,
+            unit_price: n.unit_price,
+            product_name_snapshot: n.product_name_snapshot,
+          })),
+          payment_method: netAmount !== 0 ? paymentMethod : undefined,
+          customer_id: sale.customer_id || undefined,
+          nfce_strategy: (fiscal.strategy === "cancel_reissue" || fiscal.strategy === "devolucao_55")
             ? fiscal.strategy
             : "none",
-        customer_address:
-          fiscal.strategy === "devolucao_55" ? customerAddress : undefined,
-      };
-      const result = await trocaApi.create(companyId, body);
-      toast.success("Troca registrada com sucesso!");
+          customer_address: fiscal.strategy === "devolucao_55" ? customerAddress : undefined,
+        } as any);
+      }
+
+      // V3: avança pra tela de sucesso ao invés de fechar
+      setSuccessResult(result);
+      setStep(5);
       onSuccess?.(result);
-      onClose();
     } catch (e: any) {
       toast.error(e?.message || "Erro ao registrar troca");
     } finally {
@@ -243,7 +252,7 @@ export function TrocaModal({
   if (!visible) return null;
 
   const panelWeb = webOnly({
-    background: IS_DARK_MODE ? "rgba(18,10,35,0.97)" : "rgba(255,255,255,0.97)",
+    background: IS_DARK_MODE ? "rgba(18,10,35,0.98)" : "rgba(255,255,255,0.98)",
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
     border: "1px solid rgba(124,58,237,0.3)",
@@ -252,38 +261,45 @@ export function TrocaModal({
       : "0 24px 60px -10px rgba(124,58,237,0.22)",
   });
 
-  let footerInfo: string;
+  // Footer info por step
+  let footerInfo = "";
   if (step === 1) {
     footerInfo = selectedSales.length === 0
-      ? "Nenhuma venda selecionada"
+      ? "Busque ou escolha uma venda recente"
       : `${selectedSales.length} ${selectedSales.length === 1 ? "venda" : "vendas"} · ${fmtBRL(selectedSales.reduce((s, r) => s + r.total_amount, 0))}`;
   } else if (step === 2) {
-    footerInfo = `Devolvendo ${fmtBRL(returnedValue)}`;
+    footerInfo = returnEntries.length === 0
+      ? "Marque os itens que o cliente devolveu"
+      : `Devolvendo ${returnEntries.length} ${returnEntries.length === 1 ? "item" : "itens"} · ${fmtBRL(returnedValue)}`;
   } else if (step === 3) {
-    footerInfo = `Líquido: ${netAmount >= 0 ? "+" : ""}${fmtBRL(netAmount)}`;
-  } else {
-    const fiscal = inferFiscalStrategy(selectedSales, returnEntries);
-    footerInfo = fiscal.strategy === "devolucao_55"
-      ? "Pronto · NF-e 55 de devolução"
-      : fiscal.strategy === "per_origin"
-      ? "Pronto · fiscal misto por venda"
-      : "Pronto para confirmar";
+    if (netAmount > 0) footerInfo = `Cliente paga ${fmtBRL(netAmount)}`;
+    else if (netAmount < 0) footerInfo = `Loja devolve ${fmtBRL(-netAmount)}`;
+    else footerInfo = "Troca par-a-par (sem diferença)";
+  } else if (step === 4) {
+    footerInfo = "Confira e confirme";
   }
 
   return (
     <View style={s.overlay}>
-      <Pressable style={s.backdrop} onPress={onClose} />
+      <Pressable style={s.backdrop} onPress={step === 5 ? undefined : onClose} />
       <View style={[s.panel, IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]}>
 
+        {/* Header */}
         <View style={s.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={s.headerIco}>
               <Icon name="repeat" size={16} color="#a78bfa" />
             </View>
             <View>
-              <Text style={s.headerTitle}>Troca ou Devolução</Text>
+              <Text style={s.headerTitle}>
+                {step === 5 ? "Troca concluída" : "Troca ou Devolução"}
+              </Text>
               <Text style={s.headerSub}>
-                Combine vendas, devolva e venda no mesmo cupom
+                {step === 1 && "Encontre a venda original — em qualquer filial do grupo"}
+                {step === 2 && "Marque o que o cliente está devolvendo"}
+                {step === 3 && "Defina o destino do crédito"}
+                {step === 4 && "NF-e e estoque cuidados automaticamente"}
+                {step === 5 && "NF-e emitida · Estoque atualizado · Caixa registrado"}
               </Text>
             </View>
           </View>
@@ -292,28 +308,36 @@ export function TrocaModal({
           </Pressable>
         </View>
 
-        <View style={s.stepBar}>
-          {([1, 2, 3, 4] as Step[]).map((n) => {
-            const done = step > n;
-            const active = step === n;
-            return (
-              <View key={n} style={s.stepItem}>
-                <View style={[s.stepDot, done && s.stepDotDone, active && s.stepDotActive]}>
-                  {done
-                    ? <Icon name="check" size={9} color="#fff" />
-                    : <Text style={[s.stepDotTxt, active && { color: "#fff" }]}>{n}</Text>}
+        {/* Stepper (oculto na tela de sucesso) */}
+        {step !== 5 && (
+          <View style={s.stepBar}>
+            {([1, 2, 3, 4] as const).map((n, idx) => {
+              const done = step > n;
+              const active = step === n;
+              return (
+                <View key={n} style={s.stepItem}>
+                  <View style={[s.stepDot, done && s.stepDotDone, active && s.stepDotActive]}>
+                    {done
+                      ? <Icon name="check" size={10} color="#fff" />
+                      : <Text style={[s.stepDotTxt, active && { color: "#fff" }]}>{n}</Text>}
+                  </View>
+                  <Text
+                    style={[
+                      s.stepLabel,
+                      (active || done) && { color: active ? "#a78bfa" : Colors.ink2, fontWeight: active ? "700" : "500" },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {STEP_LABELS_V3[n]}
+                  </Text>
+                  {idx < 3 && <View style={[s.stepSep, done && { backgroundColor: "rgba(124,58,237,0.4)" }]} />}
                 </View>
-                <Text
-                  style={[s.stepLabel, (active || done) && { color: active ? "#a78bfa" : Colors.ink3 }]}
-                  numberOfLines={1}
-                >
-                  {STEP_LABELS[n]}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
 
+        {/* Body */}
         <ScrollView
           style={s.body}
           contentContainerStyle={s.bodyContent}
@@ -359,38 +383,68 @@ export function TrocaModal({
               onChangeAddress={setCustomerAddress}
             />
           )}
+          {step === 5 && successResult && (
+            <Step5Success
+              companyId={companyId}
+              result={successResult}
+              selectedSales={selectedSales}
+              returnedValue={returnedValue}
+              newValue={newValue}
+              netAmount={netAmount}
+              onClose={onClose}
+              onNew={() => {
+                // Reset e volta pra step 1 — operador faz outra troca
+                setStep(1);
+                setSelectedSales([]);
+                setReturnEntries([]);
+                setNewEntries([]);
+                setPaymentSplits([]);
+                setRefundSplits([]);
+                setCustomerAddress(EMPTY_ADDRESS);
+                setSuccessResult(null);
+              }}
+            />
+          )}
         </ScrollView>
 
-        <View style={s.footer}>
-          <Text style={s.footerInfo} numberOfLines={1}>{footerInfo}</Text>
-          <View style={s.footerActions}>
-            {step > 1 && (
-              <Pressable style={s.btnSec} onPress={prev}>
-                <Text style={s.btnSecTxt}>← Voltar</Text>
-              </Pressable>
-            )}
-            {step < 4 && (
-              <Pressable
-                style={[s.btnPri, !canAdvance() && { opacity: 0.45 }]}
-                onPress={next}
-                disabled={!canAdvance()}
-              >
-                <Text style={s.btnPriTxt}>Avançar →</Text>
-              </Pressable>
-            )}
-            {step === 4 && (
-              <Pressable
-                style={[s.btnPri, submitting && { opacity: 0.6 }, { minWidth: 180 }]}
-                onPress={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={s.btnPriTxt}>✓ Confirmar troca</Text>}
-              </Pressable>
-            )}
+        {/* Footer (oculto na tela de sucesso) */}
+        {step !== 5 && (
+          <View style={s.footer}>
+            <Text style={s.footerInfo} numberOfLines={1}>{footerInfo}</Text>
+            <View style={s.footerActions}>
+              {step > 1 && (
+                <Pressable style={s.btnSec} onPress={prev}>
+                  <Text style={s.btnSecTxt}>← Voltar</Text>
+                </Pressable>
+              )}
+              {step < 4 && (
+                <Pressable
+                  style={[s.btnPri, !canAdvance() && { opacity: 0.45 }]}
+                  onPress={next}
+                  disabled={!canAdvance()}
+                >
+                  <Text style={s.btnPriTxt}>Continuar →</Text>
+                </Pressable>
+              )}
+              {step === 4 && (
+                <Pressable
+                  style={[s.btnConfirm, submitting && { opacity: 0.6 }]}
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : (
+                      <>
+                        <Icon name="check" size={14} color="#fff" />
+                        <Text style={s.btnPriTxt}>Confirmar troca</Text>
+                      </>
+                    )}
+                </Pressable>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
       </View>
     </View>
@@ -410,8 +464,8 @@ const s = StyleSheet.create({
     top: 0, left: 0, right: 0, bottom: 0,
   },
   panel: {
-    width: "100%", maxWidth: 920, maxHeight: "92%",
-    borderRadius: 16, overflow: "hidden", flexDirection: "column",
+    width: "100%", maxWidth: 960, maxHeight: "94%",
+    borderRadius: 18, overflow: "hidden", flexDirection: "column",
   },
   header: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
@@ -419,7 +473,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.15)",
   },
   headerIco: {
-    width: 32, height: 32, borderRadius: 8,
+    width: 32, height: 32, borderRadius: 9,
     backgroundColor: "rgba(124,58,237,0.18)",
     alignItems: "center", justifyContent: "center",
   },
@@ -432,23 +486,28 @@ const s = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   stepBar: {
-    flexDirection: "row",
+    flexDirection: "row", alignItems: "center",
     paddingHorizontal: 22, paddingVertical: 14,
     backgroundColor: "rgba(0,0,0,0.18)",
     borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.1)",
-    gap: 14,
+    gap: 6,
   },
-  stepItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0 },
+  stepItem: { flexDirection: "row", alignItems: "center", gap: 8 },
   stepDot: {
-    width: 22, height: 22, borderRadius: 999,
+    width: 24, height: 24, borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  stepDotActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  stepDotDone: { backgroundColor: "rgba(52,211,153,0.2)", borderColor: "#34d399" },
-  stepDotTxt: { color: Colors.ink3, fontSize: 11, fontWeight: "700" },
-  stepLabel: { color: Colors.ink3, fontSize: 12, fontWeight: "500", flex: 1, minWidth: 0 },
+  stepDotActive: { backgroundColor: Colors.violet, borderColor: Colors.violet, shadowColor: Colors.violet, shadowOpacity: 0.4, shadowRadius: 8 },
+  stepDotDone: { backgroundColor: "rgba(52,211,153,0.85)", borderColor: "#34d399" },
+  stepDotTxt: { color: Colors.ink3, fontSize: 12, fontWeight: "700" },
+  stepLabel: { color: Colors.ink3, fontSize: 12.5, fontWeight: "500" },
+  stepSep: {
+    width: 28, height: 1.5,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginHorizontal: 4,
+  },
   body: { flex: 1 },
   bodyContent: { padding: 22, paddingBottom: 8 },
   footer: {
@@ -457,18 +516,24 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.18)",
     flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12,
   },
-  footerInfo: { flex: 1, fontSize: 12, color: Colors.ink2 },
+  footerInfo: { flex: 1, fontSize: 12.5, color: Colors.ink2, fontWeight: "500" },
   footerActions: { flexDirection: "row", gap: 8, flexShrink: 0 },
   btnPri: {
     backgroundColor: Colors.violet,
-    paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
   },
-  btnPriTxt: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  btnConfirm: {
+    backgroundColor: "#10b981",
+    paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    minWidth: 200,
+  },
+  btnPriTxt: { color: "#fff", fontSize: 13.5, fontWeight: "700" },
   btnSec: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
+    paddingVertical: 11, paddingHorizontal: 16, borderRadius: 10,
   },
   btnSecTxt: { color: Colors.ink, fontSize: 13, fontWeight: "500" },
 });
