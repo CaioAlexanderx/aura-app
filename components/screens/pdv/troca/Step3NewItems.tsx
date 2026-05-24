@@ -1,704 +1,484 @@
 // ============================================================
-// AURA. — PDV · Troca v2 · Step 3 (Novos itens)
-// 3 modos de localizar produto: busca / bipe / QR code.
+// AURA. — PDV · Troca v3 · Step 3 — DESTINO DO CRÉDITO
 //
-// Comportamento por modo:
-//   - text:    input filtra catálogo on-type, clique adiciona
-//   - barcode: scanner global ativo (USB/Bluetooth);
-//              bipe → procura no catálogo por barcode/sku,
-//              acha → auto-add ao carrinho + flash visual + toast
-//              não acha → toast "código não encontrado"
-//   - qr:      input pra colar/scan QR (em desktop) ou camera (mobile);
-//              QR do produto contém EAN/SKU; mesmo lookup do barcode.
+// 24/05/2026 — Reescrito do zero pra v3.
+// Mockup: Aura/mockup_troca_v3.html (tela 3)
 //
-// REUSO: useGlobalBarcodeScanner já existe (hooks/useGlobalBarcodeScanner)
-// e foi desenhado pra ignorar foco em <input> — então só dispara quando
-// o usuário não está digitando. Quando o modo "Bipe" está ativo o input
-// fica desabilitado pra deixar o scanner livre.
+// FRICÇÃO ATACADA: operador não sabia diferença entre "trocar produto"
+// vs "devolver dinheiro" vs "deixar como crédito".
 //
-// 17/05/2026 (FASE A — UI Redesign):
-//   - Sub-componente da TrocaModal v2 (era inline antes)
-//   - Step 3 agora alinhado com Step 1 (mesma SearchModeBar)
-//   - Scanner ergonômico — operador não precisa clicar no input
+// Princípios v3:
+//   • 3 cards grandes de destino (Levar outro produto / Crédito / Dinheiro)
+//   • Default = "Levar outro produto" — caminho mais comum no varejo
+//   • Scanner sempre visível e em foco quando "Levar outro produto"
+//   • Side card com saldo financeiro vivo (crédito ↘ carrinho ↘ diferença)
 // ============================================================
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
-  View, Text, Pressable, StyleSheet, TextInput, ScrollView, Platform,
+  View, Text, TextInput, Pressable, StyleSheet,
+  ScrollView, Platform, useWindowDimensions,
 } from "react-native";
-import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
+import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
-import { SearchModeBar, STEP3_MODES, placeholderFor } from "./SearchModeBar";
-import type { NewEntry, Step3SearchMode } from "./types";
+import type { NewEntry } from "./types";
 import { fmtBRL } from "./types";
 
-const IS_WEB = Platform.OS === "web";
-
-type Product = {
-  id: string;
-  name: string;
-  price?: number;
-  barcode?: string | null;
-  sku?: string | null;
-  stock_qty?: number | null;
-  // O catálogo do PDV traz outros campos — aceitamos `any` extra.
-  [k: string]: any;
-};
-
 type Props = {
-  products: Product[];
+  products: any[];
   newEntries: NewEntry[];
   onChangeEntries: (next: NewEntry[]) => void;
-  // Resumo numérico pra exibir no rodapé interno do step (footer da modal
-  // mostra o total geral; aqui é só do step).
   returnedValue: number;
   newValue: number;
   netAmount: number;
 };
 
+type Dest = "outro" | "credito" | "dinheiro";
+
 export function Step3NewItems({
-  products,
-  newEntries,
-  onChangeEntries,
-  returnedValue,
-  newValue,
-  netAmount,
+  products, newEntries, onChangeEntries,
+  returnedValue, newValue, netAmount,
 }: Props) {
-  const [mode, setMode] = useState<Step3SearchMode>("text");
-  const [textQuery, setTextQuery] = useState("");
-  const [qrInput, setQrInput] = useState("");
+  const [dest, setDest] = useState<Dest>("outro");
+  const [query, setQuery] = useState("");
+  const [scanBuffer, setScanBuffer] = useState("");
+  const scanRef = useRef<TextInput | null>(null);
+  const { width } = useWindowDimensions();
+  const isWide = width > 880;
 
-  // Ref pro último item adicionado — usado pro "flash" visual.
-  const [flashId, setFlashId] = useState<string | null>(null);
-  const flashTimer = useRef<any>(null);
+  useEffect(() => {
+    if (dest === "outro" && scanRef.current) {
+      const t = setTimeout(() => scanRef.current?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [dest]);
 
-  // ─── Filtragem por texto (modo "text") ───────────────────────
-  const filteredProducts = useMemo(() => {
-    const q = textQuery.trim().toLowerCase();
-    if (!q) return products.slice(0, 20);
-    return products
-      .filter((p) => (p.name || "").toLowerCase().includes(q))
-      .slice(0, 20);
-  }, [products, textQuery]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = Array.isArray(products) ? products : [];
+    if (!q) return list.slice(0, 12);
+    return list.filter((p) => {
+      const name = String(p.name || p.title || "").toLowerCase();
+      const barcode = String(p.barcode || p.sku || "").toLowerCase();
+      return name.includes(q) || barcode.includes(q);
+    }).slice(0, 50);
+  }, [products, query]);
 
-  // ─── Lookup por código (barcode + qr) ────────────────────────
-  // Busca por barcode primeiro, sku como fallback. Case-insensitive.
-  function findByCode(code: string): Product | null {
-    const c = code.trim();
-    if (!c) return null;
-    const cLower = c.toLowerCase();
-    return (
-      products.find((p) => (p.barcode || "").toLowerCase() === cLower) ||
-      products.find((p) => (p.sku || "").toLowerCase() === cLower) ||
-      null
-    );
-  }
-
-  // ─── addProduct unificado ────────────────────────────────────
-  function addProduct(p: Product, via: NewEntry["addedVia"] = "search") {
+  function addProduct(p: any, via: "search" | "barcode" = "search") {
     const idx = newEntries.findIndex(
       (e) => e.product_id === p.id && !e.variant_id
     );
-    let next: NewEntry[];
     if (idx >= 0) {
-      next = newEntries.map((e, i) =>
-        i === idx ? { ...e, quantity: e.quantity + 1 } : e
-      );
+      const next = [...newEntries];
+      next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+      onChangeEntries(next);
     } else {
-      next = [
+      onChangeEntries([
         ...newEntries,
         {
           product_id: p.id,
-          variant_id: null,
           quantity: 1,
-          unit_price: p.price || 0,
-          product_name_snapshot: p.name || "",
+          unit_price: Number(p.price ?? p.unit_price ?? 0),
+          product_name_snapshot: p.name || p.title || "Produto",
           addedVia: via,
         },
-      ];
+      ]);
     }
+  }
+
+  function setQty(idx: number, qty: number) {
+    if (qty < 1) {
+      onChangeEntries(newEntries.filter((_, i) => i !== idx));
+      return;
+    }
+    const next = [...newEntries];
+    next[idx] = { ...next[idx], quantity: qty };
     onChangeEntries(next);
-
-    // Flash visual no item recém-adicionado
-    setFlashId(p.id);
-    if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlashId(null), 800);
   }
 
-  function changeQty(idx: number, delta: number) {
-    onChangeEntries(
-      newEntries.map((e, i) =>
-        i === idx ? { ...e, quantity: Math.max(1, e.quantity + delta) } : e
-      )
-    );
-  }
-
-  function removeAt(idx: number) {
+  function removeEntry(idx: number) {
     onChangeEntries(newEntries.filter((_, i) => i !== idx));
   }
 
-  // ─── Scanner global (modo "barcode") ─────────────────────────
-  // Hook ignora teclas quando foco está em <input> (ver useGlobalBarcodeScanner).
-  // No modo barcode tiramos o foco do input pra liberar o scanner.
-  useGlobalBarcodeScanner({
-    enabled: mode === "barcode",
-    minLength: 3,
-    onScan: (code) => {
-      const p = findByCode(code);
-      if (p) {
-        addProduct(p, "barcode");
-        toast.success(`Bipado: ${p.name}`);
-      } else {
-        toast.error(`Código "${code}" não encontrado no catálogo`);
-      }
-    },
-  });
-
-  // ─── QR submit (modo "qr") ───────────────────────────────────
-  // Em desktop, o operador cola/scaneia o QR no input e aperta Enter.
-  // Em mobile, idealmente abre câmera — placeholder de futuro botão.
-  function handleQrSubmit() {
-    const code = qrInput.trim();
+  function handleScanSubmit() {
+    const code = scanBuffer.trim();
     if (!code) return;
-    const p = findByCode(code);
-    if (p) {
-      addProduct(p, "qr");
-      toast.success(`QR lido: ${p.name}`);
-      setQrInput("");
+    const list = Array.isArray(products) ? products : [];
+    const found = list.find((p) =>
+      String(p.barcode || "").trim() === code ||
+      String(p.sku || "").trim() === code
+    );
+    if (found) {
+      addProduct(found, "barcode");
+      toast.success(`✓ ${found.name || found.title}`);
+      setScanBuffer("");
     } else {
-      toast.error(`QR "${code.slice(0, 12)}..." não corresponde a um produto`);
+      toast.error("Código não encontrado");
     }
   }
 
-  // ─── Limpa estado ao trocar de modo ──────────────────────────
-  useEffect(() => {
-    setTextQuery("");
-    setQrInput("");
-  }, [mode]);
-
-  // ─── Render ──────────────────────────────────────────────────
-  const sortedSelected = newEntries;
-
   return (
-    <View>
-      <Text style={s.sectionTitle}>Novos itens para o cliente</Text>
-      <Text style={s.sectionSub}>
-        Pode ficar vazio se for só devolução. Cliente pode levar quantos itens quiser.
-      </Text>
+    <View style={isWide ? s.gridWide : undefined}>
+      <View style={isWide ? { flex: 1, minWidth: 0 } : undefined}>
+        <Text style={s.question}>O que o cliente vai fazer com o crédito?</Text>
 
-      {/* Selected list */}
-      {sortedSelected.length > 0 && (
-        <View style={s.selectedBlock}>
-          <Text style={s.fieldLabel}>
-            Selecionados ({sortedSelected.length})
-          </Text>
-          {sortedSelected.map((e, idx) => {
-            const isFlash = flashId === e.product_id;
-            return (
-              <View
-                key={`${e.product_id}-${idx}`}
-                style={[s.itemRow, isFlash && s.itemRowFlash]}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={s.itemNameRow}>
-                    <Text style={s.itemName} numberOfLines={1}>
-                      {e.product_name_snapshot}
-                    </Text>
-                    {e.addedVia === "barcode" && (
-                      <View style={s.addedViaBadge}>
-                        <Icon name="barcode" size={9} color="#a78bfa" />
-                        <Text style={s.addedViaTxt}>Bipado</Text>
-                      </View>
-                    )}
-                    {e.addedVia === "qr" && (
-                      <View style={s.addedViaBadge}>
-                        <Icon name="qr_code" size={9} color="#a78bfa" />
-                        <Text style={s.addedViaTxt}>QR</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={s.itemSub}>{fmtBRL(e.unit_price)}</Text>
-                </View>
-                <View style={s.qtyRow}>
-                  <Pressable style={s.qtyBtn} onPress={() => changeQty(idx, -1)}>
-                    <Text style={s.qtyBtnTxt}>−</Text>
-                  </Pressable>
-                  <Text style={s.qtyVal}>{e.quantity}</Text>
-                  <Pressable style={s.qtyBtn} onPress={() => changeQty(idx, 1)}>
-                    <Text style={s.qtyBtnTxt}>+</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => removeAt(idx)}
-                    style={s.removeBtn}
-                    accessibilityLabel="Remover item"
-                  >
-                    <Icon name="x" size={12} color={Colors.red} />
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Mode bar — mesmo padrão visual do Step 1 */}
-      <SearchModeBar
-        mode={mode}
-        modes={STEP3_MODES}
-        onChange={setMode}
-      />
-
-      {/* Mode-specific input area */}
-      {mode === "text" && (
-        <>
-          <TextInput
-            style={s.input as any}
-            value={textQuery}
-            onChangeText={setTextQuery}
-            placeholder={placeholderFor("text", STEP3_MODES)}
-            placeholderTextColor={Colors.ink3}
-            autoFocus
+        <View style={s.destGrid}>
+          <DestCard
+            icon="shopping-bag"
+            title="Levar outro produto"
+            sub="Bipe ou escolha do estoque"
+            active={dest === "outro"}
+            onPress={() => setDest("outro")}
           />
-          <View style={{ gap: 2, marginTop: 8 }}>
-            {filteredProducts.length === 0 ? (
-              <Text style={s.emptyTxt}>
-                {textQuery.trim()
-                  ? `Nenhum produto encontrado para "${textQuery.trim()}".`
-                  : "Comece a digitar para filtrar o catálogo..."}
-              </Text>
-            ) : (
-              filteredProducts.map((p) => (
-                <Pressable
-                  key={p.id}
-                  style={s.productRow}
-                  onPress={() => addProduct(p, "search")}
-                >
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.itemName} numberOfLines={1}>
-                      {p.name}
-                    </Text>
-                    <Text style={s.itemSub}>
-                      {fmtBRL(p.price || 0)}
-                      {p.stock_qty != null ? ` · ${p.stock_qty} em estoque` : ""}
-                    </Text>
-                  </View>
-                  <View style={s.addIco}>
-                    <Icon name="plus" size={13} color={Colors.violet3} />
-                  </View>
+          <DestCard
+            icon="credit-card"
+            title="Crédito na conta"
+            sub="Cliente usa depois"
+            active={dest === "credito"}
+            onPress={() => {
+              setDest("credito");
+              if (newEntries.length > 0) onChangeEntries([]);
+            }}
+          />
+          <DestCard
+            icon="dollar-sign"
+            title="Devolver em dinheiro"
+            sub="Pix, dinheiro ou estorno"
+            active={dest === "dinheiro"}
+            onPress={() => {
+              setDest("dinheiro");
+              if (newEntries.length > 0) onChangeEntries([]);
+            }}
+          />
+        </View>
+
+        {dest === "outro" && (
+          <View>
+            <View style={s.scanner}>
+              <Icon name="barcode" size={20} color="#a78bfa" />
+              <TextInput
+                ref={scanRef}
+                value={scanBuffer}
+                onChangeText={setScanBuffer}
+                onSubmitEditing={handleScanSubmit}
+                placeholder="Bipe o código de barras…"
+                placeholderTextColor={Colors.ink3}
+                style={s.scannerInput}
+                returnKeyType="search"
+              />
+              {scanBuffer.length > 0 && (
+                <Pressable onPress={handleScanSubmit} style={s.scanSubmit}>
+                  <Text style={s.scanSubmitTxt}>Adicionar</Text>
                 </Pressable>
-              ))
+              )}
+            </View>
+
+            <View style={s.searchWrap}>
+              <Icon name="search" size={16} color={Colors.ink3} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Ou pesquise pelo nome do produto…"
+                placeholderTextColor={Colors.ink3}
+                style={s.searchInput}
+              />
+            </View>
+
+            {filtered.length > 0 && (
+              <View style={s.catalogSection}>
+                <Text style={s.sectionLabel}>
+                  {query ? "Resultados" : "Mais vendidos"}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingRight: 12 }}
+                >
+                  {filtered.map((p) => (
+                    <Pressable
+                      key={p.id}
+                      onPress={() => addProduct(p)}
+                      style={s.catCard}
+                    >
+                      <View style={s.catThumb}>
+                        <Icon name="package" size={20} color="#a78bfa" />
+                      </View>
+                      <Text style={s.catName} numberOfLines={2}>{p.name || p.title || "—"}</Text>
+                      <Text style={s.catPrice}>{fmtBRL(Number(p.price ?? p.unit_price ?? 0))}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={s.cartSection}>
+              <View style={s.cartHead}>
+                <Text style={s.sectionLabel}>Carrinho da troca</Text>
+                <Text style={s.cartCount}>
+                  {newEntries.length} {newEntries.length === 1 ? "item" : "itens"}
+                </Text>
+              </View>
+
+              {newEntries.length === 0 && (
+                <View style={s.emptyCart}>
+                  <Icon name="shopping-bag" size={24} color={Colors.ink3} />
+                  <Text style={s.emptyCartTxt}>Bipe ou escolha um produto pra começar</Text>
+                </View>
+              )}
+
+              {newEntries.map((e, idx) => (
+                <View key={`${e.product_id}-${idx}`} style={s.cartRow}>
+                  <View style={s.cartThumb}>
+                    <Icon name="package" size={14} color="#a78bfa" />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.cartName} numberOfLines={1}>
+                      {e.product_name_snapshot}
+                      {e.addedVia === "barcode" && (
+                        <Text style={s.bipedBadge}>  ✓ Bipado</Text>
+                      )}
+                    </Text>
+                    <Text style={s.cartPrice}>
+                      {fmtBRL(e.unit_price)} × {e.quantity} = {fmtBRL(e.unit_price * e.quantity)}
+                    </Text>
+                  </View>
+                  <View style={s.qty}>
+                    <Pressable onPress={() => setQty(idx, e.quantity - 1)} style={s.qtyBtn}>
+                      <Text style={s.qtyTxt}>−</Text>
+                    </Pressable>
+                    <Text style={s.qtyVal}>{e.quantity}</Text>
+                    <Pressable onPress={() => setQty(idx, e.quantity + 1)} style={s.qtyBtn}>
+                      <Text style={s.qtyTxt}>+</Text>
+                    </Pressable>
+                  </View>
+                  <Pressable onPress={() => removeEntry(idx)} style={s.removeBtn}>
+                    <Icon name="x" size={12} color="#fca5a5" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {dest === "credito" && (
+          <View style={s.altBox}>
+            <Icon name="credit-card" size={32} color="#a78bfa" />
+            <Text style={s.altTitle}>Crédito vai pra conta do cliente</Text>
+            <Text style={s.altSub}>
+              O valor de {fmtBRL(returnedValue)} fica disponível na ficha do cliente. Ele usa quando quiser, sem prazo de vencimento.
+            </Text>
+            <View style={s.altNote}>
+              <Icon name="info" size={12} color="#93c5fd" />
+              <Text style={s.altNoteTxt}>
+                Cliente cadastrado é obrigatório pro crédito. Se ele não tem cadastro, ofereça "devolver em dinheiro".
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {dest === "dinheiro" && (
+          <View style={s.altBox}>
+            <Icon name="dollar-sign" size={32} color="#10b981" />
+            <Text style={s.altTitle}>Devolução em dinheiro</Text>
+            <Text style={s.altSub}>
+              Valor de {fmtBRL(returnedValue)} sai do caixa e volta pro cliente. Escolha a forma na próxima tela.
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={isWide ? s.sideRail : { marginTop: 18 }}>
+        <View style={s.creditCard}>
+          <Text style={s.creditLabel}>CRÉDITO DISPONÍVEL</Text>
+          <Text style={s.creditValue}>{fmtBRL(returnedValue)}</Text>
+          <Text style={s.creditMeta}>Da venda original</Text>
+          <View style={s.creditDivider} />
+          <View style={s.creditRow}>
+            <Text style={s.creditRowLabel}>Carrinho</Text>
+            <Text style={s.creditRowValue}>{fmtBRL(newValue)}</Text>
+          </View>
+          <View style={s.creditRow}>
+            <Text style={s.creditRowLabel}>− Crédito</Text>
+            <Text style={s.creditRowValue}>− {fmtBRL(returnedValue)}</Text>
+          </View>
+          <View style={[s.creditRow, s.creditBalance]}>
+            {netAmount > 0 ? (
+              <>
+                <Text style={[s.creditBalanceLabel, { color: "#fef3c7" }]}>Cliente paga</Text>
+                <Text style={[s.creditBalanceValue, { color: "#fde68a" }]}>{fmtBRL(netAmount)}</Text>
+              </>
+            ) : netAmount < 0 ? (
+              <>
+                <Text style={[s.creditBalanceLabel, { color: "#a7f3d0" }]}>Loja devolve</Text>
+                <Text style={[s.creditBalanceValue, { color: "#bbf7d0" }]}>{fmtBRL(-netAmount)}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[s.creditBalanceLabel, { color: "#e9d5ff" }]}>Sem diferença</Text>
+                <Text style={[s.creditBalanceValue, { color: "#e9d5ff" }]}>{fmtBRL(0)}</Text>
+              </>
             )}
           </View>
-        </>
-      )}
-
-      {mode === "barcode" && (
-        <View style={s.scannerArea}>
-          <View style={s.scannerIco}>
-            <Icon name="barcode" size={28} color="#a78bfa" />
-          </View>
-          <Text style={s.scannerTitle}>Scanner ativo — bipe agora</Text>
-          <Text style={s.scannerSub}>
-            {placeholderFor("barcode", STEP3_MODES)}
-          </Text>
-          <Text style={s.scannerHint}>
-            Funciona com leitores USB e Bluetooth. O produto entra automaticamente no carrinho.
-          </Text>
-          <View style={s.scannerPulse}>
-            <View style={s.pulseDot} />
-            <Text style={s.pulseTxt}>Aguardando leitura...</Text>
-          </View>
-        </View>
-      )}
-
-      {mode === "qr" && (
-        <View>
-          <View style={s.qrHelper}>
-            <View style={s.qrHelperIco}>
-              <Icon name="qr_code" size={20} color="#a78bfa" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.qrHelperTitle}>Leitura por QR Code</Text>
-              <Text style={s.qrHelperSub}>
-                {IS_WEB
-                  ? "Cole o conteúdo do QR ou use um leitor USB de QR/datamatrix."
-                  : "Em breve: abrir câmera. Por enquanto, cole o código abaixo."}
-              </Text>
-            </View>
-          </View>
-
-          <View style={s.qrInputRow}>
-            <TextInput
-              style={[s.input, { flex: 1 }] as any}
-              value={qrInput}
-              onChangeText={setQrInput}
-              placeholder={placeholderFor("qr", STEP3_MODES)}
-              placeholderTextColor={Colors.ink3}
-              onSubmitEditing={handleQrSubmit}
-              returnKeyType="search"
-            />
-            <Pressable
-              style={[s.qrSubmit, !qrInput.trim() && { opacity: 0.45 }]}
-              onPress={handleQrSubmit}
-              disabled={!qrInput.trim()}
-            >
-              <Icon name="check" size={14} color="#fff" />
-              <Text style={s.qrSubmitTxt}>Adicionar</Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-
-      {/* Mini-resumo do step (line totals) */}
-      <View style={s.stepFooter}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.footerLine}>
-            Devolvendo: <Text style={s.footerVal}>{fmtBRL(returnedValue)}</Text>
-          </Text>
-          <Text style={s.footerLine}>
-            Novos:{" "}
-            <Text style={[s.footerVal, { color: "#34d399" }]}>
-              {fmtBRL(newValue)}
-            </Text>
-          </Text>
-        </View>
-        <View>
-          <Text style={s.footerNetLabel}>
-            {netAmount > 0
-              ? "Cliente paga"
-              : netAmount < 0
-              ? "Loja devolve"
-              : "Valor igual"}
-          </Text>
-          <Text
-            style={[
-              s.footerNetVal,
-              {
-                color:
-                  netAmount > 0
-                    ? "#34d399"
-                    : netAmount < 0
-                    ? Colors.red
-                    : Colors.ink2,
-              },
-            ]}
-          >
-            {netAmount === 0 ? fmtBRL(0) : (netAmount > 0 ? "+" : "") + fmtBRL(netAmount)}
-          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────
+function DestCard({
+  icon, title, sub, active, onPress,
+}: {
+  icon: string; title: string; sub: string; active: boolean; onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[s.destCard, active && s.destCardActive]}>
+      <View style={[s.destIcon, active && s.destIconActive]}>
+        <Icon name={icon as any} size={22} color={active ? "#fff" : "#a78bfa"} />
+      </View>
+      <Text style={s.destTitle}>{title}</Text>
+      <Text style={s.destSub}>{sub}</Text>
+    </Pressable>
+  );
+}
+
 const s = StyleSheet.create({
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: Colors.ink,
-    marginBottom: 2,
-    letterSpacing: -0.2,
+  gridWide: { flexDirection: "row", gap: 18, alignItems: "flex-start" },
+  sideRail: { width: 280, flexShrink: 0 },
+  question: { fontSize: 13, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 },
+  destGrid: { flexDirection: "row", gap: 10, marginBottom: 18 },
+  destCard: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 12, padding: 14,
+    alignItems: "center", gap: 8,
   },
-  sectionSub: {
-    fontSize: 12,
-    color: Colors.ink3,
-    marginBottom: 14,
+  destCardActive: {
+    backgroundColor: "rgba(124,58,237,0.14)",
+    borderColor: Colors.violet,
   },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: Colors.ink3,
+  destIcon: {
+    width: 48, height: 48, borderRadius: 12,
+    backgroundColor: "rgba(124,58,237,0.15)",
+    alignItems: "center", justifyContent: "center",
+  },
+  destIconActive: { backgroundColor: Colors.violet },
+  destTitle: { color: Colors.ink, fontSize: 13.5, fontWeight: "700", textAlign: "center" },
+  destSub: { color: Colors.ink3, fontSize: 11.5, textAlign: "center" },
+  scanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "rgba(124,58,237,0.08)",
+    borderWidth: 2, borderColor: "rgba(124,58,237,0.3)", borderStyle: Platform.OS === "web" ? ("dashed" as any) : "solid",
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+  },
+  scannerInput: { flex: 1, color: Colors.ink, fontSize: 15, fontWeight: "500" },
+  scanSubmit: {
+    backgroundColor: Colors.violet,
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
+  },
+  scanSubmitTxt: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  searchWrap: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    marginTop: 10,
+  },
+  searchInput: { flex: 1, color: Colors.ink, fontSize: 13.5 },
+  catalogSection: { marginTop: 16 },
+  sectionLabel: {
+    fontSize: 11, color: Colors.ink3, fontWeight: "700",
+    textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10,
+  },
+  catCard: {
+    width: 130,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 10, padding: 10,
+  },
+  catThumb: {
+    width: "100%", aspectRatio: 1.2, borderRadius: 8,
+    backgroundColor: "rgba(124,58,237,0.1)",
+    alignItems: "center", justifyContent: "center",
     marginBottom: 8,
   },
-
-  // Selected list
-  selectedBlock: {
-    marginBottom: 14,
+  catName: { color: Colors.ink, fontSize: 12, fontWeight: "600", minHeight: 32 },
+  catPrice: { color: "#a78bfa", fontSize: 12.5, fontWeight: "700", marginTop: 4 },
+  cartSection: { marginTop: 18 },
+  cartHead: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    marginBottom: 10,
   },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  cartCount: { fontSize: 11.5, color: Colors.ink3, fontWeight: "600" },
+  emptyCart: {
+    alignItems: "center", paddingVertical: 22, gap: 8,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderRadius: 10, borderStyle: Platform.OS === "web" ? ("dashed" as any) : "solid",
+  },
+  emptyCartTxt: { color: Colors.ink3, fontSize: 12.5 },
+  cartRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: IS_DARK_MODE
-      ? "rgba(255,255,255,0.025)"
-      : "rgba(0,0,0,0.02)",
-    borderWidth: 1,
-    borderColor: IS_DARK_MODE
-      ? "rgba(255,255,255,0.06)"
-      : "rgba(0,0,0,0.05)",
-    borderRadius: 9,
-    marginBottom: 6,
+    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)",
   },
-  itemRowFlash: {
+  cartThumb: {
+    width: 32, height: 32, borderRadius: 7,
     backgroundColor: "rgba(124,58,237,0.12)",
-    borderColor: "rgba(124,58,237,0.4)",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  itemNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  itemName: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: Colors.ink,
-    flexShrink: 1,
-  },
-  itemSub: {
-    fontSize: 11,
-    color: Colors.ink3,
-    marginTop: 2,
-  },
-  addedViaBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(167,139,250,0.15)",
-    borderColor: "rgba(167,139,250,0.3)",
-    borderWidth: 1,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  addedViaTxt: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: "#a78bfa",
-    letterSpacing: 0.3,
-  },
-
-  // Qty controls
-  qtyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexShrink: 0,
+  cartName: { color: Colors.ink, fontSize: 13.5, fontWeight: "600" },
+  bipedBadge: { color: "#10b981", fontSize: 11, fontWeight: "700" },
+  cartPrice: { color: Colors.ink3, fontSize: 11.5, marginTop: 2 },
+  qty: {
+    flexDirection: "row", alignItems: "center",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 7, overflow: "hidden",
   },
   qtyBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 26, height: 26, alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
-  qtyBtnTxt: {
-    color: Colors.ink,
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 16,
-  },
-  qtyVal: {
-    minWidth: 22,
-    textAlign: "center",
-    color: Colors.violet3,
-    fontSize: 13,
-    fontWeight: "700",
-  },
+  qtyTxt: { color: Colors.ink, fontSize: 14, fontWeight: "700" },
+  qtyVal: { color: Colors.ink, fontSize: 12.5, fontWeight: "700", minWidth: 28, textAlign: "center" },
   removeBtn: {
-    marginLeft: 2,
-    padding: 4,
-    borderRadius: 6,
+    width: 26, height: 26, borderRadius: 6,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    alignItems: "center", justifyContent: "center",
   },
-
-  // Input
-  input: {
-    backgroundColor: Glass.bgInput,
-    borderWidth: 1,
-    borderColor: Glass.bgInputBorder,
-    color: Colors.ink,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 9,
-    fontSize: 13,
+  altBox: {
+    alignItems: "center", paddingVertical: 28, gap: 8,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderRadius: 12, paddingHorizontal: 18,
   },
-
-  // Catalog rows
-  productRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 9,
+  altTitle: { color: Colors.ink, fontSize: 16, fontWeight: "700" },
+  altSub: { color: Colors.ink2, fontSize: 13, textAlign: "center", maxWidth: 380 },
+  altNote: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "rgba(37,99,235,0.12)",
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+    marginTop: 8,
   },
-  addIco: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    backgroundColor: "rgba(124,58,237,0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // Scanner area (barcode mode)
-  scannerArea: {
-    alignItems: "center",
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-    backgroundColor: "rgba(124,58,237,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.25)",
-    borderRadius: 14,
-    borderStyle: "dashed",
-  },
-  scannerIco: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+  altNoteTxt: { color: "#93c5fd", fontSize: 11.5, maxWidth: 360 },
+  creditCard: {
     backgroundColor: "rgba(124,58,237,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
+    borderWidth: 1, borderColor: "rgba(167,139,250,0.35)",
+    borderRadius: 14, padding: 16,
   },
-  scannerTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: Colors.ink,
-    marginBottom: 4,
+  creditLabel: { color: "#c4b5fd", fontSize: 10.5, fontWeight: "700", letterSpacing: 0.8 },
+  creditValue: { color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: -0.4, marginTop: 4 },
+  creditMeta: { color: "#a78bfa", fontSize: 11.5, marginTop: 2 },
+  creditDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginVertical: 12 },
+  creditRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
+  creditRowLabel: { color: "#ddd6fe", fontSize: 12.5 },
+  creditRowValue: { color: "#fff", fontSize: 12.5, fontWeight: "600" },
+  creditBalance: {
+    marginTop: 8, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)",
   },
-  scannerSub: {
-    fontSize: 12,
-    color: Colors.ink2,
-    textAlign: "center",
-    marginBottom: 6,
-  },
-  scannerHint: {
-    fontSize: 11,
-    color: Colors.ink3,
-    textAlign: "center",
-    fontStyle: "italic",
-  },
-  scannerPulse: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "rgba(167,139,250,0.1)",
-  },
-  pulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#a78bfa",
-    // (animação CSS-pulse só funciona via web — em native fica estático)
-  },
-  pulseTxt: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#a78bfa",
-    letterSpacing: 0.3,
-  },
-
-  // QR mode helpers
-  qrHelper: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: "rgba(124,58,237,0.06)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.2)",
-    alignItems: "center",
-  },
-  qrHelperIco: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    backgroundColor: "rgba(167,139,250,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  qrHelperTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: Colors.ink,
-  },
-  qrHelperSub: {
-    fontSize: 11,
-    color: Colors.ink3,
-    marginTop: 2,
-  },
-  qrInputRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  qrSubmit: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.violet,
-    borderRadius: 9,
-  },
-  qrSubmitTxt: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Empty
-  emptyTxt: {
-    color: Colors.ink3,
-    fontSize: 12,
-    fontStyle: "italic",
-    textAlign: "center",
-    paddingVertical: 16,
-  },
-
-  // Step footer (mini-resumo)
-  stepFooter: {
-    marginTop: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "rgba(0,0,0,0.15)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.04)",
-  },
-  footerLine: {
-    fontSize: 12,
-    color: Colors.ink3,
-    marginBottom: 2,
-  },
-  footerVal: {
-    color: Colors.ink,
-    fontWeight: "600",
-  },
-  footerNetLabel: {
-    fontSize: 10,
-    color: Colors.ink3,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    fontWeight: "600",
-    textAlign: "right",
-  },
-  footerNetVal: {
-    fontSize: 18,
-    fontWeight: "800",
-    marginTop: 2,
-    textAlign: "right",
-    letterSpacing: -0.3,
-  },
+  creditBalanceLabel: { fontSize: 13, fontWeight: "700" },
+  creditBalanceValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.2 },
 });
 
 export default Step3NewItems;
