@@ -1,45 +1,66 @@
 // ============================================================
 // AURA STUDIO · StudioWorkflow (wrapper canônico de wizards)
 //
+// 25/05 hotfix: removida dep @react-native-async-storage/async-storage
+//               que não estava no package.json (build CF Pages quebrava).
+//               Substituído por draftStore: localStorage no web,
+//               no-op no mobile (rascunho é só conveniência, não crítico).
+//
 // Aplicar SÓ em features Studio-específicas (NÃO em listagens, home,
 // gestão genérica). Ver BACKLOG_AURA_STUDIO.md seção "Workflow-first".
-//
-// Features que usam:
-//   - Fase 1: Configurar produto personalizável (4 passos)
-//   - Fase 2: Subir template galeria (4 passos)
-//   - Fase 5: Solicitar aprovação de arte via wa.me (3 passos)
-//   - Fase 6: Criar pedido em massa pra evento (5 passos)
-//
-// Features que NÃO usam:
-//   - Home /studio (dashboard playful)
-//   - Listagens (produtos, pedidos, galeria, insumos)
-//   - Gestão (Financeiro, NF-e, Contabilidade)
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
   View, Text, Pressable, StyleSheet, ScrollView,
-  ActivityIndicator,
+  ActivityIndicator, Platform,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
 
 type Props = {
   title: string;
-  steps: string[];               // ex: ["Área", "Campos", "Preview", "Salvar"]
-  current: number;               // 1-based index
+  steps: string[];
+  current: number;
   onBack?: () => void;
   onNext?: () => void;
   onConcluir?: () => Promise<void> | void;
-  primaryCta?: string;           // "Continuar" no meio, "Concluir" no fim
+  primaryCta?: string;
   primaryDisabled?: boolean;
-  draftKey?: string;             // se setado, salva o draft passado em saveDraft()
-  draft?: any;                   // payload pra persistir em cada passo
-  onDraftRestored?: (draft: any) => void; // chamado se houver draft salvo
+  draftKey?: string;
+  draft?: any;
+  onDraftRestored?: (draft: any) => void;
   children: React.ReactNode;
 };
 
 const DRAFT_PREFIX = "studio_workflow_draft__";
+
+// ─── Storage helper sem dep externa ──────────────────────────
+// Web: localStorage. Mobile: no-op (drafts são opcionais).
+// Tudo encapsulado pra não quebrar SSR/build se window/localStorage ausentes.
+const draftStore = {
+  setItem(key: string, value: string): void {
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem(key, value);
+      }
+    } catch (_) { /* quota / privacy mode → ignora */ }
+  },
+  getItem(key: string): string | null {
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+        return window.localStorage.getItem(key);
+      }
+    } catch (_) {}
+    return null;
+  },
+  removeItem(key: string): void {
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
+    } catch (_) {}
+  },
+};
 
 export function StudioWorkflow({
   title, steps, current,
@@ -56,23 +77,22 @@ export function StudioWorkflow({
   // ─── Auto-save draft ───────────────────────────────────────
   useEffect(() => {
     if (!draftKey || draft === undefined) return;
-    AsyncStorage.setItem(DRAFT_PREFIX + draftKey, JSON.stringify(draft)).catch(() => {});
+    draftStore.setItem(DRAFT_PREFIX + draftKey, JSON.stringify(draft));
   }, [draftKey, draft]);
 
   // ─── Restaurar draft no mount ──────────────────────────────
   useEffect(() => {
     if (!draftKey || !onDraftRestored) return;
-    AsyncStorage.getItem(DRAFT_PREFIX + draftKey).then((raw) => {
-      if (raw) {
-        try { onDraftRestored(JSON.parse(raw)); } catch (_) {}
-      }
-    }).catch(() => {});
+    const raw = draftStore.getItem(DRAFT_PREFIX + draftKey);
+    if (raw) {
+      try { onDraftRestored(JSON.parse(raw)); } catch (_) {}
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
   const clearDraft = useCallback(() => {
     if (!draftKey) return;
-    AsyncStorage.removeItem(DRAFT_PREFIX + draftKey).catch(() => {});
+    draftStore.removeItem(DRAFT_PREFIX + draftKey);
   }, [draftKey]);
 
   async function handlePrimary() {
@@ -91,7 +111,6 @@ export function StudioWorkflow({
 
   return (
     <View style={s.wrap}>
-      {/* ───── Header ───── */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <Text style={s.eyebrow}>
@@ -99,7 +118,7 @@ export function StudioWorkflow({
           </Text>
           <Text style={s.title}>{title}</Text>
         </View>
-        {draftKey && (
+        {draftKey && Platform.OS === "web" && (
           <View style={s.draftChip}>
             <View style={s.draftDot} />
             <Text style={s.draftTxt}>Salvando rascunho</Text>
@@ -107,7 +126,6 @@ export function StudioWorkflow({
         )}
       </View>
 
-      {/* ───── Stepper ───── */}
       <View style={s.stepper}>
         {steps.map((label, i) => {
           const idx = i + 1;
@@ -138,12 +156,10 @@ export function StudioWorkflow({
         })}
       </View>
 
-      {/* ───── Conteúdo ───── */}
       <ScrollView style={s.body} contentContainerStyle={{ padding: 24, paddingBottom: 8 }}>
         {children}
       </ScrollView>
 
-      {/* ───── Footer ───── */}
       <View style={s.footer}>
         {current > 1 && onBack ? (
           <Pressable style={s.btnSec} onPress={onBack}>
