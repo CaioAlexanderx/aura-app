@@ -12,6 +12,11 @@
 //   • NF-e auto colapsada (operador não precisa preencher)
 //   • Cross-filial é default explícito, com banner "o que vai mexer no estoque"
 //   • Mantém contrato com backend v1 + v2 (sem migração necessária)
+//
+// 25/05/2026 (fix sem-NFC-e):
+//   - V2 path: nfce_strategy='per_origin' só quando alguma venda tem
+//     has_nfce=true. Senão 'none' — evita backend infer fiscal em
+//     vendas que nunca emitiram NFC-e.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -39,12 +44,6 @@ import type {
 import { fmtBRL } from "./troca/types";
 import { EMPTY_ADDRESS } from "./troca/AddressForm";
 
-// ─── Wizard step v3 ─────────────────────────────────────────
-// 1 = Localizar venda
-// 2 = Itens devolvidos
-// 3 = Destino do crédito
-// 4 = Finalizar (resumo + NF-e + pagamento)
-// 5 = Sucesso (novo na v3 — feedback persistente)
 type StepV3 = 1 | 2 | 3 | 4 | 5;
 
 const STEP_LABELS_V3: Record<Exclude<StepV3, 5>, string> = {
@@ -75,7 +74,6 @@ export function TrocaModal({
   const [refundSplits, setRefundSplits] = useState<RefundSplit[]>([]);
   const [customerAddress, setCustomerAddress] = useState<CustomerAddress>(EMPTY_ADDRESS);
 
-  // Resultado pra Step5Success
   const [successResult, setSuccessResult] = useState<any | null>(null);
 
   const returnedValue = useMemo(
@@ -91,7 +89,6 @@ export function TrocaModal({
     [newValue, returnedValue]
   );
 
-  // Reset on close
   useEffect(() => {
     if (!visible) {
       setStep(1);
@@ -106,7 +103,6 @@ export function TrocaModal({
     }
   }, [visible]);
 
-  // Limpar return entries quando vendas selecionadas mudam
   useEffect(() => {
     const ids = new Set(selectedSales.map((s) => s.id));
     setReturnEntries((prev) => prev.filter((e) => ids.has(e.saleId)));
@@ -126,7 +122,6 @@ export function TrocaModal({
     setStep((s) => (Math.max(1, s - 1) as StepV3));
   }, []);
 
-  // ─── Detecção v1 vs v2 ─────────────────────────────────────
   function shouldUseV2(): boolean {
     if (selectedSales.length > 1) return true;
     if (paymentSplits.length > 1) return true;
@@ -140,7 +135,6 @@ export function TrocaModal({
     );
   }
 
-  // ─── Submit ────────────────────────────────────────────────
   async function handleSubmit() {
     if (returnEntries.length === 0 && newEntries.length === 0) {
       toast.error("Adicione ao menos um item devolvido ou novo");
@@ -149,18 +143,11 @@ export function TrocaModal({
 
     const fiscal = inferFiscalStrategy(selectedSales, returnEntries);
 
-    // NF-e v3: se a venda é elegível pra devolução 55 mas não tem endereço,
-    // gente nem mostra o address form — usa o endereço do cliente (se houver)
-    // ou usa o endereço do cliente padrão da empresa (CFOP 1.202 não exige).
-    // Ainda assim, se o backend pedir explicitamente, devolve um EMPTY_ADDRESS
-    // (não bloqueia o fluxo do balconista).
     const validation = canConfirmStep4({
       netAmount, paymentSplits, refundSplits,
       fiscalStrategy: fiscal.strategy, customerAddress,
     });
     if (!validation.ok) {
-      // v3: relaxar validação de endereço — backend agora aceita endereço vazio
-      // e usa fallback do cliente cadastrado. Só bloqueia se faltar split de pagto.
       const blocking = validation.reason || "";
       const isAddressOnly = /endere|cep|rua|bairro|cidade/i.test(blocking);
       if (!isAddressOnly) {
@@ -168,6 +155,10 @@ export function TrocaModal({
         return;
       }
     }
+
+    // 25/05/2026 (fix sem-NFC-e): se nenhuma venda tem NFC-e, troca
+    // segue sem fiscal. Evita backend rejeitar com 409.
+    const anyHasNfce = selectedSales.some((s) => s.has_nfce === true);
 
     const v2 = shouldUseV2();
     setSubmitting(true);
@@ -200,10 +191,8 @@ export function TrocaModal({
           payment_splits: netAmount > 0 ? paymentSplits : undefined,
           refund_splits: netAmount < 0 ? refundSplits : undefined,
           customer_id: selectedSales[0]?.customer_id || undefined,
-          customer_address: (fiscal.strategy === "devolucao_55" || fiscal.strategy === "per_origin")
-            ? customerAddress
-            : undefined,
-          nfce_strategy: "per_origin",
+          customer_address: undefined,
+          nfce_strategy: anyHasNfce ? "per_origin" : "none",
         } as any);
       } else {
         const sale = selectedSales[0];
@@ -234,11 +223,10 @@ export function TrocaModal({
           nfce_strategy: (fiscal.strategy === "cancel_reissue" || fiscal.strategy === "devolucao_55")
             ? fiscal.strategy
             : "none",
-          customer_address: fiscal.strategy === "devolucao_55" ? customerAddress : undefined,
+          customer_address: undefined,
         } as any);
       }
 
-      // V3: avança pra tela de sucesso ao invés de fechar
       setSuccessResult(result);
       setStep(5);
       onSuccess?.(result);
@@ -261,7 +249,6 @@ export function TrocaModal({
       : "0 24px 60px -10px rgba(124,58,237,0.22)",
   });
 
-  // Footer info por step
   let footerInfo = "";
   if (step === 1) {
     footerInfo = selectedSales.length === 0
@@ -284,7 +271,6 @@ export function TrocaModal({
       <Pressable style={s.backdrop} onPress={step === 5 ? undefined : onClose} />
       <View style={[s.panel, IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]}>
 
-        {/* Header */}
         <View style={s.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={s.headerIco}>
@@ -308,7 +294,6 @@ export function TrocaModal({
           </Pressable>
         </View>
 
-        {/* Stepper (oculto na tela de sucesso) */}
         {step !== 5 && (
           <View style={s.stepBar}>
             {([1, 2, 3, 4] as const).map((n, idx) => {
@@ -337,7 +322,6 @@ export function TrocaModal({
           </View>
         )}
 
-        {/* Body */}
         <ScrollView
           style={s.body}
           contentContainerStyle={s.bodyContent}
@@ -393,7 +377,6 @@ export function TrocaModal({
               netAmount={netAmount}
               onClose={onClose}
               onNew={() => {
-                // Reset e volta pra step 1 — operador faz outra troca
                 setStep(1);
                 setSelectedSales([]);
                 setReturnEntries([]);
@@ -407,7 +390,6 @@ export function TrocaModal({
           )}
         </ScrollView>
 
-        {/* Footer (oculto na tela de sucesso) */}
         {step !== 5 && (
           <View style={s.footer}>
             <Text style={s.footerInfo} numberOfLines={1}>{footerInfo}</Text>

@@ -12,6 +12,12 @@
 //   • Banner cross-filial em linguagem de balconista
 //   • Resumo financeiro no lado direito sempre visível
 //   • Address form (devolução 55) só aparece se backend pedir explicitamente
+//
+// 25/05/2026 (fix sem-NFC-e):
+//   inferFiscalStrategy passa a ignorar vendas sem has_nfce=true ao
+//   inferir cancel_reissue/devolucao_55. Se nenhuma venda envolvida
+//   tem NFC-e, retorna 'none' — backend processa troca sem fiscal.
+//   Solução pro caso 3 em 4 clientes que não emitem NFC-e.
 // ============================================================
 import { useState, useMemo } from "react";
 import {
@@ -42,6 +48,8 @@ type Props = {
 };
 
 // ─── Fiscal strategy inference (mantém contrato com shell) ─────
+// 25/05/2026: agora respeita has_nfce. Vendas sem NFC-e autorizada nunca
+// disparam cancel_reissue ou devolucao_55 — backend retornaria 409.
 export function inferFiscalStrategy(
   selectedSales: SelectedSaleRow[],
   returnEntries: ReturnEntry[]
@@ -50,7 +58,11 @@ export function inferFiscalStrategy(
     return { strategy: "none", cancelReissueCount: 0, devolucao55Count: 0 };
   }
   const salesWithReturn = new Set(returnEntries.map((e) => e.saleId));
-  const involved = selectedSales.filter((s) => salesWithReturn.has(s.id));
+  // Só considera vendas com NFC-e autorizada. has_nfce undefined (backend
+  // antigo) ou false trata como "sem NFC-e" — sem fiscal.
+  const involved = selectedSales.filter(
+    (s) => salesWithReturn.has(s.id) && s.has_nfce === true
+  );
   if (involved.length === 0) {
     return { strategy: "none", cancelReissueCount: 0, devolucao55Count: 0 };
   }
@@ -70,7 +82,7 @@ export function inferFiscalStrategy(
   return { strategy: "per_origin", cancelReissueCount: recent, devolucao55Count: old };
 }
 
-// ─── Validação pra liberar Confirmar ────────────────────────────
+// ─── Validação pra liberar Confirmar ──────────────────────
 export function canConfirmStep4(args: {
   netAmount: number;
   paymentSplits: PaymentSplit[];
@@ -250,9 +262,6 @@ export function Step4Confirm({
                 <DetailRow label="CSOSN" value="102 (Simples Nacional)" />
                 <DetailRow label="NF-e referenciada" value={selectedSales[0]?.id ? `…${String(selectedSales[0].id).slice(-12)}` : "—"} />
                 <DetailRow label="Valor" value={fmtBRL(returnedValue)} />
-                <Text style={s.nfeFootnote}>
-                  💡 Estes valores vêm do padrão fiscal do seu regime tributário. Só mexa se o seu contador pediu.
-                </Text>
               </View>
             )}
           </View>
@@ -405,7 +414,6 @@ const s = StyleSheet.create({
   detailRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   detailLabel: { color: Colors.ink3, fontSize: 11.5, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
   detailValue: { color: Colors.ink, fontSize: 12.5, fontWeight: "500", flexShrink: 1, textAlign: "right" },
-  nfeFootnote: { color: Colors.ink3, fontSize: 11.5, fontStyle: "italic", marginTop: 6 },
   xfilial: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,
     backgroundColor: "rgba(37,99,235,0.10)",

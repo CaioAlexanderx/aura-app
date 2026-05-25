@@ -15,6 +15,10 @@
 // searchSalesByProductBarcode pra Step1Search bipar item devolvido
 // e puxar vendas recentes do grupo com aquele produto/variant.
 //
+// 25/05/2026 (fix sem-NFC-e): SaleForTroca ganha has_nfce?: boolean
+// pra inferFiscalStrategy não tentar cancel_reissue/devolucao_55 em
+// venda sem NFC-e original (causaria 409 no backend).
+//
 // Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx
 // ============================================================
 import { request } from "./api";
@@ -154,6 +158,10 @@ export type SaleForTroca = {
   seller_id: string | null;
   seller_name: string | null;
   is_cross_filial: boolean;
+  // 25/05/2026 (fix sem-NFC-e): undefined em backend antigo — tratar como false.
+  // Quando true, frontend pode inferir cancel_reissue/devolucao_55. Quando
+  // false/undefined, troca segue sem fiscal (nfce_strategy='none').
+  has_nfce?: boolean;
   item_count: number;
   items: SaleForTrocaItem[];
 };
