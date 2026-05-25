@@ -4,7 +4,10 @@
 //
 // Gates (ordem):
 //   1. isHydrated — espera auth carregar do storage
-//   2. plan === expansao OU is_staff — vertical é Expansão+
+//   2. plan ∈ {negocio, expansao, personalizado} OU module_overrides.studio
+//      OU is_staff — vertical disponível em Negócio+ (decisão 25/05/2026
+//      caso Sheid Mania); module_overrides honra padrão canônico de gates
+//      (memory arquitetura_module_overrides)
 //   3. pdv_settings.studio_enabled === true OU is_staff — toggle ligado
 //
 // Quem não passa: EmptyState pra ativar / pra contratar plano.
@@ -23,9 +26,18 @@ export default function StudioLayout() {
 
   if (!isHydrated) return null;
 
-  // Hard guard: empresa precisa de plano Expansão+ (igual gate do backend)
+  // Hard guard: plano apto OU module_overrides liberado OU staff
+  // 25/05/2026: Studio passou a ser Negocio+ (antes era Expansao+).
+  // module_overrides.studio === true permite liberacao manual via Gestao Aura
+  // mesmo pra clientes em Essencial (padrao canonico — memory arquitetura_module_overrides).
   const plan = (company as any)?.plan;
-  const planOk = plan === "expansao" || plan === "personalizado" || Boolean(user?.is_staff);
+  const moduleOverrides = (company as any)?.module_overrides || {};
+  const planOk =
+    plan === "negocio" ||
+    plan === "expansao" ||
+    plan === "personalizado" ||
+    moduleOverrides.studio === true ||
+    Boolean(user?.is_staff);
   if (!planOk) return <Redirect href="/(tabs)" />;
 
   // Toggle ligado? (defensivo — settings ainda carregando libera, igual food)
