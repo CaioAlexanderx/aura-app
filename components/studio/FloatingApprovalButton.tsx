@@ -1,25 +1,22 @@
 /**
  * FloatingApprovalButton — item #2 da análise UX/UI.
  *
- * Atalho global pra "Solicitar aprovação ao cliente" sem ter que entrar manualmente
- * na coluna KDS. Aparece em todas as telas Studio (montado no shell) e leva direto
- * à tela de Produção filtrada por "Aguardando arte", abrindo o ApprovalRequestModal
- * automaticamente assim que o lojista clica em um card.
+ * 25/05 hotfix: substituído `Send` do lucide-react-native pelo Icon canônico.
+ * lucide não é dep do projeto e quebrava o build CF Pages.
  *
- * Mantemos a UX simples: sem fetch direto aqui (evita acoplar a hook de company).
- * Toda a lógica de listar pedidos vive em /studio/producao.
+ * Atalho global pra "Solicitar aprovação ao cliente" sem ter que entrar manualmente
+ * na coluna KDS. Leva direto à tela de Produção filtrada por intent=approval.
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Send } from 'lucide-react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { Icon } from '@/components/Icon';
 import { StudioColors } from '../../constants/studio-tokens';
 
 export function FloatingApprovalButton() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Esconde nas telas onde o botão duplica ação visível (produção e aprovação pública).
   if (pathname?.includes('/studio/producao')) return null;
   if (pathname?.startsWith('/aprovacao/')) return null;
 
@@ -30,7 +27,7 @@ export function FloatingApprovalButton() {
       accessibilityLabel="Solicitar aprovação de arte ao cliente"
     >
       <View style={[styles.fabInner, { backgroundColor: StudioColors.accent }]}>
-        <Send size={22} color="#fff" />
+        <Icon name="message" size={22} color="#fff" />
       </View>
       <Text style={styles.fabLabel}>Aprovar arte</Text>
     </Pressable>
