@@ -26,7 +26,8 @@ import {
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { IS_WIDE, Field, cs } from "./shared";
+import { IS_WIDE, Field, useChannelStyles } from "./shared";
+import { useAccent } from "@/contexts/AccentTheme";
 
 // Narrow mode: phones estreitas (<480px) precisam stack do mode-grid
 const NARROW = Dimensions.get("window").width < 480;
@@ -151,6 +152,9 @@ type Props = {
 };
 
 export function TabEntrega({ config, saveConfig, isSaving }: Props) {
+  const cs = useChannelStyles();
+  const accent = useAccent();
+
   // --- State ----------------------------------------------------
   const [pickupEnabled, setPickupEnabled] = useState(config.pickup_enabled !== false);
   const [deliveryEnabled, setDeliveryEnabled] = useState(!!config.delivery_enabled);
@@ -355,7 +359,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
   return (
     <View>
       <View style={s.tabIntro}>
-        <Icon name="info" size={14} color={Colors.violet3} />
+        <Icon name="info" size={14} color={accent.primaryStrong} />
         <Text style={s.tabIntroText}>
           Configure como o cliente recebe o pedido: retirada, entrega ou ambos. Tudo aparece direto no checkout da sua loja.
         </Text>
@@ -372,7 +376,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
             <Switch
               value={pickupEnabled}
               onValueChange={handlePickupToggle}
-              trackColor={{ false: Colors.border, true: Colors.violet }}
+              trackColor={{ false: accent.border, true: accent.primary }}
               thumbColor="#fff"
             />
           </View>
@@ -418,7 +422,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
             <Switch
               value={deliveryEnabled}
               onValueChange={handleDeliveryToggle}
-              trackColor={{ false: Colors.border, true: Colors.violet }}
+              trackColor={{ false: accent.border, true: accent.primary }}
               thumbColor="#fff"
             />
           </View>
@@ -526,7 +530,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                         Defina até 3 faixas por distância. Ex: "Até 5 km = R$ 10 · Até 10 km = R$ 18 · Até 20 km = R$ 28".
                       </Text>
                       <Pressable style={s.tierEmptyCta} onPress={addTier}>
-                        <Icon name="plus" size={14} color={Colors.violet3} />
+                        <Icon name="plus" size={14} color={accent.primaryStrong} />
                         <Text style={s.tierEmptyCtaText}>Adicionar primeira faixa</Text>
                       </Pressable>
                     </View>
@@ -575,7 +579,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 
                       {tiers.length < 3 && (
                         <Pressable style={s.addTierBtn} onPress={addTier}>
-                          <Icon name="plus" size={14} color={Colors.violet3} />
+                          <Icon name="plus" size={14} color={accent.primaryStrong} />
                           <Text style={s.addTierText}>Adicionar faixa ({tiers.length}/3)</Text>
                         </Pressable>
                       )}
@@ -755,7 +759,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 
       {isSaving && (
         <View style={s.savingPill}>
-          <ActivityIndicator size="small" color={Colors.violet} />
+          <ActivityIndicator size="small" color={accent.primary} />
           <Text style={s.savingText}>Salvando…</Text>
         </View>
       )}
