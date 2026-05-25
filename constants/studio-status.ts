@@ -7,6 +7,7 @@
 import { StudioColors } from './studio-tokens';
 
 export type StudioProductionStatus =
+  | 'awaiting_customization'
   | 'pending_art'
   | 'approved'
   | 'in_production'
@@ -30,6 +31,7 @@ export type StudioBulkEventStatus =
 /* ------------------------------ Produção ------------------------------ */
 
 const PRODUCTION_LABELS: Record<StudioProductionStatus, string> = {
+  awaiting_customization: 'Aguardando personalização',
   pending_art: 'Aguardando arte',
   approved: 'Arte aprovada',
   in_production: 'Em produção',
@@ -39,6 +41,7 @@ const PRODUCTION_LABELS: Record<StudioProductionStatus, string> = {
 };
 
 const PRODUCTION_COLORS: Record<StudioProductionStatus, { bg: string; fg: string }> = {
+  awaiting_customization: { bg: '#FCE7F3', fg: '#9D174D' }, // pink (cliente de marketplace, precisa coletar)
   pending_art: { bg: '#FEF3C7', fg: '#92400E' }, // amber
   approved: { bg: '#DBEAFE', fg: '#1E40AF' }, // blue
   in_production: { bg: '#EDE9FE', fg: '#5B21B6' }, // violet
@@ -119,3 +122,21 @@ export function colorStudioAlert(severity: 'info' | 'warning' | 'danger' | strin
  * Cor accent padrão pra borda de elemento Studio (uso geral em chip/pill neutro).
  */
 export const StudioStatusAccent = StudioColors.primary;
+
+/**
+ * Ordem canônica das colunas do KDS Studio (board /studio/(estudio)/producao).
+ * Sub-onda Marketplaces S-0 (25/05/2026): adiciona awaiting_customization como
+ * primeira coluna — pedidos ML/Shopee chegam nessa fila ANTES de virar pending_art.
+ * Lojista coleta a personalizacao via modal e o status avanca pra pending_art.
+ *
+ * KDS UI deve ler dessa lista pra montar as colunas, evitando hardcoded ordens
+ * em multiples lugares.
+ */
+export const STUDIO_KDS_COLUMNS: ReadonlyArray<StudioProductionStatus> = [
+  'awaiting_customization',
+  'pending_art',
+  'approved',
+  'in_production',
+  'ready',
+  'delivered',
+] as const;
