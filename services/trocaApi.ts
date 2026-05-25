@@ -11,11 +11,15 @@
 //
 //   create (v1) mantido inalterado pra compat retroativa.
 //
+// 25/05/2026 (Polish v3 — barcode-first): novo método
+// searchSalesByProductBarcode pra Step1Search bipar item devolvido
+// e puxar vendas recentes do grupo com aquele produto/variant.
+//
 // Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx
 // ============================================================
 import { request } from "./api";
 
-// ─── v1 types (mantidos pra compat) ───────────────────────────
+// ─── v1 types (mantidos pra compat) ─────────────────────
 export type TrocaItem = {
   product_id: string | null;
   variant_id?: string | null;
@@ -54,7 +58,7 @@ export type TrocaResult = {
   receipt_url: string;
 };
 
-// ─── v2 types (multi-venda + splits) ──────────────────────────
+// ─── v2 types (multi-venda + splits) ────────────────────
 export type TrocaReturnedItemV2 = TrocaItem & {
   original_sale_id: string;
   original_sale_item_id: string;
@@ -164,7 +168,13 @@ export type SearchForTrocaParams = {
   limit?: number;
 };
 
-// ─── api ─────────────────────────────────────────────────────
+export type SearchByBarcodeParams = {
+  barcode: string;
+  days?: number;
+  limit?: number;
+};
+
+// ─── api ────────────────────────────────────────
 export var trocaApi = {
   // v1 — original_sale_id escalar + payment_method único.
   // Mantido pra compat retroativa enquanto migração v2 não termina.
@@ -203,6 +213,30 @@ export var trocaApi = {
       companyId +
       "/pdv/sales-for-troca" +
       (qs.toString() ? "?" + qs.toString() : "");
+    return request<SaleForTroca[]>(path, {
+      method: "GET",
+      retry: 1,
+      timeout: 10000,
+    });
+  },
+
+  // 25/05/2026 (Troca barcode-first):
+  // GET /pdv/sales-by-product-barcode — puxa vendas recentes do grupo
+  // que contêm um produto/variant identificado pelo barcode bipado.
+  // Mesmo shape de SaleForTroca[] pra reaproveitar componente.
+  searchSalesByProductBarcode: function (
+    companyId: string,
+    params: SearchByBarcodeParams
+  ) {
+    var qs = new URLSearchParams();
+    qs.set("barcode", params.barcode);
+    if (params.days != null) qs.set("days", String(params.days));
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    var path =
+      "/companies/" +
+      companyId +
+      "/pdv/sales-by-product-barcode?" +
+      qs.toString();
     return request<SaleForTroca[]>(path, {
       method: "GET",
       retry: 1,
