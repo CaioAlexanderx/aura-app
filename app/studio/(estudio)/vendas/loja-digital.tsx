@@ -1,17 +1,21 @@
-import { StudioPlaceholder } from "@/components/studio/StudioPlaceholder";
+import { StudioBridge } from "@/components/studio/StudioBridge";
 
-export default function StudioVendasLoja() {
+export default function StudioVendasLojaDigital() {
   return (
-    <StudioPlaceholder
-      icon="globe"
-      phase="Atalho · reaproveita Canal Digital"
-      title="Loja digital"
-      subtitle="Sua storefront pública. Cliente final entra, escolhe produto, faz personalização e fecha pedido. Hub Studio recebe e empurra pra produção."
-      bullets={[
-        "Página de produto com upload de arte + preview SVG ao vivo (Fase 1)",
-        "Galeria pronta de templates (Fase 2)",
-        "Pedidos chegam com customization preservada por item",
-        "Compartilha o mesmo domínio/slug do Canal Digital",
+    <StudioBridge
+      eyebrow="VENDAS · LOJA DIGITAL"
+      title="Storefront pra vender online"
+      subtitle="Página pública onde o cliente vê seus produtos, configura a personalização e fecha o pedido pelo Pix."
+      bridgeHref="/(tabs)/canal"
+      bridgeIcon="globe"
+      bridgeLabel="Abrir Canal Digital"
+      bridgeNote="O Canal Digital do Aura Varejo já te dá uma vitrine pública com Pix manual + cartão Mercado Pago. Configure aqui e seus produtos personalizáveis ficam disponíveis pra venda."
+      futureFeatures={[
+        "Configurador de personalização embutido na página do produto (cliente vê preview ao vivo)",
+        "Upload de foto direto pela página pública (sem precisar mandar no WhatsApp)",
+        "Galeria de templates exposta — cliente escolhe arte pronta sem mandar nada",
+        "Notificação automática pra você quando pedido novo cair (com mockup pronto pra aprovar)",
+        "Página pública de aprovação de arte com link wa.me (Fase 5 já entregue no backend)",
       ]}
     />
   );
