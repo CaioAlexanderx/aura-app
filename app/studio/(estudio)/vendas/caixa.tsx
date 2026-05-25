@@ -88,16 +88,16 @@ export default function StudioCaixaPage() {
   // Templates do produto (cache simples)
   const [templatesById, setTemplatesById] = useState<Record<string, Array<{ id: string; name: string; image_url: string; thumb_url: string | null }>>>({});
 
-  // Carga inicial — usa endpoint generico de products c/ filtro is_personalizable=true
+  // Carga inicial — usa endpoint dedicado /studio/products
   useEffect(() => {
     if (!cid) return;
     setLoading(true);
-    // Reuse storefront-like flow via studioApi: listamos via products direto.
-    // Como nao existe endpoint dedicado /studio/products, usamos /companies/:id/products?personalizable=1
-    request<{ products: any[] }>("/companies/" + cid + "/products?personalizable=1", { method: "GET" })
+    // Endpoint dedicado /studio/products (criado em studioSaleItemPatch.js
+    // pra expor is_personalizable + customization_config, que a rota
+    // /products generica nao retorna)
+    request<{ products: any[] }>("/companies/" + cid + "/studio/products", { method: "GET" })
       .then(async (data) => {
         const list = (data.products || [])
-          .filter((p: any) => p.is_personalizable && p.customization_config)
           .map((p: any) => ({
             id: p.id,
             name: p.name,
@@ -268,7 +268,7 @@ export default function StudioCaixaPage() {
 
   if (loading) return <Center><ActivityIndicator color={primary} size="large" /></Center>;
 
-  // ─── STAGE: DONE ─────────────────────────────────────────────
+  // ─── STAGE: DONE ──────────────────────────────────────────────
   if (stage === "done" && done) {
     return (
       <Center>
@@ -329,7 +329,7 @@ export default function StudioCaixaPage() {
     );
   }
 
-  // ─── STAGE: CONFIGURE ────────────────────────────────────────
+  // ─── STAGE: CONFIGURE ───────────────────────────────────────────
   if (stage === "configure" && active) {
     const cfg = active.customization_config;
     const templates = templatesById[active.id] || [];
@@ -406,7 +406,7 @@ export default function StudioCaixaPage() {
     );
   }
 
-  // ─── STAGE: CHECKOUT ─────────────────────────────────────────
+  // ─── STAGE: CHECKOUT ────────────────────────────────────────────
   if (stage === "checkout") {
     const sendDisabled = sending || cart.length === 0;
     return (
@@ -514,7 +514,7 @@ export default function StudioCaixaPage() {
     );
   }
 
-  // ─── STAGE: LIST ─────────────────────────────────────────────
+  // ─── STAGE: LIST ──────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <View
