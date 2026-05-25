@@ -1,8 +1,8 @@
 /**
- * Helper Studio Upload — chama POST /studio/upload-mockup
+ * Helper Studio Upload — chama POST /companies/:cid/studio/upload-mockup
  * Item #10 da análise UX/UI: upload integrado em vez de URL externa.
  */
-import { request } from './apiClient';
+import { request } from './api';
 
 export type StudioUploadKind = 'mockup' | 'template' | 'approval';
 
@@ -21,21 +21,28 @@ export type StudioUploadResult = {
  *
  * Limite: 15 MB.
  */
-export async function uploadStudioMockup(params: {
-  content_base64: string;
-  content_type: string;
-  kind?: StudioUploadKind;
-}): Promise<StudioUploadResult> {
-  return request<StudioUploadResult>('/studio/upload-mockup', {
+export async function uploadStudioMockup(
+  cid: string,
+  params: {
+    content_base64: string;
+    content_type: string;
+    kind?: StudioUploadKind;
+  }
+): Promise<StudioUploadResult> {
+  return request<StudioUploadResult>(`/companies/${cid}/studio/upload-mockup`, {
     method: 'POST',
     body: params,
-  });
+    retry: 0,
+    timeout: 30000,
+  } as any);
 }
 
 /**
  * Helper para web: lê um File (input type=file) e devolve base64 pronto pra subir.
  */
-export async function fileToBase64Web(file: File): Promise<{ base64: string; content_type: string; size_mb: number }> {
+export async function fileToBase64Web(
+  file: File
+): Promise<{ base64: string; content_type: string; size_mb: number }> {
   if (file.size > 15 * 1024 * 1024) {
     throw new Error('Arquivo acima de 15 MB — tente comprimir antes de enviar.');
   }
@@ -52,5 +59,35 @@ export async function fileToBase64Web(file: File): Promise<{ base64: string; con
       });
     };
     reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Abre file picker no web e devolve resultado pronto pra enviar.
+ * Retorna null se usuário cancelar.
+ */
+export function pickFileWeb(accept = 'image/*,application/pdf'): Promise<File | null> {
+  if (typeof document === 'undefined') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.style.display = 'none';
+    let resolved = false;
+    input.onchange = () => {
+      resolved = true;
+      const file = input.files && input.files[0] ? input.files[0] : null;
+      resolve(file);
+      input.remove();
+    };
+    // se o focus voltar e nada foi escolhido em 30s, considera cancelado
+    setTimeout(() => {
+      if (!resolved) {
+        resolve(null);
+        try { input.remove(); } catch {}
+      }
+    }, 60000);
+    document.body.appendChild(input);
+    input.click();
   });
 }
