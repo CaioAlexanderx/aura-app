@@ -3,7 +3,7 @@
 //
 // Estrutura:
 //   1. Greeting personalizado
-//   2. KPIs em cards orgânicos
+//   2. KPIs em cards orgânicos — vindos de /studio/metrics (Nivel 1 C2)
 //   3. Checklist colapsável (#4) — fecha sozinho quando 100%
 //      Vira card celebratório (#3) com CTA "Cadastrar produto" + dica
 //   4. Hint Fase 4
@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
 import { useAuthStore } from "@/stores/auth";
-import { studioApi } from "@/services/studioApi";
+import { studioApi, type StudioMetrics } from "@/services/studioApi";
 
 type ChecklistItem = {
   id: string;
@@ -71,22 +71,26 @@ const CHECKLIST: ChecklistItem[] = [
   },
 ];
 
-const KPIS = [
-  { label: "Em produção",     value: "—", icon: "clock",         color: "#F59E0B" },
-  { label: "Aguardando arte", value: "—", icon: "alert-circle",  color: StudioColors.accent },
-  { label: "Prontos hoje",    value: "—", icon: "check",         color: "#10B981" },
-  { label: "Vendas 7d",       value: "—", icon: "trending-up",   color: StudioColors.primary },
-];
+function formatBRL(v: number | null | undefined): string {
+  if (v == null || isNaN(v)) return "—";
+  try {
+    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  } catch {
+    return "R$ " + Math.round(v);
+  }
+}
 
 export default function StudioHome() {
   const router = useRouter();
   const { company, user } = useAuthStore();
   const [healthLoading, setHealthLoading] = useState(true);
+  const [metricsLoading, setMetricsLoading] = useState(true);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [metrics, setMetrics] = useState<StudioMetrics | null>(null);
 
-  // #4: estado de colapso persistente (default = expanded até concluir)
   const [expanded, setExpanded] = useState(true);
 
+  // 1. Health (checklist + onboarding)
   useEffect(() => {
     if (!company?.id) return;
     studioApi.health(company.id)
@@ -98,12 +102,20 @@ export default function StudioHome() {
       .finally(() => setHealthLoading(false));
   }, [company?.id]);
 
+  // 2. Metrics (KPIs reais — Nivel 1 C2)
+  useEffect(() => {
+    if (!company?.id) return;
+    studioApi.getMetrics(company.id, 7)
+      .then((m) => setMetrics(m))
+      .catch(() => setMetrics(null))
+      .finally(() => setMetricsLoading(false));
+  }, [company?.id]);
+
   const firstName = (user as any)?.name?.split(" ")[0] || "lojista";
   const totalDone = CHECKLIST.filter((i) => completed[i.id]).length;
   const pct = Math.round((totalDone / CHECKLIST.length) * 100);
   const allDone = pct === 100;
 
-  // #4: quando termina, retrai automático
   useEffect(() => { if (allDone) setExpanded(false); }, [allDone]);
 
   const remainingTitle = useMemo(() => {
@@ -111,6 +123,34 @@ export default function StudioHome() {
     if (totalDone === 0) return "Vamos deixar tudo pronto";
     return `Faltam ${CHECKLIST.length - totalDone} ${CHECKLIST.length - totalDone === 1 ? "passo" : "passos"}`;
   }, [allDone, totalDone]);
+
+  // KPIs dinâmicos
+  const kpis = useMemo(() => [
+    {
+      label: "Em produção",
+      value: metrics ? String(metrics.em_producao) : "—",
+      icon: "clock",
+      color: "#F59E0B",
+    },
+    {
+      label: "Aguardando arte",
+      value: metrics ? String(metrics.aguardando_arte) : "—",
+      icon: "alert-circle",
+      color: StudioColors.accent,
+    },
+    {
+      label: "Prontos hoje",
+      value: metrics ? String(metrics.prontos_hoje) : "—",
+      icon: "check",
+      color: "#10B981",
+    },
+    {
+      label: "Vendas 7d",
+      value: metrics ? formatBRL(metrics.revenue_7d) : "—",
+      icon: "trending-up",
+      color: StudioColors.primary,
+    },
+  ], [metrics]);
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
@@ -134,20 +174,24 @@ export default function StudioHome() {
 
       {/* ───── KPIs ───── */}
       <View style={s.kpisRow}>
-        {KPIS.map((k) => (
+        {kpis.map((k) => (
           <View key={k.label} style={s.kpiCard}>
             <View style={[s.kpiBubble, { backgroundColor: k.color }]}>
               <Icon name={k.icon as any} size={18} color="#fff" />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.kpiLabel}>{k.label}</Text>
-              <Text style={s.kpiValue}>{k.value}</Text>
+              {metricsLoading ? (
+                <ActivityIndicator size="small" color={StudioColors.ink4} style={{ alignSelf: "flex-start", marginTop: 4 }} />
+              ) : (
+                <Text style={s.kpiValue}>{k.value}</Text>
+              )}
             </View>
           </View>
         ))}
       </View>
 
-      {/* ───── Checklist colapsável (#4) ───── */}
+      {/* ───── Checklist colapsável ───── */}
       <View style={s.checklistCard}>
         <Pressable onPress={() => setExpanded((v) => !v)} style={s.checklistHead}>
           <View style={{ flex: 1 }}>
@@ -204,7 +248,7 @@ export default function StudioHome() {
           </>
         )}
 
-        {/* #3: empty state celebratório quando 100% concluído */}
+        {/* Empty state celebratório quando 100% concluído */}
         {allDone && !expanded && (
           <View style={s.celebrate}>
             <View style={s.celebrateEmoji}>
@@ -341,7 +385,7 @@ const s = StyleSheet.create({
     textAlign: "center", fontWeight: "600",
   },
 
-  // #3: empty state celebratório
+  // Celebrate
   celebrate: {
     alignItems: "center",
     paddingVertical: 12,
