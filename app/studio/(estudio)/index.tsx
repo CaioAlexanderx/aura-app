@@ -1,16 +1,14 @@
 // ============================================================
-// AURA STUDIO · Home (Fase 0)
+// AURA STUDIO · Home (Fase 0) — overhaul 25/05
 //
 // Estrutura:
-//   1. Greeting personalizado (Inter 900, gradient brand)
-//   2. Quick stats — 5 KPIs em cards orgânicos com bolhas-ícone
-//   3. Checklist "Próximos passos" — 5 itens guiados, sem wizard
-//   4. Card de produção (preview do que vem na Fase 4)
-//
-// Mockup: Projects/Aura/mockup_studio_dashboard.html
-// Diretriz: workflow só nas features novas; home permanece playful.
+//   1. Greeting personalizado
+//   2. KPIs em cards orgânicos
+//   3. Checklist colapsável (#4) — fecha sozinho quando 100%
+//      Vira card celebratório (#3) com CTA "Cadastrar produto" + dica
+//   4. Hint Fase 4
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   ActivityIndicator,
@@ -28,7 +26,6 @@ type ChecklistItem = {
   title: string;
   sub: string;
   href: string;
-  done?: boolean; // futuramente vem do backend (settings.studio_onboarding.*)
 };
 
 const CHECKLIST: ChecklistItem[] = [
@@ -87,12 +84,13 @@ export default function StudioHome() {
   const [healthLoading, setHealthLoading] = useState(true);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
 
-  // Sentinel do vertical — confirma que o backend está pareado com o frontend
+  // #4: estado de colapso persistente (default = expanded até concluir)
+  const [expanded, setExpanded] = useState(true);
+
   useEffect(() => {
     if (!company?.id) return;
     studioApi.health(company.id)
       .then((h) => {
-        // futuramente: h.settings.onboarding_done pode ditar quais checks já estão prontos
         const onboard = (h.settings || {}).onboarding || {};
         setCompleted(onboard);
       })
@@ -103,6 +101,16 @@ export default function StudioHome() {
   const firstName = (user as any)?.name?.split(" ")[0] || "lojista";
   const totalDone = CHECKLIST.filter((i) => completed[i.id]).length;
   const pct = Math.round((totalDone / CHECKLIST.length) * 100);
+  const allDone = pct === 100;
+
+  // #4: quando termina, retrai automático
+  useEffect(() => { if (allDone) setExpanded(false); }, [allDone]);
+
+  const remainingTitle = useMemo(() => {
+    if (allDone) return "Tudo pronto pra vender";
+    if (totalDone === 0) return "Vamos deixar tudo pronto";
+    return `Faltam ${CHECKLIST.length - totalDone} ${CHECKLIST.length - totalDone === 1 ? "passo" : "passos"}`;
+  }, [allDone, totalDone]);
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
@@ -113,7 +121,9 @@ export default function StudioHome() {
             Bom dia, <Text style={s.h1Accent}>{firstName}!</Text> ✨
           </Text>
           <Text style={s.h1Sub}>
-            Bora deixar a loja redonda pros próximos pedidos
+            {allDone
+              ? "Loja redonda. Hora de mostrar produto pro mundo."
+              : "Bora deixar a loja redonda pros próximos pedidos"}
           </Text>
         </View>
         <View style={s.liveBadge}>
@@ -137,17 +147,20 @@ export default function StudioHome() {
         ))}
       </View>
 
-      {/* ───── Checklist ───── */}
+      {/* ───── Checklist colapsável (#4) ───── */}
       <View style={s.checklistCard}>
-        <View style={s.checklistHead}>
+        <Pressable onPress={() => setExpanded((v) => !v)} style={s.checklistHead}>
           <View style={{ flex: 1 }}>
-            <Text style={s.checklistEyebrow}>PRÓXIMOS PASSOS</Text>
-            <Text style={s.checklistTitle}>Vamos deixar tudo pronto</Text>
+            <Text style={s.checklistEyebrow}>
+              {allDone ? "PRONTO" : "PRÓXIMOS PASSOS"}
+            </Text>
+            <Text style={s.checklistTitle}>{remainingTitle}</Text>
           </View>
           <View style={s.progressPill}>
             <Text style={s.progressPillTxt}>{totalDone}/{CHECKLIST.length}</Text>
           </View>
-        </View>
+          <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={StudioColors.ink3} />
+        </Pressable>
 
         {healthLoading && (
           <View style={{ paddingVertical: 14 }}>
@@ -155,7 +168,7 @@ export default function StudioHome() {
           </View>
         )}
 
-        {!healthLoading && CHECKLIST.map((item) => {
+        {!healthLoading && expanded && CHECKLIST.map((item) => {
           const done = !!completed[item.id];
           return (
             <Pressable
@@ -182,23 +195,56 @@ export default function StudioHome() {
         })}
 
         {/* Progresso linear */}
-        <View style={s.progressBar}>
-          <View style={[s.progressFill, { width: `${pct}%` }]} />
-        </View>
-        <Text style={s.progressSub}>
-          {pct === 100
-            ? "🎉 Tudo pronto! Bora vender."
-            : `${pct}% concluído — falta pouco`}
-        </Text>
+        {!allDone && (
+          <>
+            <View style={s.progressBar}>
+              <View style={[s.progressFill, { width: `${pct}%` }]} />
+            </View>
+            <Text style={s.progressSub}>{pct}% concluído — falta pouco</Text>
+          </>
+        )}
+
+        {/* #3: empty state celebratório quando 100% concluído */}
+        {allDone && !expanded && (
+          <View style={s.celebrate}>
+            <View style={s.celebrateEmoji}>
+              <Text style={{ fontSize: 30 }}>🎉</Text>
+            </View>
+            <Text style={s.celebrateTitle}>Setup completo!</Text>
+            <Text style={s.celebrateBody}>
+              Configurações prontas, agora é cadastrar produto e divulgar. Quando o
+              primeiro pedido cair, o KDS começa a se preencher automaticamente.
+            </Text>
+            <View style={s.celebrateRow}>
+              <Pressable
+                onPress={() => router.push("/studio/produtos" as any)}
+                style={[s.celebrateBtn, { backgroundColor: StudioColors.primary }]}
+              >
+                <Icon name="shopping-bag" size={16} color="#fff" />
+                <Text style={s.celebrateBtnTxt}>Cadastrar produto</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/studio/galeria" as any)}
+                style={[s.celebrateBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: StudioColors.ink4 }]}
+              >
+                <Icon name="image" size={16} color={StudioColors.ink2} />
+                <Text style={[s.celebrateBtnTxt, { color: StudioColors.ink2 }]}>Ver galeria</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* ───── Hint Fase 4 ───── */}
-      <View style={s.hintCard}>
-        <Icon name="info" size={16} color={StudioColors.primary} />
-        <Text style={s.hintTxt}>
-          <Text style={s.hintBold}>Linha de produção e KDS</Text> chegam na próxima atualização. Por enquanto acompanhe os pedidos em Estúdio › Produção.
-        </Text>
-      </View>
+      {!allDone && (
+        <View style={s.hintCard}>
+          <Icon name="info" size={16} color={StudioColors.primary} />
+          <Text style={s.hintTxt}>
+            <Text style={s.hintBold}>Dica:</Text> assim que cadastrar produto e
+            subir templates, a aba Produção começa a popular o KDS automaticamente.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -294,6 +340,34 @@ const s = StyleSheet.create({
     fontSize: 11.5, color: StudioColors.ink3, marginTop: 6,
     textAlign: "center", fontWeight: "600",
   },
+
+  // #3: empty state celebratório
+  celebrate: {
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 8,
+  },
+  celebrateEmoji: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: StudioColors.mintSoft,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 4,
+  },
+  celebrateTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink },
+  celebrateBody: {
+    fontSize: 13, color: StudioColors.ink3, textAlign: "center",
+    maxWidth: 480, lineHeight: 19,
+  },
+  celebrateRow: {
+    flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  celebrateBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 12,
+  },
+  celebrateBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   hintCard: {
     flexDirection: "row", alignItems: "center", gap: 10,
