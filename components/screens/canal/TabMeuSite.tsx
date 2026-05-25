@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -9,6 +9,7 @@ import { Field, SectionTitle, StatusBadge, useChannelStyles, IS_WIDE } from "./s
 import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
 import { MpGatewayCard } from "./MpGatewayCard";
 import { useAccent } from "@/contexts/AccentTheme";
+import type { AccentTokens } from "@/contexts/AccentTheme";
 
 type Props = {
   config: any;
@@ -25,6 +26,7 @@ type Props = {
 export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix }: Props) {
   const cs = useChannelStyles();
   const accent = useAccent();
+  const s = useMemo(() => buildStyles(accent), [accent]);
   const { company } = useAuthStore();
   const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
   const [tagline, setTagline] = useState(config.tagline || "");
@@ -430,7 +432,8 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(accent: AccentTokens) {
+  return StyleSheet.create({
   // Fase 3 — Rec #9: mini-mockup (substitui o preview plano)
   mockupWrap: {
     backgroundColor: Colors.bg3,
@@ -549,7 +552,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  mockupBtnGhostText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  mockupBtnGhostText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "600" },
   mockupBtnPrimary: {
     flexDirection: "row",
     alignItems: "center",
@@ -557,7 +560,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: Colors.violet,
+    backgroundColor: accent.primary,
   },
   mockupBtnPrimaryText: { fontSize: 11, color: "#fff", fontWeight: "700" },
   mockupUrlRow: {
@@ -575,7 +578,7 @@ const s = StyleSheet.create({
   logoInitial: { fontSize: 28, fontWeight: "800", color: "#fff" },
   imgHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   imgBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, alignSelf: "flex-start" },
-  imgBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  imgBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
   bannerPreview: { width: "100%", height: 100, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
   bannerPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 6 },
   bannerPlaceholderText: { fontSize: 12, fontWeight: "600" },
@@ -586,30 +589,31 @@ const s = StyleSheet.create({
   pixDesc: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   pixBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
   pixBadgeText: { fontSize: 10, fontWeight: "700" },
-  activatePixBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, marginTop: 4 },
+  activatePixBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: accent.primary, borderRadius: 12, paddingVertical: 14, marginTop: 4 },
   activatePixBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   pixForm: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.border2 },
   pixFormTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
   pixFormHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 12 },
   typeRow: { flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" },
   typeBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bg3 },
-  typeBtnActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  typeBtnActive: { borderColor: accent.border, backgroundColor: accent.primarySoft },
   typeBtnText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  typeBtnTextActive: { color: Colors.violet3 },
+  typeBtnTextActive: { color: accent.primaryStrong },
   pixCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
   pixCancelBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
-  pixConfirmBtn: { flex: 2, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center" },
+  pixConfirmBtn: { flex: 2, paddingVertical: 12, borderRadius: 10, backgroundColor: accent.primary, alignItems: "center" },
   pixConfirmBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
   // Dominio
   domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
   domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },
-  domainBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, flexShrink: 0 },
+  domainBtn: { backgroundColor: accent.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, flexShrink: 0 },
   domainBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   planRow: { flexDirection: "row", gap: 10, marginTop: 6 },
   planBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 2, borderColor: Colors.border, alignItems: "center", gap: 4 },
-  planBtnActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  planBtnActive: { borderColor: accent.border, backgroundColor: accent.primarySoft },
   planBtnLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   planBtnPrice: { fontSize: 18, color: Colors.ink3, fontWeight: "800" },
-  planBtnLabelActive: { color: Colors.violet3 },
-});
+  planBtnLabelActive: { color: accent.primaryStrong },
+  });
+}
