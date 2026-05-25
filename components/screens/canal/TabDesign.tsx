@@ -18,8 +18,9 @@ import {
   IS_WIDE, COLOR_PRESETS, PALETTE_PRESETS, ACCENT_PRESETS,
   FONT_OPTIONS, CARD_STYLES, BANNER_TONES, BANNER_TINTS,
   SERVICE_ICONS, ServiceIconPreview,
-  Field, ChipToggle, ToggleRow, SectionTitle, cs,
+  Field, ChipToggle, ToggleRow, SectionTitle, useChannelStyles,
 } from "./shared";
+import { useAccent } from "@/contexts/AccentTheme";
 
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
@@ -265,8 +266,10 @@ export function TabDesign({
   isUploadingImage: boolean;
   deleteImage: (type: any) => Promise<any>;
 }) {
+  const cs = useChannelStyles();
+  const accent = useAccent();
   const [primary, setPrimary]   = useState(config.primary_color || "#7c3aed");
-  const [accent, setAccent]     = useState(config.accent_color  || "#a78bfa");
+  const [accentColor, setAccentColor]     = useState(config.accent_color  || "#a78bfa");
   const [dark, setDark]         = useState(!!config.dark_mode);
   const [font, setFont]         = useState(config.font_family   || "classic");
   const [cardStyle, setCardStyle] = useState(config.card_style  || "editorial");
@@ -279,7 +282,7 @@ export function TabDesign({
   const [previewKey, setPreviewKey] = useState(0);
 
   useEffect(() => { setPrimary(config.primary_color || "#7c3aed"); }, [config.primary_color]);
-  useEffect(() => { setAccent(config.accent_color   || "#a78bfa"); }, [config.accent_color]);
+  useEffect(() => { setAccentColor(config.accent_color   || "#a78bfa"); }, [config.accent_color]);
   useEffect(() => { setDark(!!config.dark_mode); }, [config.dark_mode]);
   useEffect(() => { setFont(config.font_family   || "classic"); }, [config.font_family]);
   useEffect(() => { setCardStyle(config.card_style || "editorial"); }, [config.card_style]);
@@ -407,7 +410,7 @@ export function TabDesign({
     <ScrollView style={s.editorScroll} contentContainerStyle={{ paddingBottom: 80 }}>
       {/* Rec #1 — header explicativo: visual mora aqui; contato/Pix ficam em Meu Site. */}
       <View style={s.tabIntro}>
-        <Icon name="info" size={14} color={Colors.violet3} />
+        <Icon name="info" size={14} color={accent.primaryStrong} />
         <Text style={s.tabIntroText}>
           Aqui você define o visual da loja. Logo, contato e Pix ficam em <Text style={{ fontWeight: "700" }}>Meu Site</Text>.
         </Text>
@@ -429,28 +432,28 @@ export function TabDesign({
         <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Cor de destaque</Text>
         <View style={cs.colorRow}>
           {ACCENT_PRESETS.map((c) => (
-            <Pressable key={c} onPress={() => { setAccent(c); scheduleSave({ accent_color: c }); }}
-              style={[cs.colorDot, { backgroundColor: c }, accent === c && cs.colorDotActive]} />
+            <Pressable key={c} onPress={() => { setAccentColor(c); scheduleSave({ accent_color: c }); }}
+              style={[cs.colorDot, { backgroundColor: c }, accentColor === c && cs.colorDotActive]} />
           ))}
         </View>
-        <TextInput style={cs.input} value={accent}
-          onChangeText={(v) => { setAccent(v); scheduleSave({ accent_color: v }); }}
+        <TextInput style={cs.input} value={accentColor}
+          onChangeText={(v) => { setAccentColor(v); scheduleSave({ accent_color: v }); }}
           placeholder="#a78bfa" autoCapitalize="none" />
 
         <View style={cs.divider} />
         <Text style={cs.fieldLabel}>Paletas prontas</Text>
         <View style={[cs.colorRow, { gap: 8, flexDirection: "row", flexWrap: "wrap" }]}>
           {PALETTE_PRESETS.map(([p, a, label]) => {
-            const active = primary.toLowerCase() === p.toLowerCase() && accent.toLowerCase() === a.toLowerCase();
+            const active = primary.toLowerCase() === p.toLowerCase() && accentColor.toLowerCase() === a.toLowerCase();
             return (
               <Pressable key={label}
-                onPress={() => { setPrimary(p); setAccent(a); scheduleSave({ primary_color: p, accent_color: a }); }}
+                onPress={() => { setPrimary(p); setAccentColor(a); scheduleSave({ primary_color: p, accent_color: a }); }}
                 style={[s.paletteChip, active && s.paletteChipActive]}>
                 <View style={s.paletteSplit}>
                   <View style={[s.paletteHalf, { backgroundColor: p, borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }]} />
                   <View style={[s.paletteHalf, { backgroundColor: a, borderTopRightRadius: 8, borderBottomRightRadius: 8 }]} />
                 </View>
-                <Text style={[s.paletteLabel, active && { color: Colors.violet3 }]}>{label}</Text>
+                <Text style={[s.paletteLabel, active && { color: accent.primaryStrong }]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -562,7 +565,7 @@ export function TabDesign({
               <Image source={{ uri: b.image_url }} style={s.imageThumb} resizeMode="cover" />
               <View style={{ flex: 1, gap: 6 }}>
                 <Pressable style={s.smallBtn} onPress={() => pickAndUploadImage(`banner_${idx}` as any)}>
-                  <Icon name="upload" size={14} color={Colors.violet3} />
+                  <Icon name="upload" size={14} color={accent.primaryStrong} />
                   <Text style={s.smallBtnText}>Trocar</Text>
                 </Pressable>
                 <Pressable style={[s.smallBtn, s.smallBtnDanger]}
@@ -581,7 +584,7 @@ export function TabDesign({
           ) : (
             <Pressable style={s.uploadDrop} onPress={() => pickAndUploadImage(`banner_${idx}` as any)}
               disabled={isUploadingImage}>
-              {isUploadingImage ? <ActivityIndicator color={Colors.violet} /> : (
+              {isUploadingImage ? <ActivityIndicator color={accent.primary} /> : (
                 <>
                   <Icon name="image" size={20} color={Colors.ink3} />
                   <Text style={s.uploadText}>Adicionar imagem</Text>
@@ -616,7 +619,7 @@ export function TabDesign({
               <Pressable key={tpl.title} style={s.svcTemplateCard}
                 onPress={() => addServiceCard(tpl)}>
                 <View style={s.svcTemplateIcon}>
-                  <ServiceIconPreview icon={tpl.icon} size={20} color={Colors.violet3} />
+                  <ServiceIconPreview icon={tpl.icon} size={20} color={accent.primaryStrong} />
                 </View>
                 <Text style={s.svcTemplateTitle}>{tpl.title}</Text>
                 <Text style={s.svcTemplateBody} numberOfLines={2}>{tpl.body}</Text>
@@ -626,7 +629,7 @@ export function TabDesign({
 
           <Pressable style={s.svcEmptyBtn}
             onPress={() => addServiceCard({ icon: "sparkle", title: "", body: "" })}>
-            <Icon name="plus" size={14} color={Colors.violet3} />
+            <Icon name="plus" size={14} color={accent.primaryStrong} />
             <Text style={s.svcEmptyBtnText}>Criar do zero</Text>
           </Pressable>
         </View>
@@ -659,8 +662,8 @@ export function TabDesign({
                       onPress={() => updateServiceCard(idx, { icon: opt.value })}
                       style={[s.iconChip, active && s.iconChipActive]}>
                       <ServiceIconPreview icon={opt.value} size={20}
-                        color={active ? Colors.violet3 : Colors.ink} />
-                      <Text style={[s.iconChipLabel, active && { color: Colors.violet3, fontWeight: "600" }]}>{opt.label}</Text>
+                        color={active ? accent.primaryStrong : Colors.ink} />
+                      <Text style={[s.iconChipLabel, active && { color: accent.primaryStrong, fontWeight: "600" }]}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -670,7 +673,7 @@ export function TabDesign({
           {serviceCards.length < 4 && (
             <Pressable style={s.svcAddBtn}
               onPress={() => addServiceCard({ icon: "sparkle", title: "", body: "" })}>
-              <Icon name="plus" size={14} color={Colors.violet3} />
+              <Icon name="plus" size={14} color={accent.primaryStrong} />
               <Text style={s.svcAddBtnText}>Adicionar card ({serviceCards.length}/4)</Text>
             </Pressable>
           )}
@@ -689,7 +692,7 @@ export function TabDesign({
 
       {isSaving && (
         <View style={s.savingPill}>
-          <ActivityIndicator size="small" color={Colors.violet} />
+          <ActivityIndicator size="small" color={accent.primary} />
           <Text style={s.savingText}>Salvando…</Text>
         </View>
       )}
@@ -702,13 +705,13 @@ export function TabDesign({
         <View style={s.deviceToggle}>
           <Pressable onPress={() => setDevice("desktop")}
             style={[s.deviceBtn, device === "desktop" && s.deviceBtnActive]}>
-            <Icon name="monitor" size={14} color={device === "desktop" ? Colors.violet3 : Colors.ink3} />
-            <Text style={[s.deviceText, device === "desktop" && { color: Colors.violet3 }]}>Desktop</Text>
+            <Icon name="monitor" size={14} color={device === "desktop" ? accent.primaryStrong : Colors.ink3} />
+            <Text style={[s.deviceText, device === "desktop" && { color: accent.primaryStrong }]}>Desktop</Text>
           </Pressable>
           <Pressable onPress={() => setDevice("mobile")}
             style={[s.deviceBtn, device === "mobile" && s.deviceBtnActive]}>
-            <Icon name="smartphone" size={14} color={device === "mobile" ? Colors.violet3 : Colors.ink3} />
-            <Text style={[s.deviceText, device === "mobile" && { color: Colors.violet3 }]}>Mobile</Text>
+            <Icon name="smartphone" size={14} color={device === "mobile" ? accent.primaryStrong : Colors.ink3} />
+            <Text style={[s.deviceText, device === "mobile" && { color: accent.primaryStrong }]}>Mobile</Text>
           </Pressable>
         </View>
         <Pressable onPress={() => setPreviewKey((k) => k + 1)} style={s.refreshBtn}>
