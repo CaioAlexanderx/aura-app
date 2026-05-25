@@ -9,6 +9,9 @@
 //   #6 cor das filhas padronizada por grupo (tom único)
 //   #7 float ambient reduzido (2px) + pausa após 10s
 //   #2 monta FloatingApprovalButton global
+//
+// 25/05 (segunda iteração) — substitui "S" placeholder por
+//   AuraStudioMark/Lockup (logo real navy + asterisco magenta).
 // ============================================================
 import { useRef, useEffect, useState } from "react";
 import {
@@ -19,6 +22,7 @@ import { Slot, useRouter, usePathname } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors, StudioRadius, StudioFloat } from "@/constants/studio-tokens";
 import { FloatingApprovalButton } from "@/components/studio/FloatingApprovalButton";
+import { AuraStudioMark, AuraStudioLockup } from "@/components/studio/AuraStudioMark";
 
 // ─── Float hook (#7: pausa após N segundos pra não distrair) ────
 function useFloat(idx: number, pause: boolean) {
@@ -194,8 +198,8 @@ export function StudioShell() {
     return (
       <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
         <View style={s.mobileBar}>
-          <Pressable onPress={() => go("/studio")} style={s.mobileBrand}>
-            <Text style={s.mobileBrandTxt}>Studio</Text>
+          <Pressable onPress={() => go("/studio")} style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}>
+            <AuraStudioLockup size={26} variant="dark" />
           </Pressable>
           <ScrollView
             horizontal
@@ -237,8 +241,8 @@ export function StudioShell() {
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
       <View style={s.sidebar}>
         <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 16 }}>
-          <Pressable onPress={() => go("/studio")} style={s.brand}>
-            <Text style={s.brandTxt}>S</Text>
+          <Pressable onPress={() => go("/studio")} accessibilityLabel="Ir para início do Aura Studio">
+            <AuraStudioMark size={54} />
           </Pressable>
         </FloatingBubble>
 
@@ -338,6 +342,7 @@ const s = StyleSheet.create({
     borderRightColor: "rgba(15,23,42,0.08)",
     zIndex: 1000,
   },
+  // Legado — não usado pós-AuraStudioMark mas mantido pra não quebrar refs
   brand: {
     width: 54, height: 54,
     backgroundColor: StudioColors.primary,
@@ -425,6 +430,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 6,
   },
+  // Legado (substituido por AuraStudioLockup inline na render)
   mobileBrand: {
     alignSelf: "flex-start",
     paddingHorizontal: 12,
