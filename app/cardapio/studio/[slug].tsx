@@ -9,15 +9,20 @@ import type { CustomizationConfig, CustomizationField } from "@/services/studioA
 // /cardapio/studio/[slug] — Storefront publico Studio. Sem auth.
 //
 // Nivel 1 Sub-onda D (25/05/2026)
+// 25/05/2026 (fechamento Loja Digital Studio):
+//   + price_delta de option/color somado no carrinho + display por linha
+//   + upload R2 de foto direto da página (web) pra campos type=image
+//   + estagio "sent" mostra politica de revisões + prazo
 //
 // Cliente entra no link, ve grid de produtos personalizaveis,
 // abre o configurador (text/image/template/color/option),
 // preview SVG ao vivo via PersonalizationPreview, fecha pedido
 // com nome+telefone e pix/cartao/on_delivery.
 //
-// Backend: GET /storefront/:slug/studio/products
+// Backend: GET /storefront/:slug/studio/products  (com revisions policy)
 //          POST /storefront/:slug/studio/order
-//          GET /storefront/:slug/studio/order/:oid (poll)
+//          GET  /storefront/:slug/studio/order/:oid (poll)
+//          POST /storefront/:slug/studio/upload    (R2 publico)
 // ============================================================
 
 const API_BASE =
@@ -55,6 +60,12 @@ type StudioStoreProduct = {
   }>;
 };
 
+type StoreRevisions = {
+  max_included: number;         // 0 = ilimitado (loja não definiu)
+  extra_price: number;          // R$ cobrado por revisão extra
+  policy_text: string | null;   // texto custom da loja
+};
+
 type StorePayload = {
   site: {
     name: string; tagline?: string;
@@ -64,6 +75,7 @@ type StorePayload = {
   products: StudioStoreProduct[];
   sla: { sla_base_days: number; queue_qty: number; total_estimate_days: number };
   payment: { has_pix: boolean; has_card: boolean; pay_on_delivery_enabled: boolean };
+  revisions: StoreRevisions;
   total_products: number;
 };
 
@@ -75,6 +87,40 @@ type CartLine = {
 };
 
 type Stage = "list" | "configure" | "checkout" | "sent";
+
+// ============================================================
+// Soma os price_delta das choices selecionadas em option/color.
+// Espelha o helper `computeChoicesDelta` no backend pra cliente
+// ver o preço correto antes de submeter.
+// ============================================================
+function choicesDelta(cfg: CustomizationConfig | null | undefined, values: Record<string, any>): number {
+  if (!cfg?.fields) return 0;
+  let delta = 0;
+  for (const f of cfg.fields) {
+    if (f.type !== "option" && f.type !== "color") continue;
+    const choices = f.config?.choices;
+    if (!Array.isArray(choices) || choices.length === 0) continue;
+    const selected = values[f.id];
+    if (selected == null) continue;
+    const sels = Array.isArray(selected) ? selected : [selected];
+    for (const s of sels) {
+      const c = choices.find((ch: any) => ch.value === s || ch.label === s);
+      if (c && typeof c.price_delta === "number" && !isNaN(c.price_delta)) {
+        delta += c.price_delta;
+      }
+    }
+  }
+  return delta;
+}
+
+// Preço efetivo = price + delta. Sem qty.
+function lineUnitPrice(line: CartLine): number {
+  return Number(line.product.price) + choicesDelta(line.product.customization_config, line.values);
+}
+
+function lineTotal(line: CartLine): number {
+  return lineUnitPrice(line) * line.qty;
+}
 
 export default function StudioStorefrontPage() {
   const params = useLocalSearchParams<{ slug: string }>();
@@ -132,9 +178,15 @@ export default function StudioStorefrontPage() {
   }, [slug]);
 
   const cartSubtotal = useMemo(
-    () => cart.reduce((s, l) => s + Number(l.product.price) * l.qty, 0),
+    () => cart.reduce((s, l) => s + lineTotal(l), 0),
     [cart]
   );
+
+  // Preço atual sendo configurado (com deltas live)
+  const configuringUnitPrice = useMemo(() => {
+    if (!activeProduct) return 0;
+    return Number(activeProduct.price) + choicesDelta(activeProduct.customization_config, editingValues);
+  }, [activeProduct, editingValues]);
 
   function openConfigure(product: StudioStoreProduct) {
     setActiveProduct(product);
@@ -261,8 +313,10 @@ export default function StudioStorefrontPage() {
 
   // ─── STAGE: SENT ─────────────────────────────────────────────
   if (stage === "sent" && sentOrder) {
+    const rev = store.revisions;
+    const slaDays = store.sla.total_estimate_days;
     return (
-      <Center>
+      <ScrollView style={{ flex: 1, backgroundColor: T.bg }} contentContainerStyle={{ padding: 24, paddingBottom: 40, alignItems: "center", minHeight: "100%" as any }}>
         <View
           style={{
             width: 80, height: 80, borderRadius: 40,
@@ -277,11 +331,12 @@ export default function StudioStorefrontPage() {
         </Text>
         <Text style={{ fontSize: 13, color: T.ink3, marginTop: 6, textAlign: "center", maxWidth: 320 }}>
           {sentOrder.pix
-            ? "Pague o Pix abaixo. Confirmação no WhatsApp."
+            ? "Pague o Pix abaixo. Depois disso, a loja inicia a arte e envia mockup pra aprovação no WhatsApp."
             : sentOrder.card
             ? "Redirecionando ao pagamento com cartão..."
             : "A loja confirmará seu pedido em breve por WhatsApp."}
         </Text>
+
         <View
           style={{
             backgroundColor: T.card, borderRadius: 12, padding: 16,
@@ -299,6 +354,7 @@ export default function StudioStorefrontPage() {
             Aguardando produção da arte
           </Text>
         </View>
+
         {sentOrder.pix && (
           <View style={{ marginTop: 16, maxWidth: 320, gap: 8 }}>
             <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center" }}>Pix copia-e-cola</Text>
@@ -313,22 +369,73 @@ export default function StudioStorefrontPage() {
             </Text>
           </View>
         )}
+
+        {/* Próximos passos — Studio-specific */}
+        <View
+          style={{
+            backgroundColor: T.card, borderRadius: 12, padding: 16,
+            borderWidth: 1, borderColor: T.border,
+            marginTop: 20, maxWidth: 380, width: "100%",
+          }}
+        >
+          <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 }}>
+            Próximos passos
+          </Text>
+          <NextStep n={1} title="A loja recebe seu pedido" desc="Tudo que você personalizou já chegou. A produção entra na fila." />
+          <NextStep n={2} title="Arte é preparada" desc={`Em até ${slaDays} ${slaDays === 1 ? "dia útil" : "dias úteis"} a loja gera o mockup digital do seu pedido.`} />
+          <NextStep n={3} title="Você aprova pelo WhatsApp" desc="A loja te envia o mockup pra aprovar. Se quiser ajustes, é só pedir." />
+          <NextStep n={4} title="Produção e entrega" desc="Após aprovado, vai pra produção. Entrega/retirada conforme combinado." last />
+        </View>
+
+        {/* Política de revisões — só se loja configurou */}
+        {(rev.max_included > 0 || rev.policy_text) && (
+          <View
+            style={{
+              backgroundColor: T.bg, borderRadius: 12, padding: 14,
+              borderWidth: 1, borderColor: T.border,
+              marginTop: 12, maxWidth: 380, width: "100%",
+              gap: 6,
+            }}
+          >
+            <Text style={{ fontSize: 11, color: T.ink3, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
+              Política de revisões
+            </Text>
+            {rev.max_included > 0 && (
+              <Text style={{ fontSize: 12, color: T.ink2, lineHeight: 17 }}>
+                <Text style={{ fontWeight: "800", color: T.primary }}>{rev.max_included}</Text>
+                {" "}revis{rev.max_included === 1 ? "ão" : "ões"} grát{rev.max_included === 1 ? "is" : "is"} no mockup.
+                {rev.extra_price > 0 && (
+                  <>
+                    {" "}Revisão extra: <Text style={{ fontWeight: "800", color: T.accent }}>R$ {rev.extra_price.toFixed(2)}</Text>.
+                  </>
+                )}
+              </Text>
+            )}
+            {rev.policy_text && (
+              <Text style={{ fontSize: 11.5, color: T.ink3, lineHeight: 16, fontStyle: "italic" }}>
+                {rev.policy_text}
+              </Text>
+            )}
+          </View>
+        )}
+
         <Pressable
           onPress={() => { setStage("list"); setSentOrder(null); }}
           style={{
             backgroundColor: T.primary, paddingHorizontal: 24, paddingVertical: 12,
-            borderRadius: 10, marginTop: 16,
+            borderRadius: 10, marginTop: 20,
           }}
         >
           <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>+ Personalizar outro</Text>
         </Pressable>
-      </Center>
+      </ScrollView>
     );
   }
 
   // ─── STAGE: CONFIGURE ────────────────────────────────────────
   if (stage === "configure" && activeProduct) {
     const cfg = activeProduct.customization_config;
+    const hasDelta = configuringUnitPrice !== Number(activeProduct.price);
     return (
       <View style={{ flex: 1, backgroundColor: T.bg }}>
         <View
@@ -346,9 +453,16 @@ export default function StudioStorefrontPage() {
             <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalize</Text>
             <Text style={{ fontSize: 17, fontWeight: "800", color: T.ink }}>{activeProduct.name}</Text>
           </View>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: T.primary }}>
-            R$ {Number(activeProduct.price).toFixed(2)}
-          </Text>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: T.primary }}>
+              R$ {configuringUnitPrice.toFixed(2)}
+            </Text>
+            {hasDelta && (
+              <Text style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
+                base R$ {Number(activeProduct.price).toFixed(2)}
+              </Text>
+            )}
+          </View>
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 120 }}>
@@ -368,6 +482,7 @@ export default function StudioStorefrontPage() {
               field={f}
               value={editingValues[f.id]}
               templates={activeProduct.templates}
+              slug={slug}
               onChange={(v) => setEditingValues((prev) => ({ ...prev, [f.id]: v }))}
             />
           ))}
@@ -398,7 +513,7 @@ export default function StudioStorefrontPage() {
             style={{ backgroundColor: T.primary, paddingVertical: 14, borderRadius: 10, alignItems: "center" }}
           >
             <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
-              {editingLineId ? "Atualizar" : "Adicionar"} • R$ {(Number(activeProduct.price) * editingQty).toFixed(2)}
+              {editingLineId ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
             </Text>
           </Pressable>
         </View>
@@ -430,37 +545,46 @@ export default function StudioStorefrontPage() {
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 140 }}>
           <Text style={sectionLabel}>Itens personalizados</Text>
-          {cart.map((l) => (
-            <View
-              key={l.lineId}
-              style={{
-                backgroundColor: T.card, borderRadius: 10, padding: 12,
-                borderWidth: 1, borderColor: T.border,
-                flexDirection: "row", alignItems: "center", gap: 12,
-              }}
-            >
-              <PersonalizationPreview
-                config={l.product.customization_config}
-                values={l.values}
-                size={56}
-                showLabel={false}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Text>
-                <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
-                  Qtd {l.qty} · R$ {(Number(l.product.price) * l.qty).toFixed(2)}
-                </Text>
+          {cart.map((l) => {
+            const unit = lineUnitPrice(l);
+            const hasDelta = unit !== Number(l.product.price);
+            return (
+              <View
+                key={l.lineId}
+                style={{
+                  backgroundColor: T.card, borderRadius: 10, padding: 12,
+                  borderWidth: 1, borderColor: T.border,
+                  flexDirection: "row", alignItems: "center", gap: 12,
+                }}
+              >
+                <PersonalizationPreview
+                  config={l.product.customization_config}
+                  values={l.values}
+                  size={56}
+                  showLabel={false}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Text>
+                  <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                    Qtd {l.qty} · R$ {lineTotal(l).toFixed(2)}
+                  </Text>
+                  {hasDelta && (
+                    <Text style={{ fontSize: 10, color: T.accent, marginTop: 1 }}>
+                      inclui R$ {(unit - Number(l.product.price)).toFixed(2)} por opções
+                    </Text>
+                  )}
+                </View>
+                <View style={{ gap: 6 }}>
+                  <Pressable onPress={() => editCartLine(l)} style={editChip}>
+                    <Text style={editChipTxt}>Editar</Text>
+                  </Pressable>
+                  <Pressable onPress={() => removeCartLine(l.lineId)} style={removeChip}>
+                    <Text style={removeChipTxt}>Remover</Text>
+                  </Pressable>
+                </View>
               </View>
-              <View style={{ gap: 6 }}>
-                <Pressable onPress={() => editCartLine(l)} style={editChip}>
-                  <Text style={editChipTxt}>Editar</Text>
-                </Pressable>
-                <Pressable onPress={() => removeCartLine(l.lineId)} style={removeChip}>
-                  <Text style={removeChipTxt}>Remover</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
+            );
+          })}
 
           <Text style={sectionLabel}>Seus dados</Text>
           <FInput v={customerName} on={setCustomerName} ph="Nome *" />
@@ -634,7 +758,7 @@ export default function StudioStorefrontPage() {
                   </Text>
                 ) : null}
                 <Text style={{ fontSize: 14, color: primary, fontWeight: "800", marginTop: 4 }}>
-                  R$ {Number(p.price).toFixed(2)}
+                  A partir de R$ {Number(p.price).toFixed(2)}
                 </Text>
               </View>
               <View
@@ -687,13 +811,17 @@ export default function StudioStorefrontPage() {
 // Field editor — renderiza UI conforme tipo
 // ============================================================
 function FieldEditor({
-  field, value, templates, onChange,
+  field, value, templates, slug, onChange,
 }: {
   field: CustomizationField;
   value: any;
   templates: Array<{ id: string; image_url: string; thumb_url: string | null; name: string }>;
+  slug: string;
   onChange: (v: any) => void;
 }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   if (field.type === "text") {
     const maxChars = field.config.max_chars || 30;
     return (
@@ -722,24 +850,37 @@ function FieldEditor({
 
   if (field.type === "color") {
     const colors = field.config.colors || ["#FFFFFF", "#000000"];
+    const choices = field.config.choices || [];
+    // Se choices tem price_delta, prefere choices; senão usa colors raw
     return (
       <View>
         <Text style={sectionLabel}>
           {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
         </Text>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {colors.map((c) => (
-            <Pressable
-              key={c}
-              onPress={() => onChange(c)}
-              style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: c,
-                borderWidth: value === c ? 3 : 1,
-                borderColor: value === c ? T.primary : T.border,
-              }}
-            />
-          ))}
+          {colors.map((c) => {
+            const choice = choices.find((ch: any) => ch.value === c || ch.label === c);
+            const delta = choice?.price_delta;
+            const selected = value === c;
+            return (
+              <View key={c} style={{ alignItems: "center", gap: 2 }}>
+                <Pressable
+                  onPress={() => onChange(c)}
+                  style={{
+                    width: 36, height: 36, borderRadius: 18,
+                    backgroundColor: c,
+                    borderWidth: selected ? 3 : 1,
+                    borderColor: selected ? T.primary : T.border,
+                  }}
+                />
+                {typeof delta === "number" && delta !== 0 && (
+                  <Text style={{ fontSize: 9, fontWeight: "700", color: selected ? T.accent : T.ink3 }}>
+                    {delta > 0 ? "+" : ""}R$ {delta.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+            );
+          })}
         </View>
       </View>
     );
@@ -753,15 +894,30 @@ function FieldEditor({
           {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
         </Text>
         <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-          {choices.map((c) => (
-            <Pressable
-              key={c.value}
-              onPress={() => onChange(c.value)}
-              style={[chip, value === c.value && chipActive]}
-            >
-              <Text style={[chipTxt, value === c.value && chipTxtActive]}>{c.label}</Text>
-            </Pressable>
-          ))}
+          {choices.map((c: any) => {
+            const selected = value === c.value;
+            const delta = typeof c.price_delta === "number" ? c.price_delta : 0;
+            return (
+              <Pressable
+                key={c.value}
+                onPress={() => onChange(c.value)}
+                style={[chip, selected && chipActive, { alignItems: "center" }]}
+              >
+                <Text style={[chipTxt, selected && chipTxtActive]}>{c.label}</Text>
+                {delta !== 0 && (
+                  <Text
+                    style={{
+                      fontSize: 9.5, fontWeight: "700",
+                      color: selected ? "rgba(255,255,255,0.8)" : T.accent,
+                      marginTop: 2,
+                    }}
+                  >
+                    {delta > 0 ? "+" : ""}R$ {delta.toFixed(2)}
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
     );
@@ -806,25 +962,149 @@ function FieldEditor({
   }
 
   if (field.type === "image") {
+    // Upload via file input (web). Native: cliente cola URL manual (futuro: expo-image-picker)
+    async function handleFileSelect(ev: any) {
+      const file: File | undefined = ev?.target?.files?.[0];
+      if (!file) return;
+      const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+      if (!allowed.includes(file.type)) {
+        setUploadError("Aceitos: PNG, JPG, WEBP");
+        return;
+      }
+      if (file.size > (field.config.max_mb || 15) * 1024 * 1024) {
+        setUploadError(`Arquivo grande demais (max ${field.config.max_mb || 15}MB)`);
+        return;
+      }
+      setUploading(true);
+      setUploadError(null);
+      try {
+        const reader = new FileReader();
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+          reader.readAsDataURL(file);
+        });
+        const res = await fetch(API_BASE + "/storefront/" + slug + "/studio/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content_base64: dataUrl.split(",")[1],
+            content_type: file.type,
+            filename: file.name,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        onChange(data.url);
+        // limpa o input pra permitir re-upload do mesmo arquivo
+        try { ev.target.value = ""; } catch (_) {}
+      } catch (e: any) {
+        setUploadError(e?.message || "Erro no upload");
+      } finally {
+        setUploading(false);
+      }
+    }
+
     return (
       <View>
         <Text style={sectionLabel}>
           {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
         </Text>
-        <Text style={{ fontSize: 12, color: T.ink3, marginBottom: 6 }}>
-          {value ? "Imagem enviada ✓" : "Cole o link da imagem (ou envie por WhatsApp depois)"}
-        </Text>
-        <TextInput
-          value={String(value || "")}
-          onChangeText={onChange}
-          placeholder="https://..."
-          placeholderTextColor={T.ink4}
-          style={{
-            backgroundColor: T.card, color: T.ink, padding: 12,
-            borderRadius: 8, fontSize: 13,
-            borderWidth: 1, borderColor: T.border,
-          }}
-        />
+        {value ? (
+          <View style={{ gap: 8 }}>
+            {Platform.OS === "web" ? (
+              // @ts-ignore - native img on web
+              <img
+                src={String(value)}
+                alt="preview"
+                style={{
+                  width: "100%", maxHeight: 200, objectFit: "contain",
+                  borderRadius: 8, border: "1px solid " + T.border,
+                  backgroundColor: T.bg,
+                } as any}
+              />
+            ) : (
+              <Text style={{ fontSize: 12, color: T.green }}>Imagem enviada ✓</Text>
+            )}
+            <Pressable
+              onPress={() => { onChange(""); setUploadError(null); }}
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6,
+                backgroundColor: "#fee2e2",
+              }}
+            >
+              <Text style={{ color: T.red, fontSize: 11, fontWeight: "700" }}>Remover</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {Platform.OS === "web" ? (
+              <View>
+                {/* @ts-ignore - native label/input on web */}
+                <label
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center",
+                    justifyContent: "center", gap: 6,
+                    padding: 20, backgroundColor: T.card,
+                    border: "2px dashed " + T.border, borderRadius: 10,
+                    cursor: uploading ? "wait" : "pointer",
+                    opacity: uploading ? 0.6 : 1,
+                  } as any}
+                >
+                  <Text style={{ fontSize: 24 }}>{uploading ? "⏳" : "📷"}</Text>
+                  <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>
+                    {uploading ? "Enviando..." : "Escolher foto"}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: T.ink3 }}>PNG, JPG ou WEBP até {field.config.max_mb || 15}MB</Text>
+                  {/* @ts-ignore */}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                    style={{ display: "none" } as any}
+                  />
+                </label>
+                <Text style={{ fontSize: 10, color: T.ink3, marginTop: 6, textAlign: "center" }}>
+                  ou cole o link da imagem abaixo
+                </Text>
+                <TextInput
+                  value={String(value || "")}
+                  onChangeText={onChange}
+                  placeholder="https://..."
+                  placeholderTextColor={T.ink4}
+                  style={{
+                    backgroundColor: T.card, color: T.ink, padding: 10,
+                    borderRadius: 8, fontSize: 12,
+                    borderWidth: 1, borderColor: T.border,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+            ) : (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, color: T.ink3 }}>
+                  Cole o link da imagem (ou envie por WhatsApp depois)
+                </Text>
+                <TextInput
+                  value={String(value || "")}
+                  onChangeText={onChange}
+                  placeholder="https://..."
+                  placeholderTextColor={T.ink4}
+                  style={{
+                    backgroundColor: T.card, color: T.ink, padding: 12,
+                    borderRadius: 8, fontSize: 13,
+                    borderWidth: 1, borderColor: T.border,
+                  }}
+                />
+              </View>
+            )}
+            {uploadError && (
+              <Text style={{ fontSize: 11, color: T.red }}>{uploadError}</Text>
+            )}
+          </View>
+        )}
       </View>
     );
   }
@@ -839,6 +1119,27 @@ function Center({ children }: { children: any }) {
   return (
     <View style={{ flex: 1, backgroundColor: T.bg, alignItems: "center", justifyContent: "center", padding: 24 }}>
       {children}
+    </View>
+  );
+}
+
+function NextStep({ n, title, desc, last }: { n: number; title: string; desc: string; last?: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 10, paddingBottom: last ? 0 : 12 }}>
+      <View
+        style={{
+          width: 22, height: 22, borderRadius: 11,
+          backgroundColor: T.primary,
+          alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{n}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 12.5, color: T.ink, fontWeight: "800" }}>{title}</Text>
+        <Text style={{ fontSize: 11.5, color: T.ink3, marginTop: 2, lineHeight: 16 }}>{desc}</Text>
+      </View>
     </View>
   );
 }
