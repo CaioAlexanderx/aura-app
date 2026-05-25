@@ -1,27 +1,33 @@
 // ============================================================
 // AURA STUDIO · Shell (sidebar agrupada + slot)
 //
-// Sidebar circular com bolinhas-pai agrupando filhas em hover.
+// Sidebar circular com bolinhas-pai agrupando filhas em hover/click.
 // 4 grupos: Início (sozinho) · Estúdio · Vendas · Gestão.
-// Flutuação suave nas bolinhas (timing variado por posição).
 //
-// Mockup: Projects/Aura/mockup_studio_dashboard.html
-// Memory: plano_aura_studio_vertical_24mai2026
+// 25/05 — overhaul UX/UI:
+//   #1 mobile: sidebar vira inline expandida (sem hover) c/ chips
+//   #6 cor das filhas padronizada por grupo (tom único)
+//   #7 float ambient reduzido (2px) + pausa após 10s
+//   #2 monta FloatingApprovalButton global
 // ============================================================
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import {
   View, Text, Pressable, StyleSheet,
-  Animated, Easing, useWindowDimensions,
+  Animated, Easing, useWindowDimensions, ScrollView,
 } from "react-native";
 import { Slot, useRouter, usePathname } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors, StudioRadius, StudioFloat } from "@/constants/studio-tokens";
+import { FloatingApprovalButton } from "@/components/studio/FloatingApprovalButton";
 
-// ─── Float hook ─────────────────────────────────────────────
-// Cria animação loop com timing/delay específicos por slot.
-function useFloat(idx: number) {
+// ─── Float hook (#7: pausa após N segundos pra não distrair) ────
+function useFloat(idx: number, pause: boolean) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (pause) {
+      v.stopAnimation();
+      return;
+    }
     const dur   = StudioFloat.durationsMs[idx % StudioFloat.durationsMs.length];
     const delay = Math.abs(StudioFloat.delaysMs[idx % StudioFloat.delaysMs.length]);
     const loop = Animated.loop(
@@ -33,16 +39,18 @@ function useFloat(idx: number) {
     );
     loop.start();
     return () => loop.stop();
-  }, [idx, v]);
+  }, [idx, v, pause]);
   return v;
 }
 
-function FloatingBubble({ idx, children, style }: any) {
-  const v = useFloat(idx);
-  const transY = v.interpolate({ inputRange: [0, 1], outputRange: [0, -StudioFloat.amplitudePx] });
-  const rot   = v.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `-${StudioFloat.rotationDeg}deg`] });
+// Amplitude reduzida (#7): 2px de translateY, sem rotação ambiente
+const FLOAT_AMP_AMBIENT = 2;
+
+function FloatingBubble({ idx, children, style, pause }: any) {
+  const v = useFloat(idx, !!pause);
+  const transY = v.interpolate({ inputRange: [0, 1], outputRange: [0, -FLOAT_AMP_AMBIENT] });
   return (
-    <Animated.View style={[style, { transform: [{ translateY: transY }, { rotate: rot }] }]}>
+    <Animated.View style={[style, { transform: [{ translateY: transY }] }]}>
       {children}
     </Animated.View>
   );
@@ -53,63 +61,67 @@ type NavChild = {
   label: string;
   icon: string;
   href: string;
-  toneKey: keyof typeof TONES;
   badge?: { value: string; tone?: "accent" | "warm" };
 };
 type NavGroup = {
   label: string;
   icon: string;
+  toneKey: keyof typeof TONES;
   children: NavChild[];
 };
 
 const TONES = {
-  navy:   { bg: [StudioColors.primary, StudioColors.primary2] },
-  pink:   { bg: [StudioColors.accent, StudioColors.accent2] },
-  warm:   { bg: ["#F59E0B", "#FBBF24"] },
-  mint:   { bg: ["#10B981", "#34D399"] },
-  sky:    { bg: ["#06B6D4", "#38BDF8"] },
-  violet: { bg: ["#7C3AED", "#A78BFA"] },
+  navy:   { bg: StudioColors.primary,  bg2: StudioColors.primary2 ?? "#3B82F6" },
+  pink:   { bg: StudioColors.accent,   bg2: StudioColors.accent2  ?? "#F472B6" },
+  warm:   { bg: "#F59E0B",             bg2: "#FBBF24" },
+  mint:   { bg: "#10B981",             bg2: "#34D399" },
+  sky:    { bg: "#06B6D4",             bg2: "#38BDF8" },
+  violet: { bg: "#7C3AED",             bg2: "#A78BFA" },
 };
 
+// #6: tom único por grupo — filhas herdam o tom do pai.
 const GROUPS: NavGroup[] = [
   {
     label: "Estúdio",
     icon: "star",
+    toneKey: "navy",
     children: [
-      { label: "Produtos",  icon: "shopping-bag", href: "/studio/produtos",  toneKey: "navy" },
-      { label: "Galeria",   icon: "image",         href: "/studio/galeria",   toneKey: "pink" },
-      { label: "Produção",  icon: "clock",         href: "/studio/producao",  toneKey: "warm", badge: { value: "12", tone: "accent" } },
-      { label: "Insumos",   icon: "package",       href: "/studio/insumos",   toneKey: "mint", badge: { value: "!", tone: "warm" } },
+      { label: "Produtos",  icon: "shopping-bag", href: "/studio/produtos" },
+      { label: "Galeria",   icon: "image",         href: "/studio/galeria" },
+      { label: "Produção",  icon: "clock",         href: "/studio/producao", badge: { value: "•", tone: "accent" } },
+      { label: "Insumos",   icon: "package",       href: "/studio/insumos",  badge: { value: "!", tone: "warm" } },
     ],
   },
   {
     label: "Vendas",
     icon: "shopping-cart",
+    toneKey: "pink",
     children: [
-      { label: "Caixa / PDV",  icon: "credit-card", href: "/studio/vendas/caixa",         toneKey: "violet" },
-      { label: "Loja digital", icon: "globe",       href: "/studio/vendas/loja-digital",  toneKey: "sky" },
+      { label: "Caixa / PDV",  icon: "credit-card", href: "/studio/vendas/caixa" },
+      { label: "Loja digital", icon: "globe",       href: "/studio/vendas/loja-digital" },
     ],
   },
   {
     label: "Gestão",
     icon: "briefcase",
+    toneKey: "mint",
     children: [
-      { label: "Financeiro",    icon: "dollar-sign", href: "/studio/gestao/financeiro",   toneKey: "mint" },
-      { label: "NF-e / NFC-e",  icon: "file-text",   href: "/studio/gestao/nfe",          toneKey: "navy" },
-      { label: "Contabilidade", icon: "check",       href: "/studio/gestao/contabilidade", toneKey: "warm" },
+      { label: "Financeiro",    icon: "dollar-sign", href: "/studio/gestao/financeiro" },
+      { label: "NF-e / NFC-e",  icon: "file-text",   href: "/studio/gestao/nfe" },
+      { label: "Contabilidade", icon: "check",       href: "/studio/gestao/contabilidade" },
     ],
   },
 ];
 
 // ─── Nav circle (bolinha pai) ───────────────────────────────
 function NavCircle({
-  icon, active, isGroup, idx, onPress, children,
+  icon, active, isGroup, idx, onPress, children, pause,
 }: {
   icon: string; active?: boolean; isGroup?: boolean; idx: number;
-  onPress?: () => void; children?: React.ReactNode;
+  onPress?: () => void; children?: React.ReactNode; pause: boolean;
 }) {
   return (
-    <FloatingBubble idx={idx} style={{ position: "relative" }}>
+    <FloatingBubble idx={idx} pause={pause} style={{ position: "relative" }}>
       <Pressable
         onPress={onPress}
         style={[
@@ -126,16 +138,15 @@ function NavCircle({
 }
 
 // ─── Bolinhas-filhas ────────────────────────────────────────
-function ChildBubble({ child, onPress, idx }: { child: NavChild; onPress: () => void; idx: number }) {
-  const colors = TONES[child.toneKey].bg;
+function ChildBubble({
+  child, onPress, idx, tone, pause,
+}: { child: NavChild; onPress: () => void; idx: number; tone: keyof typeof TONES; pause: boolean }) {
+  const t = TONES[tone];
   return (
-    <FloatingBubble idx={idx + 1} style={{}}>
+    <FloatingBubble idx={idx + 1} pause={pause} style={{}}>
       <Pressable
         onPress={onPress}
-        style={[
-          s.navChild,
-          { backgroundColor: colors[0] }, // gradient simulado pelo bg sólido (RN sem gradient nativo)
-        ]}
+        style={[s.navChild, { backgroundColor: t.bg }]}
       >
         <Icon name={child.icon as any} size={16} color="#fff" />
         {child.badge && (
@@ -161,8 +172,15 @@ export function StudioShell() {
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
 
-  // Estado simples: qual grupo está expandido (hover/click)
-  const [openGroup, setOpenGroup] = (require("react") as any).useState<number | null>(null);
+  const [openGroup, setOpenGroup] = useState<number | null>(null);
+
+  // #7: pausa float ambient após 10s (somente desktop expandido)
+  const [floatPause, setFloatPause] = useState(false);
+  useEffect(() => {
+    if (!isWide) return;
+    const t = setTimeout(() => setFloatPause(true), 10000);
+    return () => clearTimeout(t);
+  }, [isWide]);
 
   function go(href: string) {
     router.push(href as any);
@@ -171,26 +189,67 @@ export function StudioShell() {
 
   const isHome = pathname === "/studio" || pathname === "/studio/";
 
+  // ─── Layout mobile (#1: sidebar inline expandida no topo) ──
+  if (!isWide) {
+    return (
+      <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+        <View style={s.mobileBar}>
+          <Pressable onPress={() => go("/studio")} style={s.mobileBrand}>
+            <Text style={s.mobileBrandTxt}>Studio</Text>
+          </Pressable>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.mobileChipsRow}
+          >
+            <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={TONES.navy.bg} />
+            {GROUPS.flatMap((g) =>
+              g.children.map((c) => (
+                <MobileChip
+                  key={c.href}
+                  label={c.label}
+                  icon={c.icon}
+                  active={pathname.startsWith(c.href)}
+                  onPress={() => go(c.href)}
+                  tone={TONES[g.toneKey].bg}
+                />
+              ))
+            )}
+            <MobileChip
+              label="Config"
+              icon="settings"
+              active={pathname.startsWith("/studio/configuracoes")}
+              onPress={() => go("/studio/configuracoes")}
+              tone={StudioColors.ink3}
+            />
+          </ScrollView>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Slot />
+        </View>
+        <FloatingApprovalButton />
+      </View>
+    );
+  }
+
+  // ─── Layout desktop (sidebar circular agrupada) ────────────
   return (
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
-      {/* ───────── Sidebar ───────── */}
       <View style={s.sidebar}>
-        {/* Brand */}
-        <FloatingBubble idx={0} style={{ marginBottom: 16 }}>
+        <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 16 }}>
           <Pressable onPress={() => go("/studio")} style={s.brand}>
             <Text style={s.brandTxt}>S</Text>
           </Pressable>
         </FloatingBubble>
 
-        {/* Início (sozinho) */}
         <NavCircle
           icon="grid"
           active={isHome}
           idx={1}
+          pause={floatPause}
           onPress={() => go("/studio")}
         />
 
-        {/* Grupos */}
         {GROUPS.map((g, i) => {
           const open = openGroup === i;
           const childActive = g.children.some((c) => pathname.startsWith(c.href));
@@ -201,9 +260,10 @@ export function StudioShell() {
                 idx={i + 2}
                 active={open || childActive}
                 isGroup
+                pause={floatPause}
                 onPress={() => setOpenGroup(open ? null : i)}
               >
-                {open && isWide && (
+                {open && (
                   <View style={s.childrenPop}>
                     <View style={s.childrenInner}>
                       {g.children.map((c, ci) => (
@@ -211,6 +271,8 @@ export function StudioShell() {
                           key={c.href}
                           child={c}
                           idx={ci}
+                          tone={g.toneKey}
+                          pause={floatPause}
                           onPress={() => go(c.href)}
                         />
                       ))}
@@ -224,25 +286,42 @@ export function StudioShell() {
 
         <View style={{ flex: 1 }} />
 
-        {/* Configurações */}
         <NavCircle
           icon="settings"
           idx={6}
+          pause={floatPause}
           active={pathname.startsWith("/studio/configuracoes")}
           onPress={() => go("/studio/configuracoes")}
         />
 
-        {/* Avatar (placeholder — futuro: troca empresa) */}
         <View style={s.avatar}>
           <Text style={s.avatarTxt}>SM</Text>
         </View>
       </View>
 
-      {/* ───────── Slot do conteúdo ───────── */}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Slot />
       </View>
+      <FloatingApprovalButton />
     </View>
+  );
+}
+
+// ─── Mobile chip helper ─────────────────────────────────────
+function MobileChip({
+  label, icon, active, onPress, tone,
+}: { label: string; icon: string; active?: boolean; onPress: () => void; tone: string }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        s.mobileChip,
+        active && { backgroundColor: tone, borderColor: tone },
+      ]}
+    >
+      <Icon name={icon as any} size={14} color={active ? "#fff" : StudioColors.ink2} />
+      <Text style={[s.mobileChipTxt, active && { color: "#fff" }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -335,6 +414,42 @@ const s = StyleSheet.create({
     borderWidth: 3, borderColor: "#fff",
   },
   avatarTxt: { color: "#fff", fontSize: 14, fontWeight: "800" },
+
+  // ── Mobile (#1) ──
+  mobileBar: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(15,23,42,0.08)",
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  mobileBrand: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: StudioColors.primary,
+    borderRadius: 12,
+  },
+  mobileBrandTxt: { color: "#fff", fontWeight: "900", fontSize: 13, letterSpacing: 0.5 },
+  mobileChipsRow: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  mobileChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#fff",
+    borderWidth: 1, borderColor: StudioColors.ink4,
+    borderRadius: 999,
+  },
+  mobileChipTxt: { color: StudioColors.ink2, fontWeight: "600", fontSize: 12 },
 });
 
 export default StudioShell;
