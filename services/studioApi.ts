@@ -1,14 +1,17 @@
 // ============================================================
 // AURA. — services/studioApi.ts
-// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1
+// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1 + Marketplaces S-0/S-1
 //
 // Migrations 130 + 131 + 132 + 25/05/2026 (KDS unificado).
 // PRs Aura-backend#110/#111/#112 + 352990c/9bfee1c (Nivel 1 sub-onda A).
-// Memory: plano_aura_studio_vertical_24mai2026, projeto_studio_nivel1_AB_25mai2026
+// 25/05/2026 (Marketplaces S-0/S-1): awaiting_customization + cancelled em
+// StudioProductionStatus + métodos getMarketplaceListingPreview/saveMarketplaceHandlingDays.
+// Memory: plano_aura_studio_vertical_24mai2026, projeto_studio_nivel1_AB_25mai2026,
+// projeto_studio_marketplaces_S0_S1_25mai2026
 // ============================================================
 import { request } from "./api";
 
-// ─── F0 Health ───────────────────────────────────────────────
+// ─── F0 Health ──────────────────────────────────────────────────────────────────
 export type StudioHealth = {
   vertical: "studio";
   version: number;
@@ -21,7 +24,7 @@ export type StudioHealth = {
   timestamp: string;
 };
 
-// ─── F1 Customization ────────────────────────────────────────
+// ─── F1 Customization ────────────────────────────────────────────────────────────────
 export type CustomizationFieldType = "text" | "image" | "template" | "color" | "option";
 export type CustomizationField = {
   id: string; type: CustomizationFieldType; label: string; required: boolean;
@@ -40,7 +43,7 @@ export type CustomizationConfigResponse = {
   product_id: string; name: string; is_personalizable: boolean; config: CustomizationConfig | null;
 };
 
-// ─── F2 Gallery ──────────────────────────────────────────────
+// ─── F2 Gallery ─────────────────────────────────────────────────────────────────────
 export type TemplateCategory = {
   id: string; name: string; slug: string;
   icon: string | null; color: string | null;
@@ -55,7 +58,7 @@ export type Template = {
   created_at: string; specifically_linked?: boolean;
 };
 
-// ─── F3 Inputs + Compositions ────────────────────────────────
+// ─── F3 Inputs + Compositions ───────────────────────────────────────────────────
 export type StudioInput = {
   id: string; name: string; unit: string;
   unit_cost: number; stock_qty: number; stock_min: number | null;
@@ -77,10 +80,20 @@ export type CompositionSummary = {
   total_cost: number; margin_pct: number | null; item_count: number;
 };
 
-// ─── F4 KDS Orders (atualizado 25/05 — KDS unificado) ────────
-export type StudioProductionStatus = "pending_art" | "approved" | "in_production" | "ready" | "delivered";
+// ─── F4 KDS Orders (atualizado 25/05 — KDS unificado + Marketplaces S-0) ────
+// awaiting_customization: pedido de marketplace (ML/Shopee) sem personalização
+//   ainda coletada do cliente. Sub-onda Marketplaces S-0 (25/05/2026).
+// cancelled: alinha com constants/studio-status.ts.
+export type StudioProductionStatus =
+  | "awaiting_customization"
+  | "pending_art"
+  | "approved"
+  | "in_production"
+  | "ready"
+  | "delivered"
+  | "cancelled";
 
-export type StudioOrderSource = "digital" | "pdv";
+export type StudioOrderSource = "digital" | "pdv" | "marketplace";
 
 export type StudioOrder = {
   id: string;
@@ -98,6 +111,9 @@ export type StudioOrder = {
   source?: StudioOrderSource;
   digital_order_id?: string | null;
   pdv_sale_id?: string | null;
+  // S-0 (25/05): pedidos de marketplace identificam plataforma
+  marketplace_platform?: "mercado_livre" | "shopee" | null;
+  customization_collected_at?: string | null;
 };
 
 export type StudioOrderItem = {
@@ -115,7 +131,7 @@ export type StudioOrderDetail = {
   approvals: StudioApproval[];
 };
 
-// ─── F5 Approval ─────────────────────────────────────────────
+// ─── F5 Approval ──────────────────────────────────────────────────────────────────
 export type StudioApprovalStatus = "pending" | "approved" | "changes_requested" | "expired";
 
 export type StudioApproval = {
@@ -144,7 +160,7 @@ export type StudioApprovalRevision = {
   created_at: string;
 };
 
-// ─── Public approval response (sem auth) ──────────────────────
+// ─── Public approval response (sem auth) ─────────────────────────────
 export type PublicApproval = {
   token: string;
   mockup_url: string;
@@ -170,6 +186,8 @@ export type StudioSettings = {
   approval_template_message?: string;
   ncm_defaults?: Record<string, string>;
   onboarding?: Record<string, boolean>;
+  // Marketplaces S-1 (25/05): handling_time estendido em anúncios ML/Shopee
+  marketplace_handling_days?: number;
   [key: string]: any;
 };
 
@@ -203,9 +221,22 @@ export type StudioSlaEstimate = {
   requested_products: number;
 };
 
-// ═══════════════════════════════════════════════════════════
+// ─── Marketplaces S-1 (25/05) — Listing Preview ──────────────
+export type MarketplacePlatform = "mercado_livre" | "shopee";
+
+export type MarketplaceListingPreview = {
+  platform: MarketplacePlatform;
+  product_id: string;
+  product_name: string;
+  handling_time_days: number;
+  payload: Record<string, any>;
+  core_adapter_status: "pending" | "ready";
+  note: string;
+};
+
+// ══════════════════════════════════════════════════════════
 // API
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
 const base = (cid: string) => "/companies/" + cid + "/studio";
 
 export const studioApi = {
@@ -219,19 +250,31 @@ export const studioApi = {
   togglePersonalizable: (cid: string, pid: string, enabled: boolean) =>
     request<{ id: string; is_personalizable: boolean }>(base(cid) + "/products/" + pid + "/personalize", { method: "POST", body: { enabled }, retry: 0, timeout: 5000 }),
 
-  // ── Nivel 1: Settings ─────────────────────────────────────
+  // ── Nivel 1: Settings ─────────────────────────────────
   getSettings: (cid: string) =>
     request<{ settings: StudioSettings }>(base(cid) + "/settings", { method: "GET", retry: 1, timeout: 5000 }),
   saveSettings: (cid: string, patch: Partial<StudioSettings>) =>
     request<{ settings: StudioSettings }>(base(cid) + "/settings", { method: "PATCH", body: patch, retry: 0, timeout: 8000 }),
 
-  // ── Nivel 1: Metrics + SLA ────────────────────────────────
+  // ── Nivel 1: Metrics + SLA ───────────────────────────────
   getMetrics: (cid: string, days = 7) =>
     request<StudioMetrics>(base(cid) + "/metrics?days=" + days, { method: "GET", retry: 1, timeout: 8000 }),
   getSlaEstimate: (cid: string, productIds?: string[]) => {
     const qs = productIds && productIds.length ? "?products=" + productIds.join(",") : "";
     return request<StudioSlaEstimate>(base(cid) + "/sla/estimate" + qs, { method: "GET", retry: 1, timeout: 5000 });
   },
+
+  // ── Marketplaces S-1 (25/05) — Preview do anuncio Studio-aware + handling_days ──
+  getMarketplaceListingPreview: (cid: string, pid: string, platform: MarketplacePlatform = "mercado_livre") =>
+    request<MarketplaceListingPreview>(
+      base(cid) + "/marketplace-listings/preview/" + pid + "?platform=" + platform,
+      { method: "GET", retry: 1, timeout: 8000 }
+    ),
+  saveMarketplaceHandlingDays: (cid: string, days: number) =>
+    request<{ marketplace_handling_days: number; settings: StudioSettings }>(
+      base(cid) + "/marketplace-settings",
+      { method: "PATCH", body: { marketplace_handling_days: days }, retry: 0, timeout: 5000 }
+    ),
 
   // ── F2 Gallery ──
   listCategories: (cid: string) =>
