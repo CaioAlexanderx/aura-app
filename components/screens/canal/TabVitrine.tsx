@@ -38,6 +38,7 @@ import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
 import { useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+import type { AccentTokens } from "@/contexts/AccentTheme";
 
 const PAGE_SIZE = 60;
 const SAVE_DEBOUNCE_MS = 800;
@@ -49,6 +50,7 @@ type Props = { config: any; saveConfig: (data: any) => Promise<void>; isSaving: 
 export function TabVitrine({ config, saveConfig, isSaving }: Props) {
   const cs = useChannelStyles();
   const accent = useAccent();
+  const s = useMemo(() => buildStyles(accent), [accent]);
   const { company } = useAuthStore();
   const cid = company?.id;
 
@@ -500,7 +502,8 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(accent: AccentTokens) {
+  return StyleSheet.create({
   // Banner dual-mode
   modeBanner: {
     flexDirection: "row",
@@ -548,9 +551,9 @@ const s = StyleSheet.create({
   // Filtros
   filterRow: { flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  filterChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  filterChipActive: { backgroundColor: accent.primarySoft, borderColor: accent.primary },
   filterChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
-  filterChipTextActive: { color: Colors.violet3, fontWeight: "700" },
+  filterChipTextActive: { color: accent.primaryStrong, fontWeight: "700" },
 
   // Bulk bar
   bulkBar: {
@@ -559,9 +562,9 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     padding: 12,
     borderRadius: 12,
-    backgroundColor: Colors.violetD,
+    backgroundColor: accent.primarySoft,
     borderWidth: 1,
-    borderColor: Colors.violet,
+    borderColor: accent.primary,
     marginBottom: 10,
     gap: 12,
     flexWrap: "wrap",
@@ -572,14 +575,14 @@ const s = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: Colors.violet3,
+    borderColor: accent.primaryStrong,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.bg3,
   },
-  bulkCheckboxActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  bulkCheckboxActive: { backgroundColor: accent.primary, borderColor: accent.primary },
   bulkCheckboxMark: { color: "#fff", fontSize: 11, fontWeight: "800", lineHeight: 13 },
-  bulkCount: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  bulkCount: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
   bulkBtns: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
   bulkBtn: {
     paddingHorizontal: 10,
@@ -612,7 +615,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: Colors.bg3,
   },
-  checkboxActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  checkboxActive: { backgroundColor: accent.primary, borderColor: accent.primary },
   checkboxMark: { color: "#fff", fontSize: 11, fontWeight: "800", lineHeight: 13 },
   prodLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   prodImg: { width: 40, height: 40, borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
@@ -629,9 +632,9 @@ const s = StyleSheet.create({
 
   // Paginação
   pageRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, marginBottom: 4, gap: 8 },
-  pageBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
+  pageBtn: { backgroundColor: accent.primarySoft, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
   pageBtnDisabled: { opacity: 0.35 },
-  pageBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  pageBtnText: { fontSize: 13, color: accent.primaryStrong, fontWeight: "600" },
   pageInfo: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
 
   // Empty state
@@ -650,7 +653,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: Colors.violet,
+    backgroundColor: accent.primary,
   },
   savingPillText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-});
+  });
+}
