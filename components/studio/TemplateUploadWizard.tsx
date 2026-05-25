@@ -3,19 +3,22 @@
 //
 // Usa <StudioWorkflow> canônico — auto-save de draft.
 // 4 passos:
-//   1. URL da imagem (upload via R2 ainda pendente — MVP usa URL externa)
+//   1. Imagem (upload OU URL externa)
 //   2. Nome + descrição + categoria
 //   3. Tags
 //   4. Salvar
+//
+// 25/05 — item #10: upload integrado via /studio/upload-mockup (R2).
 // ============================================================
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, Image } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, Image, Platform, ActivityIndicator } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
 import { StudioColors } from "@/constants/studio-tokens";
 import { studioApi, type TemplateCategory } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { pickFileWeb, fileToBase64Web, uploadStudioMockup } from "@/services/studioUploadApi";
 
 type Props = {
   categories: TemplateCategory[];
@@ -45,12 +48,38 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
+  const [uploading, setUploading] = useState(false);
   const upd = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
 
   const canAdvance =
     step === 1 ? /^https?:\/\//.test(draft.image_url.trim()) :
     step === 2 ? draft.name.trim().length > 1 :
     true;
+
+  async function pickAndUpload() {
+    if (!company?.id) return;
+    if (Platform.OS !== "web") {
+      toast.error("Upload do dispositivo disponível na versão web. Use URL pública por enquanto no app.");
+      return;
+    }
+    const file = await pickFileWeb("image/*");
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { base64, content_type } = await fileToBase64Web(file);
+      const r = await uploadStudioMockup(company.id, {
+        content_base64: base64,
+        content_type,
+        kind: "template",
+      });
+      upd({ image_url: r.url });
+      toast.success("Template enviado!");
+    } catch (e: any) {
+      toast.error(e?.message || "Falha no upload");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleConcluir() {
     if (!company?.id) return;
@@ -87,8 +116,8 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
         title="Subir template à galeria"
         steps={["Imagem", "Nome e categoria", "Tags", "Salvar"]}
         current={step}
-        onBack={step > 1 ? () => setStep((s) => s - 1) : undefined}
-        onNext={step < 4 ? () => setStep((s) => s + 1) : undefined}
+        onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
+        onNext={step < 4 ? () => setStep((x) => x + 1) : undefined}
         onConcluir={step === 4 ? handleConcluir : undefined}
         primaryDisabled={!canAdvance}
         draftKey="template-upload"
@@ -97,11 +126,26 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
       >
         {step === 1 && (
           <View style={s.block}>
-            <Text style={s.q}>Cole a URL pública da imagem do template</Text>
+            <Text style={s.q}>Qual a imagem desse template?</Text>
             <Text style={s.help}>
-              Por enquanto suportamos URLs externas (R2/CDN/Cloudinary). Upload direto do dispositivo
-              chega numa próxima iteração da Fase 2.
+              Suba do seu dispositivo ou cole uma URL pública (PNG/JPG/WebP até 15 MB).
             </Text>
+
+            <Pressable onPress={pickAndUpload} disabled={uploading} style={[s.uploadBtn, uploading && { opacity: 0.6 }]}>
+              {uploading ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Icon name="upload" size={16} color="#fff" />
+                  <Text style={s.uploadBtnTxt}>Subir do dispositivo</Text>
+                </>
+              )}
+            </Pressable>
+
+            <View style={s.divider}>
+              <View style={s.dividerLine} />
+              <Text style={s.dividerTxt}>ou cole uma URL</Text>
+              <View style={s.dividerLine} />
+            </View>
+
             <TextInput
               style={s.input}
               placeholder="https://..."
@@ -109,7 +153,6 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
               onChangeText={(v) => upd({ image_url: v })}
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus
             />
             {/^https?:\/\//.test(draft.image_url.trim()) && (
               <View style={s.preview}>
@@ -249,6 +292,16 @@ const s = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
     fontSize: 14, color: StudioColors.ink,
   },
+
+  uploadBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: StudioColors.primary,
+    paddingVertical: 12, borderRadius: 12, marginBottom: 10,
+  },
+  uploadBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 8 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: StudioColors.ink5 },
+  dividerTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
 
   preview: { marginTop: 14, alignItems: "center" },
   previewImg: { width: 180, height: 180, borderRadius: 14, backgroundColor: "#fff" },
