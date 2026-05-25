@@ -4,16 +4,20 @@
 // 25/05/2026: substitui o StudioBridge stub por implementação real.
 // Reaproveita o hook useDigitalChannel + os 5 componentes Tab* do
 // Canal Digital varejo (TabMeuSite, TabDesign, TabVitrine, TabEntrega,
-// TabPedidos) — mesma feature set, mas chrome externo (eyebrow + hero
-// + tab bar) com tokens Studio (navy #1E3A8A + accent magenta #EC4899).
+// TabPedidos) — mesma feature set, tematizado via <AccentTheme> com
+// tokens Studio (navy #1E3A8A + accent magenta #EC4899).
 //
-// Studio não tem gate de plano (memory studio_sem_gate_de_plano_25mai2026)
-// — qualquer empresa com vertical=studio ou pdv_settings.studio_enabled
-// acessa essa tela.
+// Os 5 Tab* migraram pra useChannelStyles() hook (commits 9efe4059,
+// 00b38da9, 400a1f8b, 0e0db3c2, 0ddcca9c) — agora respondem ao
+// AccentTheme provider. Wrap aqui aplica tokens Studio em chips,
+// botões CTA (saveBtn), badges e switches.
+//
+// Studio não tem gate de plano (memory studio_sem_gate_de_plano_25mai2026).
 // ============================================================
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
 import { StudioColors } from "@/constants/studio-tokens";
+import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -42,93 +46,95 @@ export default function StudioVendasLojaDigital() {
     || (config.slug ? `${STOREFRONT_BASE}/${config.slug}` : null);
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
-      {/* Header Studio — eyebrow magenta + título navy */}
-      <View style={s.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>VENDAS · LOJA DIGITAL</Text>
-          <Text style={s.title}>Storefront pra vender online</Text>
-          <Text style={s.sub}>
-            Página pública onde o cliente vê seus produtos personalizáveis, configura a personalização e fecha o pedido pelo Pix ou cartão.
-          </Text>
+    <AccentTheme tokens={studioAccent}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+        {/* Header Studio — eyebrow magenta + título navy */}
+        <View style={s.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.eyebrow}>VENDAS · LOJA DIGITAL</Text>
+            <Text style={s.title}>Storefront pra vender online</Text>
+            <Text style={s.sub}>
+              Página pública onde o cliente vê seus produtos personalizáveis, configura a personalização e fecha o pedido pelo Pix ou cartão.
+            </Text>
+          </View>
+          {config.is_published && storefrontUrl && (
+            <Pressable
+              onPress={() => Linking.openURL(storefrontUrl)}
+              style={s.viewSiteBtn}
+            >
+              <Icon name="globe" size={13} color={StudioColors.primary} />
+              <Text style={s.viewSiteBtnTxt}>Ver site</Text>
+            </Pressable>
+          )}
         </View>
-        {config.is_published && storefrontUrl && (
-          <Pressable
-            onPress={() => Linking.openURL(storefrontUrl)}
-            style={s.viewSiteBtn}
-          >
-            <Icon name="globe" size={13} color={StudioColors.primary} />
-            <Text style={s.viewSiteBtnTxt}>Ver site</Text>
-          </Pressable>
+
+        {/* Hero Studio — fundo navy soft com accent */}
+        <View style={s.hero}>
+          <View style={s.heroIcon}>
+            <Icon name="globe" size={22} color={StudioColors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.heroTitle}>Sua loja Studio em minutos</Text>
+            <Text style={s.heroDesc}>
+              Configure vitrine, design, entrega e acompanhe pedidos. Produtos marcados como personalizáveis aparecem com o configurador.
+            </Text>
+          </View>
+          <View style={s.heroPill}>
+            <Text style={s.heroPillTxt}>
+              {config.is_published ? "PUBLICADA" : "RASCUNHO"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Tabs reaproveitadas do Canal Digital varejo — agora tematizadas via AccentTheme */}
+        <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+
+        {isLoading ? (
+          <ListSkeleton rows={4} />
+        ) : (
+          <>
+            {tab === 0 && (
+              <TabMeuSite
+                config={config}
+                saveConfig={saveConfig}
+                isSaving={isSaving}
+                requestDomain={requestDomain}
+                isRequestingDomain={isRequestingDomain}
+                uploadImage={uploadImage}
+                isUploadingImage={isUploadingImage}
+                setupPix={setupPix}
+                isSettingUpPix={isSettingUpPix}
+              />
+            )}
+            {tab === 1 && (
+              <TabDesign
+                config={config}
+                saveConfig={saveConfig}
+                isSaving={isSaving}
+                uploadImage={uploadImage}
+                isUploadingImage={isUploadingImage}
+                deleteImage={deleteImage}
+              />
+            )}
+            {tab === 2 && (
+              <TabVitrine
+                config={config}
+                saveConfig={saveConfig}
+                isSaving={isSaving}
+              />
+            )}
+            {tab === 3 && (
+              <TabEntrega
+                config={config}
+                saveConfig={saveConfig}
+                isSaving={isSaving}
+              />
+            )}
+            {tab === 4 && <TabPedidos />}
+          </>
         )}
-      </View>
-
-      {/* Hero Studio — fundo navy soft com accent */}
-      <View style={s.hero}>
-        <View style={s.heroIcon}>
-          <Icon name="globe" size={22} color={StudioColors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.heroTitle}>Sua loja Studio em minutos</Text>
-          <Text style={s.heroDesc}>
-            Configure vitrine, design, entrega e acompanhe pedidos. Produtos marcados como personalizáveis aparecem com o configurador.
-          </Text>
-        </View>
-        <View style={s.heroPill}>
-          <Text style={s.heroPillTxt}>
-            {config.is_published ? "PUBLICADA" : "RASCUNHO"}
-          </Text>
-        </View>
-      </View>
-
-      {/* Tabs reaproveitadas do Canal Digital varejo */}
-      <TabBar tabs={TABS} active={tab} onSelect={setTab} />
-
-      {isLoading ? (
-        <ListSkeleton rows={4} />
-      ) : (
-        <>
-          {tab === 0 && (
-            <TabMeuSite
-              config={config}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-              requestDomain={requestDomain}
-              isRequestingDomain={isRequestingDomain}
-              uploadImage={uploadImage}
-              isUploadingImage={isUploadingImage}
-              setupPix={setupPix}
-              isSettingUpPix={isSettingUpPix}
-            />
-          )}
-          {tab === 1 && (
-            <TabDesign
-              config={config}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-              uploadImage={uploadImage}
-              isUploadingImage={isUploadingImage}
-              deleteImage={deleteImage}
-            />
-          )}
-          {tab === 2 && (
-            <TabVitrine
-              config={config}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-            />
-          )}
-          {tab === 3 && (
-            <TabEntrega
-              config={config}
-              saveConfig={saveConfig}
-              isSaving={isSaving}
-            />
-          )}
-          {tab === 4 && <TabPedidos />}
-        </>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </AccentTheme>
   );
 }
 
@@ -179,7 +185,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: StudioColors.primarySoft,
+    borderColor: StudioColors.primaryBorder,
   },
   viewSiteBtnTxt: {
     fontSize: 12,
@@ -196,7 +202,7 @@ const s = StyleSheet.create({
     padding: 18,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: StudioColors.primarySoft,
+    borderColor: StudioColors.primaryBorder,
   },
   heroIcon: {
     width: 44,
@@ -206,7 +212,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: StudioColors.primarySoft,
+    borderColor: StudioColors.primaryBorder,
     flexShrink: 0,
   },
   heroTitle: {
