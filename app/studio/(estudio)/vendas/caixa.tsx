@@ -1,17 +1,21 @@
-import { StudioPlaceholder } from "@/components/studio/StudioPlaceholder";
+import { StudioBridge } from "@/components/studio/StudioBridge";
 
 export default function StudioVendasCaixa() {
   return (
-    <StudioPlaceholder
-      icon="credit-card"
-      phase="Atalho · reaproveita PDV existente"
-      title="Caixa / PDV"
-      subtitle="O PDV do varejo continua sendo a fonte de verdade. Aqui vai abrir o PDV com filtro automático nos produtos personalizáveis."
-      bullets={[
-        "Mesmo PDV do varejo, sem duplicação",
-        "Filtro automático: só produtos com is_personalizable=true",
-        "Configuração de personalização aparece no add-to-cart",
-        "Fluxo de pagamento idêntico ao varejo",
+    <StudioBridge
+      eyebrow="VENDAS · CAIXA / PDV"
+      title="Caixa do estúdio"
+      subtitle="Frente de caixa pra registrar pedidos personalizados, pagamentos e impressão de NFC-e."
+      bridgeHref="/(tabs)/pdv"
+      bridgeIcon="credit-card"
+      bridgeLabel="Abrir PDV"
+      bridgeNote="O PDV do Aura Varejo funciona normalmente — você cadastra produto personalizável em Estúdio › Produtos e vende aqui. Os pedidos aparecem em Produção automaticamente."
+      futureFeatures={[
+        "Wizard de personalização dentro do PDV (campos do produto aparecem ao escolher)",
+        "Preview SVG ao vivo do que o cliente está pedindo",
+        "Captura de telefone do cliente já pré-formatada pra aprovação de arte",
+        "Trigger automático do fluxo de aprovação de arte ao fechar venda",
+        "SLA de produção calculado em tempo real baseado na fila atual",
       ]}
     />
   );
