@@ -1,18 +1,503 @@
-import { StudioPlaceholder } from "@/components/studio/StudioPlaceholder";
+// ============================================================
+// AURA STUDIO · Produtos personalizáveis (Fase 1)
+//
+// Lista produtos da empresa + toggle "personalizável" + form
+// expandido inline pra configurar print area e campos.
+//
+// Endpoints (backend src/routes/studio.js):
+//   GET    /companies/:cid/studio/products/:pid/customization-config
+//   PUT    /companies/:cid/studio/products/:pid/customization-config
+//   POST   /companies/:cid/studio/products/:pid/personalize
+//
+// Quando salva config: marca onboarding.product = true no studio_settings.
+// ============================================================
+import { useEffect, useState, useCallback } from "react";
+import {
+  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
+  TextInput, Switch,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { StudioColors } from "@/constants/studio-tokens";
+import { studioApi, type CustomizationConfig, type CustomizationField, type CustomizationFieldType } from "@/services/studioApi";
+import { request } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/components/Toast";
+
+// Tipo enxuto pro produto vindo de /companies/:cid/products
+type ProductRow = {
+  id: string;
+  name: string;
+  price: number;
+  is_personalizable?: boolean;
+  category_name?: string | null;
+};
+
+const FIELD_TYPE_LABELS: Record<CustomizationFieldType, string> = {
+  text:     "Texto",
+  image:    "Foto do cliente",
+  template: "Escolher template da galeria",
+  color:    "Cor",
+  option:   "Opções",
+};
+
+const FIELD_TYPE_ICONS: Record<CustomizationFieldType, string> = {
+  text:     "edit",
+  image:    "image",
+  template: "star",
+  color:    "tag",
+  option:   "check",
+};
 
 export default function StudioProdutos() {
+  const { company } = useAuthStore();
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [filter, setFilter] = useState<"all" | "personalizable" | "non">("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [configCache, setConfigCache] = useState<Record<string, CustomizationConfig | null>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!company?.id) return;
+    setLoading(true);
+    try {
+      // Backend devolve {products: [...]} ou array direto. Tentamos os dois.
+      const r: any = await request(`/companies/${company.id}/products?limit=500`, { method: "GET", retry: 1, timeout: 10000 });
+      const list: ProductRow[] = Array.isArray(r) ? r : (r.products || r.items || []);
+      setProducts(list);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao carregar produtos");
+    } finally { setLoading(false); }
+  }, [company?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = products.filter((p) => {
+    if (filter === "all") return true;
+    if (filter === "personalizable") return !!p.is_personalizable;
+    return !p.is_personalizable;
+  });
+
+  const personalizedCount = products.filter((p) => p.is_personalizable).length;
+
+  async function togglePersonalizable(p: ProductRow) {
+    if (!company?.id) return;
+    const next = !p.is_personalizable;
+    setSavingId(p.id);
+    try {
+      await studioApi.togglePersonalizable(company.id, p.id, next);
+      setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, is_personalizable: next } : x));
+      toast.success(next ? "✨ Produto agora aceita personalização" : "Personalização desativada");
+      // Se ligou e ainda não tem config, abre o form pra configurar
+      if (next && !configCache[p.id]) {
+        openExpand(p);
+      }
+    } catch (e: any) { toast.error(e?.message || "Erro"); }
+    finally { setSavingId(null); }
+  }
+
+  async function openExpand(p: ProductRow) {
+    if (!company?.id) return;
+    if (expandedId === p.id) { setExpandedId(null); return; }
+    setExpandedId(p.id);
+    if (!configCache[p.id]) {
+      try {
+        const r = await studioApi.getCustomizationConfig(company.id, p.id);
+        setConfigCache((c) => ({ ...c, [p.id]: r.config }));
+      } catch { /* config vazia ok — começa do zero */ }
+    }
+  }
+
+  function updateConfig(pid: string, patch: Partial<CustomizationConfig>) {
+    setConfigCache((c) => ({
+      ...c,
+      [pid]: {
+        ...(c[pid] || { print_area: { width_cm: 10, height_cm: 10, position: "center" }, fields: [] }),
+        ...patch,
+      },
+    }));
+  }
+
+  function updateField(pid: string, fid: string, patch: Partial<CustomizationField>) {
+    setConfigCache((c) => {
+      const cur = c[pid];
+      if (!cur) return c;
+      return {
+        ...c,
+        [pid]: {
+          ...cur,
+          fields: cur.fields.map((f) => f.id === fid ? { ...f, ...patch } : f),
+        },
+      };
+    });
+  }
+
+  function addField(pid: string, type: CustomizationFieldType) {
+    setConfigCache((c) => {
+      const cur = c[pid] || { print_area: { width_cm: 10, height_cm: 10, position: "center" as const }, fields: [] };
+      const newField: CustomizationField = {
+        id: `f_${Date.now()}`,
+        type,
+        label: FIELD_TYPE_LABELS[type],
+        required: type !== "option" && type !== "color",
+        config: type === "text" ? { max_chars: 30 } : {},
+      };
+      return { ...c, [pid]: { ...cur, fields: [...cur.fields, newField] } };
+    });
+  }
+
+  function removeField(pid: string, fid: string) {
+    setConfigCache((c) => {
+      const cur = c[pid];
+      if (!cur) return c;
+      return { ...c, [pid]: { ...cur, fields: cur.fields.filter((f) => f.id !== fid) } };
+    });
+  }
+
+  async function saveConfig(p: ProductRow) {
+    if (!company?.id) return;
+    const cfg = configCache[p.id];
+    if (!cfg) { toast.error("Configure ao menos 1 campo"); return; }
+    if (!cfg.fields.length) { toast.error("Adicione ao menos 1 campo personalizável"); return; }
+    setSavingId(p.id);
+    try {
+      await studioApi.saveCustomizationConfig(company.id, p.id, cfg);
+      toast.success("✨ Configuração salva!");
+      setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, is_personalizable: true } : x));
+      setExpandedId(null);
+    } catch (e: any) { toast.error(e?.message || "Erro ao salvar"); }
+    finally { setSavingId(null); }
+  }
+
   return (
-    <StudioPlaceholder
-      icon="shopping-bag"
-      phase="Fase 1 · em construção"
-      title="Produtos personalizáveis"
-      subtitle="Aqui você cadastra quais produtos aceitam personalização e configura o que o cliente pode mudar (texto, foto, galeria de templates)."
-      bullets={[
-        "Lista de produtos com badge \"personalizável on/off\"",
-        "Wizard de 4 passos pra configurar cada produto",
-        "Pré-visualização SVG ao vivo da personalização",
-        "Integra com o catálogo do PDV — sem duplicação",
-      ]}
-    />
+    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+      {/* Header */}
+      <View style={s.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.eyebrow}>FASE 1 · PRODUTOS PERSONALIZÁVEIS</Text>
+          <Text style={s.title}>O que o cliente pode personalizar</Text>
+          <Text style={s.sub}>
+            Marque quais produtos do seu catálogo aceitam personalização (texto, foto, escolha de template) e configure o que pode ser mudado.
+          </Text>
+        </View>
+        <View style={s.statPill}>
+          <Text style={s.statNum}>{personalizedCount}</Text>
+          <Text style={s.statLabel}>personalizáveis</Text>
+        </View>
+      </View>
+
+      {/* Filter tabs */}
+      <View style={s.filterRow}>
+        <FilterChip label="Todos" count={products.length} active={filter === "all"} onPress={() => setFilter("all")} />
+        <FilterChip label="Personalizáveis" count={personalizedCount} active={filter === "personalizable"} onPress={() => setFilter("personalizable")} tone="primary" />
+        <FilterChip label="Não personalizáveis" count={products.length - personalizedCount} active={filter === "non"} onPress={() => setFilter("non")} />
+      </View>
+
+      {/* Loading */}
+      {loading && (
+        <View style={{ paddingVertical: 30 }}>
+          <ActivityIndicator size="small" color={StudioColors.primary} />
+        </View>
+      )}
+
+      {/* Empty (sem produtos no catálogo) */}
+      {!loading && products.length === 0 && (
+        <View style={s.emptyCard}>
+          <Icon name="shopping-bag" size={32} color={StudioColors.ink4} />
+          <Text style={s.emptyTitle}>Catálogo vazio</Text>
+          <Text style={s.emptySub}>
+            Cadastre produtos no Estoque primeiro. Depois volta aqui pra marcar quais aceitam personalização.
+          </Text>
+        </View>
+      )}
+
+      {/* Empty (filtro retornou vazio) */}
+      {!loading && products.length > 0 && filtered.length === 0 && (
+        <View style={s.emptyCard}>
+          <Icon name="filter" size={28} color={StudioColors.ink4} />
+          <Text style={s.emptyTitle}>Nenhum produto nesta categoria</Text>
+          <Text style={s.emptySub}>
+            {filter === "personalizable"
+              ? "Nenhum produto marcado como personalizável ainda. Mude pra \"Não personalizáveis\" e ative os que aceitam."
+              : "Todos os produtos já estão marcados como personalizáveis."}
+          </Text>
+        </View>
+      )}
+
+      {/* Lista */}
+      {!loading && filtered.length > 0 && (
+        <View style={s.list}>
+          {filtered.map((p) => {
+            const expanded = expandedId === p.id;
+            const cfg = configCache[p.id];
+            const saving = savingId === p.id;
+            return (
+              <View key={p.id} style={[s.productCard, p.is_personalizable && s.productCardActive]}>
+                {/* Linha principal */}
+                <View style={s.productRow}>
+                  <View style={[s.productIcon, p.is_personalizable && { backgroundColor: StudioColors.primary }]}>
+                    <Icon name="shopping-bag" size={16} color={p.is_personalizable ? "#fff" : StudioColors.ink3} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.productName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={s.productMeta}>
+                      R$ {Number(p.price || 0).toFixed(2)}
+                      {p.category_name && <Text> · {p.category_name}</Text>}
+                    </Text>
+                  </View>
+                  {p.is_personalizable && (
+                    <Pressable style={s.configBtn} onPress={() => openExpand(p)}>
+                      <Icon name={expanded ? "chevron-up" : "settings"} size={14} color={StudioColors.primary} />
+                      <Text style={s.configBtnTxt}>{expanded ? "Fechar" : "Configurar"}</Text>
+                    </Pressable>
+                  )}
+                  <Switch
+                    value={!!p.is_personalizable}
+                    onValueChange={() => togglePersonalizable(p)}
+                    disabled={saving}
+                    trackColor={{ false: StudioColors.ink5, true: StudioColors.primary }}
+                    thumbColor="#fff"
+                  />
+                </View>
+
+                {/* Form expandido */}
+                {expanded && p.is_personalizable && (
+                  <View style={s.expand}>
+                    {!cfg && (
+                      <View style={{ paddingVertical: 14 }}>
+                        <ActivityIndicator size="small" color={StudioColors.primary} />
+                      </View>
+                    )}
+                    {cfg && (
+                      <>
+                        {/* Print area */}
+                        <Text style={s.sectionLabel}>ÁREA DE IMPRESSÃO</Text>
+                        <View style={s.row}>
+                          <View style={{ flex: 1, minWidth: 100 }}>
+                            <Text style={s.label}>Largura (cm)</Text>
+                            <TextInput
+                              style={s.input}
+                              keyboardType="decimal-pad"
+                              value={String(cfg.print_area.width_cm)}
+                              onChangeText={(v) => updateConfig(p.id, { print_area: { ...cfg.print_area, width_cm: parseFloat(v.replace(",", ".")) || 0 } })}
+                            />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 100 }}>
+                            <Text style={s.label}>Altura (cm)</Text>
+                            <TextInput
+                              style={s.input}
+                              keyboardType="decimal-pad"
+                              value={String(cfg.print_area.height_cm)}
+                              onChangeText={(v) => updateConfig(p.id, { print_area: { ...cfg.print_area, height_cm: parseFloat(v.replace(",", ".")) || 0 } })}
+                            />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 150 }}>
+                            <Text style={s.label}>Posição</Text>
+                            <View style={s.positionRow}>
+                              {(["left", "center", "right"] as const).map((pos) => (
+                                <Pressable
+                                  key={pos}
+                                  style={[s.positionChip, cfg.print_area.position === pos && s.positionChipSel]}
+                                  onPress={() => updateConfig(p.id, { print_area: { ...cfg.print_area, position: pos } })}
+                                >
+                                  <Text style={[s.positionChipTxt, cfg.print_area.position === pos && s.positionChipTxtSel]}>
+                                    {pos === "left" ? "Esq." : pos === "center" ? "Centro" : "Dir."}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Fields */}
+                        <Text style={[s.sectionLabel, { marginTop: 18 }]}>CAMPOS QUE O CLIENTE PREENCHE</Text>
+                        {cfg.fields.length === 0 && (
+                          <Text style={s.hintInline}>
+                            Adicione pelo menos 1 campo. Ex: "Nome da pessoa" (texto), "Foto" (upload), "Cor" (opção).
+                          </Text>
+                        )}
+                        {cfg.fields.map((f) => (
+                          <View key={f.id} style={s.fieldRow}>
+                            <View style={s.fieldIcon}>
+                              <Icon name={FIELD_TYPE_ICONS[f.type] as any} size={14} color={StudioColors.primary} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <View style={s.fieldHead}>
+                                <TextInput
+                                  style={s.fieldLabel}
+                                  value={f.label}
+                                  onChangeText={(v) => updateField(p.id, f.id, { label: v })}
+                                  placeholder="Nome do campo"
+                                />
+                                <View style={s.fieldTypePill}>
+                                  <Text style={s.fieldTypePillTxt}>{FIELD_TYPE_LABELS[f.type]}</Text>
+                                </View>
+                              </View>
+                              <View style={s.fieldOpts}>
+                                <Pressable
+                                  style={[s.fieldOpt, f.required && s.fieldOptOn]}
+                                  onPress={() => updateField(p.id, f.id, { required: !f.required })}
+                                >
+                                  <Icon name={f.required ? "check" : "x"} size={10} color={f.required ? "#fff" : StudioColors.ink3} />
+                                  <Text style={[s.fieldOptTxt, f.required && { color: "#fff" }]}>Obrigatório</Text>
+                                </Pressable>
+                                {f.type === "text" && (
+                                  <View style={s.fieldOpt}>
+                                    <Text style={s.fieldOptTxt}>Máx:</Text>
+                                    <TextInput
+                                      style={s.fieldOptInput}
+                                      keyboardType="number-pad"
+                                      value={String(f.config?.max_chars || 30)}
+                                      onChangeText={(v) => updateField(p.id, f.id, { config: { ...f.config, max_chars: parseInt(v) || 30 } })}
+                                    />
+                                    <Text style={s.fieldOptTxt}>chars</Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                            <Pressable onPress={() => removeField(p.id, f.id)} style={s.fieldDel} hitSlop={8}>
+                              <Icon name="trash" size={13} color={StudioColors.ink4} />
+                            </Pressable>
+                          </View>
+                        ))}
+
+                        {/* Add field menu */}
+                        <View style={s.addFieldRow}>
+                          <Text style={s.addFieldLabel}>+ Adicionar campo:</Text>
+                          {(["text", "image", "template", "color", "option"] as CustomizationFieldType[]).map((t) => (
+                            <Pressable key={t} style={s.addFieldChip} onPress={() => addField(p.id, t)}>
+                              <Icon name={FIELD_TYPE_ICONS[t] as any} size={11} color={StudioColors.primary} />
+                              <Text style={s.addFieldChipTxt}>{FIELD_TYPE_LABELS[t]}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+
+                        {/* Actions */}
+                        <View style={s.actions}>
+                          <Pressable style={s.btnSec} onPress={() => setExpandedId(null)}>
+                            <Text style={s.btnSecTxt}>Fechar</Text>
+                          </Pressable>
+                          <Pressable style={[s.btnPri, saving && { opacity: 0.6 }]} onPress={() => saveConfig(p)} disabled={saving}>
+                            {saving ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <>
+                                <Icon name="check" size={14} color="#fff" />
+                                <Text style={s.btnPriTxt}>Salvar configuração</Text>
+                              </>
+                            )}
+                          </Pressable>
+                        </View>
+                      </>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Hint */}
+      <View style={s.hintCard}>
+        <Icon name="info" size={14} color={StudioColors.primary} />
+        <Text style={s.hintTxt}>
+          <Text style={s.hintBold}>Próxima iteração:</Text> preview SVG ao vivo da personalização (ver como vai ficar antes de mandar pra produção) + integração com galeria de templates.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
+
+function FilterChip({ label, count, active, onPress, tone }: { label: string; count: number; active: boolean; onPress: () => void; tone?: "primary" }) {
+  return (
+    <Pressable
+      style={[
+        s.filterChip,
+        active && (tone === "primary" ? s.filterChipActivePri : s.filterChipActive),
+      ]}
+      onPress={onPress}
+    >
+      <Text style={[s.filterChipTxt, active && { color: "#fff" }]}>{label}</Text>
+      <View style={[s.filterChipCount, active && { backgroundColor: "rgba(255,255,255,0.25)" }]}>
+        <Text style={[s.filterChipCountTxt, active && { color: "#fff" }]}>{count}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+const s = StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: StudioColors.bg },
+  container: { padding: 28, paddingBottom: 60, maxWidth: 1000, alignSelf: "center", width: "100%" },
+
+  headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 22, flexWrap: "wrap" },
+  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
+  sub: { fontSize: 13.5, color: StudioColors.ink3, marginTop: 4 },
+  statPill: { alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: StudioColors.primarySoft, borderRadius: 16 },
+  statNum: { fontSize: 22, fontWeight: "900", color: StudioColors.primary, letterSpacing: -0.5 },
+  statLabel: { fontSize: 10.5, color: StudioColors.primary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: -2 },
+
+  filterRow: { flexDirection: "row", gap: 8, marginBottom: 18, flexWrap: "wrap" },
+  filterChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: StudioColors.paperCard, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.ink5 },
+  filterChipActive: { backgroundColor: StudioColors.ink, borderColor: StudioColors.ink },
+  filterChipActivePri: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
+  filterChipTxt: { fontSize: 12.5, fontWeight: "700", color: StudioColors.ink2 },
+  filterChipCount: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, backgroundColor: StudioColors.ink5, alignItems: "center" },
+  filterChipCountTxt: { fontSize: 11, fontWeight: "800", color: StudioColors.ink3 },
+
+  emptyCard: { alignItems: "center", padding: 40, gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 18, borderWidth: 1, borderColor: StudioColors.ink5 },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: StudioColors.ink, marginTop: 6 },
+  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 380 },
+
+  list: { gap: 10 },
+  productCard: { backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5, overflow: "hidden" },
+  productCardActive: { borderColor: StudioColors.primarySoft, backgroundColor: StudioColors.paperCardElev },
+  productRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
+  productIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.bgSoft, alignItems: "center", justifyContent: "center" },
+  productName: { fontSize: 14, fontWeight: "700", color: StudioColors.ink },
+  productMeta: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
+  configBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 8 },
+  configBtnTxt: { color: StudioColors.primary, fontSize: 11.5, fontWeight: "700" },
+
+  expand: { padding: 18, paddingTop: 4, borderTopWidth: 1, borderTopColor: StudioColors.ink5, gap: 8 },
+  sectionLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
+  row: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
+  label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 },
+  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13.5, color: StudioColors.ink },
+  positionRow: { flexDirection: "row", gap: 4 },
+  positionChip: { flex: 1, paddingVertical: 9, borderRadius: 8, backgroundColor: StudioColors.bgSoft, borderWidth: 1, borderColor: StudioColors.ink5, alignItems: "center" },
+  positionChipSel: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
+  positionChipTxt: { fontSize: 11.5, fontWeight: "700", color: StudioColors.ink3 },
+  positionChipTxtSel: { color: "#fff" },
+
+  hintInline: { fontSize: 12, color: StudioColors.ink3, fontStyle: "italic", marginBottom: 10, padding: 10, backgroundColor: StudioColors.bgSoft, borderRadius: 8 },
+
+  fieldRow: { flexDirection: "row", gap: 10, padding: 10, marginTop: 6, backgroundColor: "#fff", borderRadius: 10, borderWidth: 1, borderColor: StudioColors.ink5 },
+  fieldIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: StudioColors.primaryGhost, alignItems: "center", justifyContent: "center" },
+  fieldHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  fieldLabel: { flex: 1, fontSize: 13.5, fontWeight: "700", color: StudioColors.ink, paddingVertical: 4 },
+  fieldTypePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: StudioColors.bgSoft },
+  fieldTypePillTxt: { fontSize: 10, fontWeight: "700", color: StudioColors.ink2, textTransform: "uppercase", letterSpacing: 0.3 },
+  fieldOpts: { flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" },
+  fieldOpt: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: StudioColors.bgSoft, borderRadius: 6 },
+  fieldOptOn: { backgroundColor: StudioColors.primary },
+  fieldOptTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
+  fieldOptInput: { fontSize: 11, color: StudioColors.ink, fontWeight: "700", paddingHorizontal: 4, minWidth: 28, backgroundColor: "#fff", borderRadius: 4 },
+  fieldDel: { width: 26, height: 26, alignItems: "center", justifyContent: "center" },
+
+  addFieldRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  addFieldLabel: { fontSize: 12, fontWeight: "700", color: StudioColors.ink3 },
+  addFieldChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft },
+  addFieldChipTxt: { fontSize: 11.5, fontWeight: "700", color: StudioColors.primary },
+
+  actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 14 },
+  btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10, minWidth: 120, justifyContent: "center" },
+  btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
+  btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff" },
+  btnSecTxt: { color: StudioColors.ink2, fontWeight: "600", fontSize: 13 },
+
+  hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.primaryGhost, borderRadius: 12, padding: 12, marginTop: 22, borderWidth: 1, borderColor: StudioColors.primarySoft },
+  hintTxt: { fontSize: 12, color: StudioColors.ink2, flex: 1, lineHeight: 17 },
+  hintBold: { fontWeight: "700", color: StudioColors.primary },
+});
