@@ -79,23 +79,23 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
 
   const handleChangeStatus = useCallback(async (newStatus: LeadStatus) => {
     if (!currentLead) return;
-    await mutations.update.mutateAsync({
-      id: currentLead.id,
-      body: { status: newStatus },
-    });
-    invalidate();
-    nextLead();
-  }, [currentLead, mutations.update, invalidate, nextLead]);
+    try {
+      await mutations.update.mutateAsync({ id: currentLead.id, body: { status: newStatus } });
+      nextLead(); // nao invalida fila durante sessao — progresso preservado
+    } catch {
+      // toast ja exibido pelo onError do mutation
+    }
+  }, [currentLead, mutations.update, nextLead]);
 
   const handleMarkRotten = useCallback(async () => {
     if (!currentLead) return;
-    await mutations.update.mutateAsync({
-      id: currentLead.id,
-      body: { rotten_since: new Date().toISOString() },
-    });
-    invalidate();
-    nextLead();
-  }, [currentLead, mutations.update, invalidate, nextLead]);
+    try {
+      await mutations.update.mutateAsync({ id: currentLead.id, body: { rotten_since: new Date().toISOString() } });
+      nextLead();
+    } catch {
+      // toast ja exibido pelo onError do mutation
+    }
+  }, [currentLead, mutations.update, nextLead]);
 
   const handleSubmitInteraction = useCallback(async (p: any) => {
     if (!currentLead) return;
