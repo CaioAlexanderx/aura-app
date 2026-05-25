@@ -1,9 +1,10 @@
 // ============================================================
 // AURA. — services/studioApi.ts
-// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5
+// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1
 //
-// Migrations 130 + 131 + 132. PRs Aura-backend#110/#111/#112.
-// Memory: plano_aura_studio_vertical_24mai2026
+// Migrations 130 + 131 + 132 + 25/05/2026 (KDS unificado).
+// PRs Aura-backend#110/#111/#112 + 352990c/9bfee1c (Nivel 1 sub-onda A).
+// Memory: plano_aura_studio_vertical_24mai2026, projeto_studio_nivel1_AB_25mai2026
 // ============================================================
 import { request } from "./api";
 
@@ -76,8 +77,10 @@ export type CompositionSummary = {
   total_cost: number; margin_pct: number | null; item_count: number;
 };
 
-// ─── F4 KDS Orders ───────────────────────────────────────────
+// ─── F4 KDS Orders (atualizado 25/05 — KDS unificado) ────────
 export type StudioProductionStatus = "pending_art" | "approved" | "in_production" | "ready" | "delivered";
+
+export type StudioOrderSource = "digital" | "pdv";
 
 export type StudioOrder = {
   id: string;
@@ -91,6 +94,10 @@ export type StudioOrder = {
   item_count: number;
   pending_approval_url: string | null;
   approval_count: number;
+  // Adicionados 25/05 (view studio_orders unificada)
+  source?: StudioOrderSource;
+  digital_order_id?: string | null;
+  pdv_sale_id?: string | null;
 };
 
 export type StudioOrderItem = {
@@ -103,7 +110,7 @@ export type StudioOrderItem = {
 };
 
 export type StudioOrderDetail = {
-  order: StudioOrder & { vertical: string; updated_at: string };
+  order: StudioOrder & { vertical?: string; updated_at: string };
   items: StudioOrderItem[];
   approvals: StudioApproval[];
 };
@@ -155,6 +162,47 @@ export type PublicApproval = {
   revisions: StudioApprovalRevision[];
 };
 
+// ─── Nivel 1 (25/05) — Settings + Metrics + SLA ──────────────
+export type StudioSettings = {
+  default_sla_days?: number;
+  production_capacity_per_day?: number;
+  approval_wa_phone?: string;
+  approval_template_message?: string;
+  ncm_defaults?: Record<string, string>;
+  onboarding?: Record<string, boolean>;
+  [key: string]: any;
+};
+
+export type StudioMetrics = {
+  em_producao: number;
+  aguardando_arte: number;
+  aprovados: number;
+  ready_total: number;
+  prontos_hoje: number;
+  vendas_periodo: number;
+  pedidos_periodo: number;
+  revenue_today: number;
+  revenue_7d: number;
+  orders_7d: number;
+  orders_today: number;
+  delivered_7d: number;
+  overdue_count: number;
+  total_orders: number;
+  margem_media_pct: number | null;
+  tempo_medio_dias: number | null;
+  period_days: number;
+  computed_at: string;
+};
+
+export type StudioSlaEstimate = {
+  sla_base_days: number;
+  queue_qty: number;
+  capacity_per_day: number;
+  queue_added_days: number;
+  total_estimate_days: number;
+  requested_products: number;
+};
+
 // ═══════════════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════════════
@@ -170,6 +218,20 @@ export const studioApi = {
     request<CustomizationConfigResponse>(base(cid) + "/products/" + pid + "/customization-config", { method: "PUT", body: cfg, retry: 0, timeout: 10000 }),
   togglePersonalizable: (cid: string, pid: string, enabled: boolean) =>
     request<{ id: string; is_personalizable: boolean }>(base(cid) + "/products/" + pid + "/personalize", { method: "POST", body: { enabled }, retry: 0, timeout: 5000 }),
+
+  // ── Nivel 1: Settings ─────────────────────────────────────
+  getSettings: (cid: string) =>
+    request<{ settings: StudioSettings }>(base(cid) + "/settings", { method: "GET", retry: 1, timeout: 5000 }),
+  saveSettings: (cid: string, patch: Partial<StudioSettings>) =>
+    request<{ settings: StudioSettings }>(base(cid) + "/settings", { method: "PATCH", body: patch, retry: 0, timeout: 8000 }),
+
+  // ── Nivel 1: Metrics + SLA ────────────────────────────────
+  getMetrics: (cid: string, days = 7) =>
+    request<StudioMetrics>(base(cid) + "/metrics?days=" + days, { method: "GET", retry: 1, timeout: 8000 }),
+  getSlaEstimate: (cid: string, productIds?: string[]) => {
+    const qs = productIds && productIds.length ? "?products=" + productIds.join(",") : "";
+    return request<StudioSlaEstimate>(base(cid) + "/sla/estimate" + qs, { method: "GET", retry: 1, timeout: 5000 });
+  },
 
   // ── F2 Gallery ──
   listCategories: (cid: string) =>
