@@ -1,9 +1,11 @@
 // ============================================================
-// AURA STUDIO · Composition Editor (pendência F3)
+// AURA STUDIO · Composition Editor (pendência F3 + UX overhaul)
 //
 // Liga 1 produto a N insumos (com qty_per_unit).
 // Mostra summary de custo + margem com semáforo (verde/amarelo/vermelho).
-// Baixa automática de estoque ao confirmar pedido vem em hook backend separado.
+//
+// 25/05 — item #11: edição inline de preço pra what-if margem
+// (preview local; persistir requer endpoint products PATCH).
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -17,6 +19,7 @@ import { studioApi, type StudioInput, type CompositionItem } from "@/services/st
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { GlassCard, BubbleIcon, GradientHeader } from "@/components/studio/StudioPrimitives";
+import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 
 function marginTone(pct: number | null): { label: string; color: string; bg: string } {
   if (pct == null)    return { label: "—",     color: StudioTokens.ink3, bg: StudioTokens.bgSoft };
@@ -35,6 +38,11 @@ export default function ComposicaoEditor() {
   const [saving, setSaving] = useState(false);
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState(0);
+  // #11: preço editável inline — mantém o original pra mostrar "preço atual"
+  const [originalPrice, setOriginalPrice] = useState(0);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [editingPrice, setEditingPrice] = useState(false);
+
   const [allInputs, setAllInputs] = useState<StudioInput[]>([]);
   const [items, setItems] = useState<CompositionItem[]>([]);
   const [notes, setNotes] = useState("");
@@ -53,6 +61,8 @@ export default function ComposicaoEditor() {
       if (compRes.summary) {
         setProductName(compRes.summary.product_name || "");
         setProductPrice(compRes.summary.product_price || 0);
+        setOriginalPrice(compRes.summary.product_price || 0);
+        setPriceDraft(String(compRes.summary.product_price || 0));
       }
     } catch (e: any) {
       toast.error(e?.message || "Erro ao carregar composição");
@@ -61,7 +71,6 @@ export default function ComposicaoEditor() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Cálculo local do custo (sem precisar re-fetch toda vez)
   const totalCost = useMemo(() => {
     return items.reduce((sum, it) => {
       const inp = allInputs.find((i) => i.id === it.input_id);
@@ -71,6 +80,22 @@ export default function ComposicaoEditor() {
 
   const marginPct = productPrice > 0 ? ((productPrice - totalCost) / productPrice) * 100 : null;
   const tone = marginTone(marginPct);
+  const priceChanged = Math.abs(productPrice - originalPrice) > 0.001;
+
+  function commitPriceDraft() {
+    const v = parseFloat(priceDraft.replace(",", "."));
+    if (!isNaN(v) && v > 0) {
+      setProductPrice(v);
+    } else {
+      setPriceDraft(String(productPrice));
+    }
+    setEditingPrice(false);
+  }
+
+  function resetPrice() {
+    setProductPrice(originalPrice);
+    setPriceDraft(String(originalPrice));
+  }
 
   function addInput(inp: StudioInput) {
     if (items.some((i) => i.input_id === inp.id)) {
@@ -105,7 +130,11 @@ export default function ComposicaoEditor() {
           notes: it.notes || null,
         })),
       });
-      toast.success("✨ Composição salva!");
+      if (priceChanged) {
+        toast.success("Composição salva! Atualize o preço do produto na tela de Produtos pra persistir a mudança.");
+      } else {
+        toast.success("✨ Composição salva!");
+      }
       router.back();
     } catch (e: any) {
       toast.error(e?.message || "Erro ao salvar");
@@ -116,6 +145,15 @@ export default function ComposicaoEditor() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: StudioTokens.bg }} contentContainerStyle={{ padding: 28, maxWidth: 920, alignSelf: "center", width: "100%" }}>
+      <StudioBreadcrumb
+        items={[
+          { label: "Estúdio", href: "/studio" },
+          { label: "Produtos", href: "/studio/produtos" },
+          { label: productName || "Composição" },
+        ]}
+        sticky={false}
+      />
+
       <GradientHeader
         eyebrow="FASE 3 · COMPOSIÇÃO"
         title={productName ? `Composição de "${productName}"` : "Composição"}
@@ -136,10 +174,47 @@ export default function ComposicaoEditor() {
         <View style={{ paddingVertical: 40 }}><ActivityIndicator size="large" color={StudioTokens.primary} /></View>
       ) : (
         <>
-          {/* Summary */}
+          {/* Summary com preço editável (#11) */}
           <GlassCard tone="neutral" pad="lg" style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: "row", gap: 18, flexWrap: "wrap" }}>
-              <Summary label="Preço de venda"  value={`R$ ${productPrice.toFixed(2)}`} />
+              {/* Preço — inline edit */}
+              <View style={{ flex: 1, minWidth: 150 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 11, color: StudioTokens.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                    Preço de venda
+                  </Text>
+                  <Pressable onPress={() => setEditingPrice((v) => !v)}>
+                    <Icon name={editingPrice ? "check" : "edit-3"} size={12} color={StudioTokens.primary} />
+                  </Pressable>
+                </View>
+                {editingPrice ? (
+                  <TextInput
+                    style={s.priceInput}
+                    value={priceDraft}
+                    onChangeText={setPriceDraft}
+                    onBlur={commitPriceDraft}
+                    onSubmitEditing={commitPriceDraft}
+                    keyboardType="decimal-pad"
+                    autoFocus
+                  />
+                ) : (
+                  <Pressable onPress={() => setEditingPrice(true)}>
+                    <Text style={{ fontSize: 20, fontWeight: "800", color: StudioTokens.ink, letterSpacing: -0.3, marginTop: 4 }}>
+                      R$ {productPrice.toFixed(2)}
+                    </Text>
+                  </Pressable>
+                )}
+                {priceChanged && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                    <Text style={{ fontSize: 10, color: StudioTokens.warning, fontWeight: "700" }}>
+                      preview · original R$ {originalPrice.toFixed(2)}
+                    </Text>
+                    <Pressable onPress={resetPrice}>
+                      <Icon name="rotate-ccw" size={10} color={StudioTokens.warning} />
+                    </Pressable>
+                  </View>
+                )}
+              </View>
               <Summary label="Custo total"     value={`R$ ${totalCost.toFixed(2)}`}  color={StudioTokens.danger} />
               <Summary label="Lucro"           value={`R$ ${(productPrice - totalCost).toFixed(2)}`} color={StudioTokens.success} />
               <Summary
@@ -275,4 +350,12 @@ const s = StyleSheet.create({
   addChipTxt: { fontSize: 12.5, fontWeight: "700", color: StudioTokens.ink },
   addChipPrice: { fontSize: 10.5, color: StudioTokens.ink3, fontWeight: "600" },
   notesInput: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioTokens.borderSoft, borderRadius: StudioRadiusV2.md, padding: 12, fontSize: 13, color: StudioTokens.ink, minHeight: 80 },
+
+  priceInput: {
+    fontSize: 18, fontWeight: "800", color: StudioTokens.ink,
+    backgroundColor: "#fff",
+    borderWidth: 1.5, borderColor: StudioTokens.primary,
+    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4,
+    marginTop: 4, width: 120,
+  },
 });
