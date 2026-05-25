@@ -5,9 +5,10 @@ import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { BASE_URL } from "@/services/api";
-import { Field, SectionTitle, StatusBadge, cs, IS_WIDE } from "./shared";
+import { Field, SectionTitle, StatusBadge, useChannelStyles, IS_WIDE } from "./shared";
 import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
 import { MpGatewayCard } from "./MpGatewayCard";
+import { useAccent } from "@/contexts/AccentTheme";
 
 type Props = {
   config: any;
@@ -22,6 +23,8 @@ type Props = {
 };
 
 export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix }: Props) {
+  const cs = useChannelStyles();
+  const accent = useAccent();
   const { company } = useAuthStore();
   const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
   const [tagline, setTagline] = useState(config.tagline || "");
@@ -241,7 +244,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         {/* Acoes abaixo do mockup */}
         <View style={s.mockupActions}>
           <Pressable onPress={copyStorefrontUrl} style={s.mockupBtnGhost}>
-            <Icon name="copy" size={13} color={Colors.violet3} />
+            <Icon name="copy" size={13} color={accent.primaryStrong} />
             <Text style={s.mockupBtnGhostText}>Copiar link</Text>
           </Pressable>
           {Platform.OS === "web" && (
@@ -298,7 +301,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                 disabled={isUploadingImage}
                 style={[s.imgBtn, isUploadingImage && uploadingType === "logo" && { opacity: 0.6 }]}
               >
-                <Icon name="upload" size={13} color={Colors.violet3} />
+                <Icon name="upload" size={13} color={accent.primaryStrong} />
                 <Text style={s.imgBtnText}>{uploadingType === "logo" ? "Enviando..." : config.logo_url ? "Trocar logo" : "Enviar logo"}</Text>
               </Pressable>
             )}
@@ -377,7 +380,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 
         {asaasConfigured && (
           <View style={cs.infoCard}>
-            <Icon name="alert" size={13} color={Colors.violet3} />
+            <Icon name="alert" size={13} color={accent.primaryStrong} />
             <Text style={cs.infoText}>
               Conta Asaas legada ativa. A chave Pix manual cadastrada acima passa a prevalecer no checkout.
             </Text>
@@ -397,7 +400,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       <View style={cs.card}>
         {hasDomain ? (
           <View>
-            <View style={s.domainRow}><Icon name="globe" size={16} color={Colors.violet3} /><Text style={s.domainName}>{config.custom_domain}</Text><StatusBadge status={config.custom_domain_status} /></View>
+            <View style={s.domainRow}><Icon name="globe" size={16} color={accent.primaryStrong} /><Text style={s.domainName}>{config.custom_domain}</Text><StatusBadge status={config.custom_domain_status} /></View>
             {config.custom_domain_status === "pending_dns" && <View style={cs.infoCard}><Icon name="alert" size={13} color={Colors.amber} /><Text style={cs.infoText}>A equipe Aura vai configurar seu dominio em ate 48h uteis.</Text></View>}
           </View>
         ) : (
@@ -419,7 +422,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
               <TextInput style={[cs.input, { flex: 1 }]} value={domainInput} onChangeText={setDomainInput} placeholder="meunegocio.com.br" placeholderTextColor={Colors.ink3} autoCapitalize="none" autoCorrect={false} />
               <Pressable onPress={handleRequestDomain} disabled={isRequestingDomain} style={[s.domainBtn, isRequestingDomain && { opacity: 0.6 }]}><Text style={s.domainBtnText}>{isRequestingDomain ? "..." : "Solicitar"}</Text></Pressable>
             </View>
-            <View style={cs.infoCard}><Icon name="alert" size={13} color={Colors.violet3} /><Text style={cs.infoText}>Apos solicitar, a equipe Aura confirma e configura em ate 48h uteis.</Text></View>
+            <View style={cs.infoCard}><Icon name="alert" size={13} color={accent.primaryStrong} /><Text style={cs.infoText}>Apos solicitar, a equipe Aura confirma e configura em ate 48h uteis.</Text></View>
           </View>
         )}
       </View>
