@@ -21,6 +21,7 @@ import {
   Field, ChipToggle, ToggleRow, SectionTitle, useChannelStyles,
 } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+import type { AccentTokens } from "@/contexts/AccentTheme";
 
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
@@ -147,7 +148,7 @@ function normalizeServiceCards(input: any): ServiceCard[] {
 // layout "image-clean" so e' selecionavel quando banner.image_url
 // existe; os 3 originais ficam disabled nesse caso.
 // ============================================================
-function BannerLayoutThumb({ tone }: { tone: BannerTone }) {
+function BannerLayoutThumb({ tone, thumb }: { tone: BannerTone; thumb: any }) {
   // Container interno do thumb — 70x40 aproximado
   if (tone === "image-clean") {
     return (
@@ -202,11 +203,13 @@ function BannerLayoutThumb({ tone }: { tone: BannerTone }) {
 }
 
 function BannerLayoutPicker({
-  value, onChange, hasImage,
+  value, onChange, hasImage, pickerStyles, thumb,
 }: {
   value: BannerTone;
   onChange: (v: BannerTone) => void;
   hasImage: boolean;
+  pickerStyles: any;
+  thumb: any;
 }) {
   // Quando ha imagem, "image-clean" e' a unica selecionavel e fica auto-selecionada.
   // Os 3 originais aparecem desabilitados (visivel mas nao clicavel).
@@ -238,7 +241,7 @@ function BannerLayoutPicker({
               disabled && pickerStyles.cardDisabled,
             ]}
           >
-            <BannerLayoutThumb tone={opt.tone} />
+            <BannerLayoutThumb tone={opt.tone} thumb={thumb} />
             <Text style={[pickerStyles.label, active && pickerStyles.labelActive]} numberOfLines={1}>
               {opt.label}
             </Text>
@@ -268,6 +271,9 @@ export function TabDesign({
 }) {
   const cs = useChannelStyles();
   const accent = useAccent();
+  const s = useMemo(() => buildStyles(accent), [accent]);
+  const pickerStyles = useMemo(() => buildPickerStyles(accent), [accent]);
+  const thumb = useMemo(() => buildThumbStyles(accent), [accent]);
   const [primary, setPrimary]   = useState(config.primary_color || "#7c3aed");
   const [accentColor, setAccentColor]     = useState(config.accent_color  || "#a78bfa");
   const [dark, setDark]         = useState(!!config.dark_mode);
@@ -544,6 +550,8 @@ export function TabDesign({
             value={toneKey}
             hasImage={hasImage}
             onChange={(v) => updateBanner(idx, { tone: v })}
+            pickerStyles={pickerStyles}
+            thumb={thumb}
           />
 
           {/* Rec #10 — helper text dinamico por tone */}
@@ -767,313 +775,319 @@ export function TabDesign({
 }
 
 // ============================================================
-// Estilos do BannerLayoutPicker (Fase 2)
+// Estilos do BannerLayoutPicker (Fase 2) — accent-aware
 // ============================================================
-const pickerStyles = StyleSheet.create({
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  card: {
-    // 2x2 em mobile (cada card ~48%), 1x4 em desktop (~23%).
-    width: IS_WIDE ? "23%" : "48%",
-    minWidth: 110,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bg4,
-    padding: 8,
-    alignItems: "center",
-    gap: 6,
-  },
-  cardActive: {
-    borderWidth: 2,
-    borderColor: Colors.violet,
-    backgroundColor: Colors.violetD,
-    padding: 7, // compensa borda extra pra nao "pular" 1px
-  },
-  cardDisabled: {
-    opacity: 0.4,
-  },
-  label: {
-    fontSize: 11,
-    color: Colors.ink,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  labelActive: {
-    color: Colors.violet3,
-  },
-  disabledHint: {
-    fontSize: 9,
-    color: Colors.ink3,
-    textAlign: "center",
-    lineHeight: 12,
-  },
-});
+function buildPickerStyles(accent: AccentTokens) {
+  return StyleSheet.create({
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 6,
+      marginBottom: 4,
+    },
+    card: {
+      // 2x2 em mobile (cada card ~48%), 1x4 em desktop (~23%).
+      width: IS_WIDE ? "23%" : "48%",
+      minWidth: 110,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      backgroundColor: Colors.bg4,
+      padding: 8,
+      alignItems: "center",
+      gap: 6,
+    },
+    cardActive: {
+      borderWidth: 2,
+      borderColor: accent.primary,
+      backgroundColor: accent.primarySoft,
+      padding: 7, // compensa borda extra pra nao "pular" 1px
+    },
+    cardDisabled: {
+      opacity: 0.4,
+    },
+    label: {
+      fontSize: 11,
+      color: Colors.ink,
+      fontWeight: "600",
+      textAlign: "center",
+    },
+    labelActive: {
+      color: accent.primaryStrong,
+    },
+    disabledHint: {
+      fontSize: 9,
+      color: Colors.ink3,
+      textAlign: "center",
+      lineHeight: 12,
+    },
+  });
+}
 
 // Schematics CSS-puros pros 4 layouts. Cada thumb fica num frame ~70x40px.
-const thumb = StyleSheet.create({
-  frame: {
-    width: 72,
-    height: 44,
-    borderRadius: 6,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden",
-    position: "relative",
-  },
-  // image-clean: top 70% imagem + bottom 30% caption band
-  imageBlock: {
-    position: "absolute",
-    top: 0, left: 0, right: 0,
-    height: "70%",
-  },
-  imageInner: {
-    position: "absolute",
-    top: "30%", left: "20%", right: "20%", bottom: "20%",
-    backgroundColor: Colors.violetD,
-    borderRadius: 2,
-  },
-  captionBand: {
-    position: "absolute",
-    bottom: 0, left: 0, right: 0,
-    height: "30%",
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 4,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  captionLine: {
-    height: 2,
-    width: 26,
-    backgroundColor: Colors.ink3,
-    borderRadius: 1,
-  },
-  captionDot: {
-    width: 8,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.violet,
-  },
-  // split: esquerda 60% texto + direita 40% circulo
-  splitLeft: {
-    position: "absolute",
-    top: 0, bottom: 0, left: 0,
-    width: "60%",
-    paddingHorizontal: 5,
-    justifyContent: "center",
-  },
-  splitRight: {
-    position: "absolute",
-    top: 0, bottom: 0, right: 0,
-    width: "40%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  splitCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: Colors.violet,
-    opacity: 0.55,
-  },
-  textLine: {
-    height: 2.5,
-    backgroundColor: Colors.ink3,
-    borderRadius: 1,
-  },
-  // editorial: letra A gigante + retangulo pequeno no canto
-  editorialLetter: {
-    position: "absolute",
-    top: -4,
-    left: 2,
-    fontSize: 38,
-    fontWeight: "700",
-    fontStyle: "italic",
-    color: Colors.violet,
-    opacity: 0.35,
-    // serif fallback
-    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
-  },
-  editorialCorner: {
-    position: "absolute",
-    bottom: 5,
-    right: 5,
-    width: 22,
-    height: 4,
-    borderRadius: 1,
-    backgroundColor: Colors.ink3,
-  },
-  // centered: 2 linhas centralizadas + cta
-  centeredInner: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  centeredCta: {
-    width: 18,
-    height: 5,
-    borderRadius: 2,
-    backgroundColor: Colors.violet,
-  },
-});
+function buildThumbStyles(accent: AccentTokens) {
+  return StyleSheet.create({
+    frame: {
+      width: 72,
+      height: 44,
+      borderRadius: 6,
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: Colors.border,
+      overflow: "hidden",
+      position: "relative",
+    },
+    // image-clean: top 70% imagem + bottom 30% caption band
+    imageBlock: {
+      position: "absolute",
+      top: 0, left: 0, right: 0,
+      height: "70%",
+    },
+    imageInner: {
+      position: "absolute",
+      top: "30%", left: "20%", right: "20%", bottom: "20%",
+      backgroundColor: accent.primarySoft,
+      borderRadius: 2,
+    },
+    captionBand: {
+      position: "absolute",
+      bottom: 0, left: 0, right: 0,
+      height: "30%",
+      backgroundColor: "#fff",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 4,
+      borderTopWidth: 1,
+      borderTopColor: Colors.border,
+    },
+    captionLine: {
+      height: 2,
+      width: 26,
+      backgroundColor: Colors.ink3,
+      borderRadius: 1,
+    },
+    captionDot: {
+      width: 8,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: accent.primary,
+    },
+    // split: esquerda 60% texto + direita 40% circulo
+    splitLeft: {
+      position: "absolute",
+      top: 0, bottom: 0, left: 0,
+      width: "60%",
+      paddingHorizontal: 5,
+      justifyContent: "center",
+    },
+    splitRight: {
+      position: "absolute",
+      top: 0, bottom: 0, right: 0,
+      width: "40%",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    splitCircle: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: accent.primary,
+      opacity: 0.55,
+    },
+    textLine: {
+      height: 2.5,
+      backgroundColor: Colors.ink3,
+      borderRadius: 1,
+    },
+    // editorial: letra A gigante + retangulo pequeno no canto
+    editorialLetter: {
+      position: "absolute",
+      top: -4,
+      left: 2,
+      fontSize: 38,
+      fontWeight: "700",
+      fontStyle: "italic",
+      color: accent.primary,
+      opacity: 0.35,
+      // serif fallback
+      fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
+    },
+    editorialCorner: {
+      position: "absolute",
+      bottom: 5,
+      right: 5,
+      width: 22,
+      height: 4,
+      borderRadius: 1,
+      backgroundColor: Colors.ink3,
+    },
+    // centered: 2 linhas centralizadas + cta
+    centeredInner: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 6,
+    },
+    centeredCta: {
+      width: 18,
+      height: 5,
+      borderRadius: 2,
+      backgroundColor: accent.primary,
+    },
+  });
+}
 
-const s = StyleSheet.create({
-  sideBySide: { flexDirection: "row", gap: 16, alignItems: "stretch", minHeight: 720 },
-  editorSide: { width: 380, flexShrink: 0 },
-  previewSide: { flex: 1 },
-  editorScroll: { flex: 1 },
+function buildStyles(accent: AccentTokens) {
+  return StyleSheet.create({
+    sideBySide: { flexDirection: "row", gap: 16, alignItems: "stretch", minHeight: 720 },
+    editorSide: { width: 380, flexShrink: 0 },
+    previewSide: { flex: 1 },
+    editorScroll: { flex: 1 },
 
-  // Rec #1 — header explicativo da tab
-  tabIntro: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    backgroundColor: Colors.violetD,
-    borderLeftWidth: 3, borderLeftColor: Colors.violet,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderRadius: 8, marginBottom: 12,
-  },
-  tabIntroText: { flex: 1, fontSize: 12, color: Colors.violet3, lineHeight: 17 },
+    // Rec #1 — header explicativo da tab
+    tabIntro: {
+      flexDirection: "row", alignItems: "flex-start", gap: 8,
+      backgroundColor: accent.primarySoft,
+      borderLeftWidth: 3, borderLeftColor: accent.primary,
+      paddingHorizontal: 12, paddingVertical: 10,
+      borderRadius: 8, marginBottom: 12,
+    },
+    tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17 },
 
-  previewWrap: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", padding: 12 },
-  previewBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 10, gap: 8 },
-  deviceToggle: { flexDirection: "row", backgroundColor: Colors.bg4, borderRadius: 10, padding: 3, gap: 2 },
-  deviceBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  deviceBtnActive: { backgroundColor: Colors.violetD },
-  deviceText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  refreshBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
-  refreshText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  previewFrame: { flex: 1, backgroundColor: "#fff", borderRadius: 10, overflow: "hidden" },
-  previewFrameMobile: { alignSelf: "center", width: 390, maxWidth: "100%", borderRadius: 28, borderWidth: 8, borderColor: "#1a1a2e" },
-  previewEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  previewEmptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 280 },
+    previewWrap: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", padding: 12 },
+    previewBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 10, gap: 8 },
+    deviceToggle: { flexDirection: "row", backgroundColor: Colors.bg4, borderRadius: 10, padding: 3, gap: 2 },
+    deviceBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+    deviceBtnActive: { backgroundColor: accent.primarySoft },
+    deviceText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+    refreshBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+    refreshText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+    previewFrame: { flex: 1, backgroundColor: "#fff", borderRadius: 10, overflow: "hidden" },
+    previewFrameMobile: { alignSelf: "center", width: 390, maxWidth: "100%", borderRadius: 28, borderWidth: 8, borderColor: "#1a1a2e" },
+    previewEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
+    previewEmptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 280 },
 
-  paletteChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
-  paletteChipActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
-  paletteSplit: { flexDirection: "row", width: 28, height: 16, borderRadius: 8, overflow: "hidden" },
-  paletteHalf: { flex: 1, height: "100%" },
-  paletteLabel: { fontSize: 11, color: Colors.ink, fontWeight: "600" },
+    paletteChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+    paletteChipActive: { borderColor: accent.primary, backgroundColor: accent.primarySoft },
+    paletteSplit: { flexDirection: "row", width: 28, height: 16, borderRadius: 8, overflow: "hidden" },
+    paletteHalf: { flex: 1, height: "100%" },
+    paletteLabel: { fontSize: 11, color: Colors.ink, fontWeight: "600" },
 
-  bannerHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  bannerTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+    bannerHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    bannerTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
 
-  // Fase 3 — Rec #6: input compacto pra tempo entre slides
-  rotateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  rotateInputBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexShrink: 0,
-  },
-  rotateInput: {
-    width: 60,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bg4,
-    fontSize: 14,
-    color: Colors.ink,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  rotateSuffix: {
-    fontSize: 12,
-    color: Colors.ink3,
-    fontWeight: "500",
-  },
+    // Fase 3 — Rec #6: input compacto pra tempo entre slides
+    rotateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      marginTop: 10,
+      marginBottom: 2,
+    },
+    rotateInputBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flexShrink: 0,
+    },
+    rotateInput: {
+      width: 60,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      backgroundColor: Colors.bg4,
+      fontSize: 14,
+      color: Colors.ink,
+      fontWeight: "600",
+      textAlign: "center",
+    },
+    rotateSuffix: {
+      fontSize: 12,
+      color: Colors.ink3,
+      fontWeight: "500",
+    },
 
-  // Rec #10 — helper text por tone
-  toneHelper: {
-    backgroundColor: Colors.violetD,
-    borderLeftWidth: 3, borderLeftColor: Colors.violet,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderRadius: 6, marginTop: 8,
-  },
-  toneHelperText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
-  toneHelperTitle: { fontWeight: "700", color: Colors.violet3 },
+    // Rec #10 — helper text por tone
+    toneHelper: {
+      backgroundColor: accent.primarySoft,
+      borderLeftWidth: 3, borderLeftColor: accent.primary,
+      paddingHorizontal: 12, paddingVertical: 10,
+      borderRadius: 6, marginTop: 8,
+    },
+    toneHelperText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+    toneHelperTitle: { fontWeight: "700", color: accent.primaryStrong },
 
-  imagePreview: { flexDirection: "row", gap: 12, alignItems: "stretch" },
-  imageThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: Colors.bg4 },
-  smallBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border },
-  smallBtnDanger: { backgroundColor: "rgba(220,38,38,0.06)" },
-  smallBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+    imagePreview: { flexDirection: "row", gap: 12, alignItems: "stretch" },
+    imageThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: Colors.bg4 },
+    smallBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: Colors.border },
+    smallBtnDanger: { backgroundColor: "rgba(220,38,38,0.06)" },
+    smallBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
 
-  uploadDrop: { borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed", padding: 20, alignItems: "center", gap: 6, backgroundColor: Colors.bg4 },
-  uploadText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  uploadHint: { fontSize: 11, color: Colors.ink3 },
+    uploadDrop: { borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed", padding: 20, alignItems: "center", gap: 6, backgroundColor: Colors.bg4 },
+    uploadText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+    uploadHint: { fontSize: 11, color: Colors.ink3 },
 
-  svcIconChip: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
-  iconChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
-  iconChipActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
-  iconChipLabel: { fontSize: 11, color: Colors.ink, fontWeight: "500" },
+    svcIconChip: { width: 32, height: 32, borderRadius: 8, backgroundColor: accent.primarySoft, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
+    iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+    iconChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+    iconChipActive: { borderColor: accent.primary, backgroundColor: accent.primarySoft },
+    iconChipLabel: { fontSize: 11, color: Colors.ink, fontWeight: "500" },
 
-  // Rec #5 — empty state de service cards
-  svcEmpty: {
-    borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed",
-    backgroundColor: Colors.bg4,
-    padding: 20, alignItems: "center",
-  },
-  svcEmptyIcon: {
-    width: 44, height: 44,
-    flexDirection: "row", flexWrap: "wrap",
-    gap: 3, marginBottom: 12, alignItems: "center", justifyContent: "center",
-  },
-  svcEmptySquare: { width: 18, height: 18, borderRadius: 4, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border },
-  svcEmptyTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
-  svcEmptyHint: { fontSize: 12, color: Colors.ink3, marginBottom: 16, textAlign: "center" },
-  svcTemplateGrid: {
-    flexDirection: "row", flexWrap: "wrap",
-    gap: 8, marginBottom: 14, width: "100%",
-  },
-  svcTemplateCard: {
-    width: "48%", minWidth: 140,
-    borderRadius: 10, borderWidth: 1, borderColor: Colors.border,
-    backgroundColor: Colors.bg3,
-    padding: 12, gap: 6,
-  },
-  svcTemplateIcon: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: Colors.violetD,
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 4,
-  },
-  svcTemplateTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink },
-  svcTemplateBody: { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
-  svcEmptyBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 8, backgroundColor: Colors.bg3,
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  svcEmptyBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  svcAddBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    paddingVertical: 10, borderRadius: 10,
-    backgroundColor: Colors.bg4,
-    borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed",
-    marginTop: 4,
-  },
-  svcAddBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+    // Rec #5 — empty state de service cards
+    svcEmpty: {
+      borderRadius: 14,
+      borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed",
+      backgroundColor: Colors.bg4,
+      padding: 20, alignItems: "center",
+    },
+    svcEmptyIcon: {
+      width: 44, height: 44,
+      flexDirection: "row", flexWrap: "wrap",
+      gap: 3, marginBottom: 12, alignItems: "center", justifyContent: "center",
+    },
+    svcEmptySquare: { width: 18, height: 18, borderRadius: 4, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: Colors.border },
+    svcEmptyTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
+    svcEmptyHint: { fontSize: 12, color: Colors.ink3, marginBottom: 16, textAlign: "center" },
+    svcTemplateGrid: {
+      flexDirection: "row", flexWrap: "wrap",
+      gap: 8, marginBottom: 14, width: "100%",
+    },
+    svcTemplateCard: {
+      width: "48%", minWidth: 140,
+      borderRadius: 10, borderWidth: 1, borderColor: Colors.border,
+      backgroundColor: Colors.bg3,
+      padding: 12, gap: 6,
+    },
+    svcTemplateIcon: {
+      width: 30, height: 30, borderRadius: 8,
+      backgroundColor: accent.primarySoft,
+      alignItems: "center", justifyContent: "center",
+      marginBottom: 4,
+    },
+    svcTemplateTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink },
+    svcTemplateBody: { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
+    svcEmptyBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingHorizontal: 14, paddingVertical: 9,
+      borderRadius: 8, backgroundColor: Colors.bg3,
+      borderWidth: 1, borderColor: Colors.border,
+    },
+    svcEmptyBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+    svcAddBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+      paddingVertical: 10, borderRadius: 10,
+      backgroundColor: Colors.bg4,
+      borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed",
+      marginTop: 4,
+    },
+    svcAddBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
 
-  savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
-  savingText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-});
+    savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: accent.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
+    savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+  });
+}
