@@ -1,10 +1,12 @@
 // ============================================================
 // AURA. — services/studioApi.ts
-// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1 + Marketplaces S-0/S-1/S-2
+// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1 + Marketplaces S-0/S-1/S-2 + OAuth Core
 //
-// 25/05/2026 (Marketplaces S-2): listMarketplaceOrders + collectMarketplaceCustomization
-// + stubCreateMarketplaceOrder pra fluxo de coleta de personalizacao.
-// Memory: projeto_studio_marketplaces_S0_S1_25mai2026
+// 25/05/2026 (OAuth Core + Revisões): adiciona 5 metodos OAuth marketplace
+// (getMarketplaceAuthUrl, authorizeMarketplace, listConnections, revokeConnection,
+// refreshConnection) + estende StudioSettings com max_revisions_included +
+// extra_revision_price + revision_policy_text.
+// Memory: studio_bridges_completas_25mai2026, projeto_core_ml_shopee_f1b_f2b_25mai2026
 // ============================================================
 import { request } from "./api";
 
@@ -178,6 +180,10 @@ export type StudioSettings = {
   ncm_defaults?: Record<string, string>;
   onboarding?: Record<string, boolean>;
   marketplace_handling_days?: number;
+  // Política de revisões (Loja Digital Studio 25/05/2026)
+  max_revisions_included?: number;       // qtas revisões grátis (0 = ilimitado)
+  extra_revision_price?: number;         // preço cobrado por revisão extra
+  revision_policy_text?: string;         // texto exibido pro cliente
   [key: string]: any;
 };
 
@@ -222,6 +228,45 @@ export type MarketplaceListingPreview = {
   payload: Record<string, any>;
   core_adapter_status: "pending" | "ready";
   note: string;
+};
+
+// ─── Marketplaces OAuth Core (25/05) — Conexões ──────────────
+export type MarketplaceConnection = {
+  id: string;
+  platform: MarketplacePlatform;
+  store_id: string | null;
+  store_name: string | null;
+  status: "ativo" | "revogado" | "expirado";
+  scope: string | null;
+  token_expires: string | null;
+  created_at: string;
+  updated_at: string;
+  token_state: "fresh" | "expiring" | "expired" | null;
+};
+
+export type MarketplaceConnectionsResponse = {
+  connections: MarketplaceConnection[];
+  by_platform: Record<MarketplacePlatform, MarketplaceConnection | null>;
+  supported_platforms: MarketplacePlatform[];
+};
+
+export type MarketplaceAuthUrlResponse = {
+  auth_url: string;
+  state: string;
+  platform: MarketplacePlatform;
+};
+
+export type MarketplaceAuthorizeResponse = {
+  ok: true;
+  platform: MarketplacePlatform;
+  connection: {
+    id: string;
+    store_id: string | null;
+    store_name: string | null;
+    status: string;
+    scope: string | null;
+    token_expires: string | null;
+  };
 };
 
 // ─── Marketplaces S-2 (25/05) — Marketplace Orders ───────────
@@ -270,6 +315,7 @@ export type CollectMarketplaceCustomizationResponse = {
 // API
 // ══════════════════════════════════════════════════════════
 const base = (cid: string) => "/companies/" + cid + "/studio";
+const mkt  = (cid: string) => "/companies/" + cid + "/marketplaces";
 
 export const studioApi = {
   // ── F0/F1 ──
@@ -306,6 +352,34 @@ export const studioApi = {
     request<{ marketplace_handling_days: number; settings: StudioSettings }>(
       base(cid) + "/marketplace-settings",
       { method: "PATCH", body: { marketplace_handling_days: days }, retry: 0, timeout: 5000 }
+    ),
+
+  // ── Marketplaces OAuth Core (25/05) — Conectar ML/Shopee ──
+  // NOTA: rota fica em /companies/:cid/marketplaces (NÃO sob /studio).
+  listMarketplaceConnections: (cid: string) =>
+    request<MarketplaceConnectionsResponse>(
+      mkt(cid) + "/connections",
+      { method: "GET", retry: 1, timeout: 8000 }
+    ),
+  getMarketplaceAuthUrl: (cid: string, platform: MarketplacePlatform) =>
+    request<MarketplaceAuthUrlResponse>(
+      mkt(cid) + "/" + platform + "/auth-url",
+      { method: "GET", retry: 0, timeout: 8000 }
+    ),
+  authorizeMarketplace: (cid: string, platform: MarketplacePlatform, body: { code: string; shop_id?: string }) =>
+    request<MarketplaceAuthorizeResponse>(
+      mkt(cid) + "/" + platform + "/authorize",
+      { method: "POST", body, retry: 0, timeout: 15000 }
+    ),
+  refreshMarketplaceConnection: (cid: string, platform: MarketplacePlatform) =>
+    request<{ ok: true; token_expires: string | null }>(
+      mkt(cid) + "/" + platform + "/refresh",
+      { method: "POST", retry: 0, timeout: 10000 }
+    ),
+  revokeMarketplaceConnection: (cid: string, platform: MarketplacePlatform) =>
+    request<{ ok: true; message: string }>(
+      mkt(cid) + "/" + platform + "/revoke",
+      { method: "POST", retry: 0, timeout: 8000 }
     ),
 
   // ── Marketplaces S-2 (25/05) — Coleta de personalizacao ──
