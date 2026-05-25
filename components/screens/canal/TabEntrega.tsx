@@ -19,7 +19,7 @@
 //  • Frete grátis em sub-card destacado
 //  • Mobile (<480px): mode-grid stack 1 coluna
 // ============================================================
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput, Switch, ActivityIndicator, Dimensions,
 } from "react-native";
@@ -28,6 +28,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { IS_WIDE, Field, useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+import type { AccentTokens } from "@/contexts/AccentTheme";
 
 // Narrow mode: phones estreitas (<480px) precisam stack do mode-grid
 const NARROW = Dimensions.get("window").width < 480;
@@ -154,6 +155,7 @@ type Props = {
 export function TabEntrega({ config, saveConfig, isSaving }: Props) {
   const cs = useChannelStyles();
   const accent = useAccent();
+  const s = useMemo(() => buildStyles(accent), [accent]);
 
   // --- State ----------------------------------------------------
   const [pickupEnabled, setPickupEnabled] = useState(config.pickup_enabled !== false);
@@ -770,15 +772,16 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 // ============================================================
 // Estilos
 // ============================================================
-const s = StyleSheet.create({
+function buildStyles(accent: AccentTokens) {
+  return StyleSheet.create({
   tabIntro: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
-    backgroundColor: Colors.violetD,
-    borderLeftWidth: 3, borderLeftColor: Colors.violet,
+    backgroundColor: accent.primarySoft,
+    borderLeftWidth: 3, borderLeftColor: accent.primary,
     paddingHorizontal: 12, paddingVertical: 10,
     borderRadius: 8, marginBottom: 12,
   },
-  tabIntroText: { flex: 1, fontSize: 12, color: Colors.violet3, lineHeight: 17 },
+  tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17 },
 
   gridWide: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   gridStack: { flexDirection: "column" },
@@ -860,8 +863,8 @@ const s = StyleSheet.create({
     padding: 12,
   },
   modeCardActive: {
-    backgroundColor: Colors.violetD,
-    borderColor: Colors.violet,
+    backgroundColor: accent.primarySoft,
+    borderColor: accent.primary,
   },
   modeCardName: {
     fontSize: 13,
@@ -869,7 +872,7 @@ const s = StyleSheet.create({
     color: Colors.ink,
     marginBottom: 3,
   },
-  modeCardNameActive: { color: Colors.violet3 },
+  modeCardNameActive: { color: accent.primaryStrong },
   modeCardDesc: {
     fontSize: 11,
     color: Colors.ink3,
@@ -939,13 +942,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 8,
-    backgroundColor: Colors.violetD,
+    backgroundColor: accent.primarySoft,
     borderWidth: 1,
     borderColor: Colors.border2,
   },
   tierEmptyCtaText: {
     fontSize: 12,
-    color: Colors.violet3,
+    color: accent.primaryStrong,
     fontWeight: "700",
   },
 
@@ -1005,7 +1008,7 @@ const s = StyleSheet.create({
     marginTop: 10,
     marginBottom: 6,
   },
-  addTierText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  addTierText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
 
   // Frete grátis em sub-card destacado
   freteBlock: {
@@ -1112,21 +1115,22 @@ const s = StyleSheet.create({
   },
   previewIcon: {
     width: 36, height: 36, borderRadius: 8,
-    backgroundColor: Colors.violetD,
+    backgroundColor: accent.primarySoft,
     alignItems: "center", justifyContent: "center",
   },
   previewTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink },
   previewSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 15 },
-  previewPrice: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  previewPrice: { fontSize: 13, fontWeight: "700", color: accent.primaryStrong },
 
   savingPill: {
     position: "absolute",
     bottom: 16, left: 16,
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.violetD,
+    backgroundColor: accent.primarySoft,
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1, borderColor: Colors.border,
   },
-  savingText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-});
+  savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+  });
+}
