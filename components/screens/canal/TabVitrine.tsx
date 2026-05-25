@@ -36,7 +36,8 @@ import { Icon } from "@/components/Icon";
 import { HoverRow } from "@/components/HoverRow";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
-import { cs } from "./shared";
+import { useChannelStyles } from "./shared";
+import { useAccent } from "@/contexts/AccentTheme";
 
 const PAGE_SIZE = 60;
 const SAVE_DEBOUNCE_MS = 800;
@@ -46,6 +47,8 @@ type FilterKey = "all" | "in_storefront" | "hidden" | "out_of_stock";
 type Props = { config: any; saveConfig: (data: any) => Promise<void>; isSaving: boolean };
 
 export function TabVitrine({ config, saveConfig, isSaving }: Props) {
+  const cs = useChannelStyles();
+  const accent = useAccent();
   const { company } = useAuthStore();
   const cid = company?.id;
 
@@ -340,7 +343,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
           onChangeText={handleSearchChange}
           returnKeyType="search"
         />
-        {isFetching && <ActivityIndicator size="small" color={Colors.violet3} />}
+        {isFetching && <ActivityIndicator size="small" color={accent.primaryStrong} />}
       </View>
 
       {/* Filtros (chips) */}
@@ -412,7 +415,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
             //   - Em curadoria + marcado: bg violet (destaque visual)
             //   - Em curadoria + nao marcado: opacity 0.6 (esmaecido, NAO aparece)
             //   - Em auto: bg transparente padrao (todos aparecem igual)
-            const rowBg = !isAutoMode && isMarked ? Colors.violetD : "transparent";
+            const rowBg = !isAutoMode && isMarked ? accent.primarySoft : "transparent";
             const rowOpacity = !isAutoMode && !isMarked ? 0.6 : 1;
 
             return (
@@ -430,14 +433,14 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
                       {Platform.OS === "web" ? (
                         <img src={prod.image_url} alt={prod.name} style={{ width: "100%", height: "100%", objectFit: "cover" } as any} />
                       ) : (
-                        <View style={[s.prodIcon, { backgroundColor: Colors.violetD }]}>
-                          <Icon name="package" size={18} color={Colors.violet3} />
+                        <View style={[s.prodIcon, { backgroundColor: accent.primarySoft }]}>
+                          <Icon name="package" size={18} color={accent.primaryStrong} />
                         </View>
                       )}
                     </View>
                   ) : (
-                    <View style={[s.prodIcon, { backgroundColor: isMarked ? Colors.violetD : Colors.bg4 }]}>
-                      <Icon name="package" size={18} color={isMarked ? Colors.violet3 : Colors.ink3} />
+                    <View style={[s.prodIcon, { backgroundColor: isMarked ? accent.primarySoft : Colors.bg4 }]}>
+                      <Icon name="package" size={18} color={isMarked ? accent.primaryStrong : Colors.ink3} />
                     </View>
                   )}
                   <View style={s.prodInfo}>
@@ -462,7 +465,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
                     <Switch
                       value={isMarked}
                       onValueChange={() => toggleVisible(id)}
-                      trackColor={{ true: Colors.violet, false: Colors.bg4 }}
+                      trackColor={{ true: accent.primary, false: Colors.bg4 }}
                       thumbColor="#fff"
                     />
                   </View>
