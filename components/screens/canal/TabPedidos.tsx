@@ -21,6 +21,8 @@
 //   sem transação/estoque/nfce). Chama DELETE /orders/:oid, backend valida.
 // 25/05: Migrado pra useChannelStyles() + useAccent() — sai violeta hard-coded,
 //   entra accent tematizado por vertical. Comportamento 100% preservado.
+// 25/05: StyleSheet local agora é buildStyles(accent) memoizado — last violet
+//   refs (refreshText, proofPdfText, advBtn, lightboxOpenBtn) viram accent.*.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -34,6 +36,7 @@ import { api } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+import type { AccentTokens } from "@/contexts/AccentTheme";
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   pending_payment:    { label: "Aguardando pagamento", color: "#d97706", bg: "#fef3c7" },
@@ -134,6 +137,7 @@ function fmt(v: number | string) {
 export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   const cs = useChannelStyles();
   const accent = useAccent();
+  const s = useMemo(() => buildStyles(accent), [accent]);
   const [filter, setFilter] = useState<ChipKey>("all");
   const [order, setOrder] = useState<any>(null);
   const [proofZoom, setProofZoom] = useState<string | null>(null);
@@ -280,12 +284,12 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
       </ScrollView>
 
       <Pressable onPress={() => refetch()} style={s.refreshBtn}>
-        <Icon name="refresh" size={12} color={Colors.violet3} />
+        <Icon name="refresh" size={12} color={accent.primaryStrong} />
         <Text style={s.refreshText}>Atualizar</Text>
       </Pressable>
 
       {isLoading ? (
-        <ActivityIndicator size="small" color={Colors.violet} style={{ marginTop: 32 }} />
+        <ActivityIndicator size="small" color={accent.primary} style={{ marginTop: 32 }} />
       ) : filteredOrders.length === 0 ? (
         <View style={s.empty}>
           <Text style={s.emptyIcon}>📦</Text>
@@ -581,74 +585,76 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   );
 }
 
-const s = StyleSheet.create({
-  kpiRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, borderTopWidth: 3, alignItems: "center" },
-  kpiNum: { fontSize: 18, fontWeight: "800", marginBottom: 3 },
-  kpiLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textAlign: "center" },
-  refreshBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10, alignSelf: "flex-end" },
-  refreshText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
-  empty: { alignItems: "center", paddingVertical: 48, gap: 10 },
-  emptyIcon: { fontSize: 36 },
-  emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
-  emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
-  card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
-  cardHighlight: { borderColor: "#fecaca", borderWidth: 2, backgroundColor: "#fff5f5" },
-  cardWarn: { borderColor: "#fde68a", borderWidth: 2, backgroundColor: "#fffbeb" },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-  cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
-  cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTotal: { fontSize: 15, fontWeight: "800", color: Colors.ink },
-  cardMeta: { fontSize: 10, color: Colors.ink3, flex: 1, textAlign: "right", marginLeft: 8 },
-  badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 10, fontWeight: "700" },
-  proofBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
-  proofBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
-  // Badge de contagem dentro do chip "Precisa agir" — vermelho/contraste
-  // pra puxar olho. Aparece só quando count > 0.
-  chipBadge: {
-    marginLeft: 6, backgroundColor: "#dc2626", borderRadius: 999,
-    minWidth: 18, height: 18, paddingHorizontal: 5,
-    alignItems: "center", justifyContent: "center",
-  },
-  chipBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800", lineHeight: 12 },
-  quickRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
-  quickBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    backgroundColor: Colors.green, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
-  },
-  quickBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", overflow: "hidden" },
-  sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  sheetTitle: { fontSize: 16, fontWeight: "800", color: Colors.ink },
-  sheetSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  closeBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  statusBanner: { borderRadius: 10, padding: 12, alignItems: "center", marginBottom: 8 },
-  statusBannerText: { fontSize: 14, fontWeight: "800" },
-  sec: { fontSize: 11, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 14 },
-  dLine: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  dSub: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
-  proofThumb: { marginTop: 12, alignItems: "center", gap: 6 },
-  proofImg: { width: "100%" as any, height: 180, borderRadius: 10, backgroundColor: Colors.bg4 },
-  proofPdf: { width: "100%" as any, height: 100, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", gap: 6 },
-  proofPdfText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  proofZoomHint: { fontSize: 11, color: Colors.ink3 },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  itemName: { fontSize: 13, color: Colors.ink, flex: 1 },
-  itemPrice: { fontSize: 13, fontWeight: "700", color: Colors.ink },
-  sumRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  sumLabel: { fontSize: 13, color: Colors.ink3 },
-  sumVal: { fontSize: 13, color: Colors.ink3 },
-  sheetFoot: { flexDirection: "row", gap: 10, padding: 20, borderTopWidth: 1, borderTopColor: Colors.border },
-  cancelBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
-  cancelText: { fontSize: 13, fontWeight: "700", color: Colors.ink3 },
-  advBtn: { flex: 2, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-  advText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  // Lightbox
-  lightbox: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center", padding: 20 },
-  lightboxImg: { width: "100%" as any, height: "80%" as any },
-  lightboxOpenBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
-  lightboxOpenText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-});
+function buildStyles(accent: AccentTokens) {
+  return StyleSheet.create({
+    kpiRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+    kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, borderTopWidth: 3, alignItems: "center" },
+    kpiNum: { fontSize: 18, fontWeight: "800", marginBottom: 3 },
+    kpiLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textAlign: "center" },
+    refreshBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10, alignSelf: "flex-end" },
+    refreshText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "600" },
+    empty: { alignItems: "center", paddingVertical: 48, gap: 10 },
+    emptyIcon: { fontSize: 36 },
+    emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+    emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
+    card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
+    cardHighlight: { borderColor: "#fecaca", borderWidth: 2, backgroundColor: "#fff5f5" },
+    cardWarn: { borderColor: "#fde68a", borderWidth: 2, backgroundColor: "#fffbeb" },
+    cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+    cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
+    cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
+    cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    cardTotal: { fontSize: 15, fontWeight: "800", color: Colors.ink },
+    cardMeta: { fontSize: 10, color: Colors.ink3, flex: 1, textAlign: "right", marginLeft: 8 },
+    badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+    badgeText: { fontSize: 10, fontWeight: "700" },
+    proofBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
+    proofBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
+    // Badge de contagem dentro do chip "Precisa agir" — vermelho/contraste
+    // pra puxar olho. Aparece só quando count > 0.
+    chipBadge: {
+      marginLeft: 6, backgroundColor: "#dc2626", borderRadius: 999,
+      minWidth: 18, height: 18, paddingHorizontal: 5,
+      alignItems: "center", justifyContent: "center",
+    },
+    chipBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800", lineHeight: 12 },
+    quickRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+    quickBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+      backgroundColor: Colors.green, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
+    },
+    quickBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+    sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", overflow: "hidden" },
+    sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
+    sheetTitle: { fontSize: 16, fontWeight: "800", color: Colors.ink },
+    sheetSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+    closeBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
+    statusBanner: { borderRadius: 10, padding: 12, alignItems: "center", marginBottom: 8 },
+    statusBannerText: { fontSize: 14, fontWeight: "800" },
+    sec: { fontSize: 11, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 14 },
+    dLine: { fontSize: 13, fontWeight: "600", color: Colors.ink },
+    dSub: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
+    proofThumb: { marginTop: 12, alignItems: "center", gap: 6 },
+    proofImg: { width: "100%" as any, height: 180, borderRadius: 10, backgroundColor: Colors.bg4 },
+    proofPdf: { width: "100%" as any, height: 100, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", gap: 6 },
+    proofPdfText: { fontSize: 13, color: accent.primaryStrong, fontWeight: "700" },
+    proofZoomHint: { fontSize: 11, color: Colors.ink3 },
+    itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    itemName: { fontSize: 13, color: Colors.ink, flex: 1 },
+    itemPrice: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+    sumRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+    sumLabel: { fontSize: 13, color: Colors.ink3 },
+    sumVal: { fontSize: 13, color: Colors.ink3 },
+    sheetFoot: { flexDirection: "row", gap: 10, padding: 20, borderTopWidth: 1, borderTopColor: Colors.border },
+    cancelBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
+    cancelText: { fontSize: 13, fontWeight: "700", color: Colors.ink3 },
+    advBtn: { flex: 2, backgroundColor: accent.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+    advText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+    // Lightbox
+    lightbox: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center", padding: 20 },
+    lightboxImg: { width: "100%" as any, height: "80%" as any },
+    lightboxOpenBtn: { backgroundColor: accent.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
+    lightboxOpenText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  });
+}
