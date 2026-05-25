@@ -1,17 +1,20 @@
-import { StudioPlaceholder } from "@/components/studio/StudioPlaceholder";
+import { StudioBridge } from "@/components/studio/StudioBridge";
 
 export default function StudioGestaoContabilidade() {
   return (
-    <StudioPlaceholder
-      icon="check"
-      phase="Atalho · módulo contábil do Aura"
-      title="Contabilidade"
-      subtitle="SPED, balancete e portal do contador. Tudo unificado com o resto do Aura — Studio entra no agregado contábil padrão."
-      bullets={[
-        "Exportação SPED Fiscal e SPED Contribuições",
-        "Balancete mensal pro contador baixar",
-        "Portal do contador com acesso read-only",
-        "Reaproveita módulo contábil do Aura — sem duplicação",
+    <StudioBridge
+      eyebrow="GESTÃO · CONTABILIDADE"
+      title="Contabilidade do estúdio"
+      subtitle="Relatórios mensais, DRE, obrigações fiscais — tudo pra mandar pro seu contador."
+      bridgeHref="/(tabs)/contabilidade"
+      bridgeIcon="calculator"
+      bridgeLabel="Abrir Contabilidade"
+      bridgeNote="A central de Contabilidade do Aura gera relatórios mensais consolidados, DRE, e lista de obrigações fiscais. Suas operações Studio entram automaticamente nos relatórios."
+      futureFeatures={[
+        "Recorte Studio: relatório separado quando você tem vertical mista (varejo + Studio)",
+        "Exportação direta pro contador com tag \"Aura Studio\" no e-mail",
+        "Conciliação automática de insumos consumidos (entrada NF-e fornecedor × baixa por venda)",
+        "Calendário de obrigações específico pra negócios de personalização (ICMS-ST quando aplicável)",
       ]}
     />
   );
