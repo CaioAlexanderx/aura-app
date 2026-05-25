@@ -2,24 +2,23 @@
 // AURA STUDIO · Wizard de solicitar aprovação de arte (Fase 5)
 //
 // 3ª aplicação do <StudioWorkflow> canônico.
-// 3 passos: Mockup → Mensagem → Abrir WhatsApp.
+// 3 passos: Mockup (upload OU URL) → Mensagem → Abrir WhatsApp.
 //
-// Fluxo:
-//   1. Lojista cola URL do mockup
-//   2. Edita mensagem (template default em PT-BR)
-//   3. Backend gera token, retorna wa.me link, frontend abre popup
-//
-// Pós-envio: cliente abre o link, vê /aprovacao/[token], aprova ou
-// pede ajuste. KDS avança auto se aprovar.
+// 25/05 — item #10 da análise UX/UI: upload integrado.
+// Lojista clica "Subir do dispositivo", arquivo vai pro R2, URL volta
+// já preenchida. Mantém URL externa como fallback.
 // ============================================================
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, Image, Linking, Platform } from "react-native";
+import {
+  View, Text, TextInput, Pressable, StyleSheet, Image, Linking, Platform, ActivityIndicator,
+} from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
 import { StudioColors } from "@/constants/studio-tokens";
 import { studioApi, type StudioOrder, type StudioApprovalCreated } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { fileToBase64Web, pickFileWeb, uploadStudioMockup } from "@/services/studioUploadApi";
 
 type Props = {
   order: StudioOrder;
@@ -31,6 +30,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
   const [mockupUrl, setMockupUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [customerPhone, setCustomerPhone] = useState(order.customer_phone || "");
   const [customMessage, setCustomMessage] = useState("");
   const [created, setCreated] = useState<StudioApprovalCreated | null>(null);
@@ -39,6 +39,31 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     step === 1 ? /^https?:\/\//.test(mockupUrl.trim()) :
     step === 2 ? customerPhone.replace(/\D/g, "").length >= 10 :
     true;
+
+  async function handlePickAndUpload() {
+    if (!company?.id) return;
+    if (Platform.OS !== "web") {
+      toast.error("Upload do dispositivo disponível na versão web. Use URL pública por enquanto no app.");
+      return;
+    }
+    const file = await pickFileWeb("image/*,application/pdf");
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { base64, content_type } = await fileToBase64Web(file);
+      const r = await uploadStudioMockup(company.id, {
+        content_base64: base64,
+        content_type,
+        kind: "approval",
+      });
+      setMockupUrl(r.url);
+      toast.success("Mockup enviado!");
+    } catch (e: any) {
+      toast.error(e?.message || "Falha no upload");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function generateLink() {
     if (!company?.id) return;
@@ -100,10 +125,32 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
       >
         {step === 1 && (
           <View style={s.block}>
-            <Text style={s.q}>Cole a URL do mockup que vai enviar</Text>
+            <Text style={s.q}>Qual mockup vai enviar?</Text>
             <Text style={s.help}>
-              URL pública da imagem do mockup com a arte aplicada (PNG/JPG). Upload direto chega numa próxima iteração.
+              Suba do seu dispositivo ou cole uma URL pública (PNG, JPG, PDF até 15 MB).
             </Text>
+
+            <Pressable
+              onPress={handlePickAndUpload}
+              style={[s.uploadBtn, uploading && { opacity: 0.6 }]}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Icon name="upload" size={16} color="#fff" />
+                  <Text style={s.uploadBtnTxt}>Subir do dispositivo</Text>
+                </>
+              )}
+            </Pressable>
+
+            <View style={s.divider}>
+              <View style={s.dividerLine} />
+              <Text style={s.dividerTxt}>ou cole uma URL</Text>
+              <View style={s.dividerLine} />
+            </View>
+
             <TextInput
               style={s.input}
               placeholder="https://..."
@@ -111,7 +158,6 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
               onChangeText={setMockupUrl}
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus
             />
             {/^https?:\/\//.test(mockupUrl.trim()) && (
               <View style={s.preview}>
@@ -191,6 +237,16 @@ const s = StyleSheet.create({
   subHelp: { fontSize: 12, color: StudioColors.ink3, marginTop: 8, fontStyle: "italic" },
   label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
   input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: StudioColors.ink },
+
+  uploadBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: StudioColors.primary,
+    paddingVertical: 12, borderRadius: 12, marginBottom: 10,
+  },
+  uploadBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 8 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: StudioColors.ink5 },
+  dividerTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
 
   preview: { marginTop: 14, alignItems: "center" },
   previewImg: { width: 200, height: 200, borderRadius: 14, backgroundColor: "#fff" },
