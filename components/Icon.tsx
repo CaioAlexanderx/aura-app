@@ -39,10 +39,16 @@ const PATHS: Record<string, string> = {
   trending_down:  "M23 18l-9.5-9.5-5 5L1 6 M17 18h6v-6",
   receipt:        "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z M16 8H8 M16 12H8 M14 16H8",
   calculator:     "M4 2h16a2 2 0 012 2v16a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z M8 10h.01 M12 10h.01 M16 10h.01 M8 14h.01 M12 14h.01 M16 14h.01 M8 18h.01 M12 18h.01 M16 18h.01 M8 6h8",
+  // Cartao de credito — usado na home Studio (venda teste)
+  credit_card:    "M3 5h18a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2z M1 10h22 M5 15h4",
   // ── Commerce ────────────────────────────────────────────────
   cart:           "M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6 M9 22a1 1 0 100-2 1 1 0 000 2z M20 22a1 1 0 100-2 1 1 0 000 2z",
+  // shopping_cart e' alias canonico de cart (usado pelo Studio shell)
+  shopping_cart:  "M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6 M9 22a1 1 0 100-2 1 1 0 000 2z M20 22a1 1 0 100-2 1 1 0 000 2z",
   package:        "M16.5 9.4l-9-5.19 M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
   bag:            "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0",
+  // shopping_bag e' usado em produto Studio — bag estilizada com alca completa
+  shopping_bag:   "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0",
     percent: "M19 5L5 19 M6.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M17.5 20a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
   tag:            "M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z M7 7h.01",
   barcode:        "M3 5v14 M6 5v14 M9 5v14 M12 5v14 M15 5v14 M18 5v14 M21 5v14",
@@ -54,15 +60,23 @@ const PATHS: Record<string, string> = {
   users:          "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
   user_plus:      "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M8.5 11a4 4 0 100-8 4 4 0 000 8z M20 8v6 M23 11h-6",
   payroll:        "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 8v4 M21 10h4",
+  // Maleta de trabalho (Gestao no Studio shell)
+  briefcase:      "M3 7h18v13a2 2 0 01-2 2H5a2 2 0 01-2-2V7z M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2 M3 13h18",
   // ── Communication ───────────────────────────────────────────
   message:        "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
+  // Balao circular com cantos arredondados (WhatsApp link na home Studio)
+  message_circle: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z",
   headset:        "M3 18v-6a9 9 0 0118 0v6 M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z M3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z",
   // ── Content ─────────────────────────────────────────────────
   file_text:      "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8",
+  // Imagem com sol (galeria Studio)
+  image:          "M3 5h18a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2z M8.5 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21",
   clipboard:      "M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2 M9 2h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V3a1 1 0 011-1z",
   bar_chart:      "M12 20V10 M18 20V4 M6 20v-4",
   star:           "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
   alert:          "M12 9v4 M12 17h.01 M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
+  // Circulo com exclamacao (KPI "aguardando arte")
+  alert_circle:   "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8v4 M12 16h.01",
   info:           "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8h.01 M12 12v4",
   // ── Date / Time ─────────────────────────────────────────────
   calendar:       "M16 2v4 M8 2v4 M3 10h18 M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z",
@@ -88,6 +102,35 @@ const PATHS: Record<string, string> = {
   sparkles:       "M12 2l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z M19 15l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5z",
 };
 
+// ── Aliases kebab-case → snake_case ────────────────────────────
+// Muitas telas (especialmente Studio) referenciam icones em kebab-case por
+// influencia de lucide-react. Sem aliases, retornavam null e quebravam UI.
+// Mantemos snake_case como canonico mas resolvemos kebab tambem.
+const ALIASES: Record<string, string> = {
+  "shopping-bag":    "shopping_bag",
+  "shopping-cart":   "shopping_cart",
+  "credit-card":     "credit_card",
+  "message-circle":  "message_circle",
+  "alert-circle":    "alert_circle",
+  "file-text":       "file_text",
+  "dollar-sign":     "dollar",
+  "bar-chart":       "bar_chart",
+  "chevron-left":    "chevron_left",
+  "chevron-right":   "chevron_right",
+  "chevron-up":      "chevron_up",
+  "chevron-down":    "chevron_down",
+  "trending-up":     "trending_up",
+  "trending-down":   "trending_down",
+  "user-plus":       "user_plus",
+  "eye-off":         "eye_off",
+  "qr-code":         "qr_code",
+  "drag-handle":     "drag_handle",
+};
+
+function resolveName(name: string): string {
+  return ALIASES[name] || name;
+}
+
 type IconName = keyof typeof PATHS;
 
 type IconProps = {
@@ -97,11 +140,12 @@ type IconProps = {
 };
 
 export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
-  const path = PATHS[name as string];
+  const resolved = resolveName(name as string);
+  const path = PATHS[resolved];
 
   // Nao renderiza nada se o icone nao existir (sem "?")
   if (!path) {
-    if (__DEV__) console.warn(`[Icon] icone nao encontrado: "${name}"`);
+    if (__DEV__) console.warn(`[Icon] icone nao encontrado: "${name}" (resolvido: "${resolved}")`);
     return null;
   }
 
@@ -135,11 +179,14 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     grid: "#", clock: "T", tag: "#", barcode: "|||", qr_code: "[#]", camera: "O",
     drag_handle: "=", eye_off: "O", shield: "U",
     tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
+    // Novos (25/05)
+    shopping_bag: "B", shopping_cart: "C", credit_card: "$",
+    message_circle: "M", alert_circle: "!", briefcase: "B", image: "I",
   };
 
   return (
     <Text style={{ fontSize: size * 0.6, fontWeight: "700", color, textAlign: "center" }}>
-      {fallback[name as string] ?? ""}
+      {fallback[resolved] ?? ""}
     </Text>
   );
 }
