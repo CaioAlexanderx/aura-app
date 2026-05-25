@@ -1,18 +1,21 @@
 // ============================================================
-// AURA STUDIO · Loja Digital (Storefront)
+// AURA STUDIO · Loja Digital (Storefront) — 8 Tabs Studio-native
 //
-// 25/05/2026: substitui o StudioBridge stub por implementação real.
-// Reaproveita o hook useDigitalChannel + os 5 componentes Tab* do
-// Canal Digital varejo (TabMeuSite, TabDesign, TabVitrine, TabEntrega,
-// TabPedidos) — mesma feature set, tematizado via <AccentTheme> com
-// tokens Studio (navy #1E3A8A + accent magenta #EC4899).
+// 25/05/2026: separação da Loja Digital Studio do Canal Digital varejo
+// (memory studio_bridges_completas_25mai2026 → evolução).
 //
-// Os 5 Tab* migraram pra useChannelStyles() hook (commits 9efe4059,
-// 00b38da9, 400a1f8b, 0e0db3c2, 0ddcca9c) — agora respondem ao
-// AccentTheme provider. Wrap aqui aplica tokens Studio em chips,
-// botões CTA (saveBtn), badges e switches.
+// 8 Tabs:
+//   1. Meu Site     — reuso TabMeuSite (canal varejo, tematizado via AccentTheme)
+//   2. Design       — reuso TabDesign (canal varejo, tematizado)
+//   3. Configurador — NOVO Studio (lista produtos personalizáveis + atalho /studio/produtos)
+//   4. Galeria      — NOVO Studio (templates de arte prontos pra cliente)
+//   5. Revisões     — NOVO Studio (max_revisions_included + extra_revision_price)
+//   6. Marketplaces — NOVO Studio (conectar ML/Shopee via OAuth popup)
+//   7. Entrega      — reuso TabEntrega (canal varejo, tematizado)
+//   8. Pedidos      — NOVO Studio (unifica digital + pdv + marketplace)
 //
-// Studio não tem gate de plano (memory studio_sem_gate_de_plano_25mai2026).
+// Envelopa em <AccentTheme tokens={studioAccent}> — tematização navy+magenta
+// completa nas 3 tabs reaproveitadas + tabs novas usam StudioColors direto.
 // ============================================================
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
@@ -21,18 +24,35 @@ import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
-import { TabBar } from "@/components/TabBar";
-import { IS_WIDE, TABS } from "@/components/screens/canal/shared";
+import { IS_WIDE } from "@/components/screens/canal/shared";
+// Reuso do canal varejo (tabs já tematizadas via useAccent/useChannelStyles)
 import { TabMeuSite } from "@/components/screens/canal/TabMeuSite";
-import { TabDesign } from "@/components/screens/canal/TabDesign";
-import { TabVitrine } from "@/components/screens/canal/TabVitrine";
+import { TabDesign }  from "@/components/screens/canal/TabDesign";
 import { TabEntrega } from "@/components/screens/canal/TabEntrega";
-import { TabPedidos } from "@/components/screens/canal/TabPedidos";
+// Tabs Studio-native novas
+import { TabStudioConfigurador } from "@/components/screens/studio-loja-digital/TabStudioConfigurador";
+import { TabStudioGaleria }      from "@/components/screens/studio-loja-digital/TabStudioGaleria";
+import { TabStudioRevisoes }     from "@/components/screens/studio-loja-digital/TabStudioRevisoes";
+import { TabStudioMarketplaces } from "@/components/screens/studio-loja-digital/TabStudioMarketplaces";
+import { TabStudioPedidos }      from "@/components/screens/studio-loja-digital/TabStudioPedidos";
 
 const STOREFRONT_BASE = "https://loja.getaura.com.br";
 
+type TabKey = "site" | "design" | "configurator" | "gallery" | "revisions" | "marketplaces" | "delivery" | "orders";
+
+const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
+  { key: "site",          label: "Meu Site",     icon: "globe" },
+  { key: "design",        label: "Design",       icon: "edit" },
+  { key: "configurator",  label: "Configurador", icon: "settings" },
+  { key: "gallery",       label: "Galeria",      icon: "image" },
+  { key: "revisions",     label: "Revisões",     icon: "refresh" },
+  { key: "marketplaces",  label: "Marketplaces", icon: "external-link" },
+  { key: "delivery",      label: "Entrega",      icon: "truck" },
+  { key: "orders",        label: "Pedidos",      icon: "shopping-bag" },
+];
+
 export default function StudioVendasLojaDigital() {
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState<TabKey>("site");
   const {
     config, isLoading,
     saveConfig, isSaving,
@@ -52,9 +72,9 @@ export default function StudioVendasLojaDigital() {
         <View style={s.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.eyebrow}>VENDAS · LOJA DIGITAL</Text>
-            <Text style={s.title}>Storefront pra vender online</Text>
+            <Text style={s.title}>Sua loja Studio na internet</Text>
             <Text style={s.sub}>
-              Página pública onde o cliente vê seus produtos personalizáveis, configura a personalização e fecha o pedido pelo Pix ou cartão.
+              Configure tudo do storefront aqui: produtos personalizáveis, galeria de templates, política de revisões, marketplaces e pedidos unificados.
             </Text>
           </View>
           {config.is_published && storefrontUrl && (
@@ -74,9 +94,9 @@ export default function StudioVendasLojaDigital() {
             <Icon name="globe" size={22} color={StudioColors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.heroTitle}>Sua loja Studio em minutos</Text>
+            <Text style={s.heroTitle}>Loja Digital pronta pra personalizados</Text>
             <Text style={s.heroDesc}>
-              Configure vitrine, design, entrega e acompanhe pedidos. Produtos marcados como personalizáveis aparecem com o configurador.
+              Tudo que o cliente precisa: ver produtos, configurar arte com texto/foto/cores, escolher template e fechar pelo Pix ou cartão.
             </Text>
           </View>
           <View style={s.heroPill}>
@@ -86,53 +106,74 @@ export default function StudioVendasLojaDigital() {
           </View>
         </View>
 
-        {/* Tabs reaproveitadas do Canal Digital varejo — agora tematizadas via AccentTheme */}
-        <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+        {/* Tabs Studio (8) — scroll horizontal em mobile */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, marginBottom: 18 }}
+          contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}
+        >
+          {TABS.map((t) => {
+            const active = t.key === tab;
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => setTab(t.key)}
+                style={[s.tabBtn, active && s.tabBtnActive]}
+              >
+                <Icon name={t.icon as any} size={13} color={active ? "#fff" : StudioColors.ink3} />
+                <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-        {isLoading ? (
-          <ListSkeleton rows={4} />
-        ) : (
-          <>
-            {tab === 0 && (
-              <TabMeuSite
-                config={config}
-                saveConfig={saveConfig}
-                isSaving={isSaving}
-                requestDomain={requestDomain}
-                isRequestingDomain={isRequestingDomain}
-                uploadImage={uploadImage}
-                isUploadingImage={isUploadingImage}
-                setupPix={setupPix}
-                isSettingUpPix={isSettingUpPix}
-              />
-            )}
-            {tab === 1 && (
-              <TabDesign
-                config={config}
-                saveConfig={saveConfig}
-                isSaving={isSaving}
-                uploadImage={uploadImage}
-                isUploadingImage={isUploadingImage}
-                deleteImage={deleteImage}
-              />
-            )}
-            {tab === 2 && (
-              <TabVitrine
-                config={config}
-                saveConfig={saveConfig}
-                isSaving={isSaving}
-              />
-            )}
-            {tab === 3 && (
-              <TabEntrega
-                config={config}
-                saveConfig={saveConfig}
-                isSaving={isSaving}
-              />
-            )}
-            {tab === 4 && <TabPedidos />}
-          </>
+        {/* Conteúdo da tab ativa */}
+        {tab === "site" && (
+          isLoading ? <ListSkeleton rows={4} /> : (
+            <TabMeuSite
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+              requestDomain={requestDomain}
+              isRequestingDomain={isRequestingDomain}
+              uploadImage={uploadImage}
+              isUploadingImage={isUploadingImage}
+              setupPix={setupPix}
+              isSettingUpPix={isSettingUpPix}
+            />
+          )
         )}
+
+        {tab === "design" && (
+          isLoading ? <ListSkeleton rows={4} /> : (
+            <TabDesign
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+              uploadImage={uploadImage}
+              isUploadingImage={isUploadingImage}
+              deleteImage={deleteImage}
+            />
+          )
+        )}
+
+        {tab === "configurator"  && <TabStudioConfigurador />}
+        {tab === "gallery"       && <TabStudioGaleria />}
+        {tab === "revisions"     && <TabStudioRevisoes />}
+        {tab === "marketplaces"  && <TabStudioMarketplaces />}
+
+        {tab === "delivery" && (
+          isLoading ? <ListSkeleton rows={4} /> : (
+            <TabEntrega
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+            />
+          )
+        )}
+
+        {tab === "orders" && <TabStudioPedidos />}
       </ScrollView>
     </AccentTheme>
   );
@@ -174,7 +215,7 @@ const s = StyleSheet.create({
     fontSize: 13.5,
     color: StudioColors.ink3,
     marginTop: 4,
-    maxWidth: 640,
+    maxWidth: 720,
   },
   viewSiteBtn: {
     flexDirection: "row",
@@ -238,5 +279,29 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+
+  tabBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: StudioColors.paperCard,
+    borderWidth: 1,
+    borderColor: StudioColors.ink5,
+  },
+  tabBtnActive: {
+    backgroundColor: StudioColors.primary,
+    borderColor: StudioColors.primary,
+  },
+  tabBtnTxt: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: StudioColors.ink2,
+  },
+  tabBtnTxtActive: {
+    color: "#fff",
   },
 });
