@@ -14,6 +14,7 @@ import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { request } from "@/services/api";
 import {
   studioBulkHubApi,
   type HubStats, type HubFeedItem, type HubAlert,
@@ -65,25 +66,28 @@ export default function StudioPedidosHub() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Carrega produtos personalizáveis pra wizard de evento
+  // Carrega produtos personalizáveis pra wizard de evento.
+  // FIX (25/05): usa request() do projeto em vez de fetch direto —
+  // pega token via interceptor padrão, retry e error handling consistentes.
   async function openBulkWizard() {
     if (!company?.id) return;
     try {
-      // Busca produtos da empresa que estão como personalizáveis
-      // Usa endpoint padrão /products do Aura — filtra is_personalizable client-side
-      // (pra MVP). Quando Fase 1 polish chegar, terá filtro server-side.
-      const r = await fetch(
-        process.env.EXPO_PUBLIC_API_URL + `/companies/${company.id}/products?limit=500`,
-        { headers: { Authorization: `Bearer ${(useAuthStore.getState() as any).accessToken || ""}` } }
-      ).then((res) => res.json()).catch(() => ({ products: [] }));
-      const list = (r.products || r || [])
+      const r = await request<any>(
+        "/companies/" + company.id + "/products?limit=500",
+        { method: "GET", retry: 1, timeout: 10000 }
+      );
+      const raw: any[] = Array.isArray(r) ? r : (r?.products || []);
+      const list = raw
         .filter((p: any) => p.is_personalizable)
         .map((p: any) => ({ id: p.id, name: p.name, price: parseFloat(p.price) || 0 }));
       setProducts(list);
       setBulkOpen(true);
-    } catch (_) {
+    } catch (e: any) {
+      // Mesmo se falhar, abre o wizard — usuário pode cadastrar produto manualmente depois.
+      // (Próxima iteração: bloqueia abertura se produtos vazios e mostra CTA "Cadastrar produto")
       setProducts([]);
       setBulkOpen(true);
+      console.warn("[studio/pedidos] Falha ao carregar produtos:", e?.message);
     }
   }
 
@@ -224,32 +228,27 @@ function Kpi({ label, value, icon, color, highlight }: { label: string; value: s
 const s = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: StudioColors.bg },
   container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
-
   headerRow: { flexDirection: "row", alignItems: "flex-end", gap: 16, marginBottom: 22, flexWrap: "wrap" },
   eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
   title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
   sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4 },
   ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.accent, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
-
   kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 22 },
   kpi: { flex: 1, minWidth: 150, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
   kpiIco: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   kpiLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
   kpiValue: { fontSize: 17, fontWeight: "800", color: StudioColors.ink, marginTop: 1 },
-
   sectionLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.6, marginBottom: 8 },
   alertsBlock: { marginBottom: 22, gap: 8 },
   alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
   alertTitle: { fontSize: 13, fontWeight: "700" },
   alertSub: { fontSize: 11.5, marginTop: 2 },
-
   tabs: { flexDirection: "row", gap: 6, marginBottom: 12 },
   tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: StudioColors.bgSoft, borderWidth: 1, borderColor: StudioColors.ink5 },
   tabActive: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
   tabTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
   tabTxtActive: { color: "#fff" },
-
   feedList: { gap: 6 },
   feedRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, backgroundColor: StudioColors.paperCard, borderRadius: 12, borderWidth: 1, borderColor: StudioColors.ink5 },
   feedDot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
@@ -258,7 +257,6 @@ const s = StyleSheet.create({
   feedAmount: { fontSize: 13.5, fontWeight: "800", color: StudioColors.ink },
   feedStatus: { backgroundColor: StudioColors.bgSoft, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, marginTop: 3 },
   feedStatusTxt: { fontSize: 10, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase" },
-
   empty: { alignItems: "center", padding: 40, gap: 8, backgroundColor: StudioColors.paperCard, borderRadius: 14 },
   emptyTxt: { fontSize: 13, color: StudioColors.ink3, marginTop: 6 },
 });
