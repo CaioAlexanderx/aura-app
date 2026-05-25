@@ -1,7 +1,13 @@
 // ============================================================
-// AURA STUDIO · KDS de Produção (Fase 4 + UX overhaul 25/05)
+// AURA STUDIO · KDS de Produção (Fase 4 + UX overhaul 25/05 + Marketplaces S-0)
 //
-// 5 colunas: Aguardando arte → Aprovado → Em produção → Pronto → Entregue
+// 6 colunas: Aguardando personalização → Aguardando arte → Aprovado → Em produção → Pronto → Entregue
+//
+// Marketplaces S-0 (25/05/2026): awaiting_customization é a 1ª coluna, em
+// rosa accent. Pedidos vindos de ML/Shopee chegam aqui (vertical='studio',
+// customization_collected_at IS NULL). Lojista coleta a personalização e
+// avança pra pending_art.
+//
 // Item #3 do follow-up: empty state celebratório quando fila vazia.
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
@@ -26,6 +32,8 @@ type Column = {
 };
 
 const COLUMNS: Column[] = [
+  // S-0: nova primeira coluna pra pedidos de marketplace (ML/Shopee) sem personalização ainda coletada.
+  { key: "awaiting_customization", label: "Aguardando personalização", icon: "message-circle", color: StudioColors.accent, bg: "#FCE7F3", nextLabel: "Coletar e enviar pra arte" },
   { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: "#F59E0B", bg: "#FEF3C7", nextLabel: "Marcar como aprovado" },
   { key: "approved",      label: "Aprovado",         icon: "check",        color: StudioColors.primary, bg: StudioColors.primarySoft, nextLabel: "Iniciar produção" },
   { key: "in_production", label: "Em produção",      icon: "clock",        color: StudioColors.accent, bg: StudioColors.accentSoft, nextLabel: "Marcar como pronto" },
@@ -34,11 +42,18 @@ const COLUMNS: Column[] = [
 ];
 
 const NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null> = {
+  awaiting_customization: "pending_art",
   pending_art:   "approved",
   approved:      "in_production",
   in_production: "ready",
   ready:         "delivered",
   delivered:     null,
+  cancelled:     null,
+};
+
+const PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }> = {
+  mercado_livre: { label: "Mercado Livre", bg: "#FEF3C7", fg: "#92400E" },
+  shopee:        { label: "Shopee",        bg: "#FFEDD5", fg: "#9A3412" },
 };
 
 function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "late" } {
@@ -186,6 +201,7 @@ export default function StudioProducao() {
                 ) : byStatus[col.key].map((o) => {
                   const sla = fmtSla(o.created_at);
                   const next = NEXT_STATUS[col.key];
+                  const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
                   return (
                     <Pressable
                       key={o.id}
@@ -210,6 +226,14 @@ export default function StudioProducao() {
                       <Text style={s.cardMeta}>
                         {o.item_count} item{o.item_count === 1 ? "" : "s"} · R$ {Number(o.total_amount).toFixed(2)}
                       </Text>
+                      {platformMeta && (
+                        <View style={[s.platformBadge, { backgroundColor: platformMeta.bg }]}>
+                          <Icon name="shopping-bag" size={10} color={platformMeta.fg} />
+                          <Text style={[s.platformBadgeTxt, { color: platformMeta.fg }]}>
+                            {platformMeta.label}
+                          </Text>
+                        </View>
+                      )}
                       {o.pending_approval_url && (
                         <View style={s.approvalBadge}>
                           <Icon name="message-circle" size={10} color="#1E40AF" />
@@ -217,6 +241,15 @@ export default function StudioProducao() {
                         </View>
                       )}
                       <View style={s.cardActions}>
+                        {col.key === "awaiting_customization" && (
+                          <Pressable
+                            style={[s.btnApproval, { backgroundColor: StudioColors.accent }]}
+                            onPress={(e) => { e.stopPropagation && e.stopPropagation(); router.push(`/studio/pedidos/${o.id}` as any); }}
+                          >
+                            <Icon name="message-circle" size={12} color="#fff" />
+                            <Text style={s.btnApprovalTxt}>Coletar personalização</Text>
+                          </Pressable>
+                        )}
                         {col.key === "pending_art" && (
                           <Pressable
                             style={s.btnApproval}
@@ -330,6 +363,12 @@ const s = StyleSheet.create({
   slaTxt: { fontSize: 10.5, fontWeight: "700", color: StudioColors.ink3 },
   cardName: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink, marginTop: 2 },
   cardMeta: { fontSize: 11.5, color: StudioColors.ink3 },
+  platformBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+    alignSelf: "flex-start", marginTop: 4,
+  },
+  platformBadgeTxt: { fontSize: 10.5, fontWeight: "800" },
   approvalBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: "#DBEAFE",
