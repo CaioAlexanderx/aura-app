@@ -19,6 +19,8 @@
 // 21/05: Davi pediu fluxo de excluir pedidos teste — botão "Excluir pedido
 //   permanentemente" no modal de detalhe (só aparece em cancelled/pending_payment
 //   sem transação/estoque/nfce). Chama DELETE /orders/:oid, backend valida.
+// 25/05: Migrado pra useChannelStyles() + useAccent() — sai violeta hard-coded,
+//   entra accent tematizado por vertical. Comportamento 100% preservado.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -30,7 +32,8 @@ import { Icon } from "@/components/Icon";
 import { useDigitalOrders } from "@/hooks/useDigitalOrders";
 import { api } from "@/services/api";
 import { toast } from "@/components/Toast";
-import { cs } from "./shared";
+import { useChannelStyles } from "./shared";
+import { useAccent } from "@/contexts/AccentTheme";
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   pending_payment:    { label: "Aguardando pagamento", color: "#d97706", bg: "#fef3c7" },
@@ -129,6 +132,8 @@ function fmt(v: number | string) {
 }
 
 export function TabPedidos({ companyId }: { companyId?: string } = {}) {
+  const cs = useChannelStyles();
+  const accent = useAccent();
   const [filter, setFilter] = useState<ChipKey>("all");
   const [order, setOrder] = useState<any>(null);
   const [proofZoom, setProofZoom] = useState<string | null>(null);
@@ -244,8 +249,8 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
           <Text style={[s.kpiNum, { color: "#dc2626" }]}>{(kpi as any).awaiting_approval || 0}</Text>
           <Text style={s.kpiLabel}>Aguardando aprov.</Text>
         </View>
-        <View style={[s.kpiCard, { borderTopColor: Colors.violet }]}>
-          <Text style={[s.kpiNum, { color: Colors.violet }]}>{kpi.confirmed}</Text>
+        <View style={[s.kpiCard, { borderTopColor: accent.primary }]}>
+          <Text style={[s.kpiNum, { color: accent.primary }]}>{kpi.confirmed}</Text>
           <Text style={s.kpiLabel}>Confirmados</Text>
         </View>
         <View style={[s.kpiCard, { borderTopColor: Colors.green }]}>
@@ -419,7 +424,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                       <Text style={s.dLine}>{order.customer_name}</Text>
                       {!!order.customer_phone && (
                         <Pressable onPress={() => Linking.openURL(`https://wa.me/${order.customer_phone.replace(/\D/g, "")}`)}>
-                          <Text style={[s.dSub, { color: Colors.violet3 }]}>{order.customer_phone} (abrir WhatsApp)</Text>
+                          <Text style={[s.dSub, { color: accent.primaryStrong }]}>{order.customer_phone} (abrir WhatsApp)</Text>
                         </Pressable>
                       )}
                       {!!order.customer_email && <Text style={s.dSub}>{order.customer_email}</Text>}
