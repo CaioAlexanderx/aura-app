@@ -48,13 +48,23 @@ const FIELD_TYPE_ICONS: Record<CustomizationFieldType, string> = {
   option:   "check",
 };
 
+// Default config quando produto ainda não tem nada salvo (ou GET falhou).
+// Sempre criar config terminal — nunca deixar `undefined` no cache, senão
+// o render do expand fica no spinner pra sempre (bug 25/05/2026).
+function defaultConfig(): CustomizationConfig {
+  return {
+    print_area: { width_cm: 10, height_cm: 10, position: "center" },
+    fields: [],
+  };
+}
+
 export default function StudioProdutos() {
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [filter, setFilter] = useState<"all" | "personalizable" | "non">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [configCache, setConfigCache] = useState<Record<string, CustomizationConfig | null>>({});
+  const [configCache, setConfigCache] = useState<Record<string, CustomizationConfig>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -101,10 +111,15 @@ export default function StudioProdutos() {
     if (expandedId === p.id) { setExpandedId(null); return; }
     setExpandedId(p.id);
     if (!configCache[p.id]) {
+      // SEMPRE termina o load com config terminal — mesmo se 404/erro/null —
+      // pra render trocar do spinner pro form. Antes engolia silenciosamente
+      // e travava no ActivityIndicator (bug 25/05/2026).
       try {
         const r = await studioApi.getCustomizationConfig(company.id, p.id);
-        setConfigCache((c) => ({ ...c, [p.id]: r.config }));
-      } catch { /* config vazia ok — começa do zero */ }
+        setConfigCache((c) => ({ ...c, [p.id]: (r?.config as CustomizationConfig) || defaultConfig() }));
+      } catch {
+        setConfigCache((c) => ({ ...c, [p.id]: defaultConfig() }));
+      }
     }
   }
 
@@ -112,7 +127,7 @@ export default function StudioProdutos() {
     setConfigCache((c) => ({
       ...c,
       [pid]: {
-        ...(c[pid] || { print_area: { width_cm: 10, height_cm: 10, position: "center" }, fields: [] }),
+        ...(c[pid] || defaultConfig()),
         ...patch,
       },
     }));
@@ -134,7 +149,7 @@ export default function StudioProdutos() {
 
   function addField(pid: string, type: CustomizationFieldType) {
     setConfigCache((c) => {
-      const cur = c[pid] || { print_area: { width_cm: 10, height_cm: 10, position: "center" as const }, fields: [] };
+      const cur = c[pid] || defaultConfig();
       const newField: CustomizationField = {
         id: `f_${Date.now()}`,
         type,
