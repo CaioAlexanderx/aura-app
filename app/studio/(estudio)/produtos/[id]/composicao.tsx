@@ -1,11 +1,9 @@
 // ============================================================
 // AURA STUDIO · Composition Editor (pendência F3 + UX overhaul)
 //
-// Liga 1 produto a N insumos (com qty_per_unit).
-// Mostra summary de custo + margem com semáforo (verde/amarelo/vermelho).
-//
-// 25/05 — item #11: edição inline de preço pra what-if margem
-// (preview local; persistir requer endpoint products PATCH).
+// 25/05 — item #7 do follow-up: edição inline de preço agora PERSISTE
+// via PATCH /companies/:cid/products/:pid quando o lojista clica Salvar
+// e o preço foi alterado. Antes era preview-only.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -16,6 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioTokens, StudioRadiusV2 } from "@/constants/studio-tokens-v2";
 import { studioApi, type StudioInput, type CompositionItem } from "@/services/studioApi";
+import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { GlassCard, BubbleIcon, GradientHeader } from "@/components/studio/StudioPrimitives";
@@ -29,6 +28,16 @@ function marginTone(pct: number | null): { label: string; color: string; bg: str
   return                     { label: "Crítica",   color: StudioTokens.danger,  bg: StudioTokens.dangerSoft };
 }
 
+// PATCH price no products via endpoint padrão da Aura.
+async function patchProductPrice(companyId: string, productId: string, price: number) {
+  return request<any>(`/companies/${companyId}/products/${productId}`, {
+    method: "PATCH",
+    body: { price },
+    retry: 0,
+    timeout: 8000,
+  } as any);
+}
+
 export default function ComposicaoEditor() {
   const router = useRouter();
   const { id: productId } = useLocalSearchParams<{ id: string }>();
@@ -38,7 +47,6 @@ export default function ComposicaoEditor() {
   const [saving, setSaving] = useState(false);
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState(0);
-  // #11: preço editável inline — mantém o original pra mostrar "preço atual"
   const [originalPrice, setOriginalPrice] = useState(0);
   const [priceDraft, setPriceDraft] = useState("");
   const [editingPrice, setEditingPrice] = useState(false);
@@ -122,6 +130,7 @@ export default function ComposicaoEditor() {
     if (!company?.id || !productId) return;
     setSaving(true);
     try {
+      // 1) salva composição
       await studioApi.saveComposition(company.id, String(productId), {
         notes: notes.trim() || undefined,
         items: items.map((it) => ({
@@ -130,8 +139,16 @@ export default function ComposicaoEditor() {
           notes: it.notes || null,
         })),
       });
+
+      // 2) #7: se preço mudou, persiste via PATCH em products
       if (priceChanged) {
-        toast.success("Composição salva! Atualize o preço do produto na tela de Produtos pra persistir a mudança.");
+        try {
+          await patchProductPrice(company.id, String(productId), productPrice);
+          toast.success("✨ Composição e novo preço salvos!");
+        } catch (e: any) {
+          // composição OK mas preço falhou — não derruba o save
+          toast.error(`Composição salva, mas preço não persistiu: ${e?.message || "erro"}`);
+        }
       } else {
         toast.success("✨ Composição salva!");
       }
@@ -163,7 +180,7 @@ export default function ComposicaoEditor() {
             {saving ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Icon name="check" size={14} color="#fff" />
-                <Text style={s.ctaTxt}>Salvar</Text>
+                <Text style={s.ctaTxt}>Salvar{priceChanged ? " (preço novo)" : ""}</Text>
               </>
             )}
           </Pressable>
@@ -174,10 +191,8 @@ export default function ComposicaoEditor() {
         <View style={{ paddingVertical: 40 }}><ActivityIndicator size="large" color={StudioTokens.primary} /></View>
       ) : (
         <>
-          {/* Summary com preço editável (#11) */}
           <GlassCard tone="neutral" pad="lg" style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: "row", gap: 18, flexWrap: "wrap" }}>
-              {/* Preço — inline edit */}
               <View style={{ flex: 1, minWidth: 150 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 11, color: StudioTokens.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 }}>
@@ -207,7 +222,7 @@ export default function ComposicaoEditor() {
                 {priceChanged && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
                     <Text style={{ fontSize: 10, color: StudioTokens.warning, fontWeight: "700" }}>
-                      preview · original R$ {originalPrice.toFixed(2)}
+                      será salvo · era R$ {originalPrice.toFixed(2)}
                     </Text>
                     <Pressable onPress={resetPrice}>
                       <Icon name="rotate-ccw" size={10} color={StudioTokens.warning} />
@@ -227,7 +242,6 @@ export default function ComposicaoEditor() {
             </View>
           </GlassCard>
 
-          {/* Items */}
           <Text style={s.sectionLabel}>INSUMOS USADOS POR UNIDADE</Text>
           {items.length === 0 ? (
             <View style={s.empty}>
@@ -268,7 +282,6 @@ export default function ComposicaoEditor() {
             </View>
           )}
 
-          {/* Add insumo */}
           {availableInputs.length > 0 && (
             <>
               <Text style={s.sectionLabel}>ADICIONAR INSUMO</Text>
@@ -295,7 +308,6 @@ export default function ComposicaoEditor() {
             </View>
           )}
 
-          {/* Notes */}
           <Text style={[s.sectionLabel, { marginTop: 18 }]}>OBSERVAÇÕES (opcional)</Text>
           <TextInput
             style={s.notesInput}

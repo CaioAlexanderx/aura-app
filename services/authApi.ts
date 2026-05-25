@@ -1,6 +1,6 @@
 import { request } from "./api";
 
-export type VerticalKey = "odonto" | "barber" | "food" | "estetica" | "pet" | "academia";
+export type VerticalKey = "odonto" | "barber" | "food" | "studio" | "estetica" | "pet" | "academia";
 
 export type LoginResponse = {
   token: string;
@@ -56,32 +56,18 @@ export type PdvSettings = {
   // e em dinheiro (single ou parcela dinheiro em split-mode). Default
   // true em DEFAULT_SETTINGS — operador batuto/fila grande pode desligar.
   cash_tender_modal_enabled: boolean;
-  // 18/05/2026 (Fase 0 Aura Food, migration 118): quando true, o PDV
-  // passa a operar em modo "fechar mesa" em vez de venda avulsa.
-  // Toggle so aparece em Configuracoes > PDV para empresas com
-  // vertical_active=food. Opcional pra backward compat — empresas
-  // sem migration 118 retornam undefined.
+  // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;
-  // 18/05/2026 (Fase 0 Aura Food, migration 118): LEGACY — campo
-  // generico de taxa de servico. Substituido por food_service_fee_pct
-  // na migration 122 (Fase 7). Mantido aqui pra backward compat com
-  // empresas antigas; novas leituras/escritas devem usar food_service_fee_pct.
   service_fee_pct?: number;
-  // 2026-05-22 (Fase 7, migration 122): taxa de servico (gorjeta garcom)
-  // calculada sobre subtotal da comanda. 0..30. Aparece como linha
-  // separada no fechamento da mesa, FORA da NFC-e.
   food_service_fee_pct?: number;
-  // 2026-05-21 (F5 do polish pre-Fase 7, reservado pra Fase 7): quando
-  // true, NFC-e da comanda ainda pode ser emitida via "Emitir cupom"
-  // manual em vez de auto-emit no fechamento. Defensivo enquanto Fase 7
-  // (auto-emit + impressora termica) nao roda. Backend retorna undefined
-  // se a coluna nao existir.
   food_nfce_manual_enabled?: boolean;
-  // 2026-05-21 (F5 do polish pre-Fase 7, reservado pra Fase 7): quando
-  // true, ao confirmar um pedido a comanda sai impressa na termica de
-  // cozinha. Inutil enquanto a integracao de impressora nao existe —
-  // toggle fica visivel apenas em Configuracoes > PDV.
   food_comanda_print_enabled?: boolean;
+  // 24-25/05/2026 (Aura Studio): liga shell /studio + features personalizados.
+  studio_enabled?: boolean;
+  studio_kds_enabled?: boolean;
+  studio_gallery_enabled?: boolean;
+  studio_approval_enabled?: boolean;
+  studio_approval_mode?: "wa_me" | "whatsapp_business";
 };
 
 export var authApi = {

@@ -116,6 +116,7 @@ var VERTICAL_META: VerticalMeta[] = [
   { key: "food",     label: "Food Service",  color: "#fb7185", icon: "🍽️", ready: true  }, // coral 🍽️
   { key: "estetica", label: "Estetica",      color: Colors.ink3, icon: "✨", ready: false }, // em dev ✨
   { key: "pet",      label: "Pet Shop",      color: Colors.ink3, icon: "🐾", ready: false }, // em dev 🐾
+  { key: "studio",   label: "Aura Studio",   color: "#1E3A8A", icon: "🎨", ready: true  }, // navy + magenta accent (vertical 25/05/2026)
   { key: "academia", label: "Academia",      color: Colors.ink3, icon: "🏋️", ready: false }, // em dev 🏋️
 ];
 

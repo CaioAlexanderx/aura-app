@@ -1,14 +1,14 @@
 // ============================================================
-// AURA STUDIO · KDS de Produção (Fase 4)
+// AURA STUDIO · KDS de Produção (Fase 4 + UX overhaul 25/05)
 //
 // 5 colunas: Aguardando arte → Aprovado → Em produção → Pronto → Entregue
-// Click no botão "→ Próxima" avança status (workflow guiado).
-// Drag é opcional pra desktop futuro; primário é click.
+// Item #3 do follow-up: empty state celebratório quando fila vazia.
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
 import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
@@ -50,6 +50,7 @@ function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "lat
 }
 
 export default function StudioProducao() {
+  const router = useRouter();
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<StudioOrder[]>([]);
@@ -72,7 +73,6 @@ export default function StudioProducao() {
     const cur = (order.studio_production_status || "pending_art") as StudioProductionStatus;
     const next = NEXT_STATUS[cur];
     if (!next || !company?.id) return;
-    // Atualização otimista
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, studio_production_status: next } : o));
     try {
       await studioApi.updateProductionStatus(company.id, order.id, next);
@@ -84,13 +84,18 @@ export default function StudioProducao() {
     }
   }
 
-  // agrupar por status
   const byStatus: Record<string, StudioOrder[]> = {};
   for (const col of COLUMNS) byStatus[col.key] = [];
   for (const o of orders) {
     const key = (o.studio_production_status || "pending_art") as StudioProductionStatus;
     if (byStatus[key]) byStatus[key].push(o);
   }
+
+  // #3: detecta "fila completamente vazia exceto delivered" — celebra
+  const activeCount = COLUMNS.filter((c) => c.key !== "delivered").reduce(
+    (sum, c) => sum + byStatus[c.key].length, 0
+  );
+  const allCaughtUp = !loading && orders.length > 0 && activeCount === 0;
 
   return (
     <View style={s.wrap}>
@@ -113,12 +118,56 @@ export default function StudioProducao() {
           <ActivityIndicator size="large" color={StudioColors.primary} />
         </View>
       ) : orders.length === 0 ? (
+        // Empty state: nunca teve pedido
         <View style={s.emptyCard}>
           <Icon name="package" size={32} color={StudioColors.ink4} />
           <Text style={s.emptyTitle}>Sem pedidos do Studio ainda</Text>
           <Text style={s.emptySub}>
             Quando o cliente fizer um pedido na loja digital com produto personalizado, ele aparece aqui na coluna "Aguardando arte".
           </Text>
+          <View style={s.emptyCtas}>
+            <Pressable
+              onPress={() => router.push("/studio/vendas/loja-digital" as any)}
+              style={[s.emptyBtn, { backgroundColor: StudioColors.primary }]}
+            >
+              <Icon name="globe" size={14} color="#fff" />
+              <Text style={s.emptyBtnTxt}>Configurar loja digital</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/studio/produtos" as any)}
+              style={[s.emptyBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: StudioColors.ink4 }]}
+            >
+              <Icon name="shopping-bag" size={14} color={StudioColors.ink2} />
+              <Text style={[s.emptyBtnTxt, { color: StudioColors.ink2 }]}>Ver produtos</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : allCaughtUp ? (
+        // #3: tudo entregue → celebra
+        <View style={s.emptyCard}>
+          <View style={s.celebrateEmoji}>
+            <Text style={{ fontSize: 36 }}>🎉</Text>
+          </View>
+          <Text style={s.emptyTitle}>Fila zerada!</Text>
+          <Text style={s.emptySub}>
+            Tudo entregue ou em delivered. Aproveita pra dar uma olhada nos insumos ou divulgar promoção pra atrair pedido novo.
+          </Text>
+          <View style={s.emptyCtas}>
+            <Pressable
+              onPress={() => router.push("/studio/insumos" as any)}
+              style={[s.emptyBtn, { backgroundColor: StudioColors.accent }]}
+            >
+              <Icon name="package" size={14} color="#fff" />
+              <Text style={s.emptyBtnTxt}>Verificar insumos</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/studio/galeria" as any)}
+              style={[s.emptyBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: StudioColors.ink4 }]}
+            >
+              <Icon name="image" size={14} color={StudioColors.ink2} />
+              <Text style={[s.emptyBtnTxt, { color: StudioColors.ink2 }]}>Atualizar galeria</Text>
+            </Pressable>
+          </View>
         </View>
       ) : (
         <ScrollView horizontal style={s.boardScroll} contentContainerStyle={s.board}>
@@ -138,7 +187,11 @@ export default function StudioProducao() {
                   const sla = fmtSla(o.created_at);
                   const next = NEXT_STATUS[col.key];
                   return (
-                    <View key={o.id} style={s.card}>
+                    <Pressable
+                      key={o.id}
+                      style={s.card}
+                      onPress={() => router.push(`/studio/pedidos/${o.id}` as any)}
+                    >
                       <View style={s.cardHead}>
                         <Text style={s.cardId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
                         <View style={[s.slaChip,
@@ -165,18 +218,24 @@ export default function StudioProducao() {
                       )}
                       <View style={s.cardActions}>
                         {col.key === "pending_art" && (
-                          <Pressable style={s.btnApproval} onPress={() => setApprovalFor(o)}>
+                          <Pressable
+                            style={s.btnApproval}
+                            onPress={(e) => { e.stopPropagation && e.stopPropagation(); setApprovalFor(o); }}
+                          >
                             <Icon name="message-circle" size={12} color="#fff" />
                             <Text style={s.btnApprovalTxt}>Solicitar aprovação</Text>
                           </Pressable>
                         )}
                         {next && (
-                          <Pressable style={[s.btnAdvance, { backgroundColor: col.color }]} onPress={() => advance(o)}>
+                          <Pressable
+                            style={[s.btnAdvance, { backgroundColor: col.color }]}
+                            onPress={(e) => { e.stopPropagation && e.stopPropagation(); advance(o); }}
+                          >
                             <Text style={s.btnAdvanceTxt}>{col.nextLabel} →</Text>
                           </Pressable>
                         )}
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </ScrollView>
@@ -185,7 +244,6 @@ export default function StudioProducao() {
         </ScrollView>
       )}
 
-      {/* Modal de solicitar aprovação */}
       <Modal
         visible={!!approvalFor}
         animationType="slide"
@@ -219,9 +277,25 @@ const s = StyleSheet.create({
   },
   reloadTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
 
-  emptyCard: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 10, margin: 28, backgroundColor: StudioColors.paperCard, borderRadius: 18, borderWidth: 1, borderColor: StudioColors.ink5 },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: StudioColors.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 400 },
+  emptyCard: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    padding: 40, gap: 10, margin: 28,
+    backgroundColor: StudioColors.paperCard, borderRadius: 18,
+    borderWidth: 1, borderColor: StudioColors.ink5,
+  },
+  celebrateEmoji: {
+    width: 76, height: 76, borderRadius: 38,
+    backgroundColor: StudioColors.mintSoft,
+    alignItems: "center", justifyContent: "center",
+  },
+  emptyTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 6 },
+  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 460, lineHeight: 19 },
+  emptyCtas: { flexDirection: "row", gap: 10, marginTop: 16, flexWrap: "wrap", justifyContent: "center" },
+  emptyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
+  },
+  emptyBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   boardScroll: { flex: 1 },
   board: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
