@@ -73,9 +73,13 @@ function AuthGuard() {
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
+    // 2026-05-25 (hotfix Sheid Mania): Studio também tem porta dedicada
+    // /studio/(estudio) com shell próprio (navy + magenta).
+    const onStudio       = segments[0] === "studio";
 
     const isOdonto = (company as any)?.vertical_active === "odonto";
     const isFood   = (company as any)?.vertical_active === "food";
+    const isStudio = (company as any)?.vertical_active === "studio";
 
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
@@ -91,6 +95,7 @@ function AuthGuard() {
       router.replace(
         isOdonto ? "/dental/(clinic)/hoje" :
         isFood   ? "/food/(salao)/mesas"   :
+        isStudio ? "/studio/(estudio)"     :
         "/(tabs)"
       );
       return;
@@ -99,6 +104,7 @@ function AuthGuard() {
       router.replace(
         isOdonto ? "/dental/(clinic)/hoje" :
         isFood   ? "/food/(salao)/mesas"   :
+        isStudio ? "/studio/(estudio)"     :
         "/(tabs)"
       );
       return;
@@ -114,13 +120,19 @@ function AuthGuard() {
       return;
     }
 
+    // 2026-05-25 (hotfix Sheid Mania): mesma lógica para Studio.
+    if (token && (emailVerified || isDemo || isInternalAura) && isStudio && inTabs && !onCheckout) {
+      router.replace("/studio/(estudio)");
+      return;
+    }
+
     const billingStatus    = (company as any)?.billing_status;
     const hasActiveBilling = billingStatus === "active" || trialActive;
     const memberRole       = (company as any)?.member_role || "owner";
     const isOwner          = memberRole === "owner";
     const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
 
-    if (token && needsCheckout && (inTabs || onDentalClinic || onFoodSalao) && !onCheckout) {
+    if (token && needsCheckout && (inTabs || onDentalClinic || onFoodSalao || onStudio) && !onCheckout) {
       router.replace("/(tabs)/checkout");
       return;
     }

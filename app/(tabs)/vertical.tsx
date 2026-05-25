@@ -18,18 +18,24 @@ import BarberScreen from '@/components/verticals/BarberScreen';
 // Food (Fase 0 — 2026-05-18): mesmo padrao do odonto. Porta
 // dedicada em /food/(salao)/mesas. FoodScreen.tsx removido em
 // 2026-05-21 (F1 do polish pré-Fase 7).
+//
+// Studio (hotfix 2026-05-25): mesmo padrao. Porta dedicada em
+// /studio/(estudio). Caso Sheid Mania — sem o redirect aqui, deep-link
+// em /(tabs)/vertical caía no fallback "Modulo Vertical" generico.
 // ============================================================
 
 const VERTICAL_NAMES: Record<string, string> = {
   odonto: 'Odontologia',
   barber: 'Barbearia / Salao',
   food: 'Food Service',
+  studio: 'Aura Studio',
   estetica: 'Estetica',
   pet: 'Pet Shop',
   academia: 'Academia',
 };
 
-// Apenas barber renderiza embedded aqui agora. Odonto e food tem porta dedicada.
+// Apenas barber renderiza embedded aqui agora. Odonto, food e studio
+// têm porta dedicada.
 const READY_VERTICALS = ['barber'];
 
 export default function VerticalTab() {
@@ -44,6 +50,11 @@ export default function VerticalTab() {
   // Food tem porta dedicada — redireciona pra la.
   if (activeVertical === 'food') {
     return <Redirect href="/food/(salao)/mesas" />;
+  }
+
+  // Studio tem porta dedicada — redireciona pra la (hotfix 2026-05-25).
+  if (activeVertical === 'studio') {
+    return <Redirect href="/studio/(estudio)" />;
   }
 
   return (
@@ -64,7 +75,7 @@ export default function VerticalTab() {
         </View>
       )}
 
-      {activeVertical && !READY_VERTICALS.includes(activeVertical) && activeVertical !== 'odonto' && activeVertical !== 'food' && (
+      {activeVertical && !READY_VERTICALS.includes(activeVertical) && activeVertical !== 'odonto' && activeVertical !== 'food' && activeVertical !== 'studio' && (
         <View style={s.noVertical}>
           <Text style={s.noIcon}>🚧</Text>
           <Text style={s.noTitle}>Modulo em desenvolvimento</Text>
