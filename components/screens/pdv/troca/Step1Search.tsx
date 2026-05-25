@@ -12,6 +12,15 @@
 //   • Cross-filial = default. Badge clara em cada card (esta loja vs outra)
 //   • Multi-seleção mantida (v2 feature) mas desinflada visualmente (1 venda
 //     é o caminho normal — checkbox aparece grande mas não é o foco do step)
+//
+// 25/05/2026 — Polish barcode-first.
+//   detectQuery agora distingue barcode (8–13 dígitos puros, exceto 11=CPF)
+//   de demais buscas. Em modo barcode, chama searchSalesByProductBarcode
+//   (endpoint dedicado /pdv/sales-by-product-barcode) em vez do
+//   /sales-for-troca genérico. Header muda pra "Últimas vendas com este
+//   item" pra dar contexto ao operador.
+//   onSubmitEditing dispara busca imediata (scanner termina em Enter —
+//   sem esperar debounce de 280ms).
 // ============================================================
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -30,34 +39,40 @@ type Props = {
   onChangeSelected: (next: SelectedSaleRow[]) => void;
 };
 
-// ─── Heurísticas pra detectar o tipo do input ──────────────────
-function detectQuery(raw: string): SearchForTrocaParams {
+type DetectResult =
+  | { kind: "empty" }
+  | { kind: "barcode"; barcode: string }
+  | { kind: "text"; params: SearchForTrocaParams };
+
+// ─── Heurísticas pra detectar o tipo do input ──────────────
+function detectQuery(raw: string): DetectResult {
   const v = raw.trim();
-  if (!v) return {};
+  if (!v) return { kind: "empty" };
 
   // Chave NFC-e: 44 dígitos
   const onlyDigits = v.replace(/\D/g, "");
   if (onlyDigits.length === 44) {
-    return { nfce_chave: onlyDigits };
+    return { kind: "text", params: { nfce_chave: onlyDigits } };
   }
 
   // CPF (11 dígitos) / CNPJ (14 dígitos) — usa como q (LIKE no cpf_cnpj)
   if (onlyDigits.length === 11 || onlyDigits.length === 14) {
-    return { q: onlyDigits };
+    return { kind: "text", params: { q: onlyDigits } };
   }
 
   // Nº de pedido — começa com # ou v/V seguido de hex
   if (/^[#vV-]/.test(v) || /^[a-f0-9]{6,8}$/i.test(v)) {
-    return { order_number: v };
+    return { kind: "text", params: { order_number: v } };
   }
 
-  // Código de barras / SKU — 8+ dígitos puros
-  if (/^\d{8,}$/.test(v) && onlyDigits.length !== 11 && onlyDigits.length !== 14) {
-    return { q: v };
+  // 25/05/2026: código de barras — 8–13 dígitos puros (excluindo CPF/CNPJ).
+  // EAN-8, EAN-12 (UPC-A), EAN-13. GTIN-14 cai em CNPJ por colisão aceitável.
+  if (/^\d{8,13}$/.test(v) && onlyDigits.length !== 11) {
+    return { kind: "barcode", barcode: v };
   }
 
   // Default: texto livre (nome, vendedor, produto)
-  return { q: v };
+  return { kind: "text", params: { q: v } };
 }
 
 export function Step1Search({ companyId, selectedSales, onChangeSelected }: Props) {
@@ -65,6 +80,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
   const [results, setResults] = useState<SaleForTroca[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resultMode, setResultMode] = useState<"recents" | "text" | "barcode">("recents");
   const debouncedRef = useRef<any>(null);
   const lastReqRef = useRef(0);
 
@@ -87,18 +103,37 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
   }, [query]);
 
   async function runSearch(rawQ: string) {
-    const params = detectQuery(rawQ);
+    const det = detectQuery(rawQ);
     const reqId = ++lastReqRef.current;
     setLoading(true);
     setError(null);
     try {
-      const rows = await trocaApi.searchSalesForTroca(companyId, {
-        ...params,
-        days: 90,
-        limit: 50,
-      });
+      let rows: SaleForTroca[];
+      if (det.kind === "barcode") {
+        rows = await trocaApi.searchSalesByProductBarcode(companyId, {
+          barcode: det.barcode,
+          days: 90,
+          limit: 50,
+        });
+      } else if (det.kind === "text") {
+        rows = await trocaApi.searchSalesForTroca(companyId, {
+          ...det.params,
+          days: 90,
+          limit: 50,
+        });
+      } else {
+        rows = await trocaApi.searchSalesForTroca(companyId, {
+          days: 90,
+          limit: 50,
+        });
+      }
       if (reqId !== lastReqRef.current) return;
       setResults(rows);
+      setResultMode(
+        det.kind === "barcode" ? "barcode" :
+        det.kind === "empty"   ? "recents" :
+                                  "text"
+      );
     } catch (e: any) {
       if (reqId !== lastReqRef.current) return;
       setError(e?.message || "Erro ao buscar vendas");
@@ -106,6 +141,13 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
     } finally {
       if (reqId === lastReqRef.current) setLoading(false);
     }
+  }
+
+  // 25/05/2026: scanner termina input em Enter — dispara busca imediata
+  // sem esperar o debounce de 280ms.
+  function handleSubmit() {
+    if (debouncedRef.current) clearTimeout(debouncedRef.current);
+    runSearch(query);
   }
 
   const isSelected = (id: string) => selectedSales.some((s) => s.id === id);
@@ -119,18 +161,36 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
     }
   }
 
-  const showingRecents = query.trim() === "";
   const detected = useMemo(() => detectQuery(query), [query]);
   const detectedLabel = useMemo(() => {
     if (!query.trim()) return "";
-    if (detected.nfce_chave) return "Detectei: chave da NFC-e";
-    if (detected.order_number) return "Detectei: número do pedido";
-    const onlyDigits = query.replace(/\D/g, "");
-    if (onlyDigits.length === 11) return "Detectei: CPF";
-    if (onlyDigits.length === 14) return "Detectei: CNPJ";
-    if (/^\d{8,}$/.test(query.trim())) return "Detectei: código de barras";
+    if (detected.kind === "barcode") return "Detectei: código de barras — procurando vendas com este item";
+    if (detected.kind === "text") {
+      if (detected.params.nfce_chave) return "Detectei: chave da NFC-e";
+      if (detected.params.order_number) return "Detectei: número do pedido";
+      const onlyDigits = query.replace(/\D/g, "");
+      if (onlyDigits.length === 11) return "Detectei: CPF";
+      if (onlyDigits.length === 14) return "Detectei: CNPJ";
+    }
     return "Buscando por: nome / vendedor / produto";
   }, [query, detected]);
+
+  const resultsTitle =
+    resultMode === "barcode" ? "Últimas vendas com este item (90 dias)" :
+    resultMode === "recents" ? "Vendas recentes do grupo (90 dias)" :
+                                "Resultados";
+
+  const emptyTitle =
+    resultMode === "barcode" ? "Nenhuma venda recente com este item" :
+    resultMode === "recents" ? "Sem vendas recentes" :
+                                "Nada encontrado";
+
+  const emptySub =
+    resultMode === "barcode"
+      ? "Esse código não foi vendido nos últimos 90 dias. Bipa outro item ou busque por CPF/nome do cliente."
+      : resultMode === "recents"
+      ? "Quando registrar uma venda, ela aparece aqui pra troca."
+      : "Tente outro CPF, nome, código ou número da NFC-e.";
 
   return (
     <View>
@@ -140,7 +200,9 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Busque por CPF, nome, código de barras ou nº da NFC-e…"
+          onSubmitEditing={handleSubmit}
+          returnKeyType="search"
+          placeholder="Bipe o código de barras ou digite CPF, nome ou nº da NFC-e…"
           placeholderTextColor={Colors.ink3}
           style={s.searchInput}
           autoFocus
@@ -160,9 +222,9 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
       <View style={s.hintsRow}>
         <Text style={s.hintsLabel}>Atalhos:</Text>
         {[
+          { label: "Código de barras" },
           { label: "CPF" },
           { label: "Nome" },
-          { label: "Código de barras" },
           { label: "Nº NFC-e" },
         ].map((h) => (
           <View key={h.label} style={s.hint}>
@@ -194,9 +256,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
 
       {/* Results header */}
       <View style={s.resultsHead}>
-        <Text style={s.resultsTitle}>
-          {showingRecents ? "Vendas recentes do grupo (90 dias)" : "Resultados"}
-        </Text>
+        <Text style={s.resultsTitle}>{resultsTitle}</Text>
         {loading && <ActivityIndicator size="small" color="#a78bfa" />}
       </View>
 
@@ -211,15 +271,9 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
       {/* Empty state */}
       {!loading && results.length === 0 && !error && (
         <View style={s.emptyBox}>
-          <Icon name="search" size={28} color={Colors.ink3} />
-          <Text style={s.emptyTitle}>
-            {showingRecents ? "Sem vendas recentes" : "Nada encontrado"}
-          </Text>
-          <Text style={s.emptySub}>
-            {showingRecents
-              ? "Quando registrar uma venda, ela aparece aqui pra troca."
-              : "Tente outro CPF, nome, código ou número da NFC-e."}
-          </Text>
+          <Icon name={resultMode === "barcode" ? "package" : "search"} size={28} color={Colors.ink3} />
+          <Text style={s.emptyTitle}>{emptyTitle}</Text>
+          <Text style={s.emptySub}>{emptySub}</Text>
         </View>
       )}
 
