@@ -69,7 +69,10 @@ function AuthGuard() {
     const onPublicQrTable = segments[0] === "m";
     // Fase 5: storefront público de delivery em /cardapio/[slug].
     const onPublicCardapio = segments[0] === "cardapio";
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio) return;
+    // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
+    // (link enviado via wa.me pro cliente — não exige login).
+    const onPublicApproval = segments[0] === "aprovacao";
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
