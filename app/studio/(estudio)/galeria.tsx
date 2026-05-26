@@ -114,8 +114,8 @@ export default function StudioGaleria() {
           </Pressable>
         ))}
         <Pressable style={s.catChipAdd} onPress={() => setShowNewCat(true)}>
-          <Icon name="plus" size={12} color={StudioColors.accent} />
-          <Text style={[s.catChipTxt, { color: StudioColors.accent }]}>Categoria</Text>
+          <Icon name="plus" size={12} color={StudioColors.ink2} />
+          <Text style={[s.catChipTxt, { color: StudioColors.ink2 }]}>Categoria</Text>
         </Pressable>
       </View>
 
@@ -253,11 +253,13 @@ const s = StyleSheet.create({
   catChipTxt: { fontSize: 12.5, fontWeight: "600", color: StudioColors.ink2 },
   catChipTxtSel: { color: "#fff" },
   catCount: { fontSize: 11, color: StudioColors.ink4, fontWeight: "700" },
+  // chip "+ Categoria" neutra — mesma afinidade visual das chips Todas/categoria*
+  // (era accentSoft/accentGhost magenta, parecia CTA destacado e poluía a row)
   catChipAdd: {
     flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1.5, borderColor: StudioColors.accentSoft,
-    backgroundColor: StudioColors.accentGhost,
+    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: StudioColors.paperCard,
   },
 
   newCatRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
