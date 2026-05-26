@@ -14,8 +14,12 @@
 //
 // Props padrao { productId, companyId, productName, onChanged? }
 // onChanged informa contagem total apos cada vincular/desvincular.
+//
+// NOTA (26/05/2026): onChanged guardado em ref pra evitar loop
+// infinito quando pai passa arrow inline (recria a cada render).
+// loadLinked depende so de companyId/productId.
 // ============================================================
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -72,6 +76,12 @@ export function StudioTemplatesPanel({ productId, companyId, productName, onChan
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
+  // Ref pro onChanged — evita loop quando pai passa arrow inline
+  const onChangedRef = useRef(onChanged);
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  }, [onChanged]);
+
   // ── Loader principal ─────────────────────────────────────
   const loadLinked = useCallback(async () => {
     console.log("[StudioTemplatesPanel] loadLinked start", { companyId, productId });
@@ -81,12 +91,12 @@ export function StudioTemplatesPanel({ productId, companyId, productName, onChan
       setLinked(list);
       console.log("[StudioTemplatesPanel] loadLinked ok", { count: list.length });
       const directCount = list.filter((x) => x.specifically_linked).length;
-      onChanged?.(directCount);
+      onChangedRef.current?.(directCount);
     } catch (e) {
       console.error("[StudioTemplatesPanel] loadLinked error", e);
       toast.error("Falha ao carregar templates: " + describeError(e as ErrShape));
     }
-  }, [companyId, productId, onChanged]);
+  }, [companyId, productId]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -110,14 +120,6 @@ export function StudioTemplatesPanel({ productId, companyId, productName, onChan
   }, [loadLinked, loadCategories]);
 
   // ── Picker (modal Vincular) ──────────────────────────────
-  const openPicker = useCallback(async () => {
-    console.log("[StudioTemplatesPanel] openPicker");
-    setPickerOpen(true);
-    setSelectedIds(new Set());
-    setPickerCategory(null);
-    await refreshPickerTemplates(null);
-  }, []);
-
   const refreshPickerTemplates = useCallback(async (catId: string | null) => {
     setPickerLoading(true);
     try {
@@ -132,6 +134,14 @@ export function StudioTemplatesPanel({ productId, companyId, productName, onChan
       setPickerLoading(false);
     }
   }, [companyId]);
+
+  const openPicker = useCallback(async () => {
+    console.log("[StudioTemplatesPanel] openPicker");
+    setPickerOpen(true);
+    setSelectedIds(new Set());
+    setPickerCategory(null);
+    await refreshPickerTemplates(null);
+  }, [refreshPickerTemplates]);
 
   const handlePickCategory = useCallback(async (catId: string | null) => {
     setPickerCategory(catId);
