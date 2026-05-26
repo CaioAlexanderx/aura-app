@@ -121,5 +121,72 @@ export const StudioFloat = {
   rotationDeg: 1.5,
 } as const;
 
+// ════════════════════════════════════════════════════════
+// DARK MODE (Fase 12 — 25/05/2026)
+//
+// Paleta navy profundo + magenta vibrante pra dark theme.
+// Use via useStudioTokens() hook (contexts/StudioThemeMode.tsx).
+// ════════════════════════════════════════════════════════
+
+export const StudioColorsDark = {
+  // Primary navy mais claro (precisa contraste em bg escuro)
+  primary:       "#3B82F6",
+  primary2:      "#60A5FA",
+  primarySoft:   "rgba(59,130,246,0.18)",
+  primaryGhost:  "rgba(59,130,246,0.08)",
+  primaryBorder: "rgba(59,130,246,0.35)",
+
+  // Accent magenta mais vibrante
+  accent:        "#F472B6",
+  accent2:       "#F9A8D4",
+  accentSoft:    "rgba(244,114,182,0.18)",
+  accentGhost:   "rgba(244,114,182,0.08)",
+
+  // Cores complementares
+  warm:          "#FBBF24",
+  warmSoft:      "rgba(251,191,36,0.18)",
+  mint:          "#34D399",
+  mintSoft:      "rgba(52,211,153,0.18)",
+  sky:           "#22D3EE",
+  violet:        "#A78BFA",
+
+  // Backgrounds — navy profundo
+  bg:            "#0F172A",       // navy mais profundo
+  bgSoft:        "#1E293B",
+  paperCard:     "#1E293B",
+  paperCardElev: "#334155",
+
+  // Ink (texto sobre bg escuro — invertido)
+  ink:           "#F8FAFC",
+  ink2:          "#CBD5E1",
+  ink3:          "#94A3B8",
+  ink4:          "#64748B",
+  ink5:          "#334155",       // divisores escuros
+
+  // Sombras (apagadas em dark mode)
+  shadowNavy:    "0 8px 24px -6px rgba(0,0,0,0.6)",
+  shadowAccent:  "0 8px 24px -6px rgba(0,0,0,0.5)",
+
+  // Semânticos (mantém hue, ajusta soft/ink pra dark)
+  danger:        "#EF4444",
+  dangerSoft:    "rgba(239,68,68,0.18)",
+  dangerInk:     "#FCA5A5",
+
+  warning:       "#FBBF24",
+  warningSoft:   "rgba(251,191,36,0.18)",
+  warningInk:    "#FCD34D",
+
+  info:          "#60A5FA",
+  infoSoft:      "rgba(96,165,250,0.18)",
+  infoInk:       "#93C5FD",
+
+  success:       "#34D399",
+  successSoft:   "rgba(52,211,153,0.18)",
+  successInk:    "#6EE7B7",
+} as const;
+
+// Type pra ambos os modos
+export type StudioPalette = typeof StudioColors;
+
 export type StudioColorKey = keyof typeof StudioColors;
 export type StudioGradientKey = keyof typeof StudioGradients;
