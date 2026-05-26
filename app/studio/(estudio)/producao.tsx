@@ -137,7 +137,7 @@ export default function StudioProducao() {
     <View style={s.wrap}>
       <View style={s.headerWrap}>
         <StudioPageHeader
-          eyebrow="PRODUÇÃO · KDS"
+          eyebrow="FLUXO DE PRODUÇÃO"
           title="Fila de produção"
           subtitle="Kanban dos pedidos em produção. Arraste pelos status pra mover."
           rightSlot={
