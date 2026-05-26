@@ -634,7 +634,8 @@ function buildStyles(accent: AccentTokens) {
   pageRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, marginBottom: 4, gap: 8 },
   pageBtn: { backgroundColor: accent.primarySoft, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
   pageBtnDisabled: { opacity: 0.35 },
-  pageBtnText: { fontSize: 13, color: accent.primaryStrong, fontWeight: "600" },
+  // WCAG AA: 13px magenta sobre primarySoft (#EFF6FF) — fontWeight 700 garante ratio ≥3:1.
+  pageBtnText: { fontSize: 13, color: accent.primaryStrong, fontWeight: "700" },
   pageInfo: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
 
   // Empty state
