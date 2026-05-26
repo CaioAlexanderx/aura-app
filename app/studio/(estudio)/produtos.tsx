@@ -11,6 +11,12 @@
 // Fase 9B (26/05/2026): badge ProductQualityScore no canto
 // superior direito de cada card de produto.
 //
+// 26/05/2026 (fix): trocado `compact` por `badgeOnly` no badge.
+// O `compact` tinha flex:1 e esticava virando barra horizontal
+// sobreposta aos outros cards. `badgeOnly` é a bolinha 24x24
+// fixa criada no componente. Wrapper agora tem width/height
+// fixos pra não permitir extensão.
+//
 // Fase 10B (26/05/2026): botão "✨ Sugestões IA" dentro do form
 // expandido — chama studioApi.suggestTemplates e abre modal de
 // checkboxes pra vincular templates em lote.
@@ -392,8 +398,9 @@ export default function StudioProdutos() {
             return (
               <View key={p.id} style={[s.productCard, p.is_personalizable && s.productCardActive]}>
                 {/* Fase 9B: badge ProductQualityScore no canto sup. direito */}
+                {/* badgeOnly = bolinha 24x24 fixa; compact estica e quebra o card */}
                 <View style={s.qualityBadgeWrap} pointerEvents="none">
-                  <ProductQualityScore product={p} compact />
+                  <ProductQualityScore product={p} badgeOnly />
                 </View>
 
                 {/* Linha principal */}
@@ -826,8 +833,11 @@ function buildStyles(t: Tokens) {
     configBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.primaryGhost, borderRadius: 8 },
     configBtnTxt: { color: t.primary, fontSize: 11.5, fontWeight: "700" },
 
-    // Fase 9B — quality score badge no canto sup. direito do card
-    qualityBadgeWrap: { position: "absolute", top: 8, right: 8, zIndex: 5 },
+    // Fase 9B — quality score badge no canto sup. direito do card.
+    // Width/height fixos (24x24) pra não esticar — alguns componentes
+    // filhos tem flex:1 ou flexDirection:row e quebram o card se o
+    // wrapper for largo. zIndex 5 pra ficar acima do hover/borders.
+    qualityBadgeWrap: { position: "absolute", top: 8, right: 8, width: 24, height: 24, zIndex: 5 },
 
     // Expand: mobile = coluna unica (preview em cima + form em baixo)
     expand: { padding: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.ink5, gap: 16 },
