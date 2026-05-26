@@ -12,6 +12,14 @@
 // identidade Studio. NÃO envolvemos em AccentTheme — isso impactaria
 // o Canal Digital varejo que compartilha o provider. Só TELA admin.
 //
+// 26/05/2026 (fix visual): o body do FinanceiroScreen usa Colors do
+// varejo (dark navy por default), e o wrapper Studio usava
+// StudioColors.bg (claro) → barra clara em cima + card dark embaixo,
+// sem continuidade. Migrado wrapper+header pra Colors do varejo
+// (bg/bg3/border/ink3) pra herdar o tema do conteúdo. Mantemos
+// StudioColors.accent só no texto do eyebrow pra preservar a
+// identidade magenta Studio.
+//
 // Por que não retematizar o body: o Financeiro é 22KB + 7 sub-componentes
 // (TabVisaoGeral, TabLancamentos, etc) que somam ~100KB. Refatorar pra
 // tokens Studio é trabalho de outra sessão. Por ora, vendas/transações
@@ -19,48 +27,34 @@
 // como "Personalizado" nos lançamentos.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
+import { Colors } from "@/constants/colors";
 import { StudioColors } from "@/constants/studio-tokens";
-import { useStudioTokens } from "@/contexts/StudioThemeMode";
-import StudioPageHeader from "@/components/studio/StudioPageHeader";
 import Icon from "@/components/Icon";
 import FinanceiroScreen from "@/app/(tabs)/financeiro";
 
 export default function StudioGestaoFinanceiro() {
-  const t = useStudioTokens();
-
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg }}>
+    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <View style={s.headerWrap}>
-        <StudioPageHeader
-          eyebrow="GESTÃO · FINANCEIRO"
-          title="Financeiro do estúdio"
-          subtitle="Sua receita Studio entra automaticamente no caixa unificado. Use abaixo as mesmas ferramentas do Aura Varejo."
-          marginBottom={12}
-        />
+        <Text style={s.eyebrow}>GESTÃO · FINANCEIRO</Text>
+        <Text style={s.title}>Financeiro do estúdio</Text>
+        <Text style={s.subtitle}>
+          Sua receita Studio entra automaticamente no caixa unificado. Use abaixo as mesmas ferramentas do Aura Varejo.
+        </Text>
 
-        <View style={[s.contextBanner, { backgroundColor: t.primarySoft }]}>
-          <Icon name="info" size={12} color={t.primary} />
-          <Text style={[s.contextBannerTxt, { color: t.primary }]}>
+        <View style={s.contextBanner}>
+          <Icon name="info" size={12} color={StudioColors.accent} />
+          <Text style={s.contextBannerTxt}>
             Vendas Studio aparecem etiquetadas como "Personalizado" nos lançamentos.
           </Text>
         </View>
       </View>
 
-      <View
-        style={[
-          s.bodyWrap,
-          {
-            backgroundColor: t.bgSoft,
-            borderColor: StudioColors.primaryBorder,
-          },
-        ]}
-      >
-        <View style={{ flex: 1 }}>
-          <FinanceiroScreen />
-        </View>
+      <View style={{ flex: 1 }}>
+        <FinanceiroScreen />
       </View>
 
-      <Text style={[s.residualHint, { color: t.ink4 }]}>
+      <Text style={s.residualHint}>
         Você está em modo Studio · vendas personalizadas aparecem com badge
       </Text>
     </View>
@@ -72,29 +66,49 @@ const s = StyleSheet.create({
     paddingHorizontal: 28,
     paddingTop: 16,
     paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg3,
+    gap: 6,
+  },
+  eyebrow: {
+    fontSize: 11,
+    color: StudioColors.accent,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: Colors.ink,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: Colors.ink3,
+    lineHeight: 18,
+    maxWidth: 720,
+    marginBottom: 4,
   },
   contextBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderRadius: 8,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     alignSelf: "flex-start",
     maxWidth: 720,
+    backgroundColor: Colors.bg2,
+    borderWidth: 1,
+    borderColor: StudioColors.accent + "55",
   },
   contextBannerTxt: {
     fontSize: 12,
     fontWeight: "600",
     lineHeight: 16,
     flexShrink: 1,
-  },
-  bodyWrap: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
+    color: Colors.ink2,
   },
   residualHint: {
     fontSize: 11,
@@ -103,5 +117,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
     paddingTop: 2,
+    color: Colors.ink4,
   },
 });
