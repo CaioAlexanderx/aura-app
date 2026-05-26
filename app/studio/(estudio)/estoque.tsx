@@ -1,32 +1,39 @@
 // ============================================================
-// AURA STUDIO · Estoque (tela master nativa — Sprints 1-4 integradas)
+// AURA STUDIO · Estoque (tela master nativa — refactor inline 26/05/2026)
 //
-// 26/05/2026 — Integração final pós-Sprints 1-4.
-// Antes: delegação 1:1 ao EstoqueScreen do varejo. Limitação: forçava
-// o cliente Studio a sair do contexto pra configurar personalização,
-// ficha técnica e templates.
+// PIVOT 26/05/2026 — Feedback do cliente: "Produtos e Estoque tinham que
+// conversar e ser a mesma coisa, na mesma tela". O drawer lateral 540px
+// com 4 tabs (Básico/Personalização/Ficha/Templates) ainda dava sensação
+// de "tela secundária separada".
 //
-// Agora: tela nativa com lista de produtos + drawer/modal de 4 tabs:
-//   Básico         — nome, preço, qty, descrição (PATCH inline)
-//   Personalização — embed StudioPersonalizacaoPanel  (Sprint 1)
-//   Ficha técnica  — embed StudioFichaTecnicaPanel    (Sprint 2)
-//   Templates      — embed StudioTemplatesPanel       (Sprint 3)
+// Solução: REMOVER o drawer/modal lateral. Click numa linha de produto
+// expande INLINE (mesma página, scroll-down) toda a configuração em
+// seções accordion:
 //
-// "Novo produto" no header abre StudioNewProductWizard (Sprint 4).
+//   ▾ DADOS BÁSICOS       (expandida por default)
+//   ▸ PERSONALIZAÇÃO      (StudioPersonalizacaoPanel embeddado)
+//   ▸ FICHA TÉCNICA       (StudioFichaTecnicaPanel embeddado)
+//   ▸ TEMPLATES VINCULADOS (StudioTemplatesPanel embeddado)
 //
-// Layout do drawer:
-//   - Desktop (vw > 1024): lateral direito 540px slide-in
-//   - Mobile/tablet: full screen modal
+// Cada seção: header com icon ▾/▸ + título + chip indicador
+// (OK / Incompleto / Vazio). Após salvar, mostra check verde.
+//
+// Lista master continua igual no topo (quando nenhum produto está
+// expandido). Botão "Voltar pra lista" no topo da expansão retorna
+// pro grid.
+//
+// "Novo produto" abre StudioNewProductWizard (Sprint 4) — sem mudança.
 //
 // Convenções (não negociar):
 //   - useStudioTokens() de @/contexts/StudioThemeMode
 //   - useMemo(() => buildStyles(t), [t])
+//   - StudioPalette type
 //   - toast com erro REAL ([status] data.error || message)
 // ============================================================
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, Modal, useWindowDimensions, Image, Platform,
+  TextInput, Image, Platform,
 } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
@@ -60,15 +67,10 @@ type StudioProduct = {
   extra_images_count?: number;
 };
 
-type TabKey = "basico" | "personalizacao" | "ficha" | "templates";
+type SectionKey = "basico" | "personalizacao" | "ficha" | "templates";
 type FilterKey = "all" | "personalizable" | "nonpersonalizable";
 
-const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
-  { key: "basico",         label: "Básico",         icon: "edit-2"  },
-  { key: "personalizacao", label: "Personalização", icon: "sparkles" },
-  { key: "ficha",          label: "Ficha técnica",  icon: "layers"  },
-  { key: "templates",      label: "Templates",      icon: "image"   },
-];
+type SectionStatus = "ok" | "partial" | "empty";
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "all",                label: "Todos"              },
@@ -82,8 +84,6 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 export default function StudioEstoque() {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
-  const { width: vw } = useWindowDimensions();
-  const isWide = vw > 1024;
 
   const { user } = useAuthStore();
   const cid = String(user?.company_id || "");
@@ -96,9 +96,8 @@ export default function StudioEstoque() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
 
-  // Drawer
-  const [selected, setSelected] = useState<StudioProduct | null>(null);
-  const [tab, setTab] = useState<TabKey>("basico");
+  // Inline expand
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -159,43 +158,38 @@ export default function StudioEstoque() {
     });
   }, [products, filter, search]);
 
-  // ── Abrir drawer ─────────────────────────────────────────
-  const openProduct = useCallback((p: StudioProduct) => {
-    setSelected(p);
-    setTab("basico");
-  }, []);
+  const expandedProduct = useMemo(
+    () => (expandedId ? products.find((p) => p.id === expandedId) || null : null),
+    [expandedId, products],
+  );
 
-  const closeDrawer = useCallback(() => {
-    setSelected(null);
-  }, []);
-
-  const refreshSelected = useCallback(async () => {
-    if (!selected) return;
+  // ── Refresh de um produto após patch em subpanel ─────────
+  const refreshExpanded = useCallback(async () => {
+    if (!expandedId) return;
     try {
-      const r = await request<any>(`/companies/${cid}/products/${selected.id}`, {
+      const r = await request<any>(`/companies/${cid}/products/${expandedId}`, {
         method: "GET", retry: 1, timeout: 10000,
       });
-      const fresh: StudioProduct = {
+      const fresh: Partial<StudioProduct> = {
         id: String(r.id),
-        name: String(r.name || selected.name),
-        price: Number(r.price) || selected.price,
-        stock_qty: r.stock_qty ?? selected.stock_qty,
-        description: r.description ?? selected.description,
-        image_url: r.image_url ?? selected.image_url,
+        name: String(r.name || ""),
+        price: Number(r.price) || 0,
+        stock_qty: r.stock_qty ?? null,
+        description: r.description ?? null,
+        image_url: r.image_url ?? null,
         is_personalizable: !!r.is_personalizable,
         customization_config: r.customization_config || null,
         template_count: Number(r.template_count) || 0,
         extra_images_count: Number(r.extra_images_count) || 0,
       };
-      setSelected(fresh);
-      setProducts((prev) => prev.map((p) => (p.id === fresh.id ? fresh : p)));
+      setProducts((prev) => prev.map((p) => (p.id === expandedId ? { ...p, ...fresh } : p)));
     } catch (e) {
-      console.warn("[StudioEstoque.refreshSelected]", e);
+      console.warn("[StudioEstoque.refreshExpanded]", e);
     }
-  }, [cid, selected]);
+  }, [cid, expandedId]);
 
   // ── Header right slot ────────────────────────────────────
-  const headerRight = (
+  const headerRight = expandedProduct ? null : (
     <Pressable onPress={() => setWizardOpen(true)} style={s.btnPri}>
       <Icon name="plus" size={14} color="#fff" />
       <Text style={s.btnPriTxt}>Novo produto</Text>
@@ -205,101 +199,104 @@ export default function StudioEstoque() {
   return (
     <View style={s.container}>
       <ScrollView contentContainerStyle={s.scrollContent}>
-        <StudioPageHeader
-          eyebrow="ESTÚDIO · ESTOQUE"
-          title="Produtos"
-          subtitle="Cadastre, configure personalização, monte ficha técnica e vincule templates."
-          rightSlot={headerRight}
-        />
-
-        {/* Filtros */}
-        <View style={s.filtersRow}>
-          <View style={s.chipsRow}>
-            {FILTERS.map((f) => {
-              const active = filter === f.key;
-              return (
-                <Pressable
-                  key={f.key}
-                  onPress={() => setFilter(f.key)}
-                  style={[s.filterChip, active && s.filterChipActive]}
-                >
-                  <Text style={[s.filterChipTxt, active && s.filterChipTxtActive]}>
-                    {f.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <View style={s.searchWrap}>
-            <Icon name="search" size={14} color={t.ink3} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Buscar produto..."
-              placeholderTextColor={t.ink4}
-              style={s.searchInput}
-            />
-            {search.length > 0 && (
-              <Pressable onPress={() => setSearch("")} hitSlop={6}>
-                <Icon name="x" size={14} color={t.ink3} />
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {/* Lista */}
-        {loading ? (
-          <StudioLoading variant="skeleton-list" rows={5} />
-        ) : products.length === 0 ? (
-          <StudioEmpty
-            icon="package"
-            title="Catálogo vazio"
-            desc="Cadastre seu primeiro produto pra começar a vender."
-            primaryCta={{
-              label: "Cadastrar produto",
-              onPress: () => setWizardOpen(true),
+        {expandedProduct ? (
+          <ProductExpanded
+            product={expandedProduct}
+            companyId={cid}
+            slug={dcConfig?.slug || null}
+            t={t}
+            s={s}
+            onBack={() => setExpandedId(null)}
+            onProductPatched={(patch) => {
+              setProducts((prev) => prev.map((x) => (x.id === expandedProduct.id ? { ...x, ...patch } : x)));
             }}
-          />
-        ) : visible.length === 0 ? (
-          <StudioEmpty
-            icon="search"
-            title="Nada encontrado"
-            desc="Ajuste o filtro ou a busca pra ver mais produtos."
-            primaryCta={{
-              label: "Limpar filtros",
-              onPress: () => { setFilter("all"); setSearch(""); },
-            }}
-            compact
+            onSubpanelChanged={refreshExpanded}
           />
         ) : (
-          <View style={s.list}>
-            {visible.map((p) => (
-              <ProductRow key={p.id} product={p} t={t} s={s} onPress={() => openProduct(p)} />
-            ))}
-          </View>
+          <>
+            <StudioPageHeader
+              eyebrow="ESTÚDIO · PRODUTOS & ESTOQUE"
+              title="Catálogo Studio"
+              subtitle="Click num produto pra abrir tudo: dados básicos, personalização, ficha técnica e templates — na mesma tela."
+              rightSlot={headerRight}
+            />
+
+            {/* Filtros */}
+            <View style={s.filtersRow}>
+              <View style={s.chipsRow}>
+                {FILTERS.map((f) => {
+                  const active = filter === f.key;
+                  return (
+                    <Pressable
+                      key={f.key}
+                      onPress={() => setFilter(f.key)}
+                      style={[s.filterChip, active && s.filterChipActive]}
+                    >
+                      <Text style={[s.filterChipTxt, active && s.filterChipTxtActive]}>
+                        {f.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={s.searchWrap}>
+                <Icon name="search" size={14} color={t.ink3} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Buscar produto..."
+                  placeholderTextColor={t.ink4}
+                  style={s.searchInput}
+                />
+                {search.length > 0 && (
+                  <Pressable onPress={() => setSearch("")} hitSlop={6}>
+                    <Icon name="x" size={14} color={t.ink3} />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {/* Lista */}
+            {loading ? (
+              <StudioLoading variant="skeleton-list" rows={5} />
+            ) : products.length === 0 ? (
+              <StudioEmpty
+                icon="package"
+                title="Catálogo vazio"
+                desc="Cadastre seu primeiro produto pra começar a vender."
+                primaryCta={{
+                  label: "Cadastrar produto",
+                  onPress: () => setWizardOpen(true),
+                }}
+              />
+            ) : visible.length === 0 ? (
+              <StudioEmpty
+                icon="search"
+                title="Nada encontrado"
+                desc="Ajuste o filtro ou a busca pra ver mais produtos."
+                primaryCta={{
+                  label: "Limpar filtros",
+                  onPress: () => { setFilter("all"); setSearch(""); },
+                }}
+                compact
+              />
+            ) : (
+              <View style={s.list}>
+                {visible.map((p) => (
+                  <ProductRow
+                    key={p.id}
+                    product={p}
+                    t={t}
+                    s={s}
+                    onPress={() => setExpandedId(p.id)}
+                  />
+                ))}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
-
-      {/* Drawer / Modal */}
-      {selected && (
-        <ProductDrawer
-          product={selected}
-          companyId={cid}
-          slug={dcConfig?.slug || null}
-          isWide={isWide}
-          tab={tab}
-          setTab={setTab}
-          t={t}
-          s={s}
-          onClose={closeDrawer}
-          onProductPatched={(patch) => {
-            setSelected((prev) => (prev ? { ...prev, ...patch } : prev));
-            setProducts((prev) => prev.map((x) => (x.id === selected.id ? { ...x, ...patch } : x)));
-          }}
-          onSubpanelChanged={refreshSelected}
-        />
-      )}
 
       {/* Wizard novo produto */}
       <StudioNewProductWizard
@@ -326,7 +323,6 @@ function ProductRow({
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
 }) {
-  const score = useMemo(() => calculateProductScore(product as any), [product]);
   const priceStr = `R$ ${(product.price || 0).toLocaleString("pt-BR", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   })}`;
@@ -392,151 +388,279 @@ function ProductRow({
 }
 
 // ───────────────────────────────────────────────────────────
-// ProductDrawer — drawer/modal com 4 tabs
+// ProductExpanded — produto expandido inline (mesma tela)
+// Sticky header + 4 seções accordion
 // ───────────────────────────────────────────────────────────
-function ProductDrawer({
-  product, companyId, slug, isWide, tab, setTab, t, s,
-  onClose, onProductPatched, onSubpanelChanged,
+function ProductExpanded({
+  product, companyId, slug, t, s,
+  onBack, onProductPatched, onSubpanelChanged,
 }: {
   product: StudioProduct;
   companyId: string;
   slug: string | null;
-  isWide: boolean;
-  tab: TabKey;
-  setTab: (k: TabKey) => void;
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
-  onClose: () => void;
+  onBack: () => void;
   onProductPatched: (patch: Partial<StudioProduct>) => void;
   onSubpanelChanged: () => void;
 }) {
-  const content = (
-    <View style={[s.drawer, isWide && s.drawerWide]}>
-      {/* Header */}
-      <View style={s.drawerHeader}>
-        <View style={s.drawerThumbWrap}>
+  // Seções: estado de expansão + status (ok/partial/empty)
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
+    basico: true,
+    personalizacao: false,
+    ficha: false,
+    templates: false,
+  });
+  const [savedFlash, setSavedFlash] = useState<Partial<Record<SectionKey, boolean>>>({});
+
+  const toggle = (key: SectionKey) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Status de cada seção
+  const basicoStatus: SectionStatus = useMemo(() => {
+    const hasName = (product.name || "").trim().length >= 2;
+    const hasPrice = (product.price || 0) > 0;
+    const hasDesc = !!(product.description && product.description.trim());
+    const hasImage = !!product.image_url;
+    const filled = [hasName, hasPrice, hasDesc, hasImage].filter(Boolean).length;
+    if (filled === 4) return "ok";
+    if (filled >= 2) return "partial";
+    return "empty";
+  }, [product.name, product.price, product.description, product.image_url]);
+
+  const personalizacaoStatus: SectionStatus = useMemo(() => {
+    if (!product.is_personalizable) return "empty";
+    const cfg = product.customization_config;
+    const hasZones = Array.isArray(cfg?.zones) && cfg.zones.length > 0;
+    return hasZones ? "ok" : "partial";
+  }, [product.is_personalizable, product.customization_config]);
+
+  const templatesStatus: SectionStatus = useMemo(() => {
+    const c = product.template_count || 0;
+    if (c >= 3) return "ok";
+    if (c >= 1) return "partial";
+    return "empty";
+  }, [product.template_count]);
+
+  // Ficha técnica: não temos o campo no row, então sinalizamos como "abrir pra ver"
+  const fichaStatus: SectionStatus = "partial";
+
+  const score = useMemo(() => calculateProductScore(product as any), [product]);
+  const personalizableChip = product.is_personalizable;
+  const templateChipQty = product.template_count || 0;
+
+  const flashSaved = (key: SectionKey) => {
+    setSavedFlash((prev) => ({ ...prev, [key]: true }));
+    setTimeout(() => {
+      setSavedFlash((prev) => ({ ...prev, [key]: false }));
+    }, 2500);
+  };
+
+  return (
+    <View style={{ gap: 14 }}>
+      {/* Toolbar: voltar */}
+      <View style={s.expandedToolbar}>
+        <Pressable onPress={onBack} style={s.backBtn}>
+          <Icon name="arrow-left" size={14} color={t.ink2} />
+          <Text style={s.backBtnTxt}>Voltar pra lista</Text>
+        </Pressable>
+      </View>
+
+      {/* Sticky header do produto */}
+      <View style={s.expandedHeader}>
+        <View style={s.expandedThumbWrap}>
           {product.image_url ? (
             Platform.OS === "web" ? (
               // eslint-disable-next-line jsx-a11y/alt-text
               <img
                 src={product.image_url}
                 alt=""
-                style={{ width: 64, height: 64, borderRadius: 12, objectFit: "cover" }}
+                style={{ width: 72, height: 72, borderRadius: 14, objectFit: "cover" }}
               />
             ) : (
-              <Image source={{ uri: product.image_url }} style={s.drawerThumb} />
+              <Image source={{ uri: product.image_url }} style={s.expandedThumb} />
             )
           ) : (
-            <View style={[s.drawerThumb, s.rowThumbEmpty]}>
-              <Icon name="image" size={22} color={t.ink4} />
+            <View style={[s.expandedThumb, s.rowThumbEmpty]}>
+              <Icon name="image" size={24} color={t.ink4} />
             </View>
           )}
         </View>
 
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={s.drawerName} numberOfLines={2}>{product.name}</Text>
-          <Text style={s.drawerPrice}>
-            R$ {(product.price || 0).toLocaleString("pt-BR", {
-              minimumFractionDigits: 2, maximumFractionDigits: 2,
-            })}
-          </Text>
-        </View>
-
-        <View style={{ alignItems: "flex-end", gap: 6 }}>
-          <ProductQualityScore product={product as any} badgeOnly />
-          <Pressable onPress={onClose} style={s.drawerCloseBtn} hitSlop={8}>
-            <Icon name="x" size={18} color={t.ink2} />
-          </Pressable>
+        <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+          <Text style={s.expandedName} numberOfLines={2}>{product.name}</Text>
+          <View style={s.expandedMetaRow}>
+            <Text style={s.expandedPrice}>
+              R$ {(product.price || 0).toLocaleString("pt-BR", {
+                minimumFractionDigits: 2, maximumFractionDigits: 2,
+              })}
+            </Text>
+            <Text style={s.rowDot}>·</Text>
+            <Text style={s.expandedQty}>
+              {product.stock_qty != null ? `${product.stock_qty} un em estoque` : "Estoque não informado"}
+            </Text>
+          </View>
+          <View style={s.expandedChipsRow}>
+            <ProductQualityScore product={product as any} badgeOnly />
+            {personalizableChip && (
+              <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
+                <Icon name="sparkles" size={10} color={t.primary} />
+                <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizável</Text>
+              </View>
+            )}
+            {templateChipQty > 0 && (
+              <View style={[s.tinyChip, { backgroundColor: t.accentSoft || t.bgSoft }]}>
+                <Icon name="image" size={10} color={t.accent} />
+                <Text style={[s.tinyChipTxt, { color: t.accent }]}>
+                  {templateChipQty} template{templateChipQty > 1 ? "s" : ""}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
-      {/* Tab bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.tabBar}
+      {/* Seção 1 — Dados básicos */}
+      <SectionCard
+        title="Dados básicos"
+        icon="edit-2"
+        status={basicoStatus}
+        open={openSections.basico}
+        savedFlash={!!savedFlash.basico}
+        onToggle={() => toggle("basico")}
+        t={t}
+        s={s}
       >
-        {TABS.map((tb) => {
-          const active = tab === tb.key;
-          return (
-            <Pressable
-              key={tb.key}
-              onPress={() => setTab(tb.key)}
-              style={[s.tabBtn, active && s.tabBtnActive]}
-            >
-              <Icon name={tb.icon as any} size={12} color={active ? t.primary : t.ink3} />
-              <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{tb.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        <BasicoForm
+          product={product}
+          companyId={companyId}
+          t={t}
+          s={s}
+          onPatched={(patch) => {
+            onProductPatched(patch);
+            flashSaved("basico");
+          }}
+        />
+      </SectionCard>
 
-      {/* Tab content */}
-      <View style={s.tabContent}>
-        {tab === "basico" && (
-          <BasicoTab
-            product={product}
-            companyId={companyId}
-            t={t}
-            s={s}
-            onPatched={onProductPatched}
-          />
-        )}
-        {tab === "personalizacao" && (
-          <StudioPersonalizacaoPanel
-            productId={product.id}
-            companyId={companyId}
-            productName={product.name}
-            productPrice={product.price}
-            slug={slug}
-            onSaved={() => onSubpanelChanged()}
-          />
-        )}
-        {tab === "ficha" && (
-          <StudioFichaTecnicaPanel
-            productId={product.id}
-            companyId={companyId}
-            productName={product.name}
-            productPrice={product.price}
-            onSaved={() => onSubpanelChanged()}
-          />
-        )}
-        {tab === "templates" && (
-          <StudioTemplatesPanel
-            productId={product.id}
-            companyId={companyId}
-            productName={product.name}
-            onChanged={() => onSubpanelChanged()}
-          />
-        )}
-      </View>
+      {/* Seção 2 — Personalização */}
+      <SectionCard
+        title="Personalização"
+        icon="sparkles"
+        status={personalizacaoStatus}
+        open={openSections.personalizacao}
+        savedFlash={!!savedFlash.personalizacao}
+        onToggle={() => toggle("personalizacao")}
+        t={t}
+        s={s}
+      >
+        <StudioPersonalizacaoPanel
+          productId={product.id}
+          companyId={companyId}
+          productName={product.name}
+          productPrice={product.price}
+          slug={slug}
+          onSaved={() => { onSubpanelChanged(); flashSaved("personalizacao"); }}
+        />
+      </SectionCard>
+
+      {/* Seção 3 — Ficha técnica */}
+      <SectionCard
+        title="Ficha técnica"
+        icon="layers"
+        status={fichaStatus}
+        open={openSections.ficha}
+        savedFlash={!!savedFlash.ficha}
+        onToggle={() => toggle("ficha")}
+        t={t}
+        s={s}
+      >
+        <StudioFichaTecnicaPanel
+          productId={product.id}
+          companyId={companyId}
+          productName={product.name}
+          productPrice={product.price}
+          onSaved={() => { onSubpanelChanged(); flashSaved("ficha"); }}
+        />
+      </SectionCard>
+
+      {/* Seção 4 — Templates vinculados */}
+      <SectionCard
+        title="Templates vinculados"
+        icon="image"
+        status={templatesStatus}
+        open={openSections.templates}
+        savedFlash={!!savedFlash.templates}
+        onToggle={() => toggle("templates")}
+        t={t}
+        s={s}
+      >
+        <StudioTemplatesPanel
+          productId={product.id}
+          companyId={companyId}
+          productName={product.name}
+          onChanged={() => { onSubpanelChanged(); flashSaved("templates"); }}
+        />
+      </SectionCard>
     </View>
-  );
-
-  if (isWide) {
-    // Desktop: overlay lateral direito
-    return (
-      <View style={s.drawerOverlay}>
-        <Pressable style={s.drawerBackdrop} onPress={onClose} />
-        {content}
-      </View>
-    );
-  }
-
-  // Mobile/tablet: full screen modal
-  return (
-    <Modal visible animationType="slide" onRequestClose={onClose} transparent>
-      <View style={s.mobileModal}>
-        {content}
-      </View>
-    </Modal>
   );
 }
 
 // ───────────────────────────────────────────────────────────
-// BasicoTab — form simplificado (PATCH /products/:pid)
+// SectionCard — card accordion reusável
 // ───────────────────────────────────────────────────────────
-function BasicoTab({
+function SectionCard({
+  title, icon, status, open, savedFlash, onToggle, children, t, s,
+}: {
+  title: string;
+  icon: string;
+  status: SectionStatus;
+  open: boolean;
+  savedFlash: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+}) {
+  const statusMeta = useMemo(() => {
+    if (savedFlash) {
+      return { label: "Salvo agora", bg: t.successSoft || "#d1fae5", fg: t.success || "#059669", icon: "check" };
+    }
+    switch (status) {
+      case "ok":      return { label: "Completo",   bg: t.successSoft || "#d1fae5", fg: t.success || "#059669", icon: "check" };
+      case "partial": return { label: "Incompleto", bg: t.warningSoft || "#fef3c7", fg: t.warning || "#b45309", icon: "alert-triangle" };
+      case "empty":
+      default:        return { label: "Vazio",      bg: t.bgSoft,                   fg: t.ink3,                 icon: "circle" };
+    }
+  }, [status, savedFlash, t]);
+
+  return (
+    <View style={s.sectionCard}>
+      <Pressable onPress={onToggle} style={s.sectionHeader}>
+        <View style={s.sectionHeaderLeft}>
+          <View style={s.sectionIconWrap}>
+            <Icon name={icon as any} size={14} color={t.primary} />
+          </View>
+          <Text style={s.sectionTitle}>{title}</Text>
+        </View>
+        <View style={s.sectionHeaderRight}>
+          <View style={[s.statusChip, { backgroundColor: statusMeta.bg }]}>
+            <Icon name={statusMeta.icon as any} size={10} color={statusMeta.fg} />
+            <Text style={[s.statusChipTxt, { color: statusMeta.fg }]}>{statusMeta.label}</Text>
+          </View>
+          <Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={t.ink2} />
+        </View>
+      </Pressable>
+      {open && <View style={s.sectionBody}>{children}</View>}
+    </View>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// BasicoForm — form inline (PATCH /products/:pid)
+// ───────────────────────────────────────────────────────────
+function BasicoForm({
   product, companyId, t, s, onPatched,
 }: {
   product: StudioProduct;
@@ -601,7 +725,7 @@ function BasicoTab({
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+    <View style={{ gap: 14 }}>
       <View style={s.field}>
         <Text style={s.fieldLabel}>Nome</Text>
         <TextInput
@@ -664,7 +788,7 @@ function BasicoTab({
           </>
         )}
       </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -676,7 +800,7 @@ function buildStyles(t: StudioPalette) {
     container: { flex: 1, backgroundColor: t.bg },
     scrollContent: { padding: 24, paddingBottom: 80, gap: 18 },
 
-    // Header CTA
+    // CTA primário
     btnPri: {
       flexDirection: "row",
       alignItems: "center",
@@ -765,62 +889,13 @@ function buildStyles(t: StudioPalette) {
     tinyChipTxt: { fontSize: 10, fontWeight: "800", letterSpacing: 0.2 },
     rowRight: { flexDirection: "row", alignItems: "center", gap: 8 },
 
-    // Drawer (desktop overlay)
-    drawerOverlay: {
-      position: "absolute" as any,
-      top: 0, right: 0, bottom: 0, left: 0,
-      flexDirection: "row",
-      zIndex: 5000,
-    },
-    drawerBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(15,23,42,0.45)",
-    },
-    drawer: {
-      width: "100%",
-      height: "100%",
-      backgroundColor: t.bg,
-      flexDirection: "column",
-    },
-    drawerWide: {
-      width: 540,
-      borderLeftWidth: 1,
-      borderLeftColor: t.ink5,
-      ...(Platform.OS === "web"
-        ? ({ boxShadow: "-12px 0 28px rgba(15,23,42,0.18)" } as any)
-        : { elevation: 16 }),
-    },
-    mobileModal: { flex: 1, backgroundColor: t.bg },
-
-    drawerHeader: {
+    // Expandido
+    expandedToolbar: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: t.ink5,
-      backgroundColor: t.paperCardElev,
+      justifyContent: "space-between",
     },
-    drawerThumbWrap: { width: 64, height: 64 },
-    drawerThumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: t.bgSoft },
-    drawerName: { fontSize: 16, color: t.ink, fontWeight: "800", letterSpacing: -0.2 },
-    drawerPrice: { fontSize: 13, color: t.ink2, fontWeight: "700", marginTop: 4 },
-    drawerCloseBtn: {
-      width: 32, height: 32, borderRadius: 8,
-      backgroundColor: t.bgSoft,
-      alignItems: "center", justifyContent: "center",
-    },
-
-    tabBar: {
-      flexDirection: "row",
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: t.ink5,
-      backgroundColor: t.bg,
-    },
-    tabBtn: {
+    backBtn: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
@@ -831,16 +906,81 @@ function buildStyles(t: StudioPalette) {
       borderWidth: 1.5,
       borderColor: t.ink5,
     },
-    tabBtnActive: {
-      backgroundColor: t.primarySoft,
-      borderColor: t.primary,
+    backBtnTxt: { fontSize: 12, color: t.ink2, fontWeight: "700" },
+
+    expandedHeader: {
+      flexDirection: "row",
+      gap: 14,
+      padding: 16,
+      backgroundColor: t.paperCardElev,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      ...(Platform.OS === "web"
+        ? ({ position: "sticky", top: 0, zIndex: 10 } as any)
+        : null),
     },
-    tabBtnTxt: { fontSize: 12, color: t.ink3, fontWeight: "700" },
-    tabBtnTxtActive: { color: t.primary },
+    expandedThumbWrap: { width: 72, height: 72 },
+    expandedThumb: { width: 72, height: 72, borderRadius: 14, backgroundColor: t.bgSoft },
+    expandedName: { fontSize: 18, color: t.ink, fontWeight: "800", letterSpacing: -0.3 },
+    expandedMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+    expandedPrice: { fontSize: 14, color: t.ink2, fontWeight: "800" },
+    expandedQty: { fontSize: 13, color: t.ink3, fontWeight: "600" },
+    expandedChipsRow: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 2 },
 
-    tabContent: { flex: 1 },
+    // Section card (accordion)
+    sectionCard: {
+      backgroundColor: t.paperCard,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      overflow: "hidden",
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      gap: 12,
+    },
+    sectionHeaderLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+      minWidth: 0,
+    },
+    sectionIconWrap: {
+      width: 32, height: 32, borderRadius: 8,
+      backgroundColor: t.primarySoft,
+      alignItems: "center", justifyContent: "center",
+    },
+    sectionTitle: { fontSize: 15, color: t.ink, fontWeight: "800", letterSpacing: -0.1 },
+    sectionHeaderRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    statusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    statusChipTxt: { fontSize: 10, fontWeight: "800", letterSpacing: 0.2 },
+    sectionBody: {
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      paddingTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: t.ink5,
+      backgroundColor: t.bg,
+    },
 
-    // Form (Basico)
+    // Form
     field: { gap: 6 },
     fieldLabel: {
       fontSize: 11,
