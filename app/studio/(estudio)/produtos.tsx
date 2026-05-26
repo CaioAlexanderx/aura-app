@@ -1,5 +1,5 @@
 // ============================================================
-// AURA STUDIO · Produtos personalizáveis (Fase 1 + Fase 4 preview)
+// AURA STUDIO · Produtos personalizáveis (Fase 1 + Fase 4 preview + Fases 9B/10B/11B)
 //
 // Lista produtos da empresa + toggle "personalizável" + form
 // expandido inline pra configurar print area e campos.
@@ -8,17 +8,28 @@
 // <PersonalizationPreview> dentro do expand — split horizontal
 // no desktop (vw > 768), preview acima do form no mobile.
 //
+// Fase 9B (26/05/2026): badge ProductQualityScore no canto
+// superior direito de cada card de produto.
+//
+// Fase 10B (26/05/2026): botão "✨ Sugestões IA" dentro do form
+// expandido — chama studioApi.suggestTemplates e abre modal de
+// checkboxes pra vincular templates em lote.
+//
+// Fase 11B (26/05/2026): botão "📲 Preview WhatsApp" no header
+// do form expandido — abre <PreviewWhatsAppModal>.
+//
 // Endpoints (backend src/routes/studio.js):
 //   GET    /companies/:cid/studio/products/:pid/customization-config
 //   PUT    /companies/:cid/studio/products/:pid/customization-config
 //   POST   /companies/:cid/studio/products/:pid/personalize
+//   POST   /companies/:cid/studio/products/:pid/suggest-templates  (Fase 10B)
 //
 // Quando salva config: marca onboarding.product = true no studio_settings.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, Switch, useWindowDimensions, Platform,
+  TextInput, Switch, useWindowDimensions, Platform, Modal,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
@@ -27,6 +38,9 @@ import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+import { ProductQualityScore, calculateProductScore } from "@/components/studio/ProductQualityScore";
+import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
+import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 
 // Tipo enxuto pro produto vindo de /companies/:cid/products
 type ProductRow = {
@@ -92,6 +106,7 @@ function buildPreviewValues(cfg: CustomizationConfig | undefined): Record<string
 
 export default function StudioProdutos() {
   const { company } = useAuthStore();
+  const { config: dcConfig } = useDigitalChannel();
   const { width: vw } = useWindowDimensions();
   const isDesktop = vw > 768;
   const [loading, setLoading] = useState(true);
@@ -101,6 +116,18 @@ export default function StudioProdutos() {
   const [configCache, setConfigCache] = useState<Record<string, CustomizationConfig>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [channelSlug, setChannelSlug] = useState<string | null>(null);
+
+  // Fase 10B — IA sugestões de templates
+  const [loadingSuggestions, setLoadingSuggestions] = useState<string | null>(null);
+  const [suggestionsModal, setSuggestionsModal] = useState<{
+    productId: string;
+    suggestions: Array<{ template_id: string; reason: string; score: number }>;
+  } | null>(null);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, boolean>>({});
+  const [linkingSuggestions, setLinkingSuggestions] = useState(false);
+
+  // Fase 11B — Preview WhatsApp
+  const [whatsAppPreviewProduct, setWhatsAppPreviewProduct] = useState<ProductRow | null>(null);
 
   const load = useCallback(async () => {
     if (!company?.id) return;
@@ -244,6 +271,52 @@ export default function StudioProdutos() {
     }
   }
 
+  // ── Fase 10B ─ chama IA pra sugerir templates do produto
+  async function fetchSuggestions(pid: string) {
+    if (!company?.id) return;
+    setLoadingSuggestions(pid);
+    try {
+      const r = await studioApi.suggestTemplates(company.id, pid);
+      if (!r.suggestions || r.suggestions.length === 0) {
+        toast.info(r.message || "Sem sugestões agora — adicione mais templates na galeria.");
+      } else {
+        // Pré-seleciona todas as sugestões por padrão (UX: 1 clique pra confirmar)
+        const preSel: Record<string, boolean> = {};
+        for (const sug of r.suggestions) preSel[sug.template_id] = true;
+        setSelectedSuggestions(preSel);
+        setSuggestionsModal({ productId: pid, suggestions: r.suggestions });
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao buscar sugestões");
+    } finally {
+      setLoadingSuggestions(null);
+    }
+  }
+
+  async function linkSelectedSuggestions() {
+    if (!company?.id || !suggestionsModal) return;
+    const ids = Object.keys(selectedSuggestions).filter((k) => selectedSuggestions[k]);
+    if (ids.length === 0) { toast.error("Selecione ao menos 1 template"); return; }
+    setLinkingSuggestions(true);
+    let ok = 0, fail = 0;
+    for (const tid of ids) {
+      try {
+        await studioApi.linkTemplate(company.id, suggestionsModal.productId, tid, 0);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setLinkingSuggestions(false);
+    if (ok > 0) {
+      toast.success(`✨ ${ok} template${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}${fail > 0 ? ` (${fail} falhou)` : ""}`);
+    } else {
+      toast.error("Nenhum template vinculado");
+    }
+    setSuggestionsModal(null);
+    setSelectedSuggestions({});
+  }
+
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* Header */}
@@ -308,6 +381,11 @@ export default function StudioProdutos() {
             const saving = savingId === p.id;
             return (
               <View key={p.id} style={[s.productCard, p.is_personalizable && s.productCardActive]}>
+                {/* Fase 9B: badge ProductQualityScore no canto sup. direito */}
+                <View style={s.qualityBadgeWrap} pointerEvents="none">
+                  <ProductQualityScore product={p} compact />
+                </View>
+
                 {/* Linha principal */}
                 <View style={s.productRow}>
                   <View style={[s.productIcon, p.is_personalizable && { backgroundColor: StudioColors.primary }]}>
@@ -343,6 +421,7 @@ export default function StudioProdutos() {
                     saving={saving}
                     isDesktop={isDesktop}
                     channelSlug={channelSlug}
+                    loadingSuggestions={loadingSuggestions === p.id}
                     onUpdateConfig={(patch) => updateConfig(p.id, patch)}
                     onUpdateField={(fid, patch) => updateField(p.id, fid, patch)}
                     onAddField={(t) => addField(p.id, t)}
@@ -350,6 +429,8 @@ export default function StudioProdutos() {
                     onClose={() => setExpandedId(null)}
                     onSave={() => saveConfig(p)}
                     onOpenCustomerView={openCustomerView}
+                    onFetchSuggestions={() => fetchSuggestions(p.id)}
+                    onOpenWhatsAppPreview={() => setWhatsAppPreviewProduct(p)}
                   />
                 )}
               </View>
@@ -365,6 +446,102 @@ export default function StudioProdutos() {
           <Text style={s.hintBold}>Próxima iteração:</Text> integração com galeria de templates por categoria + preview com upload real do cliente.
         </Text>
       </View>
+
+      {/* Fase 10B — Modal de sugestões IA */}
+      {suggestionsModal && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => { if (!linkingSuggestions) { setSuggestionsModal(null); setSelectedSuggestions({}); } }}
+        >
+          <View style={s.modalBackdrop}>
+            <View style={s.modalCard}>
+              <View style={s.modalHead}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalEyebrow}>✨ IA AURA · GALERIA</Text>
+                  <Text style={s.modalTitle}>Templates sugeridos</Text>
+                  <Text style={s.modalSub}>
+                    Selecione os templates que combinam com este produto. Vinculados aparecem pro cliente na tela de personalização.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => { setSuggestionsModal(null); setSelectedSuggestions({}); }}
+                  hitSlop={10}
+                  disabled={linkingSuggestions}
+                >
+                  <Icon name="x" size={18} color={StudioColors.ink3} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={s.modalScroll} contentContainerStyle={{ paddingBottom: 8 }}>
+                {suggestionsModal.suggestions.map((sug) => {
+                  const checked = !!selectedSuggestions[sug.template_id];
+                  return (
+                    <Pressable
+                      key={sug.template_id}
+                      style={[s.suggestRow, checked && s.suggestRowOn]}
+                      onPress={() => setSelectedSuggestions((m) => ({ ...m, [sug.template_id]: !m[sug.template_id] }))}
+                      disabled={linkingSuggestions}
+                    >
+                      <View style={[s.suggestCheck, checked && s.suggestCheckOn]}>
+                        {checked && <Icon name="check" size={12} color="#fff" />}
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={s.suggestId} numberOfLines={1}>Template #{sug.template_id.slice(0, 8)}</Text>
+                        <Text style={s.suggestReason} numberOfLines={2}>{sug.reason}</Text>
+                      </View>
+                      <View style={s.suggestScorePill}>
+                        <Text style={s.suggestScoreTxt}>{Math.round(sug.score * 100)}%</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={s.modalActions}>
+                <Pressable
+                  style={s.btnSec}
+                  onPress={() => { setSuggestionsModal(null); setSelectedSuggestions({}); }}
+                  disabled={linkingSuggestions}
+                >
+                  <Text style={s.btnSecTxt}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.btnPri, linkingSuggestions && { opacity: 0.6 }]}
+                  onPress={linkSelectedSuggestions}
+                  disabled={linkingSuggestions}
+                >
+                  {linkingSuggestions ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Icon name="check" size={14} color="#fff" />
+                      <Text style={s.btnPriTxt}>
+                        Vincular {Object.values(selectedSuggestions).filter(Boolean).length} template{Object.values(selectedSuggestions).filter(Boolean).length !== 1 ? "s" : ""}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Fase 11B — Preview WhatsApp Modal */}
+      {whatsAppPreviewProduct && (
+        <PreviewWhatsAppModal
+          visible={true}
+          onClose={() => setWhatsAppPreviewProduct(null)}
+          product={whatsAppPreviewProduct}
+          shop={{
+            name: company?.name || "Aura Studio",
+            slug: dcConfig?.slug || "loja",
+            logo_url: dcConfig?.logo_url,
+          }}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -379,6 +556,7 @@ type ExpandedFormProps = {
   saving: boolean;
   isDesktop: boolean;
   channelSlug: string | null;
+  loadingSuggestions: boolean;
   onUpdateConfig: (patch: Partial<CustomizationConfig>) => void;
   onUpdateField: (fid: string, patch: Partial<CustomizationField>) => void;
   onAddField: (t: CustomizationFieldType) => void;
@@ -386,12 +564,14 @@ type ExpandedFormProps = {
   onClose: () => void;
   onSave: () => void;
   onOpenCustomerView: () => void;
+  onFetchSuggestions: () => void;
+  onOpenWhatsAppPreview: () => void;
 };
 
 function ExpandedForm({
-  product: p, cfg, saving, isDesktop, channelSlug,
+  product: p, cfg, saving, isDesktop, channelSlug, loadingSuggestions,
   onUpdateConfig, onUpdateField, onAddField, onRemoveField,
-  onClose, onSave, onOpenCustomerView,
+  onClose, onSave, onOpenCustomerView, onFetchSuggestions, onOpenWhatsAppPreview,
 }: ExpandedFormProps) {
   // previewValues recalculado quando cfg muda — texto fixo + primeira cor/option.
   const previewValues = useMemo(() => buildPreviewValues(cfg), [cfg]);
@@ -413,12 +593,19 @@ function ExpandedForm({
       <Text style={s.previewHint}>
         Atualiza conforme você muda a área de impressão ou adiciona campos.
       </Text>
-      {channelSlug && Platform.OS === "web" && (
-        <Pressable style={s.customerLink} onPress={onOpenCustomerView}>
-          <Icon name="external-link" size={12} color={StudioColors.primary} />
-          <Text style={s.customerLinkTxt}>Ver como cliente</Text>
+      <View style={s.previewLinks}>
+        {channelSlug && Platform.OS === "web" && (
+          <Pressable style={s.customerLink} onPress={onOpenCustomerView}>
+            <Icon name="external-link" size={12} color={StudioColors.primary} />
+            <Text style={s.customerLinkTxt}>Ver como cliente</Text>
+          </Pressable>
+        )}
+        {/* Fase 11B: Preview WhatsApp */}
+        <Pressable style={s.waPreviewBtn} onPress={onOpenWhatsAppPreview}>
+          <Icon name="external-link" size={13} color={StudioColors.success} />
+          <Text style={s.waPreviewTxt}>📲 Preview WhatsApp</Text>
         </Pressable>
-      )}
+      </View>
     </View>
   );
 
@@ -537,6 +724,18 @@ function ExpandedForm({
               ))}
             </View>
 
+            {/* Fase 10B — Botão IA sugere templates */}
+            <Pressable
+              onPress={onFetchSuggestions}
+              style={[s.aiSuggestBtn, loadingSuggestions && { opacity: 0.6 }]}
+              disabled={loadingSuggestions}
+            >
+              <Icon name="star" size={14} color={StudioColors.accent} />
+              <Text style={s.aiSuggestTxt}>
+                {loadingSuggestions ? "Pensando..." : "✨ Sugestões IA de templates"}
+              </Text>
+            </Pressable>
+
             {/* Actions */}
             <View style={s.actions}>
               <Pressable style={s.btnSec} onPress={onClose}>
@@ -602,7 +801,7 @@ const s = StyleSheet.create({
   emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 380 },
 
   list: { gap: 10 },
-  productCard: { backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5, overflow: "hidden" },
+  productCard: { backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5, overflow: "hidden", position: "relative" },
   productCardActive: { borderColor: StudioColors.primarySoft, backgroundColor: StudioColors.paperCardElev },
   productRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
   productIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.bgSoft, alignItems: "center", justifyContent: "center" },
@@ -610,6 +809,9 @@ const s = StyleSheet.create({
   productMeta: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
   configBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 8 },
   configBtnTxt: { color: StudioColors.primary, fontSize: 11.5, fontWeight: "700" },
+
+  // Fase 9B — quality score badge no canto sup. direito do card
+  qualityBadgeWrap: { position: "absolute", top: 8, right: 8, zIndex: 5 },
 
   // Expand: mobile = coluna unica (preview em cima + form em baixo)
   expand: { padding: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: StudioColors.ink5, gap: 16 },
@@ -627,8 +829,13 @@ const s = StyleSheet.create({
   previewLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", alignSelf: "stretch" },
   previewBox: { alignItems: "center", justifyContent: "center", padding: 8, backgroundColor: StudioColors.bgSoft, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
   previewHint: { fontSize: 11.5, color: StudioColors.ink4, textAlign: "center", fontStyle: "italic", maxWidth: 320 },
-  customerLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft, marginTop: 2 },
+  previewLinks: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 2 },
+  customerLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft },
   customerLinkTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.primary },
+
+  // Fase 11B — Preview WhatsApp btn
+  waPreviewBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: StudioColors.successSoft, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.successSoft },
+  waPreviewTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.successInk },
 
   // Form column — mobile: cresce naturalmente; desktop: flex 1 do lado do preview
   formCol: { gap: 8 },
@@ -664,6 +871,10 @@ const s = StyleSheet.create({
   addFieldChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft },
   addFieldChipTxt: { fontSize: 11.5, fontWeight: "700", color: StudioColors.primary },
 
+  // Fase 10B — Botão IA sugestões
+  aiSuggestBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.accentGhost, borderRadius: 8, borderWidth: 1, borderColor: StudioColors.accentSoft, alignSelf: "flex-start", marginTop: 8 },
+  aiSuggestTxt: { color: StudioColors.accent, fontSize: 11.5, fontWeight: "700" },
+
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 14 },
   btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10, minWidth: 120, justifyContent: "center" },
   btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
@@ -673,4 +884,22 @@ const s = StyleSheet.create({
   hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.primaryGhost, borderRadius: 12, padding: 12, marginTop: 22, borderWidth: 1, borderColor: StudioColors.primarySoft },
   hintTxt: { fontSize: 12, color: StudioColors.ink2, flex: 1, lineHeight: 17 },
   hintBold: { fontWeight: "700", color: StudioColors.primary },
+
+  // Fase 10B — Modal sugestões IA
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: 16 },
+  modalCard: { width: "100%", maxWidth: 540, maxHeight: "85%", backgroundColor: StudioColors.paperCard, borderRadius: 18, padding: 18, gap: 12 },
+  modalHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  modalEyebrow: { fontSize: 10.5, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 2, letterSpacing: -0.3 },
+  modalSub: { fontSize: 12.5, color: StudioColors.ink3, marginTop: 3, lineHeight: 17 },
+  modalScroll: { maxHeight: 360 },
+  suggestRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: StudioColors.ink5, backgroundColor: "#fff", marginBottom: 8 },
+  suggestRowOn: { borderColor: StudioColors.accent, backgroundColor: StudioColors.accentGhost },
+  suggestCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: StudioColors.ink5, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+  suggestCheckOn: { backgroundColor: StudioColors.accent, borderColor: StudioColors.accent },
+  suggestId: { fontSize: 13, fontWeight: "700", color: StudioColors.ink },
+  suggestReason: { fontSize: 12, color: StudioColors.ink3, marginTop: 2, lineHeight: 16 },
+  suggestScorePill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: StudioColors.accentGhost, borderWidth: 1, borderColor: StudioColors.accentSoft },
+  suggestScoreTxt: { fontSize: 11, fontWeight: "800", color: StudioColors.accent },
+  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 },
 });
