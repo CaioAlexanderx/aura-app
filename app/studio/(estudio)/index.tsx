@@ -4,9 +4,12 @@
 // Estrutura:
 //   1. Greeting personalizado
 //   2. KPIs em cards orgânicos — vindos de /studio/metrics (Nivel 1 C2)
-//   3. Checklist colapsável (#4) — fecha sozinho quando 100%
+//      26/05: numero animado via AnimatedKpiCounter (Fase 6 residual)
+//   3. Banner "X produtos podem melhorar" (Fase 9 residual)
+//      — usa calculateProductScore pra contar produtos com score < 75
+//   4. Checklist colapsável (#4) — fecha sozinho quando 100%
 //      Vira card celebratório (#3) com CTA "Cadastrar produto" + dica
-//   4. Hint Fase 4
+//   5. Hint Fase 4
 // ============================================================
 import { useEffect, useState, useMemo } from "react";
 import {
@@ -18,6 +21,9 @@ import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
 import { useAuthStore } from "@/stores/auth";
 import { studioApi, type StudioMetrics } from "@/services/studioApi";
+import { request } from "@/services/api";
+import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
+import { calculateProductScore, type Product as ScoreProduct } from "@/components/studio/ProductQualityScore";
 
 type ChecklistItem = {
   id: string;
@@ -80,6 +86,15 @@ function formatBRL(v: number | null | undefined): string {
   }
 }
 
+// Formatters pro AnimatedKpiCounter (Fase 6 residual)
+function fmtCurrency(n: number): string {
+  return formatBRL(n);
+}
+function fmtInteger(n: number): string {
+  if (n == null || isNaN(n)) return "—";
+  return Math.round(n).toLocaleString("pt-BR");
+}
+
 export default function StudioHome() {
   const router = useRouter();
   const { company, user } = useAuthStore();
@@ -87,6 +102,7 @@ export default function StudioHome() {
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [metrics, setMetrics] = useState<StudioMetrics | null>(null);
+  const [productsToImprove, setProductsToImprove] = useState(0);
 
   const [expanded, setExpanded] = useState(true);
 
@@ -111,6 +127,39 @@ export default function StudioHome() {
       .finally(() => setMetricsLoading(false));
   }, [company?.id]);
 
+  // 3. Produtos pra melhorar (Fase 9 residual)
+  // Conta produtos personalizáveis com score < 75 (letter < B)
+  useEffect(() => {
+    if (!company?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await request<any>(
+          "/companies/" + company.id + "/products?limit=500",
+          { method: "GET", retry: 1, timeout: 10000 }
+        );
+        const list: any[] = Array.isArray(data)
+          ? data
+          : (data?.products || data?.items || []);
+        const personalizables = list.filter(
+          (p) => p && p.is_personalizable && !p.isHydrating
+        );
+        const toImprove = personalizables.reduce((acc, p) => {
+          try {
+            const { score } = calculateProductScore(p as ScoreProduct);
+            return score < 75 ? acc + 1 : acc;
+          } catch {
+            return acc;
+          }
+        }, 0);
+        if (!cancelled) setProductsToImprove(toImprove);
+      } catch {
+        if (!cancelled) setProductsToImprove(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [company?.id]);
+
   const firstName = (user as any)?.name?.split(" ")[0] || "lojista";
   const totalDone = CHECKLIST.filter((i) => completed[i.id]).length;
   const pct = Math.round((totalDone / CHECKLIST.length) * 100);
@@ -124,29 +173,33 @@ export default function StudioHome() {
     return `Faltam ${CHECKLIST.length - totalDone} ${CHECKLIST.length - totalDone === 1 ? "passo" : "passos"}`;
   }, [allDone, totalDone]);
 
-  // KPIs dinâmicos
+  // KPIs dinâmicos — value numérico + formatter pro AnimatedKpiCounter
   const kpis = useMemo(() => [
     {
       label: "Em produção",
-      value: metrics ? String(metrics.em_producao) : "—",
+      value: metrics ? metrics.em_producao : 0,
+      format: fmtInteger,
       icon: "clock",
       color: StudioColors.warning,
     },
     {
       label: "Aguardando arte",
-      value: metrics ? String(metrics.aguardando_arte) : "—",
+      value: metrics ? metrics.aguardando_arte : 0,
+      format: fmtInteger,
       icon: "alert-circle",
       color: StudioColors.accent,
     },
     {
       label: "Prontos hoje",
-      value: metrics ? String(metrics.prontos_hoje) : "—",
+      value: metrics ? metrics.prontos_hoje : 0,
+      format: fmtInteger,
       icon: "check",
       color: StudioColors.success,
     },
     {
       label: "Vendas 7d",
-      value: metrics ? formatBRL(metrics.revenue_7d) : "—",
+      value: metrics ? metrics.revenue_7d : 0,
+      format: fmtCurrency,
       icon: "trending-up",
       color: StudioColors.primary,
     },
@@ -184,12 +237,39 @@ export default function StudioHome() {
               {metricsLoading ? (
                 <ActivityIndicator size="small" color={StudioColors.ink4} style={{ alignSelf: "flex-start", marginTop: 4 }} />
               ) : (
-                <Text style={s.kpiValue}>{k.value}</Text>
+                <View style={{ alignItems: "flex-start", marginTop: 1 }}>
+                  <AnimatedKpiCounter
+                    value={k.value}
+                    format={k.format}
+                    fontSize={18}
+                    color={StudioColors.ink}
+                  />
+                </View>
               )}
             </View>
           </View>
         ))}
       </View>
+
+      {/* ───── Banner "X produtos podem melhorar" (Fase 9 residual) ───── */}
+      {productsToImprove > 0 && (
+        <View style={s.improveBanner}>
+          <View style={s.improveIcon}>
+            <Icon name="trending-up" size={18} color={StudioColors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.improveTitle}>
+              {productsToImprove} produto{productsToImprove > 1 ? "s" : ""} pode{productsToImprove > 1 ? "m" : ""} melhorar
+            </Text>
+            <Text style={s.improveDesc}>
+              Adicione fotos, descrição e templates pra subir o score e vender mais.
+            </Text>
+          </View>
+          <Pressable onPress={() => router.push("/studio/produtos" as any)} style={s.improveBtn}>
+            <Text style={s.improveBtnTxt}>Melhorar →</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* ───── Checklist colapsável ───── */}
       <View style={s.checklistCard}>
@@ -331,6 +411,28 @@ const s = StyleSheet.create({
   },
   kpiLabel: { fontSize: 11.5, color: StudioColors.ink3, fontWeight: "600" },
   kpiValue: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 1 },
+
+  // Banner "produtos pra melhorar" (Fase 9 residual)
+  improveBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: StudioColors.accentGhost,
+    borderWidth: 1, borderColor: StudioColors.accentSoft,
+    borderRadius: 18, padding: 14,
+    marginBottom: 22,
+  },
+  improveIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: StudioColors.accentSoft,
+    alignItems: "center", justifyContent: "center",
+  },
+  improveTitle: { fontSize: 14, fontWeight: "800", color: StudioColors.ink },
+  improveDesc: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
+  improveBtn: {
+    backgroundColor: StudioColors.accent,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 12,
+  },
+  improveBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
 
   // Checklist
   checklistCard: {
