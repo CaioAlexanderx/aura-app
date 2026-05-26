@@ -7,6 +7,9 @@
 // refreshConnection) + estende StudioSettings com max_revisions_included +
 // extra_revision_price + revision_policy_text.
 // Memory: studio_bridges_completas_25mai2026, projeto_core_ml_shopee_f1b_f2b_25mai2026
+//
+// 26/05/2026 (Fase 10B): suggestTemplates — IA Haiku 4.5 sugere templates
+// da galeria pra produtos com base em nome+categoria+tags.
 // ============================================================
 import { request } from "./api";
 
@@ -327,6 +330,18 @@ export const studioApi = {
     request<CustomizationConfigResponse>(base(cid) + "/products/" + pid + "/customization-config", { method: "PUT", body: cfg, retry: 0, timeout: 10000 }),
   togglePersonalizable: (cid: string, pid: string, enabled: boolean) =>
     request<{ id: string; is_personalizable: boolean }>(base(cid) + "/products/" + pid + "/personalize", { method: "POST", body: { enabled }, retry: 0, timeout: 5000 }),
+
+  // ── Fase 10B (26/05) — IA sugere templates da galeria pro produto ──
+  suggestTemplates: (cid: string, pid: string) =>
+    request<{
+      suggestions: Array<{ template_id: string; reason: string; score: number }>;
+      fallback?: boolean;
+      ai_powered?: boolean;
+      message?: string;
+    }>(
+      base(cid) + "/products/" + pid + "/suggest-templates",
+      { method: "POST", retry: 0, timeout: 20000 }
+    ),
 
   // ── Nivel 1: Settings ─────────────────────────────────
   getSettings: (cid: string) =>
