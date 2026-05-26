@@ -9,10 +9,13 @@
 // avança pra pending_art.
 //
 // Item #3 do follow-up: empty state celebratório quando fila vazia.
+//
+// Fase 3 (26/05/2026): loading + empty states migrados pra StudioLoading
+// e StudioEmpty (componentes globais Studio).
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -21,6 +24,8 @@ import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/serv
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
 type Column = {
   key: StudioProductionStatus;
@@ -129,61 +134,24 @@ export default function StudioProducao() {
       </View>
 
       {loading && orders.length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={StudioColors.primary} />
-        </View>
+        <StudioLoading variant="skeleton-grid" rows={3} />
       ) : orders.length === 0 ? (
-        // Empty state: nunca teve pedido
-        <View style={s.emptyCard}>
-          <Icon name="package" size={32} color={StudioColors.ink4} />
-          <Text style={s.emptyTitle}>Sem pedidos do Studio ainda</Text>
-          <Text style={s.emptySub}>
-            Quando o cliente fizer um pedido na loja digital com produto personalizado, ele aparece aqui na coluna "Aguardando arte".
-          </Text>
-          <View style={s.emptyCtas}>
-            <Pressable
-              onPress={() => router.push("/studio/vendas/loja-digital" as any)}
-              style={[s.emptyBtn, { backgroundColor: StudioColors.primary }]}
-            >
-              <Icon name="globe" size={14} color="#fff" />
-              <Text style={s.emptyBtnTxt}>Configurar loja digital</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/studio/produtos" as any)}
-              style={[s.emptyBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: StudioColors.ink4 }]}
-            >
-              <Icon name="shopping-bag" size={14} color={StudioColors.ink2} />
-              <Text style={[s.emptyBtnTxt, { color: StudioColors.ink2 }]}>Ver produtos</Text>
-            </Pressable>
-          </View>
-        </View>
+        // Empty state: fila vazia
+        <StudioEmpty
+          icon="package"
+          title="Fila de produção vazia"
+          desc="Quando entrar um pedido novo, ele aparece aqui automaticamente."
+          primaryCta={{ label: "Ver pedidos do dia", onPress: () => router.push("/studio/pedidos" as any) }}
+        />
       ) : allCaughtUp ? (
         // #3: tudo entregue → celebra
-        <View style={s.emptyCard}>
-          <View style={s.celebrateEmoji}>
-            <Text style={{ fontSize: 36 }}>🎉</Text>
-          </View>
-          <Text style={s.emptyTitle}>Fila zerada!</Text>
-          <Text style={s.emptySub}>
-            Tudo entregue ou em delivered. Aproveita pra dar uma olhada nos insumos ou divulgar promoção pra atrair pedido novo.
-          </Text>
-          <View style={s.emptyCtas}>
-            <Pressable
-              onPress={() => router.push("/studio/insumos" as any)}
-              style={[s.emptyBtn, { backgroundColor: StudioColors.accent }]}
-            >
-              <Icon name="package" size={14} color="#fff" />
-              <Text style={s.emptyBtnTxt}>Verificar insumos</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/studio/galeria" as any)}
-              style={[s.emptyBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: StudioColors.ink4 }]}
-            >
-              <Icon name="image" size={14} color={StudioColors.ink2} />
-              <Text style={[s.emptyBtnTxt, { color: StudioColors.ink2 }]}>Atualizar galeria</Text>
-            </Pressable>
-          </View>
-        </View>
+        <StudioEmpty
+          emoji="🎉"
+          title="Tudo entregue!"
+          desc="Nenhum pedido na produção agora."
+          tone="celebration"
+          primaryCta={{ label: "Novo pedido", onPress: () => router.push("/studio/pedidos" as any) }}
+        />
       ) : (
         <ScrollView horizontal style={s.boardScroll} contentContainerStyle={s.board}>
           {COLUMNS.map((col) => (
@@ -309,26 +277,6 @@ const s = StyleSheet.create({
     backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
   },
   reloadTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
-
-  emptyCard: {
-    flex: 1, alignItems: "center", justifyContent: "center",
-    padding: 40, gap: 10, margin: 28,
-    backgroundColor: StudioColors.paperCard, borderRadius: 18,
-    borderWidth: 1, borderColor: StudioColors.ink5,
-  },
-  celebrateEmoji: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: StudioColors.mintSoft,
-    alignItems: "center", justifyContent: "center",
-  },
-  emptyTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 460, lineHeight: 19 },
-  emptyCtas: { flexDirection: "row", gap: 10, marginTop: 16, flexWrap: "wrap", justifyContent: "center" },
-  emptyBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
-  },
-  emptyBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   boardScroll: { flex: 1 },
   board: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
