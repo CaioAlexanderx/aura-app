@@ -11,6 +11,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { type StudioPalette } from "@/constants/studio-tokens";
 import { toast } from "@/components/Toast";
 import { studioApi } from "@/services/studioApi";
 import StudioLoading from "@/components/studio/StudioLoading";
@@ -52,7 +53,7 @@ type Props = {
   onSaved?: (summary: Summary) => void;
 };
 
-function getMarginTone(margin: number | null, t: any) {
+function getMarginTone(margin: number | null, t: StudioPalette) {
   if (margin == null) return { fg: t.ink3, bg: t.bgSoft };
   if (margin >= 30) return { fg: t.successInk, bg: t.successSoft };
   if (margin >= 10) return { fg: t.warningInk, bg: t.warningSoft };
@@ -279,11 +280,11 @@ export default function StudioFichaTecnicaPanel({
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel}>Custo total</Text>
-            <Text style={[styles.kpiValue, { color: t.ink1 }]}>{formatBRL(totalCost)}</Text>
+            <Text style={[styles.kpiValue, { color: t.ink }]}>{formatBRL(totalCost)}</Text>
           </View>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel}>Preço de venda</Text>
-            <Text style={[styles.kpiValue, { color: t.ink1 }]}>{formatBRL(productPrice)}</Text>
+            <Text style={[styles.kpiValue, { color: t.ink }]}>{formatBRL(productPrice)}</Text>
           </View>
           <View style={[styles.kpiBox, styles.kpiMargin, { backgroundColor: marginTone.bg }]}>
             <Text style={[styles.kpiLabel, { color: marginTone.fg }]}>Margem</Text>
@@ -324,7 +325,7 @@ export default function StudioFichaTecnicaPanel({
                     <Text
                       style={[
                         styles.inputSelectText,
-                        { color: it.input_id ? t.ink1 : t.ink3 },
+                        { color: it.input_id ? t.ink : t.ink3 },
                       ]}
                       numberOfLines={1}
                     >
@@ -416,7 +417,7 @@ export default function StudioFichaTecnicaPanel({
                   </View>
                   <View style={styles.metricBox}>
                     <Text style={styles.metricLabel}>Subtotal</Text>
-                    <Text style={[styles.metricValue, { color: t.ink1, fontWeight: "700" }]}>
+                    <Text style={[styles.metricValue, { color: t.ink, fontWeight: "700" }]}>
                       {formatBRL(subtotal)}
                     </Text>
                   </View>
@@ -481,7 +482,7 @@ export default function StudioFichaTecnicaPanel({
   );
 }
 
-function buildStyles(t: any) {
+function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -493,10 +494,10 @@ function buildStyles(t: any) {
       gap: 16,
     },
     headerCard: {
-      backgroundColor: t.surface,
+      backgroundColor: t.paperCard,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       padding: 16,
       gap: 14,
     },
@@ -513,7 +514,7 @@ function buildStyles(t: any) {
     headerTitle: {
       fontSize: 16,
       fontWeight: "700",
-      color: t.ink1,
+      color: t.ink,
     },
     headerSubtitle: {
       fontSize: 12,
@@ -562,10 +563,10 @@ function buildStyles(t: any) {
       fontWeight: "600",
     },
     section: {
-      backgroundColor: t.surface,
+      backgroundColor: t.paperCard,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       padding: 14,
       gap: 12,
     },
@@ -577,7 +578,7 @@ function buildStyles(t: any) {
     sectionTitle: {
       fontSize: 14,
       fontWeight: "700",
-      color: t.ink1,
+      color: t.ink,
     },
     emptyRowsBox: {
       alignItems: "center",
@@ -591,7 +592,7 @@ function buildStyles(t: any) {
     },
     itemRow: {
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       borderRadius: 12,
       padding: 10,
       gap: 10,
@@ -612,7 +613,7 @@ function buildStyles(t: any) {
       borderRadius: 8,
       backgroundColor: t.bgSoft,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
     },
     inputSelectText: {
       flex: 1,
@@ -625,9 +626,9 @@ function buildStyles(t: any) {
     },
     pickerBox: {
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       borderRadius: 10,
-      backgroundColor: t.surface,
+      backgroundColor: t.paperCard,
       overflow: "hidden",
     },
     pickerSearch: {
@@ -637,12 +638,12 @@ function buildStyles(t: any) {
       paddingHorizontal: 10,
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: t.border,
+      borderBottomColor: t.ink5,
     },
     pickerSearchInput: {
       flex: 1,
       fontSize: 13,
-      color: t.ink1,
+      color: t.ink,
       paddingVertical: 2,
     },
     pickerList: {
@@ -663,12 +664,12 @@ function buildStyles(t: any) {
       paddingHorizontal: 12,
       paddingVertical: 10,
       borderBottomWidth: 1,
-      borderBottomColor: t.border,
+      borderBottomColor: t.ink5,
     },
     pickerOptionName: {
       fontSize: 13,
       fontWeight: "600",
-      color: t.ink1,
+      color: t.ink,
     },
     pickerOptionMeta: {
       fontSize: 11,
@@ -706,7 +707,7 @@ function buildStyles(t: any) {
     metricInput: {
       fontSize: 14,
       fontWeight: "700",
-      color: t.ink1,
+      color: t.ink,
       padding: 0,
     },
     metricValue: {
@@ -722,7 +723,7 @@ function buildStyles(t: any) {
       paddingVertical: 12,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       borderStyle: "dashed",
     },
     addRowText: {
@@ -744,11 +745,11 @@ function buildStyles(t: any) {
     },
     notesInput: {
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       borderRadius: 10,
       padding: 10,
       fontSize: 13,
-      color: t.ink1,
+      color: t.ink,
       backgroundColor: t.bgSoft,
       minHeight: 70,
       textAlignVertical: "top",
