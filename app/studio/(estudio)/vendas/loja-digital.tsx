@@ -23,11 +23,23 @@
 //     em desktop wide (IS_WIDE), onde as 8 tabs já cabem na viewport.
 //   · Fase 3: header trocado pelo componente canônico StudioPageHeader
 //     (eyebrow magenta + title + subtitle + rightSlot opcional).
+//
+// 26/05/2026 — Residual tema Studio:
+//   · Migração pra useStudioTokens() (dark mode aware via Platform context)
+//     com buildStyles(t) lazy via useMemo.
+//   · Hero ganha LinearGradient navy→magenta (StudioGradients.brand) no lugar
+//     do primaryGhost antigo — presença Studio reforçada.
+//   · Tab ativa ganha sombra navy sutil (boxShadow web / elevation native).
+//   · Separadores verticais sutis (t.ink5) entre os 3 grupos semânticos de
+//     tabs: [Site/Design] | [Configurador/Galeria/Revisões/Marketplaces] |
+//     [Entrega/Pedidos] — ajudam scan visual sem poluir.
+//   · View Site Button: primaryGhost → primarySoft (mais cor, mais Studio).
 // ============================================================
-import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
+import { useState, useMemo } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { StudioColors } from "@/constants/studio-tokens";
+import { StudioColors, StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { Icon } from "@/components/Icon";
@@ -60,8 +72,15 @@ const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: "orders",        label: "Pedidos",      icon: "shopping-bag" },
 ];
 
+// Índices APÓS os quais inserimos um separador vertical sutil entre grupos.
+// Grupos: [0,1]=Site/Design · [2,3,4,5]=Configurador/Galeria/Revisões/Marketplaces
+//         · [6,7]=Entrega/Pedidos
+const TAB_GROUP_DIVIDERS = new Set<number>([1, 5]);
+
 export default function StudioVendasLojaDigital() {
   const [tab, setTab] = useState<TabKey>("site");
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const {
     config, isLoading,
     saveConfig, isSaving,
@@ -84,16 +103,22 @@ export default function StudioVendasLojaDigital() {
           subtitle="Configure tudo do storefront: produtos personalizáveis, galeria de templates, política de revisões, marketplaces e pedidos unificados."
           rightSlot={config.is_published && storefrontUrl ? (
             <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn}>
-              <Icon name="globe" size={13} color={StudioColors.primary} />
+              <Icon name="globe" size={13} color={t.primary} />
               <Text style={s.viewSiteBtnTxt}>Ver site</Text>
             </Pressable>
           ) : undefined}
         />
 
-        {/* Hero Studio — fundo navy soft com accent */}
-        <View style={s.hero}>
+        {/* Hero Studio — gradient navy→magenta (StudioGradients.brand) reforça
+            presença do vertical. Texto e ícone passam pra branco/sobre-gradient. */}
+        <LinearGradient
+          colors={StudioGradients.brand as unknown as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={s.hero}
+        >
           <View style={s.heroIcon}>
-            <Icon name="globe" size={22} color={StudioColors.primary} />
+            <Icon name="globe" size={22} color={t.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.heroTitle}>Loja Digital pronta pra personalizados</Text>
@@ -101,15 +126,23 @@ export default function StudioVendasLojaDigital() {
               Tudo que o cliente precisa: ver produtos, configurar arte com texto/foto/cores, escolher template e fechar pelo Pix ou cartão.
             </Text>
           </View>
-          {/* Pill semântico: verde mint quando publicada (estado ativo positivo),
-              cinza ink4 quando rascunho (estado neutro). Antes era accent magenta
-              em ambos os casos, o que dava falso CTA. */}
-          <View style={[s.heroPill, { backgroundColor: config.is_published ? StudioColors.success : StudioColors.ink4 }]}>
+          {/* Pill semântico: success quando publicada (ativo positivo), branco
+              translúcido quando rascunho (neutro, sobre gradient escuro). */}
+          <View
+            style={[
+              s.heroPill,
+              {
+                backgroundColor: config.is_published
+                  ? t.success
+                  : "rgba(255,255,255,0.22)",
+              },
+            ]}
+          >
             <Text style={s.heroPillTxt}>
               {config.is_published ? "PUBLICADA" : "RASCUNHO"}
             </Text>
           </View>
-        </View>
+        </LinearGradient>
 
         {/* Tabs Studio (8) — scroll horizontal em mobile, com fade-edges (Fase 2) */}
         <View style={s.tabsWrap}>
@@ -117,19 +150,22 @@ export default function StudioVendasLojaDigital() {
             horizontal
             showsHorizontalScrollIndicator={false}
             style={{ flexGrow: 0 }}
-            contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}
+            contentContainerStyle={{ flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 20 }}
           >
-            {TABS.map((t) => {
-              const active = t.key === tab;
+            {TABS.map((tDef, idx) => {
+              const active = tDef.key === tab;
               return (
-                <Pressable
-                  key={t.key}
-                  onPress={() => setTab(t.key)}
-                  style={[s.tabBtn, active && s.tabBtnActive]}
-                >
-                  <Icon name={t.icon as any} size={13} color={active ? "#fff" : StudioColors.ink3} />
-                  <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{t.label}</Text>
-                </Pressable>
+                <View key={tDef.key} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Pressable
+                    onPress={() => setTab(tDef.key)}
+                    style={[s.tabBtn, active && s.tabBtnActive]}
+                  >
+                    <Icon name={tDef.icon as any} size={13} color={active ? "#fff" : t.ink3} />
+                    <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{tDef.label}</Text>
+                  </Pressable>
+                  {/* Separador vertical sutil entre grupos semânticos */}
+                  {TAB_GROUP_DIVIDERS.has(idx) && <View style={s.tabGroupDivider} />}
+                </View>
               );
             })}
           </ScrollView>
@@ -207,8 +243,8 @@ export default function StudioVendasLojaDigital() {
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: t.bg },
   container: {
     padding: IS_WIDE ? 32 : 20,
     paddingBottom: 60,
@@ -221,16 +257,17 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: StudioColors.primaryGhost,
+    // primarySoft (mais cor) vs primaryGhost antigo (quase branco)
+    backgroundColor: t.primarySoft,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
   viewSiteBtnTxt: {
     fontSize: 12,
-    color: StudioColors.primary,
+    color: t.primary,
     fontWeight: "700",
   },
 
@@ -238,39 +275,46 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: StudioColors.primaryGhost,
+    // backgroundColor agora é o gradient navy→magenta (StudioGradients.brand)
     borderRadius: 16,
     padding: 18,
     marginBottom: 18,
+    // borda sutil clara pra "selar" o gradient
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: "rgba(255,255,255,0.18)",
+    ...(Platform.OS === "web"
+      ? { boxShadow: t.shadowNavy as any }
+      : { elevation: 4 }),
   },
   heroIcon: {
     width: 44,
     height: 44,
     borderRadius: 12,
+    // Bolha branca opaca pra destacar ícone navy sobre gradient escuro
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: "rgba(255,255,255,0.6)",
     flexShrink: 0,
   },
   heroTitle: {
     fontSize: 15,
-    color: StudioColors.ink,
+    // Texto branco sobre gradient navy→magenta
+    color: "#fff",
     fontWeight: "800",
   },
   heroDesc: {
     fontSize: 12,
-    color: StudioColors.ink3,
+    // Branco translúcido pra hierarquia (description menos forte que title)
+    color: "rgba(255,255,255,0.88)",
     marginTop: 2,
     lineHeight: 17,
   },
   heroPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    // backgroundColor agora vem inline (success | ink4 conforme is_published)
+    // backgroundColor agora vem inline (success | rgba branco translúcido)
     borderRadius: 999,
     flexShrink: 0,
   },
@@ -309,20 +353,33 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 10,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   tabBtnActive: {
-    backgroundColor: StudioColors.primary,
-    borderColor: StudioColors.primary,
+    backgroundColor: t.primary,
+    borderColor: t.primary,
+    // Sombra navy sutil pra dar presença ao estado ativo
+    ...(Platform.OS === "web"
+      ? { boxShadow: t.shadowNavy as any }
+      : { elevation: 4 }),
   },
   tabBtnTxt: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: StudioColors.ink2,
+    color: t.ink2,
   },
   tabBtnTxtActive: {
     color: "#fff",
+  },
+
+  // Divisor vertical sutil entre grupos de tabs (Site/Design | Studio core | Entrega/Pedidos)
+  tabGroupDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: t.ink5,
+    marginHorizontal: 4,
+    opacity: 0.7,
   },
 });
