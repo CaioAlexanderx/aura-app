@@ -9,6 +9,11 @@
 //   · Bolinhas-pai aumentadas pra 60×60 (era 54×54)
 //   · Glow base (navy soft) ao redor de cada bolinha, intensifica no hover
 //   · Hover-children mostram label do nome ao lado (não só ícone)
+//
+// 26/05 (URGENTE): adicionado item "Estoque" no grupo Estúdio
+// apontando pra /studio/estoque — necessário porque cliente Studio
+// não tem acesso ao /(tabs)/estoque (redirect do _layout).
+// Ícone "archive" pra diferenciar de Insumos ("package").
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -106,6 +111,10 @@ const GROUPS: NavGroup[] = [
     icon: "star",
     toneKey: "navy",
     children: [
+      // "Estoque" PRIMEIRO no grupo — fluxo natural: cadastra produto
+      // (foto, qty, preço, categoria) → marca personalizável em "Produtos".
+      // Ícone "archive" pra não conflitar com Insumos ("package").
+      { label: "Estoque",   icon: "archive",       href: "/studio/estoque" },
       { label: "Produtos",  icon: "shopping-bag", href: "/studio/produtos" },
       { label: "Galeria",   icon: "image",         href: "/studio/galeria" },
       { label: "Produção",  icon: "clock",         href: "/studio/producao", badge: { value: "•", tone: "accent" } },
