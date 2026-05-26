@@ -4,10 +4,14 @@
 // Substitui placeholder. Mostra KPIs + alertas + feed unificado
 // (digital_orders + bulk_events). Botão "Novo pedido pra evento"
 // abre BulkOrderWizard (Fase 6).
+//
+// Fase 3 (refactor): header/loading/empty migrados pros
+// componentes globais Studio (StudioPageHeader, StudioLoading,
+// StudioEmpty).
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -20,6 +24,9 @@ import {
   type HubStats, type HubFeedItem, type HubAlert,
 } from "@/services/studioBulkHubApi";
 import { BulkOrderWizard } from "@/components/studio/BulkOrderWizard";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -93,26 +100,22 @@ export default function StudioPedidosHub() {
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
-      {/* Header */}
-      <View style={s.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>FASE 7 · HUB DO ESTÚDIO</Text>
-          <Text style={s.title}>Tudo que tá rolando</Text>
-          <Text style={s.sub}>
-            Pedidos da loja digital, eventos manuais, alertas críticos — uma visão só.
-          </Text>
-        </View>
-        <Pressable style={s.ctaPri} onPress={openBulkWizard}>
-          <Icon name="users" size={16} color="#fff" />
-          <Text style={s.ctaPriTxt}>Novo pedido pra evento</Text>
-        </Pressable>
-      </View>
+      {/* Header (Fase 3 — global StudioPageHeader) */}
+      <StudioPageHeader
+        eyebrow="HUB · PEDIDOS"
+        title="Todos os pedidos Studio"
+        subtitle="Unifica pedidos da Loja Digital, PDV e marketplaces. Acompanhe status de produção, conversão de eventos em vendas."
+        rightSlot={
+          <Pressable style={s.ctaPri} onPress={openBulkWizard}>
+            <Icon name="users" size={16} color="#fff" />
+            <Text style={s.ctaPriTxt}>+ Novo pedido</Text>
+          </Pressable>
+        }
+      />
 
       {/* KPIs */}
       {loading && !stats ? (
-        <View style={{ paddingVertical: 30 }}>
-          <ActivityIndicator size="small" color={StudioColors.primary} />
-        </View>
+        <StudioLoading variant="skeleton-list" rows={5} />
       ) : stats && (
         <View style={s.kpis}>
           <Kpi label="Pedidos hoje"    value={String(stats.orders.orders_today)} icon="shopping-bag" color={StudioColors.primary} />
@@ -165,10 +168,12 @@ export default function StudioPedidosHub() {
 
       {/* Feed */}
       {feed.length === 0 && !loading ? (
-        <View style={s.empty}>
-          <Icon name="inbox" size={28} color={StudioColors.ink4} />
-          <Text style={s.emptyTxt}>Nada por aqui ainda</Text>
-        </View>
+        <StudioEmpty
+          icon="shopping-bag"
+          title="Nenhum pedido no período"
+          desc="Quando entrar um pedido, ele aparece aqui automaticamente — Loja Digital, PDV e marketplaces."
+          primaryCta={{ label: "Configurar Loja Digital", onPress: () => router.push("/studio/vendas/loja-digital" as any) }}
+        />
       ) : (
         <View style={s.feedList}>
           {feed.map((item) => (
@@ -228,10 +233,6 @@ function Kpi({ label, value, icon, color, highlight }: { label: string; value: s
 const s = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: StudioColors.bg },
   container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
-  headerRow: { flexDirection: "row", alignItems: "flex-end", gap: 16, marginBottom: 22, flexWrap: "wrap" },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4 },
   // Convenção do app: primary CTAs são navy (primary), accent fica reservado pra status/highlights.
   ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
@@ -258,6 +259,4 @@ const s = StyleSheet.create({
   feedAmount: { fontSize: 13.5, fontWeight: "800", color: StudioColors.ink },
   feedStatus: { backgroundColor: StudioColors.bgSoft, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, marginTop: 3 },
   feedStatusTxt: { fontSize: 10, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase" },
-  empty: { alignItems: "center", padding: 40, gap: 8, backgroundColor: StudioColors.paperCard, borderRadius: 14 },
-  emptyTxt: { fontSize: 13, color: StudioColors.ink3, marginTop: 6 },
 });
