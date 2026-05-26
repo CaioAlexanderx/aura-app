@@ -16,13 +16,22 @@
 // 26/05 — Fase 2 affordance: tooltip on hover nas bolinhas-pai
 //   (desktop/web only) mostra o label do grupo + filhos antes do
 //   clique. Não muda click behavior (continua abrindo popup).
+//
+// 26/05 — Fase 6A acessibilidade/motion:
+//   · cross-fade 200ms entre rotas /studio/* (Reanimated)
+//   · respeita prefers-reduced-motion (AccessibilityInfo)
+//   · :focus-visible outline navy global (web only)
+//   · accessibilityLabel em todas as Pressables ícone-only
 // ============================================================
 import { useRef, useEffect, useState } from "react";
 import {
   View, Text, Pressable, StyleSheet,
   Animated, Easing, useWindowDimensions, ScrollView,
-  Platform,
+  Platform, AccessibilityInfo,
 } from "react-native";
+import Reanimated, {
+  useSharedValue, useAnimatedStyle, withTiming,
+} from "react-native-reanimated";
 import { Slot, useRouter, usePathname } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors, StudioRadius, StudioFloat } from "@/constants/studio-tokens";
@@ -129,11 +138,12 @@ const GROUPS: NavGroup[] = [
 // ─── Nav circle (bolinha pai) ───────────────────────────────
 function NavCircle({
   icon, active, isGroup, idx, onPress, children, pause,
-  onHoverIn, onHoverOut,
+  onHoverIn, onHoverOut, accessibilityLabel,
 }: {
   icon: string; active?: boolean; isGroup?: boolean; idx: number;
   onPress?: () => void; children?: React.ReactNode; pause: boolean;
   onHoverIn?: () => void; onHoverOut?: () => void;
+  accessibilityLabel?: string;
 }) {
   // Web-only mouse handlers — Pressable no RN-web aceita onHoverIn/Out
   const webHoverProps =
@@ -144,6 +154,8 @@ function NavCircle({
     <FloatingBubble idx={idx} pause={pause} style={{ position: "relative" }}>
       <Pressable
         onPress={onPress}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
         {...webHoverProps}
         style={[
           s.navCircle,
@@ -167,6 +179,8 @@ function ChildBubble({
     <FloatingBubble idx={idx + 1} pause={pause} style={{}}>
       <Pressable
         onPress={onPress}
+        accessibilityLabel={child.label}
+        accessibilityRole="button"
         style={[s.navChild, { backgroundColor: t.bg }]}
       >
         <Icon name={child.icon as any} size={16} color="#fff" />
@@ -225,6 +239,56 @@ export function StudioShell() {
     return () => clearTimeout(t);
   }, [isWide]);
 
+  // ─── Fase 6A: cross-fade entre rotas + reduce motion ──────
+  const opacity = useSharedValue(1);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const sub = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      (enabled) => setReduceMotion(enabled)
+    );
+    return () => {
+      mounted = false;
+      // @ts-ignore — remove() é o padrão atual
+      sub?.remove?.();
+    };
+  }, []);
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.value = 1;
+      return;
+    }
+    opacity.value = 0;
+    const t = setTimeout(() => {
+      opacity.value = withTiming(1, { duration: 200 });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [pathname, reduceMotion, opacity]);
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  // ─── Fase 6A: focus visible global (web only) ─────────────
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (typeof document === "undefined") return;
+    const style = document.createElement("style");
+    style.setAttribute("data-aura-studio-focus", "1");
+    style.textContent = `
+      :focus-visible {
+        outline: 2px solid ${StudioColors.primary} !important;
+        outline-offset: 2px !important;
+        border-radius: 4px;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      try { document.head.removeChild(style); } catch {}
+    };
+  }, []);
+
   function go(href: string) {
     router.push(href as any);
     setOpenGroup(null);
@@ -238,7 +302,12 @@ export function StudioShell() {
     return (
       <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
         <View style={s.mobileBar}>
-          <Pressable onPress={() => go("/studio")} style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}>
+          <Pressable
+            onPress={() => go("/studio")}
+            accessibilityLabel="Ir para início do Aura Studio"
+            accessibilityRole="button"
+            style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}
+          >
             <AuraStudioLockup size={26} variant="dark" />
           </Pressable>
           <ScrollView
@@ -268,9 +337,9 @@ export function StudioShell() {
             />
           </ScrollView>
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
           <Slot />
-        </View>
+        </Reanimated.View>
         <FloatingApprovalButton />
       </View>
     );
@@ -281,7 +350,11 @@ export function StudioShell() {
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
       <View style={s.sidebar}>
         <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 16 }}>
-          <Pressable onPress={() => go("/studio")} accessibilityLabel="Ir para início do Aura Studio">
+          <Pressable
+            onPress={() => go("/studio")}
+            accessibilityLabel="Ir para início do Aura Studio"
+            accessibilityRole="button"
+          >
             <AuraStudioMark size={54} />
           </Pressable>
         </FloatingBubble>
@@ -291,6 +364,7 @@ export function StudioShell() {
           active={isHome}
           idx={1}
           pause={floatPause}
+          accessibilityLabel="Início do Aura Studio"
           onPress={() => go("/studio")}
         />
 
@@ -299,6 +373,7 @@ export function StudioShell() {
           const childActive = g.children.some((c) => pathname.startsWith(c.href));
           const showTooltip =
             Platform.OS === "web" && hoveredGroupId === g.id && !open;
+          const groupLabel = `Área ${g.label} — ${g.children.map((c) => c.label).join(", ")}`;
           return (
             <View key={g.label} style={{ position: "relative" }}>
               <NavCircle
@@ -307,6 +382,7 @@ export function StudioShell() {
                 active={open || childActive}
                 isGroup
                 pause={floatPause}
+                accessibilityLabel={groupLabel}
                 onHoverIn={() => setHoveredGroupId(g.id)}
                 onHoverOut={() =>
                   setHoveredGroupId((prev) => (prev === g.id ? null : prev))
@@ -342,17 +418,18 @@ export function StudioShell() {
           idx={6}
           pause={floatPause}
           active={pathname.startsWith("/studio/configuracoes")}
+          accessibilityLabel="Configurações do Studio"
           onPress={() => go("/studio/configuracoes")}
         />
 
-        <View style={s.avatar}>
+        <View style={s.avatar} accessibilityLabel="Avatar do usuário">
           <Text style={s.avatarTxt}>SM</Text>
         </View>
       </View>
 
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
         <Slot />
-      </View>
+      </Reanimated.View>
       <FloatingApprovalButton />
     </View>
   );
@@ -365,6 +442,8 @@ function MobileChip({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityRole="button"
       style={[
         s.mobileChip,
         active && { backgroundColor: tone, borderColor: tone },
