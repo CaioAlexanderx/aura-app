@@ -12,11 +12,16 @@
 //
 // 25/05 (segunda iteração) — substitui "S" placeholder por
 //   AuraStudioMark/Lockup (logo real navy + asterisco magenta).
+//
+// 26/05 — Fase 2 affordance: tooltip on hover nas bolinhas-pai
+//   (desktop/web only) mostra o label do grupo + filhos antes do
+//   clique. Não muda click behavior (continua abrindo popup).
 // ============================================================
 import { useRef, useEffect, useState } from "react";
 import {
   View, Text, Pressable, StyleSheet,
   Animated, Easing, useWindowDimensions, ScrollView,
+  Platform,
 } from "react-native";
 import { Slot, useRouter, usePathname } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -68,6 +73,7 @@ type NavChild = {
   badge?: { value: string; tone?: "accent" | "warm" };
 };
 type NavGroup = {
+  id: string;
   label: string;
   icon: string;
   toneKey: keyof typeof TONES;
@@ -86,6 +92,7 @@ const TONES = {
 // #6: tom único por grupo — filhas herdam o tom do pai.
 const GROUPS: NavGroup[] = [
   {
+    id: "estudio",
     label: "Estúdio",
     icon: "star",
     toneKey: "navy",
@@ -97,6 +104,7 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: "vendas",
     label: "Vendas",
     icon: "shopping-cart",
     toneKey: "pink",
@@ -106,6 +114,7 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: "gestao",
     label: "Gestão",
     icon: "briefcase",
     toneKey: "mint",
@@ -120,14 +129,22 @@ const GROUPS: NavGroup[] = [
 // ─── Nav circle (bolinha pai) ───────────────────────────────
 function NavCircle({
   icon, active, isGroup, idx, onPress, children, pause,
+  onHoverIn, onHoverOut,
 }: {
   icon: string; active?: boolean; isGroup?: boolean; idx: number;
   onPress?: () => void; children?: React.ReactNode; pause: boolean;
+  onHoverIn?: () => void; onHoverOut?: () => void;
 }) {
+  // Web-only mouse handlers — Pressable no RN-web aceita onHoverIn/Out
+  const webHoverProps =
+    Platform.OS === "web" && (onHoverIn || onHoverOut)
+      ? { onHoverIn, onHoverOut }
+      : {};
   return (
     <FloatingBubble idx={idx} pause={pause} style={{ position: "relative" }}>
       <Pressable
         onPress={onPress}
+        {...webHoverProps}
         style={[
           s.navCircle,
           active && s.navCircleActive,
@@ -169,6 +186,27 @@ function ChildBubble({
   );
 }
 
+// ─── Tooltip hover (Fase 2) ────────────────────────────────
+function GroupHoverTooltip({ group }: { group: NavGroup }) {
+  return (
+    <View style={s.tooltip} pointerEvents="none">
+      <Text style={s.tooltipEyebrow}>{group.label.toUpperCase()}</Text>
+      {group.children.map((child, i) => (
+        <View
+          key={child.href}
+          style={[
+            s.tooltipItem,
+            i === group.children.length - 1 && { borderBottomWidth: 0 },
+          ]}
+        >
+          <Icon name={child.icon as any} size={12} color={StudioColors.ink3} />
+          <Text style={s.tooltipItemTxt}>{child.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ─── Shell ──────────────────────────────────────────────────
 export function StudioShell() {
   const router = useRouter();
@@ -177,6 +215,7 @@ export function StudioShell() {
   const isWide = width >= 900;
 
   const [openGroup, setOpenGroup] = useState<number | null>(null);
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
 
   // #7: pausa float ambient após 10s (somente desktop expandido)
   const [floatPause, setFloatPause] = useState(false);
@@ -189,6 +228,7 @@ export function StudioShell() {
   function go(href: string) {
     router.push(href as any);
     setOpenGroup(null);
+    setHoveredGroupId(null);
   }
 
   const isHome = pathname === "/studio" || pathname === "/studio/";
@@ -257,6 +297,8 @@ export function StudioShell() {
         {GROUPS.map((g, i) => {
           const open = openGroup === i;
           const childActive = g.children.some((c) => pathname.startsWith(c.href));
+          const showTooltip =
+            Platform.OS === "web" && hoveredGroupId === g.id && !open;
           return (
             <View key={g.label} style={{ position: "relative" }}>
               <NavCircle
@@ -265,6 +307,10 @@ export function StudioShell() {
                 active={open || childActive}
                 isGroup
                 pause={floatPause}
+                onHoverIn={() => setHoveredGroupId(g.id)}
+                onHoverOut={() =>
+                  setHoveredGroupId((prev) => (prev === g.id ? null : prev))
+                }
                 onPress={() => setOpenGroup(open ? null : i)}
               >
                 {open && (
@@ -283,6 +329,7 @@ export function StudioShell() {
                     </View>
                   </View>
                 )}
+                {showTooltip && <GroupHoverTooltip group={g} />}
               </NavCircle>
             </View>
           );
@@ -409,6 +456,46 @@ const s = StyleSheet.create({
   childLabel: {
     fontSize: 10, color: StudioColors.ink3,
     textAlign: "center", marginTop: 4,
+    fontWeight: "600",
+  },
+
+  // ── Tooltip hover (Fase 2) ──
+  tooltip: {
+    position: "absolute",
+    left: 62, // bubbleSize 54 + 8
+    top: 0,
+    zIndex: 100,
+    backgroundColor: StudioColors.paperCardElev,
+    borderWidth: 1,
+    borderColor: StudioColors.ink5,
+    borderRadius: 12,
+    padding: 10,
+    minWidth: 160,
+    // box-shadow web — RN ignora mas web-platform aplica via shim do RN-web
+    shadowColor: "#1E3A8A",
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  tooltipEyebrow: {
+    fontSize: 10,
+    color: StudioColors.accent,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  tooltipItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: StudioColors.ink5,
+  },
+  tooltipItemTxt: {
+    fontSize: 12,
+    color: StudioColors.ink2,
     fontWeight: "600",
   },
 
