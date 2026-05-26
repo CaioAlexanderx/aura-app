@@ -41,6 +41,15 @@
 //     só sidebar inline chip sem ação rápida contextual
 //   · Avatar (desktop) com iniciais dinâmicas do user.name via
 //     useAuthStore (não mais "SM" hardcoded)
+//
+// 26/05 — Floating iOS-style child bubbles:
+//   · GroupHoverTooltip (card textual) REMOVIDO — affordance ruim
+//     (user clicava no ícone do card em vez da bolinha-pai)
+//   · Hover na bolinha-pai agora EXPANDE mini-bolinhas (32×32) das
+//     filhas em coluna vertical à direita, com stagger 60ms
+//   · Cada mini-bolinha é Pressable separado (tooltip CSS title)
+//   · Container das mini tem onHoverIn/Out que cancela o close-timer
+//     pra o user conseguir mover o mouse pra dentro sem o menu sumir
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -49,7 +58,7 @@ import {
   Platform, AccessibilityInfo, RefreshControl,
 } from "react-native";
 import Reanimated, {
-  useSharedValue, useAnimatedStyle, withTiming,
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay,
 } from "react-native-reanimated";
 import { Slot, useRouter, usePathname } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -205,7 +214,7 @@ function NavCircle({
   );
 }
 
-// ─── Bolinhas-filhas ────────────────────────────────────────
+// ─── Bolinhas-filhas (popup expandido por click — mantém legado) ─
 function ChildBubble({
   child, onPress, idx, tone, pause,
 }: { child: NavChild; onPress: () => void; idx: number; tone: keyof typeof TONES; pause: boolean }) {
@@ -235,24 +244,59 @@ function ChildBubble({
   );
 }
 
-// ─── Tooltip hover (Fase 2) ────────────────────────────────
-function GroupHoverTooltip({ group }: { group: NavGroup }) {
+// ─── Mini-bolinha hover (iOS-style floating menu) ──────────
+// 32×32, navega direto pra rota do filho. Animação scale+opacity
+// com stagger (delay = idx * 60ms) via Reanimated withSpring.
+function ChildHoverBubble({
+  child, tone, delay, onPress,
+}: {
+  child: NavChild;
+  tone: keyof typeof TONES;
+  delay: number;
+  onPress: () => void;
+}) {
+  const t = TONES[tone];
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    scale.value = withDelay(delay, withSpring(1, { damping: 14, stiffness: 180 }));
+    opacity.value = withDelay(delay, withTiming(1, { duration: 180 }));
+    return () => {
+      // saída suave (caso unmount)
+      opacity.value = withTiming(0, { duration: 120 });
+    };
+  }, [delay, scale, opacity]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  // tooltip CSS nativo (web only) — title="..."
+  const webTitleProp: any =
+    Platform.OS === "web" ? { title: child.label } : {};
+
   return (
-    <View style={s.tooltip} pointerEvents="none">
-      <Text style={s.tooltipEyebrow}>{group.label.toUpperCase()}</Text>
-      {group.children.map((child, i) => (
-        <View
-          key={child.href}
-          style={[
-            s.tooltipItem,
-            i === group.children.length - 1 && { borderBottomWidth: 0 },
-          ]}
-        >
-          <Icon name={child.icon as any} size={12} color={StudioColors.ink3} />
-          <Text style={s.tooltipItemTxt}>{child.label}</Text>
-        </View>
-      ))}
-    </View>
+    <Reanimated.View style={animStyle}>
+      <Pressable
+        onPress={onPress}
+        accessibilityLabel={child.label}
+        accessibilityRole="button"
+        {...webTitleProp}
+        style={[s.hoverChildBubble, { backgroundColor: t.bg }]}
+      >
+        <Icon name={child.icon as any} size={14} color="#fff" />
+        {child.badge && (
+          <View
+            style={[
+              s.hoverChildBadge,
+              { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : StudioColors.accent },
+            ]}
+          />
+        )}
+      </Pressable>
+    </Reanimated.View>
   );
 }
 
@@ -470,6 +514,23 @@ export function StudioShell() {
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Timer pra fechar o menu hover quando user sai com o mouse —
+  // o container das mini-bolinhas também tem onHoverIn/Out que cancela.
+  const closeHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelCloseHover = () => {
+    if (closeHoverTimerRef.current) {
+      clearTimeout(closeHoverTimerRef.current);
+      closeHoverTimerRef.current = null;
+    }
+  };
+  const scheduleCloseHover = (groupId: string) => {
+    cancelCloseHover();
+    closeHoverTimerRef.current = setTimeout(() => {
+      setHoveredGroupId((prev) => (prev === groupId ? null : prev));
+    }, 200);
+  };
+  useEffect(() => () => cancelCloseHover(), []);
+
   // ─── Fase 8B: derivar accent tokens do Canal Digital ──────
   const { config } = useDigitalChannel();
   const resolvedAccent = useMemo(() => {
@@ -553,6 +614,7 @@ export function StudioShell() {
     router.push(href as any);
     setOpenGroup(null);
     setHoveredGroupId(null);
+    cancelCloseHover();
   }
 
   const isHome = pathname === "/studio" || pathname === "/studio/";
@@ -728,9 +790,18 @@ export function StudioShell() {
           {GROUPS.map((g, i) => {
             const open = openGroup === i;
             const childActive = g.children.some((c) => pathname.startsWith(c.href));
-            const showTooltip =
+            const showHoverChildren =
               Platform.OS === "web" && hoveredGroupId === g.id && !open;
             const groupLabel = `Área ${g.label} — ${g.children.map((c) => c.label).join(", ")}`;
+            // Web-only hover handlers pro container das mini-bolinhas:
+            // entrar cancela o close-timer, sair re-agenda.
+            const childContainerHoverProps: any =
+              Platform.OS === "web"
+                ? {
+                    onMouseEnter: cancelCloseHover,
+                    onMouseLeave: () => scheduleCloseHover(g.id),
+                  }
+                : {};
             return (
               <View key={g.label} style={{ position: "relative" }}>
                 <NavCircle
@@ -740,10 +811,11 @@ export function StudioShell() {
                   isGroup
                   pause={floatPause}
                   accessibilityLabel={groupLabel}
-                  onHoverIn={() => setHoveredGroupId(g.id)}
-                  onHoverOut={() =>
-                    setHoveredGroupId((prev) => (prev === g.id ? null : prev))
-                  }
+                  onHoverIn={() => {
+                    cancelCloseHover();
+                    setHoveredGroupId(g.id);
+                  }}
+                  onHoverOut={() => scheduleCloseHover(g.id)}
                   onPress={() => setOpenGroup(open ? null : i)}
                 >
                   {open && (
@@ -762,8 +834,27 @@ export function StudioShell() {
                       </View>
                     </View>
                   )}
-                  {showTooltip && <GroupHoverTooltip group={g} />}
                 </NavCircle>
+
+                {/* Floating menu iOS-style: mini-bolinhas em coluna ao
+                    lado direito da bolinha-pai. Mount/unmount controlado
+                    por hoveredGroupId; cada mini tem stagger 60ms. */}
+                {showHoverChildren && (
+                  <View
+                    style={s.childBubblesContainer}
+                    {...childContainerHoverProps}
+                  >
+                    {g.children.map((c, ci) => (
+                      <ChildHoverBubble
+                        key={c.href}
+                        child={c}
+                        tone={g.toneKey}
+                        delay={ci * 60}
+                        onPress={() => go(c.href)}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
             );
           })}
@@ -901,44 +992,43 @@ const s = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ── Tooltip hover (Fase 2) ──
-  tooltip: {
+  // ── Floating iOS-style child bubbles (hover) ──
+  // Container fica à direita da bolinha-pai (left = 54 + 8 = 62).
+  // Coluna vertical, gap 8px. zIndex alto pra ficar acima do shell.
+  childBubblesContainer: {
     position: "absolute",
-    left: 62, // bubbleSize 54 + 8
+    left: 62,
     top: 0,
-    zIndex: 100,
-    backgroundColor: StudioColors.paperCardElev,
-    borderWidth: 1,
-    borderColor: StudioColors.ink5,
-    borderRadius: 12,
-    padding: 10,
-    minWidth: 160,
-    // box-shadow web — RN ignora mas web-platform aplica via shim do RN-web
-    shadowColor: "#1E3A8A",
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
-  },
-  tooltipEyebrow: {
-    fontSize: 10,
-    color: StudioColors.accent,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  tooltipItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    flexDirection: "column",
+    gap: 8,
+    paddingLeft: 4, // hover-buffer pro mouse cruzar sem disparar leave
+    paddingRight: 4,
     paddingVertical: 4,
-    borderBottomWidth: 0.5,
-    borderBottomColor: StudioColors.ink5,
+    zIndex: 3000,
   },
-  tooltipItemTxt: {
-    fontSize: 12,
-    color: StudioColors.ink2,
-    fontWeight: "600",
+  hoverChildBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  hoverChildBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "#fff",
   },
 
   avatar: {
