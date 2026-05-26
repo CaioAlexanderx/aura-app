@@ -349,7 +349,7 @@ export default function StudioCaixaPage() {
           Venda registrada!
         </Text>
         <Text style={{ fontSize: 13, color: t.ink3, marginTop: 6, textAlign: "center", maxWidth: 360 }}>
-          O pedido entrou em "Aguardando arte" no KDS automaticamente.
+          O pedido entrou em "Aguardando arte" no Fluxo de Produção automaticamente.
         </Text>
         <View
           style={{
@@ -688,7 +688,7 @@ export default function StudioCaixaPage() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8, paddingRight: 4 }}
         >
-          <ShortcutChip t={t} icon="►" label="Ver KDS" onPress={() => router.push("/studio/producao" as any)} />
+          <ShortcutChip t={t} icon="►" label="Ver Produção" onPress={() => router.push("/studio/producao" as any)} />
           <ShortcutChip t={t} icon="◆" label="Pedidos do dia" onPress={() => router.push("/studio/pedidos" as any)} />
           <ShortcutChip t={t} icon="+" label="Cadastrar produto" onPress={() => router.push("/studio/produtos" as any)} />
           <ShortcutChip t={t} icon="✓" label="Aprovações" onPress={() => router.push("/studio/aprovacao" as any)} />
