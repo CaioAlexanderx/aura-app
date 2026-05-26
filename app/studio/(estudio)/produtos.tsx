@@ -1,5 +1,5 @@
 // ============================================================
-// AURA STUDIO · Produtos personalizáveis (Fase 1 + Fase 4 preview + Fases 9B/10B/11B)
+// AURA STUDIO · Produtos personalizáveis (Fase 1 + Fase 4 preview + Fases 9B/10B/11B + Fase 12 theme)
 //
 // Lista produtos da empresa + toggle "personalizável" + form
 // expandido inline pra configurar print area e campos.
@@ -18,6 +18,10 @@
 // Fase 11B (26/05/2026): botão "📲 Preview WhatsApp" no header
 // do form expandido — abre <PreviewWhatsAppModal>.
 //
+// Fase 12 (25/05/2026): StyleSheet via buildStyles(t) + useStudioTokens()
+// pra suportar light/dark mode. ExpandedForm/FilterChip recebem `s` e
+// `t` por prop pra evitar closure sobre globals.
+//
 // Endpoints (backend src/routes/studio.js):
 //   GET    /companies/:cid/studio/products/:pid/customization-config
 //   PUT    /companies/:cid/studio/products/:pid/customization-config
@@ -32,7 +36,7 @@ import {
   TextInput, Switch, useWindowDimensions, Platform, Modal,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type CustomizationConfig, type CustomizationField, type CustomizationFieldType } from "@/services/studioApi";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -50,6 +54,9 @@ type ProductRow = {
   is_personalizable?: boolean;
   category_name?: string | null;
 };
+
+type Tokens = ReturnType<typeof useStudioTokens>;
+type Styles = ReturnType<typeof buildStyles>;
 
 const FIELD_TYPE_LABELS: Record<CustomizationFieldType, string> = {
   text:     "Texto",
@@ -109,6 +116,9 @@ export default function StudioProdutos() {
   const { config: dcConfig } = useDigitalChannel();
   const { width: vw } = useWindowDimensions();
   const isDesktop = vw > 768;
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
+
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [filter, setFilter] = useState<"all" | "personalizable" | "non">("all");
@@ -176,7 +186,7 @@ export default function StudioProdutos() {
     try {
       await studioApi.togglePersonalizable(company.id, p.id, next);
       setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, is_personalizable: next } : x));
-      toast.success(next ? "✨ Produto agora aceita personalização" : "Personalização desativada");
+      toast.success(next ? "Produto agora aceita personalização" : "Personalização desativada");
       // Se ligou e ainda não tem config, abre o form pra configurar
       if (next && !configCache[p.id]) {
         openExpand(p);
@@ -256,7 +266,7 @@ export default function StudioProdutos() {
     setSavingId(p.id);
     try {
       await studioApi.saveCustomizationConfig(company.id, p.id, cfg);
-      toast.success("✨ Configuração salva!");
+      toast.success("Configuração salva!");
       setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, is_personalizable: true } : x));
       setExpandedId(null);
     } catch (e: any) { toast.error(e?.message || "Erro ao salvar"); }
@@ -309,7 +319,7 @@ export default function StudioProdutos() {
     }
     setLinkingSuggestions(false);
     if (ok > 0) {
-      toast.success(`✨ ${ok} template${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}${fail > 0 ? ` (${fail} falhou)` : ""}`);
+      toast.success(`${ok} template${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}${fail > 0 ? ` (${fail} falhou)` : ""}`);
     } else {
       toast.error("Nenhum template vinculado");
     }
@@ -336,22 +346,22 @@ export default function StudioProdutos() {
 
       {/* Filter tabs */}
       <View style={s.filterRow}>
-        <FilterChip label="Todos" count={products.length} active={filter === "all"} onPress={() => setFilter("all")} />
-        <FilterChip label="Personalizáveis" count={personalizedCount} active={filter === "personalizable"} onPress={() => setFilter("personalizable")} tone="primary" />
-        <FilterChip label="Não personalizáveis" count={products.length - personalizedCount} active={filter === "non"} onPress={() => setFilter("non")} />
+        <FilterChip s={s} label="Todos" count={products.length} active={filter === "all"} onPress={() => setFilter("all")} />
+        <FilterChip s={s} label="Personalizáveis" count={personalizedCount} active={filter === "personalizable"} onPress={() => setFilter("personalizable")} tone="primary" />
+        <FilterChip s={s} label="Não personalizáveis" count={products.length - personalizedCount} active={filter === "non"} onPress={() => setFilter("non")} />
       </View>
 
       {/* Loading */}
       {loading && (
         <View style={{ paddingVertical: 30 }}>
-          <ActivityIndicator size="small" color={StudioColors.primary} />
+          <ActivityIndicator size="small" color={t.primary} />
         </View>
       )}
 
       {/* Empty (sem produtos no catálogo) */}
       {!loading && products.length === 0 && (
         <View style={s.emptyCard}>
-          <Icon name="shopping-bag" size={32} color={StudioColors.ink4} />
+          <Icon name="shopping-bag" size={32} color={t.ink4} />
           <Text style={s.emptyTitle}>Catálogo vazio</Text>
           <Text style={s.emptySub}>
             Cadastre produtos no Estoque primeiro. Depois volta aqui pra marcar quais aceitam personalização.
@@ -362,7 +372,7 @@ export default function StudioProdutos() {
       {/* Empty (filtro retornou vazio) */}
       {!loading && products.length > 0 && filtered.length === 0 && (
         <View style={s.emptyCard}>
-          <Icon name="filter" size={28} color={StudioColors.ink4} />
+          <Icon name="filter" size={28} color={t.ink4} />
           <Text style={s.emptyTitle}>Nenhum produto nesta categoria</Text>
           <Text style={s.emptySub}>
             {filter === "personalizable"
@@ -388,8 +398,8 @@ export default function StudioProdutos() {
 
                 {/* Linha principal */}
                 <View style={s.productRow}>
-                  <View style={[s.productIcon, p.is_personalizable && { backgroundColor: StudioColors.primary }]}>
-                    <Icon name="shopping-bag" size={16} color={p.is_personalizable ? "#fff" : StudioColors.ink3} />
+                  <View style={[s.productIcon, p.is_personalizable && { backgroundColor: t.primary }]}>
+                    <Icon name="shopping-bag" size={16} color={p.is_personalizable ? "#fff" : t.ink3} />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.productName} numberOfLines={1}>{p.name}</Text>
@@ -400,7 +410,7 @@ export default function StudioProdutos() {
                   </View>
                   {p.is_personalizable && (
                     <Pressable style={s.configBtn} onPress={() => openExpand(p)}>
-                      <Icon name={expanded ? "chevron-up" : "settings"} size={14} color={StudioColors.primary} />
+                      <Icon name={expanded ? "chevron-up" : "settings"} size={14} color={t.primary} />
                       <Text style={s.configBtnTxt}>{expanded ? "Fechar" : "Configurar"}</Text>
                     </Pressable>
                   )}
@@ -408,7 +418,7 @@ export default function StudioProdutos() {
                     value={!!p.is_personalizable}
                     onValueChange={() => togglePersonalizable(p)}
                     disabled={saving}
-                    trackColor={{ false: StudioColors.ink5, true: StudioColors.primary }}
+                    trackColor={{ false: t.ink5, true: t.primary }}
                     thumbColor="#fff"
                   />
                 </View>
@@ -416,6 +426,8 @@ export default function StudioProdutos() {
                 {/* Form expandido + preview ao vivo (Fase 4) */}
                 {expanded && p.is_personalizable && (
                   <ExpandedForm
+                    s={s}
+                    t={t}
                     product={p}
                     cfg={cfg}
                     saving={saving}
@@ -424,7 +436,7 @@ export default function StudioProdutos() {
                     loadingSuggestions={loadingSuggestions === p.id}
                     onUpdateConfig={(patch) => updateConfig(p.id, patch)}
                     onUpdateField={(fid, patch) => updateField(p.id, fid, patch)}
-                    onAddField={(t) => addField(p.id, t)}
+                    onAddField={(type) => addField(p.id, type)}
                     onRemoveField={(fid) => removeField(p.id, fid)}
                     onClose={() => setExpandedId(null)}
                     onSave={() => saveConfig(p)}
@@ -441,7 +453,7 @@ export default function StudioProdutos() {
 
       {/* Hint */}
       <View style={s.hintCard}>
-        <Icon name="info" size={14} color={StudioColors.primary} />
+        <Icon name="info" size={14} color={t.primary} />
         <Text style={s.hintTxt}>
           <Text style={s.hintBold}>Próxima iteração:</Text> integração com galeria de templates por categoria + preview com upload real do cliente.
         </Text>
@@ -459,7 +471,7 @@ export default function StudioProdutos() {
             <View style={s.modalCard}>
               <View style={s.modalHead}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.modalEyebrow}>✨ IA AURA · GALERIA</Text>
+                  <Text style={s.modalEyebrow}>IA AURA · GALERIA</Text>
                   <Text style={s.modalTitle}>Templates sugeridos</Text>
                   <Text style={s.modalSub}>
                     Selecione os templates que combinam com este produto. Vinculados aparecem pro cliente na tela de personalização.
@@ -470,7 +482,7 @@ export default function StudioProdutos() {
                   hitSlop={10}
                   disabled={linkingSuggestions}
                 >
-                  <Icon name="x" size={18} color={StudioColors.ink3} />
+                  <Icon name="x" size={18} color={t.ink3} />
                 </Pressable>
               </View>
 
@@ -549,8 +561,11 @@ export default function StudioProdutos() {
 // ============================================================
 // ExpandedForm — extraido pra poder usar useMemo do previewValues
 // sem violar regras de hooks (não usar dentro de map inline).
+// Fase 12: recebe `s` e `t` por prop em vez de closure.
 // ============================================================
 type ExpandedFormProps = {
+  s: Styles;
+  t: Tokens;
   product: ProductRow;
   cfg: CustomizationConfig | undefined;
   saving: boolean;
@@ -569,7 +584,7 @@ type ExpandedFormProps = {
 };
 
 function ExpandedForm({
-  product: p, cfg, saving, isDesktop, channelSlug, loadingSuggestions,
+  s, t, product: p, cfg, saving, isDesktop, channelSlug, loadingSuggestions,
   onUpdateConfig, onUpdateField, onAddField, onRemoveField,
   onClose, onSave, onOpenCustomerView, onFetchSuggestions, onOpenWhatsAppPreview,
 }: ExpandedFormProps) {
@@ -596,14 +611,14 @@ function ExpandedForm({
       <View style={s.previewLinks}>
         {channelSlug && Platform.OS === "web" && (
           <Pressable style={s.customerLink} onPress={onOpenCustomerView}>
-            <Icon name="external-link" size={12} color={StudioColors.primary} />
+            <Icon name="external-link" size={12} color={t.primary} />
             <Text style={s.customerLinkTxt}>Ver como cliente</Text>
           </Pressable>
         )}
         {/* Fase 11B: Preview WhatsApp */}
         <Pressable style={s.waPreviewBtn} onPress={onOpenWhatsAppPreview}>
-          <Icon name="external-link" size={13} color={StudioColors.success} />
-          <Text style={s.waPreviewTxt}>📲 Preview WhatsApp</Text>
+          <Icon name="external-link" size={13} color={t.success} />
+          <Text style={s.waPreviewTxt}>Preview WhatsApp</Text>
         </Pressable>
       </View>
     </View>
@@ -613,7 +628,7 @@ function ExpandedForm({
     <View style={[s.expand, isDesktop && s.expandDesktop]}>
       {!cfg && (
         <View style={{ paddingVertical: 14, flex: 1 }}>
-          <ActivityIndicator size="small" color={StudioColors.primary} />
+          <ActivityIndicator size="small" color={t.primary} />
         </View>
       )}
       {cfg && (
@@ -671,7 +686,7 @@ function ExpandedForm({
             {cfg.fields.map((f) => (
               <View key={f.id} style={s.fieldRow}>
                 <View style={s.fieldIcon}>
-                  <Icon name={FIELD_TYPE_ICONS[f.type] as any} size={14} color={StudioColors.primary} />
+                  <Icon name={FIELD_TYPE_ICONS[f.type] as any} size={14} color={t.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={s.fieldHead}>
@@ -690,7 +705,7 @@ function ExpandedForm({
                       style={[s.fieldOpt, f.required && s.fieldOptOn]}
                       onPress={() => onUpdateField(f.id, { required: !f.required })}
                     >
-                      <Icon name={f.required ? "check" : "x"} size={10} color={f.required ? "#fff" : StudioColors.ink3} />
+                      <Icon name={f.required ? "check" : "x"} size={10} color={f.required ? "#fff" : t.ink3} />
                       <Text style={[s.fieldOptTxt, f.required && { color: "#fff" }]}>Obrigatório</Text>
                     </Pressable>
                     {f.type === "text" && (
@@ -708,7 +723,7 @@ function ExpandedForm({
                   </View>
                 </View>
                 <Pressable onPress={() => onRemoveField(f.id)} style={s.fieldDel} hitSlop={8}>
-                  <Icon name="trash" size={13} color={StudioColors.ink4} />
+                  <Icon name="trash" size={13} color={t.ink4} />
                 </Pressable>
               </View>
             ))}
@@ -716,10 +731,10 @@ function ExpandedForm({
             {/* Add field menu */}
             <View style={s.addFieldRow}>
               <Text style={s.addFieldLabel}>+ Adicionar campo:</Text>
-              {(["text", "image", "template", "color", "option"] as CustomizationFieldType[]).map((t) => (
-                <Pressable key={t} style={s.addFieldChip} onPress={() => onAddField(t)}>
-                  <Icon name={FIELD_TYPE_ICONS[t] as any} size={11} color={StudioColors.primary} />
-                  <Text style={s.addFieldChipTxt}>{FIELD_TYPE_LABELS[t]}</Text>
+              {(["text", "image", "template", "color", "option"] as CustomizationFieldType[]).map((ft) => (
+                <Pressable key={ft} style={s.addFieldChip} onPress={() => onAddField(ft)}>
+                  <Icon name={FIELD_TYPE_ICONS[ft] as any} size={11} color={t.primary} />
+                  <Text style={s.addFieldChipTxt}>{FIELD_TYPE_LABELS[ft]}</Text>
                 </Pressable>
               ))}
             </View>
@@ -730,9 +745,9 @@ function ExpandedForm({
               style={[s.aiSuggestBtn, loadingSuggestions && { opacity: 0.6 }]}
               disabled={loadingSuggestions}
             >
-              <Icon name="star" size={14} color={StudioColors.accent} />
+              <Icon name="star" size={14} color={t.accent} />
               <Text style={s.aiSuggestTxt}>
-                {loadingSuggestions ? "Pensando..." : "✨ Sugestões IA de templates"}
+                {loadingSuggestions ? "Pensando..." : "Sugestões IA de templates"}
               </Text>
             </Pressable>
 
@@ -759,7 +774,7 @@ function ExpandedForm({
   );
 }
 
-function FilterChip({ label, count, active, onPress, tone }: { label: string; count: number; active: boolean; onPress: () => void; tone?: "primary" }) {
+function FilterChip({ s, label, count, active, onPress, tone }: { s: Styles; label: string; count: number; active: boolean; onPress: () => void; tone?: "primary" }) {
   return (
     <Pressable
       style={[
@@ -776,130 +791,132 @@ function FilterChip({ label, count, active, onPress, tone }: { label: string; co
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: StudioColors.bg },
-  container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
+function buildStyles(t: Tokens) {
+  return StyleSheet.create({
+    scroll: { flex: 1, backgroundColor: t.bg },
+    container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
 
-  headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 22, flexWrap: "wrap" },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13.5, color: StudioColors.ink3, marginTop: 4 },
-  statPill: { alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: StudioColors.primarySoft, borderRadius: 16 },
-  statNum: { fontSize: 22, fontWeight: "900", color: StudioColors.primary, letterSpacing: -0.5 },
-  statLabel: { fontSize: 10.5, color: StudioColors.primary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: -2 },
+    headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 22, flexWrap: "wrap" },
+    eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+    title: { fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 },
+    sub: { fontSize: 13.5, color: t.ink3, marginTop: 4 },
+    statPill: { alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: t.primarySoft, borderRadius: 16 },
+    statNum: { fontSize: 22, fontWeight: "900", color: t.primary, letterSpacing: -0.5 },
+    statLabel: { fontSize: 10.5, color: t.primary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: -2 },
 
-  filterRow: { flexDirection: "row", gap: 8, marginBottom: 18, flexWrap: "wrap" },
-  filterChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: StudioColors.paperCard, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.ink5 },
-  filterChipActive: { backgroundColor: StudioColors.ink, borderColor: StudioColors.ink },
-  filterChipActivePri: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  filterChipTxt: { fontSize: 12.5, fontWeight: "700", color: StudioColors.ink2 },
-  filterChipCount: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, backgroundColor: StudioColors.ink5, alignItems: "center" },
-  filterChipCountTxt: { fontSize: 11, fontWeight: "800", color: StudioColors.ink3 },
+    filterRow: { flexDirection: "row", gap: 8, marginBottom: 18, flexWrap: "wrap" },
+    filterChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: t.paperCard, borderRadius: 999, borderWidth: 1, borderColor: t.ink5 },
+    filterChipActive: { backgroundColor: t.ink, borderColor: t.ink },
+    filterChipActivePri: { backgroundColor: t.primary, borderColor: t.primary },
+    filterChipTxt: { fontSize: 12.5, fontWeight: "700", color: t.ink2 },
+    filterChipCount: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, backgroundColor: t.ink5, alignItems: "center" },
+    filterChipCountTxt: { fontSize: 11, fontWeight: "800", color: t.ink3 },
 
-  emptyCard: { alignItems: "center", padding: 40, gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 18, borderWidth: 1, borderColor: StudioColors.ink5 },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: StudioColors.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 380 },
+    emptyCard: { alignItems: "center", padding: 40, gap: 10, backgroundColor: t.paperCard, borderRadius: 18, borderWidth: 1, borderColor: t.ink5 },
+    emptyTitle: { fontSize: 16, fontWeight: "700", color: t.ink, marginTop: 6 },
+    emptySub: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 380 },
 
-  list: { gap: 10 },
-  productCard: { backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5, overflow: "hidden", position: "relative" },
-  productCardActive: { borderColor: StudioColors.primarySoft, backgroundColor: StudioColors.paperCardElev },
-  productRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
-  productIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.bgSoft, alignItems: "center", justifyContent: "center" },
-  productName: { fontSize: 14, fontWeight: "700", color: StudioColors.ink },
-  productMeta: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
-  configBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 8 },
-  configBtnTxt: { color: StudioColors.primary, fontSize: 11.5, fontWeight: "700" },
+    list: { gap: 10 },
+    productCard: { backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", position: "relative" },
+    productCardActive: { borderColor: t.primarySoft, backgroundColor: t.paperCardElev },
+    productRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
+    productIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.bgSoft, alignItems: "center", justifyContent: "center" },
+    productName: { fontSize: 14, fontWeight: "700", color: t.ink },
+    productMeta: { fontSize: 12, color: t.ink3, marginTop: 2 },
+    configBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.primaryGhost, borderRadius: 8 },
+    configBtnTxt: { color: t.primary, fontSize: 11.5, fontWeight: "700" },
 
-  // Fase 9B — quality score badge no canto sup. direito do card
-  qualityBadgeWrap: { position: "absolute", top: 8, right: 8, zIndex: 5 },
+    // Fase 9B — quality score badge no canto sup. direito do card
+    qualityBadgeWrap: { position: "absolute", top: 8, right: 8, zIndex: 5 },
 
-  // Expand: mobile = coluna unica (preview em cima + form em baixo)
-  expand: { padding: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: StudioColors.ink5, gap: 16 },
-  // Expand desktop: split horizontal (preview esquerda 320 + form direita flex 1)
-  expandDesktop: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
+    // Expand: mobile = coluna unica (preview em cima + form em baixo)
+    expand: { padding: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.ink5, gap: 16 },
+    // Expand desktop: split horizontal (preview esquerda 320 + form direita flex 1)
+    expandDesktop: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
 
-  // Preview pane — mobile: full width, centered; desktop: sidebar fixo 320
-  previewPane: { alignItems: "center", gap: 10 },
-  previewPaneDesktop: {
-    width: 320,
-    flexShrink: 0,
-    // Sticky no web — fallback gracioso no mobile
-    ...(Platform.OS === "web" ? ({ position: "sticky", top: 16 } as any) : {}),
-  },
-  previewLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", alignSelf: "stretch" },
-  previewBox: { alignItems: "center", justifyContent: "center", padding: 8, backgroundColor: StudioColors.bgSoft, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
-  previewHint: { fontSize: 11.5, color: StudioColors.ink4, textAlign: "center", fontStyle: "italic", maxWidth: 320 },
-  previewLinks: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 2 },
-  customerLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft },
-  customerLinkTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.primary },
+    // Preview pane — mobile: full width, centered; desktop: sidebar fixo 320
+    previewPane: { alignItems: "center", gap: 10 },
+    previewPaneDesktop: {
+      width: 320,
+      flexShrink: 0,
+      // Sticky no web — fallback gracioso no mobile
+      ...(Platform.OS === "web" ? ({ position: "sticky", top: 16 } as any) : {}),
+    },
+    previewLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", alignSelf: "stretch" },
+    previewBox: { alignItems: "center", justifyContent: "center", padding: 8, backgroundColor: t.bgSoft, borderRadius: 14, borderWidth: 1, borderColor: t.ink5 },
+    previewHint: { fontSize: 11.5, color: t.ink4, textAlign: "center", fontStyle: "italic", maxWidth: 320 },
+    previewLinks: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 2 },
+    customerLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: t.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: t.primarySoft },
+    customerLinkTxt: { fontSize: 12, fontWeight: "700", color: t.primary },
 
-  // Fase 11B — Preview WhatsApp btn
-  waPreviewBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: StudioColors.successSoft, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.successSoft },
-  waPreviewTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.successInk },
+    // Fase 11B — Preview WhatsApp btn
+    waPreviewBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: t.successSoft, borderRadius: 999, borderWidth: 1, borderColor: t.successSoft },
+    waPreviewTxt: { fontSize: 12, fontWeight: "700", color: t.successInk },
 
-  // Form column — mobile: cresce naturalmente; desktop: flex 1 do lado do preview
-  formCol: { gap: 8 },
-  formColDesktop: { flex: 1, minWidth: 0 },
+    // Form column — mobile: cresce naturalmente; desktop: flex 1 do lado do preview
+    formCol: { gap: 8 },
+    formColDesktop: { flex: 1, minWidth: 0 },
 
-  sectionLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
-  row: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
-  label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 },
-  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13.5, color: StudioColors.ink },
-  positionRow: { flexDirection: "row", gap: 4 },
-  positionChip: { flex: 1, paddingVertical: 9, borderRadius: 8, backgroundColor: StudioColors.bgSoft, borderWidth: 1, borderColor: StudioColors.ink5, alignItems: "center" },
-  positionChipSel: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  positionChipTxt: { fontSize: 11.5, fontWeight: "700", color: StudioColors.ink3 },
-  positionChipTxtSel: { color: "#fff" },
+    sectionLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
+    row: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
+    label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 },
+    input: { backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13.5, color: t.ink },
+    positionRow: { flexDirection: "row", gap: 4 },
+    positionChip: { flex: 1, paddingVertical: 9, borderRadius: 8, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, alignItems: "center" },
+    positionChipSel: { backgroundColor: t.primary, borderColor: t.primary },
+    positionChipTxt: { fontSize: 11.5, fontWeight: "700", color: t.ink3 },
+    positionChipTxtSel: { color: "#fff" },
 
-  hintInline: { fontSize: 12, color: StudioColors.ink3, fontStyle: "italic", marginBottom: 10, padding: 10, backgroundColor: StudioColors.bgSoft, borderRadius: 8 },
+    hintInline: { fontSize: 12, color: t.ink3, fontStyle: "italic", marginBottom: 10, padding: 10, backgroundColor: t.bgSoft, borderRadius: 8 },
 
-  fieldRow: { flexDirection: "row", gap: 10, padding: 10, marginTop: 6, backgroundColor: "#fff", borderRadius: 10, borderWidth: 1, borderColor: StudioColors.ink5 },
-  fieldIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: StudioColors.primaryGhost, alignItems: "center", justifyContent: "center" },
-  fieldHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  fieldLabel: { flex: 1, fontSize: 13.5, fontWeight: "700", color: StudioColors.ink, paddingVertical: 4 },
-  fieldTypePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: StudioColors.bgSoft },
-  fieldTypePillTxt: { fontSize: 10, fontWeight: "700", color: StudioColors.ink2, textTransform: "uppercase", letterSpacing: 0.3 },
-  fieldOpts: { flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" },
-  fieldOpt: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: StudioColors.bgSoft, borderRadius: 6 },
-  fieldOptOn: { backgroundColor: StudioColors.primary },
-  fieldOptTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
-  fieldOptInput: { fontSize: 11, color: StudioColors.ink, fontWeight: "700", paddingHorizontal: 4, minWidth: 28, backgroundColor: "#fff", borderRadius: 4 },
-  fieldDel: { width: 26, height: 26, alignItems: "center", justifyContent: "center" },
+    fieldRow: { flexDirection: "row", gap: 10, padding: 10, marginTop: 6, backgroundColor: t.paperCardElev, borderRadius: 10, borderWidth: 1, borderColor: t.ink5 },
+    fieldIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: t.primaryGhost, alignItems: "center", justifyContent: "center" },
+    fieldHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+    fieldLabel: { flex: 1, fontSize: 13.5, fontWeight: "700", color: t.ink, paddingVertical: 4 },
+    fieldTypePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: t.bgSoft },
+    fieldTypePillTxt: { fontSize: 10, fontWeight: "700", color: t.ink2, textTransform: "uppercase", letterSpacing: 0.3 },
+    fieldOpts: { flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" },
+    fieldOpt: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: t.bgSoft, borderRadius: 6 },
+    fieldOptOn: { backgroundColor: t.primary },
+    fieldOptTxt: { fontSize: 11, color: t.ink3, fontWeight: "600" },
+    fieldOptInput: { fontSize: 11, color: t.ink, fontWeight: "700", paddingHorizontal: 4, minWidth: 28, backgroundColor: t.paperCardElev, borderRadius: 4 },
+    fieldDel: { width: 26, height: 26, alignItems: "center", justifyContent: "center" },
 
-  addFieldRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 12 },
-  addFieldLabel: { fontSize: 12, fontWeight: "700", color: StudioColors.ink3 },
-  addFieldChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft },
-  addFieldChipTxt: { fontSize: 11.5, fontWeight: "700", color: StudioColors.primary },
+    addFieldRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 12 },
+    addFieldLabel: { fontSize: 12, fontWeight: "700", color: t.ink3 },
+    addFieldChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: t.primarySoft },
+    addFieldChipTxt: { fontSize: 11.5, fontWeight: "700", color: t.primary },
 
-  // Fase 10B — Botão IA sugestões
-  aiSuggestBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.accentGhost, borderRadius: 8, borderWidth: 1, borderColor: StudioColors.accentSoft, alignSelf: "flex-start", marginTop: 8 },
-  aiSuggestTxt: { color: StudioColors.accent, fontSize: 11.5, fontWeight: "700" },
+    // Fase 10B — Botão IA sugestões
+    aiSuggestBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.accentGhost, borderRadius: 8, borderWidth: 1, borderColor: t.accentSoft, alignSelf: "flex-start", marginTop: 8 },
+    aiSuggestTxt: { color: t.accent, fontSize: 11.5, fontWeight: "700" },
 
-  actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 14 },
-  btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10, minWidth: 120, justifyContent: "center" },
-  btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
-  btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff" },
-  btnSecTxt: { color: StudioColors.ink2, fontWeight: "600", fontSize: 13 },
+    actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 14 },
+    btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10, minWidth: 120, justifyContent: "center" },
+    btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
+    btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev },
+    btnSecTxt: { color: t.ink2, fontWeight: "600", fontSize: 13 },
 
-  hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.primaryGhost, borderRadius: 12, padding: 12, marginTop: 22, borderWidth: 1, borderColor: StudioColors.primarySoft },
-  hintTxt: { fontSize: 12, color: StudioColors.ink2, flex: 1, lineHeight: 17 },
-  hintBold: { fontWeight: "700", color: StudioColors.primary },
+    hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: t.primaryGhost, borderRadius: 12, padding: 12, marginTop: 22, borderWidth: 1, borderColor: t.primarySoft },
+    hintTxt: { fontSize: 12, color: t.ink2, flex: 1, lineHeight: 17 },
+    hintBold: { fontWeight: "700", color: t.primary },
 
-  // Fase 10B — Modal sugestões IA
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: 16 },
-  modalCard: { width: "100%", maxWidth: 540, maxHeight: "85%", backgroundColor: StudioColors.paperCard, borderRadius: 18, padding: 18, gap: 12 },
-  modalHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  modalEyebrow: { fontSize: 10.5, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  modalTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 2, letterSpacing: -0.3 },
-  modalSub: { fontSize: 12.5, color: StudioColors.ink3, marginTop: 3, lineHeight: 17 },
-  modalScroll: { maxHeight: 360 },
-  suggestRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: StudioColors.ink5, backgroundColor: "#fff", marginBottom: 8 },
-  suggestRowOn: { borderColor: StudioColors.accent, backgroundColor: StudioColors.accentGhost },
-  suggestCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: StudioColors.ink5, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
-  suggestCheckOn: { backgroundColor: StudioColors.accent, borderColor: StudioColors.accent },
-  suggestId: { fontSize: 13, fontWeight: "700", color: StudioColors.ink },
-  suggestReason: { fontSize: 12, color: StudioColors.ink3, marginTop: 2, lineHeight: 16 },
-  suggestScorePill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: StudioColors.accentGhost, borderWidth: 1, borderColor: StudioColors.accentSoft },
-  suggestScoreTxt: { fontSize: 11, fontWeight: "800", color: StudioColors.accent },
-  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 },
-});
+    // Fase 10B — Modal sugestões IA
+    modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: 16 },
+    modalCard: { width: "100%", maxWidth: 540, maxHeight: "85%", backgroundColor: t.paperCard, borderRadius: 18, padding: 18, gap: 12 },
+    modalHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+    modalEyebrow: { fontSize: 10.5, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 2, letterSpacing: -0.3 },
+    modalSub: { fontSize: 12.5, color: t.ink3, marginTop: 3, lineHeight: 17 },
+    modalScroll: { maxHeight: 360 },
+    suggestRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, backgroundColor: t.paperCardElev, marginBottom: 8 },
+    suggestRowOn: { borderColor: t.accent, backgroundColor: t.accentGhost },
+    suggestCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: t.ink5, alignItems: "center", justifyContent: "center", backgroundColor: t.paperCardElev },
+    suggestCheckOn: { backgroundColor: t.accent, borderColor: t.accent },
+    suggestId: { fontSize: 13, fontWeight: "700", color: t.ink },
+    suggestReason: { fontSize: 12, color: t.ink3, marginTop: 2, lineHeight: 16 },
+    suggestScorePill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: t.accentGhost, borderWidth: 1, borderColor: t.accentSoft },
+    suggestScoreTxt: { fontSize: 11, fontWeight: "800", color: t.accent },
+    modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 },
+  });
+}
