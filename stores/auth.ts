@@ -120,15 +120,45 @@ function reloadAfterSwitch() {
   }, 200);
 }
 
+// Guard contra disparos múltiplos do _onUnauthorized handler. Quando várias
+// requisições em paralelo recebem 401 (ex: dashboard com 8 widgets), todas
+// chamam _onUnauthorized — sem guard, o logout() roda múltiplas vezes e o
+// redirect (window.location.href = "/") pode atropelar a si mesmo. O guard
+// é resetado no início do login/register/hydrate (próxima sessão limpa).
+let _logoutInProgress = false;
+
 export const useAuthStore = create<AuthState>((set, get) => {
   setTokenGetter(() => get().token);
 
   setOnUnauthorized(() => {
+    // Idempotente: só dispara logout uma vez por "rajada" de 401s paralelos.
+    if (_logoutInProgress) return;
     const state = get();
-    if (state.token) {
-      console.warn("[AUTH] Token expired, logging out");
-      state.logout();
+    if (!state.token) return; // já deslogado, nada a fazer
+    _logoutInProgress = true;
+    console.warn("[AUTH] Token expired, logging out");
+    // Mensagem ao user antes do redirect (web). Toast lib não está
+    // integrada — usa alert nativo como fallback visível. Quando o
+    // sistema de toast canônico chegar, trocar aqui.
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(
+          "aura_session_expired_msg",
+          "Sua sessao expirou. Entre novamente."
+        );
+      } catch {}
     }
+    // logout() já: limpa storage (token + refreshToken), reseta state,
+    // redireciona pra "/" após 100ms. Reset do guard no finally pra não
+    // travar caso logout() lance.
+    state.logout().finally(() => {
+      // Mantém true até o redirect acontecer; o reload destrói o módulo.
+      // Em mobile (sem reload), libera após pequeno delay pra evitar
+      // re-trigger imediato por requests em fila.
+      if (Platform.OS !== "web") {
+        setTimeout(() => { _logoutInProgress = false; }, 1000);
+      }
+    });
   });
 
   // Helper: dispara loadCompanies em background sem bloquear o caller.
@@ -162,6 +192,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
     switching: false,
 
     hydrate: async () => {
+      // Nova sessão: libera o guard de logout (caso o módulo tenha sido
+      // recarregado mas a flag ficado true em algum edge case).
+      _logoutInProgress = false;
       const token = await storage.get();
       const savedRefresh = await refreshStorage.get();
 
@@ -205,6 +238,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     login: async (email, password) => {
+      _logoutInProgress = false;
       set({ isLoading: true });
       try {
         const res: any = await authApi.login(email, password);
@@ -242,6 +276,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     register: async (body: RegisterBody) => {
+      _logoutInProgress = false;
       set({ isLoading: true });
       try {
         const res: any = await authApi.register(body);
@@ -318,6 +353,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         try { localStorage.setItem("aura_theme", "dark"); } catch {}
       }
+      // Limpa storage ANTES de resetar state, garantindo que mesmo se o
+      // redirect falhar, o próximo boot não rehidrata sessão expirada.
       await storage.del();
       await refreshStorage.del();
       set({
