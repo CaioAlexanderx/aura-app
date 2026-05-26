@@ -552,7 +552,8 @@ function buildStyles(accent: AccentTokens) {
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  mockupBtnGhostText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "600" },
+  // WCAG AA: 11px magenta sobre Colors.bg4 cinza claro ~3.4:1 — peso 700 puxa pro critério "bold ≥14px" (3:1).
+  mockupBtnGhostText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "700" },
   mockupBtnPrimary: {
     flexDirection: "row",
     alignItems: "center",
@@ -578,7 +579,8 @@ function buildStyles(accent: AccentTokens) {
   logoInitial: { fontSize: 28, fontWeight: "800", color: "#fff" },
   imgHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   imgBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, alignSelf: "flex-start" },
-  imgBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+  // WCAG AA: 12px magenta sobre Colors.bg4 — peso 700 garante leitura sob Studio.
+  imgBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
   bannerPreview: { width: "100%", height: 100, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
   bannerPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 6 },
   bannerPlaceholderText: { fontSize: 12, fontWeight: "600" },
@@ -598,7 +600,8 @@ function buildStyles(accent: AccentTokens) {
   typeBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bg3 },
   typeBtnActive: { borderColor: accent.border, backgroundColor: accent.primarySoft },
   typeBtnText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  typeBtnTextActive: { color: accent.primaryStrong },
+  // WCAG AA: 12px magenta sobre primarySoft (#EFF6FF) — peso 700 obrigatório no estado ativo.
+  typeBtnTextActive: { color: accent.primaryStrong, fontWeight: "700" },
   pixCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
   pixCancelBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   pixConfirmBtn: { flex: 2, paddingVertical: 12, borderRadius: 10, backgroundColor: accent.primary, alignItems: "center" },
@@ -614,6 +617,7 @@ function buildStyles(accent: AccentTokens) {
   planBtnActive: { borderColor: accent.border, backgroundColor: accent.primarySoft },
   planBtnLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
   planBtnPrice: { fontSize: 18, color: Colors.ink3, fontWeight: "800" },
-  planBtnLabelActive: { color: accent.primaryStrong },
+  // WCAG AA: 13px magenta sobre primarySoft — peso 700 no ativo.
+  planBtnLabelActive: { color: accent.primaryStrong, fontWeight: "700" },
   });
 }
