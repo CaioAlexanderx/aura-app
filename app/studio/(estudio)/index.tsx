@@ -48,7 +48,7 @@ const CHECKLIST: ChecklistItem[] = [
   {
     id: "sla",
     icon: "clock",
-    iconBg: "#F59E0B",
+    iconBg: StudioColors.warning,
     title: "Configure prazos de produção",
     sub: "Quantos dias úteis cada produto leva pra ficar pronto",
     href: "/studio/configuracoes",
@@ -56,7 +56,7 @@ const CHECKLIST: ChecklistItem[] = [
   {
     id: "test-sale",
     icon: "credit-card",
-    iconBg: "#7C3AED",
+    iconBg: StudioColors.accent,
     title: "Faça uma venda teste",
     sub: "Lance uma venda manual de R$1 pra simular o fluxo completo",
     href: "/studio/vendas/caixa",
@@ -64,7 +64,7 @@ const CHECKLIST: ChecklistItem[] = [
   {
     id: "wa",
     icon: "message-circle",
-    iconBg: "#10B981",
+    iconBg: StudioColors.success,
     title: "Vincule WhatsApp pra aprovação de arte",
     sub: "Cliente recebe o mockup no zap e aprova antes da produção começar",
     href: "/studio/configuracoes",
@@ -130,7 +130,7 @@ export default function StudioHome() {
       label: "Em produção",
       value: metrics ? String(metrics.em_producao) : "—",
       icon: "clock",
-      color: "#F59E0B",
+      color: StudioColors.warning,
     },
     {
       label: "Aguardando arte",
@@ -142,7 +142,7 @@ export default function StudioHome() {
       label: "Prontos hoje",
       value: metrics ? String(metrics.prontos_hoje) : "—",
       icon: "check",
-      color: "#10B981",
+      color: StudioColors.success,
     },
     {
       label: "Vendas 7d",
@@ -311,7 +311,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999,
   },
   livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: StudioColors.mint },
-  liveTxt: { fontSize: 12, fontWeight: "700", color: "#065F46" },
+  liveTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.successInk },
 
   // KPIs
   kpisRow: {
