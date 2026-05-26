@@ -5,18 +5,14 @@
 // Mockup: Aura/mockup_troca_v3.html
 // Memory: projeto_troca_v3_redesign_24mai2026
 //
-// Mudanças v2 → v3:
-//   • Stepper visível e linear (1→2→3→4 + tela 5 sucesso)
-//   • Step5Success — feedback claro pós-confirmação (era só toast + close)
-//   • Linguagem de balconista nos títulos e copies
-//   • NF-e auto colapsada (operador não precisa preencher)
-//   • Cross-filial é default explícito, com banner "o que vai mexer no estoque"
-//   • Mantém contrato com backend v1 + v2 (sem migração necessária)
-//
 // 25/05/2026 (fix sem-NFC-e):
 //   - V2 path: nfce_strategy='per_origin' só quando alguma venda tem
-//     has_nfce=true. Senão 'none' — evita backend infer fiscal em
-//     vendas que nunca emitiram NFC-e.
+//     has_nfce=true. Senão 'none'.
+//
+// 26/05/2026 (fix split fiscal):
+//   - Passa paymentSplits como prop pro Step5Success montar
+//     payments[] array corretamente quando ha split (em vez de
+//     paymentMethod singular).
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -29,14 +25,12 @@ import { trocaApi } from "@/services/trocaApi";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 
-// Sub-componentes
 import { Step1Search } from "./troca/Step1Search";
 import { Step2Returns } from "./troca/Step2Returns";
 import { Step3NewItems } from "./troca/Step3NewItems";
 import { Step4Confirm, inferFiscalStrategy, canConfirmStep4 } from "./troca/Step4Confirm";
 import { Step5Success } from "./troca/Step5Success";
 
-// Types
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
   PaymentSplit, RefundSplit, CustomerAddress,
@@ -156,8 +150,6 @@ export function TrocaModal({
       }
     }
 
-    // 25/05/2026 (fix sem-NFC-e): se nenhuma venda tem NFC-e, troca
-    // segue sem fiscal. Evita backend rejeitar com 409.
     const anyHasNfce = selectedSales.some((s) => s.has_nfce === true);
 
     const v2 = shouldUseV2();
@@ -375,6 +367,7 @@ export function TrocaModal({
               returnedValue={returnedValue}
               newValue={newValue}
               netAmount={netAmount}
+              paymentSplits={paymentSplits}
               onClose={onClose}
               onNew={() => {
                 setStep(1);
