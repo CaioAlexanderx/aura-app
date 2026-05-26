@@ -781,7 +781,8 @@ function buildStyles(accent: AccentTokens) {
     paddingHorizontal: 12, paddingVertical: 10,
     borderRadius: 8, marginBottom: 12,
   },
-  tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17 },
+  // WCAG AA: 12px magenta sobre primarySoft — peso 700 garante leitura sob Studio.
+  tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17, fontWeight: "700" },
 
   gridWide: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   gridStack: { flexDirection: "column" },
@@ -1008,7 +1009,8 @@ function buildStyles(accent: AccentTokens) {
     marginTop: 10,
     marginBottom: 6,
   },
-  addTierText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+  // WCAG AA: 12px magenta sobre Colors.bg4 — peso 700.
+  addTierText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
 
   // Frete grátis em sub-card destacado
   freteBlock: {
@@ -1131,6 +1133,7 @@ function buildStyles(accent: AccentTokens) {
     borderRadius: 999,
     borderWidth: 1, borderColor: Colors.border,
   },
-  savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+  // WCAG AA: 12px magenta sobre primarySoft — peso 700.
+  savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
   });
 }
