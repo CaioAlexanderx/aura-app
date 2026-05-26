@@ -19,6 +19,15 @@
 //   - Removido card "Recursos ativos" (toggles kds/gallery eram
 //     observacionais e não afetavam acesso real; UX confusa)
 //   - Removida hintCard final que explicava os toggles inúteis
+//
+// 26/05/2026 (FIX BOTAO QUEBRADO):
+//   - pdvSettingsApi.update NAO EXISTIA - apenas .get() e .save() (PUT).
+//     Chamada caia em TypeError silencioso, mascarado por toast generico
+//     "Erro ao salvar". Substituido por pdvSettingsApi.save() com merge
+//     dos settings atuais via GET (shape do endpoint exige objeto inteiro).
+//   - Toast de erro agora expoe e?.status + e?.data?.error + e?.message
+//     ao inves de string generica - debug em prod fica viavel.
+//   - console.log("[StudioConfig] save start/error", ...) pra Sentry/console.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -28,7 +37,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { useStudioTokens, useStudioTheme, type StudioThemeMode } from "@/contexts/StudioThemeMode";
 import { studioApi, type StudioHealth } from "@/services/studioApi";
-import { pdvSettingsApi } from "@/services/api";
+import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -77,20 +86,49 @@ export default function StudioConfiguracoes() {
       return;
     }
     setSaving(true);
+    const slaDaysNum = parseInt(slaDays, 10);
+    const phoneTrimmed = waPhone.trim();
+
+    console.log("[StudioConfig] save start", {
+      cid: company.id,
+      approvalEnabled, approvalMode,
+      slaDaysNum, phoneTrimmed,
+    });
+
     try {
-      // 1. pdv_settings (approval flow real)
-      await pdvSettingsApi.update(company.id, {
+      // 1. pdv_settings (approval flow real) — usa .save() (PUT) com merge
+      //    dos settings atuais. O endpoint espera objeto INTEIRO em
+      //    { settings: PdvSettings }, nao um patch parcial.
+      let currentPdv: PdvSettings;
+      try {
+        const cur = await pdvSettingsApi.get(company.id);
+        currentPdv = cur.settings;
+      } catch (getErr: any) {
+        console.warn("[StudioConfig] pdvSettingsApi.get falhou, usando defaults:", getErr?.message);
+        // Defensivo: se GET falha, monta objeto minimo com defaults
+        // sensatos para nao corromper outros toggles do PDV.
+        currentPdv = {
+          require_customer: false,
+          require_seller: false,
+          caixa_enabled: false,
+          crediario_enabled: false,
+          cash_tender_modal_enabled: true,
+        } as PdvSettings;
+      }
+
+      const mergedPdv: PdvSettings = {
+        ...currentPdv,
         studio_approval_enabled: approvalEnabled,
         studio_approval_mode: approvalMode,
-      } as any);
+      };
 
-      // 2. studio_settings (sla + waPhone) — AGORA persiste de verdade
-      const slaDaysNum = parseInt(slaDays, 10);
+      await pdvSettingsApi.save(company.id, mergedPdv);
+
+      // 2. studio_settings (sla + waPhone) — PATCH parcial, ok
       const studioPatch: Record<string, any> = {};
       if (!isNaN(slaDaysNum) && slaDaysNum > 0) {
         studioPatch.default_sla_days = slaDaysNum;
       }
-      const phoneTrimmed = waPhone.trim();
       if (phoneTrimmed) studioPatch.approval_wa_phone = phoneTrimmed;
 
       if (Object.keys(studioPatch).length > 0) {
@@ -98,17 +136,25 @@ export default function StudioConfiguracoes() {
           await studioApi.saveSettings(company.id, studioPatch);
         } catch (ssErr: any) {
           // Não bloqueia o save geral — pdv_settings já foi
-          console.warn("[studio/configuracoes] saveSettings falhou:", ssErr?.message);
-          toast.error("Toggles salvos, mas SLA/WhatsApp falharam: " + (ssErr?.message || "erro"));
-          setSaving(false);
-          return;
+          console.warn("[StudioConfig] saveSettings falhou:", ssErr?.message);
+          const detail = ssErr?.data?.error || ssErr?.message || "erro desconhecido";
+          toast.error("Toggles salvos, mas SLA/WhatsApp falharam: " + detail);
+          return; // saving sera resetado no finally
         }
       }
 
       toast.success("Configurações salvas!");
       load();
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao salvar");
+      console.error("[StudioConfig] save error", {
+        status: e?.status,
+        code: e?.code,
+        data: e?.data,
+        message: e?.message,
+      });
+      const status = e?.status ? `[${e.status}] ` : "";
+      const detail = e?.data?.error || e?.message || "Erro ao salvar";
+      toast.error(status + detail);
     } finally {
       setSaving(false);
     }
