@@ -10,6 +10,10 @@
 //   4. Checklist colapsável (#4) — fecha sozinho quando 100%
 //      Vira card celebratório (#3) com CTA "Cadastrar produto" + dica
 //   5. Hint Fase 4
+//
+// Fase 12 (25/05/2026): StyleSheet via buildStyles(t) + useStudioTokens().
+//   CHECKLIST mantém StudioColors estático (módulo-level, cores fixas
+//   pra cada item — ok ficar light pra preservar identidade dos ícones).
 // ============================================================
 import { useEffect, useState, useMemo } from "react";
 import {
@@ -19,6 +23,7 @@ import {
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
 import { studioApi, type StudioMetrics } from "@/services/studioApi";
 import { request } from "@/services/api";
@@ -34,6 +39,8 @@ type ChecklistItem = {
   href: string;
 };
 
+// CHECKLIST é estático em module-scope; iconBg fica em StudioColors light
+// (cores identitárias dos passos, não acompanham dark mode).
 const CHECKLIST: ChecklistItem[] = [
   {
     id: "product",
@@ -98,6 +105,9 @@ function fmtInteger(n: number): string {
 export default function StudioHome() {
   const router = useRouter();
   const { company, user } = useAuthStore();
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
+
   const [healthLoading, setHealthLoading] = useState(true);
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
@@ -180,30 +190,30 @@ export default function StudioHome() {
       value: metrics ? metrics.em_producao : 0,
       format: fmtInteger,
       icon: "clock",
-      color: StudioColors.warning,
+      color: t.warning,
     },
     {
       label: "Aguardando arte",
       value: metrics ? metrics.aguardando_arte : 0,
       format: fmtInteger,
       icon: "alert-circle",
-      color: StudioColors.accent,
+      color: t.accent,
     },
     {
       label: "Prontos hoje",
       value: metrics ? metrics.prontos_hoje : 0,
       format: fmtInteger,
       icon: "check",
-      color: StudioColors.success,
+      color: t.success,
     },
     {
       label: "Vendas 7d",
       value: metrics ? metrics.revenue_7d : 0,
       format: fmtCurrency,
       icon: "trending-up",
-      color: StudioColors.primary,
+      color: t.primary,
     },
-  ], [metrics]);
+  ], [metrics, t]);
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
@@ -235,14 +245,14 @@ export default function StudioHome() {
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.kpiLabel}>{k.label}</Text>
               {metricsLoading ? (
-                <ActivityIndicator size="small" color={StudioColors.ink4} style={{ alignSelf: "flex-start", marginTop: 4 }} />
+                <ActivityIndicator size="small" color={t.ink4} style={{ alignSelf: "flex-start", marginTop: 4 }} />
               ) : (
                 <View style={{ alignItems: "flex-start", marginTop: 1 }}>
                   <AnimatedKpiCounter
                     value={k.value}
                     format={k.format}
                     fontSize={18}
-                    color={StudioColors.ink}
+                    color={t.ink}
                   />
                 </View>
               )}
@@ -255,7 +265,7 @@ export default function StudioHome() {
       {productsToImprove > 0 && (
         <View style={s.improveBanner}>
           <View style={s.improveIcon}>
-            <Icon name="trending-up" size={18} color={StudioColors.accent} />
+            <Icon name="trending-up" size={18} color={t.accent} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.improveTitle}>
@@ -283,12 +293,12 @@ export default function StudioHome() {
           <View style={s.progressPill}>
             <Text style={s.progressPillTxt}>{totalDone}/{CHECKLIST.length}</Text>
           </View>
-          <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={StudioColors.ink3} />
+          <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={t.ink3} />
         </Pressable>
 
         {healthLoading && (
           <View style={{ paddingVertical: 14 }}>
-            <ActivityIndicator size="small" color={StudioColors.primary} />
+            <ActivityIndicator size="small" color={t.primary} />
           </View>
         )}
 
@@ -302,7 +312,7 @@ export default function StudioHome() {
             >
               <View style={[
                 s.checkBox,
-                done && { backgroundColor: StudioColors.mint, borderColor: StudioColors.mint },
+                done && { backgroundColor: t.mint, borderColor: t.mint },
               ]}>
                 {done && <Icon name="check" size={12} color="#fff" />}
               </View>
@@ -313,7 +323,7 @@ export default function StudioHome() {
                 <Text style={[s.checkTitle, done && s.checkTitleDone]}>{item.title}</Text>
                 <Text style={s.checkSub} numberOfLines={2}>{item.sub}</Text>
               </View>
-              <Icon name="chevron-right" size={16} color={StudioColors.ink4} />
+              <Icon name="chevron-right" size={16} color={t.ink4} />
             </Pressable>
           );
         })}
@@ -342,17 +352,17 @@ export default function StudioHome() {
             <View style={s.celebrateRow}>
               <Pressable
                 onPress={() => router.push("/studio/produtos" as any)}
-                style={[s.celebrateBtn, { backgroundColor: StudioColors.primary }]}
+                style={[s.celebrateBtn, { backgroundColor: t.primary }]}
               >
                 <Icon name="shopping-bag" size={16} color="#fff" />
                 <Text style={s.celebrateBtnTxt}>Cadastrar produto</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push("/studio/galeria" as any)}
-                style={[s.celebrateBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: StudioColors.ink4 }]}
+                style={[s.celebrateBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: t.ink4 }]}
               >
-                <Icon name="image" size={16} color={StudioColors.ink2} />
-                <Text style={[s.celebrateBtnTxt, { color: StudioColors.ink2 }]}>Ver galeria</Text>
+                <Icon name="image" size={16} color={t.ink2} />
+                <Text style={[s.celebrateBtnTxt, { color: t.ink2 }]}>Ver galeria</Text>
               </Pressable>
             </View>
           </View>
@@ -362,7 +372,7 @@ export default function StudioHome() {
       {/* ───── Hint Fase 4 ───── */}
       {!allDone && (
         <View style={s.hintCard}>
-          <Icon name="info" size={16} color={StudioColors.primary} />
+          <Icon name="info" size={16} color={t.primary} />
           <Text style={s.hintTxt}>
             <Text style={s.hintBold}>Dica:</Text> assim que cadastrar produto e
             subir templates, a aba Produção começa a popular o KDS automaticamente.
@@ -373,154 +383,156 @@ export default function StudioHome() {
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: StudioColors.bg },
-  container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
+function buildStyles(t: ReturnType<typeof useStudioTokens>) {
+  return StyleSheet.create({
+    scroll: { flex: 1, backgroundColor: t.bg },
+    container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
 
-  // greeting
-  greetingRow: {
-    flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
-    marginBottom: 22, gap: 16, flexWrap: "wrap",
-  },
-  h1: { fontSize: 28, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.5 },
-  h1Accent: { color: StudioColors.accent, fontWeight: "900" },
-  h1Sub: { fontSize: 13.5, color: StudioColors.ink3, marginTop: 6 },
-  liveBadge: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: StudioColors.mintSoft,
-    paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999,
-  },
-  livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: StudioColors.mint },
-  liveTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.successInk },
+    // greeting
+    greetingRow: {
+      flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
+      marginBottom: 22, gap: 16, flexWrap: "wrap",
+    },
+    h1: { fontSize: 28, fontWeight: "800", color: t.ink, letterSpacing: -0.5 },
+    h1Accent: { color: t.accent, fontWeight: "900" },
+    h1Sub: { fontSize: 13.5, color: t.ink3, marginTop: 6 },
+    liveBadge: {
+      flexDirection: "row", alignItems: "center", gap: 7,
+      backgroundColor: t.mintSoft,
+      paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999,
+    },
+    livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: t.mint },
+    liveTxt: { fontSize: 12, fontWeight: "700", color: t.successInk },
 
-  // KPIs
-  kpisRow: {
-    flexDirection: "row", flexWrap: "wrap", gap: 12,
-    marginBottom: 22,
-  },
-  kpiCard: {
-    flex: 1, minWidth: 180,
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: StudioColors.paperCard,
-    borderRadius: 22, padding: 14,
-    borderWidth: 1, borderColor: StudioColors.ink5,
-  },
-  kpiBubble: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: "center", justifyContent: "center",
-  },
-  kpiLabel: { fontSize: 11.5, color: StudioColors.ink3, fontWeight: "600" },
-  kpiValue: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 1 },
+    // KPIs
+    kpisRow: {
+      flexDirection: "row", flexWrap: "wrap", gap: 12,
+      marginBottom: 22,
+    },
+    kpiCard: {
+      flex: 1, minWidth: 180,
+      flexDirection: "row", alignItems: "center", gap: 12,
+      backgroundColor: t.paperCard,
+      borderRadius: 22, padding: 14,
+      borderWidth: 1, borderColor: t.ink5,
+    },
+    kpiBubble: {
+      width: 44, height: 44, borderRadius: 22,
+      alignItems: "center", justifyContent: "center",
+    },
+    kpiLabel: { fontSize: 11.5, color: t.ink3, fontWeight: "600" },
+    kpiValue: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 1 },
 
-  // Banner "produtos pra melhorar" (Fase 9 residual)
-  improveBanner: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: StudioColors.accentGhost,
-    borderWidth: 1, borderColor: StudioColors.accentSoft,
-    borderRadius: 18, padding: 14,
-    marginBottom: 22,
-  },
-  improveIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: StudioColors.accentSoft,
-    alignItems: "center", justifyContent: "center",
-  },
-  improveTitle: { fontSize: 14, fontWeight: "800", color: StudioColors.ink },
-  improveDesc: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
-  improveBtn: {
-    backgroundColor: StudioColors.accent,
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 12,
-  },
-  improveBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
+    // Banner "produtos pra melhorar" (Fase 9 residual)
+    improveBanner: {
+      flexDirection: "row", alignItems: "center", gap: 12,
+      backgroundColor: t.accentGhost,
+      borderWidth: 1, borderColor: t.accentSoft,
+      borderRadius: 18, padding: 14,
+      marginBottom: 22,
+    },
+    improveIcon: {
+      width: 36, height: 36, borderRadius: 18,
+      backgroundColor: t.accentSoft,
+      alignItems: "center", justifyContent: "center",
+    },
+    improveTitle: { fontSize: 14, fontWeight: "800", color: t.ink },
+    improveDesc: { fontSize: 12, color: t.ink3, marginTop: 2 },
+    improveBtn: {
+      backgroundColor: t.accent,
+      paddingHorizontal: 14, paddingVertical: 9,
+      borderRadius: 12,
+    },
+    improveBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
 
-  // Checklist
-  checklistCard: {
-    backgroundColor: StudioColors.paperCard,
-    borderRadius: 24, padding: 22,
-    borderWidth: 1, borderColor: StudioColors.ink5,
-  },
-  checklistHead: {
-    flexDirection: "row", alignItems: "center", marginBottom: 14, gap: 10,
-  },
-  checklistEyebrow: {
-    fontSize: 11, color: StudioColors.accent, fontWeight: "800",
-    letterSpacing: 0.8, textTransform: "uppercase",
-  },
-  checklistTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 3 },
-  progressPill: {
-    backgroundColor: StudioColors.primarySoft,
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-  },
-  progressPillTxt: { fontSize: 12, fontWeight: "800", color: StudioColors.primary },
+    // Checklist
+    checklistCard: {
+      backgroundColor: t.paperCard,
+      borderRadius: 24, padding: 22,
+      borderWidth: 1, borderColor: t.ink5,
+    },
+    checklistHead: {
+      flexDirection: "row", alignItems: "center", marginBottom: 14, gap: 10,
+    },
+    checklistEyebrow: {
+      fontSize: 11, color: t.accent, fontWeight: "800",
+      letterSpacing: 0.8, textTransform: "uppercase",
+    },
+    checklistTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 3 },
+    progressPill: {
+      backgroundColor: t.primarySoft,
+      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+    },
+    progressPillTxt: { fontSize: 12, fontWeight: "800", color: t.primary },
 
-  checkRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingVertical: 12, paddingHorizontal: 4,
-    borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
-  },
-  checkRowDone: { opacity: 0.55 },
-  checkBox: {
-    width: 22, height: 22, borderRadius: 6,
-    borderWidth: 2, borderColor: StudioColors.ink4,
-    alignItems: "center", justifyContent: "center",
-  },
-  checkIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: "center", justifyContent: "center",
-  },
-  checkTitle: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink },
-  checkTitleDone: { textDecorationLine: "line-through", color: StudioColors.ink3 },
-  checkSub: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
+    checkRow: {
+      flexDirection: "row", alignItems: "center", gap: 12,
+      paddingVertical: 12, paddingHorizontal: 4,
+      borderBottomWidth: 1, borderBottomColor: t.ink5,
+    },
+    checkRowDone: { opacity: 0.55 },
+    checkBox: {
+      width: 22, height: 22, borderRadius: 6,
+      borderWidth: 2, borderColor: t.ink4,
+      alignItems: "center", justifyContent: "center",
+    },
+    checkIcon: {
+      width: 36, height: 36, borderRadius: 18,
+      alignItems: "center", justifyContent: "center",
+    },
+    checkTitle: { fontSize: 13.5, fontWeight: "700", color: t.ink },
+    checkTitleDone: { textDecorationLine: "line-through", color: t.ink3 },
+    checkSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
 
-  progressBar: {
-    height: 6, backgroundColor: StudioColors.ink5,
-    borderRadius: 3, overflow: "hidden", marginTop: 16,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: StudioColors.mint,
-    borderRadius: 3,
-  },
-  progressSub: {
-    fontSize: 11.5, color: StudioColors.ink3, marginTop: 6,
-    textAlign: "center", fontWeight: "600",
-  },
+    progressBar: {
+      height: 6, backgroundColor: t.ink5,
+      borderRadius: 3, overflow: "hidden", marginTop: 16,
+    },
+    progressFill: {
+      height: "100%",
+      backgroundColor: t.mint,
+      borderRadius: 3,
+    },
+    progressSub: {
+      fontSize: 11.5, color: t.ink3, marginTop: 6,
+      textAlign: "center", fontWeight: "600",
+    },
 
-  // Celebrate
-  celebrate: {
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 8,
-  },
-  celebrateEmoji: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: StudioColors.mintSoft,
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 4,
-  },
-  celebrateTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink },
-  celebrateBody: {
-    fontSize: 13, color: StudioColors.ink3, textAlign: "center",
-    maxWidth: 480, lineHeight: 19,
-  },
-  celebrateRow: {
-    flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap",
-    justifyContent: "center",
-  },
-  celebrateBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 12,
-  },
-  celebrateBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
+    // Celebrate
+    celebrate: {
+      alignItems: "center",
+      paddingVertical: 12,
+      gap: 8,
+    },
+    celebrateEmoji: {
+      width: 60, height: 60, borderRadius: 30,
+      backgroundColor: t.mintSoft,
+      alignItems: "center", justifyContent: "center",
+      marginBottom: 4,
+    },
+    celebrateTitle: { fontSize: 18, fontWeight: "800", color: t.ink },
+    celebrateBody: {
+      fontSize: 13, color: t.ink3, textAlign: "center",
+      maxWidth: 480, lineHeight: 19,
+    },
+    celebrateRow: {
+      flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap",
+      justifyContent: "center",
+    },
+    celebrateBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingHorizontal: 14, paddingVertical: 9,
+      borderRadius: 12,
+    },
+    celebrateBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
-  hintCard: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: StudioColors.primaryGhost,
-    borderRadius: 14, padding: 14, marginTop: 16,
-    borderWidth: 1, borderColor: StudioColors.primarySoft,
-  },
-  hintTxt: { fontSize: 12.5, color: StudioColors.ink2, flex: 1, lineHeight: 18 },
-  hintBold: { fontWeight: "700", color: StudioColors.primary },
-});
+    hintCard: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      backgroundColor: t.primaryGhost,
+      borderRadius: 14, padding: 14, marginTop: 16,
+      borderWidth: 1, borderColor: t.primarySoft,
+    },
+    hintTxt: { fontSize: 12.5, color: t.ink2, flex: 1, lineHeight: 18 },
+    hintBold: { fontWeight: "700", color: t.primary },
+  });
+}
