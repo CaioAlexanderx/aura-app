@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, Platform, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { pdvApi } from "@/services/pdvApi";
@@ -31,7 +31,18 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 // (4 chips), empty state com StudioEmpty, cards de produto com
 // border-left magenta + badge PERSONALIZÁVEL. Funcionalidade
 // (carrinho, cálculo, submit) preservada 100%.
+//
+// 26/05/2026 (layout proporção) — refatoração de layout espelhando
+// app/(tabs)/pdv.tsx do varejo: container central com maxWidth 1400px
+// + paddingHorizontal responsivo + layout 2 colunas (catálogo
+// esquerda + carrinho lateral fixo direita) em desktop (>=1024px).
+// Mobile mantém coluna única + FAB carrinho. Identidade Studio
+// preservada (navy primary + magenta accent, gradient navy→magenta).
 // ============================================================
+
+const CART_WIDTH = 360;
+const DESKTOP_BREAK = 1024;
+const MAX_CONTENT = 1400;
 
 type StudioProduct = {
   id: string;
@@ -71,6 +82,10 @@ export default function StudioCaixaPage() {
   const t = useStudioTokens();
   const accent = t.accent;
   const primary = t.primary;
+
+  const { width: winW } = useWindowDimensions();
+  const wide = winW >= DESKTOP_BREAK;
+  const xPad = winW >= 1280 ? 32 : winW >= 768 ? 24 : 14;
 
   const [products, setProducts] = useState<StudioProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -403,7 +418,7 @@ export default function StudioCaixaPage() {
           </Text>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 120 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 120, maxWidth: 720, alignSelf: "center", width: "100%" }}>
           <View style={{ alignItems: "center" }}>
             <PersonalizationPreview
               config={cfg}
@@ -444,7 +459,7 @@ export default function StudioCaixaPage() {
         <View style={{ backgroundColor: t.paperCardElev, padding: 14, borderTopWidth: 1, borderTopColor: t.ink5 }}>
           <Pressable
             onPress={commitConfigure}
-            style={{ backgroundColor: primary, paddingVertical: 14, borderRadius: 10, alignItems: "center" }}
+            style={{ backgroundColor: primary, paddingVertical: 14, borderRadius: 10, alignItems: "center", maxWidth: 720, alignSelf: "center", width: "100%" }}
           >
             <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
               {editingLineId ? "Atualizar" : "Adicionar"} • R$ {(active.price * editingQty).toFixed(2)}
@@ -476,7 +491,7 @@ export default function StudioCaixaPage() {
           </View>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 140 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 140, maxWidth: 720, alignSelf: "center", width: "100%" }}>
           <Text style={styles.sectionLabel}>Itens personalizados</Text>
           {cart.map((l) => (
             <View
@@ -552,6 +567,7 @@ export default function StudioCaixaPage() {
               backgroundColor: primary,
               paddingVertical: 14, borderRadius: 10, alignItems: "center",
               opacity: sendDisabled ? 0.4 : 1,
+              maxWidth: 720, alignSelf: "center", width: "100%",
             }}
           >
             <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
@@ -572,17 +588,17 @@ export default function StudioCaixaPage() {
     stats.aguardando_arte > 0 ||
     stats.em_producao > 0;
 
-  return (
-    <View style={{ flex: 1, backgroundColor: t.bg }}>
-      {/* HERO redesenhado — informação útil ao invés de banner genérico */}
-      <View
-        style={[
-          { backgroundColor: primary, paddingHorizontal: 18, paddingTop: 22, paddingBottom: 22 },
-          Platform.OS === "web"
-            ? ({ background: `linear-gradient(135deg, ${StudioGradients.brand[0]}, ${StudioGradients.brand[1]})` } as any)
-            : ({ backgroundColor: t.primary } as any),
-        ]}
-      >
+  // ── Componente: Hero (compartilhado entre desktop e mobile) ──
+  const Hero = (
+    <View
+      style={[
+        { backgroundColor: primary, paddingHorizontal: xPad, paddingTop: 22, paddingBottom: 22 },
+        Platform.OS === "web"
+          ? ({ background: `linear-gradient(135deg, ${StudioGradients.brand[0]}, ${StudioGradients.brand[1]})` } as any)
+          : ({ backgroundColor: t.primary } as any),
+      ]}
+    >
+      <View style={{ maxWidth: MAX_CONTENT, alignSelf: "center", width: "100%" }}>
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
           <View style={{ flex: 1 }}>
             <Text
@@ -614,7 +630,6 @@ export default function StudioCaixaPage() {
             </Text>
           </View>
 
-          {/* Pill operador + hora */}
           <View
             style={{
               backgroundColor: "rgba(255,255,255,0.14)",
@@ -635,189 +650,354 @@ export default function StudioCaixaPage() {
           </View>
         </View>
       </View>
+    </View>
+  );
 
+  // ── Componente: KPI strip ──
+  const KpiStrip = (
+    <View style={{ paddingHorizontal: xPad, paddingTop: 12 }}>
+      <View style={{ maxWidth: MAX_CONTENT, alignSelf: "center", width: "100%" }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, paddingRight: 4 }}
+        >
+          <KpiCard t={t} label="Pedidos hoje" value={String(stats.pedidos_hoje)} icon="◆" />
+          <KpiCard t={t} label="Faturamento hoje" value={`R$ ${stats.faturamento_hoje.toFixed(0)}`} icon="$" />
+          <KpiCard t={t} label="Aguardando arte" value={String(stats.aguardando_arte)} icon="◷" tone="warn" />
+          <KpiCard t={t} label="Em produção" value={String(stats.em_producao)} icon="►" tone="accent" />
+        </ScrollView>
+      </View>
+    </View>
+  );
+
+  // ── Componente: Atalhos ──
+  const Shortcuts = (
+    <View style={{ paddingHorizontal: xPad, paddingTop: 14 }}>
+      <View style={{ maxWidth: MAX_CONTENT, alignSelf: "center", width: "100%" }}>
+        <Text
+          style={{
+            fontSize: 10, color: t.ink3, fontWeight: "800",
+            letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8,
+          }}
+        >
+          Atalhos rápidos
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingRight: 4 }}
+        >
+          <ShortcutChip t={t} icon="►" label="Ver KDS" onPress={() => router.push("/studio/producao" as any)} />
+          <ShortcutChip t={t} icon="◆" label="Pedidos do dia" onPress={() => router.push("/studio/pedidos" as any)} />
+          <ShortcutChip t={t} icon="+" label="Cadastrar produto" onPress={() => router.push("/studio/produtos" as any)} />
+          <ShortcutChip t={t} icon="✓" label="Aprovações" onPress={() => router.push("/studio/aprovacao" as any)} />
+        </ScrollView>
+      </View>
+    </View>
+  );
+
+  // ── Componente: Search ──
+  const SearchBar = (
+    <View style={{ paddingHorizontal: xPad, paddingTop: 16, paddingBottom: 4 }}>
+      <View style={{ maxWidth: MAX_CONTENT, alignSelf: "center", width: "100%" }}>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar produto personalizável..."
+          placeholderTextColor={t.ink4}
+          style={{
+            backgroundColor: t.paperCardElev, color: t.ink, padding: 12,
+            borderRadius: 10, fontSize: 13,
+            borderWidth: 1, borderColor: t.ink5,
+          }}
+        />
+      </View>
+    </View>
+  );
+
+  // ── Componente: Lista produtos ──
+  const ProductList = (
+    <View style={{ paddingHorizontal: xPad, paddingTop: 12, gap: 10 }}>
+      <View style={{ maxWidth: MAX_CONTENT, alignSelf: "center", width: "100%", gap: 10 }}>
+        {error && !products.length && (
+          <View style={{ padding: 16, backgroundColor: t.dangerSoft, borderRadius: 8 }}>
+            <Text style={{ color: t.danger, fontSize: 12, fontWeight: "700" }}>{error}</Text>
+          </View>
+        )}
+
+        {filteredProducts.length === 0 ? (
+          search.trim() ? (
+            <StudioEmpty
+              icon="search"
+              title="Nada encontrado."
+              desc="Tente outro termo de busca."
+            />
+          ) : (
+            <StudioEmpty
+              icon="shopping-bag"
+              title="Catálogo personalizado vazio"
+              desc='Marque produtos como "personalizáveis" em Estúdio › Produtos pra começar a vender no PDV.'
+              primaryCta={{
+                label: "Cadastrar produto",
+                onPress: () => router.push("/studio/produtos" as any),
+              }}
+              secondaryCta={{
+                label: "Ver galeria",
+                onPress: () => router.push("/studio/galeria" as any),
+              }}
+            />
+          )
+        ) : (
+          filteredProducts.map((p) => (
+            <Pressable
+              key={p.id}
+              onPress={() => openConfigure(p)}
+              style={({ hovered, pressed }: any) => ({
+                backgroundColor: t.paperCardElev, borderRadius: 14,
+                padding: 14, paddingLeft: 16,
+                borderWidth: 1, borderColor: t.ink5,
+                borderLeftWidth: 3, borderLeftColor: accent,
+                flexDirection: "row", gap: 14, alignItems: "center",
+                ...(Platform.OS === "web"
+                  ? ({
+                      transition: "transform 0.18s ease, box-shadow 0.18s ease",
+                      transform: pressed ? "scale(0.99)" : hovered ? "scale(1.01)" : "scale(1)",
+                      boxShadow: hovered
+                        ? `0 8px 24px ${accent}33, 0 2px 6px rgba(0,0,0,0.05)`
+                        : `0 2px 6px ${accent}1A`,
+                      cursor: "pointer",
+                    } as any)
+                  : {}),
+              })}
+            >
+              <PersonalizationPreview
+                config={p.customization_config}
+                values={{}}
+                size={68}
+                showLabel={false}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <Text style={{ fontSize: 15, color: t.ink, fontWeight: "800", flexShrink: 1 }}>
+                    {p.name}
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: accent + "1A",
+                      borderWidth: 1, borderColor: accent + "55",
+                      paddingHorizontal: 8, paddingVertical: 2,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9, color: accent, fontWeight: "800",
+                        letterSpacing: 0.6, textTransform: "uppercase",
+                      }}
+                    >
+                      Personalizável
+                    </Text>
+                  </View>
+                </View>
+                {p.category ? (
+                  <Text style={{ fontSize: 10, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    {p.category}
+                  </Text>
+                ) : null}
+                <Text style={{ fontSize: 16, color: primary, fontWeight: "800", marginTop: 4 }}>
+                  R$ {p.price.toFixed(2)}
+                </Text>
+              </View>
+              <View
+                style={{
+                  alignSelf: "center", paddingHorizontal: 14, paddingVertical: 9,
+                  borderRadius: 999, backgroundColor: accent,
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.3 }}>
+                  Personalizar →
+                </Text>
+              </View>
+            </Pressable>
+          ))
+        )}
+      </View>
+    </View>
+  );
+
+  // ── Componente: Carrinho lateral (desktop) ──
+  const CartSidebar = (
+    <View
+      style={{
+        backgroundColor: t.paperCard,
+        borderLeftWidth: 1, borderLeftColor: t.ink5,
+        padding: 16, gap: 12,
+        flex: 1,
+        ...(Platform.OS === "web"
+          ? ({ position: "sticky" as any, top: 0, height: "100vh", maxHeight: "100vh", overflow: "auto" } as any)
+          : {}),
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 13, color: t.ink, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" }}>
+          Carrinho
+        </Text>
+        <View
+          style={{
+            backgroundColor: cartCount > 0 ? accent : t.bgSoft,
+            paddingHorizontal: 10, paddingVertical: 4,
+            borderRadius: 999,
+          }}
+        >
+          <Text style={{ fontSize: 11, color: cartCount > 0 ? "#fff" : t.ink3, fontWeight: "800" }}>
+            {cartCount} {cartCount === 1 ? "item" : "itens"}
+          </Text>
+        </View>
+      </View>
+
+      {cart.length === 0 ? (
+        <View
+          style={{
+            backgroundColor: t.bgSoft, borderRadius: 12,
+            borderWidth: 1, borderColor: t.ink5, borderStyle: "dashed" as any,
+            padding: 24, alignItems: "center", gap: 8,
+            marginTop: 10,
+          }}
+        >
+          <View
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: accent + "1A",
+              alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 18, color: accent, fontWeight: "800" }}>+</Text>
+          </View>
+          <Text style={{ fontSize: 12, color: t.ink2, fontWeight: "700", textAlign: "center" }}>
+            Carrinho vazio
+          </Text>
+          <Text style={{ fontSize: 11, color: t.ink3, textAlign: "center", lineHeight: 16 }}>
+            Selecione um produto à esquerda e personalize.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 8 }}>
+          {cart.map((l) => (
+            <View
+              key={l.lineId}
+              style={{
+                backgroundColor: t.paperCardElev, borderRadius: 10, padding: 10,
+                borderWidth: 1, borderColor: t.ink5,
+                flexDirection: "row", alignItems: "center", gap: 10,
+              }}
+            >
+              <PersonalizationPreview
+                config={l.product.customization_config}
+                values={l.values}
+                size={44}
+                showLabel={false}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 12, color: t.ink, fontWeight: "700" }} numberOfLines={1}>
+                  {l.product.name}
+                </Text>
+                <Text style={{ fontSize: 10, color: t.ink3, marginTop: 2 }}>
+                  Qtd {l.qty} · R$ {(l.product.price * l.qty).toFixed(2)}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+                  <Pressable onPress={() => editLine(l)} style={styles.editChip}>
+                    <Text style={styles.editChipTxt}>Editar</Text>
+                  </Pressable>
+                  <Pressable onPress={() => removeLine(l.lineId)} style={styles.removeChip}>
+                    <Text style={styles.removeChipTxt}>Remover</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      <View
+        style={{
+          backgroundColor: t.paperCardElev, borderRadius: 10, padding: 12,
+          borderWidth: 1, borderColor: t.ink5, gap: 4,
+        }}
+      >
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Total
+          </Text>
+          <Text style={{ fontSize: 20, color: primary, fontWeight: "800" }}>
+            R$ {cartSubtotal.toFixed(2)}
+          </Text>
+        </View>
+      </View>
+
+      <Pressable
+        onPress={() => setStage("checkout")}
+        disabled={cart.length === 0}
+        style={{
+          backgroundColor: cart.length === 0 ? t.ink5 : primary,
+          paddingVertical: 14, borderRadius: 10,
+          alignItems: "center",
+          opacity: cart.length === 0 ? 0.6 : 1,
+        }}
+      >
+        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>
+          Fechar venda →
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  // ─── LAYOUT WIDE (desktop) ─── 2 colunas: catálogo + carrinho sticky
+  if (wide) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
+        <View
+          style={[
+            { flex: 1, minWidth: 0 },
+            Platform.OS === "web"
+              ? ({ display: "grid", gridTemplateColumns: `1fr ${CART_WIDTH}px` } as any)
+              : { flexDirection: "row" },
+          ]}
+        >
+          <ScrollView
+            style={[
+              { flex: 1, minWidth: 0 },
+              Platform.OS === "web" ? ({ maxHeight: "100vh", overflow: "auto" } as any) : {},
+            ]}
+            contentContainerStyle={{ paddingBottom: 48 }}
+          >
+            {Hero}
+            {KpiStrip}
+            {Shortcuts}
+            {SearchBar}
+            {ProductList}
+          </ScrollView>
+
+          <View style={{ width: CART_WIDTH }}>
+            {CartSidebar}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ─── LAYOUT MOBILE ─── coluna única + FAB carrinho
+  return (
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: cartCount > 0 ? 110 : 30 }}
       >
-        {/* KPI strip horizontal — 4 cards */}
-        <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 10, paddingRight: 4 }}
-          >
-            <KpiCard
-              t={t}
-              label="Pedidos hoje"
-              value={String(stats.pedidos_hoje)}
-              icon="◆"
-            />
-            <KpiCard
-              t={t}
-              label="Faturamento hoje"
-              value={`R$ ${stats.faturamento_hoje.toFixed(0)}`}
-              icon="$"
-            />
-            <KpiCard
-              t={t}
-              label="Aguardando arte"
-              value={String(stats.aguardando_arte)}
-              icon="◷"
-              tone="warn"
-            />
-            <KpiCard
-              t={t}
-              label="Em produção"
-              value={String(stats.em_producao)}
-              icon="►"
-              tone="accent"
-            />
-          </ScrollView>
-        </View>
-
-        {/* Atalhos rápidos */}
-        <View style={{ paddingHorizontal: 12, paddingTop: 14 }}>
-          <Text
-            style={{
-              fontSize: 10, color: t.ink3, fontWeight: "800",
-              letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8,
-            }}
-          >
-            Atalhos rápidos
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingRight: 4 }}
-          >
-            <ShortcutChip t={t} icon="►" label="Ver KDS" onPress={() => router.push("/studio/producao" as any)} />
-            <ShortcutChip t={t} icon="◆" label="Pedidos do dia" onPress={() => router.push("/studio/pedidos" as any)} />
-            <ShortcutChip t={t} icon="+" label="Cadastrar produto" onPress={() => router.push("/studio/produtos" as any)} />
-            <ShortcutChip t={t} icon="✓" label="Aprovações" onPress={() => router.push("/studio/aprovacao" as any)} />
-          </ScrollView>
-        </View>
-
-        {/* Busca */}
-        <View style={{ padding: 12, paddingTop: 16 }}>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Buscar produto personalizável..."
-            placeholderTextColor={t.ink4}
-            style={{
-              backgroundColor: t.paperCardElev, color: t.ink, padding: 12,
-              borderRadius: 10, fontSize: 13,
-              borderWidth: 1, borderColor: t.ink5,
-            }}
-          />
-        </View>
-
-        {/* Lista de produtos */}
-        <View style={{ paddingHorizontal: 12, gap: 10 }}>
-          {error && !products.length && (
-            <View style={{ padding: 16, backgroundColor: t.dangerSoft, borderRadius: 8 }}>
-              <Text style={{ color: t.danger, fontSize: 12, fontWeight: "700" }}>{error}</Text>
-            </View>
-          )}
-
-          {filteredProducts.length === 0 ? (
-            search.trim() ? (
-              <StudioEmpty
-                icon="search"
-                title="Nada encontrado."
-                desc="Tente outro termo de busca."
-              />
-            ) : (
-              <StudioEmpty
-                icon="shopping-bag"
-                title="Catálogo personalizado vazio"
-                desc='Marque produtos como "personalizáveis" em Estúdio › Produtos pra começar a vender no PDV.'
-                primaryCta={{
-                  label: "Cadastrar produto",
-                  onPress: () => router.push("/studio/produtos" as any),
-                }}
-                secondaryCta={{
-                  label: "Ver galeria",
-                  onPress: () => router.push("/studio/galeria" as any),
-                }}
-              />
-            )
-          ) : (
-            filteredProducts.map((p) => (
-              <Pressable
-                key={p.id}
-                onPress={() => openConfigure(p)}
-                style={({ hovered, pressed }: any) => ({
-                  backgroundColor: t.paperCardElev, borderRadius: 14,
-                  padding: 14, paddingLeft: 16,
-                  borderWidth: 1, borderColor: t.ink5,
-                  borderLeftWidth: 3, borderLeftColor: accent,
-                  flexDirection: "row", gap: 14, alignItems: "center",
-                  ...(Platform.OS === "web"
-                    ? ({
-                        transition: "transform 0.18s ease, box-shadow 0.18s ease",
-                        transform: pressed ? "scale(0.99)" : hovered ? "scale(1.01)" : "scale(1)",
-                        boxShadow: hovered
-                          ? `0 8px 24px ${accent}33, 0 2px 6px rgba(0,0,0,0.05)`
-                          : `0 2px 6px ${accent}1A`,
-                        cursor: "pointer",
-                      } as any)
-                    : {}),
-                })}
-              >
-                <PersonalizationPreview
-                  config={p.customization_config}
-                  values={{}}
-                  size={68}
-                  showLabel={false}
-                />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <Text style={{ fontSize: 15, color: t.ink, fontWeight: "800", flexShrink: 1 }}>
-                      {p.name}
-                    </Text>
-                    <View
-                      style={{
-                        backgroundColor: accent + "1A",
-                        borderWidth: 1, borderColor: accent + "55",
-                        paddingHorizontal: 8, paddingVertical: 2,
-                        borderRadius: 999,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 9, color: accent, fontWeight: "800",
-                          letterSpacing: 0.6, textTransform: "uppercase",
-                        }}
-                      >
-                        Personalizável
-                      </Text>
-                    </View>
-                  </View>
-                  {p.category ? (
-                    <Text style={{ fontSize: 10, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      {p.category}
-                    </Text>
-                  ) : null}
-                  <Text style={{ fontSize: 16, color: primary, fontWeight: "800", marginTop: 4 }}>
-                    R$ {p.price.toFixed(2)}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    alignSelf: "center", paddingHorizontal: 14, paddingVertical: 9,
-                    borderRadius: 999, backgroundColor: accent,
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.3 }}>
-                    Personalizar →
-                  </Text>
-                </View>
-              </Pressable>
-            ))
-          )}
-        </View>
+        {Hero}
+        {KpiStrip}
+        {Shortcuts}
+        {SearchBar}
+        {ProductList}
       </ScrollView>
 
       {cartCount > 0 && (
