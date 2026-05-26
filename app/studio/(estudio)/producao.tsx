@@ -12,20 +12,27 @@
 //
 // Fase 3 (26/05/2026): loading + empty states migrados pra StudioLoading
 // e StudioEmpty (componentes globais Studio).
+//
+// 26/05/2026 (residual UX overhaul): tokens dinamicos via useStudioTokens()
+// + StudioPageHeader padronizado + AnimatedKpiCounter no colCount (pulsa
+// quando pedido muda de coluna).
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 
 type Column = {
   key: StudioProductionStatus;
@@ -36,15 +43,17 @@ type Column = {
   nextLabel: string;
 };
 
-const COLUMNS: Column[] = [
-  // S-0: nova primeira coluna pra pedidos de marketplace (ML/Shopee) sem personalização ainda coletada.
-  { key: "awaiting_customization", label: "Aguardando personalização", icon: "message-circle", color: StudioColors.accent, bg: "#FCE7F3", nextLabel: "Coletar e enviar pra arte" },
-  { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: StudioColors.warning, bg: StudioColors.warningSoft, nextLabel: "Marcar como aprovado" },
-  { key: "approved",      label: "Aprovado",         icon: "check",        color: StudioColors.primary, bg: StudioColors.primarySoft, nextLabel: "Iniciar produção" },
-  { key: "in_production", label: "Em produção",      icon: "clock",        color: StudioColors.accent, bg: StudioColors.accentSoft, nextLabel: "Marcar como pronto" },
-  { key: "ready",         label: "Pronto",           icon: "package",      color: StudioColors.mint, bg: StudioColors.mintSoft, nextLabel: "Marcar como entregue" },
-  { key: "delivered",     label: "Entregue",         icon: "check-circle", color: "#6B7280", bg: "#F3F4F6", nextLabel: "" },
-];
+function buildColumns(t: StudioPalette): Column[] {
+  return [
+    // S-0: nova primeira coluna pra pedidos de marketplace (ML/Shopee) sem personalização ainda coletada.
+    { key: "awaiting_customization", label: "Aguardando personalização", icon: "message-circle", color: t.accent,  bg: "#FCE7F3",     nextLabel: "Coletar e enviar pra arte" },
+    { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: t.warning, bg: t.warningSoft, nextLabel: "Marcar como aprovado" },
+    { key: "approved",      label: "Aprovado",         icon: "check",        color: t.primary, bg: t.primarySoft, nextLabel: "Iniciar produção" },
+    { key: "in_production", label: "Em produção",      icon: "clock",        color: t.accent,  bg: t.accentSoft,  nextLabel: "Marcar como pronto" },
+    { key: "ready",         label: "Pronto",           icon: "package",      color: t.mint,    bg: t.mintSoft,    nextLabel: "Marcar como entregue" },
+    { key: "delivered",     label: "Entregue",         icon: "check-circle", color: "#6B7280", bg: "#F3F4F6",     nextLabel: "" },
+  ];
+}
 
 const NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   awaiting_customization: "pending_art",
@@ -56,10 +65,12 @@ const NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null>
   cancelled:     null,
 };
 
-const PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }> = {
-  mercado_livre: { label: "Mercado Livre", bg: StudioColors.warningSoft, fg: StudioColors.warningInk },
-  shopee:        { label: "Shopee",        bg: "#FFEDD5", fg: "#9A3412" },
-};
+function buildPlatformLabels(t: StudioPalette): Record<string, { label: string; bg: string; fg: string }> {
+  return {
+    mercado_livre: { label: "Mercado Livre", bg: t.warningSoft, fg: t.warningInk },
+    shopee:        { label: "Shopee",        bg: "#FFEDD5",     fg: "#9A3412" },
+  };
+}
 
 function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "late" } {
   const d = new Date(createdAt);
@@ -71,6 +82,11 @@ function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "lat
 
 export default function StudioProducao() {
   const router = useRouter();
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
+  const COLUMNS = useMemo(() => buildColumns(t), [t]);
+  const PLATFORM_LABELS = useMemo(() => buildPlatformLabels(t), [t]);
+
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<StudioOrder[]>([]);
@@ -119,18 +135,18 @@ export default function StudioProducao() {
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>FASE 4 · KDS DE PRODUÇÃO</Text>
-          <Text style={s.title}>Linha de produção do estúdio</Text>
-          <Text style={s.sub}>
-            Acompanhe os pedidos passando por cada etapa. Click "→ Próxima" pra avançar — ou solicite aprovação do cliente quando a arte ficar pronta.
-          </Text>
-        </View>
-        <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
-          <Icon name="refresh-cw" size={14} color={StudioColors.ink2} />
-          <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
-        </Pressable>
+      <View style={s.headerWrap}>
+        <StudioPageHeader
+          eyebrow="PRODUÇÃO · KDS"
+          title="Fila de produção"
+          subtitle="Kanban dos pedidos em produção. Arraste pelos status pra mover."
+          rightSlot={
+            <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
+              <Icon name="refresh-cw" size={14} color={t.ink2} />
+              <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
+            </Pressable>
+          }
+        />
       </View>
 
       {loading && orders.length === 0 ? (
@@ -161,7 +177,11 @@ export default function StudioProducao() {
                   <Icon name={col.icon as any} size={12} color="#fff" />
                 </View>
                 <Text style={[s.colTitle, { color: col.color }]}>{col.label}</Text>
-                <Text style={s.colCount}>{byStatus[col.key].length}</Text>
+                <AnimatedKpiCounter
+                  value={byStatus[col.key].length}
+                  fontSize={12}
+                  color={t.ink2}
+                />
               </View>
               <ScrollView style={s.colScroll} contentContainerStyle={{ padding: 10, gap: 10 }}>
                 {byStatus[col.key].length === 0 ? (
@@ -179,11 +199,11 @@ export default function StudioProducao() {
                       <View style={s.cardHead}>
                         <Text style={s.cardId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
                         <View style={[s.slaChip,
-                                      sla.tone === "warm"  ? { backgroundColor: StudioColors.warningSoft } :
-                                      sla.tone === "late"  ? { backgroundColor: StudioColors.dangerSoft } : null]}>
+                                      sla.tone === "warm"  ? { backgroundColor: t.warningSoft } :
+                                      sla.tone === "late"  ? { backgroundColor: t.dangerSoft } : null]}>
                           <Text style={[s.slaTxt,
-                                        sla.tone === "warm" ? { color: StudioColors.warningInk } :
-                                        sla.tone === "late" ? { color: StudioColors.dangerInk } : null]}>
+                                        sla.tone === "warm" ? { color: t.warningInk } :
+                                        sla.tone === "late" ? { color: t.dangerInk } : null]}>
                             {sla.txt}
                           </Text>
                         </View>
@@ -211,7 +231,7 @@ export default function StudioProducao() {
                       <View style={s.cardActions}>
                         {col.key === "awaiting_customization" && (
                           <Pressable
-                            style={[s.btnApproval, { backgroundColor: StudioColors.accent }]}
+                            style={[s.btnApproval, { backgroundColor: t.accent }]}
                             onPress={(e) => { e.stopPropagation && e.stopPropagation(); router.push(`/studio/pedidos/${o.id}` as any); }}
                           >
                             <Icon name="message-circle" size={12} color="#fff" />
@@ -262,79 +282,76 @@ export default function StudioProducao() {
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: StudioColors.bg },
-  header: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 28, paddingTop: 24, paddingBottom: 16, gap: 16, flexWrap: "wrap",
-  },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, maxWidth: 580 },
-  reloadBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
-  },
-  reloadTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
+    wrap: { flex: 1, backgroundColor: t.bg },
+    headerWrap: {
+      paddingHorizontal: 28, paddingTop: 24, paddingBottom: 16,
+    },
+    reloadBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
+      backgroundColor: "#fff", borderWidth: 1.5, borderColor: t.ink5,
+    },
+    reloadTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
 
-  boardScroll: { flex: 1 },
-  board: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
-  col: {
-    width: 280,
-    backgroundColor: StudioColors.paperCard,
-    borderRadius: 16,
-    borderWidth: 1, borderColor: StudioColors.ink5,
-    overflow: "hidden",
-    height: "100%",
-  },
-  colHead: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
-  },
-  colDot: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  colTitle: { fontSize: 13, fontWeight: "800", flex: 1, letterSpacing: -0.1 },
-  colCount: { fontSize: 12, color: StudioColors.ink2, fontWeight: "800" },
-  colScroll: { flex: 1, minHeight: 200 },
-  colEmpty: { color: StudioColors.ink4, fontSize: 12, textAlign: "center", paddingVertical: 14 },
+    boardScroll: { flex: 1 },
+    board: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
+    col: {
+      width: 280,
+      backgroundColor: t.paperCard,
+      borderRadius: 16,
+      borderWidth: 1, borderColor: t.ink5,
+      overflow: "hidden",
+      height: "100%",
+    },
+    colHead: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      paddingHorizontal: 14, paddingVertical: 12,
+      borderBottomWidth: 1, borderBottomColor: t.ink5,
+    },
+    colDot: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+    colTitle: { fontSize: 13, fontWeight: "800", flex: 1, letterSpacing: -0.1 },
+    colScroll: { flex: 1, minHeight: 200 },
+    colEmpty: { color: t.ink4, fontSize: 12, textAlign: "center", paddingVertical: 14 },
 
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: StudioColors.ink5,
-    gap: 6,
-  },
-  cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardId: { fontSize: 10.5, color: StudioColors.ink4, fontWeight: "700", letterSpacing: 0.5 },
-  slaChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: StudioColors.bgSoft },
-  slaTxt: { fontSize: 10.5, fontWeight: "700", color: StudioColors.ink3 },
-  cardName: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink, marginTop: 2 },
-  cardMeta: { fontSize: 11.5, color: StudioColors.ink3 },
-  platformBadge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
-    alignSelf: "flex-start", marginTop: 4,
-  },
-  platformBadgeTxt: { fontSize: 10.5, fontWeight: "800" },
-  approvalBadge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#DBEAFE",
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
-    alignSelf: "flex-start", marginTop: 4,
-  },
-  approvalBadgeTxt: { fontSize: 10.5, color: "#1E40AF", fontWeight: "700" },
+    card: {
+      backgroundColor: "#fff",
+      borderRadius: 12, padding: 12,
+      borderWidth: 1, borderColor: t.ink5,
+      gap: 6,
+    },
+    cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    cardId: { fontSize: 10.5, color: t.ink4, fontWeight: "700", letterSpacing: 0.5 },
+    slaChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: t.bgSoft },
+    slaTxt: { fontSize: 10.5, fontWeight: "700", color: t.ink3 },
+    cardName: { fontSize: 13.5, fontWeight: "700", color: t.ink, marginTop: 2 },
+    cardMeta: { fontSize: 11.5, color: t.ink3 },
+    platformBadge: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+      alignSelf: "flex-start", marginTop: 4,
+    },
+    platformBadgeTxt: { fontSize: 10.5, fontWeight: "800" },
+    approvalBadge: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      backgroundColor: "#DBEAFE",
+      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+      alignSelf: "flex-start", marginTop: 4,
+    },
+    approvalBadgeTxt: { fontSize: 10.5, color: "#1E40AF", fontWeight: "700" },
 
-  cardActions: { gap: 6, marginTop: 8 },
-  btnApproval: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    backgroundColor: "#10B981",
-    paddingVertical: 8, borderRadius: 8,
-  },
-  btnApprovalTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
-  btnAdvance: {
-    paddingVertical: 8, borderRadius: 8,
-    alignItems: "center",
-  },
-  btnAdvanceTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
-});
+    cardActions: { gap: 6, marginTop: 8 },
+    btnApproval: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+      backgroundColor: "#10B981",
+      paddingVertical: 8, borderRadius: 8,
+    },
+    btnApprovalTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
+    btnAdvance: {
+      paddingVertical: 8, borderRadius: 8,
+      alignItems: "center",
+    },
+    btnAdvanceTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  });
+}
