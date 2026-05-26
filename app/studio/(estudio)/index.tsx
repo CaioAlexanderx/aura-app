@@ -1,87 +1,102 @@
 // ============================================================
-// AURA STUDIO · Home (Fase 0) — overhaul 25/05
+// AURA STUDIO . Home (Fase 0) - overhaul 26/05
 //
-// Estrutura:
-//   1. Greeting personalizado
-//   2. KPIs em cards orgânicos — vindos de /studio/metrics (Nivel 1 C2)
-//      26/05: numero animado via AnimatedKpiCounter (Fase 6 residual)
-//   3. Banner "X produtos podem melhorar" (Fase 9 residual)
-//      — usa calculateProductScore pra contar produtos com score < 75
-//      26/05: numero do banner tambem via AnimatedKpiCounter
-//   4. Checklist colapsável (#4) — fecha sozinho quando 100%
-//      Vira card celebratório (#3) com CTA "Cadastrar produto" + dica
-//   5. Hint Fase 4
+// 26/05/2026 - Guia do Estudio:
+//   Substitui checklist estatico antigo por GUIA DO ESTUDIO com 5 passos
+//   verificaveis via API real (nao mais via settings.onboarding flags):
+//     1. Cadastre seus produtos        -> GET /products limit=1
+//     2. Configure personalizacao      -> ao menos 1 produto com is_personalizable + customization_config nao-vazio
+//     3. Suba templates de arte        -> studioApi.listTemplates >= 3
+//     4. Defina SLA e WhatsApp         -> settings.default_sla_days E approval_wa_phone preenchidos
+//     5. Publique a Loja Digital       -> digital_channel_config.is_published === true
 //
-// Fase 12 (25/05/2026): StyleSheet via buildStyles(t) + useStudioTokens().
-//   CHECKLIST mantém StudioColors estático (módulo-level, cores fixas
-//   pra cada item — ok ficar light pra preservar identidade dos ícones).
+//   Card grande no TOPO (entre greeting e KPIs), expansivel, com progress bar.
+//   Esconde quando 5/5 OU lojista clica "Ja configurei tudo" (persiste
+//   studio_settings.guide_dismissed = true via studioApi.saveSettings).
+//
+// Estrutura final:
+//   1. Greeting + Live badge
+//   2. GUIA DO ESTUDIO (novo - topo)
+//   3. KPIs em cards
+//   4. Banner "X produtos podem melhorar" (Fase 9 residual)
+//   5. Hint
 // ============================================================
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
-import { studioApi, type StudioMetrics } from "@/services/studioApi";
+import { studioApi, type StudioMetrics, type StudioSettings } from "@/services/studioApi";
 import { request } from "@/services/api";
+import { toast } from "@/components/Toast";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import { calculateProductScore, type Product as ScoreProduct } from "@/components/studio/ProductQualityScore";
+import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 
-type ChecklistItem = {
-  id: string;
+type StudioPalette = ReturnType<typeof useStudioTokens>;
+
+// ─── Guia steps (estaticos) ────────────────────────────────────────────────
+type GuideStepStatus = "done" | "in_progress" | "todo";
+
+type GuideStep = {
+  id: "products" | "customization" | "templates" | "sla_wa" | "publish";
+  num: number;
   icon: string;
-  iconBg: string;
   title: string;
-  sub: string;
+  helper: string;
+  cta: string;
   href: string;
 };
 
-// CHECKLIST é estático em module-scope; iconBg fica em StudioColors light
-// (cores identitárias dos passos, não acompanham dark mode).
-const CHECKLIST: ChecklistItem[] = [
+const GUIDE_STEPS: GuideStep[] = [
   {
-    id: "product",
+    id: "products",
+    num: 1,
     icon: "shopping-bag",
-    iconBg: StudioColors.primary,
-    title: "Cadastre seu primeiro produto personalizável",
-    sub: "Defina área de impressão, texto/upload e cores que o cliente pode escolher",
+    title: "Cadastre seus produtos",
+    helper: "Camisetas, canecas, quadros - o que voce vende personalizado",
+    cta: "Cadastrar produto",
     href: "/studio/produtos",
   },
   {
-    id: "gallery",
+    id: "customization",
+    num: 2,
+    icon: "edit-3",
+    title: "Configure a personalizacao",
+    helper: "Defina area de impressao, campos (texto/imagem/cor) e opcoes pro cliente",
+    cta: "Configurar",
+    href: "/studio/produtos",
+  },
+  {
+    id: "templates",
+    num: 3,
     icon: "image",
-    iconBg: StudioColors.accent,
-    title: "Suba 3 templates pra galeria",
-    sub: "Artes prontas (Dia das Mães, Pais, Profissões) facilitam pro cliente comprar sem mandar arte",
+    title: "Suba templates de arte",
+    helper: "Adicione pelo menos 3 templates pro cliente escolher na compra (Dia das Maes, Pais, profissoes)",
+    cta: "Subir templates",
     href: "/studio/galeria",
   },
   {
-    id: "sla",
+    id: "sla_wa",
+    num: 4,
     icon: "clock",
-    iconBg: StudioColors.warning,
-    title: "Configure prazos de produção",
-    sub: "Quantos dias úteis cada produto leva pra ficar pronto",
+    title: "Defina SLA e WhatsApp",
+    helper: "Prazo de producao + telefone que envia mockup pro cliente aprovar",
+    cta: "Configurar",
     href: "/studio/configuracoes",
   },
   {
-    id: "test-sale",
-    icon: "credit-card",
-    iconBg: StudioColors.accent,
-    title: "Faça uma venda teste",
-    sub: "Lance uma venda manual de R$1 pra simular o fluxo completo",
-    href: "/studio/vendas/caixa",
-  },
-  {
-    id: "wa",
-    icon: "message-circle",
-    iconBg: StudioColors.success,
-    title: "Vincule WhatsApp pra aprovação de arte",
-    sub: "Cliente recebe o mockup no zap e aprova antes da produção começar",
-    href: "/studio/configuracoes",
+    id: "publish",
+    num: 5,
+    icon: "globe",
+    title: "Publique a Loja Digital",
+    helper: "Sua vitrine online com link compartilhavel - cliente compra direto sem voce intermediar",
+    cta: "Configurar",
+    href: "/canal-digital",
   },
 ];
 
@@ -93,11 +108,7 @@ function formatBRL(v: number | null | undefined): string {
     return "R$ " + Math.round(v);
   }
 }
-
-// Formatters pro AnimatedKpiCounter (Fase 6 residual)
-function fmtCurrency(n: number): string {
-  return formatBRL(n);
-}
+function fmtCurrency(n: number): string { return formatBRL(n); }
 function fmtInteger(n: number): string {
   if (n == null || isNaN(n)) return "—";
   return Math.round(n).toLocaleString("pt-BR");
@@ -109,37 +120,40 @@ export default function StudioHome() {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
 
-  const [healthLoading, setHealthLoading] = useState(true);
+  // Digital channel (passo 5 do guia)
+  const { config: digitalConfig } = useDigitalChannel();
+
   const [metricsLoading, setMetricsLoading] = useState(true);
-  const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [metrics, setMetrics] = useState<StudioMetrics | null>(null);
   const [productsToImprove, setProductsToImprove] = useState(0);
 
-  const [expanded, setExpanded] = useState(true);
+  // Guia do Estudio - estado por passo
+  const [guideLoading, setGuideLoading] = useState(true);
+  const [guideExpanded, setGuideExpanded] = useState(true);
+  const [guideDismissed, setGuideDismissed] = useState(false);
+  const [stepStatus, setStepStatus] = useState<Record<GuideStep["id"], GuideStepStatus>>({
+    products: "todo",
+    customization: "todo",
+    templates: "todo",
+    sla_wa: "todo",
+    publish: "todo",
+  });
+  const [expandedStep, setExpandedStep] = useState<GuideStep["id"] | null>(null);
+  const [dismissing, setDismissing] = useState(false);
 
-  // 1. Health (checklist + onboarding)
-  useEffect(() => {
-    if (!company?.id) return;
-    studioApi.health(company.id)
-      .then((h) => {
-        const onboard = (h.settings || {}).onboarding || {};
-        setCompleted(onboard);
-      })
-      .catch(() => {})
-      .finally(() => setHealthLoading(false));
-  }, [company?.id]);
-
-  // 2. Metrics (KPIs reais — Nivel 1 C2)
+  // ─── KPIs (metrics reais) ───────────────────────────────────────────────
   useEffect(() => {
     if (!company?.id) return;
     studioApi.getMetrics(company.id, 7)
       .then((m) => setMetrics(m))
-      .catch(() => setMetrics(null))
+      .catch((err) => {
+        console.error("[StudioHome] getMetrics:", err);
+        setMetrics(null);
+      })
       .finally(() => setMetricsLoading(false));
   }, [company?.id]);
 
-  // 3. Produtos pra melhorar (Fase 9 residual)
-  // Conta produtos personalizáveis com score < 75 (letter < B)
+  // ─── Produtos pra melhorar (Fase 9) ─────────────────────────────────────
   useEffect(() => {
     if (!company?.id) return;
     let cancelled = false;
@@ -164,57 +178,129 @@ export default function StudioHome() {
           }
         }, 0);
         if (!cancelled) setProductsToImprove(toImprove);
-      } catch {
+      } catch (err) {
+        console.error("[StudioHome] productsToImprove:", err);
         if (!cancelled) setProductsToImprove(0);
       }
     })();
     return () => { cancelled = true; };
   }, [company?.id]);
 
+  // ─── Guia do Estudio - deteccao de progresso ─────────────────────────────
+  // 5 fetches em paralelo (Promise.allSettled pra falhar gracioso)
+  const runGuideDetection = useCallback(async () => {
+    if (!company?.id) return;
+    setGuideLoading(true);
+    const cid = company.id;
+    try {
+      const [productsRes, settingsRes, templatesRes] = await Promise.allSettled([
+        request<any>("/companies/" + cid + "/products?limit=500", { method: "GET", retry: 1, timeout: 10000 }),
+        studioApi.getSettings(cid),
+        studioApi.listTemplates(cid, { limit: 10 }),
+      ]);
+
+      // Lista de produtos (usada nos passos 1 e 2)
+      let productList: any[] = [];
+      if (productsRes.status === "fulfilled") {
+        const data = productsRes.value;
+        productList = Array.isArray(data) ? data : (data?.products || data?.items || []);
+      }
+
+      // Passo 1: >=1 produto cadastrado
+      const products: GuideStepStatus = productList.length >= 1 ? "done" : "todo";
+
+      // Passo 2: algum produto com is_personalizable=true E customization_config nao-vazio
+      const personalizables = productList.filter((p) => p && p.is_personalizable);
+      const withCfg = personalizables.filter((p) => {
+        const cfg = p.customization_config;
+        if (!cfg) return false;
+        if (typeof cfg === "object") {
+          const fields = (cfg as any).fields;
+          return Array.isArray(fields) && fields.length > 0;
+        }
+        return false;
+      });
+      let customization: GuideStepStatus = "todo";
+      if (withCfg.length >= 1 && withCfg.length === personalizables.length && personalizables.length > 0) {
+        customization = "done";
+      } else if (withCfg.length >= 1) {
+        customization = "in_progress";
+      } else if (personalizables.length >= 1) {
+        customization = "in_progress";
+      }
+
+      // Passo 3: >=3 templates na galeria
+      let templatesCount = 0;
+      if (templatesRes.status === "fulfilled") {
+        templatesCount = (templatesRes.value.templates || []).length;
+      }
+      const templates: GuideStepStatus =
+        templatesCount >= 3 ? "done" :
+        templatesCount >= 1 ? "in_progress" : "todo";
+
+      // Passo 4: settings.default_sla_days E approval_wa_phone preenchidos
+      let slaWa: GuideStepStatus = "todo";
+      let dismissed = false;
+      if (settingsRes.status === "fulfilled") {
+        const st: StudioSettings = settingsRes.value.settings || {};
+        const hasSla = !!(st.default_sla_days && st.default_sla_days > 0);
+        const hasWa = !!(st.approval_wa_phone && String(st.approval_wa_phone).trim().length > 5);
+        if (hasSla && hasWa) slaWa = "done";
+        else if (hasSla || hasWa) slaWa = "in_progress";
+        dismissed = !!st.guide_dismissed;
+      }
+
+      // Passo 5: digital_channel_config.is_published === true
+      const publish: GuideStepStatus =
+        (digitalConfig && (digitalConfig as any).is_published === true) ? "done" : "todo";
+
+      setStepStatus({ products, customization, templates, sla_wa: slaWa, publish });
+      setGuideDismissed(dismissed);
+    } catch (err) {
+      console.error("[StudioHome] runGuideDetection:", err);
+    } finally {
+      setGuideLoading(false);
+    }
+  }, [company?.id, digitalConfig]);
+
+  useEffect(() => { runGuideDetection(); }, [runGuideDetection]);
+
+  const doneCount = useMemo(
+    () => Object.values(stepStatus).filter((v) => v === "done").length,
+    [stepStatus]
+  );
+  const allDone = doneCount === GUIDE_STEPS.length;
+  const guidePct = Math.round((doneCount / GUIDE_STEPS.length) * 100);
+
+  // Dispensa guia (persiste em settings.guide_dismissed)
+  const handleDismissGuide = useCallback(async () => {
+    if (!company?.id) return;
+    setDismissing(true);
+    try {
+      await studioApi.saveSettings(company.id, { guide_dismissed: true } as any);
+      setGuideDismissed(true);
+      toast.success("Guia oculto. Tudo pronto pra operar!");
+    } catch (err: any) {
+      console.error("[StudioHome] handleDismissGuide:", err);
+      toast.error(err?.message || "Erro ao ocultar guia");
+    } finally {
+      setDismissing(false);
+    }
+  }, [company?.id]);
+
   const firstName = (user as any)?.name?.split(" ")[0] || "lojista";
-  const totalDone = CHECKLIST.filter((i) => completed[i.id]).length;
-  const pct = Math.round((totalDone / CHECKLIST.length) * 100);
-  const allDone = pct === 100;
 
-  useEffect(() => { if (allDone) setExpanded(false); }, [allDone]);
-
-  const remainingTitle = useMemo(() => {
-    if (allDone) return "Tudo pronto pra vender";
-    if (totalDone === 0) return "Vamos deixar tudo pronto";
-    return `Faltam ${CHECKLIST.length - totalDone} ${CHECKLIST.length - totalDone === 1 ? "passo" : "passos"}`;
-  }, [allDone, totalDone]);
-
-  // KPIs dinâmicos — value numérico + formatter pro AnimatedKpiCounter
+  // KPIs dinamicos
   const kpis = useMemo(() => [
-    {
-      label: "Em produção",
-      value: metrics ? metrics.em_producao : 0,
-      format: fmtInteger,
-      icon: "clock",
-      color: t.warning,
-    },
-    {
-      label: "Aguardando arte",
-      value: metrics ? metrics.aguardando_arte : 0,
-      format: fmtInteger,
-      icon: "alert-circle",
-      color: t.accent,
-    },
-    {
-      label: "Prontos hoje",
-      value: metrics ? metrics.prontos_hoje : 0,
-      format: fmtInteger,
-      icon: "check",
-      color: t.success,
-    },
-    {
-      label: "Vendas 7d",
-      value: metrics ? metrics.revenue_7d : 0,
-      format: fmtCurrency,
-      icon: "trending-up",
-      color: t.primary,
-    },
+    { label: "Em producao",      value: metrics ? metrics.em_producao : 0,      format: fmtInteger,  icon: "clock",        color: t.warning },
+    { label: "Aguardando arte",  value: metrics ? metrics.aguardando_arte : 0,  format: fmtInteger,  icon: "alert-circle", color: t.accent  },
+    { label: "Prontos hoje",     value: metrics ? metrics.prontos_hoje : 0,     format: fmtInteger,  icon: "check",        color: t.success },
+    { label: "Vendas 7d",        value: metrics ? metrics.revenue_7d : 0,       format: fmtCurrency, icon: "trending-up",  color: t.primary },
   ], [metrics, t]);
+
+  // Guia: esconde se dismissed OU se todos os passos estao done
+  const showGuide = !guideDismissed;
+  const showCompactCelebrate = showGuide && allDone;
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
@@ -222,12 +308,12 @@ export default function StudioHome() {
       <View style={s.greetingRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.h1}>
-            Bom dia, <Text style={s.h1Accent}>{firstName}!</Text> ✨
+            Bom dia, <Text style={s.h1Accent}>{firstName}!</Text>
           </Text>
           <Text style={s.h1Sub}>
             {allDone
               ? "Loja redonda. Hora de mostrar produto pro mundo."
-              : "Bora deixar a loja redonda pros próximos pedidos"}
+              : "Bora deixar a loja redonda pros proximos pedidos"}
           </Text>
         </View>
         <View style={s.liveBadge}>
@@ -235,6 +321,157 @@ export default function StudioHome() {
           <Text style={s.liveTxt}>Studio aberto</Text>
         </View>
       </View>
+
+      {/* ═══════ GUIA DO ESTUDIO ═══════ */}
+      {showGuide && showCompactCelebrate && (
+        <View style={s.guideCompact}>
+          <View style={s.guideCompactIcon}>
+            <Icon name="check" size={18} color={t.successInk} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.guideCompactTitle}>Tudo configurado!</Text>
+            <Text style={s.guideCompactSub}>Loja pronta pra receber pedidos. Bora vender.</Text>
+          </View>
+          <Pressable
+            onPress={handleDismissGuide}
+            disabled={dismissing}
+            style={s.guideCompactBtn}
+          >
+            {dismissing
+              ? <ActivityIndicator size="small" color={t.ink2} />
+              : <Text style={s.guideCompactBtnTxt}>Ocultar</Text>}
+          </Pressable>
+        </View>
+      )}
+
+      {showGuide && !showCompactCelebrate && (
+        <View style={s.guideCard}>
+          {/* Header */}
+          <Pressable onPress={() => setGuideExpanded((v) => !v)} style={s.guideHead}>
+            <View style={s.guideHeadIcon}>
+              <Icon name="compass" size={20} color="#fff" />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.guideEyebrow}>GUIA DO ESTUDIO</Text>
+              <Text style={s.guideTitle}>Configure tudo em 5 passos pra comecar</Text>
+            </View>
+            <View style={s.guideProgressPill}>
+              <Text style={s.guideProgressPillTxt}>{doneCount}/{GUIDE_STEPS.length} feitos</Text>
+            </View>
+            <Icon name={guideExpanded ? "chevron-up" : "chevron-down"} size={18} color={t.ink3} />
+          </Pressable>
+
+          {/* Progress bar */}
+          <View style={s.guideProgressBar}>
+            <View style={[s.guideProgressFill, { width: `${guidePct}%` }]} />
+          </View>
+
+          {guideLoading && (
+            <View style={{ paddingVertical: 22, alignItems: "center" }}>
+              <ActivityIndicator size="small" color={t.primary} />
+              <Text style={{ marginTop: 8, fontSize: 12, color: t.ink3 }}>Verificando seu progresso...</Text>
+            </View>
+          )}
+
+          {/* Steps */}
+          {!guideLoading && guideExpanded && GUIDE_STEPS.map((step) => {
+            const status = stepStatus[step.id];
+            const isExpanded = expandedStep === step.id;
+            const borderColor =
+              status === "done" ? t.success :
+              status === "in_progress" ? t.accent :
+              t.ink5;
+
+            // Detalhe contextual quando em_progress
+            let progressDetail: string | null = null;
+            if (step.id === "customization" && status === "in_progress") {
+              progressDetail = "Continue configurando os produtos restantes";
+            } else if (step.id === "templates" && status === "in_progress") {
+              progressDetail = "Adicione mais templates ate chegar a 3";
+            } else if (step.id === "sla_wa" && status === "in_progress") {
+              progressDetail = "Falta preencher SLA ou WhatsApp";
+            }
+
+            return (
+              <View key={step.id} style={[s.stepCard, { borderColor }]}>
+                <Pressable
+                  onPress={() => setExpandedStep(isExpanded ? null : step.id)}
+                  style={s.stepHead}
+                >
+                  {/* Numero + status icon */}
+                  <View style={s.stepNumWrap}>
+                    <StepStatusIcon status={status} t={t} />
+                    <Text style={s.stepNum}>Passo {step.num}</Text>
+                  </View>
+
+                  {/* Title + status text inline */}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.stepTitle} numberOfLines={1}>{step.title}</Text>
+                    <Text style={[s.stepStatusTxt, {
+                      color:
+                        status === "done" ? t.successInk :
+                        status === "in_progress" ? t.accent :
+                        t.ink3,
+                    }]}>
+                      {status === "done" && "feito"}
+                      {status === "in_progress" && "em andamento"}
+                      {status === "todo" && "nao iniciado"}
+                    </Text>
+                  </View>
+
+                  <Icon
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={t.ink4}
+                  />
+                </Pressable>
+
+                {isExpanded && (
+                  <View style={s.stepBody}>
+                    <Text style={s.stepHelper}>{step.helper}</Text>
+                    {progressDetail && (
+                      <Text style={s.stepProgressDetail}>{progressDetail}</Text>
+                    )}
+                    {status !== "done" && (
+                      <Pressable
+                        onPress={() => router.push(step.href as any)}
+                        style={[
+                          s.stepCta,
+                          { backgroundColor: status === "in_progress" ? t.accent : t.primary },
+                        ]}
+                      >
+                        <Icon name={step.icon as any} size={14} color="#fff" />
+                        <Text style={s.stepCtaTxt}>
+                          {status === "in_progress" ? "Continuar" : step.cta}
+                        </Text>
+                      </Pressable>
+                    )}
+                    {status === "done" && (
+                      <View style={s.stepDoneRow}>
+                        <Icon name="check" size={14} color={t.successInk} />
+                        <Text style={s.stepDoneTxt}>Passo concluido</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+
+          {/* Footer - dispensar */}
+          {!guideLoading && guideExpanded && (
+            <Pressable
+              onPress={handleDismissGuide}
+              disabled={dismissing}
+              style={s.guideDismissBtn}
+            >
+              {dismissing
+                ? <ActivityIndicator size="small" color={t.ink3} />
+                : <Text style={s.guideDismissTxt}>Ja configurei tudo, ocultar guia</Text>}
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {/* ───── KPIs ───── */}
       <View style={s.kpisRow}>
@@ -262,8 +499,7 @@ export default function StudioHome() {
         ))}
       </View>
 
-      {/* ───── Banner "X produtos podem melhorar" (Fase 9 residual) ───── */}
-      {/* 26/05: numero animado via AnimatedKpiCounter, restante do texto fica em linha separada pra evitar quebra de baseline */}
+      {/* ───── Banner "X produtos podem melhorar" ───── */}
       {productsToImprove > 0 && (
         <View style={s.improveBanner}>
           <View style={s.improveIcon}>
@@ -282,110 +518,22 @@ export default function StudioHome() {
               </Text>
             </View>
             <Text style={s.improveDesc}>
-              Adicione fotos, descrição e templates pra subir o score e vender mais.
+              Adicione fotos, descricao e templates pra subir o score e vender mais.
             </Text>
           </View>
           <Pressable onPress={() => router.push("/studio/produtos" as any)} style={s.improveBtn}>
-            <Text style={s.improveBtnTxt}>Melhorar →</Text>
+            <Text style={s.improveBtnTxt}>Melhorar</Text>
           </Pressable>
         </View>
       )}
 
-      {/* ───── Checklist colapsável ───── */}
-      <View style={s.checklistCard}>
-        <Pressable onPress={() => setExpanded((v) => !v)} style={s.checklistHead}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.checklistEyebrow}>
-              {allDone ? "PRONTO" : "PRÓXIMOS PASSOS"}
-            </Text>
-            <Text style={s.checklistTitle}>{remainingTitle}</Text>
-          </View>
-          <View style={s.progressPill}>
-            <Text style={s.progressPillTxt}>{totalDone}/{CHECKLIST.length}</Text>
-          </View>
-          <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={t.ink3} />
-        </Pressable>
-
-        {healthLoading && (
-          <View style={{ paddingVertical: 14 }}>
-            <ActivityIndicator size="small" color={t.primary} />
-          </View>
-        )}
-
-        {!healthLoading && expanded && CHECKLIST.map((item) => {
-          const done = !!completed[item.id];
-          return (
-            <Pressable
-              key={item.id}
-              onPress={() => router.push(item.href as any)}
-              style={[s.checkRow, done && s.checkRowDone]}
-            >
-              <View style={[
-                s.checkBox,
-                done && { backgroundColor: t.mint, borderColor: t.mint },
-              ]}>
-                {done && <Icon name="check" size={12} color="#fff" />}
-              </View>
-              <View style={[s.checkIcon, { backgroundColor: item.iconBg }]}>
-                <Icon name={item.icon as any} size={16} color="#fff" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[s.checkTitle, done && s.checkTitleDone]}>{item.title}</Text>
-                <Text style={s.checkSub} numberOfLines={2}>{item.sub}</Text>
-              </View>
-              <Icon name="chevron-right" size={16} color={t.ink4} />
-            </Pressable>
-          );
-        })}
-
-        {/* Progresso linear */}
-        {!allDone && (
-          <>
-            <View style={s.progressBar}>
-              <View style={[s.progressFill, { width: `${pct}%` }]} />
-            </View>
-            <Text style={s.progressSub}>{pct}% concluído — falta pouco</Text>
-          </>
-        )}
-
-        {/* Empty state celebratório quando 100% concluído */}
-        {allDone && !expanded && (
-          <View style={s.celebrate}>
-            <View style={s.celebrateEmoji}>
-              <Text style={{ fontSize: 30 }}>🎉</Text>
-            </View>
-            <Text style={s.celebrateTitle}>Setup completo!</Text>
-            <Text style={s.celebrateBody}>
-              Configurações prontas, agora é cadastrar produto e divulgar. Quando o
-              primeiro pedido cair, a fila de produção começa a se preencher automaticamente.
-            </Text>
-            <View style={s.celebrateRow}>
-              <Pressable
-                onPress={() => router.push("/studio/produtos" as any)}
-                style={[s.celebrateBtn, { backgroundColor: t.primary }]}
-              >
-                <Icon name="shopping-bag" size={16} color="#fff" />
-                <Text style={s.celebrateBtnTxt}>Cadastrar produto</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/studio/galeria" as any)}
-                style={[s.celebrateBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: t.ink4 }]}
-              >
-                <Icon name="image" size={16} color={t.ink2} />
-                <Text style={[s.celebrateBtnTxt, { color: t.ink2 }]}>Ver galeria</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* ───── Hint Fase 4 ───── */}
-      {!allDone && (
+      {/* ───── Hint ───── */}
+      {!allDone && !guideDismissed && (
         <View style={s.hintCard}>
           <Icon name="info" size={16} color={t.primary} />
           <Text style={s.hintTxt}>
             <Text style={s.hintBold}>Dica:</Text> assim que cadastrar produto e
-            subir templates, a aba Produção começa a popular a fila de produção automaticamente.
+            subir templates, a aba Producao comeca a popular a fila automaticamente.
           </Text>
         </View>
       )}
@@ -393,7 +541,40 @@ export default function StudioHome() {
   );
 }
 
-function buildStyles(t: ReturnType<typeof useStudioTokens>) {
+// ═══ helpers ═══════════════════════════════════════════════════════════════
+function StepStatusIcon({ status, t }: { status: GuideStepStatus; t: StudioPalette }) {
+  if (status === "done") {
+    return (
+      <View style={{
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: t.success,
+        alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon name="check" size={12} color="#fff" />
+      </View>
+    );
+  }
+  if (status === "in_progress") {
+    return (
+      <View style={{
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: t.accentSoft,
+        alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon name="clock" size={12} color={t.accent} />
+      </View>
+    );
+  }
+  return (
+    <View style={{
+      width: 22, height: 22, borderRadius: 11,
+      borderWidth: 1.5, borderColor: t.ink4,
+      alignItems: "center", justifyContent: "center",
+    }} />
+  );
+}
+
+function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
     scroll: { flex: 1, backgroundColor: t.bg },
     container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
@@ -414,6 +595,115 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
     livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: t.mint },
     liveTxt: { fontSize: 12, fontWeight: "700", color: t.successInk },
 
+    // Guia compacto (5/5 + nao dismissed)
+    guideCompact: {
+      flexDirection: "row", alignItems: "center", gap: 12,
+      backgroundColor: t.mintSoft,
+      borderWidth: 1, borderColor: t.success,
+      borderRadius: 18, padding: 14,
+      marginBottom: 22,
+    },
+    guideCompactIcon: {
+      width: 36, height: 36, borderRadius: 18,
+      backgroundColor: "#fff",
+      alignItems: "center", justifyContent: "center",
+    },
+    guideCompactTitle: { fontSize: 14, fontWeight: "800", color: t.ink },
+    guideCompactSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
+    guideCompactBtn: {
+      paddingHorizontal: 12, paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: "#fff",
+      borderWidth: 1, borderColor: t.ink5,
+    },
+    guideCompactBtnTxt: { fontSize: 12, fontWeight: "700", color: t.ink2 },
+
+    // Guia card principal
+    guideCard: {
+      backgroundColor: t.paperCard,
+      borderRadius: 24, padding: 22,
+      borderWidth: 1, borderColor: t.ink5,
+      marginBottom: 22,
+    },
+    guideHead: {
+      flexDirection: "row", alignItems: "center", gap: 12,
+      marginBottom: 14,
+    },
+    guideHeadIcon: {
+      width: 40, height: 40, borderRadius: 12,
+      backgroundColor: t.primary,
+      alignItems: "center", justifyContent: "center",
+    },
+    guideEyebrow: {
+      fontSize: 10.5, color: t.accent, fontWeight: "800",
+      letterSpacing: 1, textTransform: "uppercase",
+    },
+    guideTitle: { fontSize: 17, fontWeight: "800", color: t.ink, marginTop: 3 },
+    guideProgressPill: {
+      backgroundColor: t.primarySoft,
+      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+    },
+    guideProgressPillTxt: { fontSize: 12, fontWeight: "800", color: t.primary },
+
+    guideProgressBar: {
+      height: 6, backgroundColor: t.ink5,
+      borderRadius: 3, overflow: "hidden",
+      marginBottom: 14,
+    },
+    guideProgressFill: {
+      height: "100%",
+      backgroundColor: t.mint,
+      borderRadius: 3,
+    },
+
+    // step cards (cada passo do guia)
+    stepCard: {
+      backgroundColor: t.bg,
+      borderRadius: 14, padding: 12,
+      borderWidth: 1.5,
+      marginBottom: 8,
+    },
+    stepHead: {
+      flexDirection: "row", alignItems: "center", gap: 12,
+    },
+    stepNumWrap: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      minWidth: 110,
+    },
+    stepNum: { fontSize: 12, fontWeight: "700", color: t.ink3 },
+    stepTitle: { fontSize: 13.5, fontWeight: "700", color: t.ink },
+    stepStatusTxt: { fontSize: 11.5, fontWeight: "600", marginTop: 1 },
+    stepBody: {
+      paddingTop: 10, marginTop: 10,
+      borderTopWidth: 1, borderTopColor: t.ink5,
+      gap: 8,
+    },
+    stepHelper: { fontSize: 12.5, color: t.ink3, lineHeight: 18 },
+    stepProgressDetail: {
+      fontSize: 11.5, color: t.accent, fontWeight: "700",
+      backgroundColor: t.accentGhost,
+      paddingHorizontal: 8, paddingVertical: 4,
+      borderRadius: 6, alignSelf: "flex-start",
+    },
+    stepCta: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      alignSelf: "flex-start",
+      paddingHorizontal: 14, paddingVertical: 9,
+      borderRadius: 10, marginTop: 4,
+    },
+    stepCtaTxt: { color: "#fff", fontWeight: "800", fontSize: 12.5 },
+    stepDoneRow: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      marginTop: 2,
+    },
+    stepDoneTxt: { fontSize: 12, color: t.successInk, fontWeight: "700" },
+
+    guideDismissBtn: {
+      marginTop: 12, paddingVertical: 10,
+      alignItems: "center",
+    },
+    guideDismissTxt: { fontSize: 12, color: t.ink3, fontWeight: "600", textDecorationLine: "underline" },
+
     // KPIs
     kpisRow: {
       flexDirection: "row", flexWrap: "wrap", gap: 12,
@@ -431,9 +721,8 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
       alignItems: "center", justifyContent: "center",
     },
     kpiLabel: { fontSize: 11.5, color: t.ink3, fontWeight: "600" },
-    kpiValue: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 1 },
 
-    // Banner "produtos pra melhorar" (Fase 9 residual)
+    // Improve banner
     improveBanner: {
       flexDirection: "row", alignItems: "center", gap: 12,
       backgroundColor: t.accentGhost,
@@ -458,91 +747,10 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
     },
     improveBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
 
-    // Checklist
-    checklistCard: {
-      backgroundColor: t.paperCard,
-      borderRadius: 24, padding: 22,
-      borderWidth: 1, borderColor: t.ink5,
-    },
-    checklistHead: {
-      flexDirection: "row", alignItems: "center", marginBottom: 14, gap: 10,
-    },
-    checklistEyebrow: {
-      fontSize: 11, color: t.accent, fontWeight: "800",
-      letterSpacing: 0.8, textTransform: "uppercase",
-    },
-    checklistTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 3 },
-    progressPill: {
-      backgroundColor: t.primarySoft,
-      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-    },
-    progressPillTxt: { fontSize: 12, fontWeight: "800", color: t.primary },
-
-    checkRow: {
-      flexDirection: "row", alignItems: "center", gap: 12,
-      paddingVertical: 12, paddingHorizontal: 4,
-      borderBottomWidth: 1, borderBottomColor: t.ink5,
-    },
-    checkRowDone: { opacity: 0.55 },
-    checkBox: {
-      width: 22, height: 22, borderRadius: 6,
-      borderWidth: 2, borderColor: t.ink4,
-      alignItems: "center", justifyContent: "center",
-    },
-    checkIcon: {
-      width: 36, height: 36, borderRadius: 18,
-      alignItems: "center", justifyContent: "center",
-    },
-    checkTitle: { fontSize: 13.5, fontWeight: "700", color: t.ink },
-    checkTitleDone: { textDecorationLine: "line-through", color: t.ink3 },
-    checkSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
-
-    progressBar: {
-      height: 6, backgroundColor: t.ink5,
-      borderRadius: 3, overflow: "hidden", marginTop: 16,
-    },
-    progressFill: {
-      height: "100%",
-      backgroundColor: t.mint,
-      borderRadius: 3,
-    },
-    progressSub: {
-      fontSize: 11.5, color: t.ink3, marginTop: 6,
-      textAlign: "center", fontWeight: "600",
-    },
-
-    // Celebrate
-    celebrate: {
-      alignItems: "center",
-      paddingVertical: 12,
-      gap: 8,
-    },
-    celebrateEmoji: {
-      width: 60, height: 60, borderRadius: 30,
-      backgroundColor: t.mintSoft,
-      alignItems: "center", justifyContent: "center",
-      marginBottom: 4,
-    },
-    celebrateTitle: { fontSize: 18, fontWeight: "800", color: t.ink },
-    celebrateBody: {
-      fontSize: 13, color: t.ink3, textAlign: "center",
-      maxWidth: 480, lineHeight: 19,
-    },
-    celebrateRow: {
-      flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap",
-      justifyContent: "center",
-    },
-    celebrateBtn: {
-      flexDirection: "row", alignItems: "center", gap: 6,
-      paddingHorizontal: 14, paddingVertical: 9,
-      borderRadius: 12,
-    },
-    celebrateBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
-
     hintCard: {
       flexDirection: "row", alignItems: "center", gap: 10,
       backgroundColor: t.primaryGhost,
-      borderRadius: 14, padding: 14, marginTop: 16,
+      borderRadius: 14, padding: 14, marginTop: 4,
       borderWidth: 1, borderColor: t.primarySoft,
     },
     hintTxt: { fontSize: 12.5, color: t.ink2, flex: 1, lineHeight: 18 },
