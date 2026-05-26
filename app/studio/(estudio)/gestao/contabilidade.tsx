@@ -6,40 +6,30 @@
 // DasPreviewCard + Timeline obrigações + Guias + Histórico) com uma
 // barra contextual Studio no topo.
 //
-// 26/05/2026 (residual tema Studio): troca eyebrowBar por
-// <StudioPageHeader> + banner contextual e migra wrapper pra
-// useStudioTokens()/buildStyles(t) — alinha com a estratégia já aplicada
-// em gestao/financeiro.tsx. Body do ContabilidadeScreen segue intocado.
-//
-// Por que não retematizar o body: o ContabilidadeScreen é 6KB + 8 sub-
-// componentes em components/screens/contabilidade/. Refatorar pra tokens
-// Studio é trabalho de outra sessão. Suas operações Studio entram
-// automaticamente nos relatórios mensais consolidados.
+// 26/05/2026 (fix visual): ContabilidadeScreen usa Colors do varejo
+// (dark navy por default), e o wrapper Studio usava t.bgSoft/
+// t.paperCardElev (claros) → barra clara em cima + card dark embaixo,
+// sem continuidade. Migrado wrapper+header pra Colors do varejo
+// (bg/bg3/border/ink3) pra herdar o tema do conteúdo. Mantemos
+// StudioColors.accent só no eyebrow magenta pra preservar identidade.
 // ============================================================
-import { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
-import { useStudioTokens } from "@/contexts/StudioThemeMode";
-import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { Colors } from "@/constants/colors";
+import { StudioColors } from "@/constants/studio-tokens";
 import ContabilidadeScreen from "@/app/(tabs)/contabilidade";
 
-type Tokens = ReturnType<typeof useStudioTokens>;
-
 export default function StudioGestaoContabilidade() {
-  const t = useStudioTokens();
-  const s = useMemo(() => buildStyles(t), [t]);
-
   return (
     <View style={s.wrapper}>
       <View style={s.header}>
-        <StudioPageHeader
-          eyebrow="GESTÃO · CONTABILIDADE"
-          title="Contabilidade do estúdio"
-          subtitle="Obrigações fiscais, DRE e relatórios mensais. Operações Studio entram automaticamente nos números."
-          marginBottom={12}
-        />
+        <Text style={s.eyebrow}>GESTÃO · CONTABILIDADE</Text>
+        <Text style={s.title}>Contabilidade do estúdio</Text>
+        <Text style={s.subtitle}>
+          Obrigações fiscais, DRE e relatórios mensais. Operações Studio entram automaticamente nos números.
+        </Text>
         <View style={s.contextBanner}>
-          <Icon name="info" size={12} color={t.primary} />
+          <Icon name="info" size={12} color={StudioColors.accent} />
           <Text style={s.contextBannerTxt}>
             Vendas personalizadas aparecem nos relatórios mensais como categoria "Studio".
           </Text>
@@ -52,39 +42,57 @@ export default function StudioGestaoContabilidade() {
   );
 }
 
-function buildStyles(t: Tokens) {
-  return StyleSheet.create({
-    wrapper: {
-      flex: 1,
-      backgroundColor: t.bgSoft,
-    },
-    header: {
-      paddingHorizontal: 28,
-      paddingTop: 16,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: t.ink5,
-      backgroundColor: t.paperCardElev,
-      gap: 10,
-    },
-    contextBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: t.primaryGhost,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.primarySoft,
-      alignSelf: "flex-start",
-      maxWidth: 720,
-    },
-    contextBannerTxt: {
-      fontSize: 12,
-      color: t.ink2,
-      flexShrink: 1,
-      lineHeight: 16,
-    },
-  });
-}
+const s = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+  },
+  header: {
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg3,
+    gap: 6,
+  },
+  eyebrow: {
+    fontSize: 11,
+    color: StudioColors.accent,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: Colors.ink,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: Colors.ink3,
+    lineHeight: 18,
+    maxWidth: 720,
+    marginBottom: 4,
+  },
+  contextBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: Colors.bg2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: StudioColors.accent + "55",
+    alignSelf: "flex-start",
+    maxWidth: 720,
+  },
+  contextBannerTxt: {
+    fontSize: 12,
+    color: Colors.ink2,
+    flexShrink: 1,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
+});
