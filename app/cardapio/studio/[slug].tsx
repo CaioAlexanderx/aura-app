@@ -13,6 +13,12 @@ import type { CustomizationConfig, CustomizationField } from "@/services/studioA
 //   + price_delta de option/color somado no carrinho + display por linha
 //   + upload R2 de foto direto da página (web) pra campos type=image
 //   + estagio "sent" mostra politica de revisões + prazo
+// 26/05/2026 (reforço de tema Aura Studio):
+//   + hero ganha pílula "Loja oficial" + nome destacado (32/900)
+//   + cards de produto com badge "PERSONALIZÁVEL" + borda esquerda navy
+//   + stage configure ganha eyebrow "ESTÚDIO · ARTE PERSONALIZADA"
+//   + stage sent ganha assinatura "Feito no Aura Studio"
+//   + footer global "Powered by Aura" (stages list/configure/checkout)
 //
 // Cliente entra no link, ve grid de produtos personalizaveis,
 // abre o configurador (text/image/template/color/option),
@@ -326,7 +332,26 @@ export default function StudioStorefrontPage() {
         >
           <Text style={{ fontSize: 40, color: "#fff" }}>✓</Text>
         </View>
-        <Text style={{ fontSize: 22, fontWeight: "800", color: T.ink, marginTop: 16 }}>
+
+        {/* Assinatura Aura Studio — reforço de marca */}
+        <View
+          style={{
+            flexDirection: "row", alignItems: "center", gap: 6,
+            marginTop: 10,
+          }}
+        >
+          <Text style={{ fontSize: 12, color: T.accent }}>✨</Text>
+          <Text
+            style={{
+              fontSize: 10.5, color: T.ink3, fontWeight: "700",
+              letterSpacing: 0.6, textTransform: "uppercase",
+            }}
+          >
+            Feito no Aura Studio
+          </Text>
+        </View>
+
+        <Text style={{ fontSize: 22, fontWeight: "800", color: T.ink, marginTop: 10 }}>
           Pedido enviado!
         </Text>
         <Text style={{ fontSize: 13, color: T.ink3, marginTop: 6, textAlign: "center", maxWidth: 320 }}>
@@ -452,6 +477,24 @@ export default function StudioStorefrontPage() {
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalize</Text>
             <Text style={{ fontSize: 17, fontWeight: "800", color: T.ink }}>{activeProduct.name}</Text>
+            {/* Eyebrow Aura Studio — reforço de marca no configurador */}
+            <View
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: "rgba(30,58,138,0.08)",
+                paddingHorizontal: 8, paddingVertical: 3,
+                borderRadius: 999, marginTop: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 9, color: T.primary, fontWeight: "800",
+                  letterSpacing: 0.8, textTransform: "uppercase",
+                }}
+              >
+                Estúdio · Arte personalizada
+              </Text>
+            </View>
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={{ fontSize: 15, fontWeight: "800", color: T.primary }}>
@@ -465,7 +508,7 @@ export default function StudioStorefrontPage() {
           </View>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 120 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 160 }}>
           <View style={{ alignItems: "center" }}>
             <PersonalizationPreview
               config={cfg}
@@ -517,6 +560,8 @@ export default function StudioStorefrontPage() {
             </Text>
           </Pressable>
         </View>
+
+        <PoweredByAura />
       </View>
     );
   }
@@ -543,7 +588,7 @@ export default function StudioStorefrontPage() {
           </View>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 140 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 180 }}>
           <Text style={sectionLabel}>Itens personalizados</Text>
           {cart.map((l) => {
             const unit = lineUnitPrice(l);
@@ -689,6 +734,8 @@ export default function StudioStorefrontPage() {
             </Text>
           </Pressable>
         </View>
+
+        <PoweredByAura />
       </View>
     );
   }
@@ -709,7 +756,31 @@ export default function StudioStorefrontPage() {
         <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase" }}>
           Aura Studio · Personalizados
         </Text>
-        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 4 }}>{store.site.name}</Text>
+
+        {/* Pílula brand "Loja oficial" — reforço de marca */}
+        <View
+          style={{
+            alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5,
+            backgroundColor: "rgba(255,255,255,0.18)",
+            paddingHorizontal: 10, paddingVertical: 4,
+            borderRadius: 999, marginTop: 8,
+            borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 10 }}>●</Text>
+          <Text
+            style={{
+              color: "#fff", fontSize: 10, fontWeight: "800",
+              letterSpacing: 0.6, textTransform: "uppercase",
+            }}
+          >
+            Loja oficial · Arte personalizada
+          </Text>
+        </View>
+
+        <Text style={{ color: "#fff", fontSize: 32, fontWeight: "900", marginTop: 10, letterSpacing: -0.5 }}>
+          {store.site.name}
+        </Text>
         {store.site.tagline ? (
           <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 6 }}>{store.site.tagline}</Text>
         ) : null}
@@ -721,7 +792,7 @@ export default function StudioStorefrontPage() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: cart.length > 0 ? 110 : 30 }}
+        contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: cart.length > 0 ? 150 : 60 }}
       >
         {store.products.length === 0 ? (
           <View style={{ padding: 32, alignItems: "center" }}>
@@ -738,11 +809,19 @@ export default function StudioStorefrontPage() {
             <Pressable
               key={p.id}
               onPress={() => openConfigure(p)}
-              style={{
-                backgroundColor: T.card, borderRadius: 12, padding: 12,
-                borderWidth: 1, borderColor: T.border,
-                flexDirection: "row", gap: 12, alignItems: "center",
-              }}
+              style={[
+                {
+                  backgroundColor: T.card, borderRadius: 12, padding: 12,
+                  paddingLeft: 14, // espaço pra borda esquerda
+                  borderWidth: 1, borderColor: T.border,
+                  borderLeftWidth: 3, borderLeftColor: T.primary,
+                  flexDirection: "row", gap: 12, alignItems: "center",
+                  position: "relative",
+                },
+                Platform.OS === "web"
+                  ? ({ boxShadow: "0 4px 12px -4px rgba(30,58,138,0.15)" } as any)
+                  : ({ elevation: 3 } as any),
+              ]}
             >
               <PersonalizationPreview
                 config={p.customization_config}
@@ -769,6 +848,25 @@ export default function StudioStorefrontPage() {
               >
                 <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>Personalizar →</Text>
               </View>
+
+              {/* Micro-badge "PERSONALIZÁVEL" no canto superior direito */}
+              <View
+                style={{
+                  position: "absolute", top: 6, right: 6,
+                  backgroundColor: T.accent,
+                  paddingHorizontal: 6, paddingVertical: 2,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff", fontSize: 9, fontWeight: "800",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  PERSONALIZÁVEL
+                </Text>
+              </View>
             </Pressable>
           ))
         )}
@@ -778,7 +876,7 @@ export default function StudioStorefrontPage() {
         <Pressable
           onPress={() => setStage("checkout")}
           style={{
-            position: "absolute", left: 12, right: 12, bottom: 12,
+            position: "absolute", left: 12, right: 12, bottom: 40,
             backgroundColor: T.ink, borderRadius: 12,
             paddingVertical: 14, paddingHorizontal: 16,
             flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -803,6 +901,8 @@ export default function StudioStorefrontPage() {
           <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Text>
         </Pressable>
       )}
+
+      <PoweredByAura />
     </View>
   );
 }
@@ -1173,6 +1273,29 @@ function TotalRow({ l, v, big }: { l: string; v: number; big?: boolean }) {
       <Text style={{ fontSize: big ? 14 : 12, color: big ? T.ink : T.ink2, fontWeight: big ? "800" : "500" }}>{l}</Text>
       <Text style={{ fontSize: big ? 18 : 12, color: big ? T.primary : T.ink, fontWeight: big ? "800" : "600" }}>
         R$ {Number(v).toFixed(2)}
+      </Text>
+    </View>
+  );
+}
+
+// ============================================================
+// Footer global "Powered by Aura" — fixo no bottom em todos os
+// stages exceto sent. Assinatura discreta da plataforma.
+// ============================================================
+function PoweredByAura() {
+  return (
+    <View
+      style={{
+        position: "absolute", left: 0, right: 0, bottom: 0,
+        paddingVertical: 6, paddingHorizontal: 12,
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: "rgba(250,250,252,0.92)",
+        borderTopWidth: 1, borderTopColor: T.border,
+      }}
+      pointerEvents="none"
+    >
+      <Text style={{ fontSize: 9.5, color: T.ink4, letterSpacing: 0.4 }}>
+        Powered by <Text style={{ fontWeight: "800", color: T.ink3 }}>Aura</Text> · loja.getaura.com.br/aura
       </Text>
     </View>
   );
