@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Pressable, Text, View, StyleSheet, Platform, Animated } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { StudioGradient } from "@/components/studio/StudioGradient";
 import { Icon } from "@/components/Icon";
 import { StudioColors, StudioGradients } from "@/constants/studio-tokens";
 
@@ -58,29 +58,17 @@ export function StudioFab({
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel || label || "Ação"}
         >
-          {Platform.OS === "web" ? (
-            <View
-              // @ts-ignore web style
-              style={[
-                s.fab,
-                isExtended && s.fabExtended,
-                { background: `linear-gradient(135deg, ${StudioGradients.brand[0]}, ${StudioGradients.brand[1]})` } as any,
-              ]}
-            >
-              <Icon name={icon as any} size={isExtended ? 18 : 22} color="#fff" />
-              {isExtended && <Text style={s.fabLabel}>{label}</Text>}
-            </View>
-          ) : (
-            <LinearGradient
-              colors={StudioGradients.brand as any}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[s.fab, isExtended && s.fabExtended]}
-            >
-              <Icon name={icon as any} size={isExtended ? 18 : 22} color="#fff" />
-              {isExtended && <Text style={s.fabLabel}>{label}</Text>}
-            </LinearGradient>
-          )}
+          {/* StudioGradient (zero-deps): CSS linear-gradient no web, cor sólida central no native.
+              Substitui o caminho antigo que ramificava Platform.OS web (CSS) vs native (LinearGradient
+              de expo-linear-gradient, que NÃO está no package.json — quebrava build CF Workers). */}
+          <StudioGradient
+            colors={StudioGradients.brand as unknown as string[]}
+            direction="135deg"
+            style={[s.fab, isExtended && s.fabExtended]}
+          >
+            <Icon name={icon as any} size={isExtended ? 18 : 22} color="#fff" />
+            {isExtended && <Text style={s.fabLabel}>{label}</Text>}
+          </StudioGradient>
         </Pressable>
       </Animated.View>
     </View>
