@@ -11,14 +11,20 @@
 //
 // Fase 6 residual (26/05): KPIs animados via AnimatedKpiCounter
 // (tween + pulse + badge +N quando incrementa).
+//
+// Residual (26/05): migrado pra useStudioTokens() — StyleSheet
+// vira factory memoizado por tokens, suporta light/dark theme.
+// SEVERITY_TONE mantido com StudioColors (tokens semânticos
+// estáticos, não dependem de modo).
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { StudioColors, type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { request } from "@/services/api";
@@ -52,6 +58,8 @@ const SEVERITY_TONE = {
 export default function StudioPedidosHub() {
   const router = useRouter();
   const { company } = useAuthStore();
+  const t = useStudioTokens();
+  const s = useMemo(() => makeStyles(t), [t]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<HubStats | null>(null);
   const [feed, setFeed] = useState<HubFeedItem[]>([]);
@@ -64,12 +72,12 @@ export default function StudioPedidosHub() {
     if (!company?.id) return;
     setLoading(true);
     try {
-      const [s, f, a] = await Promise.all([
+      const [st, f, a] = await Promise.all([
         studioBulkHubApi.hubStats(company.id),
         studioBulkHubApi.hubFeed(company.id, tab, 100),
         studioBulkHubApi.hubAlerts(company.id),
       ]);
-      setStats(s); setFeed(f.items || []); setAlerts(a.alerts || []);
+      setStats(st); setFeed(f.items || []); setAlerts(a.alerts || []);
     } catch (e: any) {
       toast.error(e?.message || "Erro ao carregar Hub");
     } finally { setLoading(false); }
@@ -122,12 +130,12 @@ export default function StudioPedidosHub() {
         <StudioLoading variant="skeleton-list" rows={5} />
       ) : stats && (
         <View style={s.kpis}>
-          <Kpi label="Pedidos hoje"    value={stats.orders.orders_today} icon="shopping-bag" color={StudioColors.primary} />
-          <Kpi label="Em produção"     value={stats.orders.in_production} icon="clock" color={StudioColors.accent} />
-          <Kpi label="Aguardando arte" value={stats.orders.pending_art} icon="alert-circle" color={StudioColors.warning} />
-          <Kpi label="Prontos"         value={stats.orders.ready} icon="package" color={StudioColors.mint} />
-          <Kpi label="Atrasados"       value={stats.orders.overdue} icon="alert-triangle" color={StudioColors.danger} highlight={stats.orders.overdue > 0} />
-          <Kpi label="Receita 7d"      value={stats.revenue.last_7d} icon="trending-up" color={StudioColors.primary} kind="currency" />
+          <Kpi t={t} label="Pedidos hoje"    value={stats.orders.orders_today} icon="shopping-bag" color={t.primary} />
+          <Kpi t={t} label="Em produção"     value={stats.orders.in_production} icon="clock" color={t.accent} />
+          <Kpi t={t} label="Aguardando arte" value={stats.orders.pending_art} icon="alert-circle" color={t.warning} />
+          <Kpi t={t} label="Prontos"         value={stats.orders.ready} icon="package" color={t.mint} />
+          <Kpi t={t} label="Atrasados"       value={stats.orders.overdue} icon="alert-triangle" color={t.danger} highlight={stats.orders.overdue > 0} />
+          <Kpi t={t} label="Receita 7d"      value={stats.revenue.last_7d} icon="trending-up" color={t.primary} kind="currency" />
         </View>
       )}
 
@@ -157,14 +165,14 @@ export default function StudioPedidosHub() {
 
       {/* Tabs */}
       <View style={s.tabs}>
-        {(["all", "orders", "bulk"] as const).map((t) => (
+        {(["all", "orders", "bulk"] as const).map((tk) => (
           <Pressable
-            key={t}
-            style={[s.tab, tab === t && s.tabActive]}
-            onPress={() => setTab(t)}
+            key={tk}
+            style={[s.tab, tab === tk && s.tabActive]}
+            onPress={() => setTab(tk)}
           >
-            <Text style={[s.tabTxt, tab === t && s.tabTxtActive]}>
-              {t === "all" ? "Tudo" : t === "orders" ? "Pedidos" : "Eventos"}
+            <Text style={[s.tabTxt, tab === tk && s.tabTxtActive]}>
+              {tk === "all" ? "Tudo" : tk === "orders" ? "Pedidos" : "Eventos"}
             </Text>
           </Pressable>
         ))}
@@ -186,7 +194,7 @@ export default function StudioPedidosHub() {
               style={s.feedRow}
               onPress={() => router.push(item.kind === "bulk" ? "/studio/pedidos" as any : "/studio/producao" as any)}
             >
-              <View style={[s.feedDot, item.kind === "bulk" ? { backgroundColor: StudioColors.accent } : { backgroundColor: StudioColors.primary }]}>
+              <View style={[s.feedDot, item.kind === "bulk" ? { backgroundColor: t.accent } : { backgroundColor: t.primary }]}>
                 <Icon name={item.kind === "bulk" ? "users" : "shopping-bag"} size={14} color="#fff" />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -224,8 +232,9 @@ export default function StudioPedidosHub() {
 // — tween + pulse + badge +N quando incrementa. `kind="currency"` usa
 // fmtBRL como formatter; default = inteiro pt-BR.
 function Kpi({
-  label, value, icon, color, highlight, kind = "number",
+  t, label, value, icon, color, highlight, kind = "number",
 }: {
+  t: StudioPalette;
   label: string;
   value: number;
   icon: string;
@@ -233,6 +242,7 @@ function Kpi({
   highlight?: boolean;
   kind?: "number" | "currency";
 }) {
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={[s.kpi, highlight && { borderColor: color, borderWidth: 2 }]}>
       <View style={[s.kpiIco, { backgroundColor: color }]}>
@@ -244,7 +254,7 @@ function Kpi({
           <AnimatedKpiCounter
             value={Number(value) || 0}
             fontSize={17}
-            color={highlight ? color : StudioColors.ink}
+            color={highlight ? color : t.ink}
             format={kind === "currency" ? fmtBRL : undefined}
           />
         </View>
@@ -253,34 +263,36 @@ function Kpi({
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: StudioColors.bg },
-  container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
-  // Convenção do app: primary CTAs são navy (primary), accent fica reservado pra status/highlights.
-  ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
-  ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
-  kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 22 },
-  kpi: { flex: 1, minWidth: 150, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
-  kpiIco: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  kpiLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
-  // Wrap pro counter alinhar à esquerda (component default = center).
-  kpiCounterWrap: { alignItems: "flex-start", marginTop: 1 },
-  sectionLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.6, marginBottom: 8 },
-  alertsBlock: { marginBottom: 22, gap: 8 },
-  alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
-  alertTitle: { fontSize: 13, fontWeight: "700" },
-  alertSub: { fontSize: 11.5, marginTop: 2 },
-  tabs: { flexDirection: "row", gap: 6, marginBottom: 12 },
-  tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: StudioColors.bgSoft, borderWidth: 1, borderColor: StudioColors.ink5 },
-  tabActive: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  tabTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
-  tabTxtActive: { color: "#fff" },
-  feedList: { gap: 6 },
-  feedRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, backgroundColor: StudioColors.paperCard, borderRadius: 12, borderWidth: 1, borderColor: StudioColors.ink5 },
-  feedDot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  feedName: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink },
-  feedMeta: { fontSize: 11.5, color: StudioColors.ink3, marginTop: 2 },
-  feedAmount: { fontSize: 13.5, fontWeight: "800", color: StudioColors.ink },
-  feedStatus: { backgroundColor: StudioColors.bgSoft, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, marginTop: 3 },
-  feedStatusTxt: { fontSize: 10, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase" },
-});
+function makeStyles(t: StudioPalette) {
+  return StyleSheet.create({
+    scroll: { flex: 1, backgroundColor: t.bg },
+    container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
+    // Convenção do app: primary CTAs são navy (primary), accent fica reservado pra status/highlights.
+    ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
+    ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
+    kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 22 },
+    kpi: { flex: 1, minWidth: 150, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: t.paperCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: t.ink5 },
+    kpiIco: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+    kpiLabel: { fontSize: 11, color: t.ink3, fontWeight: "600" },
+    // Wrap pro counter alinhar à esquerda (component default = center).
+    kpiCounterWrap: { alignItems: "flex-start", marginTop: 1 },
+    sectionLabel: { fontSize: 11, color: t.ink3, fontWeight: "800", letterSpacing: 0.6, marginBottom: 8 },
+    alertsBlock: { marginBottom: 22, gap: 8 },
+    alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
+    alertTitle: { fontSize: 13, fontWeight: "700" },
+    alertSub: { fontSize: 11.5, marginTop: 2 },
+    tabs: { flexDirection: "row", gap: 6, marginBottom: 12 },
+    tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },
+    tabActive: { backgroundColor: t.primary, borderColor: t.primary },
+    tabTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
+    tabTxtActive: { color: "#fff" },
+    feedList: { gap: 6 },
+    feedRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5 },
+    feedDot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+    feedName: { fontSize: 13.5, fontWeight: "700", color: t.ink },
+    feedMeta: { fontSize: 11.5, color: t.ink3, marginTop: 2 },
+    feedAmount: { fontSize: 13.5, fontWeight: "800", color: t.ink },
+    feedStatus: { backgroundColor: t.bgSoft, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, marginTop: 3 },
+    feedStatusTxt: { fontSize: 10, color: t.ink3, fontWeight: "700", textTransform: "uppercase" },
+  });
+}
