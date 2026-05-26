@@ -8,9 +8,9 @@ var BASE_URL =
   "https://aura-backend-production-f805.up.railway.app/api/v1";
 
 export class ApiError extends Error {
-  status: number; data: any; isNetworkError: boolean;
-  constructor(message: string, status: number, data?: any, isNetworkError = false) {
-    super(message); this.name = "ApiError"; this.status = status; this.data = data; this.isNetworkError = isNetworkError;
+  status: number; data: any; isNetworkError: boolean; code: string | null;
+  constructor(message: string, status: number, data?: any, isNetworkError = false, code: string | null = null) {
+    super(message); this.name = "ApiError"; this.status = status; this.data = data; this.isNetworkError = isNetworkError; this.code = code;
   }
 }
 
@@ -21,6 +21,12 @@ export function setOnUnauthorized(fn: () => void) { _onUnauthorized = fn; }
 
 type RefreshResult = { status: "ok"; token: string } | { status: "invalid" } | { status: "network_error" };
 type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number };
+
+// ─── Refresh JWT singleton (race-safe) ───────────────────────────────────────
+// Múltiplas requisições paralelas que recebem 401 devem compartilhar a MESMA
+// promise de refresh. O `finally` block garante cleanup das flags em TODOS os
+// caminhos (sucesso, falha terminal, exceção, network error) — caso contrário
+// um throw deixaria isRefreshing=true permanentemente, travando a sessão.
 var isRefreshing = false;
 var refreshPromise: Promise<RefreshResult> | null = null;
 
@@ -41,43 +47,81 @@ async function refreshAccessToken(): Promise<RefreshResult> {
   } catch { return { status: "network_error" }; }
 }
 
+// Wrapper defensivo: garante que isRefreshing/refreshPromise SEMPRE são
+// limpos via finally, mesmo se refreshAccessToken lançar exceção inesperada.
+// Múltiplas chamadas concorrentes recebem a MESMA promise (singleton).
+function ensureRefresh(): Promise<RefreshResult> {
+  if (isRefreshing && refreshPromise) return refreshPromise;
+  isRefreshing = true;
+  refreshPromise = (async function() {
+    try {
+      return await refreshAccessToken();
+    } catch {
+      return { status: "network_error" } as RefreshResult;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 export async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   var { method = "GET", body, retry = 2, timeout = 10000 } = opts;
-  var token = opts.token !== undefined ? opts.token : _getToken?.() || null;
-  var headers: HeadersInit = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = "Bearer " + token;
+  var explicitToken = opts.token !== undefined;
+  var token = explicitToken ? opts.token : _getToken?.() || null;
   var lastError: Error | null = null;
+
   for (var attempt = 0; attempt <= retry; attempt++) {
+    // Re-lê token do store a cada tentativa: após refresh, _getToken() já
+    // devolve o token fresco (refreshAccessToken atualiza useAuthStore.setState).
+    // Sem isso, o retry usaria o token antigo do closure e geraria 401 de novo.
+    if (!explicitToken) token = _getToken?.() || null;
+    var headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+
     try {
       var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
       var timer = controller ? setTimeout(function() { controller!.abort(); }, timeout) : null;
       var res = await fetch(BASE_URL + path, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined, signal: controller?.signal });
       if (timer) clearTimeout(timer);
       var data = await res.json().catch(function() { return {}; });
-      if (res.status === 401 && !opts.token) {
-        if (!isRefreshing) { isRefreshing = true; refreshPromise = refreshAccessToken(); }
-        var result = await refreshPromise!; isRefreshing = false; refreshPromise = null;
-        if (result.status === "ok") {
-          var retryRes = await fetch(BASE_URL + path, { method: method, headers: { ...headers, Authorization: "Bearer " + result.token }, body: body ? JSON.stringify(body) : undefined });
-          var retryData = await retryRes.json().catch(function() { return {}; });
-          if (retryRes.ok) return retryData as T;
-          if (retryRes.status === 401 && _onUnauthorized) _onUnauthorized();
-          throw new ApiError((retryData as any).error || "Sessao expirada", 401, retryData);
+
+      if (res.status === 401 && !explicitToken) {
+        // Só tenta refresh na PRIMEIRA tentativa (attempt === 0). Após isso,
+        // se ainda voltar 401, é sessão terminalmente inválida.
+        if (attempt === 0) {
+          var result = await ensureRefresh();
+          if (result.status === "ok") {
+            // Token foi atualizado no store por refreshAccessToken; próxima
+            // iteração do loop lê via _getToken() e refaz com Authorization fresco.
+            continue;
+          }
+          if (result.status === "invalid") {
+            // Falha terminal: refresh token expirado/revogado. Dispara logout
+            // imediatamente — não continua pro retry loop (não adianta repetir).
+            if (_onUnauthorized) _onUnauthorized();
+            throw new ApiError((data as any).error || "Sessao expirada", 401, data, false, "session_expired");
+          }
+          // network_error no refresh: NÃO desloga o user (pode ser internet
+          // intermitente). Lança ApiError de rede pro caller saber.
+          throw new ApiError("Falha de conexao ao renovar sessao. Verifique sua internet.", 0, null, true, "network");
         }
-        if (result.status === "invalid") { if (_onUnauthorized) _onUnauthorized(); throw new ApiError((data as any).error || "Sessao expirada", 401, data); }
-        if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 1500 * (attempt + 1)); }); continue; }
-        throw new ApiError("Falha de conexao. Verifique sua internet.", 0, null, true);
+        // 401 após retry: sessão realmente inválida.
+        if (_onUnauthorized) _onUnauthorized();
+        throw new ApiError((data as any).error || "Sessao expirada", 401, data, false, "session_expired");
       }
-      if (res.status === 401) throw new ApiError((data as any).error || "Nao autorizado", 401, data);
+      if (res.status === 401) throw new ApiError((data as any).error || "Nao autorizado", 401, data, false, "unauthorized");
       if (res.status === 429 && attempt < retry) { await new Promise(function(r) { setTimeout(r, 1000 * (attempt + 1)); }); continue; }
       if (!res.ok) throw new ApiError((data as any).error || "Erro HTTP " + res.status, res.status, data);
       return data as T;
     } catch (err: any) {
-      lastError = err; if (err instanceof ApiError) throw err;
+      lastError = err;
+      if (err instanceof ApiError) throw err;
       if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 800 * (attempt + 1)); }); continue; }
     }
   }
-  throw lastError || new ApiError("Erro de conexao. Verifique sua internet.", 0, null, true);
+  throw lastError || new ApiError("Erro de conexao. Verifique sua internet.", 0, null, true, "network");
 }
 
 export { BASE_URL };
