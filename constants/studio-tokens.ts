@@ -13,6 +13,10 @@
 //
 // Doc: Projects/Aura/BACKLOG_AURA_STUDIO.md
 // Memory: plano_aura_studio_vertical_24mai2026
+//
+// 25/05/2026 (Fase 0 UX overhaul) — adicionados tokens semanticos
+// (danger/warning/info/success + soft/ink variants) pra padronizar
+// estados pelo app e parar de hardcodar #F59E0B, #FEE2E2, etc.
 // ============================================================
 
 export const StudioColors = {
@@ -53,6 +57,34 @@ export const StudioColors = {
   // ── Sombras coloridas ────────────────────────────────────
   shadowNavy:    "0 8px 24px -6px rgba(30,58,138,0.4)",
   shadowAccent:  "0 8px 24px -6px rgba(236,72,153,0.35)",
+
+  // ════════════════════════════════════════════════════════
+  // TOKENS SEMÂNTICOS (Fase 0 UX overhaul — 25/05/2026)
+  //
+  // Use SEMPRE estes pra estados (erro, alerta, info, sucesso).
+  // NUNCA hardcode #DC2626/#F59E0B/#3B82F6/#10B981 nas telas.
+  // Padrão tripla: cor base + soft (background) + ink (texto sobre soft).
+  // ════════════════════════════════════════════════════════
+
+  // ── Danger (erro, destrutivo, alerta crítico) ────────────
+  danger:        "#DC2626",
+  dangerSoft:    "#FEE2E2",
+  dangerInk:     "#991B1B",
+
+  // ── Warning (atenção, prazo apertado) ────────────────────
+  warning:       "#F59E0B",
+  warningSoft:   "#FEF3C7",
+  warningInk:    "#92400E",
+
+  // ── Info (informação neutra, hints) ──────────────────────
+  info:          "#3B82F6",       // = primary2 (navy claro)
+  infoSoft:      "#DBEAFE",       // = primarySoft
+  infoInk:       "#1E3A8A",       // = primary
+
+  // ── Success (confirmação, sucesso) ───────────────────────
+  success:       "#10B981",       // = mint (mantido alias pra clareza)
+  successSoft:   "#D1FAE5",       // = mintSoft
+  successInk:    "#065F46",
 } as const;
 
 // ── Gradientes nomeados ───────────────────────────────────
