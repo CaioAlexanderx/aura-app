@@ -33,9 +33,9 @@ function fmtDate(iso: string) {
 }
 
 const SEVERITY_TONE = {
-  info: { bg: "#DBEAFE", color: "#1E40AF", icon: "info" },
-  warning: { bg: "#FEF3C7", color: "#92400E", icon: "alert-triangle" },
-  danger: { bg: "#FEE2E2", color: "#991B1B", icon: "alert-circle" },
+  info:    { bg: StudioColors.infoSoft,    color: StudioColors.infoInk,    icon: "info" },
+  warning: { bg: StudioColors.warningSoft, color: StudioColors.warningInk, icon: "alert-triangle" },
+  danger:  { bg: StudioColors.dangerSoft,  color: StudioColors.dangerInk,  icon: "alert-circle" },
 } as const;
 
 export default function StudioPedidosHub() {
@@ -117,9 +117,9 @@ export default function StudioPedidosHub() {
         <View style={s.kpis}>
           <Kpi label="Pedidos hoje"    value={String(stats.orders.orders_today)} icon="shopping-bag" color={StudioColors.primary} />
           <Kpi label="Em produção"     value={String(stats.orders.in_production)} icon="clock" color={StudioColors.accent} />
-          <Kpi label="Aguardando arte" value={String(stats.orders.pending_art)} icon="alert-circle" color="#F59E0B" />
+          <Kpi label="Aguardando arte" value={String(stats.orders.pending_art)} icon="alert-circle" color={StudioColors.warning} />
           <Kpi label="Prontos"         value={String(stats.orders.ready)} icon="package" color={StudioColors.mint} />
-          <Kpi label="Atrasados"       value={String(stats.orders.overdue)} icon="alert-triangle" color="#DC2626" highlight={stats.orders.overdue > 0} />
+          <Kpi label="Atrasados"       value={String(stats.orders.overdue)} icon="alert-triangle" color={StudioColors.danger} highlight={stats.orders.overdue > 0} />
           <Kpi label="Receita 7d"      value={fmtBRL(stats.revenue.last_7d)} icon="trending-up" color={StudioColors.primary} />
         </View>
       )}
