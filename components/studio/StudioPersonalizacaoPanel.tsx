@@ -26,6 +26,7 @@
 //   - sanitizeConfig inline (id/required/type/label)
 //   - Toast erro: [status] data.error || message
 //   - console.log + console.error com {status, code, message, data}
+//   - NUNCA logar payload completo (PII) — só counts/sizes
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -241,7 +242,7 @@ export function StudioPersonalizacaoPanel({
     const cfg = sanitizeConfig(config);
     if (!cfg.fields.length) { toast.error("Adicione 1 campo"); return; }
     setSaving(true);
-    console.log("[StudioPersonalizacao] save start", { productId, payload: cfg });
+    console.log("[StudioPersonalizacao] save start", { productId, fieldsCount: cfg.fields.length });
     try {
       const resp = await studioApi.saveCustomizationConfig(companyId, productId, cfg);
       console.log("[StudioPersonalizacao] save OK", resp);
