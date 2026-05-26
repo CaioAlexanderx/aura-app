@@ -35,6 +35,12 @@
 //   · StudioFab condicional por rota (Novo produto, Cadastrar
 //     produto, Adicionar template, Novo pedido)
 //   · StudioPullToRefresh helper wrapando RefreshControl tematizado
+//
+// 26/05 — residual:
+//   · FAB também no breakpoint tablet (768–899) — antes era órfão,
+//     só sidebar inline chip sem ação rápida contextual
+//   · Avatar (desktop) com iniciais dinâmicas do user.name via
+//     useAuthStore (não mais "SM" hardcoded)
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -56,6 +62,16 @@ import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
 import { useStudioOnboarding } from "@/hooks/useStudioOnboarding";
 import { StudioBottomSheet } from "@/components/studio/StudioBottomSheet";
 import { StudioFab } from "@/components/studio/StudioFab";
+import { useAuthStore } from "@/stores/auth";
+
+// Iniciais a partir do nome — 2 caracteres uppercase.
+// "Caio" -> "CA", "Caio Alexander" -> "CA", "" -> "??"
+function initials(name?: string | null): string {
+  if (!name) return "??";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 // ─── Float hook (#7: pausa após N segundos pra não distrair) ────
 function useFloat(idx: number, pause: boolean) {
@@ -442,6 +458,13 @@ export function StudioShell() {
   const isWide = width >= 900;
   // Fase 7 residual: breakpoint mobile dedicado (sheet menu + FAB)
   const isMobile = width < 768;
+  // Residual 26/05: breakpoint tablet órfão (768–899) ganha FAB também.
+  // Mantém sidebar inline chips, só adiciona ação rápida contextual no
+  // canto inferior direito.
+  const isTablet = width >= 768 && width < 900;
+
+  // Auth: avatar com iniciais dinâmicas (residual 26/05)
+  const { user } = useAuthStore();
 
   const [openGroup, setOpenGroup] = useState<number | null>(null);
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
@@ -534,7 +557,7 @@ export function StudioShell() {
 
   const isHome = pathname === "/studio" || pathname === "/studio/";
 
-  // FAB por rota (mobile only)
+  // FAB por rota (mobile + tablet)
   const fabConfig = useMemo(() => resolveFab(pathname), [pathname]);
 
   // ─── Layout mobile (Fase 7 residual: menu sheet + FAB) ─────
@@ -613,8 +636,8 @@ export function StudioShell() {
   }
 
   // ─── Layout tablet (#1: sidebar inline expandida no topo) ──
-  // (largura 768–899: ainda usa o modelo de chips legado, sem FAB
-  //  porque desktop tem outras affordances)
+  // (largura 768–899: ainda usa o modelo de chips legado.
+  //  Residual 26/05: FAB também aparece aqui — antes era órfão.)
   if (!isWide) {
     return (
       <StudioAccentTheme tokens={resolvedAccent}>
@@ -658,6 +681,15 @@ export function StudioShell() {
           <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
             <Slot />
           </Reanimated.View>
+          {isTablet && fabConfig && (
+            <StudioFab
+              icon={fabConfig.icon}
+              label={fabConfig.label}
+              accessibilityLabel={fabConfig.accessibilityLabel}
+              onPress={() => router.push(fabConfig.href as any)}
+              position={{ bottom: 24, right: 24 }}
+            />
+          )}
           <FloatingApprovalButton />
           <StudioOnboarding
             visible={onboardingVisible}
@@ -748,7 +780,7 @@ export function StudioShell() {
           />
 
           <View style={s.avatar} accessibilityLabel="Avatar do usuário">
-            <Text style={s.avatarTxt}>SM</Text>
+            <Text style={s.avatarTxt}>{initials(user?.name)}</Text>
           </View>
         </View>
 
