@@ -34,7 +34,7 @@ type Column = {
 const COLUMNS: Column[] = [
   // S-0: nova primeira coluna pra pedidos de marketplace (ML/Shopee) sem personalização ainda coletada.
   { key: "awaiting_customization", label: "Aguardando personalização", icon: "message-circle", color: StudioColors.accent, bg: "#FCE7F3", nextLabel: "Coletar e enviar pra arte" },
-  { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: "#F59E0B", bg: "#FEF3C7", nextLabel: "Marcar como aprovado" },
+  { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: StudioColors.warning, bg: StudioColors.warningSoft, nextLabel: "Marcar como aprovado" },
   { key: "approved",      label: "Aprovado",         icon: "check",        color: StudioColors.primary, bg: StudioColors.primarySoft, nextLabel: "Iniciar produção" },
   { key: "in_production", label: "Em produção",      icon: "clock",        color: StudioColors.accent, bg: StudioColors.accentSoft, nextLabel: "Marcar como pronto" },
   { key: "ready",         label: "Pronto",           icon: "package",      color: StudioColors.mint, bg: StudioColors.mintSoft, nextLabel: "Marcar como entregue" },
@@ -52,7 +52,7 @@ const NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null>
 };
 
 const PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }> = {
-  mercado_livre: { label: "Mercado Livre", bg: "#FEF3C7", fg: "#92400E" },
+  mercado_livre: { label: "Mercado Livre", bg: StudioColors.warningSoft, fg: StudioColors.warningInk },
   shopee:        { label: "Shopee",        bg: "#FFEDD5", fg: "#9A3412" },
 };
 
@@ -211,11 +211,11 @@ export default function StudioProducao() {
                       <View style={s.cardHead}>
                         <Text style={s.cardId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
                         <View style={[s.slaChip,
-                                      sla.tone === "warm"  ? { backgroundColor: "#FEF3C7" } :
-                                      sla.tone === "late"  ? { backgroundColor: "#FEE2E2" } : null]}>
+                                      sla.tone === "warm"  ? { backgroundColor: StudioColors.warningSoft } :
+                                      sla.tone === "late"  ? { backgroundColor: StudioColors.dangerSoft } : null]}>
                           <Text style={[s.slaTxt,
-                                        sla.tone === "warm" ? { color: "#92400E" } :
-                                        sla.tone === "late" ? { color: "#991B1B" } : null]}>
+                                        sla.tone === "warm" ? { color: StudioColors.warningInk } :
+                                        sla.tone === "late" ? { color: StudioColors.dangerInk } : null]}>
                             {sla.txt}
                           </Text>
                         </View>
