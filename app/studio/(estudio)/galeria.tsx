@@ -12,7 +12,7 @@
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, Pressable, StyleSheet,
   TextInput, Image, Modal,
 } from "react-native";
 import { Icon } from "@/components/Icon";
@@ -21,6 +21,8 @@ import { studioApi, type Template, type TemplateCategory } from "@/services/stud
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { TemplateUploadWizard } from "@/components/studio/TemplateUploadWizard";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
 export default function StudioGaleria() {
   const { company } = useAuthStore();
@@ -149,31 +151,26 @@ export default function StudioGaleria() {
       </View>
 
       {/* Loading */}
-      {loading && (
-        <View style={{ paddingVertical: 30 }}>
-          <ActivityIndicator size="small" color={StudioColors.primary} />
-        </View>
-      )}
+      {loading && <StudioLoading variant="skeleton-cards" rows={6} />}
 
       {/* Empty */}
       {!loading && filteredTemplates.length === 0 && (
-        <View style={s.emptyCard}>
-          <Icon name="image" size={32} color={StudioColors.ink4} />
-          <Text style={s.emptyTitle}>
-            {templates.length === 0 ? "Galeria vazia" : "Nada com esse filtro"}
-          </Text>
-          <Text style={s.emptySub}>
-            {templates.length === 0
-              ? "Bora subir o primeiro template? Templates economizam tempo do cliente e fecham venda mais rápido."
-              : "Tenta outra categoria ou limpa o filtro."}
-          </Text>
-          {templates.length === 0 && (
-            <Pressable style={s.ctaPri} onPress={() => setWizardOpen(true)}>
-              <Icon name="plus" size={16} color="#fff" />
-              <Text style={s.ctaPriTxt}>Subir primeiro template</Text>
-            </Pressable>
-          )}
-        </View>
+        templates.length === 0 ? (
+          <StudioEmpty
+            icon="image"
+            title="Galeria vazia"
+            desc="Cadastre seus primeiros templates. Vão aparecer pro cliente escolher no momento da personalização."
+            primaryCta={{ label: "Adicionar template", onPress: () => setWizardOpen(true) }}
+            secondaryCta={{ label: "Adicionar categoria", onPress: () => setShowNewCat(true) }}
+          />
+        ) : (
+          <StudioEmpty
+            icon="filter"
+            title="Nenhum template nessa categoria"
+            desc="Tente outra categoria ou adicione um novo."
+            compact
+          />
+        )
       )}
 
       {/* Grid */}
@@ -275,14 +272,6 @@ const s = StyleSheet.create({
     marginBottom: 18,
   },
   searchInput: { flex: 1, fontSize: 13, color: StudioColors.ink },
-
-  emptyCard: {
-    alignItems: "center", padding: 40, gap: 10,
-    backgroundColor: StudioColors.paperCard,
-    borderRadius: 18, borderWidth: 1, borderColor: StudioColors.ink5,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: StudioColors.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 360, marginBottom: 6 },
 
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
   tplCard: {
