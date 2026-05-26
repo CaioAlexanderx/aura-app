@@ -22,8 +22,14 @@
 //   · respeita prefers-reduced-motion (AccessibilityInfo)
 //   · :focus-visible outline navy global (web only)
 //   · accessibilityLabel em todas as Pressables ícone-only
+//
+// 26/05 — Fases 5B + 8B integração:
+//   · StudioAccentTheme wrappa todo o shell (tokens derivados
+//     do Canal Digital via useDigitalChannel quando custom)
+//   · StudioOnboarding renderiza modal first-run controlado por
+//     useStudioOnboarding (delay 800ms pra shell aparecer antes)
 // ============================================================
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import {
   View, Text, Pressable, StyleSheet,
   Animated, Easing, useWindowDimensions, ScrollView,
@@ -37,6 +43,10 @@ import { Icon } from "@/components/Icon";
 import { StudioColors, StudioRadius, StudioFloat } from "@/constants/studio-tokens";
 import { FloatingApprovalButton } from "@/components/studio/FloatingApprovalButton";
 import { AuraStudioMark, AuraStudioLockup } from "@/components/studio/AuraStudioMark";
+import { StudioAccentTheme, studioDefaultAccent, deriveAccentFromColors } from "@/contexts/StudioAccentTheme";
+import { useDigitalChannel } from "@/hooks/useDigitalChannel";
+import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
+import { useStudioOnboarding } from "@/hooks/useStudioOnboarding";
 
 // ─── Float hook (#7: pausa após N segundos pra não distrair) ────
 function useFloat(idx: number, pause: boolean) {
@@ -231,6 +241,27 @@ export function StudioShell() {
   const [openGroup, setOpenGroup] = useState<number | null>(null);
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
 
+  // ─── Fase 8B: derivar accent tokens do Canal Digital ──────
+  const { config } = useDigitalChannel();
+  const resolvedAccent = useMemo(() => {
+    if (config?.primary_color && config?.accent_color
+        && config.primary_color !== "#1E3A8A"
+        && config.accent_color !== "#EC4899") {
+      return deriveAccentFromColors(config.primary_color, config.accent_color);
+    }
+    return studioDefaultAccent;
+  }, [config?.primary_color, config?.accent_color]);
+
+  // ─── Fase 5B: onboarding first-run ────────────────────────
+  const { shouldShow, markSeen } = useStudioOnboarding();
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
+  useEffect(() => {
+    if (shouldShow) {
+      const t = setTimeout(() => setOnboardingVisible(true), 800);
+      return () => clearTimeout(t);
+    }
+  }, [shouldShow]);
+
   // #7: pausa float ambient após 10s (somente desktop expandido)
   const [floatPause, setFloatPause] = useState(false);
   useEffect(() => {
@@ -300,138 +331,152 @@ export function StudioShell() {
   // ─── Layout mobile (#1: sidebar inline expandida no topo) ──
   if (!isWide) {
     return (
-      <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
-        <View style={s.mobileBar}>
-          <Pressable
-            onPress={() => go("/studio")}
-            accessibilityLabel="Ir para início do Aura Studio"
-            accessibilityRole="button"
-            style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}
-          >
-            <AuraStudioLockup size={26} variant="dark" />
-          </Pressable>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.mobileChipsRow}
-          >
-            <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={TONES.navy.bg} />
-            {GROUPS.flatMap((g) =>
-              g.children.map((c) => (
-                <MobileChip
-                  key={c.href}
-                  label={c.label}
-                  icon={c.icon}
-                  active={pathname.startsWith(c.href)}
-                  onPress={() => go(c.href)}
-                  tone={TONES[g.toneKey].bg}
-                />
-              ))
-            )}
-            <MobileChip
-              label="Config"
-              icon="settings"
-              active={pathname.startsWith("/studio/configuracoes")}
-              onPress={() => go("/studio/configuracoes")}
-              tone={StudioColors.ink3}
-            />
-          </ScrollView>
+      <StudioAccentTheme tokens={resolvedAccent}>
+        <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+          <View style={s.mobileBar}>
+            <Pressable
+              onPress={() => go("/studio")}
+              accessibilityLabel="Ir para início do Aura Studio"
+              accessibilityRole="button"
+              style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}
+            >
+              <AuraStudioLockup size={26} variant="dark" />
+            </Pressable>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.mobileChipsRow}
+            >
+              <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={TONES.navy.bg} />
+              {GROUPS.flatMap((g) =>
+                g.children.map((c) => (
+                  <MobileChip
+                    key={c.href}
+                    label={c.label}
+                    icon={c.icon}
+                    active={pathname.startsWith(c.href)}
+                    onPress={() => go(c.href)}
+                    tone={TONES[g.toneKey].bg}
+                  />
+                ))
+              )}
+              <MobileChip
+                label="Config"
+                icon="settings"
+                active={pathname.startsWith("/studio/configuracoes")}
+                onPress={() => go("/studio/configuracoes")}
+                tone={StudioColors.ink3}
+              />
+            </ScrollView>
+          </View>
+          <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
+            <Slot />
+          </Reanimated.View>
+          <FloatingApprovalButton />
+          <StudioOnboarding
+            visible={onboardingVisible}
+            onClose={() => { setOnboardingVisible(false); markSeen(); }}
+            onComplete={() => { setOnboardingVisible(false); markSeen(); }}
+          />
         </View>
-        <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
-          <Slot />
-        </Reanimated.View>
-        <FloatingApprovalButton />
-      </View>
+      </StudioAccentTheme>
     );
   }
 
   // ─── Layout desktop (sidebar circular agrupada) ────────────
   return (
-    <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
-      <View style={s.sidebar}>
-        <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 16 }}>
-          <Pressable
+    <StudioAccentTheme tokens={resolvedAccent}>
+      <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
+        <View style={s.sidebar}>
+          <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 16 }}>
+            <Pressable
+              onPress={() => go("/studio")}
+              accessibilityLabel="Ir para início do Aura Studio"
+              accessibilityRole="button"
+            >
+              <AuraStudioMark size={54} />
+            </Pressable>
+          </FloatingBubble>
+
+          <NavCircle
+            icon="grid"
+            active={isHome}
+            idx={1}
+            pause={floatPause}
+            accessibilityLabel="Início do Aura Studio"
             onPress={() => go("/studio")}
-            accessibilityLabel="Ir para início do Aura Studio"
-            accessibilityRole="button"
-          >
-            <AuraStudioMark size={54} />
-          </Pressable>
-        </FloatingBubble>
+          />
 
-        <NavCircle
-          icon="grid"
-          active={isHome}
-          idx={1}
-          pause={floatPause}
-          accessibilityLabel="Início do Aura Studio"
-          onPress={() => go("/studio")}
-        />
-
-        {GROUPS.map((g, i) => {
-          const open = openGroup === i;
-          const childActive = g.children.some((c) => pathname.startsWith(c.href));
-          const showTooltip =
-            Platform.OS === "web" && hoveredGroupId === g.id && !open;
-          const groupLabel = `Área ${g.label} — ${g.children.map((c) => c.label).join(", ")}`;
-          return (
-            <View key={g.label} style={{ position: "relative" }}>
-              <NavCircle
-                icon={g.icon}
-                idx={i + 2}
-                active={open || childActive}
-                isGroup
-                pause={floatPause}
-                accessibilityLabel={groupLabel}
-                onHoverIn={() => setHoveredGroupId(g.id)}
-                onHoverOut={() =>
-                  setHoveredGroupId((prev) => (prev === g.id ? null : prev))
-                }
-                onPress={() => setOpenGroup(open ? null : i)}
-              >
-                {open && (
-                  <View style={s.childrenPop}>
-                    <View style={s.childrenInner}>
-                      {g.children.map((c, ci) => (
-                        <ChildBubble
-                          key={c.href}
-                          child={c}
-                          idx={ci}
-                          tone={g.toneKey}
-                          pause={floatPause}
-                          onPress={() => go(c.href)}
-                        />
-                      ))}
+          {GROUPS.map((g, i) => {
+            const open = openGroup === i;
+            const childActive = g.children.some((c) => pathname.startsWith(c.href));
+            const showTooltip =
+              Platform.OS === "web" && hoveredGroupId === g.id && !open;
+            const groupLabel = `Área ${g.label} — ${g.children.map((c) => c.label).join(", ")}`;
+            return (
+              <View key={g.label} style={{ position: "relative" }}>
+                <NavCircle
+                  icon={g.icon}
+                  idx={i + 2}
+                  active={open || childActive}
+                  isGroup
+                  pause={floatPause}
+                  accessibilityLabel={groupLabel}
+                  onHoverIn={() => setHoveredGroupId(g.id)}
+                  onHoverOut={() =>
+                    setHoveredGroupId((prev) => (prev === g.id ? null : prev))
+                  }
+                  onPress={() => setOpenGroup(open ? null : i)}
+                >
+                  {open && (
+                    <View style={s.childrenPop}>
+                      <View style={s.childrenInner}>
+                        {g.children.map((c, ci) => (
+                          <ChildBubble
+                            key={c.href}
+                            child={c}
+                            idx={ci}
+                            tone={g.toneKey}
+                            pause={floatPause}
+                            onPress={() => go(c.href)}
+                          />
+                        ))}
+                      </View>
                     </View>
-                  </View>
-                )}
-                {showTooltip && <GroupHoverTooltip group={g} />}
-              </NavCircle>
-            </View>
-          );
-        })}
+                  )}
+                  {showTooltip && <GroupHoverTooltip group={g} />}
+                </NavCircle>
+              </View>
+            );
+          })}
 
-        <View style={{ flex: 1 }} />
+          <View style={{ flex: 1 }} />
 
-        <NavCircle
-          icon="settings"
-          idx={6}
-          pause={floatPause}
-          active={pathname.startsWith("/studio/configuracoes")}
-          accessibilityLabel="Configurações do Studio"
-          onPress={() => go("/studio/configuracoes")}
-        />
+          <NavCircle
+            icon="settings"
+            idx={6}
+            pause={floatPause}
+            active={pathname.startsWith("/studio/configuracoes")}
+            accessibilityLabel="Configurações do Studio"
+            onPress={() => go("/studio/configuracoes")}
+          />
 
-        <View style={s.avatar} accessibilityLabel="Avatar do usuário">
-          <Text style={s.avatarTxt}>SM</Text>
+          <View style={s.avatar} accessibilityLabel="Avatar do usuário">
+            <Text style={s.avatarTxt}>SM</Text>
+          </View>
         </View>
-      </View>
 
-      <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
-        <Slot />
-      </Reanimated.View>
-      <FloatingApprovalButton />
-    </View>
+        <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
+          <Slot />
+        </Reanimated.View>
+        <FloatingApprovalButton />
+        <StudioOnboarding
+          visible={onboardingVisible}
+          onClose={() => { setOnboardingVisible(false); markSeen(); }}
+          onComplete={() => { setOnboardingVisible(false); markSeen(); }}
+        />
+      </View>
+    </StudioAccentTheme>
   );
 }
 
