@@ -4,9 +4,7 @@
 // Persiste em companies.pdv_settings + companies.studio_settings:
 //   - approval_wa_phone (studio_settings) — WhatsApp da loja
 //   - default_sla_days (studio_settings) — prazo padrão produção
-//   - studio_kds_enabled / gallery_enabled / approval_enabled
-//     (pdv_settings) — toggles observacionais (memory
-//     convencao_subtoggles_observacionais)
+//   - studio_approval_enabled (pdv_settings) — controla fluxo real
 //   - studio_approval_mode (pdv_settings) — wa_me ou whatsapp_business
 //
 // Fase 12 (25/05/2026):
@@ -16,6 +14,11 @@
 // 26/05/2026 (fix critico inoperante):
 //   - save() agora salva PDV E studio_settings (slaDays+waPhone)
 //   - load defensivo: erro em studio.health nao trava a tela
+//
+// 26/05/2026 (cleanup):
+//   - Removido card "Recursos ativos" (toggles kds/gallery eram
+//     observacionais e não afetavam acesso real; UX confusa)
+//   - Removida hintCard final que explicava os toggles inúteis
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -42,8 +45,6 @@ export default function StudioConfiguracoes() {
   // Form state
   const [waPhone, setWaPhone] = useState("");
   const [slaDays, setSlaDays] = useState("3");
-  const [kdsEnabled, setKdsEnabled] = useState(false);
-  const [galleryEnabled, setGalleryEnabled] = useState(false);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
   const [approvalMode, setApprovalMode] = useState<"wa_me" | "whatsapp_business">("wa_me");
 
@@ -53,8 +54,6 @@ export default function StudioConfiguracoes() {
     try {
       const h = await studioApi.health(company.id);
       setHealth(h);
-      setKdsEnabled(!!h.kds_enabled);
-      setGalleryEnabled(!!h.gallery_enabled);
       setApprovalEnabled(!!h.approval_enabled);
       setApprovalMode(h.approval_mode || "wa_me");
       const ss: any = h.settings || {};
@@ -79,10 +78,8 @@ export default function StudioConfiguracoes() {
     }
     setSaving(true);
     try {
-      // 1. pdv_settings (toggles observacionais + approval_mode)
+      // 1. pdv_settings (approval flow real)
       await pdvSettingsApi.update(company.id, {
-        studio_kds_enabled: kdsEnabled,
-        studio_gallery_enabled: galleryEnabled,
         studio_approval_enabled: approvalEnabled,
         studio_approval_mode: approvalMode,
       } as any);
@@ -250,38 +247,6 @@ export default function StudioConfiguracoes() {
         )}
       </View>
 
-      {/* Submódulos observacionais */}
-      <View style={s.card}>
-        <Text style={s.cardTitle}>Recursos ativos</Text>
-        <Text style={s.cardSub}>Marque o que você usa. Isso ajuda a Aura a entender seu fluxo e mostrar dicas mais relevantes.</Text>
-
-        <View style={s.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.toggleLabel}>KDS de produção</Text>
-            <Text style={s.toggleSub}>Painel com colunas "Aguardando arte → Em produção → Pronto"</Text>
-          </View>
-          <Switch
-            value={kdsEnabled}
-            onValueChange={setKdsEnabled}
-            trackColor={{ false: t.ink5, true: t.primary }}
-            thumbColor="#fff"
-          />
-        </View>
-
-        <View style={s.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.toggleLabel}>Galeria de templates</Text>
-            <Text style={s.toggleSub}>Banco de artes prontas (Dia das Mães, Pais, Profissões) pro cliente escolher</Text>
-          </View>
-          <Switch
-            value={galleryEnabled}
-            onValueChange={setGalleryEnabled}
-            trackColor={{ false: t.ink5, true: t.primary }}
-            thumbColor="#fff"
-          />
-        </View>
-      </View>
-
       {/* Save */}
       <Pressable style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
         {saving ? (
@@ -293,13 +258,6 @@ export default function StudioConfiguracoes() {
           </>
         )}
       </Pressable>
-
-      <View style={s.hintCard}>
-        <Icon name="info" size={14} color={t.primary} />
-        <Text style={s.hintTxt}>
-          <Text style={s.hintBold}>Recursos ativos</Text> são indicadores pro time Aura entender quais funcionalidades você usa. Não afetam o acesso — todas as telas continuam visíveis e funcionais.
-        </Text>
-      </View>
     </ScrollView>
   );
 }
@@ -347,9 +305,5 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
 
     saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, marginTop: 6 },
     saveBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-
-    hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: t.primaryGhost, borderRadius: 12, padding: 12, marginTop: 18, borderWidth: 1, borderColor: t.primarySoft },
-    hintTxt: { fontSize: 12, color: t.ink2, flex: 1, lineHeight: 17 },
-    hintBold: { fontWeight: "700", color: t.primary },
   });
 }
