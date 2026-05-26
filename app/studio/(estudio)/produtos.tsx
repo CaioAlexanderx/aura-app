@@ -1,8 +1,12 @@
 // ============================================================
-// AURA STUDIO · Produtos personalizáveis (Fase 1)
+// AURA STUDIO · Produtos personalizáveis (Fase 1 + Fase 4 preview)
 //
 // Lista produtos da empresa + toggle "personalizável" + form
 // expandido inline pra configurar print area e campos.
+//
+// Fase 4 (26/05/2026): preview ao vivo lateral usando
+// <PersonalizationPreview> dentro do expand — split horizontal
+// no desktop (vw > 768), preview acima do form no mobile.
 //
 // Endpoints (backend src/routes/studio.js):
 //   GET    /companies/:cid/studio/products/:pid/customization-config
@@ -11,10 +15,10 @@
 //
 // Quando salva config: marca onboarding.product = true no studio_settings.
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, Switch,
+  TextInput, Switch, useWindowDimensions, Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
@@ -22,6 +26,7 @@ import { studioApi, type CustomizationConfig, type CustomizationField, type Cust
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 
 // Tipo enxuto pro produto vindo de /companies/:cid/products
 type ProductRow = {
@@ -58,14 +63,44 @@ function defaultConfig(): CustomizationConfig {
   };
 }
 
+// Fase 4: monta valores fake pro preview ao vivo no admin.
+// Cada tipo de campo recebe um placeholder representativo:
+//   text     → "Exemplo: João"
+//   color    → primeira cor da lista de choices/config.colors (fallback #EC4899)
+//   option   → primeira choice
+//   template → null (sem imagem default, mostra área dashed)
+//   image    → null (idem)
+function buildPreviewValues(cfg: CustomizationConfig | undefined): Record<string, any> {
+  if (!cfg) return {};
+  const out: Record<string, any> = {};
+  for (const f of cfg.fields) {
+    if (f.type === "text") {
+      out[f.id] = "Exemplo: João";
+    } else if (f.type === "color") {
+      const colors = (f.config?.colors as string[] | undefined) || [];
+      const choices = (f.config?.choices as Array<{ value: string }> | undefined) || [];
+      out[f.id] = colors[0] || choices[0]?.value || "#EC4899";
+    } else if (f.type === "option") {
+      const choices = (f.config?.choices as Array<{ value: string; label: string }> | undefined) || [];
+      out[f.id] = choices[0]?.value || "";
+    } else if (f.type === "template" || f.type === "image") {
+      out[f.id] = null;
+    }
+  }
+  return out;
+}
+
 export default function StudioProdutos() {
   const { company } = useAuthStore();
+  const { width: vw } = useWindowDimensions();
+  const isDesktop = vw > 768;
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [filter, setFilter] = useState<"all" | "personalizable" | "non">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [configCache, setConfigCache] = useState<Record<string, CustomizationConfig>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [channelSlug, setChannelSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!company?.id) return;
@@ -81,6 +116,23 @@ export default function StudioProdutos() {
   }, [company?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Fase 4: tenta resolver slug do Canal Digital pra link "Ver como cliente".
+  // Best-effort — se endpoint não existir ou retornar vazio, o link some.
+  useEffect(() => {
+    if (!company?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r: any = await request(`/companies/${company.id}/digital-channel`, { method: "GET", retry: 0, timeout: 6000 });
+        const slug = r?.slug || r?.channel?.slug || r?.digital_channel?.slug || null;
+        if (!cancelled && slug) setChannelSlug(String(slug));
+      } catch {
+        // Endpoint pode não existir nessa empresa — silencioso, link some.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [company?.id]);
 
   const filtered = products.filter((p) => {
     if (filter === "all") return true;
@@ -184,6 +236,14 @@ export default function StudioProdutos() {
     finally { setSavingId(null); }
   }
 
+  function openCustomerView() {
+    if (!channelSlug) return;
+    const url = `https://loja.getaura.com.br/${channelSlug}/studio`;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
+
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* Header */}
@@ -275,137 +335,22 @@ export default function StudioProdutos() {
                   />
                 </View>
 
-                {/* Form expandido */}
+                {/* Form expandido + preview ao vivo (Fase 4) */}
                 {expanded && p.is_personalizable && (
-                  <View style={s.expand}>
-                    {!cfg && (
-                      <View style={{ paddingVertical: 14 }}>
-                        <ActivityIndicator size="small" color={StudioColors.primary} />
-                      </View>
-                    )}
-                    {cfg && (
-                      <>
-                        {/* Print area */}
-                        <Text style={s.sectionLabel}>ÁREA DE IMPRESSÃO</Text>
-                        <View style={s.row}>
-                          <View style={{ flex: 1, minWidth: 100 }}>
-                            <Text style={s.label}>Largura (cm)</Text>
-                            <TextInput
-                              style={s.input}
-                              keyboardType="decimal-pad"
-                              value={String(cfg.print_area.width_cm)}
-                              onChangeText={(v) => updateConfig(p.id, { print_area: { ...cfg.print_area, width_cm: parseFloat(v.replace(",", ".")) || 0 } })}
-                            />
-                          </View>
-                          <View style={{ flex: 1, minWidth: 100 }}>
-                            <Text style={s.label}>Altura (cm)</Text>
-                            <TextInput
-                              style={s.input}
-                              keyboardType="decimal-pad"
-                              value={String(cfg.print_area.height_cm)}
-                              onChangeText={(v) => updateConfig(p.id, { print_area: { ...cfg.print_area, height_cm: parseFloat(v.replace(",", ".")) || 0 } })}
-                            />
-                          </View>
-                          <View style={{ flex: 1, minWidth: 150 }}>
-                            <Text style={s.label}>Posição</Text>
-                            <View style={s.positionRow}>
-                              {(["left", "center", "right"] as const).map((pos) => (
-                                <Pressable
-                                  key={pos}
-                                  style={[s.positionChip, cfg.print_area.position === pos && s.positionChipSel]}
-                                  onPress={() => updateConfig(p.id, { print_area: { ...cfg.print_area, position: pos } })}
-                                >
-                                  <Text style={[s.positionChipTxt, cfg.print_area.position === pos && s.positionChipTxtSel]}>
-                                    {pos === "left" ? "Esq." : pos === "center" ? "Centro" : "Dir."}
-                                  </Text>
-                                </Pressable>
-                              ))}
-                            </View>
-                          </View>
-                        </View>
-
-                        {/* Fields */}
-                        <Text style={[s.sectionLabel, { marginTop: 18 }]}>CAMPOS QUE O CLIENTE PREENCHE</Text>
-                        {cfg.fields.length === 0 && (
-                          <Text style={s.hintInline}>
-                            Adicione pelo menos 1 campo. Ex: "Nome da pessoa" (texto), "Foto" (upload), "Cor" (opção).
-                          </Text>
-                        )}
-                        {cfg.fields.map((f) => (
-                          <View key={f.id} style={s.fieldRow}>
-                            <View style={s.fieldIcon}>
-                              <Icon name={FIELD_TYPE_ICONS[f.type] as any} size={14} color={StudioColors.primary} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <View style={s.fieldHead}>
-                                <TextInput
-                                  style={s.fieldLabel}
-                                  value={f.label}
-                                  onChangeText={(v) => updateField(p.id, f.id, { label: v })}
-                                  placeholder="Nome do campo"
-                                />
-                                <View style={s.fieldTypePill}>
-                                  <Text style={s.fieldTypePillTxt}>{FIELD_TYPE_LABELS[f.type]}</Text>
-                                </View>
-                              </View>
-                              <View style={s.fieldOpts}>
-                                <Pressable
-                                  style={[s.fieldOpt, f.required && s.fieldOptOn]}
-                                  onPress={() => updateField(p.id, f.id, { required: !f.required })}
-                                >
-                                  <Icon name={f.required ? "check" : "x"} size={10} color={f.required ? "#fff" : StudioColors.ink3} />
-                                  <Text style={[s.fieldOptTxt, f.required && { color: "#fff" }]}>Obrigatório</Text>
-                                </Pressable>
-                                {f.type === "text" && (
-                                  <View style={s.fieldOpt}>
-                                    <Text style={s.fieldOptTxt}>Máx:</Text>
-                                    <TextInput
-                                      style={s.fieldOptInput}
-                                      keyboardType="number-pad"
-                                      value={String(f.config?.max_chars || 30)}
-                                      onChangeText={(v) => updateField(p.id, f.id, { config: { ...f.config, max_chars: parseInt(v) || 30 } })}
-                                    />
-                                    <Text style={s.fieldOptTxt}>chars</Text>
-                                  </View>
-                                )}
-                              </View>
-                            </View>
-                            <Pressable onPress={() => removeField(p.id, f.id)} style={s.fieldDel} hitSlop={8}>
-                              <Icon name="trash" size={13} color={StudioColors.ink4} />
-                            </Pressable>
-                          </View>
-                        ))}
-
-                        {/* Add field menu */}
-                        <View style={s.addFieldRow}>
-                          <Text style={s.addFieldLabel}>+ Adicionar campo:</Text>
-                          {(["text", "image", "template", "color", "option"] as CustomizationFieldType[]).map((t) => (
-                            <Pressable key={t} style={s.addFieldChip} onPress={() => addField(p.id, t)}>
-                              <Icon name={FIELD_TYPE_ICONS[t] as any} size={11} color={StudioColors.primary} />
-                              <Text style={s.addFieldChipTxt}>{FIELD_TYPE_LABELS[t]}</Text>
-                            </Pressable>
-                          ))}
-                        </View>
-
-                        {/* Actions */}
-                        <View style={s.actions}>
-                          <Pressable style={s.btnSec} onPress={() => setExpandedId(null)}>
-                            <Text style={s.btnSecTxt}>Fechar</Text>
-                          </Pressable>
-                          <Pressable style={[s.btnPri, saving && { opacity: 0.6 }]} onPress={() => saveConfig(p)} disabled={saving}>
-                            {saving ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <>
-                                <Icon name="check" size={14} color="#fff" />
-                                <Text style={s.btnPriTxt}>Salvar configuração</Text>
-                              </>
-                            )}
-                          </Pressable>
-                        </View>
-                      </>
-                    )}
-                  </View>
+                  <ExpandedForm
+                    product={p}
+                    cfg={cfg}
+                    saving={saving}
+                    isDesktop={isDesktop}
+                    channelSlug={channelSlug}
+                    onUpdateConfig={(patch) => updateConfig(p.id, patch)}
+                    onUpdateField={(fid, patch) => updateField(p.id, fid, patch)}
+                    onAddField={(t) => addField(p.id, t)}
+                    onRemoveField={(fid) => removeField(p.id, fid)}
+                    onClose={() => setExpandedId(null)}
+                    onSave={() => saveConfig(p)}
+                    onOpenCustomerView={openCustomerView}
+                  />
                 )}
               </View>
             );
@@ -417,10 +362,201 @@ export default function StudioProdutos() {
       <View style={s.hintCard}>
         <Icon name="info" size={14} color={StudioColors.primary} />
         <Text style={s.hintTxt}>
-          <Text style={s.hintBold}>Próxima iteração:</Text> preview SVG ao vivo da personalização (ver como vai ficar antes de mandar pra produção) + integração com galeria de templates.
+          <Text style={s.hintBold}>Próxima iteração:</Text> integração com galeria de templates por categoria + preview com upload real do cliente.
         </Text>
       </View>
     </ScrollView>
+  );
+}
+
+// ============================================================
+// ExpandedForm — extraido pra poder usar useMemo do previewValues
+// sem violar regras de hooks (não usar dentro de map inline).
+// ============================================================
+type ExpandedFormProps = {
+  product: ProductRow;
+  cfg: CustomizationConfig | undefined;
+  saving: boolean;
+  isDesktop: boolean;
+  channelSlug: string | null;
+  onUpdateConfig: (patch: Partial<CustomizationConfig>) => void;
+  onUpdateField: (fid: string, patch: Partial<CustomizationField>) => void;
+  onAddField: (t: CustomizationFieldType) => void;
+  onRemoveField: (fid: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  onOpenCustomerView: () => void;
+};
+
+function ExpandedForm({
+  product: p, cfg, saving, isDesktop, channelSlug,
+  onUpdateConfig, onUpdateField, onAddField, onRemoveField,
+  onClose, onSave, onOpenCustomerView,
+}: ExpandedFormProps) {
+  // previewValues recalculado quando cfg muda — texto fixo + primeira cor/option.
+  const previewValues = useMemo(() => buildPreviewValues(cfg), [cfg]);
+  const previewSize = isDesktop ? 320 : 280;
+
+  // PreviewPane — usado nos dois layouts (desktop sidebar / mobile topo)
+  const previewPane = (
+    <View style={[s.previewPane, isDesktop && s.previewPaneDesktop]}>
+      <Text style={s.previewLabel}>PRÉVIA EM TEMPO REAL</Text>
+      <View style={s.previewBox}>
+        <PersonalizationPreview
+          config={cfg || null}
+          values={previewValues}
+          size={previewSize}
+          productName={p.name}
+          showLabel={true}
+        />
+      </View>
+      <Text style={s.previewHint}>
+        Atualiza conforme você muda a área de impressão ou adiciona campos.
+      </Text>
+      {channelSlug && Platform.OS === "web" && (
+        <Pressable style={s.customerLink} onPress={onOpenCustomerView}>
+          <Icon name="external-link" size={12} color={StudioColors.primary} />
+          <Text style={s.customerLinkTxt}>Ver como cliente</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={[s.expand, isDesktop && s.expandDesktop]}>
+      {!cfg && (
+        <View style={{ paddingVertical: 14, flex: 1 }}>
+          <ActivityIndicator size="small" color={StudioColors.primary} />
+        </View>
+      )}
+      {cfg && (
+        <>
+          {/* Layout: desktop = preview à esquerda + form à direita; mobile = preview em cima + form abaixo */}
+          {previewPane}
+
+          <View style={[s.formCol, isDesktop && s.formColDesktop]}>
+            {/* Print area */}
+            <Text style={s.sectionLabel}>ÁREA DE IMPRESSÃO</Text>
+            <View style={s.row}>
+              <View style={{ flex: 1, minWidth: 100 }}>
+                <Text style={s.label}>Largura (cm)</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType="decimal-pad"
+                  value={String(cfg.print_area.width_cm)}
+                  onChangeText={(v) => onUpdateConfig({ print_area: { ...cfg.print_area, width_cm: parseFloat(v.replace(",", ".")) || 0 } })}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 100 }}>
+                <Text style={s.label}>Altura (cm)</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType="decimal-pad"
+                  value={String(cfg.print_area.height_cm)}
+                  onChangeText={(v) => onUpdateConfig({ print_area: { ...cfg.print_area, height_cm: parseFloat(v.replace(",", ".")) || 0 } })}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 150 }}>
+                <Text style={s.label}>Posição</Text>
+                <View style={s.positionRow}>
+                  {(["left", "center", "right"] as const).map((pos) => (
+                    <Pressable
+                      key={pos}
+                      style={[s.positionChip, cfg.print_area.position === pos && s.positionChipSel]}
+                      onPress={() => onUpdateConfig({ print_area: { ...cfg.print_area, position: pos } })}
+                    >
+                      <Text style={[s.positionChipTxt, cfg.print_area.position === pos && s.positionChipTxtSel]}>
+                        {pos === "left" ? "Esq." : pos === "center" ? "Centro" : "Dir."}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {/* Fields */}
+            <Text style={[s.sectionLabel, { marginTop: 18 }]}>CAMPOS QUE O CLIENTE PREENCHE</Text>
+            {cfg.fields.length === 0 && (
+              <Text style={s.hintInline}>
+                Adicione pelo menos 1 campo. Ex: "Nome da pessoa" (texto), "Foto" (upload), "Cor" (opção).
+              </Text>
+            )}
+            {cfg.fields.map((f) => (
+              <View key={f.id} style={s.fieldRow}>
+                <View style={s.fieldIcon}>
+                  <Icon name={FIELD_TYPE_ICONS[f.type] as any} size={14} color={StudioColors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={s.fieldHead}>
+                    <TextInput
+                      style={s.fieldLabel}
+                      value={f.label}
+                      onChangeText={(v) => onUpdateField(f.id, { label: v })}
+                      placeholder="Nome do campo"
+                    />
+                    <View style={s.fieldTypePill}>
+                      <Text style={s.fieldTypePillTxt}>{FIELD_TYPE_LABELS[f.type]}</Text>
+                    </View>
+                  </View>
+                  <View style={s.fieldOpts}>
+                    <Pressable
+                      style={[s.fieldOpt, f.required && s.fieldOptOn]}
+                      onPress={() => onUpdateField(f.id, { required: !f.required })}
+                    >
+                      <Icon name={f.required ? "check" : "x"} size={10} color={f.required ? "#fff" : StudioColors.ink3} />
+                      <Text style={[s.fieldOptTxt, f.required && { color: "#fff" }]}>Obrigatório</Text>
+                    </Pressable>
+                    {f.type === "text" && (
+                      <View style={s.fieldOpt}>
+                        <Text style={s.fieldOptTxt}>Máx:</Text>
+                        <TextInput
+                          style={s.fieldOptInput}
+                          keyboardType="number-pad"
+                          value={String(f.config?.max_chars || 30)}
+                          onChangeText={(v) => onUpdateField(f.id, { config: { ...f.config, max_chars: parseInt(v) || 30 } })}
+                        />
+                        <Text style={s.fieldOptTxt}>chars</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <Pressable onPress={() => onRemoveField(f.id)} style={s.fieldDel} hitSlop={8}>
+                  <Icon name="trash" size={13} color={StudioColors.ink4} />
+                </Pressable>
+              </View>
+            ))}
+
+            {/* Add field menu */}
+            <View style={s.addFieldRow}>
+              <Text style={s.addFieldLabel}>+ Adicionar campo:</Text>
+              {(["text", "image", "template", "color", "option"] as CustomizationFieldType[]).map((t) => (
+                <Pressable key={t} style={s.addFieldChip} onPress={() => onAddField(t)}>
+                  <Icon name={FIELD_TYPE_ICONS[t] as any} size={11} color={StudioColors.primary} />
+                  <Text style={s.addFieldChipTxt}>{FIELD_TYPE_LABELS[t]}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Actions */}
+            <View style={s.actions}>
+              <Pressable style={s.btnSec} onPress={onClose}>
+                <Text style={s.btnSecTxt}>Fechar</Text>
+              </Pressable>
+              <Pressable style={[s.btnPri, saving && { opacity: 0.6 }]} onPress={onSave} disabled={saving}>
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Icon name="check" size={14} color="#fff" />
+                    <Text style={s.btnPriTxt}>Salvar configuração</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -443,7 +579,7 @@ function FilterChip({ label, count, active, onPress, tone }: { label: string; co
 
 const s = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: StudioColors.bg },
-  container: { padding: 28, paddingBottom: 60, maxWidth: 1000, alignSelf: "center", width: "100%" },
+  container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
 
   headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 22, flexWrap: "wrap" },
   eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
@@ -475,7 +611,29 @@ const s = StyleSheet.create({
   configBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: StudioColors.primaryGhost, borderRadius: 8 },
   configBtnTxt: { color: StudioColors.primary, fontSize: 11.5, fontWeight: "700" },
 
-  expand: { padding: 18, paddingTop: 4, borderTopWidth: 1, borderTopColor: StudioColors.ink5, gap: 8 },
+  // Expand: mobile = coluna unica (preview em cima + form em baixo)
+  expand: { padding: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: StudioColors.ink5, gap: 16 },
+  // Expand desktop: split horizontal (preview esquerda 320 + form direita flex 1)
+  expandDesktop: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
+
+  // Preview pane — mobile: full width, centered; desktop: sidebar fixo 320
+  previewPane: { alignItems: "center", gap: 10 },
+  previewPaneDesktop: {
+    width: 320,
+    flexShrink: 0,
+    // Sticky no web — fallback gracioso no mobile
+    ...(Platform.OS === "web" ? ({ position: "sticky", top: 16 } as any) : {}),
+  },
+  previewLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", alignSelf: "stretch" },
+  previewBox: { alignItems: "center", justifyContent: "center", padding: 8, backgroundColor: StudioColors.bgSoft, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
+  previewHint: { fontSize: 11.5, color: StudioColors.ink4, textAlign: "center", fontStyle: "italic", maxWidth: 320 },
+  customerLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: StudioColors.primaryGhost, borderRadius: 999, borderWidth: 1, borderColor: StudioColors.primarySoft, marginTop: 2 },
+  customerLinkTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.primary },
+
+  // Form column — mobile: cresce naturalmente; desktop: flex 1 do lado do preview
+  formCol: { gap: 8 },
+  formColDesktop: { flex: 1, minWidth: 0 },
+
   sectionLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
   row: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
   label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 },
