@@ -2,21 +2,22 @@
 // AURA. — PDV · Troca v3 · Step 5 — SUCESSO
 //
 // 24/05/2026 — Novo na v3.
-// 25/05/2026 — NfceActions integrado: quando netAmount > 0 (cliente
-// pagou diferença em dinheiro/pix/cartão pela venda nova), aparece
-// o mesmo bloco de emissão NFC-e do SaleComplete. Auto-emit segue
-// config da empresa. Mesma experência do fim de venda normal.
-//
-// Casos netAmount <= 0 (troca par-a-par, crédito ou loja devolve)
-// ficam sem NFC-e nova — fora do escopo desta versão.
+// 25/05/2026 — NfceActions integrado.
+// 26/05/2026 (fixes B3 + A3 da auditoria):
+//   B3 — cross-filial: usa result.origin_company_id como companyId
+//   fiscal (sale gravada na origem). Antes usava companyId da filial
+//   física, gerando NFC-e em company_id errado.
+//   A3 — split: monta payments[] array a partir de paymentSplits
+//   prop (em vez de paymentMethod singular). NFC-e com split correto.
 // ============================================================
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { NfceActions, type NfceActionsItem } from "../NfceActions";
-import type { SelectedSaleRow } from "./types";
+import type { SelectedSaleRow, PaymentSplit } from "./types";
 import { fmtBRL } from "./types";
+import type { NfcePaymentEntry } from "@/services/nfceApi";
 
 type Props = {
   companyId: string;
@@ -25,6 +26,8 @@ type Props = {
   returnedValue: number;
   newValue: number;
   netAmount: number;
+  /** 26/05/2026: splits do TrocaModal pra montar payments[] correto em NFC-e */
+  paymentSplits?: PaymentSplit[];
   onClose: () => void;
   onNew: () => void;
 };
@@ -32,6 +35,7 @@ type Props = {
 export function Step5Success({
   companyId, result, selectedSales,
   returnedValue, newValue, netAmount,
+  paymentSplits,
   onClose, onNew,
 }: Props) {
   const { company } = useAuthStore();
@@ -43,8 +47,15 @@ export function Step5Success({
   const nfceStrategy = result?.nfce?.strategy || result?.fiscal?.strategy || "none";
   const receiptUrl = result?.receipt_url || (trocaSaleId ? `/companies/${companyId}/print/receipt/${trocaSaleId}` : "");
 
-  // Items pra NFC-e nova — vem de result.new_items (sale_items joined).
-  // Adapter pro shape NfceActionsItem.
+  // 26/05/2026 (B3): companyId fiscal = origem da sale. Em cross-filial,
+  // trocaSale.company_id é da filial origem; emitir NFC-e na física geraria
+  // registro em company_id errado. Backend agora retorna origin_company_id
+  // (escalar) tanto em v1 quanto em v2.
+  const fiscalCompanyId =
+    result?.origin_company_id ||
+    (Array.isArray(result?.origin_company_ids) && result.origin_company_ids[0]) ||
+    companyId;
+
   const newItemsRaw: any[] = Array.isArray(result?.new_items) ? result.new_items : [];
   const nfceItems: NfceActionsItem[] = newItemsRaw
     .filter((it) => it && it.product_id)
@@ -55,20 +66,23 @@ export function Step5Success({
       unit_price: Number(it.unit_price) || 0,
     }));
 
-  // Cliente: tenta extrair do trocaSale (backend retorna customer_id/name).
-  // CPF na nota não vem no result da troca — fica undefined (NFC-e anônima).
   const customerName = result?.sale?.customer_name || null;
+  // 26/05/2026 (A1): backend agora retorna customer_phone via JOIN customers
   const customerPhone = result?.sale?.customer_phone || null;
 
-  // Pagamento: na troca v1, payment_method vai no body; na v2, paymentSplits.
-  // Pegamos do result.sale.payment_method (gravado no INSERT).
-  const paymentMethodRaw: string = (result?.sale?.payment_method || "dinheiro").toLowerCase();
-  // Normaliza pro shape esperado pelo nfceApi (igual SaleComplete).
-  const paymentMethod = paymentMethodRaw
+  // 26/05/2026 (A3): preferir paymentSplits (mantém split fiscal correto).
+  // Se TrocaModal não passou paymentSplits ou está vazio, cai no fallback
+  // singular do result.sale.payment_method.
+  const hasMultipleSplits = !!(paymentSplits && paymentSplits.length >= 1 && netAmount > 0);
+  const nfcePayments: NfcePaymentEntry[] | undefined = hasMultipleSplits
+    ? paymentSplits!.map((p) => ({ method: p.method, value: p.amount }))
+    : undefined;
+
+  const paymentMethodFallback = (result?.sale?.payment_method || "dinheiro").toLowerCase()
     .replace("cartao_credito", "cartao")
     .replace("cartao_debito", "debito");
 
-  const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!companyId;
+  const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!fiscalCompanyId;
 
   function openReceipt() {
     if (!receiptUrl) return;
@@ -82,7 +96,7 @@ export function Step5Success({
 
   function openDanfe() {
     if (!trocaSaleId) return;
-    const url = `${getApiBase()}/companies/${companyId}/print/danfe/devolucao/${trocaSaleId}`;
+    const url = `${getApiBase()}/companies/${fiscalCompanyId}/print/danfe/devolucao/${trocaSaleId}`;
     if (Platform.OS === "web") {
       window.open(url, "_blank");
     } else {
@@ -144,17 +158,18 @@ export function Step5Success({
         </View>
       )}
 
-      {/* NFC-e da venda nova — 25/05/2026: mesma experência do fim de venda normal */}
+      {/* NFC-e da venda nova — 25/05/2026 + B3/A3 fixes 26/05/2026 */}
       {showNfce && (
         <View style={s.nfceWrap}>
           <NfceActions
-            companyId={companyId}
+            companyId={fiscalCompanyId}
             saleId={trocaSaleId}
             items={nfceItems}
             total={newValue}
             customerName={customerName}
             customerPhone={customerPhone}
-            paymentMethod={paymentMethod}
+            payments={nfcePayments}
+            paymentMethod={nfcePayments ? undefined : paymentMethodFallback}
             autoEmit={autoEmit}
           />
         </View>
