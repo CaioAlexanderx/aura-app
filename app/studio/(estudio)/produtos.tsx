@@ -38,6 +38,17 @@
 //   3. openExpand sanitiza config legado no LOAD pra evitar que
 //      configs antigos sem `id` quebrem no save.
 //
+// 26/05/2026 — Fix Bug B (Salvar não disparava request):
+//   - openExpand agora pré-popula 1 field de texto padrão quando
+//     config carrega vazio. Antes o user abria o expand, via 0 fields,
+//     clicava Salvar e saveConfig retornava cedo no guard
+//     `if (!cfg.fields.length)` — toast aparecia mas user achava que
+//     "nada aconteceu" (backend Railway não loga porque request nunca
+//     dispara).
+//   - Botão "Salvar configuração" agora fica disabled + texto
+//     "Adicione 1 campo" quando fields.length === 0 (defesa em
+//     profundidade pro caso user deletar todos os fields).
+//
 // Endpoints (backend src/routes/studio.js):
 //   GET    /companies/:cid/studio/products/:pid/customization-config
 //   PUT    /companies/:cid/studio/products/:pid/customization-config
@@ -266,9 +277,37 @@ export default function StudioProdutos() {
       try {
         const r = await studioApi.getCustomizationConfig(company.id, p.id);
         const sanitized = sanitizeConfig((r?.config as CustomizationConfig) || null);
-        setConfigCache((c) => ({ ...c, [p.id]: sanitized }));
+        // 26/05/2026 — Fix Bug B: se config carregou vazio (sem fields),
+        // pré-popula 1 field de texto padrão. Antes o user abria o expand,
+        // via 0 fields, clicava "Salvar" e saveConfig retornava cedo no
+        // guard `if (!cfg.fields.length)` — toast aparecia mas user achava
+        // que "nada aconteceu" (backend Railway não logava nada porque
+        // request nunca disparava).
+        const withDefaultField = sanitized.fields.length === 0
+          ? { ...sanitized, fields: [{
+              id: `f_${Date.now()}`,
+              type: "text" as CustomizationFieldType,
+              label: "Nome a estampar",
+              required: true,
+              config: { max_chars: 30 },
+            }] }
+          : sanitized;
+        setConfigCache((c) => ({ ...c, [p.id]: withDefaultField }));
       } catch {
-        setConfigCache((c) => ({ ...c, [p.id]: sanitizeConfig(null) }));
+        // Mesma lógica no fallback de erro de rede — entrega config com 1
+        // field pra usuário não ficar bloqueado.
+        const fallback = sanitizeConfig(null);
+        const withDefaultField = {
+          ...fallback,
+          fields: [{
+            id: `f_${Date.now()}`,
+            type: "text" as CustomizationFieldType,
+            label: "Nome a estampar",
+            required: true,
+            config: { max_chars: 30 },
+          }],
+        };
+        setConfigCache((c) => ({ ...c, [p.id]: withDefaultField }));
       }
     }
   }
@@ -848,9 +887,18 @@ function ExpandedForm({
               <Pressable style={s.btnSec} onPress={onClose}>
                 <Text style={s.btnSecTxt}>Fechar</Text>
               </Pressable>
-              <Pressable style={[s.btnPri, saving && { opacity: 0.6 }]} onPress={onSave} disabled={saving}>
+              <Pressable
+                style={[s.btnPri, (saving || (cfg?.fields?.length ?? 0) === 0) && { opacity: 0.5 }]}
+                onPress={onSave}
+                disabled={saving || (cfg?.fields?.length ?? 0) === 0}
+              >
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
+                ) : (cfg?.fields?.length ?? 0) === 0 ? (
+                  <>
+                    <Icon name="alert-triangle" size={14} color="#fff" />
+                    <Text style={s.btnPriTxt}>Adicione 1 campo</Text>
+                  </>
                 ) : (
                   <>
                     <Icon name="check" size={14} color="#fff" />
