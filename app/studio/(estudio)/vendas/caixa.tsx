@@ -6,6 +6,7 @@ import { studioApi, type CustomizationConfig, type CustomizationField } from "@/
 import { request } from "@/services/api";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { maskPhone } from "@/utils/masks";
+import { StudioColors, StudioGradients } from "@/constants/studio-tokens";
 
 // ============================================================
 // /studio/(estudio)/vendas/caixa — PDV Studio nativo
@@ -20,21 +21,12 @@ import { maskPhone } from "@/utils/masks";
 //  - Para cada item personalizado, PATCH /studio/sale-items/:id/customization
 //  - Trigger SQL trg_sales_studio_status marca produção automaticamente
 //  - Modal pós-venda oferece envio wa.me pro cliente acompanhar arte
+//
+// 25/05/2026 (Fase 1 identidade visual) — objeto `T` local removido,
+// agora consome StudioColors + StudioGradients.brand direto (alinhado
+// com shell do Studio). Cores semanticas (success/warning/danger) via
+// tokens novos.
 // ============================================================
-
-const T = {
-  bg: "#FAFAFC",
-  card: "#FFFFFF",
-  border: "#E5E7EB",
-  ink: "#0F172A",
-  ink2: "#334155",
-  ink3: "#64748B",
-  ink4: "#94A3B8",
-  primary: "#1E3A8A",
-  accent: "#EC4899",
-  green: "#10B981",
-  red: "#EF4444",
-};
 
 type StudioProduct = {
   id: string;
@@ -58,8 +50,8 @@ type Stage = "list" | "configure" | "checkout" | "done";
 export default function StudioCaixaPage() {
   const auth = useAuthStore();
   const cid = (auth.company as any)?.id as string | undefined;
-  const accent = T.accent;
-  const primary = T.primary;
+  const accent = StudioColors.accent;
+  const primary = StudioColors.primary;
 
   const [products, setProducts] = useState<StudioProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,26 +267,26 @@ export default function StudioCaixaPage() {
         <View
           style={{
             width: 80, height: 80, borderRadius: 40,
-            backgroundColor: T.green,
+            backgroundColor: StudioColors.success,
             alignItems: "center", justifyContent: "center",
           }}
         >
           <Text style={{ fontSize: 40, color: "#fff" }}>✓</Text>
         </View>
-        <Text style={{ fontSize: 22, fontWeight: "800", color: T.ink, marginTop: 16 }}>
+        <Text style={{ fontSize: 22, fontWeight: "800", color: StudioColors.ink, marginTop: 16 }}>
           Venda registrada!
         </Text>
-        <Text style={{ fontSize: 13, color: T.ink3, marginTop: 6, textAlign: "center", maxWidth: 360 }}>
+        <Text style={{ fontSize: 13, color: StudioColors.ink3, marginTop: 6, textAlign: "center", maxWidth: 360 }}>
           O pedido entrou em "Aguardando arte" no KDS automaticamente.
         </Text>
         <View
           style={{
-            backgroundColor: T.card, borderRadius: 12, padding: 16,
-            borderWidth: 1, borderColor: T.border,
+            backgroundColor: StudioColors.paperCardElev, borderRadius: 12, padding: 16,
+            borderWidth: 1, borderColor: StudioColors.ink5,
             alignItems: "center", gap: 6, minWidth: 280, marginTop: 16,
           }}
         >
-          <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Total</Text>
+          <Text style={{ fontSize: 11, color: StudioColors.ink3, textTransform: "uppercase" }}>Total</Text>
           <Text style={{ fontSize: 26, color: primary, fontWeight: "800" }}>
             R$ {done.total.toFixed(2)}
           </Text>
@@ -334,21 +326,21 @@ export default function StudioCaixaPage() {
     const cfg = active.customization_config;
     const templates = templatesById[active.id] || [];
     return (
-      <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
         <View
           style={{
-            backgroundColor: T.card,
+            backgroundColor: StudioColors.paperCardElev,
             paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12,
-            borderBottomWidth: 1, borderBottomColor: T.border,
+            borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
             flexDirection: "row", alignItems: "center", gap: 10,
           }}
         >
           <Pressable onPress={() => { setStage("list"); setActive(null); setError(null); }}>
-            <Text style={{ fontSize: 22, color: T.ink2 }}>←</Text>
+            <Text style={{ fontSize: 22, color: StudioColors.ink2 }}>←</Text>
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalizar</Text>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: T.ink }}>{active.name}</Text>
+            <Text style={{ fontSize: 11, color: StudioColors.ink3, textTransform: "uppercase" }}>Personalizar</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: StudioColors.ink }}>{active.name}</Text>
           </View>
           <Text style={{ fontSize: 15, fontWeight: "800", color: primary }}>
             R$ {active.price.toFixed(2)}
@@ -377,22 +369,22 @@ export default function StudioCaixaPage() {
           ))}
 
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 6 }}>
-            <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>Quantidade</Text>
+            <Text style={{ fontSize: 13, color: StudioColors.ink, fontWeight: "700" }}>Quantidade</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Pressable onPress={() => setEditingQty(Math.max(1, editingQty - 1))} style={qtyBtn}>
                 <Text style={qtyTxt}>−</Text>
               </Pressable>
-              <Text style={{ minWidth: 30, textAlign: "center", color: T.ink, fontWeight: "800", fontSize: 16 }}>{editingQty}</Text>
+              <Text style={{ minWidth: 30, textAlign: "center", color: StudioColors.ink, fontWeight: "800", fontSize: 16 }}>{editingQty}</Text>
               <Pressable onPress={() => setEditingQty(editingQty + 1)} style={qtyBtn}>
                 <Text style={qtyTxt}>+</Text>
               </Pressable>
             </View>
           </View>
 
-          {error && <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Text>}
+          {error && <Text style={{ fontSize: 12, color: StudioColors.danger, textAlign: "center" }}>{error}</Text>}
         </ScrollView>
 
-        <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
+        <View style={{ backgroundColor: StudioColors.paperCardElev, padding: 14, borderTopWidth: 1, borderTopColor: StudioColors.ink5 }}>
           <Pressable
             onPress={commitConfigure}
             style={{ backgroundColor: primary, paddingVertical: 14, borderRadius: 10, alignItems: "center" }}
@@ -410,20 +402,20 @@ export default function StudioCaixaPage() {
   if (stage === "checkout") {
     const sendDisabled = sending || cart.length === 0;
     return (
-      <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
         <View
           style={{
-            backgroundColor: T.card, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12,
-            borderBottomWidth: 1, borderBottomColor: T.border,
+            backgroundColor: StudioColors.paperCardElev, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12,
+            borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
             flexDirection: "row", alignItems: "center", gap: 10,
           }}
         >
           <Pressable onPress={() => setStage("list")}>
-            <Text style={{ fontSize: 22, color: T.ink2 }}>←</Text>
+            <Text style={{ fontSize: 22, color: StudioColors.ink2 }}>←</Text>
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Fechar venda</Text>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: T.ink }}>Resumo do pedido</Text>
+            <Text style={{ fontSize: 11, color: StudioColors.ink3, textTransform: "uppercase" }}>Fechar venda</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: StudioColors.ink }}>Resumo do pedido</Text>
           </View>
         </View>
 
@@ -433,8 +425,8 @@ export default function StudioCaixaPage() {
             <View
               key={l.lineId}
               style={{
-                backgroundColor: T.card, borderRadius: 10, padding: 12,
-                borderWidth: 1, borderColor: T.border,
+                backgroundColor: StudioColors.paperCardElev, borderRadius: 10, padding: 12,
+                borderWidth: 1, borderColor: StudioColors.ink5,
                 flexDirection: "row", alignItems: "center", gap: 12,
               }}
             >
@@ -445,8 +437,8 @@ export default function StudioCaixaPage() {
                 showLabel={false}
               />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Text>
-                <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                <Text style={{ fontSize: 13, color: StudioColors.ink, fontWeight: "700" }}>{l.product.name}</Text>
+                <Text style={{ fontSize: 11, color: StudioColors.ink3, marginTop: 2 }}>
                   Qtd {l.qty} · R$ {(l.product.price * l.qty).toFixed(2)}
                 </Text>
               </View>
@@ -483,19 +475,19 @@ export default function StudioCaixaPage() {
 
           <View
             style={{
-              backgroundColor: T.card, borderRadius: 10, padding: 12,
-              borderWidth: 1, borderColor: T.border, gap: 4, marginTop: 6,
+              backgroundColor: StudioColors.paperCardElev, borderRadius: 10, padding: 12,
+              borderWidth: 1, borderColor: StudioColors.ink5, gap: 4, marginTop: 6,
             }}
           >
             <TotalRow l="Subtotal" v={cartSubtotal} />
-            <View style={{ height: 1, backgroundColor: T.border, marginVertical: 4 }} />
+            <View style={{ height: 1, backgroundColor: StudioColors.ink5, marginVertical: 4 }} />
             <TotalRow l="Total" v={cartSubtotal} big />
           </View>
 
-          {error && <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Text>}
+          {error && <Text style={{ fontSize: 12, color: StudioColors.danger, textAlign: "center" }}>{error}</Text>}
         </ScrollView>
 
-        <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
+        <View style={{ backgroundColor: StudioColors.paperCardElev, padding: 14, borderTopWidth: 1, borderTopColor: StudioColors.ink5 }}>
           <Pressable
             onPress={finalizeSale}
             disabled={sendDisabled}
@@ -516,13 +508,13 @@ export default function StudioCaixaPage() {
 
   // ─── STAGE: LIST ──────────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
       <View
         style={[
           { padding: 22, paddingBottom: 24, backgroundColor: primary },
           Platform.OS === "web"
-            ? ({ background: "linear-gradient(135deg, " + primary + ", " + accent + ")" } as any)
-            : {},
+            ? ({ background: `linear-gradient(135deg, ${StudioGradients.brand[0]}, ${StudioGradients.brand[1]})` } as any)
+            : ({ backgroundColor: StudioColors.primary } as any),
         ]}
       >
         <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase" }}>
@@ -536,16 +528,16 @@ export default function StudioCaixaPage() {
         </Text>
       </View>
 
-      <View style={{ padding: 12, backgroundColor: T.card, borderBottomWidth: 1, borderBottomColor: T.border }}>
+      <View style={{ padding: 12, backgroundColor: StudioColors.paperCardElev, borderBottomWidth: 1, borderBottomColor: StudioColors.ink5 }}>
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar produto..."
-          placeholderTextColor={T.ink4}
+          placeholderTextColor={StudioColors.ink4}
           style={{
-            backgroundColor: T.bg, color: T.ink, padding: 12,
+            backgroundColor: StudioColors.bg, color: StudioColors.ink, padding: 12,
             borderRadius: 8, fontSize: 13,
-            borderWidth: 1, borderColor: T.border,
+            borderWidth: 1, borderColor: StudioColors.ink5,
           }}
         />
       </View>
@@ -555,18 +547,18 @@ export default function StudioCaixaPage() {
         contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: cartCount > 0 ? 110 : 30 }}
       >
         {error && !products.length && (
-          <View style={{ padding: 16, backgroundColor: "#fee2e2", borderRadius: 8 }}>
-            <Text style={{ color: T.red, fontSize: 12, fontWeight: "700" }}>{error}</Text>
+          <View style={{ padding: 16, backgroundColor: StudioColors.dangerSoft, borderRadius: 8 }}>
+            <Text style={{ color: StudioColors.danger, fontSize: 12, fontWeight: "700" }}>{error}</Text>
           </View>
         )}
 
         {filteredProducts.length === 0 ? (
           <View style={{ padding: 32, alignItems: "center" }}>
             <Text style={{ fontSize: 36 }}>🎨</Text>
-            <Text style={{ color: T.ink, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
+            <Text style={{ color: StudioColors.ink, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
               {search.trim() ? "Nada encontrado." : "Nenhum produto personalizável cadastrado."}
             </Text>
-            <Text style={{ color: T.ink3, fontSize: 12, marginTop: 6, textAlign: "center", maxWidth: 280 }}>
+            <Text style={{ color: StudioColors.ink3, fontSize: 12, marginTop: 6, textAlign: "center", maxWidth: 280 }}>
               {search.trim()
                 ? "Tente outro termo."
                 : "Cadastre em Estúdio › Produtos e marque \"é personalizável\"."}
@@ -578,8 +570,8 @@ export default function StudioCaixaPage() {
               key={p.id}
               onPress={() => openConfigure(p)}
               style={{
-                backgroundColor: T.card, borderRadius: 12, padding: 12,
-                borderWidth: 1, borderColor: T.border,
+                backgroundColor: StudioColors.paperCardElev, borderRadius: 12, padding: 12,
+                borderWidth: 1, borderColor: StudioColors.ink5,
                 flexDirection: "row", gap: 12, alignItems: "center",
               }}
             >
@@ -590,9 +582,9 @@ export default function StudioCaixaPage() {
                 showLabel={false}
               />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{p.name}</Text>
+                <Text style={{ fontSize: 14, color: StudioColors.ink, fontWeight: "700" }}>{p.name}</Text>
                 {p.category ? (
-                  <Text style={{ fontSize: 10, color: T.ink3, marginTop: 2, textTransform: "uppercase" }}>
+                  <Text style={{ fontSize: 10, color: StudioColors.ink3, marginTop: 2, textTransform: "uppercase" }}>
                     {p.category}
                   </Text>
                 ) : null}
@@ -618,7 +610,7 @@ export default function StudioCaixaPage() {
           onPress={() => setStage("checkout")}
           style={{
             position: "absolute", left: 12, right: 12, bottom: 12,
-            backgroundColor: T.ink, borderRadius: 12,
+            backgroundColor: StudioColors.ink, borderRadius: 12,
             paddingVertical: 14, paddingHorizontal: 16,
             flexDirection: "row", alignItems: "center", justifyContent: "space-between",
           }}
@@ -660,21 +652,21 @@ function FieldEditor({
     return (
       <View>
         <Text style={sectionLabel}>
-          {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
+          {field.label} {field.required && <Text style={{ color: StudioColors.danger }}>*</Text>}
         </Text>
         <TextInput
           value={String(value || "")}
           onChangeText={(t) => onChange(t.slice(0, maxChars))}
           placeholder="Digite aqui"
-          placeholderTextColor={T.ink4}
+          placeholderTextColor={StudioColors.ink4}
           maxLength={maxChars}
           style={{
-            backgroundColor: T.card, color: T.ink, padding: 12,
+            backgroundColor: StudioColors.paperCardElev, color: StudioColors.ink, padding: 12,
             borderRadius: 8, fontSize: 14,
-            borderWidth: 1, borderColor: T.border,
+            borderWidth: 1, borderColor: StudioColors.ink5,
           }}
         />
-        <Text style={{ fontSize: 10, color: T.ink3, marginTop: 4 }}>
+        <Text style={{ fontSize: 10, color: StudioColors.ink3, marginTop: 4 }}>
           {String(value || "").length}/{maxChars}
         </Text>
       </View>
@@ -685,7 +677,7 @@ function FieldEditor({
     return (
       <View>
         <Text style={sectionLabel}>
-          {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
+          {field.label} {field.required && <Text style={{ color: StudioColors.danger }}>*</Text>}
         </Text>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {colors.map((c) => (
@@ -696,7 +688,7 @@ function FieldEditor({
                 width: 36, height: 36, borderRadius: 18,
                 backgroundColor: c,
                 borderWidth: value === c ? 3 : 1,
-                borderColor: value === c ? T.primary : T.border,
+                borderColor: value === c ? StudioColors.primary : StudioColors.ink5,
               }}
             />
           ))}
@@ -709,7 +701,7 @@ function FieldEditor({
     return (
       <View>
         <Text style={sectionLabel}>
-          {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
+          {field.label} {field.required && <Text style={{ color: StudioColors.danger }}>*</Text>}
         </Text>
         <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
           {choices.map((c) => (
@@ -729,10 +721,10 @@ function FieldEditor({
     return (
       <View>
         <Text style={sectionLabel}>
-          {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
+          {field.label} {field.required && <Text style={{ color: StudioColors.danger }}>*</Text>}
         </Text>
         {templates.length === 0 ? (
-          <Text style={{ fontSize: 12, color: T.ink3, fontStyle: "italic" }}>Nenhum template vinculado a esse produto.</Text>
+          <Text style={{ fontSize: 12, color: StudioColors.ink3, fontStyle: "italic" }}>Nenhum template vinculado a esse produto.</Text>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {templates.map((t) => (
@@ -742,16 +734,16 @@ function FieldEditor({
                 style={{
                   width: 80, height: 80, borderRadius: 8,
                   borderWidth: value === t.image_url ? 3 : 1,
-                  borderColor: value === t.image_url ? T.primary : T.border,
+                  borderColor: value === t.image_url ? StudioColors.primary : StudioColors.ink5,
                   overflow: "hidden",
-                  backgroundColor: T.bg,
+                  backgroundColor: StudioColors.bg,
                 }}
               >
                 {Platform.OS === "web" ? (
                   // @ts-ignore native img on web
                   <img src={t.thumb_url || t.image_url} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" } as any} />
                 ) : (
-                  <Text style={{ fontSize: 10, color: T.ink3, padding: 6 }}>{t.name}</Text>
+                  <Text style={{ fontSize: 10, color: StudioColors.ink3, padding: 6 }}>{t.name}</Text>
                 )}
               </Pressable>
             ))}
@@ -764,17 +756,17 @@ function FieldEditor({
     return (
       <View>
         <Text style={sectionLabel}>
-          {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
+          {field.label} {field.required && <Text style={{ color: StudioColors.danger }}>*</Text>}
         </Text>
         <TextInput
           value={String(value || "")}
           onChangeText={onChange}
           placeholder="Link da imagem (ou receber por WhatsApp depois)"
-          placeholderTextColor={T.ink4}
+          placeholderTextColor={StudioColors.ink4}
           style={{
-            backgroundColor: T.card, color: T.ink, padding: 12,
+            backgroundColor: StudioColors.paperCardElev, color: StudioColors.ink, padding: 12,
             borderRadius: 8, fontSize: 13,
-            borderWidth: 1, borderColor: T.border,
+            borderWidth: 1, borderColor: StudioColors.ink5,
           }}
         />
       </View>
@@ -788,7 +780,7 @@ function FieldEditor({
 // ============================================================
 function Center({ children }: { children: any }) {
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg, alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <View style={{ flex: 1, backgroundColor: StudioColors.bg, alignItems: "center", justifyContent: "center", padding: 24 }}>
       {children}
     </View>
   );
@@ -800,13 +792,13 @@ function FInput({ v, on, ph, kb, multi }: { v: string; on: (s: string) => void; 
       value={v}
       onChangeText={on}
       placeholder={ph}
-      placeholderTextColor={T.ink4}
+      placeholderTextColor={StudioColors.ink4}
       keyboardType={kb}
       multiline={multi}
       style={{
-        backgroundColor: T.card, color: T.ink, padding: 12,
+        backgroundColor: StudioColors.paperCardElev, color: StudioColors.ink, padding: 12,
         borderRadius: 8, fontSize: 13,
-        borderWidth: 1, borderColor: T.border,
+        borderWidth: 1, borderColor: StudioColors.ink5,
         minHeight: multi ? 60 : undefined,
       }}
     />
@@ -816,40 +808,40 @@ function FInput({ v, on, ph, kb, multi }: { v: string; on: (s: string) => void; 
 function TotalRow({ l, v, big }: { l: string; v: number; big?: boolean }) {
   return (
     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-      <Text style={{ fontSize: big ? 14 : 12, color: big ? T.ink : T.ink2, fontWeight: big ? "800" : "500" }}>{l}</Text>
-      <Text style={{ fontSize: big ? 18 : 12, color: big ? T.primary : T.ink, fontWeight: big ? "800" : "600" }}>
+      <Text style={{ fontSize: big ? 14 : 12, color: big ? StudioColors.ink : StudioColors.ink2, fontWeight: big ? "800" : "500" }}>{l}</Text>
+      <Text style={{ fontSize: big ? 18 : 12, color: big ? StudioColors.primary : StudioColors.ink, fontWeight: big ? "800" : "600" }}>
         R$ {Number(v).toFixed(2)}
       </Text>
     </View>
   );
 }
 
-const sectionLabel: any = {
-  fontSize: 11, color: T.ink3, fontWeight: "700",
-  textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6,
+const sectionLabel = {
+  fontSize: 11, color: StudioColors.ink3, fontWeight: "700" as const,
+  textTransform: "uppercase" as const, letterSpacing: 0.5, marginTop: 6,
 };
-const qtyBtn: any = {
+const qtyBtn = {
   width: 30, height: 30, borderRadius: 8,
-  backgroundColor: "#f3f4f6",
-  alignItems: "center", justifyContent: "center",
+  backgroundColor: StudioColors.bgSoft,
+  alignItems: "center" as const, justifyContent: "center" as const,
 };
-const qtyTxt: any = { color: T.ink, fontSize: 16, fontWeight: "800" };
+const qtyTxt = { color: StudioColors.ink, fontSize: 16, fontWeight: "800" as const };
 
-const chip: any = {
+const chip = {
   paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-  backgroundColor: "#f3f4f6", borderWidth: 1, borderColor: T.border,
+  backgroundColor: StudioColors.bgSoft, borderWidth: 1, borderColor: StudioColors.ink5,
 };
-const chipActive: any = { backgroundColor: T.primary, borderColor: T.primary };
-const chipTxt: any = { color: T.ink2, fontSize: 12, fontWeight: "700" };
-const chipTxtActive: any = { color: "#fff" };
+const chipActive = { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary };
+const chipTxt = { color: StudioColors.ink2, fontSize: 12, fontWeight: "700" as const };
+const chipTxtActive = { color: "#fff" };
 
-const editChip: any = {
+const editChip = {
   paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-  backgroundColor: T.primary,
+  backgroundColor: StudioColors.primary,
 };
-const editChipTxt: any = { color: "#fff", fontSize: 10, fontWeight: "800" };
-const removeChip: any = {
+const editChipTxt = { color: "#fff", fontSize: 10, fontWeight: "800" as const };
+const removeChip = {
   paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-  backgroundColor: "#fee2e2",
+  backgroundColor: StudioColors.dangerSoft,
 };
-const removeChipTxt: any = { color: T.red, fontSize: 10, fontWeight: "800" };
+const removeChipTxt = { color: StudioColors.danger, fontSize: 10, fontWeight: "800" as const };
