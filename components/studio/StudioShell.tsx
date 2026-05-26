@@ -28,12 +28,19 @@
 //     do Canal Digital via useDigitalChannel quando custom)
 //   · StudioOnboarding renderiza modal first-run controlado por
 //     useStudioOnboarding (delay 800ms pra shell aparecer antes)
+//
+// 26/05 — Fase 7 residual mobile:
+//   · botão Menu no topo abre StudioBottomSheet com TODAS as rotas
+//     agrupadas (Início + Estúdio + Vendas + Gestão + Configurações)
+//   · StudioFab condicional por rota (Novo produto, Cadastrar
+//     produto, Adicionar template, Novo pedido)
+//   · StudioPullToRefresh helper wrapando RefreshControl tematizado
 // ============================================================
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
   View, Text, Pressable, StyleSheet,
   Animated, Easing, useWindowDimensions, ScrollView,
-  Platform, AccessibilityInfo,
+  Platform, AccessibilityInfo, RefreshControl,
 } from "react-native";
 import Reanimated, {
   useSharedValue, useAnimatedStyle, withTiming,
@@ -47,6 +54,8 @@ import { StudioAccentTheme, studioDefaultAccent, deriveAccentFromColors } from "
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
 import { useStudioOnboarding } from "@/hooks/useStudioOnboarding";
+import { StudioBottomSheet } from "@/components/studio/StudioBottomSheet";
+import { StudioFab } from "@/components/studio/StudioFab";
 
 // ─── Float hook (#7: pausa após N segundos pra não distrair) ────
 function useFloat(idx: number, pause: boolean) {
@@ -231,15 +240,212 @@ function GroupHoverTooltip({ group }: { group: NavGroup }) {
   );
 }
 
+// ─── Mobile menu sheet (Fase 7 residual) ────────────────────
+// Lista TODAS as rotas Studio agrupadas. Renderizada via StudioBottomSheet.
+function MobileMenuSheet({
+  visible, onClose, pathname, onNavigate, isHome,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  pathname: string;
+  onNavigate: (href: string) => void;
+  isHome: boolean;
+}) {
+  return (
+    <StudioBottomSheet
+      visible={visible}
+      onClose={onClose}
+      eyebrow="AURA STUDIO"
+      title="Navegação"
+      showGradientHeader
+    >
+      <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }}>
+        {/* Início */}
+        <MobileMenuItem
+          label="Início"
+          icon="grid"
+          tone={TONES.navy.bg}
+          active={isHome}
+          onPress={() => { onNavigate("/studio"); onClose(); }}
+        />
+
+        {/* Grupos */}
+        {GROUPS.map((g) => (
+          <View key={g.id} style={{ gap: 6 }}>
+            <Text style={mm.groupLabel}>{g.label.toUpperCase()}</Text>
+            <View style={{ gap: 4 }}>
+              {g.children.map((c) => (
+                <MobileMenuItem
+                  key={c.href}
+                  label={c.label}
+                  icon={c.icon}
+                  tone={TONES[g.toneKey].bg}
+                  active={pathname.startsWith(c.href)}
+                  onPress={() => { onNavigate(c.href); onClose(); }}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+
+        {/* Configurações */}
+        <View style={{ gap: 6 }}>
+          <Text style={mm.groupLabel}>OUTROS</Text>
+          <MobileMenuItem
+            label="Configurações"
+            icon="settings"
+            tone={StudioColors.ink3}
+            active={pathname.startsWith("/studio/configuracoes")}
+            onPress={() => { onNavigate("/studio/configuracoes"); onClose(); }}
+          />
+        </View>
+      </ScrollView>
+    </StudioBottomSheet>
+  );
+}
+
+function MobileMenuItem({
+  label, icon, tone, active, onPress,
+}: { label: string; icon: string; tone: string; active?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      style={[
+        mm.item,
+        active && { backgroundColor: tone + "12", borderColor: tone },
+      ]}
+    >
+      <View style={[mm.itemIcon, { backgroundColor: tone }]}>
+        <Icon name={icon as any} size={14} color="#fff" />
+      </View>
+      <Text style={[mm.itemTxt, active && { color: tone, fontWeight: "800" }]} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={{ flex: 1 }} />
+      {active && <Icon name="check" size={14} color={tone} />}
+    </Pressable>
+  );
+}
+
+const mm = StyleSheet.create({
+  groupLabel: {
+    fontSize: 10,
+    color: StudioColors.accent,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    marginTop: 6,
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: StudioColors.ink5,
+    borderRadius: 14,
+  },
+  itemIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: "center", justifyContent: "center",
+  },
+  itemTxt: { fontSize: 14, color: StudioColors.ink2, fontWeight: "600" },
+});
+
+// ─── Pull-to-refresh helper exportado (Fase 7 residual) ─────
+// Wrappa ScrollView com RefreshControl tematizado. Páginas Studio
+// podem importar e envolver suas listas.
+export function StudioPullToRefresh({
+  refreshing, onRefresh, children, contentContainerStyle,
+}: {
+  refreshing: boolean;
+  onRefresh: () => void;
+  children: ReactNode;
+  contentContainerStyle?: any;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={contentContainerStyle}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={StudioColors.primary}
+          colors={[StudioColors.primary, StudioColors.accent]}
+          progressBackgroundColor="#fff"
+        />
+      }
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+// ─── FAB por rota (Fase 7 residual) ─────────────────────────
+type FabConfig = {
+  label: string;
+  icon: string;
+  accessibilityLabel: string;
+  action: "push" | "queryNew";
+  href: string;
+};
+
+function resolveFab(pathname: string): FabConfig | null {
+  // Ordem importa: rotas mais específicas primeiro.
+  if (pathname === "/studio/produtos" || pathname.startsWith("/studio/produtos/")) {
+    return {
+      label: "Cadastrar produto",
+      icon: "plus",
+      accessibilityLabel: "Cadastrar novo produto",
+      action: "queryNew",
+      href: "/studio/produtos?action=new",
+    };
+  }
+  if (pathname === "/studio/galeria" || pathname.startsWith("/studio/galeria/")) {
+    return {
+      label: "Adicionar template",
+      icon: "plus",
+      accessibilityLabel: "Adicionar novo template",
+      action: "queryNew",
+      href: "/studio/galeria?action=new",
+    };
+  }
+  if (pathname === "/studio/pedidos" || pathname.startsWith("/studio/pedidos/")) {
+    return {
+      label: "Novo pedido",
+      icon: "plus",
+      accessibilityLabel: "Criar novo pedido",
+      action: "push",
+      href: "/studio/pedidos/novo",
+    };
+  }
+  if (pathname === "/studio" || pathname === "/studio/") {
+    return {
+      label: "Novo produto",
+      icon: "plus",
+      accessibilityLabel: "Ir para cadastro de produto",
+      action: "push",
+      href: "/studio/produtos",
+    };
+  }
+  return null;
+}
+
 // ─── Shell ──────────────────────────────────────────────────
 export function StudioShell() {
   const router = useRouter();
   const pathname = usePathname() || "";
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
+  // Fase 7 residual: breakpoint mobile dedicado (sheet menu + FAB)
+  const isMobile = width < 768;
 
   const [openGroup, setOpenGroup] = useState<number | null>(null);
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // ─── Fase 8B: derivar accent tokens do Canal Digital ──────
   const { config } = useDigitalChannel();
@@ -328,7 +534,87 @@ export function StudioShell() {
 
   const isHome = pathname === "/studio" || pathname === "/studio/";
 
-  // ─── Layout mobile (#1: sidebar inline expandida no topo) ──
+  // FAB por rota (mobile only)
+  const fabConfig = useMemo(() => resolveFab(pathname), [pathname]);
+
+  // ─── Layout mobile (Fase 7 residual: menu sheet + FAB) ─────
+  if (isMobile) {
+    return (
+      <StudioAccentTheme tokens={resolvedAccent}>
+        <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+          <View style={s.mobileBar}>
+            <Pressable
+              onPress={() => go("/studio")}
+              accessibilityLabel="Ir para início do Aura Studio"
+              accessibilityRole="button"
+              style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}
+            >
+              <AuraStudioLockup size={26} variant="dark" />
+            </Pressable>
+            <View style={s.mobileBarRow}>
+              <Pressable
+                onPress={() => setMobileMenuOpen(true)}
+                accessibilityLabel="Abrir menu de navegação"
+                accessibilityRole="button"
+                style={s.mobileMenuBtn}
+              >
+                <Icon name="menu" size={16} color="#fff" />
+                <Text style={s.mobileMenuBtnTxt}>Menu</Text>
+              </Pressable>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.mobileChipsRow}
+              >
+                <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={TONES.navy.bg} />
+                {GROUPS.flatMap((g) =>
+                  g.children.slice(0, 2).map((c) => (
+                    <MobileChip
+                      key={c.href}
+                      label={c.label}
+                      icon={c.icon}
+                      active={pathname.startsWith(c.href)}
+                      onPress={() => go(c.href)}
+                      tone={TONES[g.toneKey].bg}
+                    />
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          </View>
+          <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
+            <Slot />
+          </Reanimated.View>
+          {fabConfig && (
+            <StudioFab
+              icon={fabConfig.icon}
+              label={fabConfig.label}
+              accessibilityLabel={fabConfig.accessibilityLabel}
+              onPress={() => router.push(fabConfig.href as any)}
+              position={{ bottom: 24, right: 20 }}
+            />
+          )}
+          <MobileMenuSheet
+            visible={mobileMenuOpen}
+            onClose={() => setMobileMenuOpen(false)}
+            pathname={pathname}
+            onNavigate={go}
+            isHome={isHome}
+          />
+          <FloatingApprovalButton />
+          <StudioOnboarding
+            visible={onboardingVisible}
+            onClose={() => { setOnboardingVisible(false); markSeen(); }}
+            onComplete={() => { setOnboardingVisible(false); markSeen(); }}
+          />
+        </View>
+      </StudioAccentTheme>
+    );
+  }
+
+  // ─── Layout tablet (#1: sidebar inline expandida no topo) ──
+  // (largura 768–899: ainda usa o modelo de chips legado, sem FAB
+  //  porque desktop tem outras affordances)
   if (!isWide) {
     return (
       <StudioAccentTheme tokens={resolvedAccent}>
@@ -641,6 +927,21 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 6,
   },
+  mobileBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  mobileMenuBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: StudioColors.primary,
+    borderRadius: 999,
+  },
+  mobileMenuBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 12 },
   // Legado (substituido por AuraStudioLockup inline na render)
   mobileBrand: {
     alignSelf: "flex-start",
