@@ -2,16 +2,19 @@
 // AURA. — PDV · Troca v3 · Step 5 — SUCESSO
 //
 // 24/05/2026 — Novo na v3.
-// Mockup: Aura/mockup_troca_v3.html (tela 5)
+// 25/05/2026 — NfceActions integrado: quando netAmount > 0 (cliente
+// pagou diferença em dinheiro/pix/cartão pela venda nova), aparece
+// o mesmo bloco de emissão NFC-e do SaleComplete. Auto-emit segue
+// config da empresa. Mesma experência do fim de venda normal.
 //
-// Por quê: o v2 fechava o modal e dava só um toast. Operador não tinha
-// certeza se a NF-e saiu, se o cupom imprimiu, se faltava algo. A v3
-// mostra um resumo persistente + 3 ações grandes (imprimir cupom,
-// imprimir DANFE, nova troca) e só fecha quando o operador quiser.
+// Casos netAmount <= 0 (troca par-a-par, crédito ou loja devolve)
+// ficam sem NFC-e nova — fora do escopo desta versão.
 // ============================================================
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { useAuthStore } from "@/stores/auth";
+import { NfceActions, type NfceActionsItem } from "../NfceActions";
 import type { SelectedSaleRow } from "./types";
 import { fmtBRL } from "./types";
 
@@ -31,11 +34,41 @@ export function Step5Success({
   returnedValue, newValue, netAmount,
   onClose, onNew,
 }: Props) {
+  const { company } = useAuthStore();
+  const autoEmit = !!(company as any)?.nfce_config?.auto_emit_nfce;
+
   const trocaSaleId = result?.sale?.id || result?.original_sale_ids?.[0] || "";
   const isCrossFilial = Boolean(result?.cross_filial);
   const originName = selectedSales[0]?.company_name || "—";
   const nfceStrategy = result?.nfce?.strategy || result?.fiscal?.strategy || "none";
   const receiptUrl = result?.receipt_url || (trocaSaleId ? `/companies/${companyId}/print/receipt/${trocaSaleId}` : "");
+
+  // Items pra NFC-e nova — vem de result.new_items (sale_items joined).
+  // Adapter pro shape NfceActionsItem.
+  const newItemsRaw: any[] = Array.isArray(result?.new_items) ? result.new_items : [];
+  const nfceItems: NfceActionsItem[] = newItemsRaw
+    .filter((it) => it && it.product_id)
+    .map((it) => ({
+      product_id: String(it.product_id),
+      product_name: it.product_name || it.product_name_snapshot || "Item",
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+    }));
+
+  // Cliente: tenta extrair do trocaSale (backend retorna customer_id/name).
+  // CPF na nota não vem no result da troca — fica undefined (NFC-e anônima).
+  const customerName = result?.sale?.customer_name || null;
+  const customerPhone = result?.sale?.customer_phone || null;
+
+  // Pagamento: na troca v1, payment_method vai no body; na v2, paymentSplits.
+  // Pegamos do result.sale.payment_method (gravado no INSERT).
+  const paymentMethodRaw: string = (result?.sale?.payment_method || "dinheiro").toLowerCase();
+  // Normaliza pro shape esperado pelo nfceApi (igual SaleComplete).
+  const paymentMethod = paymentMethodRaw
+    .replace("cartao_credito", "cartao")
+    .replace("cartao_debito", "debito");
+
+  const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!companyId;
 
   function openReceipt() {
     if (!receiptUrl) return;
@@ -108,6 +141,22 @@ export function Step5Success({
           <Text style={s.xfilialTxt}>
             Estoque devolvido para <Text style={{ fontWeight: "700", color: "#bfdbfe" }}>{originName}</Text>. Tudo sincronizado.
           </Text>
+        </View>
+      )}
+
+      {/* NFC-e da venda nova — 25/05/2026: mesma experência do fim de venda normal */}
+      {showNfce && (
+        <View style={s.nfceWrap}>
+          <NfceActions
+            companyId={companyId}
+            saleId={trocaSaleId}
+            items={nfceItems}
+            total={newValue}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            paymentMethod={paymentMethod}
+            autoEmit={autoEmit}
+          />
         </View>
       )}
 
@@ -208,6 +257,7 @@ const s = StyleSheet.create({
     marginTop: 14, maxWidth: 520,
   },
   xfilialTxt: { color: "#93c5fd", fontSize: 12.5, flex: 1 },
+  nfceWrap: { width: "100%", maxWidth: 520, marginTop: 18 },
   actionsRow: {
     flexDirection: "row", gap: 10, marginTop: 22, flexWrap: "wrap",
     justifyContent: "center", width: "100%", maxWidth: 520,
