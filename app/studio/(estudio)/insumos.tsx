@@ -8,7 +8,7 @@
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, Pressable, StyleSheet,
   TextInput,
 } from "react-native";
 import { Icon } from "@/components/Icon";
@@ -16,6 +16,8 @@ import { StudioColors } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
 const UNITS = ["un", "g", "kg", "ml", "L", "folha", "cm", "m"];
 
@@ -133,6 +135,17 @@ export default function StudioInsumos() {
         </View>
       )}
 
+      {/* Celebration: nada crítico (só mostra quando já há insumos cadastrados) */}
+      {!loading && inputs.length > 0 && lowStock.length === 0 && (
+        <StudioEmpty
+          emoji="✅"
+          title="Nada crítico no estoque"
+          desc="Todos seus insumos estão acima do mínimo."
+          tone="celebration"
+          compact
+        />
+      )}
+
       {/* Form */}
       {showForm && (
         <View style={s.formCard}>
@@ -237,25 +250,16 @@ export default function StudioInsumos() {
       )}
 
       {/* Loading */}
-      {loading && (
-        <View style={{ paddingVertical: 30 }}>
-          <ActivityIndicator size="small" color={StudioColors.primary} />
-        </View>
-      )}
+      {loading && <StudioLoading variant="skeleton-list" rows={5} />}
 
       {/* Lista */}
       {!loading && inputs.length === 0 && (
-        <View style={s.emptyCard}>
-          <Icon name="package" size={32} color={StudioColors.ink4} />
-          <Text style={s.emptyTitle}>Sem insumos cadastrados</Text>
-          <Text style={s.emptySub}>
-            Comece pelos básicos: caneca branca, tinta sublimática, papel A4. Depois você liga eles aos produtos personalizáveis na ficha técnica.
-          </Text>
-          <Pressable style={s.ctaPri} onPress={openNew}>
-            <Icon name="plus" size={16} color="#fff" />
-            <Text style={s.ctaPriTxt}>Cadastrar primeiro</Text>
-          </Pressable>
-        </View>
+        <StudioEmpty
+          icon="package"
+          title="Sem insumos cadastrados"
+          desc="Cadastre o que você usa pra produzir (tinta, papel, tecido…). Depois vincule aos produtos via composição."
+          primaryCta={{ label: "Cadastrar insumo", onPress: () => openNew() }}
+        />
       )}
 
       {!loading && inputs.length > 0 && (
@@ -353,10 +357,6 @@ const s = StyleSheet.create({
   btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
   btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff" },
   btnSecTxt: { color: StudioColors.ink2, fontWeight: "600", fontSize: 13 },
-
-  emptyCard: { alignItems: "center", padding: 40, gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 18, borderWidth: 1, borderColor: StudioColors.ink5 },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: StudioColors.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 380, marginBottom: 6 },
 
   list: { gap: 8 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
