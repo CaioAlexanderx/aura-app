@@ -7,6 +7,7 @@
 //      26/05: numero animado via AnimatedKpiCounter (Fase 6 residual)
 //   3. Banner "X produtos podem melhorar" (Fase 9 residual)
 //      — usa calculateProductScore pra contar produtos com score < 75
+//      26/05: numero do banner tambem via AnimatedKpiCounter
 //   4. Checklist colapsável (#4) — fecha sozinho quando 100%
 //      Vira card celebratório (#3) com CTA "Cadastrar produto" + dica
 //   5. Hint Fase 4
@@ -262,15 +263,24 @@ export default function StudioHome() {
       </View>
 
       {/* ───── Banner "X produtos podem melhorar" (Fase 9 residual) ───── */}
+      {/* 26/05: numero animado via AnimatedKpiCounter, restante do texto fica em linha separada pra evitar quebra de baseline */}
       {productsToImprove > 0 && (
         <View style={s.improveBanner}>
           <View style={s.improveIcon}>
             <Icon name="trending-up" size={18} color={t.accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.improveTitle}>
-              {productsToImprove} produto{productsToImprove > 1 ? "s" : ""} pode{productsToImprove > 1 ? "m" : ""} melhorar
-            </Text>
+            <View style={s.improveTitleRow}>
+              <AnimatedKpiCounter
+                value={productsToImprove}
+                format={fmtInteger}
+                fontSize={14}
+                color={t.ink}
+              />
+              <Text style={s.improveTitle}>
+                {" "}produto{productsToImprove > 1 ? "s" : ""} pode{productsToImprove > 1 ? "m" : ""} melhorar
+              </Text>
+            </View>
             <Text style={s.improveDesc}>
               Adicione fotos, descrição e templates pra subir o score e vender mais.
             </Text>
@@ -435,6 +445,9 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
       width: 36, height: 36, borderRadius: 18,
       backgroundColor: t.accentSoft,
       alignItems: "center", justifyContent: "center",
+    },
+    improveTitleRow: {
+      flexDirection: "row", alignItems: "baseline", flexWrap: "wrap",
     },
     improveTitle: { fontSize: 14, fontWeight: "800", color: t.ink },
     improveDesc: { fontSize: 12, color: t.ink3, marginTop: 2 },
