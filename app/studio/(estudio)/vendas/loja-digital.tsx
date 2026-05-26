@@ -99,7 +99,10 @@ export default function StudioVendasLojaDigital() {
               Tudo que o cliente precisa: ver produtos, configurar arte com texto/foto/cores, escolher template e fechar pelo Pix ou cartão.
             </Text>
           </View>
-          <View style={s.heroPill}>
+          {/* Pill semântico: verde mint quando publicada (estado ativo positivo),
+              cinza ink4 quando rascunho (estado neutro). Antes era accent magenta
+              em ambos os casos, o que dava falso CTA. */}
+          <View style={[s.heroPill, { backgroundColor: config.is_published ? StudioColors.success : StudioColors.ink4 }]}>
             <Text style={s.heroPillTxt}>
               {config.is_published ? "PUBLICADA" : "RASCUNHO"}
             </Text>
@@ -270,7 +273,7 @@ const s = StyleSheet.create({
   heroPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: StudioColors.accent,
+    // backgroundColor agora vem inline (success | ink4 conforme is_published)
     borderRadius: 999,
     flexShrink: 0,
   },
