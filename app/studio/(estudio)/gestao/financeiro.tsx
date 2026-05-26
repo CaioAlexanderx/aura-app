@@ -7,10 +7,10 @@
 // fluxo de caixa + comparativos) com uma barra contextual Studio no topo.
 //
 // 26/05/2026 (residual): substituído o eyebrowBar simples por
-// StudioPageHeader canônico + banner de contexto magenta + wrapper visual
-// (border navy + bgSoft) ao redor do FinanceiroScreen pra reforçar a
-// identidade Studio. NÃO envolvemos em AccentTheme — isso impactaria
-// o Canal Digital varejo que compartilha o provider. Só TELA admin.
+// StudioPageHeader canônico + wrapper visual (border navy + bgSoft) ao
+// redor do FinanceiroScreen pra reforçar a identidade Studio. NÃO
+// envolvemos em AccentTheme — isso impactaria o Canal Digital varejo
+// que compartilha o provider. Só TELA admin.
 //
 // 26/05/2026 (fix visual): o body do FinanceiroScreen usa Colors do
 // varejo (dark navy por default), e o wrapper Studio usava
@@ -20,16 +20,17 @@
 // StudioColors.accent só no texto do eyebrow pra preservar a
 // identidade magenta Studio.
 //
+// 26/05/2026 (limpeza): removido banner de contexto "Vendas Studio
+// aparecem etiquetadas como Personalizado nos lançamentos" — info
+// não fazia sentido pro lojista (feedback). Styles órfãos removidos.
+//
 // Por que não retematizar o body: o Financeiro é 22KB + 7 sub-componentes
 // (TabVisaoGeral, TabLancamentos, etc) que somam ~100KB. Refatorar pra
-// tokens Studio é trabalho de outra sessão. Por ora, vendas/transações
-// do Studio entram no caixa unificado e aparecem aqui mesmo, etiquetadas
-// como "Personalizado" nos lançamentos.
+// tokens Studio é trabalho de outra sessão.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { StudioColors } from "@/constants/studio-tokens";
-import Icon from "@/components/Icon";
 import FinanceiroScreen from "@/app/(tabs)/financeiro";
 
 export default function StudioGestaoFinanceiro() {
@@ -41,13 +42,6 @@ export default function StudioGestaoFinanceiro() {
         <Text style={s.subtitle}>
           Sua receita Studio entra automaticamente no caixa unificado. Use abaixo as mesmas ferramentas do Aura Varejo.
         </Text>
-
-        <View style={s.contextBanner}>
-          <Icon name="info" size={12} color={StudioColors.accent} />
-          <Text style={s.contextBannerTxt}>
-            Vendas Studio aparecem etiquetadas como "Personalizado" nos lançamentos.
-          </Text>
-        </View>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -89,26 +83,6 @@ const s = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 720,
     marginBottom: 4,
-  },
-  contextBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignSelf: "flex-start",
-    maxWidth: 720,
-    backgroundColor: Colors.bg2,
-    borderWidth: 1,
-    borderColor: StudioColors.accent + "55",
-  },
-  contextBannerTxt: {
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 16,
-    flexShrink: 1,
-    color: Colors.ink2,
   },
   residualHint: {
     fontSize: 11,
