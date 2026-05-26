@@ -459,7 +459,7 @@ export function TabDesign({
                   <View style={[s.paletteHalf, { backgroundColor: p, borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }]} />
                   <View style={[s.paletteHalf, { backgroundColor: a, borderTopRightRadius: 8, borderBottomRightRadius: 8 }]} />
                 </View>
-                <Text style={[s.paletteLabel, active && { color: accent.primaryStrong }]}>{label}</Text>
+                <Text style={[s.paletteLabel, active && { color: accent.primaryStrong, fontWeight: "700" }]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -671,7 +671,7 @@ export function TabDesign({
                       style={[s.iconChip, active && s.iconChipActive]}>
                       <ServiceIconPreview icon={opt.value} size={20}
                         color={active ? accent.primaryStrong : Colors.ink} />
-                      <Text style={[s.iconChipLabel, active && { color: accent.primaryStrong, fontWeight: "600" }]}>{opt.label}</Text>
+                      <Text style={[s.iconChipLabel, active && { color: accent.primaryStrong, fontWeight: "700" }]}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -714,12 +714,12 @@ export function TabDesign({
           <Pressable onPress={() => setDevice("desktop")}
             style={[s.deviceBtn, device === "desktop" && s.deviceBtnActive]}>
             <Icon name="monitor" size={14} color={device === "desktop" ? accent.primaryStrong : Colors.ink3} />
-            <Text style={[s.deviceText, device === "desktop" && { color: accent.primaryStrong }]}>Desktop</Text>
+            <Text style={[s.deviceText, device === "desktop" && { color: accent.primaryStrong, fontWeight: "700" }]}>Desktop</Text>
           </Pressable>
           <Pressable onPress={() => setDevice("mobile")}
             style={[s.deviceBtn, device === "mobile" && s.deviceBtnActive]}>
             <Icon name="smartphone" size={14} color={device === "mobile" ? accent.primaryStrong : Colors.ink3} />
-            <Text style={[s.deviceText, device === "mobile" && { color: accent.primaryStrong }]}>Mobile</Text>
+            <Text style={[s.deviceText, device === "mobile" && { color: accent.primaryStrong, fontWeight: "700" }]}>Mobile</Text>
           </Pressable>
         </View>
         <Pressable onPress={() => setPreviewKey((k) => k + 1)} style={s.refreshBtn}>
@@ -813,9 +813,8 @@ function buildPickerStyles(accent: AccentTokens) {
       fontWeight: "600",
       textAlign: "center",
     },
-    labelActive: {
-      color: accent.primaryStrong,
-    },
+    // WCAG AA: 11px magenta sobre primarySoft (#EFF6FF) — peso 700 obrigatório.
+    labelActive: { color: accent.primaryStrong, fontWeight: "700" },
     disabledHint: {
       fontSize: 9,
       color: Colors.ink3,
@@ -954,7 +953,8 @@ function buildStyles(accent: AccentTokens) {
       paddingHorizontal: 12, paddingVertical: 10,
       borderRadius: 8, marginBottom: 12,
     },
-    tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17 },
+    // WCAG AA: 12px magenta sobre primarySoft — fontWeight 700 sobe ratio pra ≥3:1.
+    tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17, fontWeight: "700" },
 
     previewWrap: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", padding: 12 },
     previewBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 10, gap: 8 },
@@ -1026,7 +1026,8 @@ function buildStyles(accent: AccentTokens) {
     imageThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: Colors.bg4 },
     smallBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: Colors.border },
     smallBtnDanger: { backgroundColor: "rgba(220,38,38,0.06)" },
-    smallBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+    // WCAG AA: 12px magenta sobre primarySoft — peso 700.
+    smallBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
 
     uploadDrop: { borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed", padding: 20, alignItems: "center", gap: 6, backgroundColor: Colors.bg4 },
     uploadText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
@@ -1077,7 +1078,8 @@ function buildStyles(accent: AccentTokens) {
       borderRadius: 8, backgroundColor: Colors.bg3,
       borderWidth: 1, borderColor: Colors.border,
     },
-    svcEmptyBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+    // WCAG AA: 12px magenta sobre Colors.bg3 — peso 700.
+    svcEmptyBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
     svcAddBtn: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
       paddingVertical: 10, borderRadius: 10,
@@ -1085,9 +1087,11 @@ function buildStyles(accent: AccentTokens) {
       borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed",
       marginTop: 4,
     },
-    svcAddBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+    // WCAG AA: 12px magenta sobre Colors.bg4 — peso 700.
+    svcAddBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
 
     savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: accent.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
-    savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "600" },
+    // WCAG AA: 12px magenta sobre primarySoft — peso 700.
+    savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
   });
 }
