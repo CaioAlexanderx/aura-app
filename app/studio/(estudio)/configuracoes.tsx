@@ -198,7 +198,7 @@ export default function StudioConfiguracoes() {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.modeTitle, approvalMode === "wa_me" && { color: "#fff" }]}>wa.me link</Text>
                   <Text style={[s.modeSub, approvalMode === "wa_me" && { color: "rgba(255,255,255,0.85)" }]}>
-                    Você clica e abre o WhatsApp com mensagem pronta. Manual mas grátis.
+                    Abre o WhatsApp do cliente com mensagem pronta. Sem mensalidade de API.
                   </Text>
                 </View>
                 {approvalMode === "wa_me" && <Icon name="check" size={14} color="#fff" />}
