@@ -357,7 +357,7 @@ export default function StudioHome() {
             <Text style={s.celebrateTitle}>Setup completo!</Text>
             <Text style={s.celebrateBody}>
               Configurações prontas, agora é cadastrar produto e divulgar. Quando o
-              primeiro pedido cair, o KDS começa a se preencher automaticamente.
+              primeiro pedido cair, a fila de produção começa a se preencher automaticamente.
             </Text>
             <View style={s.celebrateRow}>
               <Pressable
@@ -385,7 +385,7 @@ export default function StudioHome() {
           <Icon name="info" size={16} color={t.primary} />
           <Text style={s.hintTxt}>
             <Text style={s.hintBold}>Dica:</Text> assim que cadastrar produto e
-            subir templates, a aba Produção começa a popular o KDS automaticamente.
+            subir templates, a aba Produção começa a popular a fila de produção automaticamente.
           </Text>
         </View>
       )}
