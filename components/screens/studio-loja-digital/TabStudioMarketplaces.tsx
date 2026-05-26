@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
@@ -69,8 +69,13 @@ export function TabStudioMarketplaces() {
     mercado_livre: null,
     shopee: null,
   });
-  const [connecting, setConnecting] = useState<MarketplacePlatform | null>(null);
+  const [connectingPlatform, setConnectingPlatform] = useState<MarketplacePlatform | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  // refs pra controle do popup OAuth
+  const popupRef = useRef<Window | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     if (!company?.id) return;
@@ -92,13 +97,33 @@ export function TabStudioMarketplaces() {
     load();
   }, [load]);
 
+  // limpa watchers do popup
+  const clearPopupWatchers = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearPopupWatchers();
+    };
+  }, [clearPopupWatchers]);
+
   // Listener postMessage do popup OAuth
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
     function handler(ev: MessageEvent) {
       const data = ev?.data;
       if (!data || data.type !== "aura-marketplace-callback") return;
-      setConnecting(null);
+      clearPopupWatchers();
+      setConnectingPlatform(null);
       if (data.ok) {
         toast.success(`✓ ${platformLabel(data.platform)} conectado!`);
         load();
@@ -108,11 +133,22 @@ export function TabStudioMarketplaces() {
     }
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [load]);
+  }, [load, clearPopupWatchers]);
+
+  function cancelConnecting() {
+    clearPopupWatchers();
+    try {
+      popupRef.current?.close();
+    } catch {}
+    popupRef.current = null;
+    setConnectingPlatform(null);
+  }
 
   async function connect(platform: MarketplacePlatform) {
     if (!company?.id) return;
-    setConnecting(platform);
+    // Se já tem outra conexão em andamento, encerra a anterior
+    clearPopupWatchers();
+    setConnectingPlatform(platform);
     try {
       const r = await studioApi.getMarketplaceAuthUrl(company.id, platform);
       if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -122,15 +158,42 @@ export function TabStudioMarketplaces() {
           "width=600,height=700,scrollbars=yes"
         );
         if (!popup) {
-          setConnecting(null);
+          setConnectingPlatform(null);
           toast.error("Popup bloqueado. Permita pop-ups e tente novamente.");
+          return;
         }
+        popupRef.current = popup;
+
+        // Poll se o popup foi fechado pelo usuário
+        pollRef.current = setInterval(() => {
+          try {
+            if (popup.closed) {
+              clearPopupWatchers();
+              setConnectingPlatform((cur) => (cur === platform ? null : cur));
+              // refetch — pode ter conectado e fechado antes do postMessage
+              load();
+            }
+          } catch {
+            // cross-origin durante fluxo OAuth é esperado; ignora
+          }
+        }, 500);
+
+        // Timeout defensivo 5min
+        timeoutRef.current = setTimeout(() => {
+          clearPopupWatchers();
+          try {
+            popup.close();
+          } catch {}
+          setConnectingPlatform((cur) => (cur === platform ? null : cur));
+          toast.error("Tempo esgotado aguardando autorização. Tente novamente.");
+        }, 5 * 60 * 1000);
       } else {
         toast.info("Abra a URL no navegador: " + r.auth_url);
-        setConnecting(null);
+        setConnectingPlatform(null);
       }
     } catch (e: any) {
-      setConnecting(null);
+      clearPopupWatchers();
+      setConnectingPlatform(null);
       const code = e?.code || e?.error_code;
       if (code === "ML_OAUTH_NOT_CONFIGURED" || code === "SHOPEE_OAUTH_NOT_CONFIGURED") {
         toast.error("OAuth ainda não configurado nas variáveis de ambiente. Contate o suporte Aura.");
@@ -196,7 +259,7 @@ export function TabStudioMarketplaces() {
         {PLATFORMS.map((p) => {
           const conn = connections[p.key];
           const isConnected = !!conn;
-          const isConnecting = connecting === p.key;
+          const isConnecting = connectingPlatform === p.key;
           const health = tokenHealth(conn);
           const hm = healthMeta(health);
           const storeName = (conn as any)?.store_name || (conn as any)?.shop_name || (conn as any)?.account_name;
@@ -250,7 +313,10 @@ export function TabStudioMarketplaces() {
                     ]}
                   >
                     {isConnecting ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <Text style={styles.connectButtonText}>Aguardando autorização…</Text>
+                      </>
                     ) : (
                       <>
                         <Icon name="link" size={18} color="#FFFFFF" />
@@ -297,6 +363,29 @@ export function TabStudioMarketplaces() {
                   </View>
                 )}
               </View>
+
+              {isConnecting && (
+                <View pointerEvents="box-none" style={styles.connectingOverlay}>
+                  <View style={styles.connectingPanel}>
+                    <ActivityIndicator size="small" color={StudioColors.accent} />
+                    <Text style={styles.connectingTitle}>
+                      Conclua a autorização no popup que abriu
+                    </Text>
+                    <Text style={styles.connectingSub}>
+                      Se fechou sem querer, clique novamente.
+                    </Text>
+                    <Pressable
+                      onPress={cancelConnecting}
+                      style={({ pressed }) => [
+                        styles.cancelButton,
+                        pressed && styles.cancelButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancelar</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           );
         })}
@@ -369,6 +458,8 @@ const styles = StyleSheet.create({
     borderColor: StudioColors.border,
     padding: 20,
     gap: 14,
+    position: "relative",
+    overflow: "hidden",
   },
   cardHeader: {
     flexDirection: "row",
@@ -538,6 +629,64 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 12,
     fontWeight: "600",
+  },
+  connectingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255,255,255,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 16,
+  },
+  connectingPanel: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    backgroundColor: StudioColors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: StudioColors.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    maxWidth: 280,
+  },
+  connectingTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: StudioColors.textPrimary,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  connectingSub: {
+    fontSize: 11,
+    color: StudioColors.textMuted,
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  cancelButton: {
+    marginTop: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: StudioColors.border,
+    backgroundColor: "rgba(148,163,184,0.08)",
+  },
+  cancelButtonPressed: {
+    opacity: 0.7,
+  },
+  cancelButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: StudioColors.textPrimary,
   },
   hintCard: {
     flexDirection: "row",
