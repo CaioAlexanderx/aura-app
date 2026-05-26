@@ -12,6 +12,10 @@
 // Fase 12 (25/05/2026):
 //   - Card "Aparência" com toggle Light/Dark/Auto via useStudioTheme()
 //   - Migração StyleSheet pra useStudioTokens() (StyleSheet lazy via useMemo)
+//
+// 26/05/2026 (fix critico inoperante):
+//   - save() agora salva PDV E studio_settings (slaDays+waPhone)
+//   - load defensivo: erro em studio.health nao trava a tela
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -33,7 +37,7 @@ export default function StudioConfiguracoes() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [health, setHealth] = useState<StudioHealth | null>(null);
+  const [, setHealth] = useState<StudioHealth | null>(null);
 
   // Form state
   const [waPhone, setWaPhone] = useState("");
@@ -49,35 +53,68 @@ export default function StudioConfiguracoes() {
     try {
       const h = await studioApi.health(company.id);
       setHealth(h);
-      setKdsEnabled(h.kds_enabled);
-      setGalleryEnabled(h.gallery_enabled);
-      setApprovalEnabled(h.approval_enabled);
-      setApprovalMode(h.approval_mode);
-      const ss = h.settings || {};
+      setKdsEnabled(!!h.kds_enabled);
+      setGalleryEnabled(!!h.gallery_enabled);
+      setApprovalEnabled(!!h.approval_enabled);
+      setApprovalMode(h.approval_mode || "wa_me");
+      const ss: any = h.settings || {};
       if (ss.approval_wa_phone) setWaPhone(String(ss.approval_wa_phone));
-      if (ss.default_sla_days) setSlaDays(String(ss.default_sla_days));
+      if (ss.default_sla_days)  setSlaDays(String(ss.default_sla_days));
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao carregar configurações");
-    } finally { setLoading(false); }
+      // Defensivo: erro em health NAO trava a tela. Mostra defaults +
+      // toast curto. Tela continua interativa.
+      console.warn("[studio/configuracoes] health falhou:", e?.message);
+      toast.error(e?.message || "Não consegui carregar — usando padrões");
+    } finally {
+      setLoading(false);
+    }
   }, [company?.id]);
 
   useEffect(() => { load(); }, [load]);
 
   async function save() {
-    if (!company?.id) return;
+    if (!company?.id) {
+      toast.error("Empresa não identificada");
+      return;
+    }
     setSaving(true);
     try {
-      // Patch pdv_settings (toggles + approval_mode)
+      // 1. pdv_settings (toggles observacionais + approval_mode)
       await pdvSettingsApi.update(company.id, {
         studio_kds_enabled: kdsEnabled,
         studio_gallery_enabled: galleryEnabled,
         studio_approval_enabled: approvalEnabled,
         studio_approval_mode: approvalMode,
       } as any);
+
+      // 2. studio_settings (sla + waPhone) — AGORA persiste de verdade
+      const slaDaysNum = parseInt(slaDays, 10);
+      const studioPatch: Record<string, any> = {};
+      if (!isNaN(slaDaysNum) && slaDaysNum > 0) {
+        studioPatch.default_sla_days = slaDaysNum;
+      }
+      const phoneTrimmed = waPhone.trim();
+      if (phoneTrimmed) studioPatch.approval_wa_phone = phoneTrimmed;
+
+      if (Object.keys(studioPatch).length > 0) {
+        try {
+          await studioApi.saveSettings(company.id, studioPatch);
+        } catch (ssErr: any) {
+          // Não bloqueia o save geral — pdv_settings já foi
+          console.warn("[studio/configuracoes] saveSettings falhou:", ssErr?.message);
+          toast.error("Toggles salvos, mas SLA/WhatsApp falharam: " + (ssErr?.message || "erro"));
+          setSaving(false);
+          return;
+        }
+      }
+
       toast.success("Configurações salvas!");
       load();
-    } catch (e: any) { toast.error(e?.message || "Erro ao salvar"); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) {
@@ -158,13 +195,6 @@ export default function StudioConfiguracoes() {
             />
             <Text style={s.hint}>Número usado nos links wa.me/... pra enviar mockup pro cliente.</Text>
           </View>
-        </View>
-
-        <View style={s.note}>
-          <Icon name="info" size={13} color={t.primary} />
-          <Text style={s.noteTxt}>
-            Persistência de prazo e WhatsApp em <Text style={{ fontWeight: "700" }}>studio_settings</Text> ainda em desenvolvimento. Por enquanto fica salvo localmente; ative aprovação abaixo pra usar wa.me link.
-          </Text>
         </View>
       </View>
 
@@ -314,9 +344,6 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
     modeCardSel: { backgroundColor: t.primary, borderColor: t.primary },
     modeTitle: { fontSize: 13.5, fontWeight: "700", color: t.ink },
     modeSub: { fontSize: 11.5, color: t.ink3, marginTop: 2, lineHeight: 16 },
-
-    note: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, backgroundColor: t.primaryGhost, borderRadius: 10, marginTop: 8 },
-    noteTxt: { fontSize: 11.5, color: t.ink2, flex: 1, lineHeight: 16 },
 
     saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, marginTop: 6 },
     saveBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
