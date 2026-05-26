@@ -10,6 +10,11 @@
 //
 // 26/05/2026 (Fase 10B): suggestTemplates — IA Haiku 4.5 sugere templates
 // da galeria pra produtos com base em nome+categoria+tags.
+//
+// 26/05/2026 (Verso/Frente-e-verso): estende CustomizationConfig com
+// has_back, back_print_area, back_charge_enabled, back_price_delta +
+// adiciona campo opcional `side` em CustomizationField pra agrupar
+// fields entre frente/verso no admin e no storefront público.
 // ============================================================
 import { request } from "./api";
 
@@ -28,8 +33,11 @@ export type StudioHealth = {
 
 // ─── F1 Customization ────────────────────────────────────────────────────────────────
 export type CustomizationFieldType = "text" | "image" | "template" | "color" | "option";
+export type CustomizationFieldSide = "front" | "back";
 export type CustomizationField = {
   id: string; type: CustomizationFieldType; label: string; required: boolean;
+  // Lado da peça onde o campo aparece. Default "front" (compat).
+  side?: CustomizationFieldSide;
   config: {
     max_chars?: number; fonts?: string[]; colors?: string[];
     formats?: string[]; max_mb?: number; min_dpi?: number;
@@ -40,6 +48,16 @@ export type CustomizationField = {
 export type CustomizationConfig = {
   print_area: { width_cm: number; height_cm: number; position?: "center" | "left" | "right" };
   fields: CustomizationField[];
+  // ─── Verso (opt-in pela loja) ────────────────────────────
+  // Quando has_back === true, fields com side === "back" são
+  // renderizados num bloco separado abaixo da frente. Quando a
+  // loja cobra adicional pelo verso, back_charge_enabled = true e
+  // back_price_delta soma no total apenas quando o cliente marca
+  // "Quero personalizar o verso".
+  has_back?: boolean;
+  back_print_area?: { width_cm: number; height_cm: number; position?: "center" | "left" | "right" };
+  back_charge_enabled?: boolean;
+  back_price_delta?: number;
 };
 export type CustomizationConfigResponse = {
   product_id: string; name: string; is_personalizable: boolean; config: CustomizationConfig | null;
