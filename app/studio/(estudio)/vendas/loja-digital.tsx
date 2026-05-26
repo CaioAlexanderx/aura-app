@@ -16,15 +16,24 @@
 //
 // Envelopa em <AccentTheme tokens={studioAccent}> — tematização navy+magenta
 // completa nas 3 tabs reaproveitadas + tabs novas usam StudioColors direto.
+//
+// 26/05/2026 — Fases 2+3 UX:
+//   · Fase 2: fade-edge gradients nas bordas do ScrollView horizontal de tabs
+//     (mobile mostra 3 de 8; gradient sinaliza "tem mais pra ver"). Escondido
+//     em desktop wide (IS_WIDE), onde as 8 tabs já cabem na viewport.
+//   · Fase 3: header trocado pelo componente canônico StudioPageHeader
+//     (eyebrow magenta + title + subtitle + rightSlot opcional).
 // ============================================================
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { StudioColors } from "@/constants/studio-tokens";
 import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { IS_WIDE } from "@/components/screens/canal/shared";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 // Reuso do canal varejo (tabs já tematizadas via useAccent/useChannelStyles)
 import { TabMeuSite } from "@/components/screens/canal/TabMeuSite";
 import { TabDesign }  from "@/components/screens/canal/TabDesign";
@@ -68,25 +77,18 @@ export default function StudioVendasLojaDigital() {
   return (
     <AccentTheme tokens={studioAccent}>
       <ScrollView style={s.scroll} contentContainerStyle={s.container}>
-        {/* Header Studio — eyebrow magenta + título navy */}
-        <View style={s.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>VENDAS · LOJA DIGITAL</Text>
-            <Text style={s.title}>Sua loja Studio na internet</Text>
-            <Text style={s.sub}>
-              Configure tudo do storefront aqui: produtos personalizáveis, galeria de templates, política de revisões, marketplaces e pedidos unificados.
-            </Text>
-          </View>
-          {config.is_published && storefrontUrl && (
-            <Pressable
-              onPress={() => Linking.openURL(storefrontUrl)}
-              style={s.viewSiteBtn}
-            >
+        {/* Header canônico Studio (Fase 3) */}
+        <StudioPageHeader
+          eyebrow="VENDAS · LOJA DIGITAL"
+          title="Sua loja Studio na internet"
+          subtitle="Configure tudo do storefront: produtos personalizáveis, galeria de templates, política de revisões, marketplaces e pedidos unificados."
+          rightSlot={config.is_published && storefrontUrl ? (
+            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn}>
               <Icon name="globe" size={13} color={StudioColors.primary} />
               <Text style={s.viewSiteBtnTxt}>Ver site</Text>
             </Pressable>
-          )}
-        </View>
+          ) : undefined}
+        />
 
         {/* Hero Studio — fundo navy soft com accent */}
         <View style={s.hero}>
@@ -109,27 +111,50 @@ export default function StudioVendasLojaDigital() {
           </View>
         </View>
 
-        {/* Tabs Studio (8) — scroll horizontal em mobile */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0, marginBottom: 18 }}
-          contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}
-        >
-          {TABS.map((t) => {
-            const active = t.key === tab;
-            return (
-              <Pressable
-                key={t.key}
-                onPress={() => setTab(t.key)}
-                style={[s.tabBtn, active && s.tabBtnActive]}
-              >
-                <Icon name={t.icon as any} size={13} color={active ? "#fff" : StudioColors.ink3} />
-                <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{t.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        {/* Tabs Studio (8) — scroll horizontal em mobile, com fade-edges (Fase 2) */}
+        <View style={s.tabsWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}
+          >
+            {TABS.map((t) => {
+              const active = t.key === tab;
+              return (
+                <Pressable
+                  key={t.key}
+                  onPress={() => setTab(t.key)}
+                  style={[s.tabBtn, active && s.tabBtnActive]}
+                >
+                  <Icon name={t.icon as any} size={13} color={active ? "#fff" : StudioColors.ink3} />
+                  <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{t.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {/* Fade-edges: só renderiza em mobile (IS_WIDE === false em < ~1024px).
+              bg sólido = StudioColors.bg (#E8E9F0). pointerEvents none não interfere
+              em taps/scroll. Top:0 cobre toda altura das tabs (~ 38–40px). */}
+          {!IS_WIDE && (
+            <>
+              <LinearGradient
+                colors={["rgba(232,233,240,1)", "rgba(232,233,240,0)"]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={s.fadeLeft}
+                pointerEvents="none"
+              />
+              <LinearGradient
+                colors={["rgba(232,233,240,0)", "rgba(232,233,240,1)"]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={s.fadeRight}
+                pointerEvents="none"
+              />
+            </>
+          )}
+        </View>
 
         {/* Conteúdo da tab ativa */}
         {tab === "site" && (
@@ -192,34 +217,6 @@ const s = StyleSheet.create({
     width: "100%",
   },
 
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: 16,
-    marginBottom: 18,
-    flexWrap: "wrap",
-  },
-  eyebrow: {
-    fontSize: 11,
-    color: StudioColors.accent,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: StudioColors.ink,
-    marginTop: 4,
-    letterSpacing: -0.4,
-  },
-  sub: {
-    fontSize: 13.5,
-    color: StudioColors.ink3,
-    marginTop: 4,
-    maxWidth: 720,
-  },
   viewSiteBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -282,6 +279,27 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+
+  tabsWrap: {
+    position: "relative",
+    marginBottom: 18,
+  },
+  fadeLeft: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 24,
+    zIndex: 2,
+  },
+  fadeRight: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    zIndex: 2,
   },
 
   tabBtn: {
