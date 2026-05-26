@@ -14,6 +14,10 @@
 // apontando pra /studio/estoque — necessário porque cliente Studio
 // não tem acesso ao /(tabs)/estoque (redirect do _layout).
 // Ícone "archive" pra diferenciar de Insumos ("package").
+//
+// 26/05 (FINAL Sprints 1-4): "Produtos" removido do nav — virou parte
+// integrada do /studio/estoque (tabs Básico/Personalização/Ficha/Templates).
+// A rota /studio/produtos vira redirect pra /studio/estoque.
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -111,11 +115,10 @@ const GROUPS: NavGroup[] = [
     icon: "star",
     toneKey: "navy",
     children: [
-      // "Estoque" PRIMEIRO no grupo — fluxo natural: cadastra produto
-      // (foto, qty, preço, categoria) → marca personalizável em "Produtos".
-      // Ícone "archive" pra não conflitar com Insumos ("package").
+      // Pós Sprints 1-4 (26/05): "Produtos" foi absorvido pelo /studio/estoque.
+      // O drawer da tela Estoque tem 4 tabs (Básico / Personalização / Ficha técnica / Templates),
+      // unificando todo o fluxo de cadastro+config num lugar só.
       { label: "Estoque",   icon: "archive",       href: "/studio/estoque" },
-      { label: "Produtos",  icon: "shopping-bag", href: "/studio/produtos" },
       { label: "Galeria",   icon: "image",         href: "/studio/galeria" },
       { label: "Produção",  icon: "clock",         href: "/studio/producao", badge: { value: "•", tone: "accent" } },
       { label: "Insumos",   icon: "package",       href: "/studio/insumos",  badge: { value: "!", tone: "warm" } },
@@ -428,8 +431,13 @@ type FabConfig = {
 };
 
 function resolveFab(pathname: string): FabConfig | null {
+  // /studio/estoque agora é a porta unificada (Sprints 1-4); FAB abre wizard novo produto.
+  if (pathname === "/studio/estoque" || pathname.startsWith("/studio/estoque/")) {
+    return { label: "Cadastrar produto", icon: "plus", accessibilityLabel: "Cadastrar novo produto", action: "queryNew", href: "/studio/estoque?action=new" };
+  }
+  // Compat: /studio/produtos redireciona pra /studio/estoque, mas mantém FAB caso usuário caia ali via cache
   if (pathname === "/studio/produtos" || pathname.startsWith("/studio/produtos/")) {
-    return { label: "Cadastrar produto", icon: "plus", accessibilityLabel: "Cadastrar novo produto", action: "queryNew", href: "/studio/produtos?action=new" };
+    return { label: "Cadastrar produto", icon: "plus", accessibilityLabel: "Cadastrar novo produto", action: "queryNew", href: "/studio/estoque?action=new" };
   }
   if (pathname === "/studio/galeria" || pathname.startsWith("/studio/galeria/")) {
     return { label: "Adicionar template", icon: "plus", accessibilityLabel: "Adicionar novo template", action: "queryNew", href: "/studio/galeria?action=new" };
@@ -438,7 +446,7 @@ function resolveFab(pathname: string): FabConfig | null {
     return { label: "Novo pedido", icon: "plus", accessibilityLabel: "Criar novo pedido", action: "push", href: "/studio/pedidos/novo" };
   }
   if (pathname === "/studio" || pathname === "/studio/") {
-    return { label: "Novo produto", icon: "plus", accessibilityLabel: "Ir para cadastro de produto", action: "push", href: "/studio/produtos" };
+    return { label: "Novo produto", icon: "plus", accessibilityLabel: "Ir para cadastro de produto", action: "push", href: "/studio/estoque" };
   }
   return null;
 }
