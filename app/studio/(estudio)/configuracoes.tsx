@@ -166,16 +166,18 @@ export default function StudioConfiguracoes() {
                 </View>
                 {approvalMode === "wa_me" && <Icon name="check" size={14} color="#fff" />}
               </Pressable>
-              <Pressable
-                style={[s.modeCard, approvalMode === "whatsapp_business" && s.modeCardSel, { opacity: 0.5 }]}
-                onPress={() => toast.info("WhatsApp Business API requer aprovação Meta. Em breve.")}
-              >
+              {/* WhatsApp Business API — desabilitado de verdade (não Pressable).
+                  Aguarda Business Verification + App Review da Meta (Hub Social Fase 6). */}
+              <View style={[s.modeCard, { opacity: 0.4 }]}>
                 <Icon name="headset" size={16} color={StudioColors.ink3} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.modeTitle, { color: StudioColors.ink3 }]}>WhatsApp Business API</Text>
                   <Text style={s.modeSub}>Envio automático. Requer aprovação Meta (Hub Social Fase 6).</Text>
                 </View>
-              </Pressable>
+                <View style={{ backgroundColor: StudioColors.warningSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: StudioColors.warningInk, fontSize: 10, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" }}>Em breve</Text>
+                </View>
+              </View>
             </View>
           </View>
         )}
