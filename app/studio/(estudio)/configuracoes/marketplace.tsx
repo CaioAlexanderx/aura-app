@@ -327,7 +327,7 @@ export default function StudioMarketplaceAdmin() {
           <View style={s.statusRow}>
             <View style={[s.statusDot, { backgroundColor: "#10B981" }]} />
             <Text style={s.statusLabel}>Schema Studio (S-0)</Text>
-            <Text style={s.statusValue}>Migrado · awaiting_customization disponível no KDS</Text>
+            <Text style={s.statusValue}>Migrado · awaiting_customization disponível no Fluxo de Produção</Text>
           </View>
           <View style={s.statusRow}>
             <View style={[s.statusDot, { backgroundColor: "#10B981" }]} />
