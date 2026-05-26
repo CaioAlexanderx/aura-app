@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View, Platform } from "react-native";
-import { useTheme } from "../../src/theme/ThemeProvider";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 /**
  * ProductQualityScore
@@ -9,6 +9,8 @@ import { useTheme } from "../../src/theme/ThemeProvider";
  *
  * Algoritmo `calculateProductScore` exportado pra ser reusado em outras
  * telas (Hub, lista de produtos, etc) sem montar o componente visual.
+ *
+ * 26/05/2026: trocado useTheme (path inexistente) por useStudioTokens canonico.
  */
 
 export type Product = {
@@ -115,7 +117,7 @@ export default function ProductQualityScore({
   compact = false,
   onHintClick,
 }: Props) {
-  const { theme } = useTheme();
+  const theme = useStudioTokens();
   const result = React.useMemo(() => calculateProductScore(product), [product]);
 
   const letterColor = pickLetterColor(result.letter, theme);
@@ -143,7 +145,7 @@ export default function ProductQualityScore({
 
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.scoreRowCompact}>
-            <Text style={[styles.scoreLabel, { color: theme.ink70 }]}>
+            <Text style={[styles.scoreLabel, { color: theme.ink3 }]}>
               Qualidade do produto
             </Text>
             <Text style={[styles.scoreValue, { color: theme.ink }]}>
@@ -188,7 +190,7 @@ export default function ProductQualityScore({
           <Text style={[styles.title, { color: theme.ink }]}>
             Qualidade do produto
           </Text>
-          <Text style={[styles.subtitle, { color: theme.ink70 }]}>
+          <Text style={[styles.subtitle, { color: theme.ink3 }]}>
             {result.score}/100 — {describeLetter(result.letter)}
           </Text>
           <ProgressBar score={result.score} theme={theme} />
@@ -220,10 +222,10 @@ function ProgressBar({ score, theme }: { score: number; theme: any }) {
   // accent (magenta) com bom contraste.
   const fillStyle: any = isWeb
     ? {
-        backgroundImage: `linear-gradient(90deg, ${theme.studioNavy ?? "#1E3A8A"} 0%, ${theme.studioMagenta ?? "#EC4899"} 100%)`,
+        backgroundImage: `linear-gradient(90deg, ${theme.primary ?? "#1E3A8A"} 0%, ${theme.accent ?? "#EC4899"} 100%)`,
       }
     : {
-        backgroundColor: theme.studioMagenta ?? "#EC4899",
+        backgroundColor: theme.accent ?? "#EC4899",
       };
 
   return (
@@ -254,8 +256,8 @@ function HintChip({
   onPress?: () => void;
 }) {
   const tint = hint.done
-    ? { bg: theme.successSubtle ?? "#D1FAE5", fg: theme.success ?? "#10B981" }
-    : { bg: theme.ink5, fg: theme.ink70 };
+    ? { bg: theme.successSoft ?? "#D1FAE5", fg: theme.success ?? "#10B981" }
+    : { bg: theme.ink5, fg: theme.ink3 };
 
   const icon = hint.done ? "✓" : "•";
 
@@ -271,7 +273,7 @@ function HintChip({
         style={[
           styles.chipLabel,
           {
-            color: hint.done ? theme.ink70 : theme.ink,
+            color: hint.done ? theme.ink3 : theme.ink,
             textDecorationLine: hint.done ? "line-through" : "none",
           },
         ]}
@@ -289,6 +291,9 @@ function HintChip({
     </Pressable>
   );
 }
+
+// Re-export nomeado pra match do consumer `import { ProductQualityScore }`
+export { ProductQualityScore };
 
 // ---------------------------------------------------------------------------
 // Helpers
