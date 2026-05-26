@@ -4,52 +4,11 @@
 // Sidebar circular com bolinhas-pai agrupando filhas em hover/click.
 // 4 grupos: Início (sozinho) · Estúdio · Vendas · Gestão.
 //
-// 25/05 — overhaul UX/UI:
-//   #1 mobile: sidebar vira inline expandida (sem hover) c/ chips
-//   #6 cor das filhas padronizada por grupo (tom único)
-//   #7 float ambient reduzido (2px) + pausa após 10s
-//   #2 monta FloatingApprovalButton global
-//
-// 25/05 (segunda iteração) — substitui "S" placeholder por
-//   AuraStudioMark/Lockup (logo real navy + asterisco magenta).
-//
-// 26/05 — Fase 2 affordance: tooltip on hover nas bolinhas-pai
-//   (desktop/web only) mostra o label do grupo + filhos antes do
-//   clique. Não muda click behavior (continua abrindo popup).
-//
-// 26/05 — Fase 6A acessibilidade/motion:
-//   · cross-fade 200ms entre rotas /studio/* (Reanimated)
-//   · respeita prefers-reduced-motion (AccessibilityInfo)
-//   · :focus-visible outline navy global (web only)
-//   · accessibilityLabel em todas as Pressables ícone-only
-//
-// 26/05 — Fases 5B + 8B integração:
-//   · StudioAccentTheme wrappa todo o shell (tokens derivados
-//     do Canal Digital via useDigitalChannel quando custom)
-//   · StudioOnboarding renderiza modal first-run controlado por
-//     useStudioOnboarding (delay 800ms pra shell aparecer antes)
-//
-// 26/05 — Fase 7 residual mobile:
-//   · botão Menu no topo abre StudioBottomSheet com TODAS as rotas
-//     agrupadas (Início + Estúdio + Vendas + Gestão + Configurações)
-//   · StudioFab condicional por rota (Novo produto, Cadastrar
-//     produto, Adicionar template, Novo pedido)
-//   · StudioPullToRefresh helper wrapando RefreshControl tematizado
-//
-// 26/05 — residual:
-//   · FAB também no breakpoint tablet (768–899) — antes era órfão,
-//     só sidebar inline chip sem ação rápida contextual
-//   · Avatar (desktop) com iniciais dinâmicas do user.name via
-//     useAuthStore (não mais "SM" hardcoded)
-//
-// 26/05 — Floating iOS-style child bubbles:
-//   · GroupHoverTooltip (card textual) REMOVIDO — affordance ruim
-//     (user clicava no ícone do card em vez da bolinha-pai)
-//   · Hover na bolinha-pai agora EXPANDE mini-bolinhas (32×32) das
-//     filhas em coluna vertical à direita, com stagger 60ms
-//   · Cada mini-bolinha é Pressable separado (tooltip CSS title)
-//   · Container das mini tem onHoverIn/Out que cancela o close-timer
-//     pra o user conseguir mover o mouse pra dentro sem o menu sumir
+// 26/05 — Floating-only sidebar (desktop):
+//   · Barra branca lateral REMOVIDA — só as bolinhas flutuam sobre o bg
+//   · Bolinhas-pai aumentadas pra 60×60 (era 54×54)
+//   · Glow base (navy soft) ao redor de cada bolinha, intensifica no hover
+//   · Hover-children mostram label do nome ao lado (não só ícone)
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -74,7 +33,6 @@ import { StudioFab } from "@/components/studio/StudioFab";
 import { useAuthStore } from "@/stores/auth";
 
 // Iniciais a partir do nome — 2 caracteres uppercase.
-// "Caio" -> "CA", "Caio Alexander" -> "CA", "" -> "??"
 function initials(name?: string | null): string {
   if (!name) return "??";
   const parts = name.trim().split(/\s+/);
@@ -82,7 +40,7 @@ function initials(name?: string | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// ─── Float hook (#7: pausa após N segundos pra não distrair) ────
+// ─── Float hook (pausa após N segundos pra não distrair) ────
 function useFloat(idx: number, pause: boolean) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -105,7 +63,6 @@ function useFloat(idx: number, pause: boolean) {
   return v;
 }
 
-// Amplitude reduzida (#7): 2px de translateY, sem rotação ambiente
 const FLOAT_AMP_AMBIENT = 2;
 
 function FloatingBubble({ idx, children, style, pause }: any) {
@@ -142,7 +99,6 @@ const TONES = {
   violet: { bg: "#7C3AED",             bg2: "#A78BFA" },
 };
 
-// #6: tom único por grupo — filhas herdam o tom do pai.
 const GROUPS: NavGroup[] = [
   {
     id: "estudio",
@@ -180,20 +136,31 @@ const GROUPS: NavGroup[] = [
 ];
 
 // ─── Nav circle (bolinha pai) ───────────────────────────────
+// 60×60, glow base navy soft, glow forte quando hovered/active.
 function NavCircle({
   icon, active, isGroup, idx, onPress, children, pause,
-  onHoverIn, onHoverOut, accessibilityLabel,
+  onHoverIn, onHoverOut, accessibilityLabel, glowing,
 }: {
   icon: string; active?: boolean; isGroup?: boolean; idx: number;
   onPress?: () => void; children?: React.ReactNode; pause: boolean;
   onHoverIn?: () => void; onHoverOut?: () => void;
   accessibilityLabel?: string;
+  glowing?: boolean;  // ← Hover/expand state
 }) {
-  // Web-only mouse handlers — Pressable no RN-web aceita onHoverIn/Out
   const webHoverProps =
     Platform.OS === "web" && (onHoverIn || onHoverOut)
       ? { onHoverIn, onHoverOut }
       : {};
+
+  // Glow forte: anel pink quando hovered/active. Glow base: navy soft.
+  const glowStyle = Platform.OS === "web"
+    ? (glowing || active
+        ? { boxShadow: "0 0 32px rgba(236,72,153,0.55), 0 0 18px rgba(30,58,138,0.4), 0 6px 14px rgba(15,23,42,0.18)" }
+        : { boxShadow: "0 0 18px rgba(30,58,138,0.28), 0 4px 10px rgba(15,23,42,0.12)" })
+    : (glowing || active
+        ? { shadowColor: StudioColors.accent, shadowOpacity: 0.55, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 10 }
+        : { shadowColor: StudioColors.primary, shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 5 });
+
   return (
     <FloatingBubble idx={idx} pause={pause} style={{ position: "relative" }}>
       <Pressable
@@ -203,10 +170,13 @@ function NavCircle({
         {...webHoverProps}
         style={[
           s.navCircle,
+          glowStyle as any,
           active && s.navCircleActive,
+          Platform.OS === "web" ? { transition: "box-shadow 200ms ease, transform 200ms ease" } as any : null,
+          glowing && Platform.OS === "web" ? { transform: [{ scale: 1.04 }] as any } : null,
         ]}
       >
-        <Icon name={icon as any} size={20} color={active ? "#fff" : StudioColors.ink2} />
+        <Icon name={icon as any} size={22} color={active ? "#fff" : StudioColors.ink2} />
         {isGroup && <View style={s.groupDot} />}
       </Pressable>
       {children}
@@ -214,7 +184,7 @@ function NavCircle({
   );
 }
 
-// ─── Bolinhas-filhas (popup expandido por click — mantém legado) ─
+// ─── Bolinhas-filhas (popup expandido por click — legado) ─
 function ChildBubble({
   child, onPress, idx, tone, pause,
 }: { child: NavChild; onPress: () => void; idx: number; tone: keyof typeof TONES; pause: boolean }) {
@@ -244,9 +214,9 @@ function ChildBubble({
   );
 }
 
-// ─── Mini-bolinha hover (iOS-style floating menu) ──────────
-// 32×32, navega direto pra rota do filho. Animação scale+opacity
-// com stagger (delay = idx * 60ms) via Reanimated withSpring.
+// ─── Mini-bolinha hover iOS-style — agora COM LABEL ─────────
+// Pill horizontal: bolinha 32×32 + texto do label ao lado.
+// Anima scale+opacity com stagger via Reanimated.
 function ChildHoverBubble({
   child, tone, delay, onPress,
 }: {
@@ -258,24 +228,24 @@ function ChildHoverBubble({
   const t = TONES[tone];
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
+  const translateX = useSharedValue(-8);
 
   useEffect(() => {
     scale.value = withDelay(delay, withSpring(1, { damping: 14, stiffness: 180 }));
     opacity.value = withDelay(delay, withTiming(1, { duration: 180 }));
+    translateX.value = withDelay(delay, withTiming(0, { duration: 220 }));
     return () => {
-      // saída suave (caso unmount)
       opacity.value = withTiming(0, { duration: 120 });
     };
-  }, [delay, scale, opacity]);
+  }, [delay, scale, opacity, translateX]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.value }, { translateX: translateX.value }],
     opacity: opacity.value,
+    transformOrigin: "left center" as any,
   }));
 
-  // tooltip CSS nativo (web only) — title="..."
-  const webTitleProp: any =
-    Platform.OS === "web" ? { title: child.label } : {};
+  const webTitleProp: any = Platform.OS === "web" ? { title: child.label } : {};
 
   return (
     <Reanimated.View style={animStyle}>
@@ -284,24 +254,26 @@ function ChildHoverBubble({
         accessibilityLabel={child.label}
         accessibilityRole="button"
         {...webTitleProp}
-        style={[s.hoverChildBubble, { backgroundColor: t.bg }]}
+        style={s.hoverChildRow}
       >
-        <Icon name={child.icon as any} size={14} color="#fff" />
-        {child.badge && (
-          <View
-            style={[
-              s.hoverChildBadge,
-              { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : StudioColors.accent },
-            ]}
-          />
-        )}
+        <View style={[s.hoverChildBubble, { backgroundColor: t.bg }]}>
+          <Icon name={child.icon as any} size={14} color="#fff" />
+          {child.badge && (
+            <View
+              style={[
+                s.hoverChildBadge,
+                { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : StudioColors.accent },
+              ]}
+            />
+          )}
+        </View>
+        <Text style={s.hoverChildLabel} numberOfLines={1}>{child.label}</Text>
       </Pressable>
     </Reanimated.View>
   );
 }
 
-// ─── Mobile menu sheet (Fase 7 residual) ────────────────────
-// Lista TODAS as rotas Studio agrupadas. Renderizada via StudioBottomSheet.
+// ─── Mobile menu sheet ──────────────────────────────────────
 function MobileMenuSheet({
   visible, onClose, pathname, onNavigate, isHome,
 }: {
@@ -320,7 +292,6 @@ function MobileMenuSheet({
       showGradientHeader
     >
       <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }}>
-        {/* Início */}
         <MobileMenuItem
           label="Início"
           icon="grid"
@@ -328,8 +299,6 @@ function MobileMenuSheet({
           active={isHome}
           onPress={() => { onNavigate("/studio"); onClose(); }}
         />
-
-        {/* Grupos */}
         {GROUPS.map((g) => (
           <View key={g.id} style={{ gap: 6 }}>
             <Text style={mm.groupLabel}>{g.label.toUpperCase()}</Text>
@@ -347,8 +316,6 @@ function MobileMenuSheet({
             </View>
           </View>
         ))}
-
-        {/* Configurações */}
         <View style={{ gap: 6 }}>
           <Text style={mm.groupLabel}>OUTROS</Text>
           <MobileMenuItem
@@ -415,9 +382,7 @@ const mm = StyleSheet.create({
   itemTxt: { fontSize: 14, color: StudioColors.ink2, fontWeight: "600" },
 });
 
-// ─── Pull-to-refresh helper exportado (Fase 7 residual) ─────
-// Wrappa ScrollView com RefreshControl tematizado. Páginas Studio
-// podem importar e envolver suas listas.
+// ─── Pull-to-refresh helper exportado ──────────────────────
 export function StudioPullToRefresh({
   refreshing, onRefresh, children, contentContainerStyle,
 }: {
@@ -444,7 +409,7 @@ export function StudioPullToRefresh({
   );
 }
 
-// ─── FAB por rota (Fase 7 residual) ─────────────────────────
+// ─── FAB por rota ───────────────────────────────────────────
 type FabConfig = {
   label: string;
   icon: string;
@@ -454,42 +419,17 @@ type FabConfig = {
 };
 
 function resolveFab(pathname: string): FabConfig | null {
-  // Ordem importa: rotas mais específicas primeiro.
   if (pathname === "/studio/produtos" || pathname.startsWith("/studio/produtos/")) {
-    return {
-      label: "Cadastrar produto",
-      icon: "plus",
-      accessibilityLabel: "Cadastrar novo produto",
-      action: "queryNew",
-      href: "/studio/produtos?action=new",
-    };
+    return { label: "Cadastrar produto", icon: "plus", accessibilityLabel: "Cadastrar novo produto", action: "queryNew", href: "/studio/produtos?action=new" };
   }
   if (pathname === "/studio/galeria" || pathname.startsWith("/studio/galeria/")) {
-    return {
-      label: "Adicionar template",
-      icon: "plus",
-      accessibilityLabel: "Adicionar novo template",
-      action: "queryNew",
-      href: "/studio/galeria?action=new",
-    };
+    return { label: "Adicionar template", icon: "plus", accessibilityLabel: "Adicionar novo template", action: "queryNew", href: "/studio/galeria?action=new" };
   }
   if (pathname === "/studio/pedidos" || pathname.startsWith("/studio/pedidos/")) {
-    return {
-      label: "Novo pedido",
-      icon: "plus",
-      accessibilityLabel: "Criar novo pedido",
-      action: "push",
-      href: "/studio/pedidos/novo",
-    };
+    return { label: "Novo pedido", icon: "plus", accessibilityLabel: "Criar novo pedido", action: "push", href: "/studio/pedidos/novo" };
   }
   if (pathname === "/studio" || pathname === "/studio/") {
-    return {
-      label: "Novo produto",
-      icon: "plus",
-      accessibilityLabel: "Ir para cadastro de produto",
-      action: "push",
-      href: "/studio/produtos",
-    };
+    return { label: "Novo produto", icon: "plus", accessibilityLabel: "Ir para cadastro de produto", action: "push", href: "/studio/produtos" };
   }
   return null;
 }
@@ -500,22 +440,15 @@ export function StudioShell() {
   const pathname = usePathname() || "";
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
-  // Fase 7 residual: breakpoint mobile dedicado (sheet menu + FAB)
   const isMobile = width < 768;
-  // Residual 26/05: breakpoint tablet órfão (768–899) ganha FAB também.
-  // Mantém sidebar inline chips, só adiciona ação rápida contextual no
-  // canto inferior direito.
   const isTablet = width >= 768 && width < 900;
 
-  // Auth: avatar com iniciais dinâmicas (residual 26/05)
   const { user } = useAuthStore();
 
   const [openGroup, setOpenGroup] = useState<number | null>(null);
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Timer pra fechar o menu hover quando user sai com o mouse —
-  // o container das mini-bolinhas também tem onHoverIn/Out que cancela.
   const closeHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelCloseHover = () => {
     if (closeHoverTimerRef.current) {
@@ -531,7 +464,6 @@ export function StudioShell() {
   };
   useEffect(() => () => cancelCloseHover(), []);
 
-  // ─── Fase 8B: derivar accent tokens do Canal Digital ──────
   const { config } = useDigitalChannel();
   const resolvedAccent = useMemo(() => {
     if (config?.primary_color && config?.accent_color
@@ -542,7 +474,6 @@ export function StudioShell() {
     return studioDefaultAccent;
   }, [config?.primary_color, config?.accent_color]);
 
-  // ─── Fase 5B: onboarding first-run ────────────────────────
   const { shouldShow, markSeen } = useStudioOnboarding();
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   useEffect(() => {
@@ -552,7 +483,6 @@ export function StudioShell() {
     }
   }, [shouldShow]);
 
-  // #7: pausa float ambient após 10s (somente desktop expandido)
   const [floatPause, setFloatPause] = useState(false);
   useEffect(() => {
     if (!isWide) return;
@@ -560,7 +490,6 @@ export function StudioShell() {
     return () => clearTimeout(t);
   }, [isWide]);
 
-  // ─── Fase 6A: cross-fade entre rotas + reduce motion ──────
   const opacity = useSharedValue(1);
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
@@ -574,7 +503,7 @@ export function StudioShell() {
     );
     return () => {
       mounted = false;
-      // @ts-ignore — remove() é o padrão atual
+      // @ts-ignore
       sub?.remove?.();
     };
   }, []);
@@ -591,7 +520,6 @@ export function StudioShell() {
   }, [pathname, reduceMotion, opacity]);
   const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
-  // ─── Fase 6A: focus visible global (web only) ─────────────
   useEffect(() => {
     if (Platform.OS !== "web") return;
     if (typeof document === "undefined") return;
@@ -619,10 +547,9 @@ export function StudioShell() {
 
   const isHome = pathname === "/studio" || pathname === "/studio/";
 
-  // FAB por rota (mobile + tablet)
   const fabConfig = useMemo(() => resolveFab(pathname), [pathname]);
 
-  // ─── Layout mobile (Fase 7 residual: menu sheet + FAB) ─────
+  // ─── Mobile ────────────────────────────────────────────────
   if (isMobile) {
     return (
       <StudioAccentTheme tokens={resolvedAccent}>
@@ -697,9 +624,7 @@ export function StudioShell() {
     );
   }
 
-  // ─── Layout tablet (#1: sidebar inline expandida no topo) ──
-  // (largura 768–899: ainda usa o modelo de chips legado.
-  //  Residual 26/05: FAB também aparece aqui — antes era órfão.)
+  // ─── Tablet ────────────────────────────────────────────────
   if (!isWide) {
     return (
       <StudioAccentTheme tokens={resolvedAccent}>
@@ -763,18 +688,19 @@ export function StudioShell() {
     );
   }
 
-  // ─── Layout desktop (sidebar circular agrupada) ────────────
+  // ─── Desktop (sidebar circular FLUTUANTE — sem barra branca) ─
   return (
     <StudioAccentTheme tokens={resolvedAccent}>
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
         <View style={s.sidebar}>
-          <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 16 }}>
+          <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 18 }}>
             <Pressable
               onPress={() => go("/studio")}
               accessibilityLabel="Ir para início do Aura Studio"
               accessibilityRole="button"
+              style={s.brandWrap}
             >
-              <AuraStudioMark size={54} />
+              <AuraStudioMark size={60} />
             </Pressable>
           </FloatingBubble>
 
@@ -790,11 +716,10 @@ export function StudioShell() {
           {GROUPS.map((g, i) => {
             const open = openGroup === i;
             const childActive = g.children.some((c) => pathname.startsWith(c.href));
+            const isHovered = hoveredGroupId === g.id;
             const showHoverChildren =
-              Platform.OS === "web" && hoveredGroupId === g.id && !open;
+              Platform.OS === "web" && isHovered && !open;
             const groupLabel = `Área ${g.label} — ${g.children.map((c) => c.label).join(", ")}`;
-            // Web-only hover handlers pro container das mini-bolinhas:
-            // entrar cancela o close-timer, sair re-agenda.
             const childContainerHoverProps: any =
               Platform.OS === "web"
                 ? {
@@ -808,6 +733,7 @@ export function StudioShell() {
                   icon={g.icon}
                   idx={i + 2}
                   active={open || childActive}
+                  glowing={isHovered}
                   isGroup
                   pause={floatPause}
                   accessibilityLabel={groupLabel}
@@ -836,9 +762,7 @@ export function StudioShell() {
                   )}
                 </NavCircle>
 
-                {/* Floating menu iOS-style: mini-bolinhas em coluna ao
-                    lado direito da bolinha-pai. Mount/unmount controlado
-                    por hoveredGroupId; cada mini tem stagger 60ms. */}
+                {/* Mini-bolinhas com LABEL no hover (iOS-style) */}
                 {showHoverChildren && (
                   <View
                     style={s.childBubblesContainer}
@@ -889,7 +813,6 @@ export function StudioShell() {
   );
 }
 
-// ─── Mobile chip helper ─────────────────────────────────────
 function MobileChip({
   label, icon, active, onPress, tone,
 }: { label: string; icon: string; active?: boolean; onPress: () => void; tone: string }) {
@@ -911,37 +834,39 @@ function MobileChip({
 
 // ─── Estilos ────────────────────────────────────────────────
 const s = StyleSheet.create({
+  // Sidebar SEM background — só bolinhas flutuando sobre o bg do shell.
   sidebar: {
-    width: 96,
-    paddingVertical: 22,
-    paddingHorizontal: 16,
+    width: 104,
+    paddingVertical: 28,
+    paddingHorizontal: 18,
     alignItems: "center",
-    gap: 14,
-    backgroundColor: "rgba(255,255,255,0.55)",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(15,23,42,0.08)",
+    gap: 20,
     zIndex: 1000,
   },
-  // Legado — não usado pós-AuraStudioMark mas mantido pra não quebrar refs
+
+  brandWrap: {
+    // Glow brand mais forte que as nav bubbles — destaca a marca.
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 0 32px rgba(236,72,153,0.45), 0 0 18px rgba(30,58,138,0.45)" }
+      : { shadowColor: StudioColors.accent, shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 8 }),
+    borderRadius: 30,
+  } as any,
+
   brand: {
     width: 54, height: 54,
     backgroundColor: StudioColors.primary,
     borderRadius: 27,
     alignItems: "center", justifyContent: "center",
-    shadowColor: StudioColors.primary,
-    shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
   },
   brandTxt: { color: "#fff", fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
 
   navCircle: {
-    width: 54, height: 54,
+    width: 60, height: 60,
     backgroundColor: "#fff",
-    borderWidth: 2, borderColor: StudioColors.ink4,
-    borderRadius: 27,
+    borderWidth: 2, borderColor: StudioColors.ink5,
+    borderRadius: 30,
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#0F172A", shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    // Glow base/hover é aplicado inline em NavCircle (depende do state).
   },
   navCircleActive: {
     backgroundColor: StudioColors.primary,
@@ -950,14 +875,14 @@ const s = StyleSheet.create({
   groupDot: {
     position: "absolute",
     bottom: 4, right: 4,
-    width: 8, height: 8, borderRadius: 4,
+    width: 10, height: 10, borderRadius: 5,
     backgroundColor: StudioColors.accent,
     borderWidth: 2, borderColor: "#fff",
   },
 
   childrenPop: {
     position: "absolute",
-    left: 64, top: -8,
+    left: 72, top: -8,
     zIndex: 2000,
   },
   childrenInner: {
@@ -992,19 +917,32 @@ const s = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ── Floating iOS-style child bubbles (hover) ──
-  // Container fica à direita da bolinha-pai (left = 54 + 8 = 62).
-  // Coluna vertical, gap 8px. zIndex alto pra ficar acima do shell.
+  // ── Floating iOS-style hover (com label) ──
   childBubblesContainer: {
     position: "absolute",
-    left: 62,
+    left: 72,
     top: 0,
     flexDirection: "column",
-    gap: 8,
-    paddingLeft: 4, // hover-buffer pro mouse cruzar sem disparar leave
+    gap: 10,
+    paddingLeft: 4,
     paddingRight: 4,
     paddingVertical: 4,
     zIndex: 3000,
+  },
+  hoverChildRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(255,255,255,0.97)",
+    borderRadius: 999,
+    paddingLeft: 4,
+    paddingRight: 14,
+    paddingVertical: 4,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 6px 16px rgba(15,23,42,0.18), 0 2px 4px rgba(15,23,42,0.08)" } as any
+      : { shadowColor: "#0F172A", shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 }),
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.06)",
   },
   hoverChildBubble: {
     width: 32,
@@ -1012,13 +950,15 @@ const s = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
     borderWidth: 2,
     borderColor: "#fff",
+  },
+  hoverChildLabel: {
+    fontSize: 13,
+    color: StudioColors.ink,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    ...(Platform.OS === "web" ? { whiteSpace: "nowrap" } as any : {}),
   },
   hoverChildBadge: {
     position: "absolute",
@@ -1036,10 +976,13 @@ const s = StyleSheet.create({
     backgroundColor: StudioColors.accent,
     alignItems: "center", justifyContent: "center",
     borderWidth: 3, borderColor: "#fff",
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 0 20px rgba(236,72,153,0.4), 0 4px 10px rgba(15,23,42,0.12)" } as any
+      : { shadowColor: StudioColors.accent, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 6 }),
   },
   avatarTxt: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
-  // ── Mobile (#1) ──
+  // ── Mobile ──
   mobileBar: {
     backgroundColor: "rgba(255,255,255,0.92)",
     borderBottomWidth: 1,
@@ -1049,42 +992,24 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 6,
   },
-  mobileBarRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  mobileBarRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   mobileMenuBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: StudioColors.primary,
-    borderRadius: 999,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: StudioColors.primary, borderRadius: 999,
   },
   mobileMenuBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 12 },
-  // Legado (substituido por AuraStudioLockup inline na render)
   mobileBrand: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: StudioColors.primary,
-    borderRadius: 12,
+    alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 4,
+    backgroundColor: StudioColors.primary, borderRadius: 12,
   },
   mobileBrandTxt: { color: "#fff", fontWeight: "900", fontSize: 13, letterSpacing: 0.5 },
   mobileChipsRow: {
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    flexDirection: "row", gap: 6, paddingHorizontal: 4, paddingVertical: 4,
   },
   mobileChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
     backgroundColor: "#fff",
     borderWidth: 1, borderColor: StudioColors.ink4,
     borderRadius: 999,
