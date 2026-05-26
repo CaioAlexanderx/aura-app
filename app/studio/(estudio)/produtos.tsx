@@ -28,6 +28,16 @@
 // pra suportar light/dark mode. ExpandedForm/FilterChip recebem `s` e
 // `t` por prop pra evitar closure sobre globals.
 //
+// 26/05/2026 — Fix defensivo Bug A (salvamento personalização):
+//   1. sanitizeConfig(cfg) garante schema válido antes de mandar pro
+//      backend (gera id se faltar, força required:boolean, normaliza
+//      tipos numéricos, filtra fields com type inválido).
+//   2. saveConfig agora loga payload/response no console e exibe o
+//      ERRO REAL do backend no toast (status + mensagem) em vez do
+//      genérico "Erro ao salvar".
+//   3. openExpand sanitiza config legado no LOAD pra evitar que
+//      configs antigos sem `id` quebrem no save.
+//
 // Endpoints (backend src/routes/studio.js):
 //   GET    /companies/:cid/studio/products/:pid/customization-config
 //   PUT    /companies/:cid/studio/products/:pid/customization-config
@@ -88,6 +98,48 @@ function defaultConfig(): CustomizationConfig {
     print_area: { width_cm: 10, height_cm: 10, position: "center" },
     fields: [],
   };
+}
+
+// 26/05/2026 — Fix defensivo Bug A: sanitiza config antes do save/load.
+// Backend valida com schema rígido (id string non-empty + required boolean
+// + type ∈ enum). Configs legados ou patches incrementais podem ter campos
+// sem id ou required undefined → backend rejeita → toast genérico → usuário
+// acha que salvou e perde o trabalho. Sanitização garante schema válido.
+function sanitizeConfig(cfg: CustomizationConfig | null | undefined): CustomizationConfig {
+  const fallback: CustomizationConfig = {
+    print_area: { width_cm: 10, height_cm: 10, position: "center" },
+    fields: [],
+  };
+  if (!cfg) return fallback;
+
+  // Print area com tipos válidos (Number coerce + range guard)
+  const pa: any = cfg.print_area || {};
+  const width = Number(pa.width_cm);
+  const height = Number(pa.height_cm);
+  const validPositions = ["center", "left", "right"] as const;
+  const print_area = {
+    width_cm: Number.isFinite(width) && width > 0 ? width : 10,
+    height_cm: Number.isFinite(height) && height > 0 ? height : 10,
+    position: (validPositions as readonly string[]).includes(pa.position)
+      ? (pa.position as "center" | "left" | "right")
+      : ("center" as const),
+  };
+
+  // Fields com schema correto (gera id se faltar; força required boolean;
+  // filtra type inválido; garante label não-vazio)
+  const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
+  const validTypes: CustomizationFieldType[] = ["text", "image", "template", "color", "option"];
+  const sanitizedFields: CustomizationField[] = fields
+    .filter((f: any) => f && validTypes.includes(f.type))
+    .map((f: any, i: number) => ({
+      id: typeof f.id === "string" && f.id.trim() ? f.id : `f_${Date.now()}_${i}`,
+      type: f.type as CustomizationFieldType,
+      label: typeof f.label === "string" && f.label.trim() ? f.label : `Campo ${i + 1}`,
+      required: typeof f.required === "boolean" ? f.required : false,
+      config: f.config && typeof f.config === "object" ? f.config : {},
+    }));
+
+  return { print_area, fields: sanitizedFields };
 }
 
 // Fase 4: monta valores fake pro preview ao vivo no admin.
@@ -209,11 +261,14 @@ export default function StudioProdutos() {
       // SEMPRE termina o load com config terminal — mesmo se 404/erro/null —
       // pra render trocar do spinner pro form. Antes engolia silenciosamente
       // e travava no ActivityIndicator (bug 25/05/2026).
+      // 26/05/2026: sanitiza no load também pra evitar configs legados sem
+      // id/required quebrarem no save depois.
       try {
         const r = await studioApi.getCustomizationConfig(company.id, p.id);
-        setConfigCache((c) => ({ ...c, [p.id]: (r?.config as CustomizationConfig) || defaultConfig() }));
+        const sanitized = sanitizeConfig((r?.config as CustomizationConfig) || null);
+        setConfigCache((c) => ({ ...c, [p.id]: sanitized }));
       } catch {
-        setConfigCache((c) => ({ ...c, [p.id]: defaultConfig() }));
+        setConfigCache((c) => ({ ...c, [p.id]: sanitizeConfig(null) }));
       }
     }
   }
@@ -264,19 +319,49 @@ export default function StudioProdutos() {
     });
   }
 
+  // 26/05/2026 — Fix defensivo Bug A:
+  //   - Sanitiza payload ANTES de mandar (gera id, força required:bool, etc)
+  //   - Loga payload + response no console
+  //   - Mostra erro REAL do backend no toast (status + message), não genérico
+  //   - Atualiza cache com config sanitizado (evita drift entre UI e backend)
   async function saveConfig(p: ProductRow) {
-    if (!company?.id) return;
-    const cfg = configCache[p.id];
-    if (!cfg) { toast.error("Configure ao menos 1 campo"); return; }
-    if (!cfg.fields.length) { toast.error("Adicione ao menos 1 campo personalizável"); return; }
+    if (!company?.id) {
+      toast.error("Empresa não identificada");
+      return;
+    }
+    const cfgRaw = configCache[p.id];
+    if (!cfgRaw) {
+      toast.error("Configure ao menos 1 campo");
+      return;
+    }
+    const cfg = sanitizeConfig(cfgRaw);
+    if (!cfg.fields.length) {
+      toast.error("Adicione ao menos 1 campo personalizável");
+      return;
+    }
+
     setSavingId(p.id);
+    console.log("[StudioProdutos] saveConfig start", { product_id: p.id, payload: cfg });
     try {
-      await studioApi.saveCustomizationConfig(company.id, p.id, cfg);
-      toast.success("Configuração salva!");
-      setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, is_personalizable: true } : x));
+      const resp = await studioApi.saveCustomizationConfig(company.id, p.id, cfg);
+      console.log("[StudioProdutos] saveConfig OK", resp);
+      toast.success("✨ Configuração salva!");
+      setProducts((prev) => prev.map((x) =>
+        x.id === p.id ? { ...x, is_personalizable: true } : x
+      ));
+      // Atualiza cache com config sanitizado (evita re-save de schema inválido)
+      setConfigCache((c) => ({ ...c, [p.id]: cfg }));
       setExpandedId(null);
-    } catch (e: any) { toast.error(e?.message || "Erro ao salvar"); }
-    finally { setSavingId(null); }
+    } catch (e: any) {
+      console.error("[StudioProdutos] saveConfig ERROR", {
+        status: e?.status, code: e?.code, message: e?.message, data: e?.data,
+      });
+      const msg = e?.data?.error || e?.message || "Erro desconhecido";
+      const status = e?.status ? `[${e.status}] ` : "";
+      toast.error(`${status}${msg}`);
+    } finally {
+      setSavingId(null);
+    }
   }
 
   function openCustomerView() {
