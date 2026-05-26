@@ -12,7 +12,8 @@ import {
   TextInput,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { useStudioTokens, type StudioTokens } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { type StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -316,7 +317,7 @@ export default function StudioInsumos() {
   );
 }
 
-const buildStyles = (t: StudioTokens) => StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   scroll: { flex: 1, backgroundColor: t.bg },
   container: { padding: 28, paddingBottom: 60, maxWidth: 1000, alignSelf: "center", width: "100%" },
 
