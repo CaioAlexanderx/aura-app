@@ -6,23 +6,27 @@
 //   - Lista com badge "crítico" + edição inline
 //   - Form de novo insumo expandido in-place
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   TextInput,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens, type StudioTokens } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 
 const UNITS = ["un", "g", "kg", "ml", "L", "folha", "cm", "m"];
 
 export default function StudioInsumos() {
   const { company } = useAuthStore();
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const [loading, setLoading] = useState(true);
   const [inputs, setInputs] = useState<StudioInput[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -91,19 +95,17 @@ export default function StudioInsumos() {
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* Header */}
-      <View style={s.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>FASE 3 · INSUMOS</Text>
-          <Text style={s.title}>Matéria-prima do estúdio</Text>
-          <Text style={s.sub}>
-            Controle o que você consome de verdade. Cada venda dá baixa nos insumos, não no produto-final.
-          </Text>
-        </View>
-        <Pressable style={s.ctaPri} onPress={openNew}>
-          <Icon name="plus" size={16} color="#fff" />
-          <Text style={s.ctaPriTxt}>Novo insumo</Text>
-        </Pressable>
-      </View>
+      <StudioPageHeader
+        eyebrow="INSUMOS"
+        title="Estoque do estúdio"
+        subtitle="Controle o que você consome de verdade. Cada venda dá baixa nos insumos, não no produto-final."
+        rightSlot={(
+          <Pressable style={s.ctaPri} onPress={openNew}>
+            <Icon name="plus" size={16} color="#fff" />
+            <Text style={s.ctaPriTxt}>Novo insumo</Text>
+          </Pressable>
+        )}
+      />
 
       {/* Alertas críticos */}
       {lowStock.length > 0 && (
@@ -113,9 +115,13 @@ export default function StudioInsumos() {
               <Icon name="alert-circle" size={18} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.alertTitle}>
-                {lowStock.length} insumo{lowStock.length === 1 ? "" : "s"} abaixo do estoque mínimo
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                <AnimatedKpiCounter
+                  value={lowStock.length}
+                  style={{ fontSize: 28, fontWeight: "800", color: t.danger }}
+                />
+                <Text style={s.alertSub}>insumos abaixo do mínimo</Text>
+              </View>
               <Text style={s.alertSub}>Pedido de reposição recomendado pra evitar parar produção</Text>
             </View>
           </View>
@@ -124,7 +130,7 @@ export default function StudioInsumos() {
               <View key={i.id} style={s.alertRow}>
                 <Text style={s.alertRowName}>{i.name}</Text>
                 <Text style={s.alertRowQty}>
-                  <Text style={{ color: StudioColors.accent, fontWeight: "800" }}>
+                  <Text style={{ color: t.accent, fontWeight: "800" }}>
                     {i.stock_qty} {i.unit}
                   </Text>
                   <Text> de {i.stock_min} mín.</Text>
@@ -152,7 +158,7 @@ export default function StudioInsumos() {
           <View style={s.formHead}>
             <Text style={s.formTitle}>{editing ? "Editar insumo" : "Novo insumo"}</Text>
             <Pressable onPress={() => { setShowForm(false); setEditing(null); }}>
-              <Icon name="x" size={18} color={StudioColors.ink3} />
+              <Icon name="x" size={18} color={t.ink3} />
             </Pressable>
           </View>
           <View style={s.formGrid}>
@@ -266,8 +272,8 @@ export default function StudioInsumos() {
         <View style={s.list}>
           {inputs.map((i) => (
             <Pressable key={i.id} style={[s.itemRow, i.is_low_stock && s.itemRowLow]} onPress={() => openEdit(i)}>
-              <View style={[s.itemDot, i.is_low_stock && { backgroundColor: StudioColors.accent }]}>
-                <Icon name="package" size={14} color={i.is_low_stock ? "#fff" : StudioColors.primary} />
+              <View style={[s.itemDot, i.is_low_stock && { backgroundColor: t.accent }]}>
+                <Icon name="package" size={14} color={i.is_low_stock ? "#fff" : t.primary} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={s.itemNameRow}>
@@ -280,11 +286,11 @@ export default function StudioInsumos() {
                 </View>
                 <Text style={s.itemMeta}>
                   R$ {Number(i.unit_cost).toFixed(2)} / {i.unit}
-                  {i.supplier_name && <Text style={{ color: StudioColors.ink3 }}> · {i.supplier_name}</Text>}
+                  {i.supplier_name && <Text style={{ color: t.ink3 }}> · {i.supplier_name}</Text>}
                 </Text>
               </View>
               <View style={s.itemQtyBlock}>
-                <Text style={[s.itemQty, i.is_low_stock && { color: StudioColors.accent }]}>
+                <Text style={[s.itemQty, i.is_low_stock && { color: t.accent }]}>
                   {Number(i.stock_qty).toFixed(0)} {i.unit}
                 </Text>
                 {i.stock_min != null && (
@@ -292,7 +298,7 @@ export default function StudioInsumos() {
                 )}
               </View>
               <Pressable onPress={() => remove(i)} style={s.delBtn} hitSlop={10}>
-                <Icon name="trash" size={14} color={StudioColors.ink4} />
+                <Icon name="trash" size={14} color={t.ink4} />
               </Pressable>
             </Pressable>
           ))}
@@ -301,7 +307,7 @@ export default function StudioInsumos() {
 
       {/* Hint Fase 3 evolução */}
       <View style={s.hintCard}>
-        <Icon name="info" size={14} color={StudioColors.primary} />
+        <Icon name="info" size={14} color={t.primary} />
         <Text style={s.hintTxt}>
           <Text style={s.hintBold}>Próxima iteração:</Text> ligar insumos aos produtos personalizáveis (ficha técnica) pra dar baixa automática a cada venda + cálculo de margem.
         </Text>
@@ -310,69 +316,64 @@ export default function StudioInsumos() {
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioTokens) => StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: t.bg },
   container: { padding: 28, paddingBottom: 60, maxWidth: 1000, alignSelf: "center", width: "100%" },
 
-  headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 22, flexWrap: "wrap" },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13.5, color: StudioColors.ink3, marginTop: 4 },
-
-  ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
+  ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
 
   alertCard: {
-    backgroundColor: StudioColors.dangerSoft,
-    borderWidth: 1, borderColor: StudioColors.danger,
+    backgroundColor: t.dangerSoft,
+    borderWidth: 1, borderColor: t.danger,
     borderRadius: 18, padding: 18, marginBottom: 18,
   },
   alertHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  alertIco: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.accent, alignItems: "center", justifyContent: "center" },
-  alertTitle: { fontSize: 14.5, fontWeight: "800", color: StudioColors.dangerInk },
-  alertSub: { fontSize: 12, color: StudioColors.danger, marginTop: 2 },
+  alertIco: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent, alignItems: "center", justifyContent: "center" },
+  alertTitle: { fontSize: 14.5, fontWeight: "800", color: t.dangerInk },
+  alertSub: { fontSize: 12, color: t.danger, marginTop: 2 },
   alertList: { gap: 8 },
   alertRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 10 },
-  alertRowName: { fontSize: 13, fontWeight: "700", color: StudioColors.ink },
-  alertRowQty: { fontSize: 12.5, color: StudioColors.ink2 },
+  alertRowName: { fontSize: 13, fontWeight: "700", color: t.ink },
+  alertRowQty: { fontSize: 12.5, color: t.ink2 },
 
   formCard: {
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderRadius: 18, padding: 22, marginBottom: 18,
-    borderWidth: 1, borderColor: StudioColors.primarySoft,
+    borderWidth: 1, borderColor: t.primarySoft,
   },
   formHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  formTitle: { fontSize: 17, fontWeight: "800", color: StudioColors.ink },
+  formTitle: { fontSize: 17, fontWeight: "800", color: t.ink },
   formGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 12 },
-  label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
-  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13.5, color: StudioColors.ink },
+  label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13.5, color: t.ink },
   unitRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  unitChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: StudioColors.bgSoft, borderWidth: 1, borderColor: StudioColors.ink5 },
-  unitChipSel: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  unitChipTxt: { fontSize: 11.5, fontWeight: "700", color: StudioColors.ink3 },
+  unitChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },
+  unitChipSel: { backgroundColor: t.primary, borderColor: t.primary },
+  unitChipTxt: { fontSize: 11.5, fontWeight: "700", color: t.ink3 },
   unitChipTxtSel: { color: "#fff" },
 
   formActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 10 },
-  btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10 },
+  btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10 },
   btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
-  btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff" },
-  btnSecTxt: { color: StudioColors.ink2, fontWeight: "600", fontSize: 13 },
+  btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: "#fff" },
+  btnSecTxt: { color: t.ink2, fontWeight: "600", fontSize: 13 },
 
   list: { gap: 8 },
-  itemRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
-  itemRowLow: { borderColor: StudioColors.danger, backgroundColor: StudioColors.dangerSoft },
-  itemDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.primarySoft, alignItems: "center", justifyContent: "center" },
+  itemRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5 },
+  itemRowLow: { borderColor: t.danger, backgroundColor: t.dangerSoft },
+  itemDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.primarySoft, alignItems: "center", justifyContent: "center" },
   itemNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  itemName: { fontSize: 14, fontWeight: "700", color: StudioColors.ink, flexShrink: 1 },
-  lowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, backgroundColor: StudioColors.accent },
+  itemName: { fontSize: 14, fontWeight: "700", color: t.ink, flexShrink: 1 },
+  lowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, backgroundColor: t.accent },
   lowBadgeTxt: { fontSize: 9, fontWeight: "800", color: "#fff", letterSpacing: 0.5 },
-  itemMeta: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
+  itemMeta: { fontSize: 12, color: t.ink3, marginTop: 2 },
   itemQtyBlock: { alignItems: "flex-end" },
-  itemQty: { fontSize: 14, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.2 },
-  itemMin: { fontSize: 11, color: StudioColors.ink4, marginTop: 1 },
+  itemQty: { fontSize: 14, fontWeight: "800", color: t.ink, letterSpacing: -0.2 },
+  itemMin: { fontSize: 11, color: t.ink4, marginTop: 1 },
   delBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
 
-  hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.primaryGhost, borderRadius: 12, padding: 12, marginTop: 18, borderWidth: 1, borderColor: StudioColors.primarySoft },
-  hintTxt: { fontSize: 12, color: StudioColors.ink2, flex: 1, lineHeight: 17 },
-  hintBold: { fontWeight: "700", color: StudioColors.primary },
+  hintCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: t.primaryGhost, borderRadius: 12, padding: 12, marginTop: 18, borderWidth: 1, borderColor: t.primarySoft },
+  hintTxt: { fontSize: 12, color: t.ink2, flex: 1, lineHeight: 17 },
+  hintBold: { fontWeight: "700", color: t.primary },
 });
