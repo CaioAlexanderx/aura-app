@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
+import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
 
 const queryClient = new QueryClient();
 
@@ -145,11 +146,16 @@ function AuthGuard() {
 }
 
 export default function RootLayout() {
+  // 26/05/2026 (fix critico): StudioThemeProvider envolve TUDO pra que
+  // useStudioTokens()/useStudioTheme() funcionem nas telas /studio/*.
+  // Antes nao estava montado — toggle de tema era no-op silencioso.
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthGuard />
-        <LGPDConsent />
+        <StudioThemeProvider>
+          <AuthGuard />
+          <LGPDConsent />
+        </StudioThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
