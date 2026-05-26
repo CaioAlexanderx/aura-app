@@ -232,7 +232,8 @@ const s = StyleSheet.create({
   eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
   title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
   sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4 },
-  ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.accent, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
+  // Convenção do app: primary CTAs são navy (primary), accent fica reservado pra status/highlights.
+  ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
   kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 22 },
   kpi: { flex: 1, minWidth: 150, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
