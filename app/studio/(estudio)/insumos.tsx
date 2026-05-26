@@ -319,14 +319,14 @@ const s = StyleSheet.create({
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
 
   alertCard: {
-    backgroundColor: "#FEF2F2",
-    borderWidth: 1, borderColor: "#FECACA",
+    backgroundColor: StudioColors.dangerSoft,
+    borderWidth: 1, borderColor: StudioColors.danger,
     borderRadius: 18, padding: 18, marginBottom: 18,
   },
   alertHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   alertIco: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.accent, alignItems: "center", justifyContent: "center" },
-  alertTitle: { fontSize: 14.5, fontWeight: "800", color: "#7F1D1D" },
-  alertSub: { fontSize: 12, color: "#B91C1C", marginTop: 2 },
+  alertTitle: { fontSize: 14.5, fontWeight: "800", color: StudioColors.dangerInk },
+  alertSub: { fontSize: 12, color: StudioColors.danger, marginTop: 2 },
   alertList: { gap: 8 },
   alertRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 10 },
   alertRowName: { fontSize: 13, fontWeight: "700", color: StudioColors.ink },
@@ -360,7 +360,7 @@ const s = StyleSheet.create({
 
   list: { gap: 8 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
-  itemRowLow: { borderColor: "#FECACA", backgroundColor: "#FEF2F2" },
+  itemRowLow: { borderColor: StudioColors.danger, backgroundColor: StudioColors.dangerSoft },
   itemDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: StudioColors.primarySoft, alignItems: "center", justifyContent: "center" },
   itemNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemName: { fontSize: 14, fontWeight: "700", color: StudioColors.ink, flexShrink: 1 },
