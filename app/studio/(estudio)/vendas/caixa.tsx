@@ -8,9 +8,11 @@ import { request } from "@/services/api";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { maskPhone } from "@/utils/masks";
 import { StudioGradients } from "@/constants/studio-tokens";
-import { useStudioTokens, type StudioTokens } from "@/contexts/StudioThemeMode";
+import { useStudioTokens, type StudioPalette } from "@/contexts/StudioThemeMode";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
+import { toast } from "@/components/Toast";
 
 // ============================================================
 // /studio/(estudio)/vendas/caixa — PDV Studio nativo
@@ -38,6 +40,14 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 // esquerda + carrinho lateral fixo direita) em desktop (>=1024px).
 // Mobile mantém coluna única + FAB carrinho. Identidade Studio
 // preservada (navy primary + magenta accent, gradient navy→magenta).
+//
+// 26/05/2026 (Orçamento) — espelha modelo do PDV varejo: openQuotePdf
+// gera HTML imprimível sem persistência (sem backend, sem migration),
+// disponível em todos os planos. Modal Studio captura nome + telefone
+// + validade (3/7/15/30 dias) e, opcional, abre wa.me com mensagem
+// pronta. Botão "Gerar orçamento" usa accent magenta (outline) ao
+// lado do CTA primary "Fechar venda" pra deixar claro que NÃO fecha
+// venda. Tipo trocado de StudioTokens → StudioPalette (canônico).
 // ============================================================
 
 const CART_WIDTH = 360;
@@ -117,6 +127,14 @@ export default function StudioCaixaPage() {
     total: number;
     wa_link: string | null;
   } | null>(null);
+
+  // Orçamento Studio — modal de captura cliente + validade
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [quoteCustomerName, setQuoteCustomerName] = useState("");
+  const [quoteCustomerPhone, setQuoteCustomerPhone] = useState("");
+  const [quoteValidityDays, setQuoteValidityDays] = useState(7);
+  const [quoteSending, setQuoteSending] = useState(false);
+  const [quoteDone, setQuoteDone] = useState<{ waLink: string | null } | null>(null);
 
   // Templates do produto (cache simples)
   const [templatesById, setTemplatesById] = useState<Record<string, Array<{ id: string; name: string; image_url: string; thumb_url: string | null }>>>({});
@@ -253,6 +271,83 @@ export default function StudioCaixaPage() {
 
   function removeLine(lineId: string) {
     setCart((prev) => prev.filter((l) => l.lineId !== lineId));
+  }
+
+
+  function openQuoteModal() {
+    if (cart.length === 0) {
+      toast.info("Adicione itens ao carrinho antes de gerar orçamento");
+      return;
+    }
+    setQuoteCustomerName(customerName);
+    setQuoteCustomerPhone(customerPhone);
+    setQuoteValidityDays(7);
+    setQuoteDone(null);
+    setShowQuoteModal(true);
+  }
+
+  function closeQuoteModal() {
+    if (quoteSending) return;
+    setShowQuoteModal(false);
+    setQuoteDone(null);
+  }
+
+  function handleGenerateQuote() {
+    if (cart.length === 0) {
+      toast.info("Adicione itens ao carrinho antes de gerar orçamento");
+      return;
+    }
+    setQuoteSending(true);
+    try {
+      const items: QuoteItem[] = cart.map((l) => ({
+        name: l.product.name + (l.qty > 1 ? "" : ""),
+        qty: l.qty,
+        unitPrice: l.product.price,
+      }));
+      const profile = (auth.company as any)?.profile || {};
+      const companyName =
+        (auth.company as any)?.name ||
+        (auth.company as any)?.trade_name ||
+        (auth.company as any)?.legal_name ||
+        "Estúdio";
+
+      openQuotePdf({
+        items,
+        customerName: quoteCustomerName.trim() || null,
+        sellerName: operatorName || null,
+        total: cartSubtotal,
+        companyName,
+        companyLogoUrl: profile.logo_url || null,
+        companyPhone: profile.phone || null,
+        companyAddress: profile.address || null,
+        validityDays: Number(quoteValidityDays) || 7,
+      });
+
+      let waLink: string | null = null;
+      if (quoteCustomerPhone.trim()) {
+        const digits = quoteCustomerPhone.replace(/\D/g, "");
+        const phone = digits.startsWith("55") ? digits : "55" + digits;
+        const firstName = (quoteCustomerName.trim().split(" ")[0]) || "tudo bem";
+        const msg = encodeURIComponent(
+          `Oi ${firstName}! Aqui vai o orçamento da sua personalização — ` +
+            `R$ ${cartSubtotal.toFixed(2)} (${cart.length} ${cart.length === 1 ? "item" : "itens"}). ` +
+            `Válido por ${quoteValidityDays} ${quoteValidityDays === 1 ? "dia" : "dias"}. ` +
+            `Acabei de te mandar o PDF — qualquer dúvida estou por aqui!`
+        );
+        waLink = `https://wa.me/${phone}?text=${msg}`;
+      }
+
+      setQuoteDone({ waLink });
+      toast.success("Orçamento gerado");
+      console.log("[studio-pdv] quote generated:", { items: items.length, total: cartSubtotal });
+    } catch (e: any) {
+      const status = e?.status ? "[" + e.status + "] " : "";
+      const msg = status + (e?.message || "Erro ao gerar orçamento");
+      toast.error(msg);
+      console.error("[studio-pdv] quote error:", msg, e);
+    } finally {
+      setQuoteSending(false);
+    }
   }
 
   async function finalizeSale() {
@@ -936,6 +1031,30 @@ export default function StudioCaixaPage() {
       </View>
 
       <Pressable
+        onPress={openQuoteModal}
+        disabled={cart.length === 0}
+        style={({ hovered }: any) => ({
+          backgroundColor: cart.length === 0 ? t.bgSoft : "transparent",
+          borderWidth: 1.5,
+          borderColor: cart.length === 0 ? t.ink5 : accent,
+          paddingVertical: 12, borderRadius: 10,
+          alignItems: "center",
+          opacity: cart.length === 0 ? 0.6 : 1,
+          ...(Platform.OS === "web"
+            ? ({
+                transition: "background 0.15s ease",
+                cursor: cart.length === 0 ? "not-allowed" : "pointer",
+                backgroundColor: cart.length === 0 ? t.bgSoft : (hovered ? accent + "12" : "transparent"),
+              } as any)
+            : {}),
+        })}
+      >
+        <Text style={{ color: cart.length === 0 ? t.ink3 : accent, fontSize: 13, fontWeight: "800", letterSpacing: 0.3 }}>
+          Gerar orçamento
+        </Text>
+      </Pressable>
+
+      <Pressable
         onPress={() => setStage("checkout")}
         disabled={cart.length === 0}
         style={{
@@ -951,6 +1070,210 @@ export default function StudioCaixaPage() {
       </Pressable>
     </View>
   );
+
+
+  // ── Componente: Modal Orçamento ──
+  const QuoteModal = showQuoteModal ? (
+    <View
+      style={{
+        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.55)",
+        alignItems: "center", justifyContent: "center",
+        padding: 16,
+        ...(Platform.OS === "web" ? ({ zIndex: 1000 } as any) : {}),
+      }}
+    >
+      <Pressable
+        onPress={closeQuoteModal}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      <View
+        style={{
+          backgroundColor: t.paperCardElev,
+          borderRadius: 16,
+          width: "100%", maxWidth: 460,
+          borderWidth: 1, borderColor: t.ink5,
+          padding: 20,
+          gap: 12,
+          ...(Platform.OS === "web" ? ({ boxShadow: "0 24px 60px rgba(0,0,0,0.35)" } as any) : {}),
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View
+            style={{
+              width: 36, height: 36, borderRadius: 10,
+              backgroundColor: accent + "1A",
+              alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: accent, fontSize: 16, fontWeight: "800" }}>$</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 10, color: t.ink3, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 }}>
+              Studio · PDV
+            </Text>
+            <Text style={{ fontSize: 17, color: t.ink, fontWeight: "800" }}>
+              Gerar orçamento
+            </Text>
+          </View>
+          <Pressable
+            onPress={closeQuoteModal}
+            disabled={quoteSending}
+            style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center", opacity: quoteSending ? 0.4 : 1 }}
+          >
+            <Text style={{ fontSize: 20, color: t.ink3 }}>×</Text>
+          </Pressable>
+        </View>
+
+        {!quoteDone ? (
+          <>
+            <Text style={{ fontSize: 12, color: t.ink3, lineHeight: 17 }}>
+              Geramos um PDF imprimível com os itens, sem fechar a venda. Use no balcão ou mande pelo WhatsApp.
+            </Text>
+
+            <View>
+              <Text style={styles.sectionLabel}>Nome do cliente (opcional)</Text>
+              <FInput v={quoteCustomerName} on={setQuoteCustomerName} ph="Ex.: Camila Rocha" t={t} />
+            </View>
+
+            <View>
+              <Text style={styles.sectionLabel}>WhatsApp (opcional)</Text>
+              <FInput
+                v={quoteCustomerPhone}
+                on={(v) => setQuoteCustomerPhone(maskPhone(v))}
+                ph="(11) 9 9999-9999"
+                kb="phone-pad"
+                t={t}
+              />
+            </View>
+
+            <View>
+              <Text style={styles.sectionLabel}>Validade do orçamento</Text>
+              <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+                {[3, 7, 15, 30].map((d) => (
+                  <Pressable
+                    key={d}
+                    onPress={() => setQuoteValidityDays(d)}
+                    style={[styles.chip, quoteValidityDays === d && styles.chipActive]}
+                  >
+                    <Text style={[styles.chipTxt, quoteValidityDays === d && styles.chipTxtActive]}>
+                      {d} {d === 1 ? "dia" : "dias"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: t.bgSoft, borderRadius: 10, padding: 12,
+                borderWidth: 1, borderColor: t.ink5,
+                flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+                marginTop: 4,
+              }}
+            >
+              <View>
+                <Text style={{ fontSize: 10, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  {cartCount} {cartCount === 1 ? "item" : "itens"}
+                </Text>
+                <Text style={{ fontSize: 11, color: t.ink3, marginTop: 2 }}>Total do orçamento</Text>
+              </View>
+              <Text style={{ fontSize: 20, color: primary, fontWeight: "800" }}>
+                R$ {cartSubtotal.toFixed(2)}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+              <Pressable
+                onPress={closeQuoteModal}
+                disabled={quoteSending}
+                style={{
+                  flex: 1, paddingVertical: 12, borderRadius: 10,
+                  backgroundColor: t.bgSoft, alignItems: "center",
+                  opacity: quoteSending ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: t.ink2, fontSize: 13, fontWeight: "800" }}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleGenerateQuote}
+                disabled={quoteSending}
+                style={{
+                  flex: 1.4, paddingVertical: 12, borderRadius: 10,
+                  backgroundColor: accent, alignItems: "center",
+                  opacity: quoteSending ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
+                  {quoteSending ? "Gerando..." : "Gerar PDF"}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            <View
+              style={{
+                backgroundColor: t.successSoft || (t.success + "1A"),
+                borderRadius: 10, padding: 14,
+                borderWidth: 1, borderColor: t.success,
+                gap: 4,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: t.success, fontWeight: "800" }}>
+                Orçamento gerado!
+              </Text>
+              <Text style={{ fontSize: 11, color: t.ink2, lineHeight: 16 }}>
+                Uma janela com o PDF foi aberta — imprima ou salve em PDF pelo navegador.
+              </Text>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              {quoteDone.waLink && Platform.OS === "web" && (
+                <Pressable
+                  onPress={() => {
+                    if (typeof window !== "undefined") window.open(quoteDone.waLink!, "_blank");
+                  }}
+                  style={{
+                    backgroundColor: "#25D366", paddingVertical: 12, borderRadius: 10,
+                    alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8,
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
+                    Abrir WhatsApp do cliente
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable
+                onPress={handleGenerateQuote}
+                disabled={quoteSending}
+                style={{
+                  backgroundColor: "transparent",
+                  borderWidth: 1.5, borderColor: accent,
+                  paddingVertical: 12, borderRadius: 10,
+                  alignItems: "center",
+                  opacity: quoteSending ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: accent, fontSize: 13, fontWeight: "800" }}>
+                  Reimprimir
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={closeQuoteModal}
+                style={{
+                  backgroundColor: primary, paddingVertical: 12, borderRadius: 10,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Fechar</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
+    </View>
+  ) : null;
 
   // ─── LAYOUT WIDE (desktop) ─── 2 colunas: catálogo + carrinho sticky
   if (wide) {
@@ -982,6 +1305,7 @@ export default function StudioCaixaPage() {
             {CartSidebar}
           </View>
         </View>
+        {QuoteModal}
       </View>
     );
   }
@@ -1027,6 +1351,26 @@ export default function StudioCaixaPage() {
           <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Fechar →</Text>
         </Pressable>
       )}
+
+      {/* FAB "Orçamento" mobile — alinhado acima do Fechar */}
+      {cart.length > 0 && (
+        <Pressable
+          onPress={openQuoteModal}
+          style={{
+            position: "absolute", left: 12, right: 12, bottom: 78,
+            backgroundColor: t.paperCardElev, borderRadius: 12,
+            paddingVertical: 10, paddingHorizontal: 16,
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+            borderWidth: 1.5, borderColor: accent,
+          }}
+        >
+          <Text style={{ color: accent, fontSize: 12, fontWeight: "800", letterSpacing: 0.3 }}>
+            Gerar orçamento
+          </Text>
+        </Pressable>
+      )}
+
+      {QuoteModal}
     </View>
   );
 }
@@ -1037,7 +1381,7 @@ export default function StudioCaixaPage() {
 function KpiCard({
   t, label, value, icon, tone,
 }: {
-  t: StudioTokens;
+  t: StudioPalette;
   label: string;
   value: string;
   icon: string;
@@ -1074,7 +1418,7 @@ function KpiCard({
 function ShortcutChip({
   t, icon, label, onPress,
 }: {
-  t: StudioTokens;
+  t: StudioPalette;
   icon: string;
   label: string;
   onPress: () => void;
@@ -1122,7 +1466,7 @@ function FieldEditor({
   value: any;
   templates: Array<{ id: string; image_url: string; thumb_url: string | null; name: string }>;
   onChange: (v: any) => void;
-  t: StudioTokens;
+  t: StudioPalette;
 }) {
   const sectionLabel = {
     fontSize: 11, color: t.ink3, fontWeight: "700" as const,
@@ -1267,7 +1611,7 @@ function FieldEditor({
 // ============================================================
 // Helpers
 // ============================================================
-function FInput({ v, on, ph, kb, multi, t }: { v: string; on: (s: string) => void; ph: string; kb?: any; multi?: boolean; t: StudioTokens }) {
+function FInput({ v, on, ph, kb, multi, t }: { v: string; on: (s: string) => void; ph: string; kb?: any; multi?: boolean; t: StudioPalette }) {
   return (
     <TextInput
       value={v}
@@ -1286,7 +1630,7 @@ function FInput({ v, on, ph, kb, multi, t }: { v: string; on: (s: string) => voi
   );
 }
 
-function TotalRow({ l, v, big, t }: { l: string; v: number; big?: boolean; t: StudioTokens }) {
+function TotalRow({ l, v, big, t }: { l: string; v: number; big?: boolean; t: StudioPalette }) {
   return (
     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
       <Text style={{ fontSize: big ? 14 : 12, color: big ? t.ink : t.ink2, fontWeight: big ? "800" : "500" }}>{l}</Text>
@@ -1297,7 +1641,7 @@ function TotalRow({ l, v, big, t }: { l: string; v: number; big?: boolean; t: St
   );
 }
 
-function buildStyles(t: StudioTokens) {
+function buildStyles(t: StudioPalette) {
   return {
     sectionLabel: {
       fontSize: 11, color: t.ink3, fontWeight: "700" as const,
