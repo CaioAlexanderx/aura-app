@@ -16,10 +16,13 @@
 //   - StudioLoading no submit (variant spinner)
 //   - StudioGradient no header (primary -> accent 135deg)
 //
-// Defensivo de imports:
-//   Os 3 panels embedados (Sprints 1-3 paralelos) podem nao existir
-//   no momento do build. Usamos require + try/catch + placeholder
-//   pra nao quebrar build.
+// 26/05/2026 — Code review fixes:
+//   - Imports estáticos dos panels (require dinâmico podia falhar
+//     em Metro/web bundle production)
+//   - Steps 2-4 passam productName/productPrice (e slug em
+//     personalização) pros panels embedados
+//   - panelWrap simplificado pra remover double-padding (panel
+//     filho já tem container próprio com padding)
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -47,29 +50,10 @@ import {
   pickFileWeb,
   uploadStudioMockup,
 } from "@/services/studioUploadApi";
-
-// ───────────────────────────────────────────────────────────
-// Defensivo: panels da Sprints 1-3 podem nao existir ainda.
-// Carrega via require + try/catch. Se faltar, vira placeholder.
-// ───────────────────────────────────────────────────────────
-let StudioPersonalizacaoPanel: any = null;
-let StudioFichaTecnicaPanel: any = null;
-let StudioTemplatesPanel: any = null;
-try {
-  StudioPersonalizacaoPanel = require("@/components/studio/StudioPersonalizacaoPanel").default;
-} catch (e) {
-  console.log("[StudioNewProductWizard] StudioPersonalizacaoPanel nao encontrado (Sprint 1 pendente)", e);
-}
-try {
-  StudioFichaTecnicaPanel = require("@/components/studio/StudioFichaTecnicaPanel").default;
-} catch (e) {
-  console.log("[StudioNewProductWizard] StudioFichaTecnicaPanel nao encontrado (Sprint 2 pendente)", e);
-}
-try {
-  StudioTemplatesPanel = require("@/components/studio/StudioTemplatesPanel").default;
-} catch (e) {
-  console.log("[StudioNewProductWizard] StudioTemplatesPanel nao encontrado (Sprint 3 pendente)", e);
-}
+import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoPanel";
+import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
+import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
+import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -99,6 +83,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   const t = useStudioTokens();
   const styles = useMemo(() => buildStyles(t), [t]);
   const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const { config: dcConfig } = useDigitalChannel();
+  const dcSlug = dcConfig?.slug || null;
 
   const [step, setStep] = useState(1);
 
@@ -418,10 +404,15 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     no={doPersonalizacao === false}
                     onYes={() => setDoPersonalizacao(true)}
                     onNo={() => setDoPersonalizacao(false)}
-                    Panel={StudioPersonalizacaoPanel}
-                    panelLabel="Painel de personalizacao"
-                    productId={createdProduct?.id || ""}
-                    companyId={companyId}
+                    renderPanel={() => createdProduct ? (
+                      <StudioPersonalizacaoPanel
+                        productId={createdProduct.id}
+                        companyId={companyId}
+                        productName={createdProduct.name}
+                        productPrice={createdProduct.price}
+                        slug={dcSlug}
+                      />
+                    ) : null}
                   />
                 )}
 
@@ -435,10 +426,14 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     no={doFichaTecnica === false}
                     onYes={() => setDoFichaTecnica(true)}
                     onNo={() => setDoFichaTecnica(false)}
-                    Panel={StudioFichaTecnicaPanel}
-                    panelLabel="Painel de ficha tecnica"
-                    productId={createdProduct?.id || ""}
-                    companyId={companyId}
+                    renderPanel={() => createdProduct ? (
+                      <StudioFichaTecnicaPanel
+                        productId={createdProduct.id}
+                        companyId={companyId}
+                        productName={createdProduct.name}
+                        productPrice={createdProduct.price}
+                      />
+                    ) : null}
                   />
                 )}
 
@@ -452,10 +447,13 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     no={doTemplates === false}
                     onYes={() => setDoTemplates(true)}
                     onNo={() => setDoTemplates(false)}
-                    Panel={StudioTemplatesPanel}
-                    panelLabel="Painel de templates"
-                    productId={createdProduct?.id || ""}
-                    companyId={companyId}
+                    renderPanel={() => createdProduct ? (
+                      <StudioTemplatesPanel
+                        productId={createdProduct.id}
+                        companyId={companyId}
+                        productName={createdProduct.name}
+                      />
+                    ) : null}
                   />
                 )}
               </>
@@ -736,6 +734,8 @@ function Step1Basico(props: {
 
 // ───────────────────────────────────────────────────────────
 // Steps 2/3/4 — embed wrapper com pergunta Sim/Nao
+// renderPanel é callback: só renderiza quando createdProduct existe
+// e o pai já sabe quais props passar (productName, productPrice, slug).
 // ───────────────────────────────────────────────────────────
 function StepEmbed(props: {
   t: StudioPalette;
@@ -746,46 +746,22 @@ function StepEmbed(props: {
   no: boolean;
   onYes: () => void;
   onNo: () => void;
-  Panel: any;
-  panelLabel: string;
-  productId: string;
-  companyId: string;
+  renderPanel: () => React.ReactNode;
 }) {
-  const { t, styles, question, explanation, yes, no, onYes, onNo, Panel, panelLabel, productId, companyId } = props;
+  const { styles, question, explanation, yes, onYes, onNo, renderPanel } = props;
+  const panelNode = yes ? renderPanel() : null;
 
-  // Se Sim e tem Panel real, renderiza Panel
-  if (yes && Panel) {
+  // Se Sim e tem panel real, renderiza panel
+  if (yes && panelNode) {
     return (
       <View style={{ gap: 12 }}>
         <Text style={styles.sectionQuestion}>{question}</Text>
         <Text style={styles.sectionHelp}>{explanation}</Text>
         <View style={styles.panelWrap}>
-          <Panel productId={productId} companyId={companyId} />
+          {panelNode}
         </View>
         <Pressable style={styles.linkBtn} onPress={onNo}>
           <Text style={styles.linkBtnTxt}>Mudei de ideia, pular esta etapa</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  // Se Sim mas Panel nao existe (Sprints paralelas), placeholder defensivo
-  if (yes && !Panel) {
-    return (
-      <View style={{ gap: 12 }}>
-        <Text style={styles.sectionQuestion}>{question}</Text>
-        <View style={styles.placeholderWrap}>
-          <Icon name="alert" size={20} color={t.warning} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.placeholderTitle}>{panelLabel} ainda nao disponivel</Text>
-            <Text style={styles.placeholderSub}>
-              Este painel sera ativado quando o Sprint correspondente for finalizado. Voce ja pode
-              avancar e cadastrar depois.
-            </Text>
-          </View>
-        </View>
-        <Pressable style={styles.linkBtn} onPress={onNo}>
-          <Text style={styles.linkBtnTxt}>Pular esta etapa</Text>
         </Pressable>
       </View>
     );
@@ -806,7 +782,7 @@ function StepEmbed(props: {
         </Pressable>
         <Pressable style={[styles.choiceCard, styles.choiceNo]} onPress={onNo}>
           <View style={styles.choiceIconNo}>
-            <Icon name="x" size={20} color={t.ink2} />
+            <Icon name="x" size={20} color={props.t.ink2} />
           </View>
           <Text style={styles.choiceTitle}>Nao, pular</Text>
           <Text style={styles.choiceSub}>Voce pode fazer depois</Text>
@@ -1052,26 +1028,13 @@ function buildStyles(t: StudioPalette) {
     choiceSub: { fontSize: 12, color: t.ink3, textAlign: "center" },
 
     // ── Painel embed wrapper ──────────────────────────────
+    // 26/05: removido padding/border/bg pra evitar triple-padding
+    // (ScrollView 22 + panelWrap 14 + container interno 20 = 56px).
+    // Os panels já têm container próprio com visual definitivo.
     panelWrap: {
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: t.ink5,
-      backgroundColor: t.paperCard,
-      padding: 14,
-      minHeight: 200,
+      marginTop: 8,
+      marginBottom: 16,
     },
-    placeholderWrap: {
-      flexDirection: "row",
-      gap: 12,
-      padding: 16,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: t.warningSoft,
-      backgroundColor: t.warningSoft,
-      alignItems: "flex-start",
-    },
-    placeholderTitle: { fontSize: 13.5, fontWeight: "800", color: t.warningInk },
-    placeholderSub: { fontSize: 12, color: t.warningInk, marginTop: 4, lineHeight: 17 },
     linkBtn: { alignSelf: "flex-start", paddingVertical: 6 },
     linkBtnTxt: { color: t.primary, fontSize: 12.5, fontWeight: "700", textDecorationLine: "underline" },
 
