@@ -27,17 +27,23 @@
 // 26/05/2026 — Residual tema Studio:
 //   · Migração pra useStudioTokens() (dark mode aware via Platform context)
 //     com buildStyles(t) lazy via useMemo.
-//   · Hero ganha LinearGradient navy→magenta (StudioGradients.brand) no lugar
+//   · Hero ganha gradient navy→magenta (StudioGradients.brand) no lugar
 //     do primaryGhost antigo — presença Studio reforçada.
 //   · Tab ativa ganha sombra navy sutil (boxShadow web / elevation native).
 //   · Separadores verticais sutis (t.ink5) entre os 3 grupos semânticos de
 //     tabs: [Site/Design] | [Configurador/Galeria/Revisões/Marketplaces] |
 //     [Entrega/Pedidos] — ajudam scan visual sem poluir.
 //   · View Site Button: primaryGhost → primarySoft (mais cor, mais Studio).
+//
+// 26/05/2026 — Fix Cloudflare build:
+//   · expo-linear-gradient NÃO está no package.json (build CF Workers quebrou).
+//   · Substituído por <StudioGradient> (zero-deps): CSS linear-gradient no web,
+//     cor sólida central no native. Props start/end removidas (usa "direction"
+//     CSS-style: "to bottom right", "to right", "135deg", etc).
 // ============================================================
 import { useState, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioColors, StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
@@ -111,10 +117,9 @@ export default function StudioVendasLojaDigital() {
 
         {/* Hero Studio — gradient navy→magenta (StudioGradients.brand) reforça
             presença do vertical. Texto e ícone passam pra branco/sobre-gradient. */}
-        <LinearGradient
-          colors={StudioGradients.brand as unknown as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <StudioGradient
+          colors={StudioGradients.brand as unknown as string[]}
+          direction="to bottom right"
           style={s.hero}
         >
           <View style={s.heroIcon}>
@@ -142,7 +147,7 @@ export default function StudioVendasLojaDigital() {
               {config.is_published ? "PUBLICADA" : "RASCUNHO"}
             </Text>
           </View>
-        </LinearGradient>
+        </StudioGradient>
 
         {/* Tabs Studio (8) — scroll horizontal em mobile, com fade-edges (Fase 2) */}
         <View style={s.tabsWrap}>
@@ -174,17 +179,15 @@ export default function StudioVendasLojaDigital() {
               em taps/scroll. Top:0 cobre toda altura das tabs (~ 38–40px). */}
           {!IS_WIDE && (
             <>
-              <LinearGradient
+              <StudioGradient
                 colors={["rgba(232,233,240,1)", "rgba(232,233,240,0)"]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
+                direction="to right"
                 style={s.fadeLeft}
                 pointerEvents="none"
               />
-              <LinearGradient
+              <StudioGradient
                 colors={["rgba(232,233,240,0)", "rgba(232,233,240,1)"]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
+                direction="to right"
                 style={s.fadeRight}
                 pointerEvents="none"
               />
