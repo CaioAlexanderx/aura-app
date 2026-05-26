@@ -592,7 +592,8 @@ function buildStyles(accent: AccentTokens) {
     kpiNum: { fontSize: 18, fontWeight: "800", marginBottom: 3 },
     kpiLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textAlign: "center" },
     refreshBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10, alignSelf: "flex-end" },
-    refreshText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "600" },
+    // WCAG AA: 11px magenta sobre fundo claro do canal — peso 700 garante ratio ≥3:1.
+    refreshText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "700" },
     empty: { alignItems: "center", paddingVertical: 48, gap: 10 },
     emptyIcon: { fontSize: 36 },
     emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
