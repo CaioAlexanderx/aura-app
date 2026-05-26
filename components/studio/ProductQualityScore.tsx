@@ -11,6 +11,8 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
  * telas (Hub, lista de produtos, etc) sem montar o componente visual.
  *
  * 26/05/2026: trocado useTheme (path inexistente) por useStudioTokens canonico.
+ * 26/05/2026: nova variant `badgeOnly` (bolinha 24x24 com a letra) pra uso em
+ *   listas/cards onde o `compact` estica demais e quebra o layout.
  */
 
 export type Product = {
@@ -107,6 +109,7 @@ export function calculateProductScore(p: Product): ScoreResult {
 type Props = {
   product: Product;
   compact?: boolean;
+  badgeOnly?: boolean;
   onHintClick?: (hint: string) => void;
 };
 
@@ -115,6 +118,7 @@ const isWeb = Platform.OS === "web";
 export default function ProductQualityScore({
   product,
   compact = false,
+  badgeOnly = false,
   onHintClick,
 }: Props) {
   const theme = useStudioTokens();
@@ -122,6 +126,18 @@ export default function ProductQualityScore({
 
   const letterColor = pickLetterColor(result.letter, theme);
   const letterSize = isWeb ? 32 : 28;
+
+  // ---- Modo badgeOnly: só bolinha 24x24 com a letra ----
+  // Usado em listas/cards onde o `compact` (200+ px) estica e quebra layout.
+  if (badgeOnly) {
+    return (
+      <View style={[badgeStyles.bubble, { backgroundColor: letterColor.bg }]}>
+        <Text style={[badgeStyles.bubbleTxt, { color: letterColor.fg }]}>
+          {result.letter}
+        </Text>
+      </View>
+    );
+  }
 
   // ---- Modo compact: só letter + barra inline ----
   if (compact) {
@@ -434,5 +450,23 @@ const styles = StyleSheet.create({
   scoreValue: {
     fontSize: 13,
     fontWeight: "700",
+  },
+});
+
+const badgeStyles = StyleSheet.create({
+  bubble: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  bubbleTxt: {
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "center",
+    lineHeight: 14,
   },
 });
