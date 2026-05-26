@@ -8,6 +8,9 @@
 // Fase 3 (refactor): header/loading/empty migrados pros
 // componentes globais Studio (StudioPageHeader, StudioLoading,
 // StudioEmpty).
+//
+// Fase 6 residual (26/05): KPIs animados via AnimatedKpiCounter
+// (tween + pulse + badge +N quando incrementa).
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -27,6 +30,7 @@ import { BulkOrderWizard } from "@/components/studio/BulkOrderWizard";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -118,12 +122,12 @@ export default function StudioPedidosHub() {
         <StudioLoading variant="skeleton-list" rows={5} />
       ) : stats && (
         <View style={s.kpis}>
-          <Kpi label="Pedidos hoje"    value={String(stats.orders.orders_today)} icon="shopping-bag" color={StudioColors.primary} />
-          <Kpi label="Em produção"     value={String(stats.orders.in_production)} icon="clock" color={StudioColors.accent} />
-          <Kpi label="Aguardando arte" value={String(stats.orders.pending_art)} icon="alert-circle" color={StudioColors.warning} />
-          <Kpi label="Prontos"         value={String(stats.orders.ready)} icon="package" color={StudioColors.mint} />
-          <Kpi label="Atrasados"       value={String(stats.orders.overdue)} icon="alert-triangle" color={StudioColors.danger} highlight={stats.orders.overdue > 0} />
-          <Kpi label="Receita 7d"      value={fmtBRL(stats.revenue.last_7d)} icon="trending-up" color={StudioColors.primary} />
+          <Kpi label="Pedidos hoje"    value={stats.orders.orders_today} icon="shopping-bag" color={StudioColors.primary} />
+          <Kpi label="Em produção"     value={stats.orders.in_production} icon="clock" color={StudioColors.accent} />
+          <Kpi label="Aguardando arte" value={stats.orders.pending_art} icon="alert-circle" color={StudioColors.warning} />
+          <Kpi label="Prontos"         value={stats.orders.ready} icon="package" color={StudioColors.mint} />
+          <Kpi label="Atrasados"       value={stats.orders.overdue} icon="alert-triangle" color={StudioColors.danger} highlight={stats.orders.overdue > 0} />
+          <Kpi label="Receita 7d"      value={stats.revenue.last_7d} icon="trending-up" color={StudioColors.primary} kind="currency" />
         </View>
       )}
 
@@ -216,7 +220,19 @@ export default function StudioPedidosHub() {
   );
 }
 
-function Kpi({ label, value, icon, color, highlight }: { label: string; value: string; icon: string; color: string; highlight?: boolean }) {
+// Fase 6 residual (26/05): valor numérico passa pro AnimatedKpiCounter
+// — tween + pulse + badge +N quando incrementa. `kind="currency"` usa
+// fmtBRL como formatter; default = inteiro pt-BR.
+function Kpi({
+  label, value, icon, color, highlight, kind = "number",
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  color: string;
+  highlight?: boolean;
+  kind?: "number" | "currency";
+}) {
   return (
     <View style={[s.kpi, highlight && { borderColor: color, borderWidth: 2 }]}>
       <View style={[s.kpiIco, { backgroundColor: color }]}>
@@ -224,7 +240,14 @@ function Kpi({ label, value, icon, color, highlight }: { label: string; value: s
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.kpiLabel} numberOfLines={1}>{label}</Text>
-        <Text style={[s.kpiValue, highlight && { color }]}>{value}</Text>
+        <View style={s.kpiCounterWrap}>
+          <AnimatedKpiCounter
+            value={Number(value) || 0}
+            fontSize={17}
+            color={highlight ? color : StudioColors.ink}
+            format={kind === "currency" ? fmtBRL : undefined}
+          />
+        </View>
       </View>
     </View>
   );
@@ -240,7 +263,8 @@ const s = StyleSheet.create({
   kpi: { flex: 1, minWidth: 150, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: StudioColors.paperCard, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
   kpiIco: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   kpiLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
-  kpiValue: { fontSize: 17, fontWeight: "800", color: StudioColors.ink, marginTop: 1 },
+  // Wrap pro counter alinhar à esquerda (component default = center).
+  kpiCounterWrap: { alignItems: "flex-start", marginTop: 1 },
   sectionLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.6, marginBottom: 8 },
   alertsBlock: { marginBottom: 22, gap: 8 },
   alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
