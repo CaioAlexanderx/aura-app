@@ -17,10 +17,11 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
-import { useStudioTokens, StudioPalette } from "@/contexts/StudioThemeMode";
+import { StudioGradient } from "@/components/studio/StudioGradient";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi } from "@/services/studioApi";
-import { toast } from "@/lib/toast";
+import { toast } from "@/components/Toast";
 
 type Unit = "un" | "g" | "kg" | "ml" | "L" | "folha" | "cm" | "m";
 
@@ -163,7 +164,8 @@ export default function NovoInsumoModal({
       };
       console.log("[NovoInsumoModal] creating input", {
         companyId,
-        payload,
+        name: payload.name,
+        unit: payload.unit,
       });
       const r = await studioApi.createInput(companyId, payload);
       console.log("[NovoInsumoModal] created", r);
@@ -181,12 +183,12 @@ export default function NovoInsumoModal({
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
+        err?.data?.error ||
         err?.message ||
         "Falha ao cadastrar insumo";
       console.error("[NovoInsumoModal] create failed", {
         status,
         msg,
-        err,
       });
       toast.error(`[${status}] ${msg}`);
     } finally {
@@ -211,11 +213,10 @@ export default function NovoInsumoModal({
             isMobile ? styles.cardMobile : styles.cardDesktop,
           ]}
         >
-          {/* Header */}
-          <LinearGradient
+          {/* Header — gradient brand cross-platform */}
+          <StudioGradient
             colors={[t.primary, t.accent]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            direction="135deg"
             style={styles.header}
           >
             <Text style={styles.eyebrow}>ESTOQUE · CADASTRO RÁPIDO</Text>
@@ -224,7 +225,7 @@ export default function NovoInsumoModal({
               Cadastre o item de matéria-prima e ele já entra na ficha do
               produto
             </Text>
-          </LinearGradient>
+          </StudioGradient>
 
           {/* Body */}
           <ScrollView
@@ -240,7 +241,7 @@ export default function NovoInsumoModal({
                 value={name}
                 onChangeText={setName}
                 placeholder="Ex: Tinta sublimática azul"
-                placeholderTextColor={t.inkSoft}
+                placeholderTextColor={t.ink3}
                 style={styles.input}
               />
             </View>
@@ -290,7 +291,7 @@ export default function NovoInsumoModal({
                     value={unitCost}
                     onChangeText={setUnitCost}
                     placeholder="0,00"
-                    placeholderTextColor={t.inkSoft}
+                    placeholderTextColor={t.ink3}
                     keyboardType="decimal-pad"
                     style={[styles.input, styles.inputPrefixed]}
                   />
@@ -302,7 +303,7 @@ export default function NovoInsumoModal({
                   value={stockQty}
                   onChangeText={setStockQty}
                   placeholder="0"
-                  placeholderTextColor={t.inkSoft}
+                  placeholderTextColor={t.ink3}
                   keyboardType="decimal-pad"
                   style={styles.input}
                 />
@@ -319,7 +320,7 @@ export default function NovoInsumoModal({
                 value={stockMin}
                 onChangeText={setStockMin}
                 placeholder="0"
-                placeholderTextColor={t.inkSoft}
+                placeholderTextColor={t.ink3}
                 keyboardType="decimal-pad"
                 style={styles.input}
               />
@@ -343,7 +344,7 @@ export default function NovoInsumoModal({
                     value={supplierName}
                     onChangeText={setSupplierName}
                     placeholder="Nome do fornecedor"
-                    placeholderTextColor={t.inkSoft}
+                    placeholderTextColor={t.ink3}
                     style={styles.input}
                   />
                 </View>
@@ -353,7 +354,7 @@ export default function NovoInsumoModal({
                     value={supplierPhone}
                     onChangeText={(v) => setSupplierPhone(maskPhone(v))}
                     placeholder="(11) 99999-9999"
-                    placeholderTextColor={t.inkSoft}
+                    placeholderTextColor={t.ink3}
                     keyboardType="phone-pad"
                     style={styles.input}
                   />
@@ -364,7 +365,7 @@ export default function NovoInsumoModal({
                     value={notes}
                     onChangeText={setNotes}
                     placeholder="Notas internas, código do fornecedor, etc"
-                    placeholderTextColor={t.inkSoft}
+                    placeholderTextColor={t.ink3}
                     multiline
                     numberOfLines={3}
                     style={[styles.input, styles.textarea]}
@@ -415,7 +416,7 @@ function buildStyles(t: StudioPalette) {
     },
     backdropPress: { ...StyleSheet.absoluteFillObject },
     card: {
-      backgroundColor: t.surface,
+      backgroundColor: t.paperCard,
       borderRadius: 20,
       overflow: "hidden",
       shadowColor: "#000",
@@ -468,13 +469,13 @@ function buildStyles(t: StudioPalette) {
     },
     labelHint: {
       fontWeight: "500",
-      color: t.inkSoft,
+      color: t.ink3,
       fontSize: 11,
     },
     input: {
-      backgroundColor: t.surfaceSoft,
+      backgroundColor: t.bgSoft,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: Platform.OS === "web" ? 10 : 12,
@@ -490,7 +491,7 @@ function buildStyles(t: StudioPalette) {
       bottom: 0,
       textAlignVertical: "center",
       lineHeight: Platform.OS === "web" ? 38 : 44,
-      color: t.inkSoft,
+      color: t.ink3,
       fontWeight: "700",
       fontSize: 13,
       zIndex: 1,
@@ -509,9 +510,9 @@ function buildStyles(t: StudioPalette) {
       paddingHorizontal: 14,
       paddingVertical: 8,
       borderRadius: 999,
-      backgroundColor: t.surfaceSoft,
+      backgroundColor: t.bgSoft,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
     },
     chipMobile: { minWidth: "22%", alignItems: "center" },
     chipActive: {
@@ -540,8 +541,8 @@ function buildStyles(t: StudioPalette) {
       gap: 12,
       padding: 16,
       borderTopWidth: 1,
-      borderTopColor: t.border,
-      backgroundColor: t.surface,
+      borderTopColor: t.ink5,
+      backgroundColor: t.paperCard,
     },
     btn: {
       flex: 1,
@@ -553,7 +554,7 @@ function buildStyles(t: StudioPalette) {
     btnGhost: {
       backgroundColor: "transparent",
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.ink5,
     },
     btnGhostText: {
       color: t.ink,
