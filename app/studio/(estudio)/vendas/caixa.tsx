@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, Platform } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { pdvApi } from "@/services/pdvApi";
 import { studioApi, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
@@ -8,7 +9,6 @@ import { PersonalizationPreview } from "@/components/studio/PersonalizationPrevi
 import { maskPhone } from "@/utils/masks";
 import { StudioGradients } from "@/constants/studio-tokens";
 import { useStudioTokens, type StudioTokens } from "@/contexts/StudioThemeMode";
-import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
@@ -26,9 +26,11 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 //  - Trigger SQL trg_sales_studio_status marca produção automaticamente
 //  - Modal pós-venda oferece envio wa.me pro cliente acompanhar arte
 //
-// 26/05/2026 (residual identidade) — migrado pra useStudioTokens()
-// dinâmico (dark mode), StudioPageHeader no hero, StudioLoading/Empty
-// nos estados. Gradientes brand permanecem identitários.
+// 26/05/2026 (redesign UI) — hero customizado com data + total do dia +
+// pill operador, KPI strip horizontal (4 cards), atalhos rápidos
+// (4 chips), empty state com StudioEmpty, cards de produto com
+// border-left magenta + badge PERSONALIZÁVEL. Funcionalidade
+// (carrinho, cálculo, submit) preservada 100%.
 // ============================================================
 
 type StudioProduct = {
@@ -50,9 +52,22 @@ type CartLine = {
 
 type Stage = "list" | "configure" | "checkout" | "done";
 
+type DayStats = {
+  pedidos_hoje: number;
+  faturamento_hoje: number;
+  aguardando_arte: number;
+  em_producao: number;
+};
+
 export default function StudioCaixaPage() {
   const auth = useAuthStore();
+  const router = useRouter();
   const cid = (auth.company as any)?.id as string | undefined;
+  const operatorName =
+    (auth.user as any)?.name ||
+    (auth.user as any)?.full_name ||
+    (auth.user as any)?.email?.split("@")[0] ||
+    "Operador";
   const t = useStudioTokens();
   const accent = t.accent;
   const primary = t.primary;
@@ -61,6 +76,13 @@ export default function StudioCaixaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [now, setNow] = useState(new Date());
+  const [stats, setStats] = useState<DayStats>({
+    pedidos_hoje: 0,
+    faturamento_hoje: 0,
+    aguardando_arte: 0,
+    em_producao: 0,
+  });
 
   const [stage, setStage] = useState<Stage>("list");
   const [active, setActive] = useState<StudioProduct | null>(null);
@@ -84,13 +106,16 @@ export default function StudioCaixaPage() {
   // Templates do produto (cache simples)
   const [templatesById, setTemplatesById] = useState<Record<string, Array<{ id: string; name: string; image_url: string; thumb_url: string | null }>>>({});
 
+  // Tick relógio (1min) — só pra header
+  useEffect(() => {
+    const i = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(i);
+  }, []);
+
   // Carga inicial — usa endpoint dedicado /studio/products
   useEffect(() => {
     if (!cid) return;
     setLoading(true);
-    // Endpoint dedicado /studio/products (criado em studioSaleItemPatch.js
-    // pra expor is_personalizable + customization_config, que a rota
-    // /products generica nao retorna)
     request<{ products: any[] }>("/companies/" + cid + "/studio/products", { method: "GET" })
       .then(async (data) => {
         const list = (data.products || [])
@@ -107,6 +132,28 @@ export default function StudioCaixaPage() {
       })
       .catch((e) => setError(e?.message || "Erro ao carregar produtos personalizáveis"))
       .finally(() => setLoading(false));
+  }, [cid]);
+
+  // Stats do dia — best-effort, ignora erros (endpoints podem nao existir
+  // em todas empresas / planos). Padrao defensivo armadilha_schema_pre_migration.
+  useEffect(() => {
+    if (!cid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await request<any>("/companies/" + cid + "/studio/dashboard/today", { method: "GET" }).catch(() => null);
+        if (cancelled || !r) return;
+        setStats({
+          pedidos_hoje: Number(r?.pedidos_hoje || r?.orders_today || 0),
+          faturamento_hoje: Number(r?.faturamento_hoje || r?.revenue_today || 0),
+          aguardando_arte: Number(r?.aguardando_arte || r?.awaiting_art || 0),
+          em_producao: Number(r?.em_producao || r?.in_production || 0),
+        });
+      } catch (_) {
+        // silencioso
+      }
+    })();
+    return () => { cancelled = true; };
   }, [cid]);
 
   const filteredProducts = useMemo(() => {
@@ -219,7 +266,6 @@ export default function StudioCaixaPage() {
       const saleItems: any[] = saleRes?.sale?.items || [];
 
       // 2. Para cada item personalizado, PATCH studio/sale-items/:id/customization
-      // Mapeia em ordem: cart[i] -> saleItems[i] (mesma ordem de insert)
       const patchPromises: Promise<any>[] = [];
       for (let i = 0; i < cart.length; i++) {
         const line = cart[i];
@@ -230,7 +276,6 @@ export default function StudioCaixaPage() {
             "/companies/" + cid + "/studio/sale-items/" + si.id + "/customization",
             { method: "PATCH", body: { customization: line.values } }
           ).catch((err) => {
-            // Se 503 (schema pendente) ou 404, logamos e seguimos
             console.warn("[studio-pdv] patch customization fail:", err?.message);
           })
         );
@@ -243,7 +288,7 @@ export default function StudioCaixaPage() {
         const digits = customerPhone.replace(/\D/g, "");
         const phone = digits.startsWith("55") ? digits : "55" + digits;
         const msg = encodeURIComponent(
-          `Oi ${customerName.split(" ")[0] || "tudo bem"}! Sua arte personalizada já está na produção 🎨\n` +
+          `Oi ${customerName.split(" ")[0] || "tudo bem"}! Sua arte personalizada já está na produção\n` +
             `Pedido #${String(saleId).slice(0, 8)} · R$ ${cartSubtotal.toFixed(2)}\n\n` +
             `Em breve te mando o mockup pra aprovação.`
         );
@@ -283,7 +328,7 @@ export default function StudioCaixaPage() {
             alignItems: "center", justifyContent: "center",
           }}
         >
-          <Text style={{ fontSize: 40, color: "#fff" }}>✓</Text>
+          <Text style={{ fontSize: 40, color: "#fff" }}>OK</Text>
         </View>
         <Text style={{ fontSize: 22, fontWeight: "800", color: t.ink, marginTop: 16 }}>
           Venda registrada!
@@ -315,7 +360,6 @@ export default function StudioCaixaPage() {
               borderRadius: 10, marginTop: 16, flexDirection: "row", gap: 8, alignItems: "center",
             }}
           >
-            <Text style={{ fontSize: 16 }}>💬</Text>
             <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>Mandar wa.me pro cliente</Text>
           </Pressable>
         )}
@@ -520,96 +564,260 @@ export default function StudioCaixaPage() {
   }
 
   // ─── STAGE: LIST ──────────────────────────────────────────────
+  const dateLabel = now.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  const timeLabel = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const hasStats =
+    stats.pedidos_hoje > 0 ||
+    stats.faturamento_hoje > 0 ||
+    stats.aguardando_arte > 0 ||
+    stats.em_producao > 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
+      {/* HERO redesenhado — informação útil ao invés de banner genérico */}
       <View
         style={[
-          { backgroundColor: primary },
+          { backgroundColor: primary, paddingHorizontal: 18, paddingTop: 22, paddingBottom: 22 },
           Platform.OS === "web"
             ? ({ background: `linear-gradient(135deg, ${StudioGradients.brand[0]}, ${StudioGradients.brand[1]})` } as any)
             : ({ backgroundColor: t.primary } as any),
         ]}
       >
-        <StudioPageHeader
-          eyebrow="VENDAS · PDV STUDIO"
-          title="Caixa do estúdio"
-          subtitle="Toque num produto personalizável pra começar"
-        />
-      </View>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 10, fontWeight: "800", letterSpacing: 1.2,
+                color: accent, textTransform: "uppercase",
+              }}
+            >
+              VENDAS · PDV STUDIO
+            </Text>
+            <Text
+              style={{
+                fontSize: 28, fontWeight: "800", color: "#fff",
+                marginTop: 4, lineHeight: 32,
+              }}
+            >
+              Caixa do estúdio
+            </Text>
+            <Text
+              style={{
+                fontSize: 12, color: "rgba(255,255,255,0.78)",
+                marginTop: 6, textTransform: "capitalize",
+              }}
+            >
+              {dateLabel}
+              {hasStats
+                ? ` · R$ ${stats.faturamento_hoje.toFixed(2)} em ${stats.pedidos_hoje} ${stats.pedidos_hoje === 1 ? "pedido" : "pedidos"} hoje`
+                : " · Pronto pra primeira venda"}
+            </Text>
+          </View>
 
-      <View style={{ padding: 12, backgroundColor: t.paperCardElev, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Buscar produto..."
-          placeholderTextColor={t.ink4}
-          style={{
-            backgroundColor: t.bg, color: t.ink, padding: 12,
-            borderRadius: 8, fontSize: 13,
-            borderWidth: 1, borderColor: t.ink5,
-          }}
-        />
+          {/* Pill operador + hora */}
+          <View
+            style={{
+              backgroundColor: "rgba(255,255,255,0.14)",
+              borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
+              borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8,
+              alignItems: "center", flexDirection: "row", gap: 8,
+            }}
+          >
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e" }} />
+            <View>
+              <Text style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", fontWeight: "600", letterSpacing: 0.5 }}>
+                ESTAÇÃO ATIVA
+              </Text>
+              <Text style={{ fontSize: 12, color: "#fff", fontWeight: "800" }}>
+                {timeLabel} · {operatorName}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: cartCount > 0 ? 110 : 30 }}
+        contentContainerStyle={{ paddingBottom: cartCount > 0 ? 110 : 30 }}
       >
-        {error && !products.length && (
-          <View style={{ padding: 16, backgroundColor: t.dangerSoft, borderRadius: 8 }}>
-            <Text style={{ color: t.danger, fontSize: 12, fontWeight: "700" }}>{error}</Text>
-          </View>
-        )}
+        {/* KPI strip horizontal — 4 cards */}
+        <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 10, paddingRight: 4 }}
+          >
+            <KpiCard
+              t={t}
+              label="Pedidos hoje"
+              value={String(stats.pedidos_hoje)}
+              icon="◆"
+            />
+            <KpiCard
+              t={t}
+              label="Faturamento hoje"
+              value={`R$ ${stats.faturamento_hoje.toFixed(0)}`}
+              icon="$"
+            />
+            <KpiCard
+              t={t}
+              label="Aguardando arte"
+              value={String(stats.aguardando_arte)}
+              icon="◷"
+              tone="warn"
+            />
+            <KpiCard
+              t={t}
+              label="Em produção"
+              value={String(stats.em_producao)}
+              icon="►"
+              tone="accent"
+            />
+          </ScrollView>
+        </View>
 
-        {filteredProducts.length === 0 ? (
-          <StudioEmpty
-            icon="shopping-bag"
-            title={search.trim() ? "Nada encontrado." : "Nenhum produto personalizável cadastrado."}
-            desc={
-              search.trim()
-                ? "Tente outro termo."
-                : "Cadastre em Estúdio › Produtos e marque \"é personalizável\"."
-            }
+        {/* Atalhos rápidos */}
+        <View style={{ paddingHorizontal: 12, paddingTop: 14 }}>
+          <Text
+            style={{
+              fontSize: 10, color: t.ink3, fontWeight: "800",
+              letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8,
+            }}
+          >
+            Atalhos rápidos
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingRight: 4 }}
+          >
+            <ShortcutChip t={t} icon="►" label="Ver KDS" onPress={() => router.push("/studio/producao" as any)} />
+            <ShortcutChip t={t} icon="◆" label="Pedidos do dia" onPress={() => router.push("/studio/pedidos" as any)} />
+            <ShortcutChip t={t} icon="+" label="Cadastrar produto" onPress={() => router.push("/studio/produtos" as any)} />
+            <ShortcutChip t={t} icon="✓" label="Aprovações" onPress={() => router.push("/studio/aprovacao" as any)} />
+          </ScrollView>
+        </View>
+
+        {/* Busca */}
+        <View style={{ padding: 12, paddingTop: 16 }}>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar produto personalizável..."
+            placeholderTextColor={t.ink4}
+            style={{
+              backgroundColor: t.paperCardElev, color: t.ink, padding: 12,
+              borderRadius: 10, fontSize: 13,
+              borderWidth: 1, borderColor: t.ink5,
+            }}
           />
-        ) : (
-          filteredProducts.map((p) => (
-            <Pressable
-              key={p.id}
-              onPress={() => openConfigure(p)}
-              style={{
-                backgroundColor: t.paperCardElev, borderRadius: 12, padding: 12,
-                borderWidth: 1, borderColor: t.ink5,
-                flexDirection: "row", gap: 12, alignItems: "center",
-              }}
-            >
-              <PersonalizationPreview
-                config={p.customization_config}
-                values={{}}
-                size={68}
-                showLabel={false}
+        </View>
+
+        {/* Lista de produtos */}
+        <View style={{ paddingHorizontal: 12, gap: 10 }}>
+          {error && !products.length && (
+            <View style={{ padding: 16, backgroundColor: t.dangerSoft, borderRadius: 8 }}>
+              <Text style={{ color: t.danger, fontSize: 12, fontWeight: "700" }}>{error}</Text>
+            </View>
+          )}
+
+          {filteredProducts.length === 0 ? (
+            search.trim() ? (
+              <StudioEmpty
+                icon="search"
+                title="Nada encontrado."
+                desc="Tente outro termo de busca."
               />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, color: t.ink, fontWeight: "700" }}>{p.name}</Text>
-                {p.category ? (
-                  <Text style={{ fontSize: 10, color: t.ink3, marginTop: 2, textTransform: "uppercase" }}>
-                    {p.category}
-                  </Text>
-                ) : null}
-                <Text style={{ fontSize: 14, color: primary, fontWeight: "800", marginTop: 4 }}>
-                  R$ {p.price.toFixed(2)}
-                </Text>
-              </View>
-              <View
-                style={{
-                  alignSelf: "center", paddingHorizontal: 10, paddingVertical: 6,
-                  borderRadius: 999, backgroundColor: accent,
+            ) : (
+              <StudioEmpty
+                icon="shopping-bag"
+                title="Catálogo personalizado vazio"
+                desc='Marque produtos como "personalizáveis" em Estúdio › Produtos pra começar a vender no PDV.'
+                primaryCta={{
+                  label: "Cadastrar produto",
+                  onPress: () => router.push("/studio/produtos" as any),
                 }}
+                secondaryCta={{
+                  label: "Ver galeria",
+                  onPress: () => router.push("/studio/galeria" as any),
+                }}
+              />
+            )
+          ) : (
+            filteredProducts.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => openConfigure(p)}
+                style={({ hovered, pressed }: any) => ({
+                  backgroundColor: t.paperCardElev, borderRadius: 14,
+                  padding: 14, paddingLeft: 16,
+                  borderWidth: 1, borderColor: t.ink5,
+                  borderLeftWidth: 3, borderLeftColor: accent,
+                  flexDirection: "row", gap: 14, alignItems: "center",
+                  ...(Platform.OS === "web"
+                    ? ({
+                        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+                        transform: pressed ? "scale(0.99)" : hovered ? "scale(1.01)" : "scale(1)",
+                        boxShadow: hovered
+                          ? `0 8px 24px ${accent}33, 0 2px 6px rgba(0,0,0,0.05)`
+                          : `0 2px 6px ${accent}1A`,
+                        cursor: "pointer",
+                      } as any)
+                    : {}),
+                })}
               >
-                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>Personalizar</Text>
-              </View>
-            </Pressable>
-          ))
-        )}
+                <PersonalizationPreview
+                  config={p.customization_config}
+                  values={{}}
+                  size={68}
+                  showLabel={false}
+                />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <Text style={{ fontSize: 15, color: t.ink, fontWeight: "800", flexShrink: 1 }}>
+                      {p.name}
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: accent + "1A",
+                        borderWidth: 1, borderColor: accent + "55",
+                        paddingHorizontal: 8, paddingVertical: 2,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 9, color: accent, fontWeight: "800",
+                          letterSpacing: 0.6, textTransform: "uppercase",
+                        }}
+                      >
+                        Personalizável
+                      </Text>
+                    </View>
+                  </View>
+                  {p.category ? (
+                    <Text style={{ fontSize: 10, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      {p.category}
+                    </Text>
+                  ) : null}
+                  <Text style={{ fontSize: 16, color: primary, fontWeight: "800", marginTop: 4 }}>
+                    R$ {p.price.toFixed(2)}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    alignSelf: "center", paddingHorizontal: 14, paddingVertical: 9,
+                    borderRadius: 999, backgroundColor: accent,
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.3 }}>
+                    Personalizar →
+                  </Text>
+                </View>
+              </Pressable>
+            ))
+          )}
+        </View>
       </ScrollView>
 
       {cartCount > 0 && (
@@ -640,6 +848,87 @@ export default function StudioCaixaPage() {
         </Pressable>
       )}
     </View>
+  );
+}
+
+// ============================================================
+// Sub-components (KPI / Shortcut)
+// ============================================================
+function KpiCard({
+  t, label, value, icon, tone,
+}: {
+  t: StudioTokens;
+  label: string;
+  value: string;
+  icon: string;
+  tone?: "warn" | "accent" | "primary";
+}) {
+  const iconColor =
+    tone === "warn" ? t.warning :
+    tone === "accent" ? t.accent :
+    t.accent;
+  return (
+    <View
+      style={{
+        backgroundColor: t.paperCard, borderRadius: 14, padding: 14,
+        borderWidth: 1, borderColor: t.ink5,
+        minWidth: 140, gap: 4,
+      }}
+    >
+      <View
+        style={{
+          width: 28, height: 28, borderRadius: 8,
+          backgroundColor: iconColor + "1A",
+          alignItems: "center", justifyContent: "center",
+          marginBottom: 4,
+        }}
+      >
+        <Text style={{ color: iconColor, fontSize: 14, fontWeight: "800" }}>{icon}</Text>
+      </View>
+      <Text style={{ fontSize: 22, color: t.primary, fontWeight: "800", lineHeight: 24 }}>{value}</Text>
+      <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "600" }}>{label}</Text>
+    </View>
+  );
+}
+
+function ShortcutChip({
+  t, icon, label, onPress,
+}: {
+  t: StudioTokens;
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ hovered }: any) => ({
+        flexDirection: "row", alignItems: "center", gap: 8,
+        paddingHorizontal: 14, paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: t.paperCardElev,
+        borderWidth: 1, borderColor: t.ink5,
+        ...(Platform.OS === "web"
+          ? ({
+              transition: "all 0.15s ease",
+              cursor: "pointer",
+              borderColor: hovered ? t.accent : t.ink5,
+              boxShadow: hovered ? `0 2px 8px ${t.accent}22` : "none",
+            } as any)
+          : {}),
+      })}
+    >
+      <View
+        style={{
+          width: 22, height: 22, borderRadius: 11,
+          backgroundColor: t.accent + "1A",
+          alignItems: "center", justifyContent: "center",
+        }}
+      >
+        <Text style={{ color: t.accent, fontSize: 11, fontWeight: "800" }}>{icon}</Text>
+      </View>
+      <Text style={{ fontSize: 12, color: t.ink, fontWeight: "700" }}>{label}</Text>
+    </Pressable>
   );
 }
 
