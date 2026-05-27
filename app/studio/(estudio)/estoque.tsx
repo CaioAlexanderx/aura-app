@@ -50,6 +50,7 @@ import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { toast } from "@/components/Toast";
+import { pickFileWeb, fileToBase64Web, uploadStudioMockup } from "@/services/studioUploadApi";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -538,7 +539,7 @@ function ProductExpanded({
       {/* Seção 1 — Dados básicos */}
       <SectionCard
         title="Dados básicos"
-        icon="edit-2"
+        icon="edit"
         status={basicoStatus}
         open={openSections.basico}
         savedFlash={!!savedFlash.basico}
@@ -582,7 +583,7 @@ function ProductExpanded({
       {/* Seção 3 — Ficha técnica */}
       <SectionCard
         title="Ficha técnica"
-        icon="layers"
+        icon="clipboard"
         status={fichaStatus}
         open={openSections.ficha}
         savedFlash={!!savedFlash.ficha}
@@ -688,6 +689,8 @@ function BasicoForm({
   const [qty, setQty] = useState(product.stock_qty != null ? String(product.stock_qty) : "");
   const [description, setDescription] = useState(product.description || "");
   const [saving, setSaving] = useState(false);
+  const [localImage, setLocalImage] = useState(product.image_url || null);
+  const [uploadingImg, setUploadingImg] = useState(false);
 
   // Resync se trocar de produto
   useEffect(() => {
@@ -695,7 +698,40 @@ function BasicoForm({
     setPrice(String(product.price || ""));
     setQty(product.stock_qty != null ? String(product.stock_qty) : "");
     setDescription(product.description || "");
+    setLocalImage(product.image_url || null);
   }, [product.id]);
+
+  async function uploadImage() {
+    if (!companyId || Platform.OS !== "web") {
+      toast.error("Upload disponível apenas na versão web");
+      return;
+    }
+    const file = await pickFileWeb("image/*");
+    if (!file) return;
+    setUploadingImg(true);
+    try {
+      const { base64, content_type } = await fileToBase64Web(file);
+      const r = await uploadStudioMockup(companyId, {
+        content_base64: base64,
+        content_type,
+        kind: "product",
+      });
+      await request<any>(`/companies/${companyId}/products/${product.id}`, {
+        method: "PATCH",
+        body: { image_url: r.url },
+        retry: 0,
+        timeout: 12000,
+      });
+      setLocalImage(r.url);
+      onPatched({ image_url: r.url });
+      toast.success("Foto atualizada!");
+    } catch (e: any) {
+      const status = e?.status ? `[${e.status}] ` : "";
+      toast.error(`${status}${e?.data?.error || e?.message || "Erro no upload"}`);
+    } finally {
+      setUploadingImg(false);
+    }
+  }
 
   async function save() {
     const trimmed = name.trim();
@@ -740,6 +776,43 @@ function BasicoForm({
 
   return (
     <View style={{ gap: 14 }}>
+      {/* Foto do produto */}
+      <View style={s.field}>
+        <Text style={s.fieldLabel}>Foto do produto</Text>
+        <View style={s.imgUploadRow}>
+          <View style={s.imgThumbWrap}>
+            {localImage ? (
+              Platform.OS === "web" ? (
+                // eslint-disable-next-line jsx-a11y/alt-text
+                <img src={localImage} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover" }} />
+              ) : (
+                <Image source={{ uri: localImage }} style={s.imgThumb} />
+              )
+            ) : (
+              <View style={[s.imgThumb, s.imgThumbEmpty]}>
+                <Icon name="image" size={22} color={t.ink4} />
+              </View>
+            )}
+          </View>
+          <Pressable
+            onPress={uploadImage}
+            disabled={uploadingImg || saving}
+            style={[s.btnSec, (uploadingImg || saving) && { opacity: 0.5 }]}
+          >
+            {uploadingImg ? (
+              <ActivityIndicator size="small" color={t.primary} />
+            ) : (
+              <>
+                <Icon name="upload" size={13} color={t.primary} />
+                <Text style={s.btnSecTxt}>
+                  {localImage ? "Trocar foto" : "Enviar foto"}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </View>
+
       <View style={s.field}>
         <Text style={s.fieldLabel}>Nome</Text>
         <TextInput
@@ -825,6 +898,20 @@ function buildStyles(t: StudioPalette) {
       borderRadius: 10,
     },
     btnPriTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
+
+    // CTA secundário (upload)
+    btnSec: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: t.primarySoft,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: t.primary,
+    },
+    btnSecTxt: { color: t.primary, fontSize: 13, fontWeight: "700" },
 
     // Filtros
     filtersRow: {
@@ -1000,7 +1087,6 @@ function buildStyles(t: StudioPalette) {
       fontSize: 11,
       color: t.ink3,
       fontWeight: "700",
-      textTransform: "uppercase",
       letterSpacing: 0.4,
     },
     input: {
@@ -1014,5 +1100,17 @@ function buildStyles(t: StudioPalette) {
       color: t.ink,
     },
     row2: { flexDirection: "row", gap: 10 },
+
+    // Upload de imagem
+    imgUploadRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    imgThumbWrap: { width: 72, height: 72 },
+    imgThumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: t.bgSoft },
+    imgThumbEmpty: {
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1.5,
+      borderColor: t.ink5,
+      borderStyle: "dashed" as any,
+    },
   });
 }
