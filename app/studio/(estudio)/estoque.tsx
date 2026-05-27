@@ -113,7 +113,12 @@ export default function StudioEstoque() {
     }
     setLoading(true);
     try {
-      const r = await request<any>(`/companies/${cid}/products?limit=500`, {
+      // 27/05/2026: usa endpoint Studio dedicado (mesma fonte do PDV Studio).
+      // include_non_personalizable=true pra cobrir os 3 filtros da tela
+      // (Todos / Personalizáveis / Não personalizáveis).
+      // O endpoint genérico /products filtra por vertical=varejo silenciosamente
+      // e retorna vazio pra contas Studio (bug "Catálogo vazio" 27/05).
+      const r = await request<any>(`/companies/${cid}/studio/products?include_non_personalizable=true&limit=500`, {
         method: "GET",
         retry: 1,
         timeout: 15000,
