@@ -1,197 +1,168 @@
 // ============================================================
-// AURA STUDIO . Home (Fase 0) - overhaul 26/05
+// AURA STUDIO . Home (Painel) - 26/05/2026
 //
-// 26/05/2026 - Guia do Estudio:
-//   Substitui checklist estatico antigo por GUIA DO ESTUDIO com 5 passos
-//   verificaveis via API real (nao mais via settings.onboarding flags):
-//     1. Cadastre seus produtos        -> GET /products limit=1
-//     2. Configure personalizacao      -> ao menos 1 produto com is_personalizable + customization_config nao-vazio
-//     3. Suba templates de arte        -> studioApi.listTemplates >= 3
-//     4. Defina SLA e WhatsApp         -> settings.default_sla_days E approval_wa_phone preenchidos
-//     5. Publique a Loja Digital       -> digital_channel_config.is_published === true
+// Substitui home antiga (greeting + guia 5 passos full + KPIs)
+// por Painel real: KPIs com delta + faturamento line chart + top 5
+// produtos bar horizontal + funil aprovacao. Guia 5 passos mantido,
+// mas em forma colapsada (1 linha gradient brand) no topo, e some
+// quando 5/5.
 //
-//   Card grande no TOPO (entre greeting e KPIs), expansivel, com progress bar.
-//   Esconde quando 5/5 OU lojista clica "Ja configurei tudo" (persiste
-//   studio_settings.guide_dismissed = true via studioApi.saveSettings).
+// Lib de graficos: SVG inline via react-native-svg (mesmo approach
+// do dashboard varejo: sparklines + bar lists). Sem nova dependencia.
 //
-// Estrutura final:
-//   1. Greeting + Live badge
-//   2. GUIA DO ESTUDIO (novo - topo)
-//   3. KPIs em cards
-//   4. Banner "X produtos podem melhorar" (Fase 9 residual)
-//   5. Hint
+// Backend: GET /studio/painel?days=N (rota nova, paralela). Falha
+// gracioso com toast + UI degradada quando 4xx/5xx.
 // ============================================================
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
-  ActivityIndicator,
+  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
+  Platform,
 } from "react-native";
+import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
-import { studioApi, type StudioMetrics, type StudioSettings } from "@/services/studioApi";
+import {
+  studioApi,
+  type StudioSettings,
+  type PainelData,
+  type PainelSeriePoint,
+} from "@/services/studioApi";
 import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
-import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
-import { calculateProductScore, type Product as ScoreProduct } from "@/components/studio/ProductQualityScore";
+import { StudioGradient } from "@/components/studio/StudioGradient";
+import { StudioLoading } from "@/components/studio/StudioLoading";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
+import type { StudioPalette } from "@/constants/studio-tokens";
 
-type StudioPalette = ReturnType<typeof useStudioTokens>;
-
-// ─── Guia steps (estaticos) ────────────────────────────────────────────────
+// ─── Guia steps (mantido pro card colapsado) ───────────────────────
 type GuideStepStatus = "done" | "in_progress" | "todo";
 
 type GuideStep = {
   id: "products" | "customization" | "templates" | "sla_wa" | "publish";
   num: number;
-  icon: string;
   title: string;
-  helper: string;
   cta: string;
   href: string;
 };
 
 const GUIDE_STEPS: GuideStep[] = [
-  {
-    id: "products",
-    num: 1,
-    icon: "shopping-bag",
-    title: "Cadastre seus produtos",
-    helper: "Camisetas, canecas, quadros - o que voce vende personalizado",
-    cta: "Cadastrar produto",
-    href: "/studio/produtos",
-  },
-  {
-    id: "customization",
-    num: 2,
-    icon: "edit-3",
-    title: "Configure a personalizacao",
-    helper: "Defina area de impressao, campos (texto/imagem/cor) e opcoes pro cliente",
-    cta: "Configurar",
-    href: "/studio/produtos",
-  },
-  {
-    id: "templates",
-    num: 3,
-    icon: "image",
-    title: "Suba templates de arte",
-    helper: "Adicione pelo menos 3 templates pro cliente escolher na compra (Dia das Maes, Pais, profissoes)",
-    cta: "Subir templates",
-    href: "/studio/galeria",
-  },
-  {
-    id: "sla_wa",
-    num: 4,
-    icon: "clock",
-    title: "Defina SLA e WhatsApp",
-    helper: "Prazo de producao + telefone que envia mockup pro cliente aprovar",
-    cta: "Configurar",
-    href: "/studio/configuracoes",
-  },
-  {
-    id: "publish",
-    num: 5,
-    icon: "globe",
-    title: "Publique a Loja Digital",
-    helper: "Sua vitrine online com link compartilhavel - cliente compra direto sem voce intermediar",
-    cta: "Configurar",
-    href: "/canal-digital",
-  },
+  { id: "products",      num: 1, title: "Cadastre seus produtos",            cta: "Cadastrar produto",       href: "/studio/produtos" },
+  { id: "customization", num: 2, title: "Configure a personalizacao",        cta: "Configurar",              href: "/studio/produtos" },
+  { id: "templates",     num: 3, title: "Suba templates de arte",            cta: "Subir templates",         href: "/studio/galeria" },
+  { id: "sla_wa",        num: 4, title: "Defina SLA e WhatsApp",             cta: "Configurar",              href: "/studio/configuracoes" },
+  { id: "publish",       num: 5, title: "Publique a Loja Digital",           cta: "Configurar",              href: "/canal-digital" },
 ];
 
-function formatBRL(v: number | null | undefined): string {
-  if (v == null || isNaN(v)) return "—";
-  try {
-    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  } catch {
-    return "R$ " + Math.round(v);
-  }
-}
-function fmtCurrency(n: number): string { return formatBRL(n); }
-function fmtInteger(n: number): string {
-  if (n == null || isNaN(n)) return "—";
-  return Math.round(n).toLocaleString("pt-BR");
+type Period = "hoje" | "7d" | "30d";
+
+function periodToDays(p: Period): number {
+  if (p === "hoje") return 1;
+  if (p === "30d") return 30;
+  return 7;
 }
 
-export default function StudioHome() {
+function periodLabel(p: Period): string {
+  if (p === "hoje") return "Hoje";
+  if (p === "30d") return "30 dias";
+  return "7 dias";
+}
+
+function formatBRL(v: number | null | undefined, decimals = 2): string {
+  if (v == null || isNaN(v)) return "—";
+  try {
+    return v.toLocaleString("pt-BR", {
+      style: "currency", currency: "BRL",
+      minimumFractionDigits: decimals, maximumFractionDigits: decimals,
+    });
+  } catch {
+    return "R$ " + (decimals === 0 ? Math.round(v) : v.toFixed(decimals));
+  }
+}
+
+function formatBRLCompact(v: number | null | undefined): string {
+  if (v == null || isNaN(v)) return "—";
+  const n = Math.abs(v);
+  if (n >= 1000) return "R$ " + (v / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return formatBRL(v, 0);
+}
+
+// Quebra "R$ 1.842,50" em parte inteira + decimais para estilizar
+function splitBRL(v: number): { main: string; decimals: string } {
+  const s = formatBRL(v, 2);
+  const idx = s.lastIndexOf(",");
+  if (idx === -1) return { main: s, decimals: "" };
+  return { main: s.slice(0, idx), decimals: s.slice(idx) };
+}
+
+const EMPTY_PAINEL: PainelData = {
+  period_days: 7,
+  computed_at: "",
+  kpis: {
+    vendas_dia:      { value: 0, delta_pct: null, sub_label: null },
+    ticket_medio:    { value: 0, delta_pct: null, sub_label: null },
+    lucro_bruto_mes: { value: 0, delta_pct: null, sub_label: null },
+  },
+  faturamento_serie: [],
+  faturamento_total: 0,
+  top_produtos: [],
+  funil_aprovacao: {
+    pendentes:  { count: 0, pct: 0 },
+    aprovados:  { count: 0, pct: 0 },
+    alteracoes: { count: 0, pct: 0 },
+    expirados:  { count: 0, pct: 0 },
+    total_enviados: 0,
+    aprovacao_primeira_pct: null,
+    tempo_medio_resposta_min: null,
+  },
+};
+
+export default function StudioPainel() {
   const router = useRouter();
-  const { company, user } = useAuthStore();
+  const auth = useAuthStore();
+  const cid = (auth.company as any)?.id;
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
 
-  // Digital channel (passo 5 do guia)
   const { config: digitalConfig } = useDigitalChannel();
 
-  const [metricsLoading, setMetricsLoading] = useState(true);
-  const [metrics, setMetrics] = useState<StudioMetrics | null>(null);
-  const [productsToImprove, setProductsToImprove] = useState(0);
+  // ─── Painel data ─────────────────────────────────────────
+  const [period, setPeriod] = useState<Period>("7d");
+  const [painel, setPainel] = useState<PainelData | null>(null);
+  const [painelLoading, setPainelLoading] = useState(true);
 
-  // Guia do Estudio - estado por passo
+  const fetchPainel = useCallback(async () => {
+    if (!cid) return;
+    setPainelLoading(true);
+    try {
+      const data = await studioApi.getPainel(cid, periodToDays(period));
+      setPainel(data);
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status;
+      const msg = err?.response?.data?.error || err?.message || "Erro desconhecido";
+      console.error("[StudioPainel] getPainel:", status, msg);
+      toast.error("Painel indisponivel (" + (status || "rede") + "). " + msg);
+      // UI degradada: tudo zero, mas tela nao quebra
+      setPainel(EMPTY_PAINEL);
+    } finally {
+      setPainelLoading(false);
+    }
+  }, [cid, period]);
+
+  useEffect(() => { fetchPainel(); }, [fetchPainel]);
+
+  // ─── Guia 5 passos (mantido — detecta progresso real) ──────
   const [guideLoading, setGuideLoading] = useState(true);
-  const [guideExpanded, setGuideExpanded] = useState(true);
   const [guideDismissed, setGuideDismissed] = useState(false);
   const [stepStatus, setStepStatus] = useState<Record<GuideStep["id"], GuideStepStatus>>({
-    products: "todo",
-    customization: "todo",
-    templates: "todo",
-    sla_wa: "todo",
-    publish: "todo",
+    products: "todo", customization: "todo", templates: "todo", sla_wa: "todo", publish: "todo",
   });
-  const [expandedStep, setExpandedStep] = useState<GuideStep["id"] | null>(null);
   const [dismissing, setDismissing] = useState(false);
 
-  // ─── KPIs (metrics reais) ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!company?.id) return;
-    studioApi.getMetrics(company.id, 7)
-      .then((m) => setMetrics(m))
-      .catch((err) => {
-        console.error("[StudioHome] getMetrics:", err);
-        setMetrics(null);
-      })
-      .finally(() => setMetricsLoading(false));
-  }, [company?.id]);
-
-  // ─── Produtos pra melhorar (Fase 9) ─────────────────────────────────────
-  useEffect(() => {
-    if (!company?.id) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await request<any>(
-          "/companies/" + company.id + "/products?limit=500",
-          { method: "GET", retry: 1, timeout: 10000 }
-        );
-        const list: any[] = Array.isArray(data)
-          ? data
-          : (data?.products || data?.items || []);
-        const personalizables = list.filter(
-          (p) => p && p.is_personalizable && !p.isHydrating
-        );
-        const toImprove = personalizables.reduce((acc, p) => {
-          try {
-            const { score } = calculateProductScore(p as ScoreProduct);
-            return score < 75 ? acc + 1 : acc;
-          } catch {
-            return acc;
-          }
-        }, 0);
-        if (!cancelled) setProductsToImprove(toImprove);
-      } catch (err) {
-        console.error("[StudioHome] productsToImprove:", err);
-        if (!cancelled) setProductsToImprove(0);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [company?.id]);
-
-  // ─── Guia do Estudio - deteccao de progresso ─────────────────────────────
-  // 5 fetches em paralelo (Promise.allSettled pra falhar gracioso)
   const runGuideDetection = useCallback(async () => {
-    if (!company?.id) return;
+    if (!cid) return;
     setGuideLoading(true);
-    const cid = company.id;
     try {
       const [productsRes, settingsRes, templatesRes] = await Promise.allSettled([
         request<any>("/companies/" + cid + "/products?limit=500", { method: "GET", retry: 1, timeout: 10000 }),
@@ -199,37 +170,32 @@ export default function StudioHome() {
         studioApi.listTemplates(cid, { limit: 10 }),
       ]);
 
-      // Lista de produtos (usada nos passos 1 e 2)
+      // Lista de produtos (passos 1 e 2)
       let productList: any[] = [];
       if (productsRes.status === "fulfilled") {
         const data = productsRes.value;
         productList = Array.isArray(data) ? data : (data?.products || data?.items || []);
       }
 
-      // Passo 1: >=1 produto cadastrado
+      // Passo 1: >=1 produto
       const products: GuideStepStatus = productList.length >= 1 ? "done" : "todo";
 
-      // Passo 2: algum produto com is_personalizable=true E customization_config nao-vazio
+      // Passo 2: produto personalizavel com customization_config nao-vazio
       const personalizables = productList.filter((p) => p && p.is_personalizable);
       const withCfg = personalizables.filter((p) => {
         const cfg = p.customization_config;
-        if (!cfg) return false;
-        if (typeof cfg === "object") {
-          const fields = (cfg as any).fields;
-          return Array.isArray(fields) && fields.length > 0;
-        }
-        return false;
+        if (!cfg || typeof cfg !== "object") return false;
+        const fields = (cfg as any).fields;
+        return Array.isArray(fields) && fields.length > 0;
       });
       let customization: GuideStepStatus = "todo";
       if (withCfg.length >= 1 && withCfg.length === personalizables.length && personalizables.length > 0) {
         customization = "done";
-      } else if (withCfg.length >= 1) {
-        customization = "in_progress";
-      } else if (personalizables.length >= 1) {
+      } else if (withCfg.length >= 1 || personalizables.length >= 1) {
         customization = "in_progress";
       }
 
-      // Passo 3: >=3 templates na galeria
+      // Passo 3: >=3 templates
       let templatesCount = 0;
       if (templatesRes.status === "fulfilled") {
         templatesCount = (templatesRes.value.templates || []).length;
@@ -238,7 +204,7 @@ export default function StudioHome() {
         templatesCount >= 3 ? "done" :
         templatesCount >= 1 ? "in_progress" : "todo";
 
-      // Passo 4: settings.default_sla_days E approval_wa_phone preenchidos
+      // Passo 4: SLA + WhatsApp
       let slaWa: GuideStepStatus = "todo";
       let dismissed = false;
       if (settingsRes.status === "fulfilled") {
@@ -250,18 +216,18 @@ export default function StudioHome() {
         dismissed = !!st.guide_dismissed;
       }
 
-      // Passo 5: digital_channel_config.is_published === true
+      // Passo 5: Loja Digital publicada
       const publish: GuideStepStatus =
         (digitalConfig && (digitalConfig as any).is_published === true) ? "done" : "todo";
 
       setStepStatus({ products, customization, templates, sla_wa: slaWa, publish });
       setGuideDismissed(dismissed);
     } catch (err) {
-      console.error("[StudioHome] runGuideDetection:", err);
+      console.error("[StudioPainel] runGuideDetection:", err);
     } finally {
       setGuideLoading(false);
     }
-  }, [company?.id, digitalConfig]);
+  }, [cid, digitalConfig]);
 
   useEffect(() => { runGuideDetection(); }, [runGuideDetection]);
 
@@ -270,490 +236,851 @@ export default function StudioHome() {
     [stepStatus]
   );
   const allDone = doneCount === GUIDE_STEPS.length;
-  const guidePct = Math.round((doneCount / GUIDE_STEPS.length) * 100);
 
-  // Dispensa guia (persiste em settings.guide_dismissed)
+  // Proximo passo nao concluido — usado pra CTA do card colapsado
+  const nextStep = useMemo(() => {
+    return GUIDE_STEPS.find((step) => stepStatus[step.id] !== "done") || null;
+  }, [stepStatus]);
+
   const handleDismissGuide = useCallback(async () => {
-    if (!company?.id) return;
+    if (!cid) return;
     setDismissing(true);
     try {
-      await studioApi.saveSettings(company.id, { guide_dismissed: true } as any);
+      await studioApi.saveSettings(cid, { guide_dismissed: true } as any);
       setGuideDismissed(true);
-      toast.success("Guia oculto. Tudo pronto pra operar!");
+      toast.success("Guia oculto.");
     } catch (err: any) {
-      console.error("[StudioHome] handleDismissGuide:", err);
+      console.error("[StudioPainel] handleDismissGuide:", err);
       toast.error(err?.message || "Erro ao ocultar guia");
     } finally {
       setDismissing(false);
     }
-  }, [company?.id]);
+  }, [cid]);
 
-  const firstName = (user as any)?.name?.split(" ")[0] || "lojista";
+  // Render guia: oculto se dismissed ou se 5/5
+  const showGuide = !guideDismissed && !allDone && !guideLoading && !!nextStep;
 
-  // KPIs dinamicos
-  const kpis = useMemo(() => [
-    { label: "Em producao",      value: metrics ? metrics.em_producao : 0,      format: fmtInteger,  icon: "clock",        color: t.warning },
-    { label: "Aguardando arte",  value: metrics ? metrics.aguardando_arte : 0,  format: fmtInteger,  icon: "alert-circle", color: t.accent  },
-    { label: "Prontos hoje",     value: metrics ? metrics.prontos_hoje : 0,     format: fmtInteger,  icon: "check",        color: t.success },
-    { label: "Vendas 7d",        value: metrics ? metrics.revenue_7d : 0,       format: fmtCurrency, icon: "trending-up",  color: t.primary },
-  ], [metrics, t]);
-
-  // Guia: esconde se dismissed OU se todos os passos estao done
-  const showGuide = !guideDismissed;
-  const showCompactCelebrate = showGuide && allDone;
+  // ─── Data shortcuts ─────────────────────────────────────────
+  const d = painel || EMPTY_PAINEL;
+  const kpiVendas = d.kpis.vendas_dia;
+  const kpiTicket = d.kpis.ticket_medio;
+  const kpiLucro  = d.kpis.lucro_bruto_mes;
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
-      {/* ───── Greeting ───── */}
-      <View style={s.greetingRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.h1}>
-            Bom dia, <Text style={s.h1Accent}>{firstName}!</Text>
-          </Text>
-          <Text style={s.h1Sub}>
-            {allDone
-              ? "Loja redonda. Hora de mostrar produto pro mundo."
-              : "Bora deixar a loja redonda pros proximos pedidos"}
-          </Text>
-        </View>
-        <View style={s.liveBadge}>
-          <View style={s.livePulse} />
-          <Text style={s.liveTxt}>Studio aberto</Text>
-        </View>
-      </View>
-
-      {/* ═══════ GUIA DO ESTUDIO ═══════ */}
-      {showGuide && showCompactCelebrate && (
-        <View style={s.guideCompact}>
-          <View style={s.guideCompactIcon}>
-            <Icon name="check" size={18} color={t.successInk} />
+      {/* ═══════ GUIA 5 PASSOS (colapsado) ═══════ */}
+      {showGuide && nextStep && (
+        <StudioGradient
+          colors={["#1E3A8A", "#EC4899"]}
+          direction="135deg"
+          style={s.guideCompactCard}
+        >
+          <View style={s.guideDotsWrap}>
+            {GUIDE_STEPS.map((step) => {
+              const isDone = stepStatus[step.id] === "done";
+              return (
+                <View
+                  key={step.id}
+                  style={[s.guideDot, isDone && s.guideDotDone]}
+                />
+              );
+            })}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.guideCompactTitle}>Tudo configurado!</Text>
-            <Text style={s.guideCompactSub}>Loja pronta pra receber pedidos. Bora vender.</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.guideCompactTitle} numberOfLines={1}>
+              Proximo passo: {nextStep.title.toLowerCase()}
+            </Text>
+            <Text style={s.guideCompactSub}>
+              {doneCount} de {GUIDE_STEPS.length} passos
+              {GUIDE_STEPS.length - doneCount > 0
+                ? " . faltam " + (GUIDE_STEPS.length - doneCount) + " pra completar o setup"
+                : ""}
+            </Text>
           </View>
+          <Pressable
+            onPress={() => router.push(nextStep.href as any)}
+            style={s.guideCompactBtn}
+          >
+            <Text style={s.guideCompactBtnTxt}>Continuar</Text>
+            <Icon name="arrow-right" size={12} color="#fff" />
+          </Pressable>
           <Pressable
             onPress={handleDismissGuide}
             disabled={dismissing}
-            style={s.guideCompactBtn}
+            style={s.guideCompactX}
+            hitSlop={8}
           >
             {dismissing
-              ? <ActivityIndicator size="small" color={t.ink2} />
-              : <Text style={s.guideCompactBtnTxt}>Ocultar</Text>}
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Icon name="x" size={14} color="#fff" />}
           </Pressable>
-        </View>
+        </StudioGradient>
       )}
 
-      {showGuide && !showCompactCelebrate && (
-        <View style={s.guideCard}>
-          {/* Header */}
-          <Pressable onPress={() => setGuideExpanded((v) => !v)} style={s.guideHead}>
-            <View style={s.guideHeadIcon}>
-              <Icon name="compass" size={20} color="#fff" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.guideEyebrow}>GUIA DO ESTUDIO</Text>
-              <Text style={s.guideTitle}>Configure tudo em 5 passos pra comecar</Text>
-            </View>
-            <View style={s.guideProgressPill}>
-              <Text style={s.guideProgressPillTxt}>{doneCount}/{GUIDE_STEPS.length} feitos</Text>
-            </View>
-            <Icon name={guideExpanded ? "chevron-up" : "chevron-down"} size={18} color={t.ink3} />
-          </Pressable>
-
-          {/* Progress bar */}
-          <View style={s.guideProgressBar}>
-            <View style={[s.guideProgressFill, { width: `${guidePct}%` }]} />
-          </View>
-
-          {guideLoading && (
-            <View style={{ paddingVertical: 22, alignItems: "center" }}>
-              <ActivityIndicator size="small" color={t.primary} />
-              <Text style={{ marginTop: 8, fontSize: 12, color: t.ink3 }}>Verificando seu progresso...</Text>
-            </View>
-          )}
-
-          {/* Steps */}
-          {!guideLoading && guideExpanded && GUIDE_STEPS.map((step) => {
-            const status = stepStatus[step.id];
-            const isExpanded = expandedStep === step.id;
-            const borderColor =
-              status === "done" ? t.success :
-              status === "in_progress" ? t.accent :
-              t.ink5;
-
-            // Detalhe contextual quando em_progress
-            let progressDetail: string | null = null;
-            if (step.id === "customization" && status === "in_progress") {
-              progressDetail = "Continue configurando os produtos restantes";
-            } else if (step.id === "templates" && status === "in_progress") {
-              progressDetail = "Adicione mais templates ate chegar a 3";
-            } else if (step.id === "sla_wa" && status === "in_progress") {
-              progressDetail = "Falta preencher SLA ou WhatsApp";
-            }
-
+      {/* ═══════ HEADER + Toggle periodo ═══════ */}
+      <View style={s.pageHeader}>
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
+          <Text style={s.eyebrow}>ESTUDIO . PAINEL</Text>
+          <Text style={s.pageTitle}>Indicadores do dia</Text>
+          <Text style={s.pageSub}>Acompanhe vendas, pedidos e margem em tempo real.</Text>
+        </View>
+        <View style={s.togglePeriod}>
+          {(["hoje", "7d", "30d"] as Period[]).map((p) => {
+            const active = period === p;
             return (
-              <View key={step.id} style={[s.stepCard, { borderColor }]}>
-                <Pressable
-                  onPress={() => setExpandedStep(isExpanded ? null : step.id)}
-                  style={s.stepHead}
-                >
-                  {/* Numero + status icon */}
-                  <View style={s.stepNumWrap}>
-                    <StepStatusIcon status={status} t={t} />
-                    <Text style={s.stepNum}>Passo {step.num}</Text>
-                  </View>
-
-                  {/* Title + status text inline */}
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.stepTitle} numberOfLines={1}>{step.title}</Text>
-                    <Text style={[s.stepStatusTxt, {
-                      color:
-                        status === "done" ? t.successInk :
-                        status === "in_progress" ? t.accent :
-                        t.ink3,
-                    }]}>
-                      {status === "done" && "feito"}
-                      {status === "in_progress" && "em andamento"}
-                      {status === "todo" && "nao iniciado"}
-                    </Text>
-                  </View>
-
-                  <Icon
-                    name={isExpanded ? "chevron-up" : "chevron-down"}
-                    size={16}
-                    color={t.ink4}
-                  />
-                </Pressable>
-
-                {isExpanded && (
-                  <View style={s.stepBody}>
-                    <Text style={s.stepHelper}>{step.helper}</Text>
-                    {progressDetail && (
-                      <Text style={s.stepProgressDetail}>{progressDetail}</Text>
-                    )}
-                    {status !== "done" && (
-                      <Pressable
-                        onPress={() => router.push(step.href as any)}
-                        style={[
-                          s.stepCta,
-                          { backgroundColor: status === "in_progress" ? t.accent : t.primary },
-                        ]}
-                      >
-                        <Icon name={step.icon as any} size={14} color="#fff" />
-                        <Text style={s.stepCtaTxt}>
-                          {status === "in_progress" ? "Continuar" : step.cta}
-                        </Text>
-                      </Pressable>
-                    )}
-                    {status === "done" && (
-                      <View style={s.stepDoneRow}>
-                        <Icon name="check" size={14} color={t.successInk} />
-                        <Text style={s.stepDoneTxt}>Passo concluido</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </View>
+              <Pressable
+                key={p}
+                onPress={() => setPeriod(p)}
+                style={[s.toggleChip, active && s.toggleChipActive]}
+              >
+                <Text style={[s.toggleChipTxt, active && s.toggleChipTxtActive]}>
+                  {periodLabel(p)}
+                </Text>
+              </Pressable>
             );
           })}
-
-          {/* Footer - dispensar */}
-          {!guideLoading && guideExpanded && (
-            <Pressable
-              onPress={handleDismissGuide}
-              disabled={dismissing}
-              style={s.guideDismissBtn}
-            >
-              {dismissing
-                ? <ActivityIndicator size="small" color={t.ink3} />
-                : <Text style={s.guideDismissTxt}>Ja configurei tudo, ocultar guia</Text>}
-            </Pressable>
-          )}
         </View>
-      )}
-
-      {/* ───── KPIs ───── */}
-      <View style={s.kpisRow}>
-        {kpis.map((k) => (
-          <View key={k.label} style={s.kpiCard}>
-            <View style={[s.kpiBubble, { backgroundColor: k.color }]}>
-              <Icon name={k.icon as any} size={18} color="#fff" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.kpiLabel}>{k.label}</Text>
-              {metricsLoading ? (
-                <ActivityIndicator size="small" color={t.ink4} style={{ alignSelf: "flex-start", marginTop: 4 }} />
-              ) : (
-                <View style={{ alignItems: "flex-start", marginTop: 1 }}>
-                  <AnimatedKpiCounter
-                    value={k.value}
-                    format={k.format}
-                    fontSize={18}
-                    color={t.ink}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
-        ))}
       </View>
 
-      {/* ───── Banner "X produtos podem melhorar" ───── */}
-      {productsToImprove > 0 && (
-        <View style={s.improveBanner}>
-          <View style={s.improveIcon}>
-            <Icon name="trending-up" size={18} color={t.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={s.improveTitleRow}>
-              <AnimatedKpiCounter
-                value={productsToImprove}
-                format={fmtInteger}
-                fontSize={14}
-                color={t.ink}
-              />
-              <Text style={s.improveTitle}>
-                {" "}produto{productsToImprove > 1 ? "s" : ""} pode{productsToImprove > 1 ? "m" : ""} melhorar
-              </Text>
-            </View>
-            <Text style={s.improveDesc}>
-              Adicione fotos, descricao e templates pra subir o score e vender mais.
-            </Text>
-          </View>
-          <Pressable onPress={() => router.push("/studio/produtos" as any)} style={s.improveBtn}>
-            <Text style={s.improveBtnTxt}>Melhorar</Text>
-          </Pressable>
-        </View>
+      {/* ═══════ LOADING (full) ═══════ */}
+      {painelLoading && !painel && (
+        <StudioLoading variant="spinner" label="Carregando painel..." />
       )}
 
-      {/* ───── Hint ───── */}
-      {!allDone && !guideDismissed && (
-        <View style={s.hintCard}>
-          <Icon name="info" size={16} color={t.primary} />
-          <Text style={s.hintTxt}>
-            <Text style={s.hintBold}>Dica:</Text> assim que cadastrar produto e
-            subir templates, a aba Producao comeca a popular a fila automaticamente.
-          </Text>
+      {/* ═══════ Conteudo (mesmo durante refetch, com opacity reduzida) ═══════ */}
+      {(!painelLoading || painel) && (
+        <View style={[painelLoading && { opacity: 0.6 }]}>
+          {/* ─── KPI row ─── */}
+          <View style={s.kpiRow}>
+            <KpiCard
+              t={t}
+              variant="primary"
+              label="Vendas no dia"
+              value={kpiVendas.value}
+              format="currency"
+              deltaPct={kpiVendas.delta_pct}
+              subLabel={kpiVendas.sub_label || "Hoje"}
+            />
+            <KpiCard
+              t={t}
+              variant="accent"
+              label={"Ticket medio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
+              value={kpiTicket.value}
+              format="currency"
+              deltaPct={kpiTicket.delta_pct}
+              subLabel={kpiTicket.sub_label || "Periodo selecionado"}
+            />
+            <KpiCard
+              t={t}
+              variant="success"
+              label="Lucro bruto . mes"
+              value={kpiLucro.value}
+              format="currency"
+              deltaPct={kpiLucro.delta_pct}
+              subLabel={kpiLucro.sub_label || "Margem operacional"}
+            />
+          </View>
+
+          {/* ─── Charts row ─── */}
+          <View style={s.chartsRow}>
+            {/* Faturamento line chart */}
+            <View style={s.chartCardWide}>
+              <View style={s.chartHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.chartEyebrow}>RECEITA</Text>
+                  <Text style={s.chartTitle}>
+                    Faturamento {period === "hoje" ? "de hoje" : "ultimos " + (period === "30d" ? "30 dias" : "7 dias")}
+                  </Text>
+                </View>
+                <Text style={s.chartMeta}>
+                  Total: {formatBRL(d.faturamento_total, 2)}
+                </Text>
+              </View>
+              <FaturamentoChart data={d.faturamento_serie} t={t} />
+            </View>
+
+            {/* Top 5 produtos */}
+            <View style={s.chartCardNarrow}>
+              <View style={s.chartHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.chartEyebrow}>TOP VENDAS</Text>
+                  <Text style={s.chartTitle}>
+                    Top 5 produtos . {periodLabel(period).toLowerCase()}
+                  </Text>
+                </View>
+              </View>
+              <TopProdutosList data={d.top_produtos} t={t} />
+            </View>
+          </View>
+
+          {/* ─── Funil aprovacao (full width) ─── */}
+          <View style={s.chartCardFull}>
+            <View style={s.chartHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.chartEyebrow}>APROVACAO DE ARTE (wa.me)</Text>
+                <Text style={s.chartTitle}>
+                  Funil de aprovacao . {periodLabel(period).toLowerCase()}
+                </Text>
+              </View>
+              <Text style={s.chartMeta}>
+                {d.funil_aprovacao.total_enviados} links enviados
+              </Text>
+            </View>
+            <FunilAprovacao data={d.funil_aprovacao} t={t} />
+          </View>
         </View>
       )}
     </ScrollView>
   );
 }
 
-// ═══ helpers ═══════════════════════════════════════════════════════════════
-function StepStatusIcon({ status, t }: { status: GuideStepStatus; t: StudioPalette }) {
-  if (status === "done") {
-    return (
-      <View style={{
-        width: 22, height: 22, borderRadius: 11,
-        backgroundColor: t.success,
-        alignItems: "center", justifyContent: "center",
-      }}>
-        <Icon name="check" size={12} color="#fff" />
-      </View>
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <View style={{
-        width: 22, height: 22, borderRadius: 11,
-        backgroundColor: t.accentSoft,
-        alignItems: "center", justifyContent: "center",
-      }}>
-        <Icon name="clock" size={12} color={t.accent} />
-      </View>
-    );
-  }
+// ═══════ KPI Card ═══════════════════════════════════════════════
+function KpiCard({
+  t, variant, label, value, format, deltaPct, subLabel,
+}: {
+  t: StudioPalette;
+  variant: "primary" | "accent" | "success";
+  label: string;
+  value: number;
+  format: "currency" | "integer";
+  deltaPct: number | null;
+  subLabel: string | null;
+}) {
+  const s = useMemo(() => buildKpiStyles(t), [t]);
+  const stripeColors: readonly string[] =
+    variant === "primary" ? ["#1E3A8A", "#3B82F6"] :
+    variant === "accent"  ? ["#EC4899", "#F472B6"] :
+                            ["#10B981", "#34D399"];
+
+  const split = format === "currency" ? splitBRL(value) : { main: String(Math.round(value)), decimals: "" };
+
+  const deltaUp = (deltaPct ?? 0) >= 0;
+  const showDelta = deltaPct !== null && deltaPct !== undefined && !isNaN(deltaPct);
+
   return (
-    <View style={{
-      width: 22, height: 22, borderRadius: 11,
-      borderWidth: 1.5, borderColor: t.ink4,
-      alignItems: "center", justifyContent: "center",
-    }} />
+    <View style={s.card}>
+      <StudioGradient
+        colors={stripeColors}
+        direction="90deg"
+        style={s.stripe}
+        pointerEvents="none"
+      />
+      <Text style={s.label}>{label}</Text>
+      <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" }}>
+        <Text style={s.value}>{split.main}</Text>
+        {split.decimals ? (
+          <Text style={s.valueDecimals}>{split.decimals}</Text>
+        ) : null}
+      </View>
+      {showDelta && (
+        <View style={[s.deltaPill, deltaUp ? s.deltaUp : s.deltaDown]}>
+          <Text style={[s.deltaTxt, deltaUp ? s.deltaTxtUp : s.deltaTxtDown]}>
+            {deltaUp ? "+" : ""}{deltaPct.toFixed(0)}%
+          </Text>
+        </View>
+      )}
+      {subLabel && <Text style={s.subLabel}>{subLabel}</Text>}
+    </View>
   );
 }
 
+function buildKpiStyles(t: StudioPalette) {
+  return StyleSheet.create({
+    card: {
+      flex: 1, minWidth: 220,
+      backgroundColor: t.paperCard,
+      borderWidth: 1, borderColor: t.ink5,
+      borderRadius: 14,
+      padding: 18,
+      paddingTop: 22,
+      position: "relative",
+      overflow: "hidden",
+    },
+    stripe: {
+      position: "absolute",
+      top: 0, left: 0, right: 0,
+      height: 4,
+    },
+    label: {
+      fontSize: 10,
+      color: t.ink3,
+      fontWeight: "800",
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      marginBottom: 6,
+    },
+    value: {
+      fontSize: 26,
+      fontWeight: "800",
+      color: t.ink,
+      letterSpacing: -0.5,
+      lineHeight: 30,
+    },
+    valueDecimals: {
+      fontSize: 18,
+      color: t.ink3,
+      fontWeight: "700",
+    },
+    deltaPill: {
+      marginTop: 6,
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+    },
+    deltaUp:   { backgroundColor: t.successSoft },
+    deltaDown: { backgroundColor: t.dangerSoft },
+    deltaTxt:    { fontSize: 11, fontWeight: "700" },
+    deltaTxtUp:  { color: t.successInk },
+    deltaTxtDown:{ color: t.dangerInk },
+    subLabel: {
+      fontSize: 11,
+      color: t.ink4,
+      marginTop: 8,
+    },
+  });
+}
+
+// ═══════ Faturamento line chart (SVG) ════════════════════════════
+function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPalette }) {
+  if (!data || data.length === 0) {
+    return (
+      <View style={{ height: 220, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontSize: 12, color: t.ink4 }}>Sem dados no periodo</Text>
+      </View>
+    );
+  }
+
+  const W = 700;
+  const H = 220;
+  const padL = 40;
+  const padR = 10;
+  const padT = 30;   // espaco pro tooltip "Hoje"
+  const padB = 30;   // espaco pros x labels
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const maxVal = Math.max(1, ...data.map((p) => p.value));
+  // Arredonda max pra cima ao multiplo de 500 (gridlines bonitas)
+  const niceMax = Math.ceil(maxVal / 500) * 500 || 500;
+
+  // 4 gridlines + 4 y labels
+  const gridSteps = [1, 0.75, 0.5, 0.25];
+
+  const xStep = data.length > 1 ? chartW / (data.length - 1) : chartW;
+
+  const points = data.map((p, i) => ({
+    x: padL + i * xStep,
+    y: padT + chartH * (1 - p.value / niceMax),
+    point: p,
+  }));
+
+  // Path da linha
+  const linePath = points
+    .map((pt, i) => (i === 0 ? "M " : "L ") + pt.x.toFixed(1) + " " + pt.y.toFixed(1))
+    .join(" ");
+
+  // Path da area (linha + fechamento na base)
+  const lastX = points[points.length - 1].x;
+  const firstX = points[0].x;
+  const baseY = padT + chartH;
+  const areaPath =
+    linePath +
+    " L " + lastX.toFixed(1) + " " + baseY.toFixed(1) +
+    " L " + firstX.toFixed(1) + " " + baseY.toFixed(1) +
+    " Z";
+
+  const todayIdx = data.findIndex((p) => p.is_today);
+  const todayPt = todayIdx >= 0 ? points[todayIdx] : null;
+
+  return (
+    <View style={{ width: "100%" }}>
+      <View style={{ width: "100%", aspectRatio: W / H }}>
+        <Svg
+          viewBox={"0 0 " + W + " " + H}
+          width="100%"
+          height="100%"
+          preserveAspectRatio="none"
+        >
+          <Defs>
+            <LinearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%"   stopColor="#EC4899" stopOpacity="0.25" />
+              <Stop offset="100%" stopColor="#EC4899" stopOpacity="0" />
+            </LinearGradient>
+          </Defs>
+
+          {/* Gridlines + y labels */}
+          {gridSteps.map((step, i) => {
+            const y = padT + chartH * (1 - step);
+            const labelVal = niceMax * step;
+            return (
+              <Line
+                key={"grid-" + i}
+                x1={padL}
+                y1={y}
+                x2={W - padR}
+                y2={y}
+                stroke="#EEF0F5"
+                strokeWidth={1}
+                strokeDasharray="3,3"
+              />
+            );
+          })}
+          {gridSteps.map((step, i) => {
+            const y = padT + chartH * (1 - step);
+            const labelVal = niceMax * step;
+            return (
+              <SvgText
+                key={"y-" + i}
+                x={padL - 6}
+                y={y + 4}
+                fill="#94A3B8"
+                fontSize={10}
+                textAnchor="end"
+              >
+                {formatBRLCompact(labelVal)}
+              </SvgText>
+            );
+          })}
+
+          {/* Area */}
+          <Path d={areaPath} fill="url(#lineGrad)" />
+
+          {/* Line */}
+          <Path
+            d={linePath}
+            fill="none"
+            stroke="#EC4899"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Dots */}
+          {points.map((pt, i) => {
+            const isToday = pt.point.is_today;
+            return (
+              <Circle
+                key={"dot-" + i}
+                cx={pt.x}
+                cy={pt.y}
+                r={isToday ? 5 : 4}
+                fill={isToday ? "#EC4899" : "#FFFFFF"}
+                stroke={isToday ? "#FFFFFF" : "#EC4899"}
+                strokeWidth={2}
+              />
+            );
+          })}
+
+          {/* Tooltip "Hoje" no ultimo ponto se is_today */}
+          {todayPt && (
+            <>
+              <Rect
+                x={Math.max(padL, Math.min(W - padR - 110, todayPt.x - 55))}
+                y={Math.max(0, todayPt.y - 32)}
+                width={110}
+                height={24}
+                rx={6}
+                fill="#0F172A"
+              />
+              <SvgText
+                x={Math.max(padL + 55, Math.min(W - padR - 55, todayPt.x))}
+                y={Math.max(16, todayPt.y - 16)}
+                fill="#FFFFFF"
+                fontSize={11}
+                fontWeight="700"
+                textAnchor="middle"
+              >
+                {"Hoje . " + formatBRLCompact(todayPt.point.value)}
+              </SvgText>
+            </>
+          )}
+
+          {/* X labels */}
+          {points.map((pt, i) => {
+            const isToday = pt.point.is_today;
+            // Skip labels intermediarios se serie muito longa (30d)
+            if (data.length > 14) {
+              const step = Math.ceil(data.length / 7);
+              if (i % step !== 0 && i !== data.length - 1) return null;
+            }
+            return (
+              <SvgText
+                key={"x-" + i}
+                x={pt.x}
+                y={H - 8}
+                fill={isToday ? "#EC4899" : "#94A3B8"}
+                fontSize={10}
+                fontWeight={isToday ? "700" : "400"}
+                textAnchor="middle"
+              >
+                {pt.point.label}
+              </SvgText>
+            );
+          })}
+        </Svg>
+      </View>
+    </View>
+  );
+}
+
+// ═══════ Top 5 produtos (bar horizontal) ════════════════════════
+function TopProdutosList({
+  data, t,
+}: {
+  data: { product_id: string | null; name: string; revenue: number; qty: number }[];
+  t: StudioPalette;
+}) {
+  if (!data || data.length === 0) {
+    return (
+      <View style={{ paddingVertical: 30, alignItems: "center" }}>
+        <Text style={{ fontSize: 12, color: t.ink4 }}>Sem vendas no periodo</Text>
+      </View>
+    );
+  }
+
+  const top5 = data.slice(0, 5);
+  const maxRev = Math.max(1, ...top5.map((p) => p.revenue));
+
+  return (
+    <View style={{ gap: 10 }}>
+      {top5.map((p, i) => {
+        const rank = i + 1;
+        const widthPct = (p.revenue / maxRev) * 100;
+        // Rank colors: 1 navy, 2-3 accent, 4-5 ink4 com opacity reduzida
+        const rankBg =
+          rank === 1 ? "#1E3A8A" :
+          rank <= 3 ? "#F472B6" : "#94A3B8";
+        const fillOpacity = rank <= 3 ? 1 : (rank === 4 ? 0.85 : 0.7);
+
+        return (
+          <View key={p.product_id || ("idx-" + i)} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{
+              width: 22, height: 22, borderRadius: 11,
+              backgroundColor: rankBg,
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{rank}</Text>
+            </View>
+            <Text
+              numberOfLines={1}
+              style={{
+                width: 110,
+                fontSize: 12,
+                color: t.ink2,
+                fontWeight: "600",
+              }}
+            >
+              {p.name || "Sem nome"}
+            </Text>
+            <View style={{
+              flex: 1,
+              height: 22,
+              backgroundColor: t.bgSoft,
+              borderRadius: 999,
+              overflow: "hidden",
+            }}>
+              <StudioGradient
+                colors={["#1E3A8A", "#EC4899"]}
+                direction="90deg"
+                style={{
+                  width: (widthPct + "%") as any,
+                  height: "100%",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  paddingRight: 8,
+                  opacity: fillOpacity,
+                  borderRadius: 999,
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>
+                  {formatBRLCompact(p.revenue)}
+                </Text>
+              </StudioGradient>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ═══════ Funil aprovacao ════════════════════════════════════════
+function FunilAprovacao({
+  data, t,
+}: {
+  data: PainelData["funil_aprovacao"];
+  t: StudioPalette;
+}) {
+  const stages = [
+    { key: "pendentes",  label: "Pendentes",  color: t.warning, count: data.pendentes.count,  pct: data.pendentes.pct },
+    { key: "aprovados",  label: "Aprovados",  color: t.success, count: data.aprovados.count,  pct: data.aprovados.pct },
+    { key: "alteracoes", label: "Alteracoes", color: t.info,    count: data.alteracoes.count, pct: data.alteracoes.pct },
+    { key: "expirados",  label: "Expirados",  color: t.ink4,    count: data.expirados.count,  pct: data.expirados.pct },
+  ];
+
+  const total = Math.max(1, ...stages.map((st) => st.count));
+  const empty = data.total_enviados === 0;
+
+  // Sumario tempo medio
+  let tempoTxt = "—";
+  if (data.tempo_medio_resposta_min !== null && data.tempo_medio_resposta_min !== undefined) {
+    const m = Math.round(data.tempo_medio_resposta_min);
+    if (m < 60) tempoTxt = m + "min";
+    else {
+      const h = Math.floor(m / 60);
+      const r = m % 60;
+      tempoTxt = h + "h" + (r > 0 ? " " + r + "min" : "");
+    }
+  }
+
+  return (
+    <View>
+      {empty && (
+        <View style={{ paddingVertical: 20, alignItems: "center" }}>
+          <Text style={{ fontSize: 12, color: t.ink4 }}>Nenhum link de aprovacao enviado no periodo</Text>
+        </View>
+      )}
+      {!empty && (
+        <View style={{ gap: 8 }}>
+          {stages.map((st) => {
+            const widthPct = (st.count / total) * 100;
+            return (
+              <View key={st.key} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Text style={{
+                  width: 110,
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: t.ink2,
+                }}>
+                  {st.label}
+                </Text>
+                <View style={{
+                  flex: 1,
+                  height: 28,
+                  backgroundColor: st.color,
+                  borderRadius: 8,
+                  alignItems: "flex-start",
+                  justifyContent: "center",
+                  paddingHorizontal: 10,
+                  minWidth: 32,
+                  // largura proporcional via maxWidth nao funciona em RN flex,
+                  // usamos um wrapper transparente
+                }}>
+                  <View style={{
+                    position: "absolute",
+                    top: 0, left: 0,
+                    width: (Math.max(8, widthPct) + "%") as any,
+                    height: "100%",
+                    backgroundColor: st.color,
+                    borderRadius: 8,
+                  }} />
+                  <Text style={{
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: "800",
+                    zIndex: 1,
+                  }}>
+                    {st.count}
+                  </Text>
+                </View>
+                <Text style={{
+                  width: 50,
+                  textAlign: "right",
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: t.ink3,
+                }}>
+                  {Math.round(st.pct)}%
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Sumario */}
+      <View style={{
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: t.ink5,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+      }}>
+        <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "600" }}>
+          Taxa de aprovacao na 1a:{" "}
+          <Text style={{ color: t.success, fontSize: 16, fontWeight: "800" }}>
+            {data.aprovacao_primeira_pct !== null && data.aprovacao_primeira_pct !== undefined
+              ? Math.round(data.aprovacao_primeira_pct) + "%"
+              : "—"}
+          </Text>
+        </Text>
+        <Text style={{ fontSize: 11, color: t.ink4, fontWeight: "600" }}>
+          Tempo medio de resposta: {tempoTxt}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ═══════ Styles ═════════════════════════════════════════════════
 function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
     scroll: { flex: 1, backgroundColor: t.bg },
-    container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
-
-    // greeting
-    greetingRow: {
-      flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
-      marginBottom: 22, gap: 16, flexWrap: "wrap",
-    },
-    h1: { fontSize: 28, fontWeight: "800", color: t.ink, letterSpacing: -0.5 },
-    h1Accent: { color: t.accent, fontWeight: "900" },
-    h1Sub: { fontSize: 13.5, color: t.ink3, marginTop: 6 },
-    liveBadge: {
-      flexDirection: "row", alignItems: "center", gap: 7,
-      backgroundColor: t.mintSoft,
-      paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999,
-    },
-    livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: t.mint },
-    liveTxt: { fontSize: 12, fontWeight: "700", color: t.successInk },
-
-    // Guia compacto (5/5 + nao dismissed)
-    guideCompact: {
-      flexDirection: "row", alignItems: "center", gap: 12,
-      backgroundColor: t.mintSoft,
-      borderWidth: 1, borderColor: t.success,
-      borderRadius: 18, padding: 14,
-      marginBottom: 22,
-    },
-    guideCompactIcon: {
-      width: 36, height: 36, borderRadius: 18,
-      backgroundColor: "#fff",
-      alignItems: "center", justifyContent: "center",
-    },
-    guideCompactTitle: { fontSize: 14, fontWeight: "800", color: t.ink },
-    guideCompactSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
-    guideCompactBtn: {
-      paddingHorizontal: 12, paddingVertical: 8,
-      borderRadius: 10,
-      backgroundColor: "#fff",
-      borderWidth: 1, borderColor: t.ink5,
-    },
-    guideCompactBtnTxt: { fontSize: 12, fontWeight: "700", color: t.ink2 },
-
-    // Guia card principal
-    guideCard: {
-      backgroundColor: t.paperCard,
-      borderRadius: 24, padding: 22,
-      borderWidth: 1, borderColor: t.ink5,
-      marginBottom: 22,
-    },
-    guideHead: {
-      flexDirection: "row", alignItems: "center", gap: 12,
-      marginBottom: 14,
-    },
-    guideHeadIcon: {
-      width: 40, height: 40, borderRadius: 12,
-      backgroundColor: t.primary,
-      alignItems: "center", justifyContent: "center",
-    },
-    guideEyebrow: {
-      fontSize: 10.5, color: t.accent, fontWeight: "800",
-      letterSpacing: 1, textTransform: "uppercase",
-    },
-    guideTitle: { fontSize: 17, fontWeight: "800", color: t.ink, marginTop: 3 },
-    guideProgressPill: {
-      backgroundColor: t.primarySoft,
-      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-    },
-    guideProgressPillTxt: { fontSize: 12, fontWeight: "800", color: t.primary },
-
-    guideProgressBar: {
-      height: 6, backgroundColor: t.ink5,
-      borderRadius: 3, overflow: "hidden",
-      marginBottom: 14,
-    },
-    guideProgressFill: {
-      height: "100%",
-      backgroundColor: t.mint,
-      borderRadius: 3,
+    container: {
+      padding: 24,
+      paddingBottom: 60,
+      maxWidth: 1280,
+      alignSelf: "center",
+      width: "100%",
     },
 
-    // step cards (cada passo do guia)
-    stepCard: {
-      backgroundColor: t.bg,
-      borderRadius: 14, padding: 12,
-      borderWidth: 1.5,
-      marginBottom: 8,
+    // ── Guia colapsado ──
+    guideCompactCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 16,
+      borderRadius: 18,
+      padding: 16,
+      paddingHorizontal: 20,
+      marginBottom: 18,
+      ...(Platform.OS === "web" ? ({ boxShadow: "0 6px 16px rgba(15,23,42,0.12)" } as any) : null),
     },
-    stepHead: {
-      flexDirection: "row", alignItems: "center", gap: 12,
+    guideDotsWrap: { flexDirection: "row", gap: 4 },
+    guideDot: {
+      width: 24, height: 8, borderRadius: 4,
+      backgroundColor: "rgba(255,255,255,0.3)",
     },
-    stepNumWrap: {
-      flexDirection: "row", alignItems: "center", gap: 8,
-      minWidth: 110,
+    guideDotDone: { backgroundColor: "#fff" },
+    guideCompactTitle: {
+      fontSize: 14, fontWeight: "700", color: "#fff",
     },
-    stepNum: { fontSize: 12, fontWeight: "700", color: t.ink3 },
-    stepTitle: { fontSize: 13.5, fontWeight: "700", color: t.ink },
-    stepStatusTxt: { fontSize: 11.5, fontWeight: "600", marginTop: 1 },
-    stepBody: {
-      paddingTop: 10, marginTop: 10,
-      borderTopWidth: 1, borderTopColor: t.ink5,
-      gap: 8,
-    },
-    stepHelper: { fontSize: 12.5, color: t.ink3, lineHeight: 18 },
-    stepProgressDetail: {
-      fontSize: 11.5, color: t.accent, fontWeight: "700",
-      backgroundColor: t.accentGhost,
-      paddingHorizontal: 8, paddingVertical: 4,
-      borderRadius: 6, alignSelf: "flex-start",
-    },
-    stepCta: {
-      flexDirection: "row", alignItems: "center", gap: 6,
-      alignSelf: "flex-start",
-      paddingHorizontal: 14, paddingVertical: 9,
-      borderRadius: 10, marginTop: 4,
-    },
-    stepCtaTxt: { color: "#fff", fontWeight: "800", fontSize: 12.5 },
-    stepDoneRow: {
-      flexDirection: "row", alignItems: "center", gap: 6,
+    guideCompactSub: {
+      fontSize: 12, color: "rgba(255,255,255,0.85)",
       marginTop: 2,
     },
-    stepDoneTxt: { fontSize: 12, color: t.successInk, fontWeight: "700" },
-
-    guideDismissBtn: {
-      marginTop: 12, paddingVertical: 10,
+    guideCompactBtn: {
+      flexDirection: "row",
       alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      borderWidth: 1, borderColor: "rgba(255,255,255,0.4)",
+      paddingHorizontal: 14, paddingVertical: 8,
+      borderRadius: 999,
     },
-    guideDismissTxt: { fontSize: 12, color: t.ink3, fontWeight: "600", textDecorationLine: "underline" },
+    guideCompactBtnTxt: {
+      color: "#fff", fontSize: 12, fontWeight: "700",
+    },
+    guideCompactX: {
+      width: 28, height: 28, borderRadius: 14,
+      alignItems: "center", justifyContent: "center",
+    },
 
-    // KPIs
-    kpisRow: {
-      flexDirection: "row", flexWrap: "wrap", gap: 12,
+    // ── Page header ──
+    pageHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
       marginBottom: 22,
+      gap: 16,
+      flexWrap: "wrap",
     },
-    kpiCard: {
-      flex: 1, minWidth: 180,
-      flexDirection: "row", alignItems: "center", gap: 12,
+    eyebrow: {
+      fontSize: 11, color: t.accent, fontWeight: "800",
+      letterSpacing: 1.4, textTransform: "uppercase",
+      marginBottom: 6,
+    },
+    pageTitle: {
+      fontSize: 28, fontWeight: "800",
+      color: t.ink, letterSpacing: -0.6,
+    },
+    pageSub: { fontSize: 13, color: t.ink3, marginTop: 4 },
+
+    // ── Toggle periodo ──
+    togglePeriod: {
+      flexDirection: "row",
       backgroundColor: t.paperCard,
-      borderRadius: 22, padding: 14,
+      borderWidth: 1.5, borderColor: t.ink5,
+      borderRadius: 999,
+      padding: 4,
+      gap: 2,
+    },
+    toggleChip: {
+      paddingHorizontal: 16, paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: "transparent",
+    },
+    toggleChipActive: { backgroundColor: t.primary },
+    toggleChipTxt: {
+      fontSize: 12, fontWeight: "700",
+      color: t.ink3,
+    },
+    toggleChipTxtActive: { color: "#fff" },
+
+    // ── KPI row ──
+    kpiRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 14,
+      marginBottom: 18,
+    },
+
+    // ── Charts row ──
+    chartsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 14,
+      marginBottom: 18,
+    },
+    chartCardWide: {
+      flexGrow: 3,
+      flexShrink: 1,
+      flexBasis: 420,
+      minWidth: 300,
+      backgroundColor: t.paperCard,
       borderWidth: 1, borderColor: t.ink5,
+      borderRadius: 14,
+      padding: 18,
     },
-    kpiBubble: {
-      width: 44, height: 44, borderRadius: 22,
-      alignItems: "center", justifyContent: "center",
+    chartCardNarrow: {
+      flexGrow: 2,
+      flexShrink: 1,
+      flexBasis: 280,
+      minWidth: 280,
+      backgroundColor: t.paperCard,
+      borderWidth: 1, borderColor: t.ink5,
+      borderRadius: 14,
+      padding: 18,
     },
-    kpiLabel: { fontSize: 11.5, color: t.ink3, fontWeight: "600" },
-
-    // Improve banner
-    improveBanner: {
-      flexDirection: "row", alignItems: "center", gap: 12,
-      backgroundColor: t.accentGhost,
-      borderWidth: 1, borderColor: t.accentSoft,
-      borderRadius: 18, padding: 14,
-      marginBottom: 22,
+    chartCardFull: {
+      backgroundColor: t.paperCard,
+      borderWidth: 1, borderColor: t.ink5,
+      borderRadius: 14,
+      padding: 18,
     },
-    improveIcon: {
-      width: 36, height: 36, borderRadius: 18,
-      backgroundColor: t.accentSoft,
-      alignItems: "center", justifyContent: "center",
+    chartHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14,
+      gap: 8,
     },
-    improveTitleRow: {
-      flexDirection: "row", alignItems: "baseline", flexWrap: "wrap",
+    chartEyebrow: {
+      fontSize: 10, color: t.ink4, fontWeight: "700",
+      letterSpacing: 0.4, textTransform: "uppercase",
+      marginBottom: 2,
     },
-    improveTitle: { fontSize: 14, fontWeight: "800", color: t.ink },
-    improveDesc: { fontSize: 12, color: t.ink3, marginTop: 2 },
-    improveBtn: {
-      backgroundColor: t.accent,
-      paddingHorizontal: 14, paddingVertical: 9,
-      borderRadius: 12,
+    chartTitle: {
+      fontSize: 13, fontWeight: "800",
+      color: t.ink, letterSpacing: -0.1,
     },
-    improveBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
-
-    hintCard: {
-      flexDirection: "row", alignItems: "center", gap: 10,
-      backgroundColor: t.primaryGhost,
-      borderRadius: 14, padding: 14, marginTop: 4,
-      borderWidth: 1, borderColor: t.primarySoft,
+    chartMeta: {
+      fontSize: 11, color: t.ink4, fontWeight: "600",
     },
-    hintTxt: { fontSize: 12.5, color: t.ink2, flex: 1, lineHeight: 18 },
-    hintBold: { fontWeight: "700", color: t.primary },
   });
 }
