@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   ActivityIndicator, Modal, TextInput, RefreshControl,
-  Platform, Dimensions,
+  Platform, Dimensions, Linking,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -38,6 +38,11 @@ var fmtDateFull = function(iso: string) {
 var daysLate = function(dueDate: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(dueDate).getTime()) / 86400000));
 };
+
+function phoneToWa(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  return digits.startsWith("55") ? digits : "55" + digits;
+}
 
 const SCORE_LABEL_MAP: Record<string, string> = {
   premium: "Histórico: excelente",
@@ -353,6 +358,21 @@ export default function CrediarioClienteScreen() {
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao alterar status"),
   });
 
+  // Cobrança via WhatsApp (wa.me deep link)
+  const collectMut = useMutation({
+    mutationFn: (installmentId: string) =>
+      creditApi.triggerCollection(company!.id, installmentId),
+    onSuccess: (data) => {
+      const phone55 = phoneToWa(data.phone);
+      const url = `https://wa.me/${phone55}?text=${encodeURIComponent(data.message)}`;
+      Linking.openURL(url).catch(() =>
+        toast.error("Não foi possível abrir o WhatsApp")
+      );
+      toast.success("WhatsApp aberto para cobrança");
+    },
+    onError: (err: any) => toast.error(err?.data?.error || "Erro ao gerar cobrança"),
+  });
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
@@ -365,6 +385,7 @@ export default function CrediarioClienteScreen() {
   const profile = profileQ.data;
   const history = historyQ.data;
   const openInstallments = profile?.open_installments?.filter(i => i.status !== "paid" && i.status !== "cancelled") || [];
+  const overdueInstallments = openInstallments.filter(i => i.status === "overdue");
   const isBlocked = profile?.status === "blocked";
   const trafficLight = profile ? computeTrafficLight(profile.status, openInstallments) : "green";
   const trafficColor = TRAFFIC_LIGHT_COLORS[trafficLight];
@@ -471,6 +492,9 @@ export default function CrediarioClienteScreen() {
                   <Text style={s.resumeLabel}>Parcelas abertas</Text>
                   <Text style={s.resumeMeta}>
                     {openInstallments.length} parcela{openInstallments.length !== 1 ? "s" : ""}
+                    {overdueInstallments.length > 0 && (
+                      ` · ${overdueInstallments.length} vencida${overdueInstallments.length !== 1 ? "s" : ""}`
+                    )}
                   </Text>
                 </View>
                 <Text style={[s.resumeValue, totalOpenInstallmentsAmount > 0 && { color: Colors.amber }]}>
@@ -495,6 +519,7 @@ export default function CrediarioClienteScreen() {
                   const remaining = Number(inst.amount_due) - Number(inst.amount_paid);
                   const late = inst.status === "overdue" ? daysLate(inst.due_date) : 0;
                   const isOverdue = inst.status === "overdue";
+                  const isCollecting = collectMut.isPending && collectMut.variables === inst.id;
                   return (
                     <View key={inst.id} style={s.installmentRow}>
                       <View style={s.installmentLeft}>
@@ -519,12 +544,27 @@ export default function CrediarioClienteScreen() {
                             {isOverdue ? `Atrasada ${late}d` : "No prazo"}
                           </Text>
                         </View>
-                        <Pressable
-                          style={s.receiveBtn}
-                          onPress={() => setPayingInstallment(inst)}
-                        >
-                          <Text style={s.receiveBtnText}>Receber</Text>
-                        </Pressable>
+                        <View style={s.installmentActions}>
+                          {/* Botão WhatsApp — só para parcelas vencidas */}
+                          {isOverdue && (
+                            <Pressable
+                              style={[s.waBtn, isCollecting && { opacity: 0.6 }]}
+                              onPress={() => collectMut.mutate(inst.id)}
+                              disabled={collectMut.isPending}
+                            >
+                              {isCollecting
+                                ? <ActivityIndicator color="#fff" size="small" style={{ width: 14, height: 14 }} />
+                                : <Text style={s.waBtnText}>WhatsApp</Text>
+                              }
+                            </Pressable>
+                          )}
+                          <Pressable
+                            style={s.receiveBtn}
+                            onPress={() => setPayingInstallment(inst)}
+                          >
+                            <Text style={s.receiveBtnText}>Receber</Text>
+                          </Pressable>
+                        </View>
                       </View>
                     </View>
                   );
@@ -722,6 +762,7 @@ const s = StyleSheet.create({
   installmentAmount: { fontWeight: "700" },
   installmentDate: { fontSize: 11, color: Colors.ink3, marginTop: 3 },
   installmentRight: { alignItems: "flex-end", gap: 6 },
+  installmentActions: { flexDirection: "row", gap: 6, alignItems: "center" },
   statusBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   statusBadgeText: { fontSize: 10, fontWeight: "700" },
   receiveBtn: {
@@ -729,6 +770,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6,
   },
   receiveBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  waBtn: {
+    backgroundColor: "#25D366", borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6,
+    minWidth: 36, alignItems: "center", justifyContent: "center",
+  },
+  waBtnText: { color: "#fff", fontSize: 11, fontWeight: "700" },
 
   emptyInstallments: {
     flexDirection: "row", alignItems: "center", gap: 8,
