@@ -13,6 +13,12 @@ import type { CustomizationConfig, CustomizationField } from "@/services/studioA
 //   + price_delta de option/color somado no carrinho + display por linha
 //   + upload R2 de foto direto da página (web) pra campos type=image
 //   + estagio "sent" mostra politica de revisões + prazo
+// 26/05/2026 (verso opcional — Frente e Verso):
+//   + agrupa fields por side ("front" | "back") quando has_back===true
+//   + divisor visual "VERSO" + checkbox opt-in quando back_charge_enabled
+//   + soma back_price_delta no carrinho/checkout/total quando addBack
+//   + envia customization.has_back_selected no payload da order
+//   + required de field do verso é ignorado quando addBack=false
 // 26/05/2026 (reforço de tema Aura Studio):
 //   + hero ganha pílula "Loja oficial" + nome destacado (32/900)
 //   + cards de produto com badge "PERSONALIZÁVEL" + borda esquerda navy
@@ -90,6 +96,12 @@ type CartLine = {
   product: StudioStoreProduct;
   qty: number;
   values: Record<string, any>;
+  // 26/05/2026: cliente escolheu personalizar o verso?
+  // Quando product.customization_config.back_charge_enabled === true,
+  // só soma back_price_delta no preco se hasBackSelected === true.
+  // Quando has_back === true mas back_charge_enabled === false, o
+  // verso é grátis e hasBackSelected fica true implicitamente.
+  hasBackSelected?: boolean;
 };
 
 type Stage = "list" | "configure" | "checkout" | "sent";
@@ -119,9 +131,43 @@ function choicesDelta(cfg: CustomizationConfig | null | undefined, values: Recor
   return delta;
 }
 
-// Preço efetivo = price + delta. Sem qty.
+// ============================================================
+// Verso (26/05/2026)
+// effectiveBackSelected: cliente "tem" o verso?
+//   - has_back !== true → sempre false (loja não habilitou verso)
+//   - has_back === true && back_charge_enabled !== true → true
+//     (verso grátis, sempre ativo)
+//   - has_back === true && back_charge_enabled === true →
+//     respeita flag explícita (cliente decidiu)
+// ============================================================
+function effectiveBackSelected(
+  cfg: CustomizationConfig | null | undefined,
+  explicit: boolean | undefined
+): boolean {
+  if (!cfg || cfg.has_back !== true) return false;
+  if (cfg.back_charge_enabled !== true) return true;
+  return explicit === true;
+}
+
+// Soma o back_price_delta quando o verso é cobrado E o cliente marcou.
+function backDelta(
+  cfg: CustomizationConfig | null | undefined,
+  explicit: boolean | undefined
+): number {
+  if (!cfg || cfg.has_back !== true) return 0;
+  if (cfg.back_charge_enabled !== true) return 0;
+  if (explicit !== true) return 0;
+  const d = Number(cfg.back_price_delta);
+  return isFinite(d) ? d : 0;
+}
+
+// Preço efetivo = price + choices + verso. Sem qty.
 function lineUnitPrice(line: CartLine): number {
-  return Number(line.product.price) + choicesDelta(line.product.customization_config, line.values);
+  return (
+    Number(line.product.price) +
+    choicesDelta(line.product.customization_config, line.values) +
+    backDelta(line.product.customization_config, line.hasBackSelected)
+  );
 }
 
 function lineTotal(line: CartLine): number {
@@ -141,6 +187,12 @@ export default function StudioStorefrontPage() {
   const [editingValues, setEditingValues] = useState<Record<string, any>>({});
   const [editingQty, setEditingQty] = useState(1);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+
+  // 26/05/2026: cliente marcou "Adicionar verso" no configurador?
+  // Default false — só vira true quando back_charge_enabled e cliente
+  // ativa o switch; quando back_charge_enabled=false e has_back=true,
+  // o cálculo trata como true implicitamente via effectiveBackSelected.
+  const [editingAddBack, setEditingAddBack] = useState<boolean>(false);
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
@@ -188,11 +240,15 @@ export default function StudioStorefrontPage() {
     [cart]
   );
 
-  // Preço atual sendo configurado (com deltas live)
+  // Preço atual sendo configurado (com deltas live de choices + verso)
   const configuringUnitPrice = useMemo(() => {
     if (!activeProduct) return 0;
-    return Number(activeProduct.price) + choicesDelta(activeProduct.customization_config, editingValues);
-  }, [activeProduct, editingValues]);
+    return (
+      Number(activeProduct.price) +
+      choicesDelta(activeProduct.customization_config, editingValues) +
+      backDelta(activeProduct.customization_config, editingAddBack)
+    );
+  }, [activeProduct, editingValues, editingAddBack]);
 
   function openConfigure(product: StudioStoreProduct) {
     setActiveProduct(product);
@@ -208,6 +264,7 @@ export default function StudioStorefrontPage() {
     }
     setEditingValues(initial);
     setEditingQty(1);
+    setEditingAddBack(false);
     setStage("configure");
   }
 
@@ -216,34 +273,57 @@ export default function StudioStorefrontPage() {
     setEditingLineId(line.lineId);
     setEditingValues(line.values);
     setEditingQty(line.qty);
+    setEditingAddBack(line.hasBackSelected === true);
     setStage("configure");
   }
 
   function commitConfigure() {
     if (!activeProduct) return;
     const cfg = activeProduct.customization_config;
+    // Verso: se field é do verso E o verso não está ativo, ignora required
+    // (field não está visível, não pode bloquear). effectiveBackSelected
+    // trata os 3 casos (has_back=false / verso grátis / verso pago opt-in).
+    const backActive = effectiveBackSelected(cfg, editingAddBack);
     if (cfg?.fields) {
       for (const f of cfg.fields) {
-        if (f.required) {
-          const v = editingValues[f.id];
-          if (v == null || (typeof v === "string" && !v.trim())) {
-            setError(`Preencha "${f.label}"`);
-            return;
-          }
+        if (!f.required) continue;
+        const fieldSide = (f as any).side === "back" ? "back" : "front";
+        if (fieldSide === "back" && !backActive) continue;
+        const v = editingValues[f.id];
+        if (v == null || (typeof v === "string" && !v.trim())) {
+          setError(`Preencha "${f.label}"`);
+          return;
         }
       }
     }
     setError(null);
+    // Sanitiza: se cliente desligou o verso depois de preencher fields do
+    // verso, removemos as respostas correspondentes pra evitar confusao
+    // no backend e na exibicao da loja.
+    let valuesToCommit = editingValues;
+    if (cfg?.has_back === true && !backActive && cfg.fields) {
+      const cleaned: Record<string, any> = { ...editingValues };
+      for (const f of cfg.fields) {
+        if ((f as any).side === "back") delete cleaned[f.id];
+      }
+      valuesToCommit = cleaned;
+    }
     if (editingLineId) {
       setCart((prev) =>
-        prev.map((l) => (l.lineId === editingLineId ? { ...l, qty: editingQty, values: editingValues } : l))
+        prev.map((l) => (l.lineId === editingLineId
+          ? { ...l, qty: editingQty, values: valuesToCommit, hasBackSelected: editingAddBack }
+          : l))
       );
     } else {
       const lineId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7);
-      setCart((prev) => [...prev, { lineId, product: activeProduct, qty: editingQty, values: editingValues }]);
+      setCart((prev) => [...prev, {
+        lineId, product: activeProduct, qty: editingQty,
+        values: valuesToCommit, hasBackSelected: editingAddBack,
+      }]);
     }
     setActiveProduct(null);
     setEditingLineId(null);
+    setEditingAddBack(false);
     setStage("list");
   }
 
@@ -275,11 +355,31 @@ export default function StudioStorefrontPage() {
         delivery_type: deliveryType,
         payment_method: paymentMethod || undefined,
         notes: notes.trim() || null,
-        items: cart.map((l) => ({
-          product_id: l.product.id,
-          quantity: l.qty,
-          customization: l.values,
-        })),
+        items: cart.map((l) => {
+          const backActive = effectiveBackSelected(
+            l.product.customization_config,
+            l.hasBackSelected
+          );
+          // Strip respostas do verso quando o verso não está ativo —
+          // evita o backend gerar mockup com dados orfaos.
+          let valuesOut: Record<string, any> = l.values;
+          const cfg = l.product.customization_config;
+          if (cfg?.has_back === true && !backActive && cfg.fields) {
+            const cleaned: Record<string, any> = { ...l.values };
+            for (const f of cfg.fields) {
+              if ((f as any).side === "back") delete cleaned[f.id];
+            }
+            valuesOut = cleaned;
+          }
+          return {
+            product_id: l.product.id,
+            quantity: l.qty,
+            customization: {
+              ...valuesOut,
+              has_back_selected: backActive,
+            },
+          };
+        }),
         address_zip: addressZip.replace(/\D/g, "") || null,
         address_street: addressStreet.trim() || null,
         address_number: addressNumber.trim() || null,
@@ -519,16 +619,157 @@ export default function StudioStorefrontPage() {
             />
           </View>
 
-          {cfg?.fields?.map((f) => (
-            <FieldEditor
-              key={f.id}
-              field={f}
-              value={editingValues[f.id]}
-              templates={activeProduct.templates}
-              slug={slug}
-              onChange={(v) => setEditingValues((prev) => ({ ...prev, [f.id]: v }))}
-            />
-          ))}
+          {(() => {
+            const allFields = cfg?.fields || [];
+            const frontFields = allFields.filter(
+              (f) => ((f as any).side || "front") === "front"
+            );
+            const backFields = allFields.filter(
+              (f) => (f as any).side === "back"
+            );
+            const hasBack = cfg?.has_back === true;
+            const backCharge = cfg?.back_charge_enabled === true;
+            const backPrice = Number(cfg?.back_price_delta) || 0;
+            // Loja habilitou verso mas não criou nenhum field — não
+            // adianta mostrar a seção pro cliente, fica vazia.
+            const shouldRenderBack = hasBack && backFields.length > 0;
+            const showBackBody = shouldRenderBack && (!backCharge || editingAddBack);
+
+            const renderField = (f: CustomizationField) => (
+              <FieldEditor
+                key={f.id}
+                field={f}
+                value={editingValues[f.id]}
+                templates={activeProduct.templates}
+                slug={slug}
+                onChange={(v) => setEditingValues((prev) => ({ ...prev, [f.id]: v }))}
+              />
+            );
+
+            // Backwards-compat: sem verso, render flat (como antes).
+            if (!shouldRenderBack) {
+              return <>{allFields.map(renderField)}</>;
+            }
+
+            return (
+              <>
+                {/* Frente */}
+                <View style={{ gap: 4, marginTop: 4 }}>
+                  <Text
+                    style={{
+                      fontSize: 10.5, color: T.primary, fontWeight: "800",
+                      letterSpacing: 1, textTransform: "uppercase",
+                    }}
+                  >
+                    Frente
+                  </Text>
+                </View>
+                {frontFields.map(renderField)}
+
+                {/* Divisor "VERSO" */}
+                <View
+                  style={{
+                    marginTop: 18, marginBottom: 4,
+                    flexDirection: "row", alignItems: "center", gap: 10,
+                  }}
+                >
+                  <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+                  <View
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 6,
+                      paddingHorizontal: 10, paddingVertical: 4,
+                      borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: T.primary }}>↻</Text>
+                    <Text
+                      style={{
+                        fontSize: 10.5, color: T.primary, fontWeight: "800",
+                        letterSpacing: 1.2, textTransform: "uppercase",
+                      }}
+                    >
+                      Verso
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+                </View>
+
+                {/* Checkbox opt-in (só quando o verso é cobrado) */}
+                {backCharge ? (
+                  <Pressable
+                    onPress={() => {
+                      const next = !editingAddBack;
+                      setEditingAddBack(next);
+                      if (next && backPrice > 0) {
+                        console.log(
+                          "[storefront] verso adicionado: +R$ " + backPrice.toFixed(2)
+                        );
+                      }
+                    }}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 10,
+                      backgroundColor: T.card, borderRadius: 10, padding: 12,
+                      borderWidth: 1.5,
+                      borderColor: editingAddBack ? T.primary : T.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 22, height: 22, borderRadius: 6,
+                        borderWidth: 2,
+                        borderColor: editingAddBack ? T.primary : T.ink4,
+                        backgroundColor: editingAddBack ? T.primary : "transparent",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {editingAddBack && (
+                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>✓</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
+                        Personalizar também o verso
+                      </Text>
+                      {!editingAddBack && (
+                        <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                          Opcional · adiciona arte no lado de trás da peça
+                        </Text>
+                      )}
+                      {editingAddBack && backPrice > 0 && (
+                        <Text style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                          +R$ {backPrice.toFixed(2)} no total
+                        </Text>
+                      )}
+                    </View>
+                    {!editingAddBack && backPrice > 0 && (
+                      <View
+                        style={{
+                          paddingHorizontal: 8, paddingVertical: 4,
+                          borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)",
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>
+                          +R$ {backPrice.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 11, color: T.ink3, textAlign: "center",
+                      fontStyle: "italic", marginTop: -2,
+                    }}
+                  >
+                    Verso incluso · sem custo adicional
+                  </Text>
+                )}
+
+                {/* Body do verso (só quando ativo) */}
+                {showBackBody && backFields.map(renderField)}
+              </>
+            );
+          })()}
 
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 }}>
             <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>Quantidade</Text>
@@ -618,6 +859,19 @@ export default function StudioStorefrontPage() {
                       inclui R$ {(unit - Number(l.product.price)).toFixed(2)} por opções
                     </Text>
                   )}
+                  {effectiveBackSelected(l.product.customization_config, l.hasBackSelected) &&
+                    (Number(l.product.customization_config?.back_price_delta) || 0) > 0 && (
+                      <Text style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
+                        + verso (R$ {Number(l.product.customization_config?.back_price_delta || 0).toFixed(2)})
+                      </Text>
+                    )}
+                  {effectiveBackSelected(l.product.customization_config, l.hasBackSelected) &&
+                    (Number(l.product.customization_config?.back_price_delta) || 0) === 0 &&
+                    l.product.customization_config?.has_back === true && (
+                      <Text style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>
+                        com verso personalizado
+                      </Text>
+                    )}
                 </View>
                 <View style={{ gap: 6 }}>
                   <Pressable onPress={() => editCartLine(l)} style={editChip}>
