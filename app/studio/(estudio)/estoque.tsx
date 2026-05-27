@@ -104,7 +104,13 @@ export default function StudioEstoque() {
 
   // ── Loader ───────────────────────────────────────────────
   const load = useCallback(async () => {
-    if (!cid) return;
+    // Defensivo: cid vazio (auth hidratando) → liberar skeleton em vez de travar
+    // Bug 26/05/2026: setLoading inicial=true + early return SEM setLoading(false)
+    // = skeleton infinito quando user.company_id chega vazio na 1ª render
+    if (!cid) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const r = await request<any>(`/companies/${cid}/products?limit=500`, {
