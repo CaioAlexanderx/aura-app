@@ -13,7 +13,7 @@
 // 26/05 (URGENTE): adicionado item "Estoque" no grupo Estúdio
 // apontando pra /studio/estoque — necessário porque cliente Studio
 // não tem acesso ao /(tabs)/estoque (redirect do _layout).
-// Ícone "archive" pra diferenciar de Insumos ("package").
+// Ícone "box" pra diferenciar de Insumos ("package").
 //
 // 26/05 (FINAL Sprints 1-4): "Produtos" removido do nav — virou parte
 // integrada do /studio/estoque (tabs Básico/Personalização/Ficha/Templates).
@@ -118,7 +118,7 @@ const GROUPS: NavGroup[] = [
       // Pós Sprints 1-4 (26/05): "Produtos" foi absorvido pelo /studio/estoque.
       // O drawer da tela Estoque tem 4 tabs (Básico / Personalização / Ficha técnica / Templates),
       // unificando todo o fluxo de cadastro+config num lugar só.
-      { label: "Estoque",   icon: "archive",       href: "/studio/estoque" },
+      { label: "Estoque",   icon: "box",          href: "/studio/estoque" },
       { label: "Galeria",   icon: "image",         href: "/studio/galeria" },
       { label: "Produção",  icon: "clock",         href: "/studio/producao", badge: { value: "•", tone: "accent" } },
       { label: "Insumos",   icon: "package",       href: "/studio/insumos",  badge: { value: "!", tone: "warm" } },
