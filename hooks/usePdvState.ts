@@ -8,6 +8,11 @@
 // 14/05/2026: interceptação do crediário parcelado em
 // handleFinalize() — showCrediario + handleCrediarioConfirm.
 // handleOpenCrediario() — atalho direto via botão ActCrediario (F6).
+//
+// 26/05/2026 (crediario fase 1): handleCrediarioConfirm agora
+// recebe { installments, first_due_date } do modal e repassa
+// para finalizeSale(), que inclui os campos no POST /pdv/sale.
+// O backend cria as credit_installments inline (best-effort).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +35,7 @@ import { flyToCart } from "@/components/screens/pdv/flyToCart";
 import { IS_WEB, fmtCurrency } from "@/components/screens/pdv/types";
 import type { CartDisplayItem, PayChip } from "@/components/screens/pdv/CartPanel";
 import type { Product } from "@/components/screens/estoque/types";
+import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals";
 
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
@@ -342,10 +348,12 @@ export function usePdvState() {
     finalizeSale();
   }
 
-  // Parcelas criadas no backend — fecha modal e conclui o ciclo local.
-  function handleCrediarioConfirm() {
+  // Parcelas configuradas no modal — fecha e conclui a venda com os parâmetros.
+  // 26/05/2026 (fase 1): recebe payload do CreditInstallmentModal e passa
+  // para finalizeSale, que os inclui no body do POST /pdv/sale.
+  function handleCrediarioConfirm(payload: CrediarioConfirmPayload) {
     setShowCrediario(false);
-    finalizeSale();
+    finalizeSale(undefined, payload);
   }
 
   // Atalho direto do botão ActCrediario (F6) — não passa por handleFinalize.

@@ -9,6 +9,9 @@
 //   1. Adicione o estado e o handler em hooks/usePdvState.ts
 //   2. Acrescente o prop aqui em PdvModalsProps
 //   3. Renderize o modal dentro do Fragment abaixo
+//
+// 26/05/2026 (crediario fase 1): onCrediarioConfirm agora recebe
+// { installments, first_due_date } para repassar ao POST /pdv/sale.
 // ============================================================
 import { QuickCustomerModal } from "@/components/QuickCustomerModal";
 import { VariantPickerModal } from "@/components/VariantPickerModal";
@@ -17,6 +20,11 @@ import { OpenCloseCashModal } from "@/components/screens/pdv/OpenCloseCashModal"
 import { CashChangeModal } from "@/components/screens/pdv/CashChangeModal";
 import { CreditInstallmentModal } from "@/components/screens/pdv/CreditInstallmentModal";
 import type { Product } from "@/components/screens/estoque/types";
+
+export type CrediarioConfirmPayload = {
+  installments: number;
+  first_due_date: string;
+};
 
 export interface PdvModalsProps {
   // ── Cliente rápido
@@ -45,12 +53,12 @@ export interface PdvModalsProps {
   cashModalIsSplit: boolean;
   onCancelChange:   () => void;
   onConfirmChange:  () => void;
-  // ── Crediário parcelado (14/05/2026)
+  // ── Crediário parcelado (14/05/2026 criado; 26/05/2026 fase 1 refatorado)
   showCrediario:      boolean;
   customerId:         string | null;
   customerName:       string | null;
   saleTotal:          number;
-  onCrediarioConfirm: () => void;
+  onCrediarioConfirm: (payload: CrediarioConfirmPayload) => void;
   onCrediarioClose:   () => void;
 }
 

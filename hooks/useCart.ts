@@ -102,6 +102,9 @@ export function useCart() {
       qc.invalidateQueries({ queryKey: ["employees", companyId] });
       // Crediário: invalida saldos pra UI de /clientes refletir o novo debit.
       qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
+      // Fase 1: invalida credit-installments pra dashboard de inadimplência
+      qc.invalidateQueries({ queryKey: ["credit-installments", companyId] });
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId] });
     },
   });
 
@@ -246,7 +249,17 @@ export function useCart() {
   function clearCoupon() { setCouponCode(""); setCouponApplied(null); }
   function clearDiscount() { setDiscountValue(""); }
 
-  function finalizeSale(saleDate?: string) {
+  /**
+   * finalizeSale
+   * @param saleDate  - data retroativa opcional (YYYY-MM-DD)
+   * @param crediario - parâmetros de parcelamento quando payment=crediario e installments>1.
+   *                    Passados diretamente no body do POST /pdv/sale para o backend
+   *                    criar as credit_installments inline (fase 1 crediário, 26/05/2026).
+   */
+  function finalizeSale(
+    saleDate?: string,
+    crediario?: { installments: number; first_due_date: string },
+  ) {
     if (cart.length === 0 || isProcessing) return;
     // Bloqueio só quando split está ativo e não fecha
     if (splitMode && !splitIsBalanced) {
@@ -295,6 +308,13 @@ export function useCart() {
       } else {
         saleData.discount_amount = manualDiscountAmount;
       }
+    }
+
+    // Crediário parcelado fase 1: adiciona installments no body da venda.
+    // O backend cria as credit_installments inline após o COMMIT da venda.
+    if (crediario && crediario.installments > 1 && primaryPayment === "crediario") {
+      saleData.installments = crediario.installments;
+      saleData.first_due_date = crediario.first_due_date;
     }
 
     function buildLastSale(saleId: string): SaleResult {
