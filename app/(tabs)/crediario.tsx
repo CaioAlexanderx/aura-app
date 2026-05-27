@@ -177,7 +177,13 @@ export default function CrediarioScreen() {
                   ? Math.max(0, Math.floor((Date.now() - new Date(d.oldest_due_date).getTime()) / 86400000))
                   : 0;
                 return (
-                  <View key={d.customer_id} style={s.debtorRow}>
+                  <Pressable
+                    key={d.customer_id}
+                    style={s.debtorRow}
+                    onPress={() =>
+                      router.push(`/crediario/cliente/${d.customer_id}?name=${encodeURIComponent(d.customer_name)}` as any)
+                    }
+                  >
                     <View style={s.debtorLeft}>
                       <Text style={s.debtorName} numberOfLines={1}>{d.customer_name}</Text>
                       <View style={s.debtorMeta}>
@@ -195,24 +201,9 @@ export default function CrediarioScreen() {
                     </View>
                     <View style={s.debtorRight}>
                       <Text style={s.debtorAmount}>{fmt(d.total_overdue)}</Text>
-                      {d.phone && (
-                        <Pressable
-                          onPress={() => {
-                            setTriggeringId(d.customer_id);
-                            toast.info("Acesse o cliente para disparar cobrança individual.");
-                            setTriggeringId(null);
-                          }}
-                          style={s.triggerBtn}
-                          disabled={isTrig}
-                        >
-                          {isTrig
-                            ? <ActivityIndicator size="small" color={Colors.violet3} />
-                            : <Icon name="message" size={13} color={Colors.violet3} />
-                          }
-                        </Pressable>
-                      )}
+                      <Icon name="chevron_right" size={14} color={Colors.ink3} />
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
