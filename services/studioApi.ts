@@ -15,6 +15,9 @@
 // has_back, back_print_area, back_charge_enabled, back_price_delta +
 // adiciona campo opcional `side` em CustomizationField pra agrupar
 // fields entre frente/verso no admin e no storefront público.
+//
+// 26/05/2026 (Painel): adiciona PainelData + getPainel pro novo home
+// /studio (substitui home antiga). Backend: GET /studio/painel?days=N.
 // ============================================================
 import { request } from "./api";
 
@@ -238,6 +241,62 @@ export type StudioSlaEstimate = {
   requested_products: number;
 };
 
+// ─── Painel (26/05) — Home dashboard ──────────────────────────
+//
+// GET /studio/painel?days=N retorna 4 blocos:
+//   - kpis: 3 KPIs principais (vendas dia, ticket medio, lucro mes) com delta_pct
+//   - faturamento_serie: array de N pontos (label + value); ultimo ponto is_today
+//   - top_produtos: top 5 produtos por receita no periodo
+//   - funil_aprovacao: estagios pendente/aprovado/alterado/expirado + sumario
+//
+// Campos podem ser undefined/null se o backend ainda nao popular tudo
+// (ex: cliente novo sem vendas). Tela degrada graciosamente.
+export type PainelKpi = {
+  value: number;
+  delta_pct: number | null;
+  sub_label: string | null;
+};
+
+export type PainelSeriePoint = {
+  label: string;       // ex "Qua", "26/05"
+  value: number;       // R$
+  is_today?: boolean;
+};
+
+export type PainelTopProduto = {
+  product_id: string | null;
+  name: string;
+  revenue: number;
+  qty: number;
+};
+
+export type PainelFunilStage = {
+  count: number;
+  pct: number;         // 0-100
+};
+
+export type PainelData = {
+  period_days: number;
+  computed_at: string;
+  kpis: {
+    vendas_dia: PainelKpi;
+    ticket_medio: PainelKpi;
+    lucro_bruto_mes: PainelKpi;
+  };
+  faturamento_serie: PainelSeriePoint[];
+  faturamento_total: number;
+  top_produtos: PainelTopProduto[];
+  funil_aprovacao: {
+    pendentes: PainelFunilStage;
+    aprovados: PainelFunilStage;
+    alteracoes: PainelFunilStage;
+    expirados: PainelFunilStage;
+    total_enviados: number;
+    aprovacao_primeira_pct: number | null;
+    tempo_medio_resposta_min: number | null;
+  };
+};
+
 // ─── Marketplaces S-1 (25/05) — Listing Preview ──────────────
 export type MarketplacePlatform = "mercado_livre" | "shopee";
 
@@ -374,6 +433,14 @@ export const studioApi = {
     const qs = productIds && productIds.length ? "?products=" + productIds.join(",") : "";
     return request<StudioSlaEstimate>(base(cid) + "/sla/estimate" + qs, { method: "GET", retry: 1, timeout: 5000 });
   },
+
+  // ── Painel (26/05) — home /studio ─────────────────────────
+  // days = 1 (hoje) | 7 (7 dias) | 30 (30 dias)
+  // Retorna 4 blocos: kpis + faturamento_serie + top_produtos + funil_aprovacao.
+  // Fala-falha: se /studio/painel ainda não existe no backend, request lança
+  // erro com status — index.tsx trata via toast + UI degradada com zeros.
+  getPainel: (cid: string, days = 7) =>
+    request<PainelData>(base(cid) + "/painel?days=" + days, { method: "GET", retry: 1, timeout: 10000 }),
 
   // ── Marketplaces S-1 — Preview + handling_days ──
   getMarketplaceListingPreview: (cid: string, pid: string, platform: MarketplacePlatform = "mercado_livre") =>
