@@ -85,8 +85,11 @@ export default function StudioEstoque() {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
 
-  const { user } = useAuthStore();
-  const cid = String(user?.company_id || "");
+  // 27/05/2026: alinhar com caixa.tsx + StudioShell + configuracoes — auth.company.id
+  // (não user.company_id, que está undefined em algumas contas Studio que loga
+  // via member em vez de owner direto). PDV funcionava porque já usava esse padrão.
+  const auth = useAuthStore();
+  const cid = ((auth.company as any)?.id as string | undefined) || "";
 
   const { config: dcConfig } = useDigitalChannel();
 
