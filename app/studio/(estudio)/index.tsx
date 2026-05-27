@@ -12,6 +12,12 @@
 //
 // Backend: GET /studio/painel?days=N (rota nova, paralela). Falha
 // gracioso com toast + UI degradada quando 4xx/5xx.
+//
+// 26/05/2026 (Painel v2): KPI "Lucro Bruto . mes" virou
+// "Lucro Liquido . mes" (Receita - Despesa, fonte transactions).
+// Sub-label espelha Receita / Despesa em pt-BR. Faixa colorida do
+// card vira danger quando value < 0 (prejuizo) e o valor aparece
+// com sinal "-" em cor danger. Acompanha refactor do backend.
 // ============================================================
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
@@ -88,7 +94,9 @@ function formatBRLCompact(v: number | null | undefined): string {
   return formatBRL(v, 0);
 }
 
-// Quebra "R$ 1.842,50" em parte inteira + decimais para estilizar
+// Quebra "R$ 1.842,50" em parte inteira + decimais para estilizar.
+// Quando value < 0, formatBRL devolve "-R$ 1.842,50" (locale pt-BR usa
+// hifen ASCII como sinal); preservamos o sinal no main.
 function splitBRL(v: number): { main: string; decimals: string } {
   const s = formatBRL(v, 2);
   const idx = s.lastIndexOf(",");
@@ -100,9 +108,9 @@ const EMPTY_PAINEL: PainelData = {
   period_days: 7,
   computed_at: "",
   kpis: {
-    vendas_dia:      { value: 0, delta_pct: null, sub_label: null },
-    ticket_medio:    { value: 0, delta_pct: null, sub_label: null },
-    lucro_bruto_mes: { value: 0, delta_pct: null, sub_label: null },
+    vendas_dia:        { value: 0, delta_pct: null, sub_label: null },
+    ticket_medio:      { value: 0, delta_pct: null, sub_label: null },
+    lucro_liquido_mes: { value: 0, receita_mes: 0, despesa_mes: 0, margem_pct: null, delta_pct: null },
   },
   faturamento_serie: [],
   faturamento_total: 0,
@@ -264,7 +272,16 @@ export default function StudioPainel() {
   const d = painel || EMPTY_PAINEL;
   const kpiVendas = d.kpis.vendas_dia;
   const kpiTicket = d.kpis.ticket_medio;
-  const kpiLucro  = d.kpis.lucro_bruto_mes;
+  const kpiLucro  = d.kpis.lucro_liquido_mes;
+
+  // Sub-label do card de Lucro: "Receita R$ X . Despesa R$ Y"
+  // (formatado pt-BR, sem decimais pra ficar compacto).
+  const lucroSubLabel =
+    "Receita " + formatBRL(kpiLucro.receita_mes, 0) +
+    " . Despesa " + formatBRL(kpiLucro.despesa_mes, 0);
+
+  // Prejuizo no mes: faixa danger + valor em vermelho
+  const isLoss = kpiLucro.value < 0;
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container}>
@@ -372,12 +389,13 @@ export default function StudioPainel() {
             />
             <KpiCard
               t={t}
-              variant="success"
-              label="Lucro bruto . mes"
+              variant={isLoss ? "danger" : "success"}
+              label="Lucro Liquido . mes"
               value={kpiLucro.value}
               format="currency"
               deltaPct={kpiLucro.delta_pct}
-              subLabel={kpiLucro.sub_label || "Margem operacional"}
+              subLabel={lucroSubLabel}
+              valueIsNegative={isLoss}
             />
           </View>
 
@@ -435,21 +453,25 @@ export default function StudioPainel() {
 }
 
 // ═══════ KPI Card ═══════════════════════════════════════════════
+// variant "danger" foi adicionado pra cobrir prejuizo no card de Lucro.
+// Quando valueIsNegative, o valor numerico recebe a cor danger.
 function KpiCard({
-  t, variant, label, value, format, deltaPct, subLabel,
+  t, variant, label, value, format, deltaPct, subLabel, valueIsNegative,
 }: {
   t: StudioPalette;
-  variant: "primary" | "accent" | "success";
+  variant: "primary" | "accent" | "success" | "danger";
   label: string;
   value: number;
   format: "currency" | "integer";
   deltaPct: number | null;
   subLabel: string | null;
+  valueIsNegative?: boolean;
 }) {
   const s = useMemo(() => buildKpiStyles(t), [t]);
   const stripeColors: readonly string[] =
     variant === "primary" ? ["#1E3A8A", "#3B82F6"] :
     variant === "accent"  ? ["#EC4899", "#F472B6"] :
+    variant === "danger"  ? ["#DC2626", "#F87171"] :
                             ["#10B981", "#34D399"];
 
   const split = format === "currency" ? splitBRL(value) : { main: String(Math.round(value)), decimals: "" };
@@ -467,9 +489,9 @@ function KpiCard({
       />
       <Text style={s.label}>{label}</Text>
       <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" }}>
-        <Text style={s.value}>{split.main}</Text>
+        <Text style={[s.value, valueIsNegative && s.valueNegative]}>{split.main}</Text>
         {split.decimals ? (
-          <Text style={s.valueDecimals}>{split.decimals}</Text>
+          <Text style={[s.valueDecimals, valueIsNegative && s.valueDecimalsNegative]}>{split.decimals}</Text>
         ) : null}
       </View>
       {showDelta && (
@@ -516,11 +538,13 @@ function buildKpiStyles(t: StudioPalette) {
       letterSpacing: -0.5,
       lineHeight: 30,
     },
+    valueNegative: { color: t.dangerInk },
     valueDecimals: {
       fontSize: 18,
       color: t.ink3,
       fontWeight: "700",
     },
+    valueDecimalsNegative: { color: t.dangerInk },
     deltaPill: {
       marginTop: 6,
       alignSelf: "flex-start",
