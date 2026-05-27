@@ -18,6 +18,11 @@
 //
 // 26/05/2026 (Painel): adiciona PainelData + getPainel pro novo home
 // /studio (substitui home antiga). Backend: GET /studio/painel?days=N.
+//
+// 26/05/2026 (Painel v2): KPI de lucro vira "lucro_liquido_mes"
+// (Receita - Despesa do mês, fonte transactions) substituindo o antigo
+// "lucro_bruto_mes" (Receita - custo de insumos). Acompanha refactor do
+// backend; novo campo despesa_mes, removido custo_insumos.
 // ============================================================
 import { request } from "./api";
 
@@ -244,7 +249,7 @@ export type StudioSlaEstimate = {
 // ─── Painel (26/05) — Home dashboard ──────────────────────────
 //
 // GET /studio/painel?days=N retorna 4 blocos:
-//   - kpis: 3 KPIs principais (vendas dia, ticket medio, lucro mes) com delta_pct
+//   - kpis: 3 KPIs principais (vendas dia, ticket medio, lucro liquido mes) com delta_pct
 //   - faturamento_serie: array de N pontos (label + value); ultimo ponto is_today
 //   - top_produtos: top 5 produtos por receita no periodo
 //   - funil_aprovacao: estagios pendente/aprovado/alterado/expirado + sumario
@@ -255,6 +260,17 @@ export type PainelKpi = {
   value: number;
   delta_pct: number | null;
   sub_label: string | null;
+};
+
+// Lucro Liquido do mes (Receita - Despesa) — fonte transactions.
+// Substitui o antigo lucro_bruto_mes (Receita - custo de insumos).
+// value pode ser NEGATIVO (prejuizo); UI renderiza com cor danger.
+export type PainelLucroLiquidoKpi = {
+  value: number;              // Receita - Despesa (pode ser negativo)
+  receita_mes: number;
+  despesa_mes: number;
+  margem_pct: number | null;  // value / receita_mes * 100, null se receita=0
+  delta_pct: number | null;   // delta vs mes anterior
 };
 
 export type PainelSeriePoint = {
@@ -281,7 +297,7 @@ export type PainelData = {
   kpis: {
     vendas_dia: PainelKpi;
     ticket_medio: PainelKpi;
-    lucro_bruto_mes: PainelKpi;
+    lucro_liquido_mes: PainelLucroLiquidoKpi;
   };
   faturamento_serie: PainelSeriePoint[];
   faturamento_total: number;
