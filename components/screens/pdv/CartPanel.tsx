@@ -494,6 +494,16 @@ function SplitRow({
 // Linha 1: [avatar] [nome flex:1]                  [total] [trash]
 // Linha 2:          [R$ unit ✏]    spacer    [- qty +]
 // Avatar ocupa só linha 1; linha 2 alinha à esquerda do nome (indent).
+function parseCurrencyInput(raw: string): number | null {
+  const sanitized = raw.replace(/[^\d,.]/g, "");
+  const normalized = sanitized.includes(",")
+    ? sanitized.replace(/\./g, "").replace(",", ".")
+    : sanitized;
+  if (!normalized) return null;
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange,
 }: {
@@ -535,15 +545,24 @@ function CartItem({
     setPriceBuf(item.price.toFixed(2).replace(".", ","));
   }
 
+  function commitPriceBuffer(buf: string | null) {
+    if (buf === null || !onPriceChange) return;
+    const n = parseCurrencyInput(buf);
+    if (n !== null && n !== item.price) onPriceChange(n);
+  }
+
+  function handlePriceChangeText(v: string) {
+    const next = v.replace(/[^\d,.]/g, "");
+    setPriceBuf(next);
+    // Atualiza o carrinho enquanto o caixa digita. Assim, se ele clicar em
+    // "Finalizar" sem sair do campo, o POST /pdv/sale e a NFC-e já usam o
+    // valor editado em vez do preço original do estoque.
+    commitPriceBuffer(next);
+  }
+
   function handlePriceCommit() {
-    if (priceBuf !== null && onPriceChange) {
-      const cleaned = priceBuf.replace(",", ".").replace(/[^\d.]/g, "");
-      const n = parseFloat(cleaned);
-      if (!isNaN(n) && n >= 0 && n !== item.price) {
-        onPriceChange(n);
-      }
-    }
-    setPriceBuf(null);
+  commitPriceBuffer(priceBuf);
+  setPriceBuf(null);
   }
 
   function handleDeletePress() {
@@ -603,7 +622,7 @@ function CartItem({
             <TextInput
               style={s.priceEditInput}
               value={priceBuf!}
-              onChangeText={(v) => setPriceBuf(v.replace(/[^\d,.]/g, ""))}
+              onChangeText={handlePriceChangeText}
               onBlur={handlePriceCommit}
               onSubmitEditing={handlePriceCommit}
               keyboardType="decimal-pad"
