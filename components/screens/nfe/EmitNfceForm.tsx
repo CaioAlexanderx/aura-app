@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
@@ -81,7 +81,7 @@ function normalizePaymentMethod(pm: string | null | undefined): string {
     } catch { /* swallow */ }
     return "dinheiro";
   }
-  // Valida contra a lista exposta no form; ‘crediario’ não aparece nos chips,
+  // Valida contra a lista exposta no form; 'crediario' não aparece nos chips,
   // então cai pra dinheiro (que é o tPag SEFAZ correspondente).
   const known = new Set(PAGAMENTOS.map(p => p.key));
   return known.has(trimmed) ? trimmed : "dinheiro";
@@ -400,7 +400,6 @@ export function EmitNfceForm({
   );
 }
 
-import { StyleSheet } from "react-native";
 const styles = StyleSheet.create({
   reemitBanner: {
     backgroundColor: Colors.violetD,
