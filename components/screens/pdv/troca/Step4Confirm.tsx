@@ -12,6 +12,14 @@
 // 29/05/2026 (fase2):
 //   - Card fiscal exibe label correto para todos os 4 estados
 //     (cancel_reissue / devolucao_55 / per_origin / none).
+//
+// 29/05/2026 (fase3):
+//   - Toggle "Pagamento avancado" / "Estorno avancado" no bloco de
+//     metodo de pagamento, que abre PaymentSplitForm / RefundSplitForm
+//     (SplitForm.tsx) para split multi-metodo.
+//   - Chip simples permanece como caminho padrao (auto-preenche 100%
+//     do valor em um unico split). Toggle avancado habilita edicao
+//     granular de splits.
 // ============================================================
 import { useState, useMemo } from "react";
 import {
@@ -19,6 +27,7 @@ import {
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { PaymentSplitForm, RefundSplitForm } from "./SplitForm";
 import type {
   SelectedSaleRow, ReturnEntry, NewEntry,
   PaymentSplit, RefundSplit, CustomerAddress, FiscalStrategy,
@@ -190,11 +199,32 @@ export function Step4Confirm({
   const selectedPayMethod = paymentSplits[0]?.method || null;
   const selectedRefundMethod = refundSplits[0]?.method || null;
 
+  // Toggle modo avancado (split multi-metodo)
+  const [showPaySplit, setShowPaySplit] = useState(false);
+  const [showRefundSplit, setShowRefundSplit] = useState(false);
+
   function pickPay(method: PaymentMethod) {
+    // Chip simples: substitui splits por um unico com valor total.
     onChangePaymentSplits([{ method, amount: parseFloat(netAmount.toFixed(2)) }]);
   }
   function pickRefund(method: RefundMethod) {
     onChangeRefundSplits([{ method, amount: parseFloat(Math.abs(netAmount).toFixed(2)) }]);
+  }
+
+  // Ao ativar modo avancado: preserva selecao simples existente como
+  // ponto de partida (ja tem amount correto se chip foi tocado antes).
+  function togglePaySplit() {
+    if (!showPaySplit && paymentSplits.length === 0) {
+      // Nenhuma selecao ainda — inicializa com pix pelo valor total.
+      onChangePaymentSplits([{ method: "pix", amount: parseFloat(netAmount.toFixed(2)) }]);
+    }
+    setShowPaySplit((v) => !v);
+  }
+  function toggleRefundSplit() {
+    if (!showRefundSplit && refundSplits.length === 0) {
+      onChangeRefundSplits([{ method: "pix", amount: parseFloat(Math.abs(netAmount).toFixed(2)) }]);
+    }
+    setShowRefundSplit((v) => !v);
   }
 
   const [showNfeDetails, setShowNfeDetails] = useState(false);
@@ -230,42 +260,85 @@ export function Step4Confirm({
 
         {netAmount > 0 && (
           <View style={s.payBlock}>
-            <Text style={s.payLabel}>Como o cliente vai pagar?</Text>
-            <View style={s.chips}>
-              {PAY_METHODS.map((m) => {
-                const sel = selectedPayMethod === m.id;
-                return (
-                  <Pressable
-                    key={m.id}
-                    onPress={() => pickPay(m.id)}
-                    style={[s.chip, sel && s.chipSel]}
-                  >
-                    <Icon name={m.icon as any} size={14} color={sel ? "#fff" : "#a78bfa"} />
-                    <Text style={[s.chipTxt, sel && { color: "#fff" }]}>{m.label}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={s.payLabelRow}>
+              <Text style={s.payLabel}>Como o cliente vai pagar?</Text>
+              <Pressable onPress={togglePaySplit} style={s.advancedToggle}>
+                <Icon name={showPaySplit ? "chevron-up" : "sliders"} size={12} color="#a78bfa" />
+                <Text style={s.advancedToggleTxt}>
+                  {showPaySplit ? "Simples" : "Pagamento avancado"}
+                </Text>
+              </Pressable>
             </View>
+
+            {!showPaySplit && (
+              <View style={s.chips}>
+                {PAY_METHODS.map((m) => {
+                  const sel = selectedPayMethod === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      onPress={() => pickPay(m.id)}
+                      style={[s.chip, sel && s.chipSel]}
+                    >
+                      <Icon name={m.icon as any} size={14} color={sel ? "#fff" : "#a78bfa"} />
+                      <Text style={[s.chipTxt, sel && { color: "#fff" }]}>{m.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {showPaySplit && (
+              <View style={s.splitWrap}>
+                <PaymentSplitForm
+                  splits={paymentSplits}
+                  onChange={onChangePaymentSplits}
+                  target={parseFloat(netAmount.toFixed(2))}
+                />
+              </View>
+            )}
           </View>
         )}
+
         {netAmount < 0 && (
           <View style={s.payBlock}>
-            <Text style={s.payLabel}>Como devolver o valor ao cliente?</Text>
-            <View style={s.chips}>
-              {REFUND_METHODS.map((m) => {
-                const sel = selectedRefundMethod === m.id;
-                return (
-                  <Pressable
-                    key={m.id}
-                    onPress={() => pickRefund(m.id)}
-                    style={[s.chip, sel && s.chipSel]}
-                  >
-                    <Icon name={m.icon as any} size={14} color={sel ? "#fff" : "#a78bfa"} />
-                    <Text style={[s.chipTxt, sel && { color: "#fff" }]}>{m.label}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={s.payLabelRow}>
+              <Text style={s.payLabel}>Como devolver o valor ao cliente?</Text>
+              <Pressable onPress={toggleRefundSplit} style={s.advancedToggle}>
+                <Icon name={showRefundSplit ? "chevron-up" : "sliders"} size={12} color="#a78bfa" />
+                <Text style={s.advancedToggleTxt}>
+                  {showRefundSplit ? "Simples" : "Estorno avancado"}
+                </Text>
+              </Pressable>
             </View>
+
+            {!showRefundSplit && (
+              <View style={s.chips}>
+                {REFUND_METHODS.map((m) => {
+                  const sel = selectedRefundMethod === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      onPress={() => pickRefund(m.id)}
+                      style={[s.chip, sel && s.chipSel]}
+                    >
+                      <Icon name={m.icon as any} size={14} color={sel ? "#fff" : "#a78bfa"} />
+                      <Text style={[s.chipTxt, sel && { color: "#fff" }]}>{m.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {showRefundSplit && (
+              <View style={s.splitWrap}>
+                <RefundSplitForm
+                  splits={refundSplits}
+                  onChange={onChangeRefundSplits}
+                  target={parseFloat(Math.abs(netAmount).toFixed(2))}
+                />
+              </View>
+            )}
           </View>
         )}
 
@@ -421,7 +494,23 @@ const s = StyleSheet.create({
   bigAmountValue: { fontSize: 34, fontWeight: "800", letterSpacing: -0.6, marginTop: 4 },
   bigAmountSub: { color: Colors.ink3, fontSize: 12, marginTop: 4 },
   payBlock: { marginTop: 16 },
-  payLabel: { color: Colors.ink, fontSize: 13.5, fontWeight: "700", marginBottom: 10 },
+  payLabelRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 10,
+  },
+  payLabel: { color: Colors.ink, fontSize: 13.5, fontWeight: "700" },
+  advancedToggle: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(124,58,237,0.08)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+  },
+  advancedToggleTxt: { color: "#a78bfa", fontSize: 11.5, fontWeight: "700" },
+  splitWrap: {
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.18)",
+    borderRadius: 12, padding: 14, marginTop: 4,
+  },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     flexDirection: "row", alignItems: "center", gap: 7,
