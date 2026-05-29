@@ -207,6 +207,9 @@ export type ConsolidatedSalesListItem = {
   discount_amount: number;
   payment_method: string | null;
   status: "completed" | "cancelled";
+  // 29/05/2026: 'sale' | 'troca'. /me/sales expoe type pra UI consolidada
+  // marcar "Troca" (mesmo do per-company). useSalesList repassa direto.
+  type?: "sale" | "troca" | string;
   cancelled_at: string | null;
   created_at: string;
   customer: { id: string; name: string } | null;
