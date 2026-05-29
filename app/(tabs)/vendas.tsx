@@ -35,6 +35,10 @@ import type { SalesListItem, SalesFilters } from "@/services/api";
 // Date.UTC(y,m,d,3,0,0) para calcular meia-noite SP corretamente
 // independente do fuso do navegador (bug: vendas do dia anterior
 // apareciam na listagem do dia seguinte quando browser em UTC).
+//
+// 29/05/2026: badge "Troca" nas linhas com type='troca'. A troca sempre
+// apareceu na listagem (backend nao filtra type), mas sem rotulo parecia
+// venda normal. O valor exibido na troca e o "levado" (newValue).
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
@@ -350,6 +354,7 @@ export default function VendasScreen() {
         <View style={s.listWrap}>
           {sales.map(function(sale: SaleListRow) {
             const isCancelled = sale.status === "cancelled";
+            const isTroca = sale.type === "troca";
             return (
               <Pressable
                 key={sale.id}
@@ -365,6 +370,12 @@ export default function VendasScreen() {
                     {sale.customer?.name || "Sem cliente"}
                   </Text>
                   <View style={s.rowMetaRow}>
+                    {isTroca && (
+                      <View style={s.rowTrocaPill}>
+                        <Icon name="repeat" size={9} color="#fb923c" />
+                        <Text style={s.rowTrocaPillText}>Troca</Text>
+                      </View>
+                    )}
                     {sale.seller?.name && (
                       <View style={s.rowMetaPill}>
                         <Icon name="user_plus" size={9} color={Colors.ink3} />
@@ -390,7 +401,7 @@ export default function VendasScreen() {
                   </View>
                 </View>
                 <View style={s.rowRight}>
-                  <Text style={[s.rowAmount, isCancelled && s.rowAmountStrike]}>
+                  <Text style={[s.rowAmount, isCancelled && s.rowAmountStrike, isTroca && { color: "#fb923c" }]}>
                     {fmt(sale.total_amount)}
                   </Text>
                   {isCancelled && (
@@ -516,6 +527,9 @@ const s = StyleSheet.create({
   rowMetaRow: { flexDirection: "row", gap: 4, flexWrap: "wrap" },
   rowMetaPill: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: Colors.bg4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   rowMetaPillText: { fontSize: 9.5, color: Colors.ink3, fontWeight: "500" },
+  // 29/05/2026: pill "Troca" (laranja) pra distinguir trocas das vendas normais
+  rowTrocaPill: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(251,146,60,0.15)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: "rgba(251,146,60,0.4)" },
+  rowTrocaPillText: { fontSize: 9.5, color: "#fb923c", fontWeight: "700", letterSpacing: 0.3 },
   // MULTICNPJ Onda 2.4: pill da loja (violeta pra destacar)
   rowCompanyPill: { backgroundColor: Colors.violetD, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 140 },
   rowCompanyPillText: { fontSize: 9.5, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.2 },

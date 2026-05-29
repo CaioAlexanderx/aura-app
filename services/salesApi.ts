@@ -44,6 +44,9 @@ export type SalesListItem = {
   discount_amount: number;
   payment_method: string | null;
   status: SaleStatus;
+  // 29/05/2026: 'sale' | 'troca'. Backend GET /sales expoe o type pra UI
+  // marcar a linha como "Troca" (a troca sempre apareceu na listagem).
+  type?: "sale" | "troca" | string;
   cancelled_at?: string | null;
   created_at: string;
   customer: { id: string; name: string } | null;

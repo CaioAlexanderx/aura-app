@@ -21,6 +21,11 @@
 //     BASE_URL de services/api.ts. Antes retornava "" quando
 //     EXPO_PUBLIC_API_URL nao estava no bundle web, gerando URL relativa
 //     que o Expo Router tratava como rota interna -> "Unmatched Route".
+// 29/05/2026 (DANFE autenticado):
+//   - openDanfe agora baixa o PDF via fetch com Authorization + blob e
+//     abre em nova aba. A rota /print/danfe/devolucao/:saleId exige auth;
+//     window.open direto nao manda o Bearer -> 401. Mesmo padrao do
+//     NfceActions (openPrintNfceTermica).
 // ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
@@ -158,13 +163,32 @@ export function Step5Success({
     }
   }
 
-  function openDanfe() {
+  // 29/05/2026: DANFE da NF-e 55 de devolucao. A rota exige auth, entao
+  // baixamos via fetch com Authorization + blob e abrimos em nova aba
+  // (mesmo padrao do NfceActions). window.open direto -> 401.
+  async function openDanfe() {
     if (!trocaSaleId) return;
     const url = `${getApiBase()}/companies/${fiscalCompanyId}/print/danfe/devolucao/${trocaSaleId}`;
-    if (Platform.OS === "web") {
-      window.open(url, "_blank");
-    } else {
-      Linking.openURL(url).catch(() => {});
+    try {
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!resp.ok) {
+        let msg = "Nao foi possivel gerar o DANFE da devolucao.";
+        try {
+          const j = await resp.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        if (Platform.OS === "web") window.alert(msg);
+        return;
+      }
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      if (Platform.OS === "web") {
+        window.open(blobUrl, "_blank");
+      } else {
+        Linking.openURL(blobUrl).catch(() => {});
+      }
+    } catch {
+      if (Platform.OS === "web") window.alert("Erro ao baixar o DANFE da devolucao.");
     }
   }
 
