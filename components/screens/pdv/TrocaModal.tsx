@@ -69,6 +69,7 @@ export function TrocaModal({
   const [customerAddress, setCustomerAddress] = useState<CustomerAddress>(EMPTY_ADDRESS);
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const returnedValue = useMemo(
     () => returnEntries.reduce((s, e) => s + e.returnQty * Number(e.item.unit_price), 0),
@@ -94,6 +95,7 @@ export function TrocaModal({
       setCustomerAddress(EMPTY_ADDRESS);
       setSuccessResult(null);
       setSubmitting(false);
+      setShowExitConfirm(false);
     }
   }, [visible]);
 
@@ -229,6 +231,16 @@ export function TrocaModal({
     }
   }
 
+  // Troca em andamento = ha selecao/itens e ainda nao concluiu (step < 5).
+  // Fechar nesse estado pede confirmacao pra nao perder o trabalho.
+  const hasProgress =
+    step < 5 &&
+    (selectedSales.length > 0 || returnEntries.length > 0 || newEntries.length > 0);
+  const requestClose = () => {
+    if (hasProgress) setShowExitConfirm(true);
+    else onClose();
+  };
+
   if (!visible) return null;
 
   const panelWeb = webOnly({
@@ -260,7 +272,7 @@ export function TrocaModal({
 
   return (
     <View style={s.overlay}>
-      <Pressable style={s.backdrop} onPress={step === 5 ? undefined : onClose} />
+      <Pressable style={s.backdrop} onPress={step === 5 ? undefined : requestClose} />
       <View style={[s.panel, IS_WEB ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]}>
 
         <View style={s.header}>
@@ -281,7 +293,7 @@ export function TrocaModal({
               </Text>
             </View>
           </View>
-          <Pressable onPress={onClose} style={s.closeBtn}>
+          <Pressable onPress={requestClose} style={s.closeBtn}>
             <Icon name="x" size={16} color={Colors.ink3} />
           </Pressable>
         </View>
@@ -422,6 +434,29 @@ export function TrocaModal({
         )}
 
       </View>
+
+      {showExitConfirm && (
+        <View style={s.exitOverlay}>
+          <View style={s.exitCard}>
+            <Text style={s.exitTitle}>Descartar esta troca?</Text>
+            <Text style={s.exitMsg}>
+              Voce tem uma troca em andamento. Se sair agora, os itens
+              selecionados serao perdidos.
+            </Text>
+            <View style={s.exitActions}>
+              <Pressable style={s.exitStay} onPress={() => setShowExitConfirm(false)}>
+                <Text style={s.exitStayTxt}>Continuar troca</Text>
+              </Pressable>
+              <Pressable
+                style={s.exitLeave}
+                onPress={() => { setShowExitConfirm(false); onClose(); }}
+              >
+                <Text style={s.exitLeaveTxt}>Descartar e sair</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -511,6 +546,33 @@ const s = StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 16, borderRadius: 10,
   },
   btnSecTxt: { color: Colors.ink, fontSize: 13, fontWeight: "500" },
+  exitOverlay: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center", justifyContent: "center",
+    zIndex: 200, padding: 24,
+  },
+  exitCard: {
+    width: "100%", maxWidth: 380, borderRadius: 16, padding: 22,
+    backgroundColor: Colors.bg3,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+  },
+  exitTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 8 },
+  exitMsg: { fontSize: 13, color: Colors.ink2, lineHeight: 19, marginBottom: 18 },
+  exitActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
+  exitStay: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
+  },
+  exitStayTxt: { fontSize: 13, fontWeight: "700", color: "#a78bfa" },
+  exitLeave: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderWidth: 1, borderColor: "rgba(239,68,68,0.35)",
+  },
+  exitLeaveTxt: { fontSize: 13, fontWeight: "700", color: "#f87171" },
 });
 
 export default TrocaModal;

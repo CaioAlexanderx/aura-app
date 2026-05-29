@@ -241,7 +241,7 @@ export function Step4Confirm({
                 <Text style={s.nfeTitle}>
                   {fiscal.strategy === "cancel_reissue"
                     ? "NFC-e original será cancelada"
-                    : "NF-e de devolução pronta"}
+                    : "NF-e de devolução será emitida"}
                 </Text>
                 <Text style={s.nfeSub}>
                   {fiscal.strategy === "cancel_reissue"

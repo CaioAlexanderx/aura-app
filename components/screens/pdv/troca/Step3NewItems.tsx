@@ -24,6 +24,12 @@ import { toast } from "@/components/Toast";
 import type { NewEntry } from "./types";
 import { fmtBRL } from "./types";
 
+// Le o estoque disponivel do produto de forma tolerante a shape.
+// Definido no escopo do modulo (nunca injetar funcao dentro de .map()).
+function readStock(p: any): number {
+  return Number(p?.stock_qty ?? p?.stock ?? p?.available_stock ?? 0);
+}
+
 type Props = {
   products: any[];
   newEntries: NewEntry[];
@@ -205,6 +211,18 @@ export function Step3NewItems({
                       </View>
                       <Text style={s.catName} numberOfLines={2}>{p.name || p.title || "—"}</Text>
                       <Text style={s.catPrice}>{fmtBRL(Number(p.price ?? p.unit_price ?? 0))}</Text>
+                      <Text
+                        style={[
+                          s.catStock,
+                          readStock(p) <= 0 && s.catStockOut,
+                          readStock(p) > 0 && readStock(p) <= 5 && s.catStockLow,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {readStock(p) <= 0
+                          ? "Sem estoque"
+                          : `${readStock(p)} em estoque`}
+                      </Text>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -404,6 +422,9 @@ const s = StyleSheet.create({
   },
   catName: { color: Colors.ink, fontSize: 12, fontWeight: "600", minHeight: 32 },
   catPrice: { color: "#a78bfa", fontSize: 12.5, fontWeight: "700", marginTop: 4 },
+  catStock: { color: Colors.ink3, fontSize: 11, fontWeight: "600", marginTop: 3 },
+  catStockLow: { color: "#fbbf24" },
+  catStockOut: { color: "#f87171" },
   cartSection: { marginTop: 18 },
   cartHead: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
