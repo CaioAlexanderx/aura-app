@@ -40,14 +40,19 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 // ── EmissionRow: novo formato consumindo /nfce do backend ──────
+// onReemit é opcional — só usado quando status === 'rejeitada'.
+// Mantemos o mesmo padrão visual de Ver/Cancelar (miniBtn) pra reduzir
+// peso visual e deixar claro que é uma ação no nível do card.
 export function EmissionRow({
   emission,
   onCancel,
   onView,
+  onReemit,
 }: {
   emission: NfceEmission;
   onCancel: () => void;
   onView: () => void;
+  onReemit?: () => void;
 }) {
   const typeLabel = emission.tipo === "nfe" ? "NF-e" : "NFC-e";
   const dateStr = emission.authorized_at || emission.created_at;
@@ -61,7 +66,7 @@ export function EmissionRow({
         <Text style={ns.docRecipient} numberOfLines={1}>{recipient}</Text>
         <Text style={ns.docDate}>{new Date(dateStr).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</Text>
         {emission.error_message && (
-          <Text style={[ns.docDate, { color: Colors.red }]} numberOfLines={1}>
+          <Text style={[ns.docDate, { color: Colors.red }]} numberOfLines={2}>
             {emission.error_message}
           </Text>
         )}
@@ -69,13 +74,22 @@ export function EmissionRow({
       <View style={ns.docRight}>
         <Text style={ns.docAmount}>{fmt(emission.total_nfce)}</Text>
         <StatusBadge status={emission.status} />
-        <View style={{ flexDirection: "row", gap: 4, marginTop: 4 }}>
+        <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <Pressable onPress={onView} style={ns.miniBtn}>
             <Text style={ns.miniBtnText}>{emission.pdf_url ? "PDF" : "Ver"}</Text>
           </Pressable>
           {emission.status === "autorizada" && (
             <Pressable onPress={onCancel} style={[ns.miniBtn, { borderColor: Colors.red + "33" }]}>
               <Text style={[ns.miniBtnText, { color: Colors.red }]}>Cancelar</Text>
+            </Pressable>
+          )}
+          {emission.status === "rejeitada" && onReemit && (
+            <Pressable
+              onPress={onReemit}
+              style={[ns.miniBtn, { borderColor: Colors.violet3 + "55", backgroundColor: Colors.violetD }]}
+              accessibilityLabel={`Reemitir nota ${emission.numero}`}
+            >
+              <Text style={[ns.miniBtnText, { color: Colors.violet3 }]}>Reemitir</Text>
             </Pressable>
           )}
         </View>

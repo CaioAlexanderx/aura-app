@@ -12,7 +12,7 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { Icon } from "@/components/Icon";
 import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfe } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
-import { EmitNfceForm } from "@/components/screens/nfe/EmitNfceForm";
+import { EmitNfceForm, type NfcePrefill } from "@/components/screens/nfe/EmitNfceForm";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
 // IS_NARROW: breakpoint para KPI cards compactos em telas estreitas (<500px)
@@ -20,6 +20,9 @@ const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : fals
 
 // Mai/2026 audit: refetch dinâmico quando há nota em status='processando' +
 // botão de refresh manual + ESC fecha modal de cancel.
+// Mai/2026 reemissão: card rejeitado ganha ação "Reemitir" — busca detalhe
+// da nota (sale_id+items), hidrata EmitNfceForm via prop `prefill`, troca
+// pra aba "Emitir NFC-e". Backend mantém idempotência só pra autorizada/processando.
 function NfeScreenInner() {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
@@ -31,6 +34,11 @@ function NfeScreenInner() {
 
   // Estado anterior pra calcular refetchInterval com base nos dados
   const [hasProcessing, setHasProcessing] = useState(false);
+
+  // Prefill da reemissão (set pelo handleReemit, lido pelo EmitNfceForm).
+  // Sobrevive a troca de aba — usuário pode ir ver outros cards e voltar.
+  const [reemitPrefill, setReemitPrefill] = useState<NfcePrefill | null>(null);
+  const [reemitLoadingId, setReemitLoadingId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["nfce-emissions", company?.id],
@@ -112,6 +120,46 @@ function NfeScreenInner() {
     toast.info("Atualizando...");
   }
 
+  // Reemitir: busca o detalhe da nota rejeitada (LIST não traz sale_id/items),
+  // monta o prefill e troca pra aba "Emitir NFC-e". O backend já entende que
+  // sale_id com nota anterior 'rejeitada' libera nova emissão.
+  async function handleReemit(emission: NfceEmission) {
+    if (!company?.id) return;
+    if (emission.status !== "rejeitada") {
+      toast.error("Reemissão só é permitida para notas rejeitadas");
+      return;
+    }
+    setReemitLoadingId(emission.id);
+    try {
+      const { emission: full } = await nfceApi.get(company.id, emission.id);
+      const rawItems = (full as any).items;
+      const items = Array.isArray(rawItems)
+        ? rawItems
+        : typeof rawItems === "string"
+          ? (() => { try { return JSON.parse(rawItems); } catch { return []; } })()
+          : [];
+
+      setReemitPrefill({
+        rejectedFromId:     full.id,
+        rejectedFromNumero: full.numero,
+        rejectedFromTipo:   full.tipo,
+        rejectedAt:         full.created_at,
+        rejectedReason:     full.error_message,
+        sale_id:            (full as any).sale_id ?? null,
+        items,
+        customer_cpf:       full.customer_cpf,
+        customer_name:      full.customer_name,
+        payment_method:     full.payment_method,
+      });
+      setTab(2);
+      toast.info(`Nota #${full.numero} carregada. Revise NCM antes de emitir.`);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao carregar dados da nota");
+    } finally {
+      setReemitLoadingId(null);
+    }
+  }
+
   // Filtros aplicados — quando 0 resultados mas há emissions, mostra dica
   const filtersActive = tipoFilter !== "all" || statusFilter !== "all";
 
@@ -157,6 +205,15 @@ function NfeScreenInner() {
             Há {totalProcessing} nota{totalProcessing > 1 ? "s" : ""} aguardando confirmação da SEFAZ. Atualizando automaticamente...
           </Text>
         </View>
+      )}
+
+      {reemitPrefill && tab !== 2 && (
+        <Pressable onPress={() => setTab(2)} style={s.reemitPendingBanner} accessibilityLabel="Voltar para reemissão em andamento">
+          <Icon name="refresh" size={14} color={Colors.violet3} />
+          <Text style={s.reemitPendingText}>
+            Reemissão da nota #{reemitPrefill.rejectedFromNumero} em andamento. Toque para retomar.
+          </Text>
+        </Pressable>
       )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -205,6 +262,11 @@ function NfeScreenInner() {
                     emission={e}
                     onCancel={() => { setCancelTarget(e); setCancelReason(""); }}
                     onView={() => handleViewEmission(e)}
+                    onReemit={
+                      e.status === "rejeitada"
+                        ? () => { if (reemitLoadingId !== e.id) handleReemit(e); }
+                        : undefined
+                    }
                   />
                 ))}
                 {filtered.length === 0 && (
@@ -226,7 +288,16 @@ function NfeScreenInner() {
       )}
 
       {tab === 1 && company?.id && <EmitNfseForm companyId={company.id} />}
-      {tab === 2 && company?.id && <EmitNfceForm companyId={company.id} />}
+      {tab === 2 && company?.id && (
+        <EmitNfceForm
+          // key força remount quando o usuário inicia outra reemissão,
+          // garantindo que o useState do form re-leia o prefill novo.
+          key={reemitPrefill?.rejectedFromId || "fresh"}
+          companyId={company.id}
+          prefill={reemitPrefill}
+          onClearPrefill={() => setReemitPrefill(null)}
+        />
+      )}
 
       {/* Modal inline de cancelamento (com input para motivo, regra SEFAZ ≥ 15 chars) */}
       {cancelTarget && (
@@ -303,6 +374,12 @@ const s = StyleSheet.create({
     marginBottom: 12, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)",
   },
   processingText: { flex: 1, fontSize: 12, color: Colors.amber, fontWeight: "600" },
+  reemitPendingBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.violetD, borderRadius: 10, padding: 12,
+    marginBottom: 12, borderWidth: 1, borderColor: Colors.violet3 + "44",
+  },
+  reemitPendingText: { flex: 1, fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },

@@ -57,6 +57,12 @@ export type NfceEmission = {
   cancelled_at: string | null;
   created_at: string;
   error_message: string | null;
+  // Campos opcionais — só vêm no GET /:id (SELECT *), ausentes na LIST.
+  // Usados pelo fluxo de Reemissão (carrega items+sale_id da nota rejeitada).
+  sale_id?: string | null;
+  transaction_id?: string | null;
+  items?: NfceEmissionItem[];
+  payment_change?: number | null;
 };
 
 export type NfceStats = {
