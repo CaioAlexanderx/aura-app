@@ -9,49 +9,33 @@
 //   - Scanner reutilizado Step 1 (achar venda) + Step 3 (achar produto novo)
 //
 // COMPAT: enquanto o backend v2 (multi-origin + splits) não chega,
-// o handleSubmit do TrocaModal cai no contrato v1 quando há apenas
-// 1 venda selecionada. Multi-venda exibe banner "rollout em curso".
+//   o handleSubmit do TrocaModal cai no contrato v1 quando há apenas
+//   1 venda selecionada. Multi-venda exibe banner "rollout em curso".
+//
+// 29/05/2026 (FASE 2):
+//   - TrocaRascunho: fonte unica de verdade do estado do modal
+//   - idempotency_key gerado uma vez ao abrir o modal
 // ============================================================
 import type { SaleForTroca } from "@/services/trocaApi";
 import type { SaleDetailsItem } from "@/services/api";
 
 // ─── Search modes (Step 1 + Step 3) ────────────────────────────
-// Step 1: localizar venda original
-//   - text:    nome/CPF/vendedora/produto
-//   - order:   número do pedido
-//   - barcode: bipe (lista vendas com aquele produto)
-//   - qr:      QR-Code do cupom NFC-e (chave de acesso)
-//
-// Step 3: localizar produto novo
-//   - text:    nome do produto
-//   - barcode: bipe → auto-add
-//   - qr:      QR/datamatrix → auto-add (mobile camera ou colar)
 export type Step1SearchMode = "text" | "order" | "barcode" | "qr";
 export type Step3SearchMode = "text" | "barcode" | "qr";
 
 // ─── Sale selection (Step 1 → Step 2) ──────────────────────────
-// SelectedSaleRow estende SaleForTroca com o detalhe carregado pra
-// poder listar items no Step 2 sem 2ª round-trip.
 export type SelectedSaleRow = SaleForTroca & {
-  // detail é o resultado da round-trip salesApi.get quando o backend
-  // não retornou items inline (caso barcode mode — same-filial only).
-  // No text mode (group-aware), os items já vêm em SaleForTroca.items.
   items: SaleForTroca["items"];
 };
 
 // ─── Return entries (Step 2) ───────────────────────────────────
-// ReturnEntry agora carrega o sale_id de origem (multi-venda).
-// item.id pode ser "synth-<saleId>-<idx>" quando vem do payload
-// de /sales-for-troca (sale_item.id não está no payload).
 export type ReturnEntry = {
-  saleId: string;            // qual venda original
-  saleDate: string;          // pra UI agrupar
-  saleCompanyName: string;   // badge cross-filial
+  saleId: string;
+  saleDate: string;
+  saleCompanyName: string;
   sellerName: string | null;
   item: SaleDetailsItem;
   returnQty: number;
-  // Histórico de devoluções anteriores naquele sale_item_id —
-  // populado quando backend v2 chegar. Por enquanto sempre 0.
   previouslyReturnedQty: number;
 };
 
@@ -62,13 +46,10 @@ export type NewEntry = {
   quantity: number;
   unit_price: number;
   product_name_snapshot: string;
-  // Marca itens adicionados via scan pra UI mostrar "✓ Bipado".
   addedVia?: "search" | "barcode" | "qr";
 };
 
 // ─── Payment / Refund splits (Step 4) ──────────────────────────
-// PaymentSplit: cliente paga diferença (netAmount > 0)
-// RefundSplit:  loja devolve dinheiro (netAmount < 0)
 export type PaymentMethod = "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
 export type RefundMethod  = "dinheiro" | "pix" | "cartao_estorno" | "crediario_credito" | "vale";
 
@@ -85,9 +66,6 @@ export type RefundSplit = {
 };
 
 // ─── Fiscal strategy ───────────────────────────────────────────
-// Quando multi-origin entrar, "per_origin" permite cada venda escolher
-// individualmente (uma <24h → cancel_reissue; outra >24h → devolucao_55).
-// Default backend v1 = "none" (sem fiscal).
 export type FiscalStrategy =
   | "none"
   | "cancel_reissue"
@@ -104,6 +82,22 @@ export type CustomerAddress = {
   ibge: string;
 };
 
+// ─── TrocaRascunho: fonte unica de verdade do modal ────────────
+// Consolida estados antes espalhados em multiplos useState.
+// idempotency_key gerado uma vez quando o modal abre; reutilizado
+// em retries automaticos sem criar troca duplicada no backend.
+export interface TrocaRascunho {
+  returnEntries: ReturnEntry[];
+  newEntries: NewEntry[];
+  destino: "outro" | "credito" | "dinheiro" | null;
+  paymentSplits: PaymentSplit[];
+  refundSplits: RefundSplit[];
+  estrategiaFiscal: FiscalStrategy;
+  idempotency_key: string;
+  /** derived: returnEntries.length > 0 && destino definido */
+  valido: boolean;
+}
+
 // ─── Wizard step ───────────────────────────────────────────────
 export type Step = 1 | 2 | 3 | 4;
 
@@ -113,7 +107,7 @@ export const fmtBRL = (v: number): string =>
 
 export const STEP_LABELS: Record<Step, string> = {
   1: "Localizar venda",
-  2: "Devolução",
+  2: "Devolucao",
   3: "Novos itens",
   4: "Confirmar",
 };

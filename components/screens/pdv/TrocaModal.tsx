@@ -13,6 +13,11 @@
 //   - Passa paymentSplits como prop pro Step5Success montar
 //     payments[] array corretamente quando ha split (em vez de
 //     paymentMethod singular).
+//
+// 29/05/2026 (fase2):
+//   - idempotency_key gerado uma vez ao abrir o modal (crypto.randomUUID
+//     com fallback Math.random). Incluido no payload v1 e v2.
+//   - Botao Confirmar desabilitado quando returnEntries.length === 0.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -55,6 +60,17 @@ type Props = {
   onSuccess?: (result: any) => void;
 };
 
+// Gera idempotency_key usando crypto.randomUUID quando disponivel,
+// com fallback para Math.random + timestamp (nao criptografico mas
+// suficiente para dedup de troca no mesmo modal).
+function genIdempotencyKey(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+}
+
 export function TrocaModal({
   visible, companyId, products, onClose, onSuccess,
 }: Props) {
@@ -67,6 +83,8 @@ export function TrocaModal({
   const [paymentSplits, setPaymentSplits] = useState<PaymentSplit[]>([]);
   const [refundSplits, setRefundSplits] = useState<RefundSplit[]>([]);
   const [customerAddress, setCustomerAddress] = useState<CustomerAddress>(EMPTY_ADDRESS);
+  // idempotency_key: gerado uma vez por abertura do modal.
+  const [idempotencyKey, setIdempotencyKey] = useState<string>("");
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -96,6 +114,10 @@ export function TrocaModal({
       setSuccessResult(null);
       setSubmitting(false);
       setShowExitConfirm(false);
+      setIdempotencyKey("");
+    } else {
+      // Gera chave uma unica vez ao abrir.
+      setIdempotencyKey(genIdempotencyKey());
     }
   }, [visible]);
 
@@ -110,6 +132,9 @@ export function TrocaModal({
     if (step === 3) return returnEntries.length > 0 || newEntries.length > 0;
     return false;
   }, [step, selectedSales.length, returnEntries.length, newEntries.length]);
+
+  // Confirmar troca so habilitado quando ha pelo menos 1 item a devolver.
+  const canConfirm = returnEntries.length > 0 && !submitting;
 
   const next = useCallback(() => {
     setStep((s) => (Math.min(4, s + 1) as StepV3));
@@ -153,6 +178,8 @@ export function TrocaModal({
     }
 
     const anyHasNfce = selectedSales.some((s) => s.has_nfce === true);
+    // Garante que temos uma chave valida (caso algo tenha zerado o estado).
+    const iKey = idempotencyKey || genIdempotencyKey();
 
     const v2 = shouldUseV2();
     setSubmitting(true);
@@ -187,6 +214,7 @@ export function TrocaModal({
           customer_id: selectedSales[0]?.customer_id || undefined,
           customer_address: undefined,
           nfce_strategy: anyHasNfce ? "per_origin" : "none",
+          idempotency_key: iKey,
         } as any);
       } else {
         const sale = selectedSales[0];
@@ -218,6 +246,7 @@ export function TrocaModal({
             ? fiscal.strategy
             : "none",
           customer_address: undefined,
+          idempotency_key: iKey,
         } as any);
       }
 
@@ -232,7 +261,6 @@ export function TrocaModal({
   }
 
   // Troca em andamento = ha selecao/itens e ainda nao concluiu (step < 5).
-  // Fechar nesse estado pede confirmacao pra nao perder o trabalho.
   const hasProgress =
     step < 5 &&
     (selectedSales.length > 0 || returnEntries.length > 0 || newEntries.length > 0);
@@ -265,7 +293,7 @@ export function TrocaModal({
   } else if (step === 3) {
     if (netAmount > 0) footerInfo = `Cliente paga ${fmtBRL(netAmount)}`;
     else if (netAmount < 0) footerInfo = `Loja devolve ${fmtBRL(-netAmount)}`;
-    else footerInfo = "Troca par-a-par (sem diferença)";
+    else footerInfo = "Troca par-a-par (sem diferenca)";
   } else if (step === 4) {
     footerInfo = "Confira e confirme";
   }
@@ -282,12 +310,12 @@ export function TrocaModal({
             </View>
             <View>
               <Text style={s.headerTitle}>
-                {step === 5 ? "Troca concluída" : "Troca ou Devolução"}
+                {step === 5 ? "Troca concluida" : "Troca ou Devolucao"}
               </Text>
               <Text style={s.headerSub}>
                 {step === 1 && "Encontre a venda original — em qualquer filial do grupo"}
-                {step === 2 && "Marque o que o cliente está devolvendo"}
-                {step === 3 && "Defina o destino do crédito"}
+                {step === 2 && "Marque o que o cliente esta devolvendo"}
+                {step === 3 && "Defina o destino do credito"}
                 {step === 4 && "NF-e e estoque cuidados automaticamente"}
                 {step === 5 && "NF-e emitida · Estoque atualizado · Caixa registrado"}
               </Text>
@@ -415,9 +443,9 @@ export function TrocaModal({
               )}
               {step === 4 && (
                 <Pressable
-                  style={[s.btnConfirm, submitting && { opacity: 0.6 }]}
-                  onPress={handleSubmit}
-                  disabled={submitting}
+                  style={[s.btnConfirm, !canConfirm && { opacity: 0.45 }]}
+                  onPress={canConfirm ? handleSubmit : undefined}
+                  disabled={!canConfirm}
                 >
                   {submitting
                     ? <ActivityIndicator size="small" color="#fff" />

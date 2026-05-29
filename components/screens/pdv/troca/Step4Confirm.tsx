@@ -4,20 +4,14 @@
 // 24/05/2026 — Reescrito do zero pra v3.
 // Mockup: Aura/mockup_troca_v3.html (tela 4)
 //
-// FRICÇÃO ATACADA: Davi travou aqui — pedia preenchimento da NF-e.
-//
-// Princípios v3:
-//   • NF-e 100% automática — card verde "✓ pronta", detalhes em toggle opcional
-//   • Pay chips grandes pra escolher como o cliente paga (1 click)
-//   • Banner cross-filial em linguagem de balconista
-//   • Resumo financeiro no lado direito sempre visível
-//   • Address form (devolução 55) só aparece se backend pedir explicitamente
-//
 // 25/05/2026 (fix sem-NFC-e):
 //   inferFiscalStrategy passa a ignorar vendas sem has_nfce=true ao
 //   inferir cancel_reissue/devolucao_55. Se nenhuma venda envolvida
 //   tem NFC-e, retorna 'none' — backend processa troca sem fiscal.
-//   Solução pro caso 3 em 4 clientes que não emitem NFC-e.
+//
+// 29/05/2026 (fase2):
+//   - Card fiscal exibe label correto para todos os 4 estados
+//     (cancel_reissue / devolucao_55 / per_origin / none).
 // ============================================================
 import { useState, useMemo } from "react";
 import {
@@ -48,8 +42,6 @@ type Props = {
 };
 
 // ─── Fiscal strategy inference (mantém contrato com shell) ─────
-// 25/05/2026: agora respeita has_nfce. Vendas sem NFC-e autorizada nunca
-// disparam cancel_reissue ou devolucao_55 — backend retornaria 409.
 export function inferFiscalStrategy(
   selectedSales: SelectedSaleRow[],
   returnEntries: ReturnEntry[]
@@ -58,8 +50,6 @@ export function inferFiscalStrategy(
     return { strategy: "none", cancelReissueCount: 0, devolucao55Count: 0 };
   }
   const salesWithReturn = new Set(returnEntries.map((e) => e.saleId));
-  // Só considera vendas com NFC-e autorizada. has_nfce undefined (backend
-  // antigo) ou false trata como "sem NFC-e" — sem fiscal.
   const involved = selectedSales.filter(
     (s) => salesWithReturn.has(s.id) && s.has_nfce === true
   );
@@ -82,7 +72,7 @@ export function inferFiscalStrategy(
   return { strategy: "per_origin", cancelReissueCount: recent, devolucao55Count: old };
 }
 
-// ─── Validação pra liberar Confirmar ──────────────────────
+// ─── Validação pra liberar Confirmar ──────────────────────────
 export function canConfirmStep4(args: {
   netAmount: number;
   paymentSplits: PaymentSplit[];
@@ -93,11 +83,11 @@ export function canConfirmStep4(args: {
   const { netAmount, paymentSplits, refundSplits } = args;
   if (netAmount > 0) {
     if (paymentSplits.length === 0) {
-      return { ok: false, reason: "Escolha como o cliente vai pagar a diferença" };
+      return { ok: false, reason: "Escolha como o cliente vai pagar a diferenca" };
     }
     const sum = paymentSplits.reduce((s, p) => s + (p.amount || 0), 0);
     if (Math.abs(sum - netAmount) > 0.01) {
-      return { ok: false, reason: `Soma dos pagamentos (${fmtBRL(sum)}) não bate com a diferença (${fmtBRL(netAmount)})` };
+      return { ok: false, reason: `Soma dos pagamentos (${fmtBRL(sum)}) nao bate com a diferenca (${fmtBRL(netAmount)})` };
     }
   }
   if (netAmount < 0) {
@@ -106,24 +96,70 @@ export function canConfirmStep4(args: {
     }
     const sum = refundSplits.reduce((s, r) => s + (r.amount || 0), 0);
     if (Math.abs(sum - Math.abs(netAmount)) > 0.01) {
-      return { ok: false, reason: "Soma dos estornos não bate com o valor a devolver" };
+      return { ok: false, reason: "Soma dos estornos nao bate com o valor a devolver" };
     }
   }
   return { ok: true };
 }
 
+// ─── Label do card fiscal por estrategia ─────────────────────
+// Helper no escopo do modulo — nunca injetar dentro de .map().
+function getFiscalCardInfo(strategy: FiscalStrategy): {
+  title: string;
+  sub: string;
+  color: string;
+  borderColor: string;
+  iconBg: string;
+} {
+  switch (strategy) {
+    case "cancel_reissue":
+      return {
+        title: "NFC-e original sera cancelada",
+        sub: "Venda foi feita ha menos de 24h — cancelamos sem precisar emitir devolucao",
+        color: "#6ee7b7",
+        borderColor: "rgba(16,185,129,0.3)",
+        iconBg: "#10b981",
+      };
+    case "devolucao_55":
+      return {
+        title: "NF-e de devolucao sera emitida",
+        sub: "CFOP 1.202 · Natureza: Devolucao de venda · Serie 1",
+        color: "#6ee7b7",
+        borderColor: "rgba(16,185,129,0.3)",
+        iconBg: "#10b981",
+      };
+    case "per_origin":
+      return {
+        title: "Fiscal por origem (misto)",
+        sub: "Vendas recentes serao canceladas; antigas terao NF-e de devolucao",
+        color: "#fde68a",
+        borderColor: "rgba(251,191,36,0.3)",
+        iconBg: "#d97706",
+      };
+    case "none":
+    default:
+      return {
+        title: "Sem emissao fiscal",
+        sub: "Nenhuma NFC-e foi emitida na venda original",
+        color: Colors.ink3,
+        borderColor: "rgba(255,255,255,0.1)",
+        iconBg: "rgba(255,255,255,0.12)",
+      };
+  }
+}
+
 const PAY_METHODS: Array<{ id: PaymentMethod; label: string; icon: string }> = [
   { id: "dinheiro",        label: "Dinheiro",       icon: "dollar-sign" },
   { id: "pix",             label: "Pix",            icon: "zap" },
-  { id: "cartao_debito",   label: "Cartão débito",  icon: "credit-card" },
-  { id: "cartao_credito",  label: "Cartão crédito", icon: "credit-card" },
+  { id: "cartao_debito",   label: "Cartao debito",  icon: "credit-card" },
+  { id: "cartao_credito",  label: "Cartao credito", icon: "credit-card" },
 ];
 
 const REFUND_METHODS: Array<{ id: RefundMethod; label: string; icon: string }> = [
   { id: "dinheiro",           label: "Dinheiro",      icon: "dollar-sign" },
   { id: "pix",                label: "Pix",           icon: "zap" },
-  { id: "cartao_estorno",     label: "Estorno cartão", icon: "credit-card" },
-  { id: "crediario_credito",  label: "Crédito conta",  icon: "user" },
+  { id: "cartao_estorno",     label: "Estorno cartao", icon: "credit-card" },
+  { id: "crediario_credito",  label: "Credito conta",  icon: "user" },
 ];
 
 export function Step4Confirm({
@@ -139,6 +175,8 @@ export function Step4Confirm({
     () => inferFiscalStrategy(selectedSales, returnEntries),
     [selectedSales, returnEntries]
   );
+
+  const fiscalCard = getFiscalCardInfo(fiscal.strategy);
 
   const isCrossFilial = useMemo(() => {
     return selectedSales.some((s) => s.is_cross_filial);
@@ -169,7 +207,7 @@ export function Step4Confirm({
             <Text style={s.bigAmountLabel}>Cliente paga</Text>
             <Text style={[s.bigAmountValue, { color: "#10b981" }]}>{fmtBRL(netAmount)}</Text>
             <Text style={s.bigAmountSub}>
-              Diferença entre carrinho ({fmtBRL(newValue)}) e crédito ({fmtBRL(returnedValue)})
+              Diferenca entre carrinho ({fmtBRL(newValue)}) e credito ({fmtBRL(returnedValue)})
             </Text>
           </View>
         )}
@@ -178,7 +216,7 @@ export function Step4Confirm({
             <Text style={s.bigAmountLabel}>Loja devolve</Text>
             <Text style={[s.bigAmountValue, { color: "#60a5fa" }]}>{fmtBRL(-netAmount)}</Text>
             <Text style={s.bigAmountSub}>
-              Crédito ({fmtBRL(returnedValue)}) maior que carrinho ({fmtBRL(newValue)})
+              Credito ({fmtBRL(returnedValue)}) maior que carrinho ({fmtBRL(newValue)})
             </Text>
           </View>
         )}
@@ -186,7 +224,7 @@ export function Step4Confirm({
           <View style={s.bigAmountCard}>
             <Text style={s.bigAmountLabel}>Troca par-a-par</Text>
             <Text style={[s.bigAmountValue, { color: Colors.ink }]}>{fmtBRL(0)}</Text>
-            <Text style={s.bigAmountSub}>Sem diferença a receber ou devolver</Text>
+            <Text style={s.bigAmountSub}>Sem diferenca a receber ou devolver</Text>
           </View>
         )}
 
@@ -231,41 +269,50 @@ export function Step4Confirm({
           </View>
         )}
 
-        {(fiscal.strategy === "cancel_reissue" || fiscal.strategy === "devolucao_55") && (
-          <View style={s.nfeWrap}>
-            <View style={s.nfeCard}>
-              <View style={s.nfeCheck}>
-                <Icon name="check" size={18} color="#fff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.nfeTitle}>
-                  {fiscal.strategy === "cancel_reissue"
-                    ? "NFC-e original será cancelada"
-                    : "NF-e de devolução será emitida"}
-                </Text>
-                <Text style={s.nfeSub}>
-                  {fiscal.strategy === "cancel_reissue"
-                    ? "Venda foi feita há menos de 24h — cancelamos sem precisar emitir devolução"
-                    : "CFOP 1.202 · Natureza: Devolução de venda · Série 1"}
-                </Text>
-              </View>
+        {/* Card fiscal — exibido para todas as estrategias */}
+        <View style={s.nfeWrap}>
+          <View style={[
+            s.nfeCard,
+            {
+              backgroundColor: fiscal.strategy === "none"
+                ? "rgba(255,255,255,0.03)"
+                : "rgba(16,185,129,0.10)",
+              borderColor: fiscalCard.borderColor,
+            },
+          ]}>
+            <View style={[s.nfeCheck, { backgroundColor: fiscalCard.iconBg }]}>
+              <Icon
+                name={fiscal.strategy === "none" ? "minus" : "check"}
+                size={18}
+                color="#fff"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.nfeTitle, { color: fiscalCard.color }]}>
+                {fiscalCard.title}
+              </Text>
+              <Text style={[s.nfeSub, { color: fiscalCard.color, opacity: 0.8 }]}>
+                {fiscalCard.sub}
+              </Text>
+            </View>
+            {fiscal.strategy !== "none" && (
               <Pressable style={s.nfeToggle} onPress={() => setShowNfeDetails((v) => !v)}>
                 <Text style={s.nfeToggleTxt}>{showNfeDetails ? "Ocultar" : "Detalhes"}</Text>
               </Pressable>
-            </View>
-
-            {showNfeDetails && (
-              <View style={s.nfeDetails}>
-                <DetailRow label="Estratégia" value={fiscal.strategy === "cancel_reissue" ? "Cancelamento da NFC-e" : "Emissão de NF-e 55 (devolução)"} />
-                <DetailRow label="CFOP" value="1.202 — Devolução de venda" />
-                <DetailRow label="Natureza" value="Devolução de venda" />
-                <DetailRow label="CSOSN" value="102 (Simples Nacional)" />
-                <DetailRow label="NF-e referenciada" value={selectedSales[0]?.id ? `…${String(selectedSales[0].id).slice(-12)}` : "—"} />
-                <DetailRow label="Valor" value={fmtBRL(returnedValue)} />
-              </View>
             )}
           </View>
-        )}
+
+          {showNfeDetails && fiscal.strategy !== "none" && (
+            <View style={s.nfeDetails}>
+              <DetailRow label="Estrategia" value={fiscal.strategy === "cancel_reissue" ? "Cancelamento da NFC-e" : fiscal.strategy === "per_origin" ? "Por origem (misto)" : "Emissao de NF-e 55 (devolucao)"} />
+              <DetailRow label="CFOP" value="1.202 — Devolucao de venda" />
+              <DetailRow label="Natureza" value="Devolucao de venda" />
+              <DetailRow label="CSOSN" value="102 (Simples Nacional)" />
+              <DetailRow label="NF-e referenciada" value={selectedSales[0]?.id ? `...${String(selectedSales[0].id).slice(-12)}` : "—"} />
+              <DetailRow label="Valor" value={fmtBRL(returnedValue)} />
+            </View>
+          )}
+        </View>
 
         {isCrossFilial && (
           <View style={s.xfilial}>
@@ -273,9 +320,9 @@ export function Step4Confirm({
             <View style={{ flex: 1 }}>
               <Text style={s.xfilialTitle}>Troca entre filiais</Text>
               <Text style={s.xfilialBody}>
-                ↩ <Text style={s.xfilialBold}>{originFilialName}</Text> recebe os itens devolvidos no estoque{"\n"}
-                ↪ Esta loja tira os {newEntries.length} {newEntries.length === 1 ? "item" : "itens"} do carrinho{"\n"}
-                💸 A diferença entra/sai do caixa desta loja
+                {"↩ "}<Text style={s.xfilialBold}>{originFilialName}</Text>{" recebe os itens devolvidos no estoque\n"}
+                {"↪ Esta loja tira os "}{newEntries.length}{" "}{newEntries.length === 1 ? "item" : "itens"}{" do carrinho\n"}
+                {"  A diferenca entra/sai do caixa desta loja"}
               </Text>
             </View>
           </View>
@@ -292,7 +339,7 @@ export function Step4Confirm({
               {returnEntries.map((e, i) => (
                 <View key={i} style={s.summaryRow}>
                   <Text style={s.summaryRowLabel} numberOfLines={1}>
-                    {e.returnQty}× {e.item.product_name_snapshot || (e.item as any).product_name}
+                    {e.returnQty}x {e.item.product_name_snapshot || (e.item as any).product_name}
                   </Text>
                   <Text style={s.summaryRowValue}>{fmtBRL(e.returnQty * Number(e.item.unit_price))}</Text>
                 </View>
@@ -306,7 +353,7 @@ export function Step4Confirm({
               {newEntries.map((n, i) => (
                 <View key={i} style={s.summaryRow}>
                   <Text style={s.summaryRowLabel} numberOfLines={1}>
-                    {n.quantity}× {n.product_name_snapshot}
+                    {n.quantity}x {n.product_name_snapshot}
                   </Text>
                   <Text style={s.summaryRowValue}>{fmtBRL(n.quantity * n.unit_price)}</Text>
                 </View>
@@ -321,8 +368,8 @@ export function Step4Confirm({
             <Text style={s.summaryRowValue}>{fmtBRL(newValue)}</Text>
           </View>
           <View style={s.summaryRow}>
-            <Text style={s.summaryRowLabel}>− Crédito devolução</Text>
-            <Text style={[s.summaryRowValue, { color: "#60a5fa" }]}>− {fmtBRL(returnedValue)}</Text>
+            <Text style={s.summaryRowLabel}>- Credito devolucao</Text>
+            <Text style={[s.summaryRowValue, { color: "#60a5fa" }]}>- {fmtBRL(returnedValue)}</Text>
           </View>
 
           <View style={s.summaryDivider} />
@@ -342,7 +389,7 @@ export function Step4Confirm({
             )}
             {netAmount === 0 && (
               <>
-                <Text style={s.summaryTotalLabel}>Sem diferença</Text>
+                <Text style={s.summaryTotalLabel}>Sem diferenca</Text>
                 <Text style={[s.summaryTotalValue, { color: Colors.ink }]}>{fmtBRL(0)}</Text>
               </>
             )}
@@ -387,18 +434,16 @@ const s = StyleSheet.create({
   nfeWrap: { marginTop: 16 },
   nfeCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: "rgba(16,185,129,0.10)",
-    borderWidth: 1, borderColor: "rgba(16,185,129,0.3)",
+    borderWidth: 1,
     borderRadius: 12, padding: 14,
   },
   nfeCheck: {
     width: 36, height: 36, borderRadius: 999,
-    backgroundColor: "#10b981",
     alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   },
-  nfeTitle: { color: "#6ee7b7", fontSize: 14, fontWeight: "700" },
-  nfeSub: { color: "#86efac", fontSize: 12, marginTop: 2 },
+  nfeTitle: { fontSize: 14, fontWeight: "700" },
+  nfeSub: { fontSize: 12, marginTop: 2 },
   nfeToggle: {
     backgroundColor: "rgba(16,185,129,0.18)",
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7,

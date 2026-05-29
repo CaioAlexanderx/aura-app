@@ -5,10 +5,12 @@
 // 25/05/2026 — NfceActions integrado.
 // 26/05/2026 (fixes B3 + A3 da auditoria):
 //   B3 — cross-filial: usa result.origin_company_id como companyId
-//   fiscal (sale gravada na origem). Antes usava companyId da filial
-//   física, gerando NFC-e em company_id errado.
+//   fiscal (sale gravada na origem).
 //   A3 — split: monta payments[] array a partir de paymentSplits
-//   prop (em vez de paymentMethod singular). NFC-e com split correto.
+//   prop (em vez de paymentMethod singular).
+// 29/05/2026 (fase2):
+//   - Status fiscal usa result.fiscal.per_origin[] (resposta real
+//     do backend fase1). Substitui strings fixas por status dinamico.
 // ============================================================
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -32,6 +34,20 @@ type Props = {
   onNew: () => void;
 };
 
+// Retorna label + cor para cada item de fiscal.per_origin.
+// Helper no escopo do modulo — nunca injetar dentro de .map().
+function fiscalOriginStatus(item: any): { label: string; color: string } {
+  if (!item) return { label: "Processando...", color: "#fbbf24" };
+  if (item.status === "autorizada") {
+    const stratLabel = item.strategy === "cancel_reissue" ? "NFC-e cancelada" : "NF-e emitida";
+    return { label: stratLabel, color: "#4ade80" };
+  }
+  if (item.status === "falha") {
+    return { label: "Falhou — sera reprocessada", color: "#f87171" };
+  }
+  return { label: "Processando...", color: "#fbbf24" };
+}
+
 export function Step5Success({
   companyId, result, selectedSales,
   returnedValue, newValue, netAmount,
@@ -47,10 +63,13 @@ export function Step5Success({
   const nfceStrategy = result?.nfce?.strategy || result?.fiscal?.strategy || "none";
   const receiptUrl = result?.receipt_url || (trocaSaleId ? `/companies/${companyId}/print/receipt/${trocaSaleId}` : "");
 
-  // 26/05/2026 (B3): companyId fiscal = origem da sale. Em cross-filial,
-  // trocaSale.company_id é da filial origem; emitir NFC-e na física geraria
-  // registro em company_id errado. Backend agora retorna origin_company_id
-  // (escalar) tanto em v1 quanto em v2.
+  // fiscal.per_origin[] — resposta real do backend (fase1).
+  // Fallback para array vazio caso backend mais antigo nao retorne o campo.
+  const perOrigin: any[] = Array.isArray(result?.fiscal?.per_origin)
+    ? result.fiscal.per_origin
+    : [];
+
+  // 26/05/2026 (B3): companyId fiscal = origem da sale.
   const fiscalCompanyId =
     result?.origin_company_id ||
     (Array.isArray(result?.origin_company_ids) && result.origin_company_ids[0]) ||
@@ -67,12 +86,8 @@ export function Step5Success({
     }));
 
   const customerName = result?.sale?.customer_name || null;
-  // 26/05/2026 (A1): backend agora retorna customer_phone via JOIN customers
   const customerPhone = result?.sale?.customer_phone || null;
 
-  // 26/05/2026 (A3): preferir paymentSplits (mantém split fiscal correto).
-  // Se TrocaModal não passou paymentSplits ou está vazio, cai no fallback
-  // singular do result.sale.payment_method.
   const hasMultipleSplits = !!(paymentSplits && paymentSplits.length >= 1 && netAmount > 0);
   const nfcePayments: NfcePaymentEntry[] | undefined = hasMultipleSplits
     ? paymentSplits!.map((p) => ({ method: p.method, value: p.amount }))
@@ -104,6 +119,10 @@ export function Step5Success({
     }
   }
 
+  // Texto do subtitulo baseado no resultado fiscal real.
+  // Prefere per_origin[] quando disponivel; cai em nfceStrategy como fallback.
+  const subTitle = buildSubTitle(perOrigin, nfceStrategy);
+
   return (
     <View style={s.wrap}>
       <View style={s.checkOuter}>
@@ -112,12 +131,8 @@ export function Step5Success({
         </View>
       </View>
 
-      <Text style={s.title}>Troca concluída!</Text>
-      <Text style={s.sub}>
-        {nfceStrategy === "cancel_reissue" && "NFC-e original cancelada e estoque atualizado"}
-        {nfceStrategy === "devolucao_55" && "NF-e de devolução emitida e estoque atualizado"}
-        {(nfceStrategy === "none" || nfceStrategy === "per_origin") && "Estoque atualizado e caixa registrado"}
-      </Text>
+      <Text style={s.title}>Troca concluida!</Text>
+      <Text style={s.sub}>{subTitle}</Text>
 
       <View style={s.card}>
         <View style={s.cardHead}>
@@ -131,12 +146,31 @@ export function Step5Success({
         <SummaryRow label="Devolvido" value={`${fmtBRL(returnedValue)}`} valueColor="#fb923c" />
         <SummaryRow label="Levado" value={`${fmtBRL(newValue)}`} valueColor="#6ee7b7" />
 
-        {nfceStrategy === "devolucao_55" && (
-          <SummaryRow label="NF-e devolução" value="✓ Emitida" valueColor="#6ee7b7" />
-        )}
-        {nfceStrategy === "cancel_reissue" && (
-          <SummaryRow label="NFC-e original" value="✓ Cancelada" valueColor="#6ee7b7" />
-        )}
+        {/* Status fiscal real por origem */}
+        {perOrigin.length > 0
+          ? perOrigin.map((item: any, idx: number) => {
+              const st = fiscalOriginStatus(item);
+              return (
+                <SummaryRow
+                  key={item?.origin_sale_id || idx}
+                  label={perOrigin.length > 1 ? `Fiscal origem ${idx + 1}` : "Fiscal"}
+                  value={st.label}
+                  valueColor={st.color}
+                />
+              );
+            })
+          : (
+            // Fallback para backend sem per_origin (versao anterior)
+            <>
+              {nfceStrategy === "devolucao_55" && (
+                <SummaryRow label="NF-e devolucao" value="Emitida" valueColor="#6ee7b7" />
+              )}
+              {nfceStrategy === "cancel_reissue" && (
+                <SummaryRow label="NFC-e original" value="Cancelada" valueColor="#6ee7b7" />
+              )}
+            </>
+          )
+        }
 
         <View style={s.divider} />
 
@@ -145,7 +179,7 @@ export function Step5Success({
         ) : netAmount < 0 ? (
           <SummaryRow label="Devolvido ao cliente" value={fmtBRL(-netAmount)} valueColor="#60a5fa" big />
         ) : (
-          <SummaryRow label="Troca par-a-par" value="Sem diferença" big />
+          <SummaryRow label="Troca par-a-par" value="Sem diferenca" big />
         )}
       </View>
 
@@ -158,7 +192,6 @@ export function Step5Success({
         </View>
       )}
 
-      {/* NFC-e da venda nova — 25/05/2026 + B3/A3 fixes 26/05/2026 */}
       {showNfce && (
         <View style={s.nfceWrap}>
           <NfceActions
@@ -198,6 +231,22 @@ export function Step5Success({
       </View>
     </View>
   );
+}
+
+// Monta subtitulo a partir do resultado fiscal real.
+// Helper no escopo do modulo — nao injetar dentro de render.
+function buildSubTitle(perOrigin: any[], nfceStrategy: string): string {
+  if (perOrigin.length > 0) {
+    const allOk = perOrigin.every((i) => i?.status === "autorizada");
+    const anyFail = perOrigin.some((i) => i?.status === "falha");
+    if (allOk) return "Fiscal processado · Estoque atualizado · Caixa registrado";
+    if (anyFail) return "Fiscal com erro em uma origem · Estoque atualizado · Caixa registrado";
+    return "Processando fiscal · Estoque atualizado · Caixa registrado";
+  }
+  // Fallback
+  if (nfceStrategy === "cancel_reissue") return "NFC-e original cancelada e estoque atualizado";
+  if (nfceStrategy === "devolucao_55") return "NF-e de devolucao emitida e estoque atualizado";
+  return "Estoque atualizado e caixa registrado";
 }
 
 function SummaryRow({
