@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { nfceApi, type NfceEmissionItem } from "@/services/nfceApi";
+import { nfceApi, type NfceEmissionItem, type NfeKind } from "@/services/nfceApi";
 import { ns } from "./shared";
 
 // Forma de pagamento → código tPag enviado pro backend.
@@ -19,6 +19,22 @@ const PAGAMENTOS = [
 
 type ItemRow = NfceEmissionItem & { _id: string };
 
+// Prefill enviado pelo nfe.tsx quando o lojista clica "Reemitir" num card
+// rejeitado. Hidrata o form a partir do snapshot da nota rejeitada
+// (items, cliente, pagamento, sale_id).
+export type NfcePrefill = {
+  rejectedFromId: string;
+  rejectedFromNumero: number;
+  rejectedFromTipo: NfeKind;
+  rejectedAt: string;
+  rejectedReason: string | null;
+  sale_id: string | null;
+  items: NfceEmissionItem[];
+  customer_cpf: string | null;
+  customer_name: string | null;
+  payment_method: string | null;
+};
+
 function newItemRow(): ItemRow {
   return {
     _id: Math.random().toString(36).slice(2),
@@ -31,24 +47,89 @@ function newItemRow(): ItemRow {
   };
 }
 
+function itemsFromPrefill(items: NfceEmissionItem[] | undefined | null): ItemRow[] {
+  if (!Array.isArray(items) || items.length === 0) return [newItemRow()];
+  return items.map(it => ({
+    _id: Math.random().toString(36).slice(2),
+    product_id:   it.product_id ?? null,
+    product_name: it.product_name || it.name || "",
+    name:         it.name,
+    description:  it.description,
+    quantity:     Number(it.quantity) || 1,
+    unit_price:   Number(it.unit_price) || 0,
+    ncm:          it.ncm  || "00000000",
+    cfop:         it.cfop || "5102",
+    unit:         it.unit || "UN",
+    barcode:      it.barcode,
+    discount:     it.discount,
+  }));
+}
+
+// payment_method em nfce_emissions pode ser:
+// - chave simples ('dinheiro','pix','credito','debito','outros','crediario')
+// - string JSON de multi-pagamento ('[{...}]') quando vinda do PDV com payments[]
+// Para reemissão via form (single-pagamento), caímos pro primeiro method
+// quando vier JSON, ou 'dinheiro' como último fallback.
+function normalizePaymentMethod(pm: string | null | undefined): string {
+  if (!pm) return "dinheiro";
+  const trimmed = pm.trim();
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const first = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (first?.method && typeof first.method === "string") return first.method;
+    } catch { /* swallow */ }
+    return "dinheiro";
+  }
+  // Valida contra a lista exposta no form; 'crediario' não aparece nos chips,
+  // então cai pra dinheiro (que é o tPag SEFAZ correspondente).
+  const known = new Set(PAGAMENTOS.map(p => p.key));
+  return known.has(trimmed) ? trimmed : "dinheiro";
+}
+
 const fmtBR = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export function EmitNfceForm({ companyId }: { companyId: string }) {
+export function EmitNfceForm({
+  companyId,
+  prefill,
+  onClearPrefill,
+}: {
+  companyId: string;
+  /** Quando passado, hidrata o form com dados da nota rejeitada e exibe banner de reemissão. */
+  prefill?: NfcePrefill | null;
+  /** Chamado quando o usuário cancela a reemissão ou a emissão é bem-sucedida. */
+  onClearPrefill?: () => void;
+}) {
   const qc = useQueryClient();
-  const [tipo, setTipo] = useState<"nfce" | "nfe">("nfce");
-  const [items, setItems] = useState<ItemRow[]>([newItemRow()]);
-  const [cpf, setCpf] = useState("");
-  const [cnpj, setCnpj] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("dinheiro");
+
+  // Inicialização condicionada ao prefill — vale só na primeira renderização.
+  // Pra trocar a nota fonte (clicar Reemitir em outro card), o pai deve usar
+  // key={prefill?.rejectedFromId} forçando remount.
+  const initialCpfRaw = (prefill?.customer_cpf || "").replace(/\D/g, "");
+  const initialIsCnpj = initialCpfRaw.length > 11;
+
+  const [tipo, setTipo] = useState<NfeKind>(prefill?.rejectedFromTipo || "nfce");
+  const [items, setItems] = useState<ItemRow[]>(() => itemsFromPrefill(prefill?.items));
+  const [cpf, setCpf] = useState(prefill && !initialIsCnpj ? initialCpfRaw : "");
+  const [cnpj, setCnpj] = useState(prefill && initialIsCnpj ? initialCpfRaw : "");
+  const [customerName, setCustomerName] = useState(prefill?.customer_name || "");
+  const [paymentMethod, setPaymentMethod] = useState(() => normalizePaymentMethod(prefill?.payment_method));
   const [paymentChange, setPaymentChange] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Quando vem de reemissão, abre a seção avançada — NCM costuma ser o
+  // motivo da rejeição e o usuário precisa ver/editar imediatamente.
+  const [showAdvanced, setShowAdvanced] = useState(!!prefill);
 
   const total = useMemo(
     () => items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0),
     [items]
   );
+
+  const isReemissao = !!prefill;
+  const rejeicaoMotivo = prefill?.rejectedReason || null;
+  const rejeicaoDataFmt = prefill?.rejectedAt
+    ? new Date(prefill.rejectedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+    : null;
 
   const emitMut = useMutation({
     mutationFn: (body: any) => nfceApi.emit(companyId, body),
@@ -60,9 +141,10 @@ export function EmitNfceForm({ companyId }: { companyId: string }) {
           ? `${labelTipo} #${res.nfce.numero} autorizada!`
           : `${labelTipo} #${res.nfce.numero} ${res.nfce.status}`
       );
-      // reset
+      // reset — limpa também o prefill no pai (sai do modo reemissão)
       setItems([newItemRow()]);
       setCpf(""); setCnpj(""); setCustomerName(""); setObservacoes("");
+      onClearPrefill?.();
     },
     onError: (err: any) => {
       // Backend devolve { error, payload, nfce_id } em rejeição da Nuvem Fiscal
@@ -78,6 +160,16 @@ export function EmitNfceForm({ companyId }: { companyId: string }) {
   }
   function removeItem(id: string) {
     setItems(prev => (prev.length === 1 ? prev : prev.filter(it => it._id !== id)));
+  }
+
+  function handleCancelReemissao() {
+    // Limpa o form e tira do modo reemissão; nfe.tsx zera o prefill.
+    setItems([newItemRow()]);
+    setCpf(""); setCnpj(""); setCustomerName("");
+    setPaymentMethod("dinheiro");
+    setObservacoes("");
+    setShowAdvanced(false);
+    onClearPrefill?.();
   }
 
   function handleEmit() {
@@ -100,13 +192,49 @@ export function EmitNfceForm({ companyId }: { companyId: string }) {
       payment_method: paymentMethod,
       payment_change: paymentChange ? Number(paymentChange.replace(",", ".")) : undefined,
       observacoes:    observacoes.trim() || undefined,
+      // Reemissão: mantém o vínculo com a venda original; backend revalida
+      // idempotência (só bloqueia se tiver outra nota autorizada/processando
+      // pra essa sale_id — rejeitada/erro/cancelada liberam reemissão).
+      sale_id:        prefill?.sale_id || undefined,
     });
   }
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       <View style={ns.formCard}>
-        <Text style={ns.formTitle}>Emitir nota fiscal</Text>
+        {isReemissao && (
+          <View style={styles.reemitBanner}>
+            <View style={styles.reemitBannerHeader}>
+              <View style={styles.reemitBadge}>
+                <Icon name="refresh" size={12} color={Colors.violet3} />
+                <Text style={styles.reemitBadgeText}>REEMISSÃO</Text>
+              </View>
+              <Pressable onPress={handleCancelReemissao} hitSlop={6} accessibilityLabel="Cancelar reemissão">
+                <Text style={styles.reemitCancelLink}>Cancelar reemissão</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.reemitTitle}>
+              Reemissão da nota #{prefill!.rejectedFromNumero}
+              {rejeicaoDataFmt ? ` (rejeitada em ${rejeicaoDataFmt})` : ""}
+            </Text>
+            {rejeicaoMotivo && (
+              <Text style={styles.reemitReason} numberOfLines={4}>
+                Motivo SEFAZ: {rejeicaoMotivo}
+              </Text>
+            )}
+            <Text style={styles.reemitTip}>
+              ⚠ Verifique se o NCM dos produtos está correto antes de reemitir.
+              Use o botão NCM/CFOP abaixo pra editar por item.
+            </Text>
+            {prefill!.rejectedFromTipo === "nfe" && !cnpj && !cpf && (
+              <Text style={styles.reemitTip}>
+                NF-e: confirme o CPF/CNPJ do destinatário antes de reemitir.
+              </Text>
+            )}
+          </View>
+        )}
+
+        <Text style={ns.formTitle}>{isReemissao ? "Reemitir nota fiscal" : "Emitir nota fiscal"}</Text>
         <Text style={ns.formHint}>
           NFC-e (modelo 65) é o padrão para venda direta ao consumidor. Use NF-e (modelo 55)
           quando o cliente exigir nota com CNPJ.
@@ -263,9 +391,69 @@ export function EmitNfceForm({ companyId }: { companyId: string }) {
           style={[ns.emitBtn, (emitMut.isPending || total <= 0) && { opacity: 0.55 }]}>
           {emitMut.isPending
             ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={ns.emitBtnText}>Emitir {tipo === "nfe" ? "NF-e" : "NFC-e"}</Text>}
+            : <Text style={ns.emitBtnText}>
+                {isReemissao ? "Reemitir" : "Emitir"} {tipo === "nfe" ? "NF-e" : "NFC-e"}
+              </Text>}
         </Pressable>
       </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  reemitBanner: {
+    backgroundColor: Colors.violetD,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.violet3 + "44",
+    gap: 6,
+  },
+  reemitBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 2,
+  },
+  reemitBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.bg3,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.violet3 + "55",
+  },
+  reemitBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.violet3,
+    letterSpacing: 0.6,
+  },
+  reemitCancelLink: {
+    fontSize: 11,
+    color: Colors.ink3,
+    textDecorationLine: "underline",
+    fontWeight: "600",
+  },
+  reemitTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.ink,
+  },
+  reemitReason: {
+    fontSize: 12,
+    color: Colors.red,
+    fontWeight: "600",
+    lineHeight: 17,
+  },
+  reemitTip: {
+    fontSize: 11,
+    color: Colors.amber,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+});
