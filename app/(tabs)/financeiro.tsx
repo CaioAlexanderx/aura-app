@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, useWindowDimensions, TextInput } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi } from "@/hooks/useTransactions";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -19,19 +19,18 @@ import { toast } from "@/components/Toast";
 import { FinanceiroToolbar } from "@/components/FinanceiroToolbar";
 import { AgentBanner } from "@/components/AgentBanner";
 import { useAuthStore } from "@/stores/auth";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BASE_URL } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
 import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
 // V2 redesign (04/05/2026): Topbar nova + 2 abas novas (Receitas, Despesas).
 import { FinanceiroTopbar, TabReceitas, TabDespesas } from "@/components/screens/financeiro/v2";
+// F3-3D (29/05/2026): Surface de A Receber do crediario na aba Visao Geral.
+import { creditApi } from "@/services/creditApi";
 
 var isWeb = Platform.OS === "web";
 
-// Mapping de query param -> indice da tab. Usado pra deep-link como
-// /financeiro?tab=receitas&focus=abc (chamado pelo CTA "Ver analise
-// completa" no SalesAnalyticsCard do Painel).
 var TAB_KEY_TO_INDEX: Record<string, number> = {
   visao: TAB_INDEX.visao,
   receitas: TAB_INDEX.receitas,
@@ -41,16 +40,12 @@ var TAB_KEY_TO_INDEX: Record<string, number> = {
   cupons: TAB_INDEX.cupons,
 };
 
-// FIX 06/05/2026 (responsividade): maxWidth e padding adaptam a viewport.
-// Antes tinha maxWidth: 1100 cravado, deixando 170px vazio em 1440x900
-// e 730px em 2560x1440. Agora escala em 4 niveis. Padding tambem ajusta —
-// mobile precisa de menos pra dar espaco aos cards.
 function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: number } {
-  if (w < 480) return { maxWidth: "100%", padding: 14 };       // mobile
-  if (w < 768) return { maxWidth: "100%", padding: 20 };       // tablet retrato
-  if (w < 1280) return { maxWidth: 1100, padding: 28 };        // tablet paisagem / laptop pequeno
-  if (w < 1900) return { maxWidth: 1340, padding: 32 };        // 1440x900 / FHD
-  return { maxWidth: 1600, padding: 36 };                       // 2560x1440 ultrawide
+  if (w < 480) return { maxWidth: "100%", padding: 14 };
+  if (w < 768) return { maxWidth: "100%", padding: 20 };
+  if (w < 1280) return { maxWidth: 1100, padding: 28 };
+  if (w < 1900) return { maxWidth: 1340, padding: 32 };
+  return { maxWidth: 1600, padding: 36 };
 }
 
 function maskDate(v: string): string {
@@ -68,35 +63,101 @@ function brToISO(br: string): string | null {
   return y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
 }
 
+// ─── F3-3D: Card de A Receber do crediario ──────────────────
+// Consome GET /financial/receivables (Negocio+).
+// Gating no backend: planos inferiores recebem 403 e o card nao renderiza.
+// Mostra KPIs: total aberto, vencido, recebido no mes. Link para /crediario.
+function CrediarioReceivablesCard({ companyId }: { companyId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["financial-receivables", companyId],
+    queryFn: () => creditApi.getReceivables(companyId),
+    staleTime: 120_000,
+    retry: false, // nao retentar em 403 (plano insuficiente)
+  });
+
+  // Nao mostrar se: carregando, erro (403/plano), ou sem clientes em aberto
+  if (isLoading || !data || data.kpis.customers_open === 0) return null;
+
+  const { kpis } = data;
+  const fmtR = (n: number) =>
+    "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <View style={rcv.card}>
+      <View style={rcv.headerRow}>
+        <View style={rcv.iconBox}>
+          <Icon name="percent" size={15} color={Colors.violet3} />
+        </View>
+        <Text style={rcv.title}>Crediário — A Receber</Text>
+        <Pressable
+          onPress={() => router.push("/(tabs)/crediario" as any)}
+          style={rcv.linkBtn}
+        >
+          <Text style={rcv.linkBtnText}>Ver detalhes</Text>
+          <Icon name="chevron_right" size={11} color={Colors.violet3} />
+        </Pressable>
+      </View>
+
+      <View style={rcv.kpiRow}>
+        <View style={rcv.kpi}>
+          <Text style={rcv.kpiLabel}>ABERTO</Text>
+          <Text style={[rcv.kpiValue, { color: Colors.violet3 }]}>{fmtR(kpis.total_open)}</Text>
+          <Text style={rcv.kpiMeta}>{kpis.customers_open} cliente{kpis.customers_open !== 1 ? "s" : ""}</Text>
+        </View>
+        {kpis.total_overdue > 0 && (
+          <View style={rcv.kpi}>
+            <Text style={rcv.kpiLabel}>VENCIDO</Text>
+            <Text style={[rcv.kpiValue, { color: Colors.red }]}>{fmtR(kpis.total_overdue)}</Text>
+          </View>
+        )}
+        <View style={rcv.kpi}>
+          <Text style={rcv.kpiLabel}>RECEBIDO MÊS</Text>
+          <Text style={[rcv.kpiValue, { color: Colors.green }]}>{fmtR(kpis.received_month)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const rcv = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.bg3, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: Colors.border2, marginTop: 14,
+  },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
+  iconBox: {
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+  },
+  title: { flex: 1, fontSize: 12, fontWeight: "700", color: Colors.ink },
+  linkBtn: { flexDirection: "row", alignItems: "center", gap: 2 },
+  linkBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  kpiRow: { flexDirection: "row", gap: 10 },
+  kpi: { flex: 1 },
+  kpiLabel: { fontSize: 8, fontWeight: "800", letterSpacing: 0.8, color: Colors.ink3, textTransform: "uppercase", marginBottom: 4 },
+  kpiValue: { fontSize: 15, fontWeight: "800", letterSpacing: -0.3 },
+  kpiMeta: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+});
+
+// ─── Tela principal ──────────────────────────────────────────
 export default function FinanceiroScreen() {
-  // Reativo a resize/orientation. Antes era Dimensions.get("window").width
-  // no module load — viewport ficava cravado no primeiro render.
   var { width: vw } = useWindowDimensions();
   var layout = getLayoutForWidth(vw);
   var IS_WIDE = vw >= 768;
   var IS_NARROW = vw < 480;
 
-  // Deep-link: ?tab= define aba inicial; ?focus= rola pro card alvo
-  // (ex.: focus=abc -> #abc-curve-card dentro da TabReceitas).
   var params = useLocalSearchParams<{ tab?: string; focus?: string }>();
   var paramTab = typeof params.tab === "string" ? params.tab : undefined;
   var paramFocus = typeof params.focus === "string" ? params.focus : undefined;
   var initialTab = paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined ? TAB_KEY_TO_INDEX[paramTab] : TAB_INDEX.visao;
 
-  // V2: 6 abas (Visao Geral, Receitas, Despesas, Lancamentos, Retirada, Cupons).
-  // TAB_INDEX exporta indices semanticos; nao escrever numeros literais.
   var [activeTab, setActiveTab] = useState(initialTab);
-  // FIX 04/05/2026: default era "today" — recorrentes mensais materializadas
-  // (12 rows com due_date espalhadas) eram filtradas fora da janela. Cliente
-  // Eryca reportou que despesa de R$5k aparecia no Painel mas nao no Financeiro.
-  // "month" alinha com expectativa: entrei no Financeiro pra ver o mes atual.
   var [period, setPeriod] = useState<PeriodKey>("month");
   var [showModal, setShowModal] = useState(false);
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
-  // Estado pra abrir/fechar o seletor de periodo customizado quando usuario clica
-  // no botao "Periodo" do topbar.
   var [showCustomPeriod, setShowCustomPeriod] = useState(false);
   var scrollRef = useRef<any>(null);
 
@@ -114,19 +175,12 @@ export default function FinanceiroScreen() {
   var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
 
-  // Deep-link: troca de aba se o param `tab` mudar enquanto a tela ja
-  // estiver montada (ex.: usuario clica no CTA do Painel quando ja estava
-  // em /financeiro). Sem esse efeito, useState so leria o valor inicial.
   useEffect(function() {
     if (paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined) {
       setActiveTab(TAB_KEY_TO_INDEX[paramTab]);
     }
   }, [paramTab]);
 
-  // Deep-link: auto-scroll pro card alvo. Por enquanto so 'abc' (Curva ABC
-  // dentro da aba Receitas). nativeID="abc-curve-card" no TabReceitas vira
-  // id no DOM em RN-Web. Pequeno delay pra garantir que a aba renderizou
-  // e o card tem layout. Native nao suporta scrollIntoView -> noop benigno.
   useEffect(function() {
     if (paramFocus !== "abc") return;
     if (activeTab !== TAB_INDEX.receitas) return;
@@ -144,8 +198,6 @@ export default function FinanceiroScreen() {
 
   var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
 
-  // MULTICNPJ Onda 2.2: adapta TransactionsBreakdown -> DashboardBreakdown shape
-  // (income -> revenue) pra reusar o mesmo ConsolidatedBreakdownCard do Painel.
   var breakdownForCard = useMemo(function() {
     if (!consolidatedBreakdown || !consolidatedBreakdown.length) return [];
     return consolidatedBreakdown.map(function(b: any) {
@@ -168,7 +220,6 @@ export default function FinanceiroScreen() {
 
   function handlePeriodChange(p: PeriodKey) {
     setPeriod(p);
-    // Quando usuario clica em "Periodo", abre seletor de datas custom inline
     if (p === "custom") setShowCustomPeriod(true);
     else setShowCustomPeriod(false);
   }
@@ -221,7 +272,6 @@ export default function FinanceiroScreen() {
     setEditTx(null); setShowModal(true);
   }
 
-  // Container responsivo — recalcula a cada render conforme vw muda.
   var contentStyle = {
     padding: layout.padding,
     paddingBottom: 48,
@@ -242,8 +292,6 @@ export default function FinanceiroScreen() {
         />
       </WebPortal>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={contentStyle}>
-        {/* V2: Topbar nova substitui ScreenHeader + periodBar antigo. Em consolidated,
-            mostra "Consolidado · N empresas" e esconde "Novo lancamento". */}
         <FinanceiroTopbar
           companyName={company?.name || ""}
           consolidated={!!consolidatedView}
@@ -254,7 +302,6 @@ export default function FinanceiroScreen() {
           onNew={consolidatedView ? undefined : handleNewTransaction}
         />
 
-        {/* MULTICNPJ Onda 2.2: banner de modo consolidado — preservado abaixo do topbar */}
         {consolidatedView && (
           <View style={s.consolidatedBanner}>
             <Icon name="globe" size={14} color="#a78bfa" />
@@ -271,8 +318,6 @@ export default function FinanceiroScreen() {
 
         {!consolidatedView && <AgentBanner context="financeiro" />}
 
-        {/* Selector de periodo custom — aparece quando usuario clica "Periodo" no topbar.
-            Em produção, futuro: substituir por DatePicker bonito. */}
         {(period === "custom" || showCustomPeriod) && (
           <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
             <View style={s.customField}>
@@ -300,12 +345,11 @@ export default function FinanceiroScreen() {
           />
         )}
 
-        {/* MULTICNPJ Onda 2.2: breakdown card so na Tab Visao Geral e em consolidated */}
         {consolidatedView && activeTab === TAB_INDEX.visao && breakdownForCard.length > 0 && (
           <ConsolidatedBreakdownCard breakdown={breakdownForCard as any} />
         )}
 
-        {/* Tabs (6 abas — V2). Scroll horizontal em mobile pra caber todas. */}
+        {/* Tabs */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: IS_NARROW ? 4 : IS_WIDE ? 8 : 6 }}>
           {TABS.map(function(tab, i) {
             return <Pressable key={tab} onPress={function() { handleTabSelect(i); }} style={[s.tab, IS_NARROW ? s.tabNarrow : null, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
@@ -317,28 +361,30 @@ export default function FinanceiroScreen() {
         {!isDemo && transactions.length > 0 && (activeTab === TAB_INDEX.visao || activeTab === TAB_INDEX.lancamentos) && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
         {isLoading && activeTab !== TAB_INDEX.cupons && <ListSkeleton rows={4} showCards />}
 
-        {/* Tab content — switch por activeTab semantico */}
         {activeTab === TAB_INDEX.visao && (
-          <TabVisaoGeral
-            transactions={transactions}
-            summary={summary}
-            previousSummary={previousSummary}
-            period={period}
-            customStart={customStart}
-            customEnd={customEnd}
-            isLoading={isLoading}
-            isDemo={isDemo}
-            onNewTransaction={handleNewTransaction}
-            onImport={!importing && !consolidatedView ? handleImport : undefined}
-            onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
-            onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }}
-            onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
-          />
+          <>
+            <TabVisaoGeral
+              transactions={transactions}
+              summary={summary}
+              previousSummary={previousSummary}
+              period={period}
+              customStart={customStart}
+              customEnd={customEnd}
+              isLoading={isLoading}
+              isDemo={isDemo}
+              onNewTransaction={handleNewTransaction}
+              onImport={!importing && !consolidatedView ? handleImport : undefined}
+              onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+              onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }}
+              onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
+            />
+            {/* F3-3D (29/05/2026): A Receber crediario -- so em empresa individual, Negocio+ */}
+            {!consolidatedView && company?.id && (
+              <CrediarioReceivablesCard companyId={company.id} />
+            )}
+          </>
         )}
 
-        {/* V2: Receitas + Despesas — abas novas (multi-CNPJ aware).
-            Onda 2: passa period pro hook useFinancialInsights buscar dados ricos
-            do server (top5, methods, timeline, DOW, anomalias, gauge). */}
         {activeTab === TAB_INDEX.receitas && (
           <TabReceitas
             transactions={transactions}
@@ -371,8 +417,6 @@ export default function FinanceiroScreen() {
           />
         )}
 
-        {/* Retirada e Cupons — preservadas como abas extras (Onda 1 do redesign).
-            Em consolidated, ambas mostram o ConsolidatedBlocked existente. */}
         {activeTab === TAB_INDEX.retirada && consolidatedView && <ConsolidatedBlocked label="Retirada / Pro-labore" description="O calculo de retirada usa regime tributario e Fator R da empresa. Selecione uma empresa no switcher." />}
         {activeTab === TAB_INDEX.retirada && !consolidatedView && <TabRetirada transactions={transactions} />}
         {activeTab === TAB_INDEX.cupons && consolidatedView && <ConsolidatedBlocked label="Cupons" description="Cupons sao gerenciados por empresa. Selecione uma para ver e criar cupons." />}
@@ -385,7 +429,6 @@ export default function FinanceiroScreen() {
   );
 }
 
-// MULTICNPJ Onda 2.2: placeholder pras tabs que precisam de empresa especifica
 function ConsolidatedBlocked({ label, description }: { label: string; description: string }) {
   return (
     <View style={s.blocked}>
@@ -401,14 +444,12 @@ function ConsolidatedBlocked({ label, description }: { label: string; descriptio
 
 var s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
-  // padding/maxWidth movidos pra contentStyle inline (responsivo via useWindowDimensions)
   customRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2 },
   customField: { flex: 1 },
   customLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  // Tab compacta em mobile — caber mais antes de scroll horizontal.
   tabNarrow: { paddingHorizontal: 8, paddingVertical: 7 },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
@@ -417,7 +458,6 @@ var s = StyleSheet.create({
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 
-  // MULTICNPJ Onda 2.2
   consolidatedBanner: {
     flexDirection: "row",
     gap: 10,
