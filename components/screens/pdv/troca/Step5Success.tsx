@@ -16,6 +16,16 @@
 //   - Botao Reemitir nota quando ha falha ou pendente.
 //   - handleReemitir usa getApiBase() + fetch com Authorization header
 //     (mesmo padrao de openReceipt/openDanfe — sem fetch cru/URL relativa).
+// 29/05/2026 (fix 404 DANFE/Reemitir):
+//   - getApiBase() ganhou fallback de producao (Railway), igual ao
+//     BASE_URL de services/api.ts. Antes retornava "" quando
+//     EXPO_PUBLIC_API_URL nao estava no bundle web, gerando URL relativa
+//     que o Expo Router tratava como rota interna -> "Unmatched Route".
+// 29/05/2026 (DANFE autenticado):
+//   - openDanfe agora baixa o PDF via fetch com Authorization + blob e
+//     abre em nova aba. A rota /print/danfe/devolucao/:saleId exige auth;
+//     window.open direto nao manda o Bearer -> 401. Mesmo padrao do
+//     NfceActions (openPrintNfceTermica).
 // ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
@@ -153,13 +163,32 @@ export function Step5Success({
     }
   }
 
-  function openDanfe() {
+  // 29/05/2026: DANFE da NF-e 55 de devolucao. A rota exige auth, entao
+  // baixamos via fetch com Authorization + blob e abrimos em nova aba
+  // (mesmo padrao do NfceActions). window.open direto -> 401.
+  async function openDanfe() {
     if (!trocaSaleId) return;
     const url = `${getApiBase()}/companies/${fiscalCompanyId}/print/danfe/devolucao/${trocaSaleId}`;
-    if (Platform.OS === "web") {
-      window.open(url, "_blank");
-    } else {
-      Linking.openURL(url).catch(() => {});
+    try {
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!resp.ok) {
+        let msg = "Nao foi possivel gerar o DANFE da devolucao.";
+        try {
+          const j = await resp.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        if (Platform.OS === "web") window.alert(msg);
+        return;
+      }
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      if (Platform.OS === "web") {
+        window.open(blobUrl, "_blank");
+      } else {
+        Linking.openURL(blobUrl).catch(() => {});
+      }
+    } catch {
+      if (Platform.OS === "web") window.alert("Erro ao baixar o DANFE da devolucao.");
     }
   }
 
@@ -332,11 +361,16 @@ function fmtNow(): string {
   return d.toLocaleDateString("pt-BR") + " · " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+// 29/05/2026 (fix 404): fallback de producao igual ao BASE_URL de
+// services/api.ts. Sem ele, quando EXPO_PUBLIC_API_URL nao esta no bundle
+// web getApiBase() devolvia "" -> URL relativa -> "Unmatched Route".
+const API_FALLBACK = "https://aura-backend-production-f805.up.railway.app/api/v1";
 function getApiBase(): string {
   try {
     // @ts-ignore
-    return (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
-  } catch { return ""; }
+    const env = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
+    return env || API_FALLBACK;
+  } catch { return API_FALLBACK; }
 }
 
 const s = StyleSheet.create({

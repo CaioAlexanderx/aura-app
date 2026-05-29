@@ -44,6 +44,14 @@ function phoneToWa(raw: string): string {
   return digits.startsWith("55") ? digits : "55" + digits;
 }
 
+// F3-3C (29/05/2026): fonte de verdade do saldo descoberto de uma parcela.
+// covered_amount (FIFO do applyPayment) substitui amount_paid.
+// Fallback para amount_paid para compatibilidade com dados legados.
+function installmentRemaining(inst: CreditInstallment): number {
+  const covered = Number(inst.covered_amount ?? inst.amount_paid ?? 0);
+  return Math.max(0, Number(inst.amount_due) - covered);
+}
+
 const SCORE_LABEL_MAP: Record<string, string> = {
   premium: "Histórico: excelente",
   bom: "Histórico: bom",
@@ -82,22 +90,26 @@ const TRAFFIC_LIGHT_COLORS: Record<string, string> = {
 };
 
 // ─── Modal de baixa de parcela ───────────────────────────────
+// F3-3C: usa covered_amount como fonte do saldo + campo de método de pagamento.
+// Valor livre: não travado no amount_due — caixa pode receber valor parcial.
 type PayModalProps = {
   installment: CreditInstallment;
   config?: { interest_rate: number; late_fee_rate: number; late_interest_daily: number };
   onClose: () => void;
-  onConfirm: (id: string, amount: number) => void;
+  onConfirm: (id: string, amount: number, method: string) => void;
   isPending: boolean;
 };
 
 function PayInstallmentModal({ installment, config, onClose, onConfirm, isPending }: PayModalProps) {
-  const remaining = Number(installment.amount_due) - Number(installment.amount_paid);
+  // F3-3C: remaining usa covered_amount (FIFO) como fonte de verdade
+  const remaining = installmentRemaining(installment);
   const late = installment.status === "overdue" ? daysLate(installment.due_date) : 0;
   const lateFee = late > 0 && config ? remaining * (config.late_fee_rate / 100) : 0;
   const lateInterest = late > 0 && config ? remaining * (config.late_interest_daily / 100) * late : 0;
   const suggested = remaining + lateFee + lateInterest;
 
   const [amount, setAmount] = useState(suggested.toFixed(2).replace(".", ","));
+  const [method, setMethod] = useState("pix");
 
   function parseAmt() {
     return parseFloat(amount.replace(/\./g, "").replace(",", ".")) || suggested;
@@ -116,7 +128,7 @@ function PayInstallmentModal({ installment, config, onClose, onConfirm, isPendin
           </Text>
 
           <View style={pm.row}>
-            <Text style={pm.rowLabel}>Valor original</Text>
+            <Text style={pm.rowLabel}>Saldo descoberto</Text>
             <Text style={pm.rowValue}>{fmt(remaining)}</Text>
           </View>
           {lateFee > 0 && (
@@ -144,13 +156,28 @@ function PayInstallmentModal({ installment, config, onClose, onConfirm, isPendin
             placeholderTextColor={Colors.ink3}
           />
 
+          <Text style={[pm.inputLabel, { marginTop: 14 }]}>Forma de pagamento</Text>
+          <View style={pm.methodRow}>
+            {PAYMENT_METHODS.map(m => (
+              <Pressable
+                key={m.key}
+                style={[pm.methodPill, method === m.key && pm.methodPillActive]}
+                onPress={() => setMethod(m.key)}
+              >
+                <Text style={[pm.methodPillText, method === m.key && pm.methodPillTextActive]}>
+                  {m.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           <View style={pm.btnRow}>
             <Pressable style={pm.cancelBtn} onPress={onClose}>
               <Text style={pm.cancelBtnText}>Cancelar</Text>
             </Pressable>
             <Pressable
               style={[pm.confirmBtn, isPending && { opacity: 0.6 }]}
-              onPress={() => onConfirm(installment.id, parseAmt())}
+              onPress={() => onConfirm(installment.id, parseAmt(), method)}
               disabled={isPending}
             >
               {isPending
@@ -185,7 +212,7 @@ function FiadoPayModal({ onClose, onConfirm, isPending }: FiadoPayModalProps) {
       <Pressable style={pm.backdrop} onPress={onClose}>
         <Pressable style={pm.sheet} onPress={() => {}}>
           <Text style={pm.title}>Registrar recebimento</Text>
-          <Text style={pm.subtitle}>Abatimento manual no saldo fiado do cliente</Text>
+          <Text style={pm.subtitle}>Abatimento manual no saldo do cliente (valor livre)</Text>
 
           <Text style={pm.inputLabel}>Valor (R$)</Text>
           <TextInput
@@ -321,10 +348,10 @@ export default function CrediarioClienteScreen() {
     staleTime: 30_000,
   });
 
-  // Baixa de parcela
+  // Baixa de parcela — F3-3C: passa payment_method para applyPayment via creditLedger
   const payMut = useMutation({
-    mutationFn: ({ iid, amount }: { iid: string; amount: number }) =>
-      creditApi.payInstallment(company!.id, iid, { amount_paid: amount }),
+    mutationFn: ({ iid, amount, method }: { iid: string; amount: number; method: string }) =>
+      creditApi.payInstallment(company!.id, iid, { amount_paid: amount, payment_method: method }),
     onSuccess: () => {
       toast.success("Parcela recebida!");
       setPayingInstallment(null);
@@ -334,7 +361,7 @@ export default function CrediarioClienteScreen() {
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao dar baixa na parcela"),
   });
 
-  // Pagamento fiado
+  // Pagamento fiado — valor livre, applyPayment via creditLedger
   const fiadoMut = useMutation({
     mutationFn: ({ amount, method }: { amount: number; method: string }) =>
       creditApi.receivePayment(company!.id, id, { amount, payment_method: method }),
@@ -342,6 +369,8 @@ export default function CrediarioClienteScreen() {
       toast.success("Recebimento registrado!");
       setShowFiadoPay(false);
       qc.invalidateQueries({ queryKey: ["credit-history", company?.id, id] });
+      qc.invalidateQueries({ queryKey: ["credit-profile", company?.id, id] });
+      qc.invalidateQueries({ queryKey: ["credit-dashboard"] });
     },
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao registrar recebimento"),
   });
@@ -392,8 +421,9 @@ export default function CrediarioClienteScreen() {
   const scoreLabel = profile?.label ? (SCORE_LABEL_MAP[profile.label] || profile.label) : null;
   const scoreLabelColor = profile?.label ? (SCORE_COLORS[profile.label] || Colors.ink3) : Colors.ink3;
 
+  // F3-3C: usa installmentRemaining (covered_amount) como fonte de verdade
   const totalOpenInstallmentsAmount = openInstallments.reduce(
-    (sum, i) => sum + (Number(i.amount_due) - Number(i.amount_paid)), 0
+    (sum, i) => sum + installmentRemaining(i), 0
   );
 
   const isLoading = profileQ.isLoading;
@@ -516,10 +546,12 @@ export default function CrediarioClienteScreen() {
               <View style={s.sectionCard}>
                 <Text style={s.sectionTitle}>Parcelas em aberto</Text>
                 {openInstallments.map((inst) => {
-                  const remaining = Number(inst.amount_due) - Number(inst.amount_paid);
+                  // F3-3C: remaining usa covered_amount (FIFO) como fonte de verdade
+                  const remaining = installmentRemaining(inst);
                   const late = inst.status === "overdue" ? daysLate(inst.due_date) : 0;
                   const isOverdue = inst.status === "overdue";
                   const isCollecting = collectMut.isPending && collectMut.variables === inst.id;
+                  const hasPartialCoverage = Number(inst.covered_amount) > 0 && remaining < Number(inst.amount_due);
                   return (
                     <View key={inst.id} style={s.installmentRow}>
                       <View style={s.installmentLeft}>
@@ -527,6 +559,11 @@ export default function CrediarioClienteScreen() {
                           Parcela {inst.installment_number}/{inst.total_installments}
                           {" · "}
                           <Text style={s.installmentAmount}>{fmt(remaining)}</Text>
+                          {hasPartialCoverage && (
+                            <Text style={{ color: Colors.ink3, fontSize: 10 }}>
+                              {" "}({fmt(Number(inst.amount_due))} total)
+                            </Text>
+                          )}
                         </Text>
                         <Text style={s.installmentDate}>Vence {fmtDate(inst.due_date)}</Text>
                       </View>
@@ -662,7 +699,7 @@ export default function CrediarioClienteScreen() {
           installment={payingInstallment}
           config={profile?.config}
           onClose={() => setPayingInstallment(null)}
-          onConfirm={(iid, amount) => payMut.mutate({ iid, amount })}
+          onConfirm={(iid, amount, method) => payMut.mutate({ iid, amount, method })}
           isPending={payMut.isPending}
         />
       )}
