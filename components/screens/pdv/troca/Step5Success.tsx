@@ -11,7 +11,11 @@
 // 29/05/2026 (fase2):
 //   - Status fiscal usa result.fiscal.per_origin[] (resposta real
 //     do backend fase1). Substitui strings fixas por status dinamico.
+// 29/05/2026 (C5+C6.2):
+//   - fiscalOriginStatus cobre pendente + none + falha honestamente.
+//   - Botao Reemitir nota quando ha falha ou pendente.
 // ============================================================
+import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -39,11 +43,18 @@ type Props = {
 function fiscalOriginStatus(item: any): { label: string; color: string } {
   if (!item) return { label: "Processando...", color: "#fbbf24" };
   if (item.status === "autorizada") {
-    const stratLabel = item.strategy === "cancel_reissue" ? "NFC-e cancelada" : "NF-e emitida";
+    const stratLabel =
+      item.strategy === "cancel_reissue" ? "NFC-e cancelada" : "NF-e emitida";
     return { label: stratLabel, color: "#4ade80" };
   }
   if (item.status === "falha") {
-    return { label: "Falhou — sera reprocessada", color: "#f87171" };
+    return { label: "Falhou — emitir manualmente", color: "#f87171" };
+  }
+  if (item.status === "pendente") {
+    return { label: "Pendente de emissao", color: "#fbbf24" };
+  }
+  if (item.status === "none") {
+    return { label: "Sem nota fiscal", color: "#94a3b8" };
   }
   return { label: "Processando...", color: "#fbbf24" };
 }
@@ -54,7 +65,7 @@ export function Step5Success({
   paymentSplits,
   onClose, onNew,
 }: Props) {
-  const { company } = useAuthStore();
+  const { company, token } = useAuthStore();
   const autoEmit = !!(company as any)?.nfce_config?.auto_emit_nfce;
 
   const trocaSaleId = result?.sale?.id || result?.original_sale_ids?.[0] || "";
@@ -65,14 +76,19 @@ export function Step5Success({
 
   // fiscal.per_origin[] — resposta real do backend (fase1).
   // Fallback para array vazio caso backend mais antigo nao retorne o campo.
-  const perOrigin: any[] = Array.isArray(result?.fiscal?.per_origin)
+  const perOriginInit: any[] = Array.isArray(result?.fiscal?.per_origin)
     ? result.fiscal.per_origin
     : [];
 
+  // State local para refletir reemissao sem recarregar o modal inteiro.
+  const [perOriginLocal, setPerOriginLocal] = useState<any[]>(perOriginInit);
+  const [reemitindo, setReemitindo] = useState(false);
+
   // 26/05/2026 (B3): companyId fiscal = origem da sale.
   const fiscalCompanyId =
-    result?.origin_company_id ||
-    (Array.isArray(result?.origin_company_ids) && result.origin_company_ids[0]) ||
+    result?.fiscal_company_id ??
+    result?.origin_company_id ??
+    (Array.isArray(result?.origin_company_ids) && result.origin_company_ids[0]) ??
     companyId;
 
   const newItemsRaw: any[] = Array.isArray(result?.new_items) ? result.new_items : [];
@@ -99,6 +115,32 @@ export function Step5Success({
 
   const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!fiscalCompanyId;
 
+  // C6.2 — handler de reemissao fiscal.
+  const handleReemitir = async () => {
+    setReemitindo(true);
+    try {
+      const saleId = result?.troca?.id ?? trocaSaleId;
+      const resp = await fetch(
+        `/companies/${fiscalCompanyId}/troca/${saleId}/reemitir-fiscal`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const data = await resp.json();
+      if (data?.fiscal?.per_origin) {
+        setPerOriginLocal(data.fiscal.per_origin);
+      }
+    } catch {
+      // silencioso — badge permanece no estado atual
+    } finally {
+      setReemitindo(false);
+    }
+  };
+
   function openReceipt() {
     if (!receiptUrl) return;
     const fullUrl = receiptUrl.startsWith("http") ? receiptUrl : `${getApiBase()}${receiptUrl}`;
@@ -120,8 +162,8 @@ export function Step5Success({
   }
 
   // Texto do subtitulo baseado no resultado fiscal real.
-  // Prefere per_origin[] quando disponivel; cai em nfceStrategy como fallback.
-  const subTitle = buildSubTitle(perOrigin, nfceStrategy);
+  // Prefere perOriginLocal quando disponivel; cai em nfceStrategy como fallback.
+  const subTitle = buildSubTitle(perOriginLocal, nfceStrategy);
 
   return (
     <View style={s.wrap}>
@@ -146,14 +188,14 @@ export function Step5Success({
         <SummaryRow label="Devolvido" value={`${fmtBRL(returnedValue)}`} valueColor="#fb923c" />
         <SummaryRow label="Levado" value={`${fmtBRL(newValue)}`} valueColor="#6ee7b7" />
 
-        {/* Status fiscal real por origem */}
-        {perOrigin.length > 0
-          ? perOrigin.map((item: any, idx: number) => {
+        {/* Status fiscal real por origem — usa perOriginLocal para refletir reemissao */}
+        {perOriginLocal.length > 0
+          ? perOriginLocal.map((item: any, idx: number) => {
               const st = fiscalOriginStatus(item);
               return (
                 <SummaryRow
                   key={item?.origin_sale_id || idx}
-                  label={perOrigin.length > 1 ? `Fiscal origem ${idx + 1}` : "Fiscal"}
+                  label={perOriginLocal.length > 1 ? `Fiscal origem ${idx + 1}` : "Fiscal"}
                   value={st.label}
                   valueColor={st.color}
                 />
@@ -182,6 +224,19 @@ export function Step5Success({
           <SummaryRow label="Troca par-a-par" value="Sem diferenca" big />
         )}
       </View>
+
+      {/* C6.2 — botao Reemitir nota quando ha falha ou pendente */}
+      {perOriginLocal.some((i) => i.status === "falha" || i.status === "pendente") && (
+        <Pressable
+          style={[s.reemitirBtn, reemitindo && { opacity: 0.6 }]}
+          onPress={reemitindo ? undefined : handleReemitir}
+          disabled={reemitindo}
+        >
+          <Text style={s.reemitirTxt}>
+            {reemitindo ? "Reemitindo..." : "Reemitir nota"}
+          </Text>
+        </Pressable>
+      )}
 
       {isCrossFilial && (
         <View style={s.xfilial}>
@@ -313,6 +368,13 @@ const s = StyleSheet.create({
   rowLabel: { color: Colors.ink3, fontSize: 13 },
   rowValue: { color: Colors.ink, fontSize: 13, fontWeight: "600", maxWidth: 280, textAlign: "right" },
   divider: { height: 1, backgroundColor: "rgba(255,255,255,0.08)", marginVertical: 6 },
+  reemitirBtn: {
+    marginTop: 12, paddingVertical: 10, paddingHorizontal: 20,
+    borderRadius: 10, backgroundColor: "rgba(124,58,237,0.15)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
+    alignSelf: "center",
+  },
+  reemitirTxt: { color: "#a78bfa", fontSize: 13, fontWeight: "700" },
   xfilial: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(37,99,235,0.12)",

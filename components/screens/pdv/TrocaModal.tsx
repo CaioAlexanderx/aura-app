@@ -18,6 +18,9 @@
 //   - idempotency_key gerado uma vez ao abrir o modal (crypto.randomUUID
 //     com fallback Math.random). Incluido no payload v1 e v2.
 //   - Botao Confirmar desabilitado quando returnEntries.length === 0.
+//
+// 29/05/2026 (C3):
+//   - canConfirm via useMemo — semantica explicita + reatividade correta.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -133,8 +136,15 @@ export function TrocaModal({
     return false;
   }, [step, selectedSales.length, returnEntries.length, newEntries.length]);
 
-  // Confirmar troca so habilitado quando ha pelo menos 1 item a devolver.
-  const canConfirm = returnEntries.length > 0 && !submitting;
+  // C3: canConfirm via useMemo — semantica explicita, reatividade correta.
+  // Desabilitado visivelmente (opacity 0.45) quando nao ha itens ou esta submetendo.
+  const canConfirm = useMemo(() => {
+    if (submitting || returnEntries.length === 0) return false;
+    // Minimo: ha itens a devolver. Pagamento/estorno validados no submit.
+    // Habilita se ha itens devolvidos, mesmo sem split preenchido,
+    // para nao bloquear o fluxo simples (split opcional).
+    return returnEntries.length > 0;
+  }, [submitting, returnEntries.length]);
 
   const next = useCallback(() => {
     setStep((s) => (Math.min(4, s + 1) as StepV3));
