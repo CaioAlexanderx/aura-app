@@ -14,6 +14,8 @@
 // 29/05/2026 (C5+C6.2):
 //   - fiscalOriginStatus cobre pendente + none + falha honestamente.
 //   - Botao Reemitir nota quando ha falha ou pendente.
+//   - handleReemitir usa getApiBase() + fetch com Authorization header
+//     (mesmo padrao de openReceipt/openDanfe — sem fetch cru/URL relativa).
 // ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
@@ -116,20 +118,20 @@ export function Step5Success({
   const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!fiscalCompanyId;
 
   // C6.2 — handler de reemissao fiscal.
+  // Usa getApiBase() + fetch com Authorization header — mesmo padrao de
+  // openReceipt/openDanfe. Sem fetch cru nem URL relativa.
   const handleReemitir = async () => {
     setReemitindo(true);
     try {
       const saleId = result?.troca?.id ?? trocaSaleId;
-      const resp = await fetch(
-        `/companies/${fiscalCompanyId}/troca/${saleId}/reemitir-fiscal`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const url = `${getApiBase()}/companies/${fiscalCompanyId}/troca/${saleId}/reemitir-fiscal`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await resp.json();
       if (data?.fiscal?.per_origin) {
         setPerOriginLocal(data.fiscal.per_origin);

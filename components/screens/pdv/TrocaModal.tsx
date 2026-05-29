@@ -21,6 +21,8 @@
 //
 // 29/05/2026 (C3):
 //   - canConfirm via useMemo — semantica explicita + reatividade correta.
+//   - Desabilita quando netAmount > 0 e nenhum split de pagamento
+//     preenchido (evita clique-que-falha sem travar troca par-a-par).
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -137,14 +139,17 @@ export function TrocaModal({
   }, [step, selectedSales.length, returnEntries.length, newEntries.length]);
 
   // C3: canConfirm via useMemo — semantica explicita, reatividade correta.
-  // Desabilitado visivelmente (opacity 0.45) quando nao ha itens ou esta submetendo.
+  // Desabilita quando netAmount > 0 e nenhum split de pagamento preenchido
+  // (evita clique-que-falha sem travar troca par-a-par ou com estorno).
   const canConfirm = useMemo(() => {
     if (submitting || returnEntries.length === 0) return false;
-    // Minimo: ha itens a devolver. Pagamento/estorno validados no submit.
-    // Habilita se ha itens devolvidos, mesmo sem split preenchido,
-    // para nao bloquear o fluxo simples (split opcional).
-    return returnEntries.length > 0;
-  }, [submitting, returnEntries.length]);
+    // Se cliente deve pagar diferenca e nao ha nenhum split de pagamento,
+    // o botao desabilita — evita clique-que-falha sem atrapalhar troca par-a-par.
+    if (netAmount > 0.005 && (!Array.isArray(paymentSplits) || paymentSplits.length === 0)) {
+      return false;
+    }
+    return true;
+  }, [submitting, returnEntries.length, netAmount, paymentSplits]);
 
   const next = useCallback(() => {
     setStep((s) => (Math.min(4, s + 1) as StepV3));
