@@ -8,7 +8,7 @@ export type CartItem = { productId: string; name: string; price: number; qty: nu
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
 // O backend mapeia method PDV → tPag SEFAZ (dinheiro→01, cartao→03, debito→04, pix→17,
-// crediario→01 — fiado declarado como dinheiro pra evitar 391/442).
+// crediario→05 — Crédito Loja; F4 correcao 29/05/2026).
 export type PaymentEntry = {
   method: string;        // chave do PDV: "dinheiro" | "pix" | "debito" | "cartao" | "crediario"
   value: number;         // valor em R$
@@ -32,9 +32,11 @@ export type SaleResult = {
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
 };
 
-// Crediário (mai/2026): operação interna do lojista — venda fica como "a receber"
-// no cliente, registrada em customer_credit_transactions (migration 099).
-// Cliente opcional: sem customer_id a venda finaliza normalmente (crediário anônimo).
+// Crediário (F1 29/05/2026): venda fica como "a receber" no ledger do cliente
+// (customer_credit_transactions debit + transactions A Receber).
+// OBRIGATÓRIO: customer_id deve estar preenchido quando payment=crediario.
+// Backend retorna 422 CREDIARIO_REQUIRES_CUSTOMER caso contrário — o onError
+// abaixo trata esse caso com mensagem acionável para o lojista.
 export const PAYMENTS = [
   { key: "dinheiro",  label: "Dinheiro" },
   { key: "pix",       label: "PIX" },
@@ -254,7 +256,7 @@ export function useCart() {
    * @param saleDate  - data retroativa opcional (YYYY-MM-DD)
    * @param crediario - parâmetros de parcelamento quando payment=crediario e installments>1.
    *                    Passados diretamente no body do POST /pdv/sale para o backend
-   *                    criar as credit_installments inline (fase 1 crediário, 26/05/2026).
+   *                    criar as credit_installments inline (F1 creditLedger, 29/05/2026).
    */
   function finalizeSale(
     saleDate?: string,
@@ -310,8 +312,8 @@ export function useCart() {
       }
     }
 
-    // Crediário parcelado fase 1: adiciona installments no body da venda.
-    // O backend cria as credit_installments inline após o COMMIT da venda.
+    // Crediário parcelado: adiciona installments no body da venda.
+    // O backend (F1 creditLedger) cria as credit_installments DENTRO da transacao principal.
     if (crediario && crediario.installments > 1 && primaryPayment === "crediario") {
       saleData.installments = crediario.installments;
       saleData.first_due_date = crediario.first_due_date;
@@ -347,7 +349,17 @@ export function useCart() {
           // Não desativa splitMode automaticamente — usuário decide se mantém
           if (splitMode) setSplitPayments([]);
         },
-        onError: function(err: any) { toast.error(err?.message || "Erro ao registrar venda"); setIsProcessing(false); },
+        onError: function(err: any) {
+          // F3-3A (29/05/2026): trata 422 CREDIARIO_REQUIRES_CUSTOMER com mensagem acionavel.
+          // ApiError.data contem o body JSON do backend; .code eh o codigo do erro.
+          const errCode = err?.data?.code || err?.code;
+          if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
+            toast.error("Selecione um cliente antes de finalizar no crediário.");
+          } else {
+            toast.error(err?.data?.error || err?.message || "Erro ao registrar venda");
+          }
+          setIsProcessing(false);
+        },
       });
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
