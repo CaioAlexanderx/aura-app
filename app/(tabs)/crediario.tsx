@@ -1,5 +1,9 @@
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Dimensions, Platform } from "react-native";
+import {
+  View, Text, ScrollView, StyleSheet, Pressable,
+  ActivityIndicator, RefreshControl, useWindowDimensions,
+  Linking, Platform,
+} from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -8,11 +12,6 @@ import { useAuthStore } from "@/stores/auth";
 import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import type { AgingRow } from "@/services/creditApi";
-
-const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
-// IS_NARROW: breakpoint para KPI cards — valores monetários em fontSize 22
-// transbordavam os ~129px de largura interna disponível em telas <500px.
-const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : false;
 
 var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -46,6 +45,12 @@ export default function CrediarioScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
 
+  // F3-3B (29/05/2026): IS_WIDE/IS_NARROW calculados em tempo de execucao via
+  // useWindowDimensions, nao mais como constante de modulo (que nao recalculava em resize).
+  const { width } = useWindowDimensions();
+  const isWide   = width > 720;
+  const isNarrow = width < 500;
+
   const dashQ = useQuery({
     queryKey: ["credit-dashboard", company?.id],
     queryFn: () => creditApi.getDashboard(company!.id),
@@ -60,17 +65,6 @@ export default function CrediarioScreen() {
     staleTime: 60_000,
   });
 
-  const triggerMut = useMutation({
-    mutationFn: ({ installmentId, customerId }: { installmentId: string; customerId: string }) =>
-      creditApi.triggerCollection(company!.id, installmentId),
-    onSuccess: (data) => {
-      toast.success("Cobrança disparada!");
-      qc.invalidateQueries({ queryKey: ["credit-dashboard"] });
-    },
-    onError: (err: any) => toast.error(err?.data?.error || "Erro ao disparar cobrança"),
-    onSettled: () => setTriggeringId(null),
-  });
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
@@ -80,6 +74,19 @@ export default function CrediarioScreen() {
     setRefreshing(false);
   }, [company?.id]);
 
+  // F3-3B: envia mensagem WhatsApp de cobranca (wa.me eh o dispositivo canonico)
+  const handleTriggerWA = useCallback(async (customerName: string, phone: string | null, totalOverdue: number, overdueCount: number) => {
+    if (!phone) { toast.error("Cliente sem telefone cadastrado"); return; }
+    const clean = phone.replace(/\D/g, "");
+    const num   = clean.startsWith("55") ? clean : `55${clean}`;
+    const msg   = encodeURIComponent(
+      `Olá, ${customerName}! Passando para avisar que você tem ${overdueCount} parcela${overdueCount !== 1 ? "s" : ""} em aberto totalizando ${fmt(totalOverdue)} no nosso crediário. Entre em contato para regularizar.`
+    );
+    const url = `https://wa.me/${num}?text=${msg}`;
+    try { await Linking.openURL(url); }
+    catch { toast.error("Erro ao abrir WhatsApp"); }
+  }, []);
+
   const kpis = dashQ.data?.kpis;
   const topDefaulters = dashQ.data?.top_defaulters || [];
   const aging: AgingRow[] = agingQ.data || [];
@@ -88,10 +95,35 @@ export default function CrediarioScreen() {
 
   const isLoading = dashQ.isLoading || agingQ.isLoading;
 
+  // Skeleton de loading (substitui ActivityIndicator simples)
+  if (isLoading) {
+    return (
+      <ScrollView style={s.screen} contentContainerStyle={[s.content, { padding: isWide ? 32 : 16 }]}>
+        <View style={s.headerRow}>
+          <View style={s.headerTitleGroup}>
+            <View style={s.headerIconBox}><Icon name="percent" size={18} color={Colors.violet3} /></View>
+            <View>
+              <Text style={s.pageTitle}>Crediário</Text>
+              <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
+            </View>
+          </View>
+        </View>
+        <View style={s.kpiGrid}>
+          {[0,1,2].map(i => (
+            <View key={i} style={[s.kpiCard, { opacity: 0.4, minWidth: isWide ? 180 : "45%" as any }]}>
+              <View style={{ width: 60, height: 9, borderRadius: 4, backgroundColor: Colors.border, marginBottom: 8 }} />
+              <View style={{ width: 100, height: 22, borderRadius: 6, backgroundColor: Colors.border }} />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView
       style={s.screen}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { padding: isWide ? 32 : 16 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
     >
       {/* Header */}
@@ -109,36 +141,29 @@ export default function CrediarioScreen() {
         </Pressable>
       </View>
 
-      {isLoading && (
-        <View style={s.loadingBox}>
-          <ActivityIndicator color={Colors.violet3} size="large" />
-          <Text style={s.loadingText}>Carregando...</Text>
-        </View>
-      )}
-
-      {!isLoading && kpis && (
+      {kpis && (
         <>
           {/* KPI Hero */}
           <View style={s.kpiGrid}>
-            <View style={[s.kpiCard, s.kpiCardAccent]}>
+            <View style={[s.kpiCard, s.kpiCardAccent, { minWidth: isWide ? 180 : "45%" as any }]}>
               <Text style={s.kpiLabel}>A RECEBER</Text>
-              <Text style={[s.kpiValue, { color: Colors.violet3 }]}>{fmt(kpis.total_open_amount)}</Text>
+              <Text style={[s.kpiValue, { color: Colors.violet3, fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.total_open_amount)}</Text>
               <Text style={s.kpiMeta}>{kpis.total_open_count} parcelas abertas</Text>
             </View>
-            <View style={[s.kpiCard, { borderColor: Colors.red + "44" }]}>
+            <View style={[s.kpiCard, { borderColor: Colors.red + "44", minWidth: isWide ? 180 : "45%" as any }]}>
               <Text style={s.kpiLabel}>EM ATRASO</Text>
-              <Text style={[s.kpiValue, { color: Colors.red }]}>{fmt(kpis.overdue_amount)}</Text>
+              <Text style={[s.kpiValue, { color: Colors.red, fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.overdue_amount)}</Text>
               <Text style={s.kpiMeta}>{kpis.overdue_count} parcelas · {kpis.defaulting_customers} clientes</Text>
             </View>
-            <View style={[s.kpiCard, { borderColor: Colors.green + "44" }]}>
+            <View style={[s.kpiCard, { borderColor: Colors.green + "44", minWidth: isWide ? 180 : "45%" as any }]}>
               <Text style={s.kpiLabel}>RECEBIDO NO MÊS</Text>
-              <Text style={[s.kpiValue, { color: Colors.green }]}>{fmt(kpis.paid_this_month_amount)}</Text>
+              <Text style={[s.kpiValue, { color: Colors.green, fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.paid_this_month_amount)}</Text>
               <Text style={s.kpiMeta}>{kpis.paid_this_month_count} pagamentos</Text>
             </View>
             {kpis.critical_amount > 0 && (
-              <View style={[s.kpiCard, { borderColor: "#7f1d1d" }]}>
+              <View style={[s.kpiCard, { borderColor: "#7f1d1d", minWidth: isWide ? 180 : "45%" as any }]}>
                 <Text style={s.kpiLabel}>CRÍTICO (90+ dias)</Text>
-                <Text style={[s.kpiValue, { color: "#ef4444" }]}>{fmt(kpis.critical_amount)}</Text>
+                <Text style={[s.kpiValue, { color: "#ef4444", fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.critical_amount)}</Text>
                 <Text style={s.kpiMeta}>{kpis.critical_count} parcelas em risco</Text>
               </View>
             )}
@@ -201,7 +226,25 @@ export default function CrediarioScreen() {
                     </View>
                     <View style={s.debtorRight}>
                       <Text style={s.debtorAmount}>{fmt(d.total_overdue)}</Text>
-                      <Icon name="chevron_right" size={14} color={Colors.ink3} />
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        {/* F3-3B: botão cobranca WhatsApp (wa.me dispositivo canonico) */}
+                        <Pressable
+                          style={[s.triggerBtn, isTrig && { opacity: 0.4 }]}
+                          disabled={isTrig}
+                          onPress={(e) => {
+                            // Impede que o press propague para o Pressable pai (navegação)
+                            setTriggeringId(d.customer_id);
+                            handleTriggerWA(d.customer_name, d.phone, d.total_overdue, d.overdue_count)
+                              .finally(() => setTriggeringId(null));
+                          }}
+                        >
+                          {isTrig
+                            ? <ActivityIndicator size="small" color={Colors.violet3} />
+                            : <Icon name="message_circle" size={13} color={Colors.violet3} />
+                          }
+                        </Pressable>
+                        <Icon name="chevron_right" size={14} color={Colors.ink3} />
+                      </View>
                     </View>
                   </Pressable>
                 );
@@ -224,7 +267,7 @@ export default function CrediarioScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 48, maxWidth: 900, alignSelf: "center", width: "100%" },
+  content: { paddingBottom: 48, maxWidth: 900, alignSelf: "center", width: "100%" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   headerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
@@ -233,16 +276,11 @@ const s = StyleSheet.create({
   settingsBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
   settingsBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
 
-  loadingBox: { paddingVertical: 60, alignItems: "center", gap: 16 },
-  loadingText: { fontSize: 13, color: Colors.ink3 },
-
   kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
-  kpiCard: { flex: 1, minWidth: IS_WIDE ? 180 : "45%", backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
   kpiCardAccent: { borderColor: Colors.violet + "55" },
   kpiLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 8 },
-  // Mobile fix: fontSize 22 transbordava em cards de ~129px de largura interna
-  // em telas <500px (valores como "R$ 1.200,00" → ~144px). Reduzido pra 16.
-  kpiValue: { fontSize: IS_NARROW ? 16 : 22, fontWeight: "800", letterSpacing: -0.5 },
+  kpiValue: { fontWeight: "800", letterSpacing: -0.5 },
   kpiMeta: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
 
   sectionCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
@@ -264,7 +302,11 @@ const s = StyleSheet.create({
   scorePillText: { fontSize: 9.5, fontWeight: "700" },
   debtorRight: { alignItems: "flex-end", gap: 6 },
   debtorAmount: { fontSize: 14, fontWeight: "800", color: Colors.red },
-  triggerBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  triggerBtn: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+  },
 
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink },

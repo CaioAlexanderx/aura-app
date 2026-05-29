@@ -1,11 +1,12 @@
 // ============================================================
 // AURA. — Crediário API client
 // Fiado (credit.js) + Parcelado (creditInstallments.js)
-// Sem cache local — react-query do consumidor cuida disso.
+// F3 (29/05/2026): getCustomerPreview, quickCustomer, getPlanConfig,
+//   updatePlanConfig, getReceivables, getCustomerHistory com installments.
 // ============================================================
 import { request } from "@/services/api";
 
-// ─── Fiado (legado) ───────────────────────────────────────────
+// ─── Fiado (legado) ──────────────────────────────────────────
 export type CreditBalanceItem = {
   id: string; name: string; phone: string | null; cpf_cnpj: string | null;
   balance: number; total_debited: number; total_paid: number; last_activity_at: string | null;
@@ -18,6 +19,7 @@ export type CreditCustomerDetail = {
   customer: { id: string; name: string; phone: string; cpf_cnpj: string };
   balance: number; total_debited: number; total_paid: number;
   last_activity_at: string | null; transactions: CreditTransaction[];
+  open_installments?: CreditInstallment[];
 };
 
 // ─── Parcelado ────────────────────────────────────────────────
@@ -46,6 +48,10 @@ export type CreditInstallment = {
   id: string; sale_id: string | null; customer_id: string; company_id: string;
   installment_number: number; total_installments: number;
   amount_due: number; amount_paid: number;
+  /** Cobertura FIFO alocada pelo applyPayment (F1). Fonte de verdade do saldo descoberto. */
+  covered_amount: number;
+  /** Saldo descoberto: amount_due - covered_amount */
+  remaining?: number;
   due_date: string; paid_at: string | null;
   status: "pending" | "paid" | "overdue" | "cancelled";
   pix_link: string | null; late_fee: number; late_interest: number;
@@ -82,10 +88,48 @@ export type CollectionRules = {
   }>;
 };
 
+/** F3 (29/05/2026): Preview 360 do cliente para PDV checkout (guardrail suave). */
+export type CreditPreview = {
+  balance: number;
+  open_installments_count: number;
+  overdue_count: number;
+  next_due_date: string | null;
+  score: number;
+  score_label: ScoreLabel;
+  credit_limit: number;
+  credit_used: number;
+  /** true quando balance >= credit_limit e credit_limit > 0. Apenas aviso, nao bloqueia. */
+  over_limit: boolean;
+  status: "active" | "blocked";
+  blocked_reason: string | null;
+};
+
+/** F3 (29/05/2026): A receber do crediario no Financeiro. */
+export type FinancialReceivable = {
+  customer_id: string | null;
+  customer_name: string | null;
+  phone: string | null;
+  pending_count: number;
+  total_open: number;
+  oldest_due_date: string | null;
+  overdue_count: number;
+  overdue_amount: number;
+  last_sale_at: string | null;
+};
+export type FinancialReceivables = {
+  receivables: FinancialReceivable[];
+  kpis: {
+    total_open: number;
+    total_overdue: number;
+    customers_open: number;
+    received_month: number;
+  };
+};
+
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
 export const creditApi = {
-  // ── Fiado (legado) ─────────────────────────────────────────
+  // ── Fiado (legado) ───────────────────────────────────────────────
   listBalances(companyId: string, opts?: { onlyOpen?: boolean; q?: string }) {
     const qs = new URLSearchParams();
     if (opts?.onlyOpen === false) qs.set("only_open", "false");
@@ -99,7 +143,7 @@ export const creditApi = {
     return request<CreditCustomerDetail>(`${base(companyId)}/customer/${customerId}`);
   },
   receivePayment(companyId: string, customerId: string, body: { amount: number; payment_method?: string; notes?: string }) {
-    return request<{ transaction: CreditTransaction; new_balance: number }>(
+    return request<{ transaction: CreditTransaction; new_balance: number; settled: any[]; legacy_amount: number }>(
       `${base(companyId)}/customer/${customerId}/payment`, { method: "POST", body }
     );
   },
@@ -109,7 +153,7 @@ export const creditApi = {
     );
   },
 
-  // ── Crediário Parcelado ────────────────────────────────────
+  // ── Parcela crediário ────────────────────────────────────────────
   getCustomerProfile(companyId: string, customerId: string) {
     return request<CreditProfile>(`${base(companyId)}/customers/${customerId}/profile`);
   },
@@ -123,6 +167,28 @@ export const creditApi = {
       method: "PATCH", body: { action, reason },
     });
   },
+
+  /** F3-2A (29/05/2026): preview 360 para PDV checkout. */
+  getCustomerPreview(companyId: string, customerId: string) {
+    return request<CreditPreview>(`${base(companyId)}/customers/${customerId}/preview`);
+  },
+
+  /** F3-2B (29/05/2026): cadastro-relampago + limite inline. */
+  quickCustomer(companyId: string, body: { name?: string; phone?: string; cpf_cnpj?: string; credit_limit?: number }) {
+    return request<{ customer: { id: string; name: string; phone: string }; preview: CreditPreview }>(
+      `${base(companyId)}/quick-customer`, { method: "POST", body }
+    );
+  },
+
+  // ── Plan config (F2-2A) ─────────────────────────────────────────
+  getPlanConfig(companyId: string) {
+    return request<CreditPlanConfig>(`${base(companyId)}/plan-config`);
+  },
+  updatePlanConfig(companyId: string, body: Partial<CreditPlanConfig>) {
+    return request<CreditPlanConfig>(`${base(companyId)}/plan-config`, { method: "PUT", body });
+  },
+
+  // ── Installments ────────────────────────────────────────────────
   createInstallments(companyId: string, body: {
     customer_id: string; sale_id?: string; total_amount: number;
     installments: number; first_due_date: string;
@@ -142,8 +208,9 @@ export const creditApi = {
       `${base(companyId)}/installments${tail}`
     );
   },
-  payInstallment(companyId: string, installmentId: string, body?: { amount_paid?: number; paid_at?: string }) {
-    return request<CreditInstallment & { days_late: number; total_due: number }>(
+  /** Pagar parcela por valor livre. amount_paid omitido = saldo descoberto da parcela. */
+  payInstallment(companyId: string, installmentId: string, body?: { amount_paid?: number; payment_method?: string }) {
+    return request<CreditInstallment & { new_balance: number; settled: any[] }>(
       `${base(companyId)}/installments/${installmentId}/pay`, { method: "PATCH", body: body || {} }
     );
   },
@@ -152,6 +219,8 @@ export const creditApi = {
       `${base(companyId)}/installments/${installmentId}/cancel`, { method: "PATCH", body: {} }
     );
   },
+
+  // ── Dashboard / analytics ───────────────────────────────────────
   getDashboard(companyId: string) {
     return request<CreditDashboard>(`${base(companyId)}/dashboard`);
   },
@@ -168,5 +237,10 @@ export const creditApi = {
     return request<{ success: boolean; message: string; phone: string; days_late: number }>(
       `${base(companyId)}/collection/trigger/${installmentId}`, { method: "POST", body: body || {} }
     );
+  },
+
+  /** F3-2D (29/05/2026): A receber crediario no Financeiro. Negocio+. */
+  getReceivables(companyId: string) {
+    return request<FinancialReceivables>(`/companies/${companyId}/financial/receivables`);
   },
 };
