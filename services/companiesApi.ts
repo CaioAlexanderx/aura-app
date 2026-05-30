@@ -10,6 +10,26 @@ export type ProductCategoryRow = {
   product_count: number;
 };
 
+// 30/05/2026: parametros expandidos do ranking ABC (PR fix Eryca).
+// Backend novo aceita limit/offset/abc — UI consome em chunks de 25.
+export type ProductsRankingOpts = {
+  period?: string;
+  limit?: number;
+  offset?: number;
+  abc?: 'A' | 'B' | 'C';
+  category?: string;
+};
+
+function buildRankingQuery(opts?: ProductsRankingOpts): string {
+  var period = (opts && opts.period) || 'month';
+  var parts: string[] = ['period=' + encodeURIComponent(period)];
+  if (opts && typeof opts.limit === 'number')  parts.push('limit='  + opts.limit);
+  if (opts && typeof opts.offset === 'number') parts.push('offset=' + opts.offset);
+  if (opts && opts.abc)                        parts.push('abc='    + opts.abc);
+  if (opts && opts.category)                   parts.push('category=' + encodeURIComponent(opts.category));
+  return parts.join('&');
+}
+
 export var companiesApi = {
   get: function(companyId: string) { return request<any>("/companies/" + companyId); },
   getProfile: function(companyId: string) { return request<any>("/companies/" + companyId + "/profile"); },
@@ -95,6 +115,13 @@ export var companiesApi = {
   checklist: function(companyId: string) { return request<any>("/companies/" + companyId + "/checklist"); },
   completeCheckpoint: function(companyId: string, checkpointId: string) { return request<any>("/companies/" + companyId + "/checklist/" + checkpointId + "/complete", { method: "POST" }); },
   salesAnalytics: function(companyId: string, period?: string, groupBy?: string) { return request<any>("/companies/" + companyId + "/sales/analytics?period=" + (period || "month") + "&group_by=" + (groupBy || "day")); },
-  productsRanking: function(companyId: string, period?: string) { return request<any>("/companies/" + companyId + "/products/ranking?period=" + (period || "month")); },
+  // 30/05/2026: aceita opts (limit/offset/abc) alem de period. Compat com
+  // chamada antiga `productsRanking(cid, 'week')` mantida via overload.
+  productsRanking: function(companyId: string, periodOrOpts?: string | ProductsRankingOpts) {
+    var opts: ProductsRankingOpts = typeof periodOrOpts === 'string'
+      ? { period: periodOrOpts }
+      : (periodOrOpts || {});
+    return request<any>("/companies/" + companyId + "/products/ranking?" + buildRankingQuery(opts));
+  },
   productsCategories: function(companyId: string, period?: string) { return request<any>("/companies/" + companyId + "/products/categories?period=" + (period || "month")); },
 };
