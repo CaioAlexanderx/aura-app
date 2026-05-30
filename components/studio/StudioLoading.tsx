@@ -10,9 +10,10 @@
 //   "skeleton-cards"   — grid 2x2 de cards (galeria, produtos)
 //   "skeleton-grid"    — 3 colunas (KDS, dashboard)
 // ============================================================
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { View, ActivityIndicator, StyleSheet, Animated, Easing } from "react-native";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 type Variant = "spinner" | "skeleton-list" | "skeleton-cards" | "skeleton-grid";
 
@@ -25,10 +26,12 @@ export function StudioLoading({
   rows?: number;
   label?: string;
 }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   if (variant === "spinner") {
     return (
       <View style={s.spinnerWrap}>
-        <ActivityIndicator size="large" color={StudioColors.primary} />
+        <ActivityIndicator size="large" color={t.primary} />
         {label && (
           <View style={{ marginTop: 12 }}>
             <SkeletonText width={140} />
@@ -91,6 +94,7 @@ function useShimmer() {
 }
 
 function SkeletonText({ width = 100, height = 12 }: { width?: number | string; height?: number }) {
+  const t = useStudioTokens();
   const anim = useShimmer();
   const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.85] });
   return (
@@ -98,7 +102,7 @@ function SkeletonText({ width = 100, height = 12 }: { width?: number | string; h
       style={{
         width: width as any,
         height,
-        backgroundColor: StudioColors.ink5,
+        backgroundColor: t.ink5,
         borderRadius: 6,
         opacity,
       }}
@@ -107,6 +111,8 @@ function SkeletonText({ width = 100, height = 12 }: { width?: number | string; h
 }
 
 function SkeletonRow({ delay = 0 }: { delay?: number }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const t = setTimeout(() => {
@@ -132,6 +138,8 @@ function SkeletonRow({ delay = 0 }: { delay?: number }) {
 }
 
 function SkeletonCard({ delay = 0, small = false }: { delay?: number; small?: boolean }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const t = setTimeout(() => {
@@ -156,7 +164,8 @@ function SkeletonCard({ delay = 0, small = false }: { delay?: number; small?: bo
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   spinnerWrap: {
     alignItems: "center",
     justifyContent: "center",
@@ -181,28 +190,28 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 12,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   rowAvatar: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: StudioColors.ink5,
+    backgroundColor: t.ink5,
   },
   rowBar: {
     height: 10,
-    backgroundColor: StudioColors.ink5,
+    backgroundColor: t.ink5,
     borderRadius: 5,
   },
   card: {
     width: 180,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     overflow: "hidden",
   },
   cardSmall: {
@@ -210,8 +219,9 @@ const s = StyleSheet.create({
   },
   cardThumb: {
     height: 100,
-    backgroundColor: StudioColors.ink5,
+    backgroundColor: t.ink5,
   },
-});
+  });
+}
 
 export default StudioLoading;
