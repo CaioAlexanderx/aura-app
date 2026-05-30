@@ -1,10 +1,21 @@
 /**
- * Mapa canônico de status do Aura Studio → pt-BR.
+ * Mapa canônico de status do Aura Studio → pt-BR + cor semântica.
  * Item #8 da análise UX/UI: lojista não decora códigos técnicos.
  * Usar `labelStudioStatus(status)` em qualquer lugar que renderize status.
+ *
+ * Fase 0 do redesign (30/05/2026): a COR agora deriva de StudioSemantic
+ * (constants/studio-semantic.ts) — fonte única, theme-aware, AA-validada.
+ * Removido o hardcode de hex (e o ROSA pra awaiting_customization, que
+ * violava o guardrail "nunca magenta pra estado"). As funções de cor
+ * aceitam `isDark` (default false = light, backward compat).
  */
 
 import { StudioColors } from './studio-tokens';
+import {
+  getStudioSemantic,
+  intentForStatus,
+  type StudioIntent,
+} from './studio-semantic';
 
 export type StudioProductionStatus =
   | 'awaiting_customization'
@@ -28,7 +39,7 @@ export type StudioBulkEventStatus =
   | 'delivered'
   | 'cancelled';
 
-/* ------------------------------ Produção ------------------------------ */
+/* ------------------------------ Labels -------------------------------- */
 
 const PRODUCTION_LABELS: Record<StudioProductionStatus, string> = {
   awaiting_customization: 'Aguardando personalização',
@@ -40,18 +51,6 @@ const PRODUCTION_LABELS: Record<StudioProductionStatus, string> = {
   cancelled: 'Cancelado',
 };
 
-const PRODUCTION_COLORS: Record<StudioProductionStatus, { bg: string; fg: string }> = {
-  awaiting_customization: { bg: '#FCE7F3', fg: '#9D174D' }, // pink (cliente de marketplace, precisa coletar)
-  pending_art: { bg: '#FEF3C7', fg: '#92400E' }, // amber
-  approved: { bg: '#DBEAFE', fg: '#1E40AF' }, // blue
-  in_production: { bg: '#EDE9FE', fg: '#5B21B6' }, // violet
-  ready: { bg: '#D1FAE5', fg: '#065F46' }, // emerald
-  delivered: { bg: '#F1F5F9', fg: '#475569' }, // slate
-  cancelled: { bg: '#FEE2E2', fg: '#991B1B' }, // red
-};
-
-/* ------------------------------ Aprovação ----------------------------- */
-
 const APPROVAL_LABELS: Record<StudioApprovalStatus, string> = {
   pending: 'Aguardando cliente',
   approved: 'Cliente aprovou',
@@ -59,29 +58,12 @@ const APPROVAL_LABELS: Record<StudioApprovalStatus, string> = {
   expired: 'Link expirado',
 };
 
-const APPROVAL_COLORS: Record<StudioApprovalStatus, { bg: string; fg: string }> = {
-  pending: { bg: '#FEF3C7', fg: '#92400E' },
-  approved: { bg: '#D1FAE5', fg: '#065F46' },
-  changes_requested: { bg: '#FED7AA', fg: '#9A3412' },
-  expired: { bg: '#F1F5F9', fg: '#64748B' },
-};
-
-/* ------------------------------ Evento -------------------------------- */
-
 const BULK_EVENT_LABELS: Record<StudioBulkEventStatus, string> = {
   draft: 'Rascunho',
   confirmed: 'Confirmado',
   in_production: 'Em produção',
   delivered: 'Entregue',
   cancelled: 'Cancelado',
-};
-
-const BULK_EVENT_COLORS: Record<StudioBulkEventStatus, { bg: string; fg: string }> = {
-  draft: { bg: '#F1F5F9', fg: '#475569' },
-  confirmed: { bg: '#DBEAFE', fg: '#1E40AF' },
-  in_production: { bg: '#EDE9FE', fg: '#5B21B6' },
-  delivered: { bg: '#D1FAE5', fg: '#065F46' },
-  cancelled: { bg: '#FEE2E2', fg: '#991B1B' },
 };
 
 /* ------------------------------ API ----------------------------------- */
@@ -95,27 +77,41 @@ export function labelStudioStatus(status: string | null | undefined): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function colorStudioStatus(status: string | null | undefined): { bg: string; fg: string } {
-  if (!status) return { bg: '#F1F5F9', fg: '#64748B' };
-  if (status in PRODUCTION_COLORS) return PRODUCTION_COLORS[status as StudioProductionStatus];
-  if (status in APPROVAL_COLORS) return APPROVAL_COLORS[status as StudioApprovalStatus];
-  if (status in BULK_EVENT_COLORS) return BULK_EVENT_COLORS[status as StudioBulkEventStatus];
-  return { bg: '#F1F5F9', fg: '#64748B' };
+/**
+ * Cor de chip de status: { bg, fg } derivado de StudioSemantic.
+ * bg = soft, fg = ink. Theme-aware via `isDark` (default light).
+ */
+export function colorStudioStatus(
+  status: string | null | undefined,
+  isDark = false,
+): { bg: string; fg: string } {
+  const sem = getStudioSemantic(isDark);
+  const intent = intentForStatus(status);
+  const t = sem[intent];
+  return { bg: t.soft, fg: t.ink };
+}
+
+/** Cor base (ponto/ícone) de um status — para dots e bordas. */
+export function baseStudioStatus(status: string | null | undefined, isDark = false): string {
+  return getStudioSemantic(isDark)[intentForStatus(status)].base;
 }
 
 /**
- * Severity de alerta studio (low_stock, overdue, etc) → cores.
+ * Severity de alerta studio (low_stock, overdue, etc) → cores semânticas.
+ * info → production(azul) · warning → waiting(âmbar) · danger → danger(vermelho).
  */
-export function colorStudioAlert(severity: 'info' | 'warning' | 'danger' | string | null | undefined) {
-  switch (severity) {
-    case 'danger':
-      return { bg: '#FEE2E2', fg: '#991B1B', border: '#FCA5A5' };
-    case 'warning':
-      return { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' };
-    case 'info':
-    default:
-      return { bg: '#DBEAFE', fg: '#1E40AF', border: '#93C5FD' };
-  }
+export function colorStudioAlert(
+  severity: 'info' | 'warning' | 'danger' | string | null | undefined,
+  isDark = false,
+) {
+  const sem = getStudioSemantic(isDark);
+  const map: Record<string, StudioIntent> = {
+    danger: 'danger',
+    warning: 'waiting',
+    info: 'production',
+  };
+  const t = sem[map[severity as string] ?? 'production'];
+  return { bg: t.soft, fg: t.ink, border: t.base };
 }
 
 /**
@@ -127,10 +123,6 @@ export const StudioStatusAccent = StudioColors.primary;
  * Ordem canônica das colunas do KDS Studio (board /studio/(estudio)/producao).
  * Sub-onda Marketplaces S-0 (25/05/2026): adiciona awaiting_customization como
  * primeira coluna — pedidos ML/Shopee chegam nessa fila ANTES de virar pending_art.
- * Lojista coleta a personalizacao via modal e o status avanca pra pending_art.
- *
- * KDS UI deve ler dessa lista pra montar as colunas, evitando hardcoded ordens
- * em multiples lugares.
  */
 export const STUDIO_KDS_COLUMNS: ReadonlyArray<StudioProductionStatus> = [
   'awaiting_customization',

@@ -35,6 +35,8 @@ import Reanimated, {
 import { Slot, useRouter, usePathname } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors, StudioRadius, StudioFloat } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+type Tok = typeof StudioColors;
 import { FloatingApprovalButton } from "@/components/studio/FloatingApprovalButton";
 import { AuraStudioMark, AuraStudioLockup } from "@/components/studio/AuraStudioMark";
 import { StudioAccentTheme, studioDefaultAccent, deriveAccentFromColors } from "@/contexts/StudioAccentTheme";
@@ -43,6 +45,7 @@ import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
 import { useStudioOnboarding } from "@/hooks/useStudioOnboarding";
 import { StudioBottomSheet } from "@/components/studio/StudioBottomSheet";
 import { StudioFab } from "@/components/studio/StudioFab";
+import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
 import { useAuthStore } from "@/stores/auth";
 
 // Iniciais a partir do nome — 2 caracteres uppercase.
@@ -99,18 +102,20 @@ type NavGroup = {
   id: string;
   label: string;
   icon: string;
-  toneKey: keyof typeof TONES;
+  toneKey: ToneKey;
   children: NavChild[];
 };
 
-const TONES = {
-  navy:   { bg: StudioColors.primary,  bg2: StudioColors.primary2 ?? "#3B82F6" },
-  pink:   { bg: StudioColors.accent,   bg2: StudioColors.accent2  ?? "#F472B6" },
-  warm:   { bg: "#F59E0B",             bg2: "#FBBF24" },
-  mint:   { bg: "#10B981",             bg2: "#34D399" },
-  sky:    { bg: "#06B6D4",             bg2: "#38BDF8" },
-  violet: { bg: "#7C3AED",             bg2: "#A78BFA" },
-};
+type ToneKey = "navy" | "pink" | "warm" | "mint" | "sky" | "violet";
+// makeTones: tons de navegação theme-aware (Fase 0). bg/bg2 do hue.
+const makeTones = (c: Tok) => ({
+  navy:   { bg: c.primary, bg2: c.primary2 },
+  pink:   { bg: c.accent,  bg2: c.accent2 },
+  warm:   { bg: c.warning, bg2: c.warm },
+  mint:   { bg: c.success, bg2: c.mint },
+  sky:    { bg: c.sky,     bg2: c.sky },
+  violet: { bg: c.violet,  bg2: c.violet },
+}) as Record<ToneKey, { bg: string; bg2: string }>;
 
 const GROUPS: NavGroup[] = [
   {
@@ -162,6 +167,8 @@ function NavCircle({
   accessibilityLabel?: string;
   glowing?: boolean;
 }) {
+  const tk = useStudioTokens();
+  const s = useMemo(() => makeStyles(tk), [tk]);
   const webHoverProps =
     Platform.OS === "web" && (onHoverIn || onHoverOut)
       ? { onHoverIn, onHoverOut }
@@ -172,8 +179,8 @@ function NavCircle({
         ? { boxShadow: "0 0 32px rgba(236,72,153,0.55), 0 0 18px rgba(30,58,138,0.4), 0 6px 14px rgba(15,23,42,0.18)" }
         : { boxShadow: "0 0 18px rgba(30,58,138,0.28), 0 4px 10px rgba(15,23,42,0.12)" })
     : (glowing || active
-        ? { shadowColor: StudioColors.accent, shadowOpacity: 0.55, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 10 }
-        : { shadowColor: StudioColors.primary, shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 5 });
+        ? { shadowColor: tk.accent, shadowOpacity: 0.55, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 10 }
+        : { shadowColor: tk.primary, shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 5 });
 
   return (
     <FloatingBubble idx={idx} pause={pause} style={{ position: "relative" }}>
@@ -190,7 +197,7 @@ function NavCircle({
           glowing && Platform.OS === "web" ? { transform: [{ scale: 1.04 }] as any } : null,
         ]}
       >
-        <Icon name={icon as any} size={22} color={active ? "#fff" : StudioColors.ink2} />
+        <Icon name={icon as any} size={22} color={active ? "#fff" : tk.ink2} />
         {isGroup && <View style={s.groupDot} />}
       </Pressable>
       {children}
@@ -200,8 +207,10 @@ function NavCircle({
 
 function ChildBubble({
   child, onPress, idx, tone, pause,
-}: { child: NavChild; onPress: () => void; idx: number; tone: keyof typeof TONES; pause: boolean }) {
-  const t = TONES[tone];
+}: { child: NavChild; onPress: () => void; idx: number; tone: ToneKey; pause: boolean }) {
+  const tk = useStudioTokens();
+  const s = useMemo(() => makeStyles(tk), [tk]);
+  const t = makeTones(tk)[tone];
   return (
     <FloatingBubble idx={idx + 1} pause={pause} style={{}}>
       <Pressable
@@ -215,7 +224,7 @@ function ChildBubble({
           <View
             style={[
               s.childBadge,
-              { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : StudioColors.accent },
+              { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : tk.accent },
             ]}
           >
             <Text style={s.childBadgeTxt}>{child.badge.value}</Text>
@@ -231,11 +240,13 @@ function ChildHoverBubble({
   child, tone, delay, onPress,
 }: {
   child: NavChild;
-  tone: keyof typeof TONES;
+  tone: ToneKey;
   delay: number;
   onPress: () => void;
 }) {
-  const t = TONES[tone];
+  const tk = useStudioTokens();
+  const s = useMemo(() => makeStyles(tk), [tk]);
+  const t = makeTones(tk)[tone];
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const translateX = useSharedValue(-8);
@@ -272,7 +283,7 @@ function ChildHoverBubble({
             <View
               style={[
                 s.hoverChildBadge,
-                { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : StudioColors.accent },
+                { backgroundColor: child.badge.tone === "warm" ? "#F59E0B" : tk.accent },
               ]}
             />
           )}
@@ -293,6 +304,8 @@ function MobileMenuSheet({
   onNavigate: (href: string) => void;
   isHome: boolean;
 }) {
+  const tk = useStudioTokens();
+  const mm = useMemo(() => makeMm(tk), [tk]);
   return (
     <StudioBottomSheet
       visible={visible}
@@ -305,7 +318,7 @@ function MobileMenuSheet({
         <MobileMenuItem
           label="Início"
           icon="grid"
-          tone={TONES.navy.bg}
+          tone={makeTones(tk).navy.bg}
           active={isHome}
           onPress={() => { onNavigate("/studio"); onClose(); }}
         />
@@ -318,7 +331,7 @@ function MobileMenuSheet({
                   key={c.href}
                   label={c.label}
                   icon={c.icon}
-                  tone={TONES[g.toneKey].bg}
+                  tone={makeTones(tk)[g.toneKey].bg}
                   active={pathname.startsWith(c.href)}
                   onPress={() => { onNavigate(c.href); onClose(); }}
                 />
@@ -331,7 +344,7 @@ function MobileMenuSheet({
           <MobileMenuItem
             label="Configurações"
             icon="settings"
-            tone={StudioColors.ink3}
+            tone={tk.ink3}
             active={pathname.startsWith("/studio/configuracoes")}
             onPress={() => { onNavigate("/studio/configuracoes"); onClose(); }}
           />
@@ -344,6 +357,8 @@ function MobileMenuSheet({
 function MobileMenuItem({
   label, icon, tone, active, onPress,
 }: { label: string; icon: string; tone: string; active?: boolean; onPress: () => void }) {
+  const tk = useStudioTokens();
+  const mm = useMemo(() => makeMm(tk), [tk]);
   return (
     <Pressable
       onPress={onPress}
@@ -366,10 +381,10 @@ function MobileMenuItem({
   );
 }
 
-const mm = StyleSheet.create({
+const makeMm = (c: Tok) => StyleSheet.create({
   groupLabel: {
     fontSize: 10,
-    color: StudioColors.accent,
+    color: c.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     marginTop: 6,
@@ -380,16 +395,16 @@ const mm = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+    backgroundColor: c.paperCardElev,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: c.ink5,
     borderRadius: 14,
   },
   itemIcon: {
     width: 28, height: 28, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
   },
-  itemTxt: { fontSize: 14, color: StudioColors.ink2, fontWeight: "600" },
+  itemTxt: { fontSize: 14, color: c.ink2, fontWeight: "600" },
 });
 
 // ─── Pull-to-refresh helper exportado ──────────────────────
@@ -401,6 +416,7 @@ export function StudioPullToRefresh({
   children: ReactNode;
   contentContainerStyle?: any;
 }) {
+  const tk = useStudioTokens();
   return (
     <ScrollView
       contentContainerStyle={contentContainerStyle}
@@ -408,8 +424,8 @@ export function StudioPullToRefresh({
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={StudioColors.primary}
-          colors={[StudioColors.primary, StudioColors.accent]}
+          tintColor={tk.primary}
+          colors={[tk.primary, tk.accent]}
           progressBackgroundColor="#fff"
         />
       }
@@ -454,6 +470,8 @@ function resolveFab(pathname: string): FabConfig | null {
 // ─── Shell ──────────────────────────────────────────────────
 export function StudioShell() {
   const router = useRouter();
+  const tk = useStudioTokens();
+  const s = useMemo(() => makeStyles(tk), [tk]);
   const pathname = usePathname() || "";
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
@@ -544,7 +562,7 @@ export function StudioShell() {
     style.setAttribute("data-aura-studio-focus", "1");
     style.textContent = `
       :focus-visible {
-        outline: 2px solid ${StudioColors.primary} !important;
+        outline: 2px solid ${tk.primary} !important;
         outline-offset: 2px !important;
         border-radius: 4px;
       }
@@ -570,7 +588,7 @@ export function StudioShell() {
   if (isMobile) {
     return (
       <StudioAccentTheme tokens={resolvedAccent}>
-        <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+        <View style={{ flex: 1, backgroundColor: tk.bg }}>
           <View style={s.mobileBar}>
             <Pressable
               onPress={() => go("/studio")}
@@ -581,6 +599,7 @@ export function StudioShell() {
               <AuraStudioLockup size={26} variant="dark" />
             </Pressable>
             <View style={s.mobileBarRow}>
+              <StudioThemeToggle compact />
               <Pressable
                 onPress={() => setMobileMenuOpen(true)}
                 accessibilityLabel="Abrir menu de navegação"
@@ -595,7 +614,7 @@ export function StudioShell() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.mobileChipsRow}
               >
-                <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={TONES.navy.bg} />
+                <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={makeTones(tk).navy.bg} />
                 {GROUPS.flatMap((g) =>
                   g.children.slice(0, 2).map((c) => (
                     <MobileChip
@@ -604,7 +623,7 @@ export function StudioShell() {
                       icon={c.icon}
                       active={pathname.startsWith(c.href)}
                       onPress={() => go(c.href)}
-                      tone={TONES[g.toneKey].bg}
+                      tone={makeTones(tk)[g.toneKey].bg}
                     />
                   ))
                 )}
@@ -645,7 +664,7 @@ export function StudioShell() {
   if (!isWide) {
     return (
       <StudioAccentTheme tokens={resolvedAccent}>
-        <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+        <View style={{ flex: 1, backgroundColor: tk.bg }}>
           <View style={s.mobileBar}>
             <Pressable
               onPress={() => go("/studio")}
@@ -660,7 +679,7 @@ export function StudioShell() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={s.mobileChipsRow}
             >
-              <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={TONES.navy.bg} />
+              <MobileChip label="Início" icon="grid" active={isHome} onPress={() => go("/studio")} tone={makeTones(tk).navy.bg} />
               {GROUPS.flatMap((g) =>
                 g.children.map((c) => (
                   <MobileChip
@@ -669,7 +688,7 @@ export function StudioShell() {
                     icon={c.icon}
                     active={pathname.startsWith(c.href)}
                     onPress={() => go(c.href)}
-                    tone={TONES[g.toneKey].bg}
+                    tone={makeTones(tk)[g.toneKey].bg}
                   />
                 ))
               )}
@@ -678,7 +697,7 @@ export function StudioShell() {
                 icon="settings"
                 active={pathname.startsWith("/studio/configuracoes")}
                 onPress={() => go("/studio/configuracoes")}
-                tone={StudioColors.ink3}
+                tone={tk.ink3}
               />
             </ScrollView>
           </View>
@@ -708,7 +727,7 @@ export function StudioShell() {
   // ─── Desktop (sidebar circular FLUTUANTE — sem barra branca) ─
   return (
     <StudioAccentTheme tokens={resolvedAccent}>
-      <View style={{ flex: 1, flexDirection: "row", backgroundColor: StudioColors.bg }}>
+      <View style={{ flex: 1, flexDirection: "row", backgroundColor: tk.bg }}>
         <View style={s.sidebar}>
           <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 18 }}>
             <Pressable
@@ -810,6 +829,7 @@ export function StudioShell() {
             onPress={() => go("/studio/configuracoes")}
           />
 
+          <StudioThemeToggle />
           <View style={s.avatar} accessibilityLabel="Avatar do usuário">
             <Text style={s.avatarTxt}>{initials(user?.name)}</Text>
           </View>
@@ -832,6 +852,8 @@ export function StudioShell() {
 function MobileChip({
   label, icon, active, onPress, tone,
 }: { label: string; icon: string; active?: boolean; onPress: () => void; tone: string }) {
+  const tk = useStudioTokens();
+  const s = useMemo(() => makeStyles(tk), [tk]);
   return (
     <Pressable
       onPress={onPress}
@@ -842,14 +864,14 @@ function MobileChip({
         active && { backgroundColor: tone, borderColor: tone },
       ]}
     >
-      <Icon name={icon as any} size={14} color={active ? "#fff" : StudioColors.ink2} />
+      <Icon name={icon as any} size={14} color={active ? "#fff" : tk.ink2} />
       <Text style={[s.mobileChipTxt, active && { color: "#fff" }]}>{label}</Text>
     </Pressable>
   );
 }
 
 // ─── Estilos ────────────────────────────────────────────────
-const s = StyleSheet.create({
+const makeStyles = (c: Tok) => StyleSheet.create({
   sidebar: {
     width: 104,
     paddingVertical: 28,
@@ -862,13 +884,13 @@ const s = StyleSheet.create({
   brandWrap: {
     ...(Platform.OS === "web"
       ? { boxShadow: "0 0 32px rgba(236,72,153,0.45), 0 0 18px rgba(30,58,138,0.45)" }
-      : { shadowColor: StudioColors.accent, shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 8 }),
+      : { shadowColor: c.accent, shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 8 }),
     borderRadius: 30,
   } as any,
 
   brand: {
     width: 54, height: 54,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: c.primary,
     borderRadius: 27,
     alignItems: "center", justifyContent: "center",
   },
@@ -876,20 +898,20 @@ const s = StyleSheet.create({
 
   navCircle: {
     width: 60, height: 60,
-    backgroundColor: "#fff",
-    borderWidth: 2, borderColor: StudioColors.ink5,
+    backgroundColor: c.paperCardElev,
+    borderWidth: 2, borderColor: c.ink5,
     borderRadius: 30,
     alignItems: "center", justifyContent: "center",
   },
   navCircleActive: {
-    backgroundColor: StudioColors.primary,
-    borderColor: StudioColors.primary,
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   groupDot: {
     position: "absolute",
     bottom: 4, right: 4,
     width: 10, height: 10, borderRadius: 5,
-    backgroundColor: StudioColors.accent,
+    backgroundColor: c.accent,
     borderWidth: 2, borderColor: "#fff",
   },
 
@@ -902,9 +924,9 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     padding: 10,
-    backgroundColor: "#fff",
+    backgroundColor: c.paperCardElev,
     borderRadius: 40,
-    borderWidth: 1, borderColor: "#E2E8F0",
+    borderWidth: 1, borderColor: c.ink5,
     shadowColor: "#0F172A", shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 12 },
     elevation: 10,
   },
@@ -925,7 +947,7 @@ const s = StyleSheet.create({
   },
   childBadgeTxt: { color: "#fff", fontSize: 9, fontWeight: "800" },
   childLabel: {
-    fontSize: 10, color: StudioColors.ink3,
+    fontSize: 10, color: c.ink3,
     textAlign: "center", marginTop: 4,
     fontWeight: "600",
   },
@@ -945,7 +967,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(255,255,255,0.97)",
+    backgroundColor: c.paperCardElev,
     borderRadius: 999,
     paddingLeft: 4,
     paddingRight: 14,
@@ -967,7 +989,7 @@ const s = StyleSheet.create({
   },
   hoverChildLabel: {
     fontSize: 13,
-    color: StudioColors.ink,
+    color: c.ink,
     fontWeight: "700",
     letterSpacing: -0.2,
     ...(Platform.OS === "web" ? { whiteSpace: "nowrap" } as any : {}),
@@ -985,17 +1007,17 @@ const s = StyleSheet.create({
 
   avatar: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: StudioColors.accent,
+    backgroundColor: c.accent,
     alignItems: "center", justifyContent: "center",
     borderWidth: 3, borderColor: "#fff",
     ...(Platform.OS === "web"
       ? { boxShadow: "0 0 20px rgba(236,72,153,0.4), 0 4px 10px rgba(15,23,42,0.12)" } as any
-      : { shadowColor: StudioColors.accent, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 6 }),
+      : { shadowColor: c.accent, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 6 }),
   },
   avatarTxt: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
   mobileBar: {
-    backgroundColor: "rgba(255,255,255,0.92)",
+    backgroundColor: c.paperCardElev,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(15,23,42,0.08)",
     paddingTop: 8,
@@ -1007,12 +1029,12 @@ const s = StyleSheet.create({
   mobileMenuBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: StudioColors.primary, borderRadius: 999,
+    backgroundColor: c.primary, borderRadius: 999,
   },
   mobileMenuBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 12 },
   mobileBrand: {
     alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 4,
-    backgroundColor: StudioColors.primary, borderRadius: 12,
+    backgroundColor: c.primary, borderRadius: 12,
   },
   mobileBrandTxt: { color: "#fff", fontWeight: "900", fontSize: 13, letterSpacing: 0.5 },
   mobileChipsRow: {
@@ -1021,11 +1043,11 @@ const s = StyleSheet.create({
   mobileChip: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: "#fff",
-    borderWidth: 1, borderColor: StudioColors.ink4,
+    backgroundColor: c.paperCardElev,
+    borderWidth: 1, borderColor: c.ink4,
     borderRadius: 999,
   },
-  mobileChipTxt: { color: StudioColors.ink2, fontWeight: "600", fontSize: 12 },
+  mobileChipTxt: { color: c.ink2, fontWeight: "600", fontSize: 12 },
 });
 
 export default StudioShell;
