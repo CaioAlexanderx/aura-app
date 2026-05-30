@@ -14,16 +14,19 @@
  *     ]}
  *   />
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@/components/Icon';
-import { StudioColors } from '../../constants/studio-tokens';
+import type { StudioPalette } from '../../constants/studio-tokens';
+import { useStudioTokens } from '@/contexts/StudioThemeMode';
 
 export type StudioBreadcrumbItem = { label: string; href?: string };
 
 export function StudioBreadcrumb({ items, sticky = true }: { items: StudioBreadcrumbItem[]; sticky?: boolean }) {
   const router = useRouter();
+  const t = useStudioTokens();
+  const styles = useMemo(() => buildStyles(t), [t]);
   return (
     <View
       style={[
@@ -37,7 +40,7 @@ export function StudioBreadcrumb({ items, sticky = true }: { items: StudioBreadc
           <View key={`${it.label}-${idx}`} style={styles.row}>
             {idx > 0 ? (
               <View style={{ marginHorizontal: 4 }}>
-                <Icon name="chevron_right" size={14} color={StudioColors.ink3} />
+                <Icon name="chevron_right" size={14} color={t.ink3} />
               </View>
             ) : null}
             {it.href && !last ? (
@@ -54,32 +57,34 @@ export function StudioBreadcrumb({ items, sticky = true }: { items: StudioBreadc
   );
 }
 
-const styles = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderBottomWidth: 1,
-    borderBottomColor: (StudioColors as any).ink5 ?? '#E2E8F0',
+    borderBottomColor: t.ink5,
     zIndex: 50,
   },
   row: { flexDirection: 'row', alignItems: 'center' },
   link: {
-    color: StudioColors.primary,
+    color: t.primary,
     fontWeight: '600',
     fontSize: 13,
   },
   text: {
-    color: StudioColors.ink3,
+    color: t.ink3,
     fontSize: 13,
   },
   current: {
-    color: (StudioColors as any).ink1 ?? '#0F172A',
+    color: t.ink,
     fontWeight: '700',
   },
-});
+  });
+}
 
 export default StudioBreadcrumb;
