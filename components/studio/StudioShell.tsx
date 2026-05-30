@@ -21,6 +21,7 @@
 //
 // 30/05 (Camada 1 Fase E): Orçamentos + Pedidos adicionados ao grupo Vendas.
 // FAB para /gestao/orcamentos → "Novo orçamento".
+// P2 (30/05): FAB href corrigido para /studio/gestao/orcamentos/novo.
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -437,9 +438,9 @@ function resolveFab(pathname: string): FabConfig | null {
   if (pathname === "/studio/galeria" || pathname.startsWith("/studio/galeria/")) {
     return { label: "Adicionar template", icon: "plus", accessibilityLabel: "Adicionar novo template", action: "queryNew", href: "/studio/galeria?action=new" };
   }
-  // Camada 1 (30/05): FAB para lista de orçamentos
+  // Camada 1 (30/05): FAB para lista de orçamentos — P2: href corrigido para gestao/
   if (pathname === "/studio/gestao/orcamentos" || pathname.startsWith("/studio/gestao/orcamentos")) {
-    return { label: "Novo orçamento", icon: "plus", accessibilityLabel: "Criar novo orçamento", action: "push", href: "/studio/orcamentos/novo" };
+    return { label: "Novo orçamento", icon: "plus", accessibilityLabel: "Criar novo orçamento", action: "push", href: "/studio/gestao/orcamentos/novo" };
   }
   if (pathname === "/studio/pedidos" || pathname.startsWith("/studio/pedidos/")) {
     return { label: "Novo pedido", icon: "plus", accessibilityLabel: "Criar novo pedido", action: "push", href: "/studio/pedidos/novo" };
