@@ -4,16 +4,19 @@
 // Item #9 da análise UX/UI: hub levava pra lugar nenhum.
 // Tela mostra: pedido, items + customizações, status, aprovações
 // + ações rápidas (avançar produção, solicitar aprovação, ver mockup).
+//
+// Camada 1 Fase C: PaymentCard + gate de produção por sinal.
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking,
+  Alert, Modal, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioColors } from "@/constants/studio-tokens";
 import { useAuthStore } from "@/stores/auth";
-import { studioApi, type StudioOrderDetail, type StudioProductionStatus } from "@/services/studioApi";
+import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type StudioPayment, type StudioPaymentKind } from "@/services/studioApi";
 import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 
@@ -25,6 +28,282 @@ const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   delivered: null,
 };
 
+// ── PaymentCard ────────────────────────────────────────────────────────────────
+type PaymentCardProps = {
+  orderId: string;
+  companyId: string;
+  depositRequired: number | null | undefined;
+  depositPaid: boolean | undefined;
+  onDepositReleased: () => void;
+};
+
+function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepositReleased }: PaymentCardProps) {
+  const [payments, setPayments] = useState<StudioPayment[]>([]);
+  const [loadingPay, setLoadingPay] = useState(true);
+  const [acting, setActing] = useState(false);
+
+  // Modal "Registrar Pix recebido"
+  const [markModal, setMarkModal] = useState(false);
+  const [markTarget, setMarkTarget] = useState<StudioPayment | null>(null);
+
+  // Modal "Adicionar marco"
+  const [addModal, setAddModal] = useState(false);
+  const [addKind, setAddKind] = useState<StudioPaymentKind>("deposit");
+  const [addAmount, setAddAmount] = useState("");
+  const [addDueAt, setAddDueAt] = useState("");
+
+  // Cobrança via Pix
+  const [chargeInfo, setChargeInfo] = useState<{ instructions: string; pix_code: string | null } | null>(null);
+  const [chargeModal, setChargeModal] = useState(false);
+
+  const loadPayments = useCallback(async () => {
+    setLoadingPay(true);
+    try {
+      const res = await studioApi.listOrderPayments(companyId, orderId);
+      setPayments(res.payments || []);
+    } catch {
+      setPayments([]);
+    } finally {
+      setLoadingPay(false);
+    }
+  }, [companyId, orderId]);
+
+  useEffect(() => { loadPayments(); }, [loadPayments]);
+
+  const hasDeposit = (depositRequired ?? 0) > 0;
+  const showCard = hasDeposit || payments.length > 0;
+  if (!showCard) return null;
+
+  const handleMarkPaid = async () => {
+    if (!markTarget) return;
+    setActing(true);
+    try {
+      const res = await studioApi.markPaymentPaid(companyId, markTarget.id, { method: "pix" });
+      setMarkModal(false);
+      setMarkTarget(null);
+      await loadPayments();
+      if (res.deposit_released) onDepositReleased();
+    } catch {
+      Alert.alert("Erro", "Não foi possível confirmar o pagamento.");
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleChargeLink = async (payment: StudioPayment) => {
+    setActing(true);
+    try {
+      const res = await studioApi.createChargeLink(companyId, payment.id);
+      setChargeInfo({ instructions: (res as any).instructions || "", pix_code: res.pix_code });
+      setChargeModal(true);
+    } catch {
+      Alert.alert("Erro", "Não foi possível gerar informações de cobrança.");
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleAddMarco = async () => {
+    const amt = parseFloat(addAmount.replace(",", "."));
+    if (!amt || amt <= 0) {
+      Alert.alert("Valor inválido", "Informe um valor maior que zero.");
+      return;
+    }
+    setActing(true);
+    try {
+      await studioApi.createOrderPayment(companyId, orderId, {
+        kind: addKind,
+        amount: amt,
+        due_at: addDueAt || null,
+        method: undefined,
+      });
+      setAddModal(false);
+      setAddAmount("");
+      setAddDueAt("");
+      setAddKind("deposit");
+      await loadPayments();
+    } catch {
+      Alert.alert("Erro", "Não foi possível criar o marco de pagamento.");
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const kindLabel: Record<StudioPaymentKind, string> = {
+    deposit: "Sinal",
+    balance: "Saldo",
+    full: "Total",
+  };
+
+  const statusPillStyle = (status: StudioPayment["status"]) => {
+    if (status === "paid")      return { bg: "#DCFCE7", fg: "#16A34A" };
+    if (status === "cancelled") return { bg: "#F1F5F9", fg: "#64748B" };
+    return { bg: "#FEF3C7", fg: "#D97706" }; // pending
+  };
+
+  return (
+    <View style={[ps.section]}>
+      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 }}>
+        <Text style={ps.eyebrow}>PAGAMENTOS</Text>
+        {hasDeposit && (
+          <View style={[ps.pill, depositPaid ? { backgroundColor: "#DCFCE7" } : { backgroundColor: "#FEF3C7" }]}>
+            <Text style={[ps.pillTxt, depositPaid ? { color: "#16A34A" } : { color: "#D97706" }]}>
+              {depositPaid ? "✓ Sinal recebido — produção liberada" : `⚠ Sinal pendente — R$ ${Number(depositRequired).toFixed(2)}`}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {loadingPay ? (
+        <ActivityIndicator size="small" color={StudioColors.primary} />
+      ) : (
+        <>
+          {payments.map((p) => {
+            const col = statusPillStyle(p.status);
+            return (
+              <View key={p.id} style={ps.payRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <Text style={ps.payLabel}>{kindLabel[p.kind as StudioPaymentKind] || p.kind}</Text>
+                    <Text style={ps.payAmount}>R$ {Number(p.amount).toFixed(2)}</Text>
+                    <View style={[ps.pill, { backgroundColor: col.bg }]}>
+                      <Text style={[ps.pillTxt, { color: col.fg }]}>
+                        {p.status === "paid" ? "Pago" : p.status === "cancelled" ? "Cancelado" : "Pendente"}
+                      </Text>
+                    </View>
+                  </View>
+                  {p.due_at ? (
+                    <Text style={ps.paySub}>Vence: {new Date(p.due_at).toLocaleDateString("pt-BR")}</Text>
+                  ) : null}
+                  {p.paid_at ? (
+                    <Text style={ps.paySub}>Pago em: {new Date(p.paid_at).toLocaleDateString("pt-BR")}</Text>
+                  ) : null}
+                </View>
+                {p.status === "pending" && (
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Pressable
+                      style={[ps.actionBtn, { backgroundColor: "#16A34A" }]}
+                      disabled={acting}
+                      onPress={() => { setMarkTarget(p); setMarkModal(true); }}
+                    >
+                      <Text style={ps.actionBtnTxt}>Registrar Pix recebido</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[ps.actionBtn, { backgroundColor: StudioColors.primary }]}
+                      disabled={acting}
+                      onPress={() => handleChargeLink(p)}
+                    >
+                      <Text style={ps.actionBtnTxt}>Cobrar via loja</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+
+          {/* Botão Adicionar Marco */}
+          <Pressable
+            style={[ps.actionBtn, { backgroundColor: StudioColors.accent, alignSelf: "flex-start", marginTop: 10 }]}
+            onPress={() => setAddModal(true)}
+          >
+            <Text style={ps.actionBtnTxt}>+ Adicionar marco</Text>
+          </Pressable>
+        </>
+      )}
+
+      {/* Modal: Registrar Pix recebido */}
+      <Modal visible={markModal} transparent animationType="fade">
+        <View style={ps.modalOverlay}>
+          <View style={ps.modalBox}>
+            <Text style={ps.modalTitle}>Confirmar recebimento</Text>
+            <Text style={ps.modalBody}>
+              Marcar {markTarget ? `R$ ${Number(markTarget.amount).toFixed(2)}` : ""} como recebido via Pix?
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <Pressable style={[ps.modalBtn, { backgroundColor: "#F1F5F9" }]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}>
+                <Text style={{ color: "#374151", fontWeight: "600" }}>Cancelar</Text>
+              </Pressable>
+              <Pressable style={[ps.modalBtn, { backgroundColor: "#16A34A" }]} disabled={acting} onPress={handleMarkPaid}>
+                <Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Cobrar via loja (Pix info) */}
+      <Modal visible={chargeModal} transparent animationType="fade">
+        <View style={ps.modalOverlay}>
+          <View style={ps.modalBox}>
+            <Text style={ps.modalTitle}>Informações de pagamento</Text>
+            {chargeInfo?.pix_code ? (
+              <View style={ps.pixBox}>
+                <Text style={ps.pixLabel}>Chave Pix</Text>
+                <Text style={ps.pixCode}>{chargeInfo.pix_code}</Text>
+              </View>
+            ) : null}
+            {chargeInfo?.instructions ? (
+              <Text style={[ps.modalBody, { marginTop: 10 }]}>{chargeInfo.instructions}</Text>
+            ) : null}
+            <Pressable style={[ps.modalBtn, { backgroundColor: StudioColors.primary, marginTop: 16, alignSelf: "flex-end" }]} onPress={() => setChargeModal(false)}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>Fechar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Adicionar marco */}
+      <Modal visible={addModal} transparent animationType="fade">
+        <View style={ps.modalOverlay}>
+          <View style={ps.modalBox}>
+            <Text style={ps.modalTitle}>Adicionar marco de pagamento</Text>
+
+            <Text style={ps.inputLabel}>Tipo</Text>
+            <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
+              {(["deposit", "balance", "full"] as StudioPaymentKind[]).map((k) => (
+                <Pressable
+                  key={k}
+                  style={[ps.kindPill, addKind === k && { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary }]}
+                  onPress={() => setAddKind(k)}
+                >
+                  <Text style={[ps.kindPillTxt, addKind === k && { color: "#fff" }]}>{kindLabel[k]}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={ps.inputLabel}>Valor (R$)</Text>
+            <TextInput
+              style={ps.input}
+              keyboardType="decimal-pad"
+              placeholder="0,00"
+              value={addAmount}
+              onChangeText={setAddAmount}
+            />
+
+            <Text style={ps.inputLabel}>Vencimento (opcional, AAAA-MM-DD)</Text>
+            <TextInput
+              style={ps.input}
+              placeholder="2026-06-30"
+              value={addDueAt}
+              onChangeText={setAddDueAt}
+            />
+
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <Pressable style={[ps.modalBtn, { backgroundColor: "#F1F5F9" }]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}>
+                <Text style={{ color: "#374151", fontWeight: "600" }}>Cancelar</Text>
+              </Pressable>
+              <Pressable style={[ps.modalBtn, { backgroundColor: StudioColors.primary }]} disabled={acting} onPress={handleAddMarco}>
+                <Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// ── Tela principal ─────────────────────────────────────────────────────────────
 export default function StudioOrderDetail() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -51,12 +330,8 @@ export default function StudioOrderDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  const advance = async () => {
+  const doAdvance = async (next: StudioProductionStatus) => {
     if (!data || !company?.id) return;
-    const cur = data.order.studio_production_status as StudioProductionStatus | null;
-    if (!cur) return;
-    const next = NEXT[cur];
-    if (!next) return;
     setActing(true);
     try {
       await studioApi.updateProductionStatus(company.id, oid, next);
@@ -64,6 +339,37 @@ export default function StudioOrderDetail() {
     } finally {
       setActing(false);
     }
+  };
+
+  const advance = () => {
+    if (!data || !company?.id) return;
+    const cur = data.order.studio_production_status as StudioProductionStatus | null;
+    if (!cur) return;
+    const next = NEXT[cur];
+    if (!next) return;
+
+    // Gate de produção: approved → in_production requer sinal confirmado
+    if (
+      next === "in_production" &&
+      (data.order.deposit_required ?? 0) > 0 &&
+      !data.order.deposit_paid
+    ) {
+      Alert.alert(
+        "Sinal não recebido",
+        `O sinal de R$ ${Number(data.order.deposit_required).toFixed(2)} ainda não foi confirmado. Iniciar mesmo assim?`,
+        [
+          { text: "Aguardar sinal", style: "cancel" },
+          {
+            text: "Iniciar mesmo assim",
+            style: "destructive",
+            onPress: () => doAdvance(next),
+          },
+        ]
+      );
+      return;
+    }
+
+    doAdvance(next);
   };
 
   if (loading) {
@@ -196,6 +502,17 @@ export default function StudioOrderDetail() {
             })}
           </View>
         ) : null}
+
+        {/* Pagamentos / Sinal (Fase C) */}
+        {company?.id ? (
+          <PaymentCard
+            orderId={oid}
+            companyId={company.id}
+            depositRequired={order.deposit_required}
+            depositPaid={order.deposit_paid}
+            onDepositReleased={load}
+          />
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -261,4 +578,72 @@ const s = StyleSheet.create({
   link: { color: StudioColors.primary, fontWeight: "600", fontSize: 12 },
   linkBtn: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: StudioColors.primary },
   linkBtnTxt: { color: "#fff", fontWeight: "700" },
+});
+
+// ── Estilos exclusivos do PaymentCard ─────────────────────────────────────────
+const ps = StyleSheet.create({
+  section: {
+    backgroundColor: StudioColors.paperCard,
+    borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: StudioColors.ink5,
+    marginBottom: 14,
+  },
+  eyebrow: {
+    fontSize: 10, fontWeight: "800", color: StudioColors.ink3,
+    letterSpacing: 0.8, textTransform: "uppercase",
+  },
+  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  pillTxt: { fontSize: 11, fontWeight: "700" },
+
+  payRow: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    paddingVertical: 10,
+    borderTopWidth: 1, borderTopColor: StudioColors.ink5,
+    flexWrap: "wrap",
+  },
+  payLabel: { fontWeight: "700", color: StudioColors.ink, fontSize: 13 },
+  payAmount: { color: StudioColors.ink2, fontSize: 13 },
+  paySub: { color: StudioColors.ink3, fontSize: 11, marginTop: 2 },
+
+  actionBtn: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+  },
+  actionBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center", alignItems: "center", padding: 24,
+  },
+  modalBox: {
+    backgroundColor: "#fff", borderRadius: 20, padding: 24,
+    width: "100%", maxWidth: 420,
+  },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: StudioColors.ink, marginBottom: 8 },
+  modalBody: { fontSize: 13, color: StudioColors.ink2, lineHeight: 20 },
+  modalBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+
+  // Pix info
+  pixBox: {
+    backgroundColor: StudioColors.bg, borderRadius: 12,
+    padding: 14, marginTop: 10,
+    borderWidth: 1, borderColor: StudioColors.ink5,
+  },
+  pixLabel: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.6 },
+  pixCode: { fontSize: 15, fontWeight: "700", color: StudioColors.primary, marginTop: 4 },
+
+  // Adicionar marco
+  inputLabel: { fontSize: 11, fontWeight: "700", color: StudioColors.ink3, marginBottom: 4, marginTop: 10 },
+  input: {
+    borderWidth: 1, borderColor: StudioColors.ink5,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14, color: StudioColors.ink,
+    backgroundColor: StudioColors.bg,
+  },
+  kindPill: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+    borderWidth: 1, borderColor: StudioColors.ink4,
+    backgroundColor: "#fff",
+  },
+  kindPillTxt: { fontWeight: "700", fontSize: 12, color: StudioColors.ink2 },
 });
