@@ -4,6 +4,9 @@
 // Lista de orçamentos do estúdio com status pills coloridos,
 // filtro por status, CTA "Novo orçamento" e linha clicável
 // pro editor/detalhe.
+//
+// P2 (30/05/2026): rotas unificadas sob gestao/orcamentos/
+// Editor vive em /studio/gestao/orcamentos/[id].
 // ============================================================
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -93,7 +96,7 @@ export default function StudioOrcamentosScreen() {
         </View>
         <Pressable
           style={s.btnNew}
-          onPress={() => router.push("/studio/orcamentos/novo")}
+          onPress={() => router.push("/studio/gestao/orcamentos/novo" as any)}
         >
           <Icon name="plus" size={16} color="#fff" />
           <Text style={s.btnNewTxt}>Novo orçamento</Text>
@@ -139,7 +142,7 @@ export default function StudioOrcamentosScreen() {
           <Text style={s.emptySub}>Crie seu primeiro orçamento</Text>
           <Pressable
             style={s.btnNew}
-            onPress={() => router.push("/studio/orcamentos/novo")}
+            onPress={() => router.push("/studio/gestao/orcamentos/novo" as any)}
           >
             <Icon name="plus" size={16} color="#fff" />
             <Text style={s.btnNewTxt}>Novo orçamento</Text>
@@ -151,7 +154,7 @@ export default function StudioOrcamentosScreen() {
             <Pressable
               key={q.id}
               style={s.card}
-              onPress={() => router.push(`/studio/orcamentos/${q.id}`)}
+              onPress={() => router.push(`/studio/gestao/orcamentos/${q.id}` as any)}
             >
               <View style={s.cardTop}>
                 <View style={{ flex: 1 }}>

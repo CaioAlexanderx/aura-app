@@ -16,10 +16,14 @@
 // 26/05/2026 (residual UX overhaul): tokens dinamicos via useStudioTokens()
 // + StudioPageHeader padronizado + AnimatedKpiCounter no colCount (pulsa
 // quando pedido muda de coluna).
+//
+// 30/05/2026 (P1 Camada 1): advance() agora trata 409 deposit_required.
+// Quando backend retorna 409, reverte o optimistic update e exibe Alert
+// de confirmação. Ao confirmar, reenvia com force:true.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal, Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -105,16 +109,44 @@ export default function StudioProducao() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function advance(order: StudioOrder) {
+  // P1 (30/05): forceDeposit=true bypassa o gate require_deposit_for_production.
+  // Quando backend retorna 409 deposit_required, reverte o optimistic update
+  // e pergunta ao lojista se quer forçar mesmo sem sinal confirmado.
+  async function advance(order: StudioOrder, forceDeposit?: boolean) {
     const cur = (order.studio_production_status || "pending_art") as StudioProductionStatus;
     const next = NEXT_STATUS[cur];
     if (!next || !company?.id) return;
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, studio_production_status: next } : o));
     try {
-      await studioApi.updateProductionStatus(company.id, order.id, next);
+      await studioApi.updateProductionStatus(company.id, order.id, next, forceDeposit);
       const col = COLUMNS.find((c) => c.key === next);
       toast.success(`✨ Movido pra ${col?.label}`);
     } catch (e: any) {
+      // P1: gate de sinal — backend retorna 409 deposit_required quando
+      // require_deposit_for_production=true e sinal não está confirmado.
+      if (
+        (e?.status === 409 || e?.code === 409) &&
+        (e?.data?.error === "deposit_required" || e?.error === "deposit_required")
+      ) {
+        // Reverte optimistic update antes de pedir confirmação
+        setOrders((prev) => prev.map((o) =>
+          o.id === order.id ? { ...o, studio_production_status: cur } : o
+        ));
+        Alert.alert(
+          "Sinal não recebido",
+          e?.data?.message || e?.message ||
+            "O sinal deste pedido ainda não foi confirmado. Deseja iniciar a produção mesmo assim?",
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Iniciar mesmo assim",
+              style: "destructive",
+              onPress: () => advance(order, true),
+            },
+          ]
+        );
+        return;
+      }
       toast.error(e?.message || "Erro ao atualizar");
       load();
     }
