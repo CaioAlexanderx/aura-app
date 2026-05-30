@@ -3,8 +3,8 @@
 //
 // 6 colunas: Aguardando personalização → Aguardando arte → Aprovado → Em produção → Pronto → Entregue
 //
-// Marketplaces S-0 (25/05/2026): awaiting_customization é a 1ª coluna, em
-// rosa accent. Pedidos vindos de ML/Shopee chegam aqui (vertical='studio',
+// Marketplaces S-0 (25/05/2026): awaiting_customization é a 1ª coluna (âmbar
+// via StudioSemantic). Pedidos vindos de ML/Shopee chegam aqui (vertical='studio',
 // customization_collected_at IS NULL). Lojista coleta a personalização e
 // avança pra pending_art.
 //
@@ -27,8 +27,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { useStudioTokens, useStudioSemantic } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import type { StudioPalette } from "@/constants/studio-tokens";
+import type { StudioSemanticPalette } from "@/constants/studio-semantic";
 import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -47,15 +49,17 @@ type Column = {
   nextLabel: string;
 };
 
-function buildColumns(t: StudioPalette): Column[] {
+// Cores das colunas vêm de StudioSemantic (fonte única de cor de estado,
+// theme-aware, AA). Mata o magenta-pra-estado das colunas awaiting/in_production.
+function buildColumns(sem: StudioSemanticPalette): Column[] {
   return [
-    // S-0: nova primeira coluna pra pedidos de marketplace (ML/Shopee) sem personalização ainda coletada.
-    { key: "awaiting_customization", label: "Aguardando personalização", icon: "message-circle", color: t.accent,  bg: "#FCE7F3",     nextLabel: "Coletar e enviar pra arte" },
-    { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: t.warning, bg: t.warningSoft, nextLabel: "Marcar como aprovado" },
-    { key: "approved",      label: "Aprovado",         icon: "check",        color: t.primary, bg: t.primarySoft, nextLabel: "Iniciar produção" },
-    { key: "in_production", label: "Em produção",      icon: "clock",        color: t.accent,  bg: t.accentSoft,  nextLabel: "Marcar como pronto" },
-    { key: "ready",         label: "Pronto",           icon: "package",      color: t.mint,    bg: t.mintSoft,    nextLabel: "Marcar como entregue" },
-    { key: "delivered",     label: "Entregue",         icon: "check-circle", color: "#6B7280", bg: "#F3F4F6",     nextLabel: "" },
+    // S-0: 1ª coluna pra pedidos de marketplace (ML/Shopee) sem personalização coletada.
+    { key: "awaiting_customization", label: "Aguardando personalização", icon: "message-circle", color: sem.waiting.base,    bg: sem.waiting.soft,    nextLabel: "Coletar e enviar pra arte" },
+    { key: "pending_art",   label: "Aguardando arte",  icon: "alert-circle", color: sem.art.base,        bg: sem.art.soft,        nextLabel: "Marcar como aprovado" },
+    { key: "approved",      label: "Aprovado",         icon: "check",        color: sem.approved.base,   bg: sem.approved.soft,   nextLabel: "Iniciar produção" },
+    { key: "in_production", label: "Em produção",      icon: "clock",        color: sem.production.base, bg: sem.production.soft, nextLabel: "Marcar como pronto" },
+    { key: "ready",         label: "Pronto",           icon: "package",      color: sem.ready.base,      bg: sem.ready.soft,      nextLabel: "Marcar como entregue" },
+    { key: "delivered",     label: "Entregue",         icon: "check-circle", color: sem.delivered.base,  bg: sem.delivered.soft,  nextLabel: "" },
   ];
 }
 
@@ -88,7 +92,8 @@ export default function StudioProducao() {
   const router = useRouter();
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
-  const COLUMNS = useMemo(() => buildColumns(t), [t]);
+  const sem = useStudioSemantic();
+  const COLUMNS = useMemo(() => buildColumns(sem), [sem]);
   const PLATFORM_LABELS = useMemo(() => buildPlatformLabels(t), [t]);
 
   const { company } = useAuthStore();
@@ -166,7 +171,7 @@ export default function StudioProducao() {
   const allCaughtUp = !loading && orders.length > 0 && activeCount === 0;
 
   return (
-    <View style={s.wrap}>
+    <StudioScreen variant="board" scroll={false} padded={false}>
       <View style={s.headerWrap}>
         <StudioPageHeader
           eyebrow="FLUXO DE PRODUÇÃO"
@@ -256,7 +261,7 @@ export default function StudioProducao() {
                       )}
                       {o.pending_approval_url && (
                         <View style={s.approvalBadge}>
-                          <Icon name="message-circle" size={10} color="#1E40AF" />
+                          <Icon name="message-circle" size={10} color={t.infoInk} />
                           <Text style={s.approvalBadgeTxt}>Aprovação enviada</Text>
                         </View>
                       )}
@@ -310,7 +315,7 @@ export default function StudioProducao() {
           />
         )}
       </Modal>
-    </View>
+    </StudioScreen>
   );
 }
 
@@ -323,7 +328,7 @@ function buildStyles(t: StudioPalette) {
     reloadBtn: {
       flexDirection: "row", alignItems: "center", gap: 6,
       paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
-      backgroundColor: "#fff", borderWidth: 1.5, borderColor: t.ink5,
+      backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
     },
     reloadTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
 
@@ -348,7 +353,7 @@ function buildStyles(t: StudioPalette) {
     colEmpty: { color: t.ink4, fontSize: 12, textAlign: "center", paddingVertical: 14 },
 
     card: {
-      backgroundColor: "#fff",
+      backgroundColor: t.paperCardElev,
       borderRadius: 12, padding: 12,
       borderWidth: 1, borderColor: t.ink5,
       gap: 6,
@@ -367,16 +372,16 @@ function buildStyles(t: StudioPalette) {
     platformBadgeTxt: { fontSize: 10.5, fontWeight: "800" },
     approvalBadge: {
       flexDirection: "row", alignItems: "center", gap: 5,
-      backgroundColor: "#DBEAFE",
+      backgroundColor: t.infoSoft,
       paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
       alignSelf: "flex-start", marginTop: 4,
     },
-    approvalBadgeTxt: { fontSize: 10.5, color: "#1E40AF", fontWeight: "700" },
+    approvalBadgeTxt: { fontSize: 10.5, color: t.infoInk, fontWeight: "700" },
 
     cardActions: { gap: 6, marginTop: 8 },
     btnApproval: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-      backgroundColor: "#10B981",
+      backgroundColor: t.success,
       paddingVertical: 8, borderRadius: 8,
     },
     btnApprovalTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },

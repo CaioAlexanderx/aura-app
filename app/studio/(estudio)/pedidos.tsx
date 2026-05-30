@@ -14,8 +14,7 @@
 //
 // Residual (26/05): migrado pra useStudioTokens() — StyleSheet
 // vira factory memoizado por tokens, suporta light/dark theme.
-// SEVERITY_TONE mantido com StudioColors (tokens semânticos
-// estáticos, não dependem de modo).
+// SEVERITY_TONE virou severityTone(t) theme-aware (Fase 1b).
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -23,7 +22,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors, type StudioPalette } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -49,16 +49,19 @@ function fmtDate(iso: string) {
   } catch { return iso; }
 }
 
-const SEVERITY_TONE = {
-  info:    { bg: StudioColors.infoSoft,    color: StudioColors.infoInk,    icon: "info" },
-  warning: { bg: StudioColors.warningSoft, color: StudioColors.warningInk, icon: "alert-triangle" },
-  danger:  { bg: StudioColors.dangerSoft,  color: StudioColors.dangerInk,  icon: "alert-circle" },
-} as const;
+function severityTone(t: StudioPalette) {
+  return {
+    info:    { bg: t.infoSoft,    color: t.infoInk,    icon: "info" },
+    warning: { bg: t.warningSoft, color: t.warningInk, icon: "alert-triangle" },
+    danger:  { bg: t.dangerSoft,  color: t.dangerInk,  icon: "alert-circle" },
+  } as const;
+}
 
 export default function StudioPedidosHub() {
   const router = useRouter();
   const { company } = useAuthStore();
   const t = useStudioTokens();
+  const sev = severityTone(t);
   const s = useMemo(() => makeStyles(t), [t]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<HubStats | null>(null);
@@ -111,7 +114,7 @@ export default function StudioPedidosHub() {
   }
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+    <StudioScreen variant="reading">
       {/* Header (Fase 3 — global StudioPageHeader) */}
       <StudioPageHeader
         eyebrow="HUB · PEDIDOS"
@@ -144,7 +147,7 @@ export default function StudioPedidosHub() {
         <View style={s.alertsBlock}>
           <Text style={s.sectionLabel}>{alerts.length} ALERTAS PENDENTES</Text>
           {alerts.slice(0, 8).map((a, i) => {
-            const tone = SEVERITY_TONE[a.severity] || SEVERITY_TONE.info;
+            const tone = sev[a.severity] || sev.info;
             return (
               <Pressable
                 key={i}
@@ -224,7 +227,7 @@ export default function StudioPedidosHub() {
           onSaved={() => { setBulkOpen(false); load(); }}
         />
       </Modal>
-    </ScrollView>
+    </StudioScreen>
   );
 }
 
