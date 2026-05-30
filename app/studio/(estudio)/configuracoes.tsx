@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens, useStudioTheme, type StudioThemeMode } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { studioApi, type StudioHealth } from "@/services/studioApi";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -122,11 +123,11 @@ export default function StudioConfiguracoes() {
   const themeOptions: Array<{ key: StudioThemeMode; icon: string; label: string }> = [
     { key: "light", icon: "sun", label: "Claro" },
     { key: "dark", icon: "moon", label: "Escuro" },
-    { key: "auto", icon: "monitor", label: "Sistema" },
+    { key: "auto", icon: "refresh", label: "Sistema" },
   ];
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+    <StudioScreen variant="reading">
       {/* Header */}
       <View style={s.headerRow}>
         <View style={{ flex: 1 }}>
@@ -234,7 +235,7 @@ export default function StudioConfiguracoes() {
           <><Icon name="check" size={16} color="#fff" /><Text style={s.saveBtnTxt}>Salvar configurações</Text></>
         )}
       </Pressable>
-    </ScrollView>
+    </StudioScreen>
   );
 }
 
