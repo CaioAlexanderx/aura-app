@@ -10,6 +10,8 @@
 //   - Lista de itens com subtotal por linha
 //   - Rodapé: subtotal, desconto, total
 //   - "Adicionar item" → modal busca produto ou texto livre
+//     Integração A→B: ao selecionar produto chama calculateQuoteLine
+//     (motor de precificação, Fase B). Fallback ao preço cadastrado.
 //   - "Enviar" → studioApi.sendQuote → exibe link + wa.me
 //   - "Converter em Pedido" (só accepted) → studioApi.convertQuote
 // ============================================================
@@ -27,6 +29,7 @@ import {
   type StudioQuoteItem,
   type StudioQuoteStatus,
   type StudioQuoteCreated,
+  type PricingBreakdown,
 } from "@/services/studioApi";
 
 // ─── Status pills ─────────────────────────────────────────────
@@ -66,13 +69,14 @@ function AddItemModal({ visible, companyId, onClose, onAdd }: ItemModalProps) {
   const [query, setQuery]       = useState("");
   const [results, setResults]   = useState<any[]>([]);
   const [searching, setSearch]  = useState(false);
+  const [pricing, setPricing]   = useState(false); // A→B: calculando preço
   const [desc, setDesc]         = useState("");
   const [qty, setQty]           = useState("1");
   const [price, setPrice]       = useState("");
   const [mode, setMode]         = useState<"search" | "free">("search");
 
   useEffect(() => {
-    if (!visible) { setQuery(""); setResults([]); setDesc(""); setQty("1"); setPrice(""); setMode("search"); }
+    if (!visible) { setQuery(""); setResults([]); setDesc(""); setQty("1"); setPrice(""); setMode("search"); setPricing(false); }
   }, [visible]);
 
   async function doSearch(q: string) {
@@ -86,14 +90,39 @@ function AddItemModal({ visible, companyId, onClose, onAdd }: ItemModalProps) {
     finally { setSearch(false); }
   }
 
-  function selectProduct(p: any) {
+  // Integração A→B: ao selecionar produto, pede preço ao motor de precificação (Fase B).
+  // Fallback gracioso: se motor retornar 501 (stub) ou não tiver regra, usa preço cadastrado.
+  async function selectProduct(p: any) {
+    setPricing(true);
+    let suggestedPrice = parseFloat(p.price) || 0;
+    let pricingMeta: PricingBreakdown["breakdown"] | null = null;
+    let unitCost: number | null = p.cost_price ? parseFloat(p.cost_price) : null;
+
+    if (companyId) {
+      try {
+        const calc = await studioApi.calculateQuoteLine(companyId, {
+          product_id: p.id,
+          quantity:   1,
+        });
+        if (calc.unit_price > 0) {
+          suggestedPrice = calc.unit_price;
+          pricingMeta    = calc.breakdown;
+          if (calc.breakdown.base_cost > 0) unitCost = calc.breakdown.base_cost;
+        }
+      } catch {
+        // Motor B ainda em stub ou sem regra — usa preço cadastrado no produto
+      }
+    }
+
     onAdd({
-      product_id:  p.id,
-      description: p.name,
-      quantity:    1,
-      unit_price:  parseFloat(p.price) || 0,
-      unit_cost:   p.cost_price ? parseFloat(p.cost_price) : null,
+      product_id:   p.id,
+      description:  p.name,
+      quantity:     1,
+      unit_price:   suggestedPrice,
+      unit_cost:    unitCost,
+      pricing_meta: pricingMeta ?? undefined,
     });
+    setPricing(false);
     onClose();
   }
 
@@ -134,11 +163,14 @@ function AddItemModal({ visible, companyId, onClose, onAdd }: ItemModalProps) {
                   onChangeText={(v) => { setQuery(v); if (v.length >= 2) doSearch(v); }}
                   autoFocus
                 />
-                {searching && <ActivityIndicator size="small" color="#1E3A8A" />}
+                {(searching || pricing) && <ActivityIndicator size="small" color="#1E3A8A" />}
               </View>
+              {pricing && (
+                <Text style={m.pricingHint}>Consultando motor de precificação...</Text>
+              )}
               <ScrollView style={{ maxHeight: 260 }}>
                 {results.map((p) => (
-                  <Pressable key={p.id} style={m.resultRow} onPress={() => selectProduct(p)}>
+                  <Pressable key={p.id} style={m.resultRow} onPress={() => selectProduct(p)} disabled={pricing}>
                     <Text style={m.resultName}>{p.name}</Text>
                     <Text style={m.resultPrice}>R$ {parseFloat(p.price || 0).toFixed(2)}</Text>
                   </Pressable>
@@ -187,6 +219,7 @@ const m = StyleSheet.create({
     flex: 1, backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#CBD5E1",
     borderRadius: 10, padding: 12, fontSize: 14, color: "#0F172A",
   },
+  pricingHint: { fontSize: 12, color: "#1E3A8A", fontStyle: "italic", textAlign: "center" },
   resultRow: {
     flexDirection: "row", justifyContent: "space-between", paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: "#F1F5F9",
@@ -303,7 +336,6 @@ export default function OrcamentoEditorScreen() {
   // ─── Enviar ─────────────────────────────────────────────────
   async function handleSend() {
     if (!companyId || !quote) return;
-    // Salva antes de enviar se draft com itens modificados
     setSaving(true);
     setError(null);
     try {
@@ -449,6 +481,7 @@ export default function OrcamentoEditorScreen() {
                   <Text style={s.itemName}>{it.description}</Text>
                   <Text style={s.itemDetail}>
                     {it.quantity} × R$ {it.unit_price.toFixed(2)}
+                    {it.pricing_meta ? " (motor B)" : ""}
                   </Text>
                 </View>
                 <Text style={s.itemTotal}>
