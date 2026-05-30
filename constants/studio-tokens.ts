@@ -50,7 +50,7 @@ export const StudioColors = {
   // ── Ink (texto) ──────────────────────────────────────────
   ink:           "#0F172A",
   ink2:          "#334155",
-  ink3:          "#64748B",
+  ink3:          "#5E6A7A",       // AA fix Fase 0 (era #64748B, 4.41:1 sobre paperCard)
   ink4:          "#94A3B8",       // bordas padrão de cards/nav inativos
   ink5:          "#CBD5E1",       // divisores
 
@@ -184,6 +184,15 @@ export const StudioColorsDark = {
   successSoft:   "rgba(52,211,153,0.18)",
   successInk:    "#6EE7B7",
 } as const;
+
+// ── Parity guard (Fase 0): light e dark com chaves idênticas ──
+type _StudioColorParity =
+  keyof typeof StudioColors extends keyof typeof StudioColorsDark
+    ? keyof typeof StudioColorsDark extends keyof typeof StudioColors
+      ? true
+      : never
+    : never;
+export const _STUDIO_COLOR_PARITY: _StudioColorParity = true;
 
 // Type pra ambos os modos
 export type StudioPalette = typeof StudioColors;
