@@ -1,7 +1,9 @@
-import { useEffect, useRef, ReactNode } from "react";
+import { useEffect, useRef, ReactNode, useMemo } from "react";
 import { View, Text, Modal, Pressable, StyleSheet, Animated, Easing, Platform, PanResponder } from "react-native";
 import { StudioGradient } from "@/components/studio/StudioGradient";
-import { StudioColors, StudioGradients } from "@/constants/studio-tokens";
+import { StudioGradients } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 type Props = {
   visible: boolean;
@@ -18,6 +20,8 @@ export function StudioBottomSheet({
   visible, onClose, title, eyebrow, children,
   height = "auto", showHandle = true, showGradientHeader = false,
 }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -99,11 +103,12 @@ export function StudioBottomSheet({
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0F172A" },
   sheet: {
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 32,
     maxHeight: "90%" as any,
@@ -123,15 +128,16 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     borderBottomWidth: 1,
-    borderBottomColor: StudioColors.ink5,
+    borderBottomColor: t.ink5,
   },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: StudioColors.ink5, marginBottom: 8 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: t.ink5, marginBottom: 8 },
   handleLight: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.4)", marginBottom: 8 },
-  eyebrow: { fontSize: 10, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  eyebrow: { fontSize: 10, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
   eyebrowLight: { fontSize: 10, color: "rgba(255,255,255,0.85)", fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 17, color: StudioColors.ink, fontWeight: "800" },
+  title: { fontSize: 17, color: t.ink, fontWeight: "800" },
   titleLight: { fontSize: 17, color: "#fff", fontWeight: "800" },
   body: { padding: 20, paddingBottom: 32 },
-});
+  });
+}
 
 export default StudioBottomSheet;

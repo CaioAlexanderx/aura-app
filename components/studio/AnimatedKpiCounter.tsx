@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 type Props = {
   value: number;
@@ -15,6 +16,8 @@ type Props = {
 export function AnimatedKpiCounter({
   value, label, fontSize = 22, color, prefix = "", suffix = "", format,
 }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const [display, setDisplay] = useState(value);
   const prevValue = useRef(value);
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -73,10 +76,10 @@ export function AnimatedKpiCounter({
   return (
     <View style={s.wrap}>
       <Animated.View
-        style={[s.pulse, { backgroundColor: StudioColors.success, opacity: pulseOpacity }]}
+        style={[s.pulse, { backgroundColor: t.success, opacity: pulseOpacity }]}
         pointerEvents="none"
       />
-      <Text style={[s.value, { fontSize, color: color || StudioColors.ink }]}>
+      <Text style={[s.value, { fontSize, color: color || t.ink }]}>
         {prefix}{formatted}{suffix}
       </Text>
       {label && <Text style={s.label}>{label}</Text>}
@@ -98,17 +101,19 @@ export function AnimatedKpiCounter({
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   wrap: { position: "relative", alignItems: "center" },
   pulse: { position: "absolute" as any, inset: -8, borderRadius: 12 },
   value: { fontWeight: "900", letterSpacing: -0.5 },
-  label: { fontSize: 11, color: StudioColors.ink3, marginTop: 2, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  label: { fontSize: 11, color: t.ink3, marginTop: 2, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
   badge: {
     position: "absolute" as any, top: -8, right: -16,
-    backgroundColor: StudioColors.accent, borderRadius: 8,
+    backgroundColor: t.accent, borderRadius: 8,
     paddingHorizontal: 6, paddingVertical: 2,
   },
   badgeTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
-});
+  });
+}
 
 export default AnimatedKpiCounter;

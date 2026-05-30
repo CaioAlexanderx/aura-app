@@ -2,7 +2,8 @@ import { useRef } from "react";
 import { Pressable, Text, View, StyleSheet, Platform, Animated } from "react-native";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { Icon } from "@/components/Icon";
-import { StudioColors, StudioGradients } from "@/constants/studio-tokens";
+import { StudioGradients } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 type Props = {
   onPress: () => void;
@@ -17,6 +18,7 @@ export function StudioFab({
   position = { bottom: 24, right: 24 },
   accessibilityLabel,
 }: Props) {
+  const tk = useStudioTokens();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
@@ -44,7 +46,7 @@ export function StudioFab({
           s.pulse,
           isExtended && s.pulseExtended,
           {
-            backgroundColor: StudioColors.accent,
+            backgroundColor: tk.accent,
             opacity: pulseOpacity,
             transform: [{ scale: pulseScale }],
           },

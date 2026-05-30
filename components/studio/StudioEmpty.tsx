@@ -19,33 +19,22 @@
 //   tone="celebration" — celebratório (mint soft + emoji)
 //   tone="warning"     — alerta (warning soft)
 // ============================================================
+import { useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 type CTA = { label: string; onPress: () => void };
 type Tone = "default" | "celebration" | "warning";
 
-const TONES: Record<Tone, { bg: string; iconBg: string; iconColor: string; border: string }> = {
-  default: {
-    bg: StudioColors.paperCard,
-    iconBg: StudioColors.bgSoft,
-    iconColor: StudioColors.ink3,
-    border: StudioColors.ink5,
-  },
-  celebration: {
-    bg: StudioColors.successSoft,
-    iconBg: "#fff",
-    iconColor: StudioColors.success,
-    border: StudioColors.success,
-  },
-  warning: {
-    bg: StudioColors.warningSoft,
-    iconBg: "#fff",
-    iconColor: StudioColors.warning,
-    border: StudioColors.warning,
-  },
-};
+function makeTones(t: StudioPalette): Record<Tone, { bg: string; iconBg: string; iconColor: string; border: string }> {
+  return {
+    default:     { bg: t.paperCard,   iconBg: t.bgSoft,        iconColor: t.ink3,    border: t.ink5 },
+    celebration: { bg: t.successSoft, iconBg: t.paperCardElev, iconColor: t.success, border: t.success },
+    warning:     { bg: t.warningSoft, iconBg: t.paperCardElev, iconColor: t.warning, border: t.warning },
+  };
+}
 
 export function StudioEmpty({
   icon = "info",
@@ -66,7 +55,9 @@ export function StudioEmpty({
   tone?: Tone;
   compact?: boolean;
 }) {
-  const t = TONES[tone];
+  const tk = useStudioTokens();
+  const s = useMemo(() => buildStyles(tk), [tk]);
+  const t = makeTones(tk)[tone];
 
   return (
     <View style={[
@@ -101,7 +92,8 @@ export function StudioEmpty({
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   wrap: {
     alignItems: "center",
     paddingVertical: 36,
@@ -128,13 +120,13 @@ const s = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "800",
-    color: StudioColors.ink,
+    color: t.ink,
     textAlign: "center",
     letterSpacing: -0.2,
   },
   desc: {
     fontSize: 13,
-    color: StudioColors.ink3,
+    color: t.ink3,
     textAlign: "center",
     maxWidth: 380,
     lineHeight: 18,
@@ -148,7 +140,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   btnPri: {
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingVertical: 11,
     paddingHorizontal: 20,
     borderRadius: 10,
@@ -159,18 +151,19 @@ const s = StyleSheet.create({
     fontWeight: "800",
   },
   btnSec: {
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     paddingVertical: 11,
     paddingHorizontal: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   btnSecTxt: {
-    color: StudioColors.ink2,
+    color: t.ink2,
     fontSize: 13,
     fontWeight: "700",
   },
-});
+  });
+}
 
 export default StudioEmpty;
