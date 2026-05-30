@@ -18,6 +18,9 @@
 // 26/05 (FINAL Sprints 1-4): "Produtos" removido do nav — virou parte
 // integrada do /studio/estoque (tabs Básico/Personalização/Ficha/Templates).
 // A rota /studio/produtos vira redirect pra /studio/estoque.
+//
+// 30/05 (Camada 1 Fase E): Orçamentos + Pedidos adicionados ao grupo Vendas.
+// FAB para /gestao/orcamentos → "Novo orçamento".
 // ============================================================
 import { useRef, useEffect, useState, useMemo, ReactNode } from "react";
 import {
@@ -115,9 +118,6 @@ const GROUPS: NavGroup[] = [
     icon: "star",
     toneKey: "navy",
     children: [
-      // Pós Sprints 1-4 (26/05): "Produtos" foi absorvido pelo /studio/estoque.
-      // O drawer da tela Estoque tem 4 tabs (Básico / Personalização / Ficha técnica / Templates),
-      // unificando todo o fluxo de cadastro+config num lugar só.
       { label: "Estoque",   icon: "box",          href: "/studio/estoque" },
       { label: "Galeria",   icon: "image",         href: "/studio/galeria" },
       { label: "Produção",  icon: "clock",         href: "/studio/producao", badge: { value: "•", tone: "accent" } },
@@ -130,8 +130,11 @@ const GROUPS: NavGroup[] = [
     icon: "shopping-cart",
     toneKey: "pink",
     children: [
-      { label: "Caixa / PDV",  icon: "credit-card", href: "/studio/vendas/caixa" },
-      { label: "Loja digital", icon: "globe",       href: "/studio/vendas/loja-digital" },
+      // Camada 1 (30/05): Orçamentos + Pedidos adicionados ao funil de vendas
+      { label: "Orçamentos",   icon: "file-text",   href: "/studio/gestao/orcamentos" },
+      { label: "Pedidos",      icon: "package",      href: "/studio/pedidos" },
+      { label: "Caixa / PDV",  icon: "credit-card",  href: "/studio/vendas/caixa" },
+      { label: "Loja digital", icon: "globe",        href: "/studio/vendas/loja-digital" },
     ],
   },
   {
@@ -148,7 +151,6 @@ const GROUPS: NavGroup[] = [
 ];
 
 // ─── Nav circle (bolinha pai) ───────────────────────────────
-// 60×60, glow base navy soft, glow forte quando hovered/active.
 function NavCircle({
   icon, active, isGroup, idx, onPress, children, pause,
   onHoverIn, onHoverOut, accessibilityLabel, glowing,
@@ -157,14 +159,13 @@ function NavCircle({
   onPress?: () => void; children?: React.ReactNode; pause: boolean;
   onHoverIn?: () => void; onHoverOut?: () => void;
   accessibilityLabel?: string;
-  glowing?: boolean;  // ← Hover/expand state
+  glowing?: boolean;
 }) {
   const webHoverProps =
     Platform.OS === "web" && (onHoverIn || onHoverOut)
       ? { onHoverIn, onHoverOut }
       : {};
 
-  // Glow forte: anel pink quando hovered/active. Glow base: navy soft.
   const glowStyle = Platform.OS === "web"
     ? (glowing || active
         ? { boxShadow: "0 0 32px rgba(236,72,153,0.55), 0 0 18px rgba(30,58,138,0.4), 0 6px 14px rgba(15,23,42,0.18)" }
@@ -196,7 +197,6 @@ function NavCircle({
   );
 }
 
-// ─── Bolinhas-filhas (popup expandido por click — legado) ─
 function ChildBubble({
   child, onPress, idx, tone, pause,
 }: { child: NavChild; onPress: () => void; idx: number; tone: keyof typeof TONES; pause: boolean }) {
@@ -226,9 +226,6 @@ function ChildBubble({
   );
 }
 
-// ─── Mini-bolinha hover iOS-style — agora COM LABEL ─────────
-// Pill horizontal: bolinha 32×32 + texto do label ao lado.
-// Anima scale+opacity com stagger via Reanimated.
 function ChildHoverBubble({
   child, tone, delay, onPress,
 }: {
@@ -431,16 +428,18 @@ type FabConfig = {
 };
 
 function resolveFab(pathname: string): FabConfig | null {
-  // /studio/estoque agora é a porta unificada (Sprints 1-4); FAB abre wizard novo produto.
   if (pathname === "/studio/estoque" || pathname.startsWith("/studio/estoque/")) {
     return { label: "Cadastrar produto", icon: "plus", accessibilityLabel: "Cadastrar novo produto", action: "queryNew", href: "/studio/estoque?action=new" };
   }
-  // Compat: /studio/produtos redireciona pra /studio/estoque, mas mantém FAB caso usuário caia ali via cache
   if (pathname === "/studio/produtos" || pathname.startsWith("/studio/produtos/")) {
     return { label: "Cadastrar produto", icon: "plus", accessibilityLabel: "Cadastrar novo produto", action: "queryNew", href: "/studio/estoque?action=new" };
   }
   if (pathname === "/studio/galeria" || pathname.startsWith("/studio/galeria/")) {
     return { label: "Adicionar template", icon: "plus", accessibilityLabel: "Adicionar novo template", action: "queryNew", href: "/studio/galeria?action=new" };
+  }
+  // Camada 1 (30/05): FAB para lista de orçamentos
+  if (pathname === "/studio/gestao/orcamentos" || pathname.startsWith("/studio/gestao/orcamentos")) {
+    return { label: "Novo orçamento", icon: "plus", accessibilityLabel: "Criar novo orçamento", action: "push", href: "/studio/orcamentos/novo" };
   }
   if (pathname === "/studio/pedidos" || pathname.startsWith("/studio/pedidos/")) {
     return { label: "Novo pedido", icon: "plus", accessibilityLabel: "Criar novo pedido", action: "push", href: "/studio/pedidos/novo" };
@@ -779,7 +778,6 @@ export function StudioShell() {
                   )}
                 </NavCircle>
 
-                {/* Mini-bolinhas com LABEL no hover (iOS-style) */}
                 {showHoverChildren && (
                   <View
                     style={s.childBubblesContainer}
@@ -851,7 +849,6 @@ function MobileChip({
 
 // ─── Estilos ────────────────────────────────────────────────
 const s = StyleSheet.create({
-  // Sidebar SEM background — só bolinhas flutuando sobre o bg do shell.
   sidebar: {
     width: 104,
     paddingVertical: 28,
@@ -862,7 +859,6 @@ const s = StyleSheet.create({
   },
 
   brandWrap: {
-    // Glow brand mais forte que as nav bubbles — destaca a marca.
     ...(Platform.OS === "web"
       ? { boxShadow: "0 0 32px rgba(236,72,153,0.45), 0 0 18px rgba(30,58,138,0.45)" }
       : { shadowColor: StudioColors.accent, shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 8 }),
@@ -883,7 +879,6 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: StudioColors.ink5,
     borderRadius: 30,
     alignItems: "center", justifyContent: "center",
-    // Glow base/hover é aplicado inline em NavCircle (depende do state).
   },
   navCircleActive: {
     backgroundColor: StudioColors.primary,
@@ -934,7 +929,6 @@ const s = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ── Floating iOS-style hover (com label) ──
   childBubblesContainer: {
     position: "absolute",
     left: 72,
@@ -999,7 +993,6 @@ const s = StyleSheet.create({
   },
   avatarTxt: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
-  // ── Mobile ──
   mobileBar: {
     backgroundColor: "rgba(255,255,255,0.92)",
     borderBottomWidth: 1,
