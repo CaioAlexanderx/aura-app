@@ -46,6 +46,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform } from
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioColors, StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { Icon } from "@/components/Icon";
@@ -101,7 +102,7 @@ export default function StudioVendasLojaDigital() {
 
   return (
     <AccentTheme tokens={studioAccent}>
-      <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+      <StudioScreen variant="grid">
         {/* Header canônico Studio (Fase 3) */}
         <StudioPageHeader
           eyebrow="VENDAS · LOJA DIGITAL"
@@ -241,7 +242,7 @@ export default function StudioVendasLojaDigital() {
         )}
 
         {tab === "orders" && <TabStudioPedidos />}
-      </ScrollView>
+      </StudioScreen>
     </AccentTheme>
   );
 }
