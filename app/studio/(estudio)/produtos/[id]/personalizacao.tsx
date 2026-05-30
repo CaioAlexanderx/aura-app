@@ -11,14 +11,15 @@
 // experiência rica (drag-drop de fields, preview SVG ao vivo,
 // galeria de fontes) entra em iterações da Fase 1.
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -48,6 +49,8 @@ const DEFAULT_DRAFT: DraftState = {
 };
 
 export default function PersonalizacaoWizard() {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const router = useRouter();
   const { id: productId } = useLocalSearchParams<{ id: string }>();
   const { company } = useAuthStore();
@@ -235,14 +238,14 @@ export default function PersonalizacaoWizard() {
           <View style={s.previewCard}>
             <Text style={s.previewEyebrow}>PRÉVIA — configuração resumida</Text>
             <View style={s.previewRow}>
-              <Icon name="square" size={14} color={StudioColors.primary} />
+              <Icon name="square" size={14} color={t.primary} />
               <Text style={s.previewTxt}>
                 Área de impressão: <Text style={s.previewBold}>{draft.print_area_w}×{draft.print_area_h} cm</Text>, {draft.print_area_pos === "center" ? "centralizada" : draft.print_area_pos === "left" ? "à esquerda" : "à direita"}
               </Text>
             </View>
             {draft.allow_text && (
               <View style={s.previewRow}>
-                <Icon name="type" size={14} color={StudioColors.primary} />
+                <Icon name="type" size={14} color={t.primary} />
                 <Text style={s.previewTxt}>
                   Texto até <Text style={s.previewBold}>{draft.text_max_chars} caracteres</Text> com {FONTS_PRESET.length} fontes e {COLORS_PRESET.length} cores
                 </Text>
@@ -250,7 +253,7 @@ export default function PersonalizacaoWizard() {
             )}
             {draft.allow_image && (
               <View style={s.previewRow}>
-                <Icon name="image" size={14} color={StudioColors.primary} />
+                <Icon name="image" size={14} color={t.primary} />
                 <Text style={s.previewTxt}>
                   Upload PNG/JPG/PDF até <Text style={s.previewBold}>10 MB</Text>
                 </Text>
@@ -258,7 +261,7 @@ export default function PersonalizacaoWizard() {
             )}
             {draft.allow_template && (
               <View style={s.previewRow}>
-                <Icon name="grid" size={14} color={StudioColors.primary} />
+                <Icon name="grid" size={14} color={t.primary} />
                 <Text style={s.previewTxt}>
                   Galeria pronta — vincule categorias em Estúdio › Galeria
                 </Text>
@@ -276,9 +279,9 @@ export default function PersonalizacaoWizard() {
             Você pode editar essa configuração quando quiser.
           </Text>
 
-          <View style={[s.previewCard, { backgroundColor: StudioColors.mintSoft, borderColor: "#A7F3D0" }]}>
-            <Icon name="check" size={22} color={StudioColors.mint} />
-            <Text style={[s.previewEyebrow, { color: "#065F46", marginTop: 8 }]}>QUASE LÁ</Text>
+          <View style={[s.previewCard, { backgroundColor: t.mintSoft, borderColor: t.mint }]}>
+            <Icon name="check" size={22} color={t.mint} />
+            <Text style={[s.previewEyebrow, { color: t.successInk, marginTop: 8 }]}>QUASE LÁ</Text>
             <Text style={[s.previewTxt, { fontSize: 14, marginTop: 4 }]}>
               Clique em <Text style={s.previewBold}>Concluir</Text> pra ativar a personalização e ver o produto na loja digital.
             </Text>
@@ -293,13 +296,15 @@ export default function PersonalizacaoWizard() {
 function Toggle({
   label, sub, checked, onToggle, tone,
 }: { label: string; sub: string; checked: boolean; onToggle: () => void; tone: "navy" | "pink" | "warm" }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const bg =
-    tone === "navy" ? StudioColors.primary :
-    tone === "pink" ? StudioColors.accent :
-                      "#F59E0B";
+    tone === "navy" ? t.primary :
+    tone === "pink" ? t.accent :
+                      t.warning;
   return (
     <Pressable onPress={onToggle} style={[s.toggleCard, checked && { borderColor: bg }]}>
-      <View style={[s.toggleIco, { backgroundColor: checked ? bg : StudioColors.ink5 }]}>
+      <View style={[s.toggleIco, { backgroundColor: checked ? bg : t.ink5 }]}>
         {checked && <Icon name="check" size={14} color="#fff" />}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -310,60 +315,62 @@ function Toggle({
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   stepBlock: { maxWidth: 620 },
-  q: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.3 },
-  help: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, marginBottom: 18, lineHeight: 19 },
-  label: { fontSize: 12, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  q: { fontSize: 18, fontWeight: "800", color: t.ink, letterSpacing: -0.3 },
+  help: { fontSize: 13, color: t.ink3, marginTop: 4, marginBottom: 18, lineHeight: 19 },
+  label: { fontSize: 12, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
   input: {
-    backgroundColor: "#fff",
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev,
+    borderWidth: 1.5, borderColor: t.ink5,
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 15, color: StudioColors.ink,
+    fontSize: 15, color: t.ink,
   },
   row2: { flexDirection: "row", gap: 12 },
 
   chipsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   chip: {
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10,
-    backgroundColor: "#fff",
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev,
+    borderWidth: 1.5, borderColor: t.ink5,
   },
-  chipSel: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  chipTxt: { fontSize: 13, fontWeight: "600", color: StudioColors.ink2 },
+  chipSel: { backgroundColor: t.primary, borderColor: t.primary },
+  chipTxt: { fontSize: 13, fontWeight: "600", color: t.ink2 },
   chipTxtSel: { color: "#fff" },
 
   toggleCard: {
     flexDirection: "row", alignItems: "center", gap: 14,
-    backgroundColor: "#fff",
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev,
+    borderWidth: 1.5, borderColor: t.ink5,
     borderRadius: 14, padding: 14, marginBottom: 10,
   },
   toggleIco: {
     width: 28, height: 28, borderRadius: 14,
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  toggleLabel: { fontSize: 14.5, fontWeight: "700", color: StudioColors.ink },
-  toggleSub: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
+  toggleLabel: { fontSize: 14.5, fontWeight: "700", color: t.ink },
+  toggleSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
 
   subBlock: {
     marginLeft: 42, marginBottom: 10, padding: 12,
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderRadius: 10,
   },
-  subHelp: { fontSize: 11.5, color: StudioColors.ink3, marginTop: 6 },
+  subHelp: { fontSize: 11.5, color: t.ink3, marginTop: 6 },
 
   previewCard: {
-    backgroundColor: StudioColors.paperCard,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCard,
+    borderWidth: 1, borderColor: t.ink5,
     borderRadius: 14, padding: 16,
     gap: 8,
   },
   previewEyebrow: {
-    fontSize: 11, color: StudioColors.accent, fontWeight: "800",
+    fontSize: 11, color: t.accent, fontWeight: "800",
     letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6,
   },
   previewRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  previewTxt: { fontSize: 13, color: StudioColors.ink2, flex: 1 },
-  previewBold: { fontWeight: "700", color: StudioColors.ink },
-});
+  previewTxt: { fontSize: 13, color: t.ink2, flex: 1 },
+  previewBold: { fontWeight: "700", color: t.ink },
+  });
+}
