@@ -1,6 +1,6 @@
 // ============================================================
 // AURA. — services/studioApi.ts
-// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1 + Marketplaces S-0/S-1/S-2 + OAuth Core
+// Vertical Aura Studio (personalizados) — Fase 0/1/2/3/4/5 + Nivel 1 + Marketplaces S-0/S-1/S-2 + OAuth Core + Camada 1
 //
 // 25/05/2026 (OAuth Core + Revisões): adiciona 5 metodos OAuth marketplace
 // (getMarketplaceAuthUrl, authorizeMarketplace, listConnections, revokeConnection,
@@ -23,6 +23,15 @@
 // (Receita - Despesa do mês, fonte transactions) substituindo o antigo
 // "lucro_bruto_mes" (Receita - custo de insumos). Acompanha refactor do
 // backend; novo campo despesa_mes, removido custo_insumos.
+//
+// 30/05/2026 (Camada 1 — Fase 0 Gate): tipos + stubs completos
+// — StudioQuoteStatus/StudioQuoteItem/StudioQuote/StudioQuoteDetail/StudioQuoteCreated/PublicQuote
+// — StudioPricingTier/StudioPricingRule/PricingBreakdown
+// — StudioPaymentKind/StudioPaymentStatus/StudioPayment
+// — Métodos quote: listQuotes/createQuote/getQuote/updateQuote/deleteQuote/sendQuote/convertQuote
+// — Métodos aceite público: getPublicQuote/respondPublicQuote (skipAuth, /orcamento/:token)
+// — Métodos pricing: listPricingRules/savePricingRule/calculateQuoteLine
+// — Métodos payments: listOrderPayments/createOrderPayment/markPaymentPaid/createChargeLink
 // ============================================================
 import { request } from "./api";
 
@@ -137,6 +146,9 @@ export type StudioOrder = {
   pdv_sale_id?: string | null;
   marketplace_platform?: "mercado_livre" | "shopee" | null;
   customization_collected_at?: string | null;
+  // Camada 1: gate de produção por sinal
+  deposit_required?: number | null;
+  deposit_paid?: boolean;
 };
 
 export type StudioOrderItem = {
@@ -247,24 +259,12 @@ export type StudioSlaEstimate = {
 };
 
 // ─── Painel (26/05) — Home dashboard ──────────────────────────
-//
-// GET /studio/painel?days=N retorna 4 blocos:
-//   - kpis: 3 KPIs principais (vendas dia, ticket medio, lucro liquido mes) com delta_pct
-//   - faturamento_serie: array de N pontos (label + value); ultimo ponto is_today
-//   - top_produtos: top 5 produtos por receita no periodo
-//   - funil_aprovacao: estagios pendente/aprovado/alterado/expirado + sumario
-//
-// Campos podem ser undefined/null se o backend ainda nao popular tudo
-// (ex: cliente novo sem vendas). Tela degrada graciosamente.
 export type PainelKpi = {
   value: number;
   delta_pct: number | null;
   sub_label: string | null;
 };
 
-// Lucro Liquido do mes (Receita - Despesa) — fonte transactions.
-// Substitui o antigo lucro_bruto_mes (Receita - custo de insumos).
-// value pode ser NEGATIVO (prejuizo); UI renderiza com cor danger.
 export type PainelLucroLiquidoKpi = {
   value: number;              // Receita - Despesa (pode ser negativo)
   receita_mes: number;
@@ -407,6 +407,140 @@ export type CollectMarketplaceCustomizationResponse = {
   message: string;
 };
 
+// ─── Camada 1 (30/05/2026) — Orçamento, Precificação, Pagamentos ──────────────
+// Fase 0 Gate: tipos + stubs completos. Fases A/B/C/D implementam os endpoints;
+// este arquivo NÃO precisa ser editado novamente pelas fases paralelas.
+
+// ── Orçamento (Fase A) ───────────────────────────────────────────────────────
+export type StudioQuoteStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "converted";
+
+export type StudioQuoteItem = {
+  id?: string;
+  product_id: string | null;           // null = item livre (DA-A: product_id nullable)
+  description: string;                  // nome do produto OU texto livre
+  quantity: number;
+  unit_price: number;                   // preço final (pós-motor/override)
+  unit_cost?: number | null;            // custo do BOM no momento (snapshot)
+  pricing_meta?: any | null;            // breakdown do motor {base_cost, labor, setup, tier_multiplier, margin_pct, urgency}
+  customization?: any | null;           // briefing por item (reutiliza estrutura do Canal Digital)
+  sort_order?: number;
+};
+
+export type StudioQuote = {
+  id: string;
+  company_id: string;
+  customer_id?: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  status: StudioQuoteStatus;
+  token?: string | null;
+  subtotal: number;
+  discount: number;
+  total: number;
+  estimated_cost: number | null;        // soma do BOM dos itens (margem)
+  validity_days: number;
+  expires_at: string | null;
+  sent_at: string | null;
+  responded_at: string | null;
+  response_note?: string | null;
+  order_id: string | null;              // preenchido na conversão → digital_order id
+  deposit_pct: number | null;           // DA-C: % de sinal escolhido pelo lojista (ex: 50.00)
+  deposit_amount: number | null;        // valor absoluto do sinal
+  notes?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type StudioQuoteDetail = {
+  quote: StudioQuote;
+  items: StudioQuoteItem[];
+};
+
+export type StudioQuoteCreated = StudioQuote & {
+  quote_url: string;                    // link público /orcamento/:token
+  wa_me_link: string | null;            // link wa.me pré-montado (se approval_wa_phone configurado)
+};
+
+export type PublicQuote = {
+  token: string;
+  status: StudioQuoteStatus;
+  expires_at: string;
+  shop: { name: string };
+  customer_name: string | null;
+  subtotal: number;
+  discount: number;
+  total: number;
+  items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+    customization: any;
+  }>;
+  // Sinal (se deposit_pct definido no orçamento)
+  deposit_pct?: number | null;
+  deposit_amount?: number | null;
+};
+
+// ── Motor de Precificação (Fase B) ────────────────────────────────────────────
+export type PricingBreakdown = {
+  unit_price: number;
+  breakdown: {
+    base_cost: number;       // custo do BOM ou unit_cost do produto
+    labor: number;           // mão de obra por unidade
+    setup: number;           // setup/arte rateado pela quantidade
+    tier_multiplier: number; // multiplicador da faixa de tiragem (1.0 = sem faixa)
+    margin_pct: number | null;
+    urgency: number;         // acréscimo de urgência (valor, não %)
+  };
+};
+
+export type StudioPricingTier = {
+  min_qty: number;
+  max_qty: number | null;
+  unit_multiplier?: number; // multiplica o custo base (ex: 0.8 = 20% desconto)
+  unit_price?: number;      // preço fixo por unidade nessa faixa
+};
+
+export type StudioPricingRule = {
+  id?: string;
+  company_id?: string;
+  product_id: string | null;           // null = regra global da loja
+  setup_fee: number;
+  labor_cost: number;
+  default_margin_pct: number | null;
+  urgency_pct: number;
+  qty_tiers: StudioPricingTier[] | null; // DA-B: faixas SEMPRE por produto; global não define tiers
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+// ── Pagamentos / Sinal (Fase C) ───────────────────────────────────────────────
+export type StudioPaymentKind = "deposit" | "balance" | "full";
+export type StudioPaymentStatus = "pending" | "paid" | "cancelled";
+
+export type StudioPayment = {
+  id: string;
+  company_id: string;
+  order_id: string;
+  kind: StudioPaymentKind;
+  amount: number;
+  status: StudioPaymentStatus;
+  method: "pix" | "card" | "cash" | "other" | null;
+  asaas_charge_id: string | null;
+  due_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at?: string;
+};
+
 // ══════════════════════════════════════════════════════════
 // API
 // ══════════════════════════════════════════════════════════
@@ -451,10 +585,6 @@ export const studioApi = {
   },
 
   // ── Painel (26/05) — home /studio ─────────────────────────
-  // days = 1 (hoje) | 7 (7 dias) | 30 (30 dias)
-  // Retorna 4 blocos: kpis + faturamento_serie + top_produtos + funil_aprovacao.
-  // Fala-falha: se /studio/painel ainda não existe no backend, request lança
-  // erro com status — index.tsx trata via toast + UI degradada com zeros.
   getPainel: (cid: string, days = 7) =>
     request<PainelData>(base(cid) + "/painel?days=" + days, { method: "GET", retry: 1, timeout: 10000 }),
 
@@ -471,7 +601,6 @@ export const studioApi = {
     ),
 
   // ── Marketplaces OAuth Core (25/05) — Conectar ML/Shopee ──
-  // NOTA: rota fica em /companies/:cid/marketplaces (NÃO sob /studio).
   listMarketplaceConnections: (cid: string) =>
     request<MarketplaceConnectionsResponse>(
       mkt(cid) + "/connections",
@@ -627,6 +756,95 @@ export const studioApi = {
     request<{ ok: true; action: string; new_status: StudioApprovalStatus; message: string }>(
       "/aprovacao/" + token + "/respond",
       { method: "POST", body, retry: 0, timeout: 10000, skipAuth: true } as any
+    ),
+
+  // ── Camada 1 — Orçamentos (Fase A) ───────────────────────────────────────────
+  // CRUD + send (gera token/link) + convert (cria digital_order vertical=studio).
+  // Stub 501 até a Fase A implementar. Contratos fixos — NÃO editar este arquivo.
+  listQuotes: (cid: string, q?: { status?: StudioQuoteStatus; days?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (q?.status) qs.set("status", q.status);
+    if (q?.days)   qs.set("days", String(q.days));
+    if (q?.limit)  qs.set("limit", String(q.limit));
+    const suffix = qs.toString() ? "?" + qs.toString() : "";
+    return request<{ quotes: StudioQuote[] }>(base(cid) + "/quotes" + suffix, { method: "GET", retry: 1, timeout: 8000 });
+  },
+  createQuote: (cid: string, body: {
+    customer_id?: string | null;
+    customer_name?: string;
+    customer_phone?: string;
+    items: StudioQuoteItem[];
+    discount?: number;
+    validity_days?: number;
+    deposit_pct?: number | null;
+    deposit_amount?: number | null;
+    notes?: string;
+  }) =>
+    request<StudioQuote>(base(cid) + "/quotes", { method: "POST", body, retry: 0, timeout: 10000 }),
+  getQuote: (cid: string, qid: string) =>
+    request<StudioQuoteDetail>(base(cid) + "/quotes/" + qid, { method: "GET", retry: 1, timeout: 8000 }),
+  updateQuote: (cid: string, qid: string, body: Partial<{
+    customer_name: string;
+    customer_phone: string;
+    items: StudioQuoteItem[];
+    discount: number;
+    validity_days: number;
+    deposit_pct: number | null;
+    deposit_amount: number | null;
+    notes: string;
+  }>) =>
+    request<StudioQuote>(base(cid) + "/quotes/" + qid, { method: "PATCH", body, retry: 0, timeout: 10000 }),
+  deleteQuote: (cid: string, qid: string) =>
+    request<{ deleted: true; id: string }>(base(cid) + "/quotes/" + qid, { method: "DELETE", retry: 0, timeout: 5000 }),
+  sendQuote: (cid: string, qid: string) =>
+    request<StudioQuoteCreated>(base(cid) + "/quotes/" + qid + "/send", { method: "POST", retry: 0, timeout: 10000 }),
+  convertQuote: (cid: string, qid: string) =>
+    request<{ order_id: string; quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/convert", { method: "POST", retry: 0, timeout: 10000 }),
+
+  // ── Camada 1 — Aceite público do orçamento (Fase A, sem auth) ────────────────
+  // Espelha getPublicApproval/respondPublicApproval. Rota: /orcamento/:token.
+  getPublicQuote: (token: string) =>
+    request<PublicQuote>("/orcamento/" + token, { method: "GET", retry: 1, timeout: 8000, skipAuth: true } as any),
+  respondPublicQuote: (token: string, body: { action: "accept" | "reject"; note?: string }) =>
+    request<{ ok: true; action: string; new_status: StudioQuoteStatus; message: string }>(
+      "/orcamento/" + token + "/respond",
+      { method: "POST", body, retry: 0, timeout: 10000, skipAuth: true } as any
+    ),
+
+  // ── Camada 1 — Motor de Precificação (Fase B) ─────────────────────────────────
+  // Cálculo vive no backend (fonte única). Frontend pinta breakdown e permite override.
+  listPricingRules: (cid: string) =>
+    request<{ rules: StudioPricingRule[] }>(base(cid) + "/pricing/rules", { method: "GET", retry: 1, timeout: 8000 }),
+  savePricingRule: (cid: string, productId: string | "global", rule: Partial<StudioPricingRule>) =>
+    request<StudioPricingRule>(base(cid) + "/pricing/rules/" + productId, { method: "PUT", body: rule, retry: 0, timeout: 8000 }),
+  calculateQuoteLine: (cid: string, body: {
+    product_id?: string | null;
+    quantity: number;
+    urgency?: boolean;
+    overrides?: Partial<{ unit_price: number; unit_cost: number }>;
+  }) =>
+    request<PricingBreakdown>(base(cid) + "/pricing/quote-line", { method: "POST", body, retry: 0, timeout: 8000 }),
+
+  // ── Camada 1 — Pagamentos / Sinal (Fase C) ────────────────────────────────────
+  // DA-D: mark-paid = Pix manual; charge-link = modalidade de pagamento existente da loja virtual.
+  listOrderPayments: (cid: string, oid: string) =>
+    request<{ payments: StudioPayment[] }>(base(cid) + "/orders/" + oid + "/payments", { method: "GET", retry: 1, timeout: 8000 }),
+  createOrderPayment: (cid: string, oid: string, body: {
+    kind: StudioPaymentKind;
+    amount: number;
+    due_at?: string | null;
+    method?: StudioPayment["method"];
+  }) =>
+    request<StudioPayment>(base(cid) + "/orders/" + oid + "/payments", { method: "POST", body, retry: 0, timeout: 8000 }),
+  markPaymentPaid: (cid: string, pid: string, body?: { method?: StudioPayment["method"] }) =>
+    request<{ ok: true; payment: StudioPayment; deposit_released: boolean }>(
+      base(cid) + "/payments/" + pid + "/mark-paid",
+      { method: "POST", body: body || {}, retry: 0, timeout: 8000 }
+    ),
+  createChargeLink: (cid: string, pid: string) =>
+    request<{ ok: true; payment_url: string | null; pix_code: string | null; method: string }>(
+      base(cid) + "/payments/" + pid + "/charge-link",
+      { method: "POST", retry: 0, timeout: 10000 }
     ),
 };
 
