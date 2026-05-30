@@ -1,33 +1,35 @@
 // ============================================================
 // AURA STUDIO · Primitives (Fase 8 — Design System)
-//
-// Consolida 6 componentes atômicos usados em todas as telas.
-// Tudo num único arquivo pra reduzir overhead de imports.
+// Fase 0 redesign (30/05/2026): theme-aware. Cores vêm de
+// useStudioTokens() (light+dark) e estado de useStudioSemantic().
+// Radius/scale (StudioRadiusV2) seguem estáticos (theme-independent).
 //
 // Componentes exportados:
-//   - <StudioBrandMark size={40} />        — logo bolha navy→magenta com sparkle
-//   - <GlassCard pad="lg" tone="primary">  — card translúcido com bordas orgânicas
-//   - <BubbleIcon ico="..." tone="navy">   — círculo gradient com ícone interno
-//   - <GradientHeader title="..." sub="..." gradient="brand" />
-//   - <AlertBadge severity="warning" />    — badge minimalista de alerta
-//   - <KpiTile label value icon tone />    — card de KPI com bolha
+//   - <StudioBrandMark size={40} />
+//   - <GlassCard pad="lg" tone="primary">
+//   - <BubbleIcon ico="..." tone="navy">
+//   - <GradientHeader title="..." sub="..." />
+//   - <AlertBadge severity="warning" />
+//   - <KpiTile label value icon tone />
 // ============================================================
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioTokens, StudioRadiusV2 } from "@/constants/studio-tokens-v2";
+import { StudioRadiusV2 } from "@/constants/studio-tokens-v2";
+import { useStudioTokens, useStudioSemantic } from "@/contexts/StudioThemeMode";
 
 // ─── 1. StudioBrandMark ─────────────────────────────────────
 type BrandProps = { size?: number; letter?: string };
 export function StudioBrandMark({ size = 54, letter = "S" }: BrandProps) {
+  const t = useStudioTokens();
   return (
     <View
       style={{
         width: size, height: size,
         borderRadius: size / 2,
-        backgroundColor: StudioTokens.primary,
+        backgroundColor: t.primary,
         alignItems: "center", justifyContent: "center",
         position: "relative",
-        shadowColor: StudioTokens.primary,
+        shadowColor: t.primary,
         shadowOpacity: 0.4, shadowRadius: size / 4,
         shadowOffset: { width: 0, height: size / 8 },
         elevation: 6,
@@ -51,25 +53,26 @@ type GlassProps = {
   organic?: 1 | 2 | 3 | 4;
   style?: any;
 };
-const TONE_BG = {
-  neutral: StudioTokens.paperCard,
-  primary: StudioTokens.primaryGhost,
-  accent:  StudioTokens.accentGhost,
-  warm:    StudioTokens.warningSoft,
-  mint:    StudioTokens.successSoft,
-};
 const PAD = { sm: 12, md: 16, lg: 22 };
 export function GlassCard({ children, pad = "md", tone = "neutral", organic, style }: GlassProps) {
-  const radiusKey = organic ? `organic${organic}` as const : null;
+  const t = useStudioTokens();
+  const TONE_BG: Record<NonNullable<GlassProps["tone"]>, string> = {
+    neutral: t.paperCard,
+    primary: t.primaryGhost,
+    accent:  t.accentGhost,
+    warm:    t.warningSoft,
+    mint:    t.successSoft,
+  };
+  const radiusKey = organic ? (`organic${organic}` as const) : null;
   return (
     <View
       style={[{
         backgroundColor: TONE_BG[tone],
         padding: PAD[pad],
-        borderRadius: radiusKey ? undefined : StudioRadiusV2.xl,
+        borderRadius: radiusKey ? (StudioRadiusV2[radiusKey] as any) : StudioRadiusV2.xl,
         borderWidth: 1,
-        borderColor: StudioTokens.borderSoft,
-      }, radiusKey && { borderRadius: undefined, ...({ borderRadius: StudioRadiusV2[radiusKey] } as any) }, style]}
+        borderColor: t.ink5,
+      }, style]}
     >
       {children}
     </View>
@@ -83,25 +86,27 @@ type BubbleProps = {
   size?: number;
   organic?: 1 | 2 | 3 | 4;
 };
-const BUBBLE_BG = {
-  navy:    StudioTokens.primary,
-  accent:  StudioTokens.accent,
-  warm:    StudioTokens.warning,
-  mint:    StudioTokens.success,
-  violet:  "#7C3AED",
-  sky:     "#06B6D4",
-};
 export function BubbleIcon({ ico, tone = "navy", size = 44, organic }: BubbleProps) {
+  const t = useStudioTokens();
+  const BUBBLE_BG: Record<NonNullable<BubbleProps["tone"]>, string> = {
+    navy:   t.primary,
+    accent: t.accent,
+    warm:   t.warning,
+    mint:   t.success,
+    violet: t.violet,
+    sky:    t.sky,
+  };
   const radius = organic ? StudioRadiusV2[`bubble${organic}` as const] : size / 2;
+  const bg = BUBBLE_BG[tone];
   return (
     <View
       style={{
         width: size, height: size,
         borderRadius: typeof radius === "number" ? radius : undefined,
         ...(typeof radius === "string" ? { borderRadius: radius as any } : {}),
-        backgroundColor: BUBBLE_BG[tone],
+        backgroundColor: bg,
         alignItems: "center", justifyContent: "center",
-        shadowColor: BUBBLE_BG[tone],
+        shadowColor: bg,
         shadowOpacity: 0.35, shadowRadius: size / 5,
         shadowOffset: { width: 0, height: 4 },
         elevation: 4,
@@ -112,7 +117,7 @@ export function BubbleIcon({ ico, tone = "navy", size = 44, organic }: BubblePro
   );
 }
 
-// ─── 4. GradientHeader (texto com gradient simulado) ───────
+// ─── 4. GradientHeader ──────────────────────────────────────
 type HeaderProps = {
   eyebrow?: string;
   title: string;
@@ -120,19 +125,20 @@ type HeaderProps = {
   rightSlot?: React.ReactNode;
 };
 export function GradientHeader({ eyebrow, title, sub, rightSlot }: HeaderProps) {
+  const t = useStudioTokens();
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
       <View style={{ flex: 1, minWidth: 280 }}>
         {eyebrow && (
-          <Text style={{ fontSize: 11, color: StudioTokens.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
+          <Text style={{ fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
             {eyebrow}
           </Text>
         )}
-        <Text style={{ fontSize: 24, fontWeight: "800", color: StudioTokens.ink, marginTop: 4, letterSpacing: -0.4 }}>
+        <Text style={{ fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 }}>
           {title}
         </Text>
         {sub && (
-          <Text style={{ fontSize: 13.5, color: StudioTokens.ink3, marginTop: 4 }}>
+          <Text style={{ fontSize: 13.5, color: t.ink3, marginTop: 4 }}>
             {sub}
           </Text>
         )}
@@ -147,21 +153,18 @@ type AlertProps = {
   severity: "info" | "warning" | "danger";
   label: string;
 };
-const SEV_STYLES = {
-  info:    { bg: StudioTokens.infoSoft,    fg: "#1E40AF" },
-  warning: { bg: StudioTokens.warningSoft, fg: "#92400E" },
-  danger:  { bg: StudioTokens.dangerSoft,  fg: "#991B1B" },
-};
 export function AlertBadge({ severity, label }: AlertProps) {
-  const sv = SEV_STYLES[severity];
+  const sem = useStudioSemantic();
+  const intent = severity === "danger" ? "danger" : severity === "warning" ? "waiting" : "production";
+  const sv = sem[intent];
   return (
     <View style={{
       flexDirection: "row", alignItems: "center", gap: 5,
-      backgroundColor: sv.bg,
+      backgroundColor: sv.soft,
       paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
     }}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sv.fg }} />
-      <Text style={{ fontSize: 11, color: sv.fg, fontWeight: "700" }}>{label}</Text>
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sv.base }} />
+      <Text style={{ fontSize: 11, color: sv.ink, fontWeight: "700" }}>{label}</Text>
     </View>
   );
 }
@@ -176,6 +179,7 @@ type KpiProps = {
   onPress?: () => void;
 };
 export function KpiTile({ label, value, ico, tone = "navy", trend, onPress }: KpiProps) {
+  const t = useStudioTokens();
   const Wrap: any = onPress ? Pressable : View;
   return (
     <Wrap
@@ -183,25 +187,25 @@ export function KpiTile({ label, value, ico, tone = "navy", trend, onPress }: Kp
       style={{
         flex: 1, minWidth: 150,
         flexDirection: "row", alignItems: "center", gap: 10,
-        backgroundColor: StudioTokens.paperCard,
+        backgroundColor: t.paperCard,
         borderRadius: StudioRadiusV2.lg, padding: 14,
-        borderWidth: 1, borderColor: StudioTokens.borderSoft,
+        borderWidth: 1, borderColor: t.ink5,
       }}
     >
       <BubbleIcon ico={ico} tone={tone} size={36} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 11, color: StudioTokens.ink3, fontWeight: "600" }} numberOfLines={1}>
+        <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "600" }} numberOfLines={1}>
           {label}
         </Text>
         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: StudioTokens.ink, letterSpacing: -0.2 }}>
+          <Text style={{ fontSize: 18, fontWeight: "800", color: t.ink, letterSpacing: -0.2 }}>
             {value}
           </Text>
           {trend && (
             <Text style={{
               fontSize: 10.5, fontWeight: "800",
-              color: trend.dir === "up" ? StudioTokens.success : StudioTokens.danger,
-              backgroundColor: trend.dir === "up" ? StudioTokens.successSoft : StudioTokens.dangerSoft,
+              color: trend.dir === "up" ? t.success : t.danger,
+              backgroundColor: trend.dir === "up" ? t.successSoft : t.dangerSoft,
               paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4,
             }}>
               {trend.dir === "up" ? "↑" : "↓"} {trend.pct}%
