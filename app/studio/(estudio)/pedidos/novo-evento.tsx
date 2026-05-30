@@ -7,17 +7,19 @@
 //
 // Reaproveita BulkOrderWizard. Quando o wizard fecha (sucesso ou
 // cancel), navega de volta pro hub /studio/pedidos.
+//
+// Fase 1b: container via StudioScreen (reading), tema dinâmico.
 // ============================================================
 import { useRouter } from "expo-router";
-import { View, StyleSheet } from "react-native";
+import { View } from "react-native";
 import { BulkOrderWizard } from "@/components/studio/BulkOrderWizard";
-import { StudioColors } from "@/constants/studio-tokens";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 
 export default function NovoEvento() {
   const router = useRouter();
   return (
-    <View style={s.root}>
+    <StudioScreen variant="reading" scroll={false}>
       <StudioBreadcrumb
         items={[
           { label: "Estúdio", href: "/studio" },
@@ -25,18 +27,13 @@ export default function NovoEvento() {
           { label: "Novo pedido pra evento" },
         ]}
       />
-      <View style={s.body}>
+      <View style={{ flex: 1, marginTop: 8 }}>
         <BulkOrderWizard
           asPage
           onClose={() => router.push("/studio/pedidos" as any)}
           onDone={() => router.push("/studio/pedidos" as any)}
         />
       </View>
-    </View>
+    </StudioScreen>
   );
 }
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: StudioColors.bg },
-  body: { flex: 1, padding: 22, maxWidth: 980, alignSelf: "center", width: "100%" },
-});
