@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type Template, type TemplateCategory } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
@@ -85,7 +86,7 @@ export default function StudioGaleria() {
   }
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+    <StudioScreen variant="grid">
       {/* Header canônico */}
       <StudioPageHeader
         eyebrow="GALERIA"
@@ -225,7 +226,7 @@ export default function StudioGaleria() {
           onSaved={() => { setWizardOpen(false); load(); }}
         />
       </Modal>
-    </ScrollView>
+    </StudioScreen>
   );
 }
 
