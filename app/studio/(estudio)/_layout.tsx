@@ -16,12 +16,13 @@ import { Redirect } from "expo-router";
 import { View, Text } from "react-native";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { EmptyState } from "@/components/EmptyState";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 
 export default function StudioLayout() {
   const { company, isHydrated, user } = useAuthStore();
+  const tk = useStudioTokens();
   const { settings, isLoading: pdvLoading } = usePdvSettings();
 
   if (!isHydrated) return null;
@@ -34,14 +35,14 @@ export default function StudioLayout() {
 
   if (studioOff && !user?.is_staff) {
     return (
-      <View style={{ flex: 1, backgroundColor: StudioColors.bg, padding: 24 }}>
+      <View style={{ flex: 1, backgroundColor: tk.bg, padding: 24 }}>
         <Text style={{
-          fontSize: 11, color: StudioColors.accent, fontWeight: "800",
+          fontSize: 11, color: tk.accent, fontWeight: "800",
           letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4,
         }}>
           AURA STUDIO
         </Text>
-        <Text style={{ fontSize: 22, color: StudioColors.ink, fontWeight: "800", marginBottom: 24 }}>
+        <Text style={{ fontSize: 22, color: tk.ink, fontWeight: "800", marginBottom: 24 }}>
           Modo Studio desativado
         </Text>
         <EmptyState
