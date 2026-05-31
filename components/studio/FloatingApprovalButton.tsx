@@ -18,12 +18,16 @@
  *
  * Atalho leva pra Produção com filtro `intent=approval` que abre a
  * coluna "Aguardando aprovação" do KDS.
+ *
+ * 30/05/2026 (Fase 1b · batch 4): migrado de StudioColors estático
+ * pra useStudioTokens — light+dark via provider. Texto branco do
+ * círculo accent permanece (alto contraste sobre magenta).
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Icon } from '@/components/Icon';
-import { StudioColors } from '../../constants/studio-tokens';
+import { useStudioTokens } from '@/contexts/StudioThemeMode';
 
 // Allowlist: só rotas onde o atalho "Aprovar arte" tem contexto claro.
 // Hoje só o Hub de Pedidos. Adicionar /studio aqui no futuro se virar
@@ -40,6 +44,7 @@ function shouldShow(pathname: string | null): boolean {
 export function FloatingApprovalButton() {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useStudioTokens();
 
   if (!shouldShow(pathname)) return null;
 
@@ -49,10 +54,10 @@ export function FloatingApprovalButton() {
       style={styles.fab}
       accessibilityLabel="Solicitar aprovação de arte ao cliente"
     >
-      <View style={[styles.fabInner, { backgroundColor: StudioColors.accent }]}>
+      <View style={[styles.fabInner, { backgroundColor: t.accent }]}>
         <Icon name="message" size={22} color="#fff" />
       </View>
-      <Text style={styles.fabLabel}>Aprovar arte</Text>
+      <Text style={[styles.fabLabel, { color: t.ink2 ?? t.ink3 }]}>Aprovar arte</Text>
     </Pressable>
   );
 }
@@ -81,7 +86,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabLabel: {
-    color: (StudioColors as any).ink2 ?? StudioColors.ink3,
     fontSize: 11,
     fontWeight: '600',
   },
