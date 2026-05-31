@@ -21,6 +21,7 @@ import { companiesApi } from "@/services/companiesApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
@@ -278,7 +279,8 @@ export default function StudioInsumos() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+    <StudioScreen variant="grid" scroll={false} padded={false}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* Header */}
       <StudioPageHeader
         eyebrow="INSUMOS"
@@ -806,7 +808,8 @@ export default function StudioInsumos() {
           )}
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </StudioScreen>
   );
 }
 

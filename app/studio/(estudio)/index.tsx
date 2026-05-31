@@ -39,6 +39,7 @@ import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
@@ -284,7 +285,8 @@ export default function StudioPainel() {
   const isLoss = kpiLucro.value < 0;
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+    <StudioScreen variant="grid" scroll={false} padded={false}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* ═══════ GUIA 5 PASSOS (colapsado) ═══════ */}
       {showGuide && nextStep && (
         <StudioGradient
@@ -448,7 +450,8 @@ export default function StudioPainel() {
           </View>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </StudioScreen>
   );
 }
 

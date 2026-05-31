@@ -39,6 +39,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { ProductQualityScore, calculateProductScore } from "@/components/studio/ProductQualityScore";
 import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoPanel";
@@ -212,7 +213,8 @@ export default function StudioEstoque() {
   );
 
   return (
-    <View style={s.container}>
+    <StudioScreen variant="grid" scroll={false} padded={false}>
+      <View style={s.container}>
       <ScrollView contentContainerStyle={s.scrollContent}>
         {expandedProduct ? (
           <ProductExpanded
@@ -323,7 +325,8 @@ export default function StudioEstoque() {
           load();
         }}
       />
-    </View>
+      </View>
+    </StudioScreen>
   );
 }
 
