@@ -18,12 +18,18 @@
 //   tone="default"     — neutro (cinza)
 //   tone="celebration" — celebratório (mint soft + emoji)
 //   tone="warning"     — alerta (warning soft)
+//
+// 31/05/2026 (Fase 5): prop opcional `branded` substitui o ícone
+// genérico pelo AuraStudioMark — pra empty states de telas Studio
+// que querem identidade visual da marca. Per plano "empty states:
+// branded illustration".
 // ============================================================
 import { useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
 
 type CTA = { label: string; onPress: () => void };
 type Tone = "default" | "celebration" | "warning";
@@ -39,6 +45,7 @@ function makeTones(t: StudioPalette): Record<Tone, { bg: string; iconBg: string;
 export function StudioEmpty({
   icon = "info",
   emoji,
+  branded = false,
   title,
   desc,
   primaryCta,
@@ -48,6 +55,8 @@ export function StudioEmpty({
 }: {
   icon?: string;
   emoji?: string;
+  /** Substitui o ícone genérico pelo AuraStudioMark (identidade visual Studio). */
+  branded?: boolean;
   title: string;
   desc?: string;
   primaryCta?: CTA;
@@ -60,12 +69,19 @@ export function StudioEmpty({
   const t = makeTones(tk)[tone];
 
   return (
-    <View style={[
-      s.wrap,
-      { backgroundColor: t.bg, borderColor: t.border },
-      compact && s.wrapCompact,
-    ]}>
-      {emoji ? (
+    <View
+      style={[
+        s.wrap,
+        { backgroundColor: t.bg, borderColor: t.border },
+        compact && s.wrapCompact,
+      ]}
+      accessibilityLabel={title}
+    >
+      {branded ? (
+        <View style={{ marginBottom: 8 }}>
+          <AuraStudioMark size={56} />
+        </View>
+      ) : emoji ? (
         <Text style={s.emoji}>{emoji}</Text>
       ) : (
         <View style={[s.iconBubble, { backgroundColor: t.iconBg }]}>
@@ -77,12 +93,12 @@ export function StudioEmpty({
       {(primaryCta || secondaryCta) && (
         <View style={s.ctas}>
           {primaryCta && (
-            <Pressable onPress={primaryCta.onPress} style={s.btnPri}>
+            <Pressable onPress={primaryCta.onPress} style={s.btnPri} accessibilityRole="button" accessibilityLabel={primaryCta.label}>
               <Text style={s.btnPriTxt}>{primaryCta.label}</Text>
             </Pressable>
           )}
           {secondaryCta && (
-            <Pressable onPress={secondaryCta.onPress} style={s.btnSec}>
+            <Pressable onPress={secondaryCta.onPress} style={s.btnSec} accessibilityRole="button" accessibilityLabel={secondaryCta.label}>
               <Text style={s.btnSecTxt}>{secondaryCta.label}</Text>
             </Pressable>
           )}
