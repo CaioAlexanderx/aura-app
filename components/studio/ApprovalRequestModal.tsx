@@ -8,13 +8,14 @@
 // Lojista clica "Subir do dispositivo", arquivo vai pro R2, URL volta
 // já preenchida. Mantém URL externa como fallback.
 // ============================================================
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, Image, Linking, Platform, ActivityIndicator,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type StudioOrder, type StudioApprovalCreated } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -27,6 +28,8 @@ type Props = {
 };
 
 export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
   const [mockupUrl, setMockupUrl] = useState("");
@@ -95,10 +98,10 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={s.closeRow}>
         <Pressable onPress={onClose} style={s.closeBtn}>
-          <Icon name="x" size={18} color={StudioColors.ink2} />
+          <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
       </View>
 
@@ -201,7 +204,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
         {step === 3 && created && (
           <View style={s.block}>
             <View style={s.successCard}>
-              <Icon name="check-circle" size={28} color={StudioColors.mint} />
+              <Icon name="check-circle" size={28} color={t.mint} />
               <Text style={s.successTitle}>Link gerado!</Text>
               <Text style={s.successSub}>
                 Click no botão abaixo pra abrir o WhatsApp com a mensagem já pronta. Você só precisa clicar enviar.
@@ -227,38 +230,38 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   closeRow: { flexDirection: "row", justifyContent: "flex-end", padding: 12 },
-  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: t.paperCardElev },
 
   block: { maxWidth: 540 },
-  q: { fontSize: 17, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.3 },
-  help: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
-  subHelp: { fontSize: 12, color: StudioColors.ink3, marginTop: 8, fontStyle: "italic" },
-  label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
-  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: StudioColors.ink },
+  q: { fontSize: 17, fontWeight: "800", color: t.ink, letterSpacing: -0.3 },
+  help: { fontSize: 13, color: t.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
+  subHelp: { fontSize: 12, color: t.ink3, marginTop: 8, fontStyle: "italic" },
+  label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  input: { backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: t.ink },
 
   uploadBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingVertical: 12, borderRadius: 12, marginBottom: 10,
   },
   uploadBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
   divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 8 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: StudioColors.ink5 },
-  dividerTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
+  dividerLine: { flex: 1, height: 1, backgroundColor: t.ink5 },
+  dividerTxt: { fontSize: 11, color: t.ink3, fontWeight: "600" },
 
   preview: { marginTop: 14, alignItems: "center" },
-  previewImg: { width: 200, height: 200, borderRadius: 14, backgroundColor: "#fff" },
-  previewCap: { fontSize: 11, color: StudioColors.ink3, marginTop: 6 },
+  previewImg: { width: 200, height: 200, borderRadius: 14, backgroundColor: t.paperCardElev },
+  previewCap: { fontSize: 11, color: t.ink3, marginTop: 6 },
 
-  successCard: { padding: 22, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: StudioColors.mintSoft, alignItems: "center" },
-  successTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 8 },
-  successSub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", marginTop: 4, marginBottom: 16 },
-  linkBox: { width: "100%", backgroundColor: StudioColors.bgSoft, borderRadius: 10, padding: 12, marginTop: 8 },
-  linkLabel: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.6 },
-  linkUrl: { fontSize: 12, color: StudioColors.primary, marginTop: 4, fontWeight: "600" },
-  linkMsg: { fontSize: 12.5, color: StudioColors.ink2, marginTop: 4, lineHeight: 18 },
+  successCard: { padding: 22, backgroundColor: t.paperCardElev, borderRadius: 16, borderWidth: 1, borderColor: t.mintSoft, alignItems: "center" },
+  successTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 8 },
+  successSub: { fontSize: 13, color: t.ink3, textAlign: "center", marginTop: 4, marginBottom: 16 },
+  linkBox: { width: "100%", backgroundColor: t.bgSoft, borderRadius: 10, padding: 12, marginTop: 8 },
+  linkLabel: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
+  linkUrl: { fontSize: 12, color: t.primary, marginTop: 4, fontWeight: "600" },
+  linkMsg: { fontSize: 12.5, color: t.ink2, marginTop: 4, lineHeight: 18 },
 });
 
 export default ApprovalRequestModal;
