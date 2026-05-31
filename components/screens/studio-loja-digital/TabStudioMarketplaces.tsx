@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, MarketplaceConnection, MarketplacePlatform } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -55,14 +56,16 @@ function tokenHealth(conn: MarketplaceConnection | null): TokenHealth {
   return "fresh";
 }
 
-function healthMeta(h: TokenHealth) {
+function healthMeta(h: TokenHealth, mutedColor: string) {
   if (h === "fresh") return { color: "#10B981", bg: "rgba(16,185,129,0.12)", label: "Token válido" };
   if (h === "expiring") return { color: "#F59E0B", bg: "rgba(245,158,11,0.14)", label: "Token expira em breve" };
   if (h === "expired") return { color: "#EF4444", bg: "rgba(239,68,68,0.14)", label: "Token expirado" };
-  return { color: StudioColors.textMuted, bg: "rgba(148,163,184,0.14)", label: "Status desconhecido" };
+  return { color: mutedColor, bg: "rgba(148,163,184,0.14)", label: "Status desconhecido" };
 }
 
 export function TabStudioMarketplaces() {
+  const t = useStudioTokens();
+  const styles = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [connections, setConnections] = useState<Record<MarketplacePlatform, MarketplaceConnection | null>>({
@@ -240,7 +243,7 @@ export function TabStudioMarketplaces() {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={StudioColors.accent} />
+        <ActivityIndicator size="large" color={t.accent} />
         <Text style={styles.loadingText}>Carregando conexões…</Text>
       </View>
     );
@@ -261,7 +264,7 @@ export function TabStudioMarketplaces() {
           const isConnected = !!conn;
           const isConnecting = connectingPlatform === p.key;
           const health = tokenHealth(conn);
-          const hm = healthMeta(health);
+          const hm = healthMeta(health, t.ink3);
           const storeName = (conn as any)?.store_name || (conn as any)?.shop_name || (conn as any)?.account_name;
           const storeId = (conn as any)?.store_id || (conn as any)?.shop_id || (conn as any)?.external_id;
 
@@ -335,10 +338,10 @@ export function TabStudioMarketplaces() {
                       ]}
                     >
                       {busyAction === `refresh:${p.key}` ? (
-                        <ActivityIndicator size="small" color={StudioColors.accent} />
+                        <ActivityIndicator size="small" color={t.accent} />
                       ) : (
                         <>
-                          <Icon name="refresh-cw" size={14} color={StudioColors.accent} />
+                          <Icon name="refresh-cw" size={14} color={t.accent} />
                           <Text style={styles.secondaryButtonText}>Renovar token</Text>
                         </>
                       )}
@@ -367,7 +370,7 @@ export function TabStudioMarketplaces() {
               {isConnecting && (
                 <View pointerEvents="box-none" style={styles.connectingOverlay}>
                   <View style={styles.connectingPanel}>
-                    <ActivityIndicator size="small" color={StudioColors.accent} />
+                    <ActivityIndicator size="small" color={t.accent} />
                     <Text style={styles.connectingTitle}>
                       Conclua a autorização no popup que abriu
                     </Text>
@@ -393,7 +396,7 @@ export function TabStudioMarketplaces() {
 
       <View style={styles.hintCard}>
         <View style={styles.hintIconWrap}>
-          <Icon name="info" size={18} color={StudioColors.accent} />
+          <Icon name="info" size={18} color={t.accent} />
         </View>
         <View style={styles.hintTextWrap}>
           <Text style={styles.hintTitle}>OAuth requer credenciais configuradas</Text>
@@ -407,10 +410,10 @@ export function TabStudioMarketplaces() {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: StudioColors.background,
+    backgroundColor: t.bg,
   },
   content: {
     padding: 24,
@@ -424,7 +427,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: StudioColors.textMuted,
+    color: t.ink3,
     fontSize: 14,
   },
   header: {
@@ -433,12 +436,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     lineHeight: 20,
     maxWidth: 640,
   },
@@ -452,10 +455,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 360,
     minHeight: 220,
-    backgroundColor: StudioColors.surface,
+    backgroundColor: t.paperCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: StudioColors.border,
+    borderColor: t.ink5,
     padding: 20,
     gap: 14,
     position: "relative",
@@ -485,7 +488,7 @@ const styles = StyleSheet.create({
   platformName: {
     fontSize: 18,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   connectedBadge: {
     flexDirection: "row",
@@ -510,18 +513,18 @@ const styles = StyleSheet.create({
   },
   disconnectedHint: {
     fontSize: 12,
-    color: StudioColors.textMuted,
+    color: t.ink3,
   },
   description: {
     fontSize: 13,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     lineHeight: 19,
   },
   connectedBlock: {
     gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: StudioColors.surfaceAlt || "rgba(148,163,184,0.06)",
+    backgroundColor: t.bgSoft || "rgba(148,163,184,0.06)",
     borderRadius: 10,
   },
   storeInfo: {
@@ -530,11 +533,11 @@ const styles = StyleSheet.create({
   storeName: {
     fontSize: 14,
     fontWeight: "600",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   storeId: {
     fontSize: 11,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
   },
   healthPill: {
@@ -566,8 +569,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
-    backgroundColor: StudioColors.accent,
-    shadowColor: StudioColors.accent,
+    backgroundColor: t.accent,
+    shadowColor: t.accent,
     shadowOpacity: 0.3,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -598,14 +601,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: StudioColors.accent,
-    backgroundColor: StudioColors.primaryGhost || "rgba(236,72,153,0.08)",
+    borderColor: t.accent,
+    backgroundColor: t.primaryGhost || "rgba(236,72,153,0.08)",
   },
   secondaryButtonPressed: {
     opacity: 0.8,
   },
   secondaryButtonText: {
-    color: StudioColors.accent,
+    color: t.accent,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -647,10 +650,10 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 18,
-    backgroundColor: StudioColors.surface,
+    backgroundColor: t.paperCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: StudioColors.border,
+    borderColor: t.ink5,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -661,13 +664,13 @@ const styles = StyleSheet.create({
   connectingTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
     textAlign: "center",
     marginTop: 4,
   },
   connectingSub: {
     fontSize: 11,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     textAlign: "center",
     lineHeight: 16,
   },
@@ -677,7 +680,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: StudioColors.border,
+    borderColor: t.ink5,
     backgroundColor: "rgba(148,163,184,0.08)",
   },
   cancelButtonPressed: {
@@ -686,14 +689,14 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   hintCard: {
     flexDirection: "row",
     gap: 12,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: StudioColors.primaryGhost || "rgba(236,72,153,0.08)",
+    backgroundColor: t.primaryGhost || "rgba(236,72,153,0.08)",
     borderWidth: 1,
     borderColor: "rgba(236,72,153,0.18)",
   },
@@ -712,11 +715,11 @@ const styles = StyleSheet.create({
   hintTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   hintBody: {
     fontSize: 12,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     lineHeight: 18,
   },
 });
