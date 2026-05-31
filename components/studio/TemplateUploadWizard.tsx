@@ -10,11 +10,12 @@
 //
 // 25/05 — item #10: upload integrado via /studio/upload-mockup (R2).
 // ============================================================
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Image, Platform, ActivityIndicator } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type TemplateCategory } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -45,6 +46,8 @@ const DEFAULT_DRAFT: Draft = {
 };
 
 export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
@@ -108,7 +111,7 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
     <View style={{ flex: 1 }}>
       <View style={s.closeRow}>
         <Pressable onPress={onClose} style={s.closeBtn}>
-          <Icon name="x" size={18} color={StudioColors.ink2} />
+          <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
       </View>
 
@@ -199,7 +202,7 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
                   style={[s.catItem, draft.category_id === c.id && s.catItemSel]}
                   onPress={() => upd({ category_id: c.id })}
                 >
-                  {c.icon && <Icon name={c.icon as any} size={12} color={draft.category_id === c.id ? "#fff" : StudioColors.ink3} />}
+                  {c.icon && <Icon name={c.icon as any} size={12} color={draft.category_id === c.id ? "#fff" : t.ink3} />}
                   <Text style={[s.catItemTxt, draft.category_id === c.id && s.catItemTxtSel]}>{c.name}</Text>
                 </Pressable>
               ))}
@@ -229,14 +232,14 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
             </View>
             {draft.tags.length > 0 && (
               <View style={s.tagsList}>
-                {draft.tags.map((t) => (
+                {draft.tags.map((tag) => (
                   <Pressable
-                    key={t}
+                    key={tag}
                     style={s.tagChip}
-                    onPress={() => upd({ tags: draft.tags.filter((x) => x !== t) })}
+                    onPress={() => upd({ tags: draft.tags.filter((x) => x !== tag) })}
                   >
-                    <Text style={s.tagChipTxt}>#{t}</Text>
-                    <Icon name="x" size={10} color={StudioColors.ink3} />
+                    <Text style={s.tagChipTxt}>#{tag}</Text>
+                    <Icon name="x" size={10} color={t.ink3} />
                   </Pressable>
                 ))}
               </View>
@@ -262,7 +265,7 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
                 )}
                 <Text style={s.summaryMeta}>
                   {draft.tags.length} tag{draft.tags.length === 1 ? "" : "s"}
-                  {draft.tags.length > 0 && ": " + draft.tags.map((t) => "#" + t).join(" ")}
+                  {draft.tags.length > 0 && ": " + draft.tags.map((tag) => "#" + tag).join(" ")}
                 </Text>
               </View>
             </View>
@@ -277,61 +280,61 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  closeRow: { flexDirection: "row", justifyContent: "flex-end", padding: 12, backgroundColor: StudioColors.bg },
-  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  closeRow: { flexDirection: "row", justifyContent: "flex-end", padding: 12, backgroundColor: t.bg },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: t.paperCardElev },
 
   block: { maxWidth: 540 },
-  q: { fontSize: 17, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.3 },
-  help: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
-  subHelp: { fontSize: 12, color: StudioColors.ink3, marginTop: 10 },
-  label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  q: { fontSize: 17, fontWeight: "800", color: t.ink, letterSpacing: -0.3 },
+  help: { fontSize: 13, color: t.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
+  subHelp: { fontSize: 12, color: t.ink3, marginTop: 10 },
+  label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
   input: {
-    backgroundColor: "#fff",
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev,
+    borderWidth: 1.5, borderColor: t.ink5,
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 14, color: StudioColors.ink,
+    fontSize: 14, color: t.ink,
   },
 
   uploadBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingVertical: 12, borderRadius: 12, marginBottom: 10,
   },
   uploadBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
   divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 8 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: StudioColors.ink5 },
-  dividerTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
+  dividerLine: { flex: 1, height: 1, backgroundColor: t.ink5 },
+  dividerTxt: { fontSize: 11, color: t.ink3, fontWeight: "600" },
 
   preview: { marginTop: 14, alignItems: "center" },
-  previewImg: { width: 180, height: 180, borderRadius: 14, backgroundColor: "#fff" },
-  previewCap: { fontSize: 11, color: StudioColors.ink3, marginTop: 6 },
+  previewImg: { width: 180, height: 180, borderRadius: 14, backgroundColor: t.paperCardElev },
+  previewCap: { fontSize: 11, color: t.ink3, marginTop: 6 },
 
   catList: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   catItem: {
     flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-    borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff",
+    borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev,
   },
-  catItemSel: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  catItemTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
+  catItemSel: { backgroundColor: t.primary, borderColor: t.primary },
+  catItemTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
   catItemTxtSel: { color: "#fff" },
 
   tagInputRow: { flexDirection: "row", gap: 8 },
-  tagAddBtn: { width: 42, height: 42, borderRadius: 10, backgroundColor: StudioColors.accent, alignItems: "center", justifyContent: "center" },
+  tagAddBtn: { width: 42, height: 42, borderRadius: 10, backgroundColor: t.accent, alignItems: "center", justifyContent: "center" },
   tagsList: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   tagChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: StudioColors.accentSoft,
+    backgroundColor: t.accentSoft,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
   tagChipTxt: { fontSize: 12, color: "#9D174D", fontWeight: "700" },
 
-  summary: { flexDirection: "row", gap: 14, padding: 14, backgroundColor: StudioColors.paperCard, borderRadius: 14, borderWidth: 1, borderColor: StudioColors.ink5 },
+  summary: { flexDirection: "row", gap: 14, padding: 14, backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5 },
   summaryImg: { width: 100, height: 100, borderRadius: 10 },
-  summaryName: { fontSize: 16, fontWeight: "800", color: StudioColors.ink },
-  summaryDesc: { fontSize: 12.5, color: StudioColors.ink3, marginTop: 4 },
-  summaryMeta: { fontSize: 11.5, color: StudioColors.ink3, marginTop: 4 },
+  summaryName: { fontSize: 16, fontWeight: "800", color: t.ink },
+  summaryDesc: { fontSize: 12.5, color: t.ink3, marginTop: 4 },
+  summaryMeta: { fontSize: 11.5, color: t.ink3, marginTop: 4 },
 });
 
 export default TemplateUploadWizard;
