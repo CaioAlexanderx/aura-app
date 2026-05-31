@@ -12,6 +12,10 @@
 // Per PLANO seção 5/Fase 3 + confirmação Caio 31/05:
 // busca é UI-only (placeholder), sem `headerRight` slot — topbar é
 // puramente shell, NÃO mexe na API do StudioScreen.
+//
+// 31/05/2026 (Fase 5 audit AA): ink4 promovido pra ink3 em texto/ícone
+// visível (chevron breadcrumb, search icon, placeholder) — ink4 falha 4.5:1
+// (light 2.5-2.6:1, dark 2.2-3.7:1). ink4 continua válido só pra borders.
 // ============================================================
 import { useMemo } from "react";
 import { View, Text, TextInput } from "react-native";
@@ -108,7 +112,8 @@ export function Topbar({ pathname }: { pathname: string }) {
               key={c + ":" + i}
               style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              {i > 0 && <Icon name="chevron-right" size={11} color={t.ink4} />}
+              {/* AA fix Fase 5: ink4 → ink3 (chevron como ícone separador, 11px) */}
+              {i > 0 && <Icon name="chevron-right" size={11} color={t.ink3} />}
               <Text
                 style={{
                   fontSize: 13,
@@ -141,10 +146,11 @@ export function Topbar({ pathname }: { pathname: string }) {
           maxWidth: 320,
         }}
       >
-        <Icon name="search" size={13} color={t.ink4} />
+        {/* AA fix Fase 5: ink4 → ink3 (search icon + placeholder text) */}
+        <Icon name="search" size={13} color={t.ink3} />
         <TextInput
           placeholder="Buscar no Studio..."
-          placeholderTextColor={t.ink4}
+          placeholderTextColor={t.ink3}
           style={{
             flex: 1,
             fontSize: 13,

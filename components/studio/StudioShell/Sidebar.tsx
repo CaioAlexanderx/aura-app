@@ -21,6 +21,12 @@
 //
 // Fade route + reduceMotion gating mora no index.tsx — Sidebar
 // só anima a largura.
+//
+// 31/05/2026 (Fase 5 audit AA): ink4 promovido pra ink3 em texto visível
+// (section labels dos grupos, 9px uppercase). ink4 falha 4.5:1 sobre
+// paperCard em ambos os temas (light 2.4:1, dark 3.1:1). Active state
+// magenta (accent em label sobre rgba(236,72,153,0.10) → 2.99:1 light) é
+// residual conhecido — follow-up vai separar accentInk pra texto.
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
@@ -365,7 +371,9 @@ function GroupSection({
           style={{
             fontSize: 9,
             fontWeight: "800",
-            color: t.ink4,
+            // AA fix Fase 5: ink4 (2.4:1 light / 3.1:1 dark sobre paperCard)
+            // → ink3 (5.1:1 light / 5.7:1 dark) pra section label visível.
+            color: t.ink3,
             letterSpacing: 1.2,
             textTransform: "uppercase",
             paddingHorizontal: 10,
@@ -470,7 +478,8 @@ function GroupSection({
             style={{
               fontSize: 9,
               fontWeight: "800",
-              color: t.ink4,
+              // AA fix Fase 5: ink4 → ink3 (same rationale do header expanded)
+              color: t.ink3,
               letterSpacing: 1.2,
               textTransform: "uppercase",
               paddingHorizontal: 8,
