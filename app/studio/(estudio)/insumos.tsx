@@ -347,7 +347,7 @@ export default function StudioInsumos() {
                   <View key={i.id} style={s.alertRow}>
                     <Text style={s.alertRowName}>{i.name}</Text>
                     <Text style={s.alertRowQty}>
-                      <Text style={{ color: t.accent, fontWeight: "800" }}>
+                      <Text style={{ color: t.danger, fontWeight: "800" }}>
                         {i.stock_qty} {i.unit}
                       </Text>
                       <Text> de {i.stock_min} mín.</Text>
@@ -490,7 +490,7 @@ export default function StudioInsumos() {
             <View style={s.list}>
               {inputs.map((i) => (
                 <Pressable key={i.id} style={[s.itemRow, i.is_low_stock && s.itemRowLow]} onPress={() => openEdit(i)}>
-                  <View style={[s.itemDot, i.is_low_stock && { backgroundColor: t.accent }]}>
+                  <View style={[s.itemDot, i.is_low_stock && { backgroundColor: t.danger }]}>
                     <Icon name="package" size={14} color={i.is_low_stock ? "#fff" : t.primary} />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
@@ -508,7 +508,7 @@ export default function StudioInsumos() {
                     </Text>
                   </View>
                   <View style={s.itemQtyBlock}>
-                    <Text style={[s.itemQty, i.is_low_stock && { color: t.accent }]}>
+                    <Text style={[s.itemQty, i.is_low_stock && { color: t.danger }]}>
                       {Number(i.stock_qty).toFixed(0)} {i.unit}
                     </Text>
                     {i.stock_min != null && (
@@ -845,7 +845,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     borderRadius: 18, padding: 18, marginBottom: 18,
   },
   alertHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  alertIco: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent, alignItems: "center", justifyContent: "center" },
+  alertIco: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.danger, alignItems: "center", justifyContent: "center" },
   alertSub: { fontSize: 12, color: t.danger, marginTop: 2 },
   alertList: { gap: 8 },
   alertRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 10 },
@@ -876,7 +876,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   itemDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.primarySoft, alignItems: "center", justifyContent: "center" },
   itemNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemName: { fontSize: 14, fontWeight: "700", color: t.ink, flexShrink: 1 },
-  lowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, backgroundColor: t.accent },
+  lowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, backgroundColor: t.danger },
   lowBadgeTxt: { fontSize: 9, fontWeight: "800", color: "#fff", letterSpacing: 0.5 },
   itemMeta: { fontSize: 12, color: t.ink3, marginTop: 2 },
   itemQtyBlock: { alignItems: "flex-end" },

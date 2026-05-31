@@ -10,11 +10,15 @@
 //   - reduceMotion + fade de troca de rota
 //   - pause da animação flutuante após 10s
 //
+// 31/05/2026 (Fase 3): desktop branch ganha <Topbar /> horizontal
+// acima do conteúdo (breadcrumb + busca + ThemeToggle).
+// Mobile/tablet sem topbar adicional — MobileBar permanece.
+//
 // Cada peça mora em arquivo separado:
 //   types.ts, styles.ts, useFloat.ts, FloatingBubble.tsx,
 //   NavCircle.tsx, ChildBubble.tsx (+ ChildHoverBubble),
 //   MobileChip.tsx, MobileMenuSheet.tsx, MobileBar.tsx,
-//   Sidebar.tsx, fab.ts
+//   Sidebar.tsx, Topbar.tsx, fab.ts
 //
 // IMPORTANTE: o path `@/components/studio/StudioShell` continua
 // resolvendo aqui (index.tsx). API externa (`<StudioShell />`)
@@ -48,6 +52,7 @@ import { useStudioOnboarding } from "@/hooks/useStudioOnboarding";
 import { StudioFab } from "@/components/studio/StudioFab";
 import { useAuthStore } from "@/stores/auth";
 import { Sidebar } from "./Sidebar";
+import { Topbar } from "./Topbar";
 import { MobileBar } from "./MobileBar";
 import { MobileMenuSheet } from "./MobileMenuSheet";
 import { resolveFab } from "./fab";
@@ -229,7 +234,7 @@ export function StudioShell() {
     );
   }
 
-  // ─── Desktop (sidebar circular FLUTUANTE — sem barra branca) ─
+  // ─── Desktop (sidebar circular FLUTUANTE + Topbar horizontal) ─
   return (
     <StudioAccentTheme tokens={resolvedAccent}>
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: tk.bg }}>
@@ -241,9 +246,14 @@ export function StudioShell() {
           go={go}
         />
 
-        <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
-          <Slot />
-        </Reanimated.View>
+        {/* Coluna direita: topbar + conteúdo */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Topbar pathname={pathname} />
+          <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
+            <Slot />
+          </Reanimated.View>
+        </View>
+
         <FloatingApprovalButton />
         <StudioOnboarding
           visible={onboardingVisible}
