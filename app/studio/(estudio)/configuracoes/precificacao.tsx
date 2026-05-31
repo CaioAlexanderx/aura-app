@@ -13,7 +13,7 @@
 // Cores: navy #1E3A8A (primary), magenta #EC4899 (accent) — StudioColors.
 // Layout: segue padrão de marketplace.tsx (ScrollView + section cards).
 // ============================================================
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useMemo, useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import {
   studioApi,
   type StudioPricingRule,
@@ -97,9 +98,13 @@ function tiersFromDraft(tiers: TierDraft[]): StudioPricingTier[] {
 function TiersEditor({
   tiers,
   onChange,
+  t,
+  ts,
 }: {
   tiers: TierDraft[];
   onChange: (tiers: TierDraft[]) => void;
+  t: any;
+  ts: any;
 }) {
   function update(idx: number, key: keyof TierDraft, value: string) {
     const next = tiers.map((t, i) => (i === idx ? { ...t, [key]: value } : t));
@@ -169,13 +174,13 @@ function TiersEditor({
             />
           </View>
           <Pressable onPress={() => remove(idx)} style={ts.tierRemoveBtn}>
-            <Icon name="x" size={14} color={StudioColors.dangerInk} />
+            <Icon name="x" size={14} color={t.dangerInk} />
           </Pressable>
         </View>
       ))}
 
       <Pressable onPress={add} style={ts.tiersAddBtn}>
-        <Icon name="plus" size={13} color={StudioColors.primary} />
+        <Icon name="plus" size={13} color={t.primary} />
         <Text style={ts.tiersAddTxt}>Adicionar faixa</Text>
       </Pressable>
     </View>
@@ -187,10 +192,14 @@ function PricingPreview({
   cid,
   productId,
   qty,
+  t,
+  ts,
 }: {
   cid: string;
   productId: string | null;
   qty: number;
+  t: any;
+  ts: any;
 }) {
   const [price, setPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,12 +221,12 @@ function PricingPreview({
     return () => { cancelled = true; };
   }, [cid, productId, qty]);
 
-  if (loading) return <ActivityIndicator size="small" color={StudioColors.primary} style={{ marginTop: 8 }} />;
+  if (loading) return <ActivityIndicator size="small" color={t.primary} style={{ marginTop: 8 }} />;
   if (price === null) return null;
 
   return (
     <View style={ts.previewBadge}>
-      <Icon name="tag" size={12} color={StudioColors.primary} />
+      <Icon name="tag" size={12} color={t.primary} />
       <Text style={ts.previewTxt}>
         Preço sugerido ({qty}un): <Text style={{ fontWeight: "800" }}>R$ {price.toFixed(2)}</Text>
       </Text>
@@ -227,6 +236,9 @@ function PricingPreview({
 
 // ─── Tela principal ────────────────────────────────────────
 export default function StudioPrecificacao() {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
+  const ts = useMemo(() => buildTiersStyles(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const cid = company?.id ?? "";
@@ -440,7 +452,7 @@ export default function StudioPrecificacao() {
   if (loading) {
     return (
       <View style={[s.wrap, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator size="small" color={StudioColors.primary} />
+        <ActivityIndicator size="small" color={t.primary} />
       </View>
     );
   }
@@ -458,7 +470,7 @@ export default function StudioPrecificacao() {
           </Text>
         </View>
         <Pressable style={s.backBtn} onPress={() => router.push("/studio/configuracoes" as any)}>
-          <Icon name="arrow-left" size={14} color={StudioColors.ink2} />
+          <Icon name="arrow-left" size={14} color={t.ink2} />
           <Text style={s.backTxt}>Voltar</Text>
         </Pressable>
       </View>
@@ -534,7 +546,7 @@ export default function StudioPrecificacao() {
           </Pressable>
 
           {globalSaved && cid && (
-            <PricingPreview cid={cid} productId={null} qty={1} />
+            <PricingPreview cid={cid} productId={null} qty={1} t={t} ts={ts} />
           )}
         </View>
       </View>
@@ -548,16 +560,16 @@ export default function StudioPrecificacao() {
 
         {/* Busca de produto */}
         <View style={s.searchWrap}>
-          <Icon name="search" size={14} color={StudioColors.ink3} style={{ position: "absolute", left: 12, zIndex: 1 }} />
+          <Icon name="search" size={14} color={t.ink3} style={{ position: "absolute", left: 12, zIndex: 1 }} />
           <TextInput
             style={s.searchInput}
             placeholder="Buscar produto para adicionar regra..."
-            placeholderTextColor={StudioColors.ink4}
+            placeholderTextColor={t.ink4}
             value={searchQuery}
             onChangeText={handleSearch}
           />
           {searchLoading && (
-            <ActivityIndicator size="small" color={StudioColors.primary} style={{ position: "absolute", right: 12 }} />
+            <ActivityIndicator size="small" color={t.primary} style={{ position: "absolute", right: 12 }} />
           )}
         </View>
 
@@ -567,7 +579,7 @@ export default function StudioPrecificacao() {
               <Pressable key={p.id} style={s.searchItem} onPress={() => addProductRule(p)}>
                 <Text style={s.searchItemName}>{p.name}</Text>
                 <Text style={s.searchItemPrice}>R$ {p.price.toFixed(2)}</Text>
-                <Icon name="plus" size={12} color={StudioColors.primary} />
+                <Icon name="plus" size={12} color={t.primary} />
               </Pressable>
             ))}
           </View>
@@ -586,7 +598,7 @@ export default function StudioPrecificacao() {
                 <Text style={s.productCardName}>{draft.product.name}</Text>
                 {draft.preview_price !== null && (
                   <View style={ts.previewBadge}>
-                    <Icon name="tag" size={11} color={StudioColors.primary} />
+                    <Icon name="tag" size={11} color={t.primary} />
                     <Text style={ts.previewTxt}>
                       Preço sugerido (1un):{" "}
                       <Text style={{ fontWeight: "800" }}>R$ {draft.preview_price.toFixed(2)}</Text>
@@ -595,7 +607,7 @@ export default function StudioPrecificacao() {
                 )}
               </View>
               <Pressable onPress={() => removeProductRule(idx)} style={s.removeBtn}>
-                <Icon name="trash-2" size={13} color={StudioColors.dangerInk} />
+                <Icon name="trash-2" size={13} color={t.dangerInk} />
               </Pressable>
             </View>
 
@@ -645,16 +657,15 @@ export default function StudioPrecificacao() {
             {/* Faixas de Tiragem */}
             <TiersEditor
               tiers={draft.tiers}
-              onChange={(tiers) => updateProductTiers(idx, tiers)}
-            />
+              onChange={(tiers) => updateProductTiers(idx, tiers)} t={t} ts={ts} />
 
             {/* Preview rápido das faixas */}
             {draft.tiers.filter((t) => t.min_qty.trim() !== "").length > 0 && cid && (
               <View style={s.tiersPreviewRow}>
-                <Icon name="layers" size={12} color={StudioColors.ink3} />
+                <Icon name="layers" size={12} color={t.ink3} />
                 <Text style={s.tiersPreviewLabel}>Preview por tiragem:</Text>
                 {[1, 10, 50, 100].map((qty) => (
-                  <PricingPreview key={qty} cid={cid} productId={draft.product.id} qty={qty} />
+                  <PricingPreview key={qty} cid={cid} productId={draft.product.id} qty={qty} t={t} ts={ts} />
                 ))}
               </View>
             )}
@@ -693,7 +704,7 @@ export default function StudioPrecificacao() {
           <Text style={s.formulaLine}>
             <Text style={s.formulaKey}>+ Urgência</Text> = Preço sugerido + (Custo total × Urgência%)
           </Text>
-          <Text style={[s.formulaLine, { marginTop: 8, color: StudioColors.ink3, fontStyle: "italic" }]}>
+          <Text style={[s.formulaLine, { marginTop: 8, color: t.ink3, fontStyle: "italic" }]}>
             Se a faixa definir Preço fixo/un, ele substitui o cálculo de custo (override direto).
           </Text>
         </View>
@@ -703,9 +714,8 @@ export default function StudioPrecificacao() {
 }
 
 // ─── Styles ────────────────────────────────────────────────
-const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: StudioColors.bg },
-
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: t.bg },
   header: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -717,13 +727,13 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioColors.accent,
+    color: t.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
+  title: { fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 },
+  sub: { fontSize: 13, color: t.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -731,11 +741,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderWidth: 1.5,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
-  backTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
+  backTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
 
   section: {
     marginHorizontal: 28,
@@ -743,42 +753,42 @@ const s = StyleSheet.create({
     marginBottom: 16,
     padding: 20,
     gap: 10,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.2 },
-  sectionHelp: { fontSize: 12.5, color: StudioColors.ink3, lineHeight: 18 },
+  sectionTitle: { fontSize: 16, fontWeight: "800", color: t.ink, letterSpacing: -0.2 },
+  sectionHelp: { fontSize: 12.5, color: t.ink3, lineHeight: 18 },
 
   fieldsRow: { flexDirection: "row", gap: 12, flexWrap: "wrap", marginTop: 8 },
   fieldWrap: { flex: 1, minWidth: 140 },
   label: {
     fontSize: 11,
-    color: StudioColors.ink3,
+    color: t.ink3,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.4,
     marginBottom: 5,
   },
   input: {
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderWidth: 1.5,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 14,
-    color: StudioColors.ink,
+    color: t.ink,
   },
-  hint: { fontSize: 11, color: StudioColors.ink4, marginTop: 4, lineHeight: 15 },
+  hint: { fontSize: 11, color: t.ink4, marginTop: 4, lineHeight: 15 },
 
   saveRow: { flexDirection: "row", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 4 },
   saveBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingVertical: 11,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -794,20 +804,20 @@ const s = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderWidth: 1.5,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     borderRadius: 10,
     paddingHorizontal: 36,
     paddingVertical: 10,
     fontSize: 13.5,
-    color: StudioColors.ink,
+    color: t.ink,
   },
   searchResults: {
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     marginTop: 4,
     overflow: "hidden",
   },
@@ -818,29 +828,29 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: StudioColors.ink5,
+    borderBottomColor: t.ink5,
   },
-  searchItemName: { flex: 1, fontSize: 13, color: StudioColors.ink, fontWeight: "600" },
-  searchItemPrice: { fontSize: 11.5, color: StudioColors.ink3 },
+  searchItemName: { flex: 1, fontSize: 13, color: t.ink, fontWeight: "600" },
+  searchItemPrice: { fontSize: 11.5, color: t.ink3 },
 
-  emptyTxt: { fontSize: 12.5, color: StudioColors.ink3, textAlign: "center", paddingVertical: 12 },
+  emptyTxt: { fontSize: 12.5, color: t.ink3, textAlign: "center", paddingVertical: 12 },
 
   // Card de produto
   productCard: {
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
     padding: 16,
     marginTop: 12,
     gap: 4,
   },
   productCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 6 },
-  productCardName: { fontSize: 15, fontWeight: "800", color: StudioColors.primary },
+  productCardName: { fontSize: 15, fontWeight: "800", color: t.primary },
   removeBtn: {
     padding: 8,
     borderRadius: 8,
-    backgroundColor: StudioColors.dangerSoft,
+    backgroundColor: t.dangerSoft,
   },
 
   tiersPreviewRow: {
@@ -851,70 +861,70 @@ const s = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: StudioColors.ink5,
+    borderTopColor: t.ink5,
   },
-  tiersPreviewLabel: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700" },
+  tiersPreviewLabel: { fontSize: 11, color: t.ink3, fontWeight: "700" },
 
   // Fórmula
   formulaBox: {
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderRadius: 12,
     padding: 14,
     gap: 6,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
-  formulaLine: { fontSize: 12.5, color: StudioColors.ink2, lineHeight: 18 },
-  formulaKey: { fontWeight: "800", color: StudioColors.primary },
+  formulaLine: { fontSize: 12.5, color: t.ink2, lineHeight: 18 },
+  formulaKey: { fontWeight: "800", color: t.primary },
 });
 
 // Styles usados pelo TiersEditor (separados pra não misturar com o StyleSheet da tela)
-const ts = StyleSheet.create({
+const buildTiersStyles = (t: any) => StyleSheet.create({
   tiersWrap: {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: StudioColors.ink5,
+    borderTopColor: t.ink5,
     gap: 8,
   },
-  tiersTitle: { fontSize: 13, fontWeight: "800", color: StudioColors.ink, marginBottom: 2 },
-  tiersHint: { fontSize: 11.5, color: StudioColors.ink3, lineHeight: 16, marginBottom: 4 },
-  tiersEmpty: { fontSize: 12, color: StudioColors.ink4, fontStyle: "italic" },
+  tiersTitle: { fontSize: 13, fontWeight: "800", color: t.ink, marginBottom: 2 },
+  tiersHint: { fontSize: 11.5, color: t.ink3, lineHeight: 16, marginBottom: 4 },
+  tiersEmpty: { fontSize: 12, color: t.ink4, fontStyle: "italic" },
 
   tierRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
     flexWrap: "wrap",
-    backgroundColor: StudioColors.bgSoft,
+    backgroundColor: t.bgSoft,
     borderRadius: 10,
     padding: 10,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   tierCell: { flex: 1, minWidth: 90 },
   tierLabel: {
     fontSize: 10,
-    color: StudioColors.ink3,
+    color: t.ink3,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.4,
     marginBottom: 4,
   },
   tierInput: {
-    backgroundColor: StudioColors.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 13,
-    color: StudioColors.ink,
+    color: t.ink,
   },
   tierRemoveBtn: {
     padding: 8,
     borderRadius: 8,
-    backgroundColor: StudioColors.dangerSoft,
+    backgroundColor: t.dangerSoft,
     alignSelf: "flex-end",
   },
 
@@ -926,12 +936,12 @@ const ts = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
     marginTop: 4,
   },
-  tiersAddTxt: { fontSize: 12, color: StudioColors.primary, fontWeight: "700" },
+  tiersAddTxt: { fontSize: 12, color: t.primary, fontWeight: "700" },
 
   previewBadge: {
     flexDirection: "row",
@@ -940,9 +950,9 @@ const ts = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: StudioColors.primarySoft,
+    backgroundColor: t.primarySoft,
     alignSelf: "flex-start",
     marginTop: 4,
   },
-  previewTxt: { fontSize: 11.5, color: StudioColors.primary },
+  previewTxt: { fontSize: 11.5, color: t.primary },
 });
