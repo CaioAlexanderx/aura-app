@@ -12,13 +12,14 @@
 //  - PATCH /studio/marketplace-settings { marketplace_handling_days }
 //  - GET /studio/settings (carrega valor atual)
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type MarketplaceListingPreview, type MarketplacePlatform } from "@/services/studioApi";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -38,6 +39,8 @@ const PLATFORMS: Array<{ key: MarketplacePlatform; label: string; color: string 
 ];
 
 export default function StudioMarketplaceAdmin() {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const cid = company?.id;
@@ -134,7 +137,7 @@ export default function StudioMarketplaceAdmin() {
           style={s.backBtn}
           onPress={() => router.push("/studio" as any)}
         >
-          <Icon name="arrow-left" size={14} color={StudioColors.ink2} />
+          <Icon name="arrow-left" size={14} color={t.ink2} />
           <Text style={s.backTxt}>Voltar</Text>
         </Pressable>
       </View>
@@ -171,7 +174,7 @@ export default function StudioMarketplaceAdmin() {
           </Pressable>
         </View>
         <Text style={s.handlingHint}>
-          Atual: <Text style={{ fontWeight: "800", color: StudioColors.primary }}>{handlingDays} dias</Text>
+          Atual: <Text style={{ fontWeight: "800", color: t.primary }}>{handlingDays} dias</Text>
           {" · "}
           Sugestão pra estúdios pequenos: 5–10 dias. Bulk events ou personalização complexa: 10–15.
         </Text>
@@ -206,7 +209,7 @@ export default function StudioMarketplaceAdmin() {
         {/* Seletor de produto */}
         <Text style={s.label}>Produto personalizável</Text>
         {loadingProducts ? (
-          <ActivityIndicator size="small" color={StudioColors.primary} />
+          <ActivityIndicator size="small" color={t.primary} />
         ) : products.length === 0 ? (
           <View style={s.emptyMini}>
             <Text style={s.emptyMiniTxt}>
@@ -214,7 +217,7 @@ export default function StudioMarketplaceAdmin() {
             </Text>
             <Pressable
               onPress={() => router.push("/studio/produtos" as any)}
-              style={[s.emptyBtnMini, { backgroundColor: StudioColors.primary }]}
+              style={[s.emptyBtnMini, { backgroundColor: t.primary }]}
             >
               <Text style={s.emptyBtnMiniTxt}>Ir pra Produtos</Text>
             </Pressable>
@@ -227,10 +230,10 @@ export default function StudioMarketplaceAdmin() {
                 onPress={() => setSelectedProductId(p.id)}
                 style={[
                   s.productChip,
-                  selectedProductId === p.id && { backgroundColor: StudioColors.primarySoft, borderColor: StudioColors.primary },
+                  selectedProductId === p.id && { backgroundColor: t.primarySoft, borderColor: t.primary },
                 ]}
               >
-                <Text style={[s.productChipTxt, selectedProductId === p.id && { color: StudioColors.primary, fontWeight: "800" }]}>
+                <Text style={[s.productChipTxt, selectedProductId === p.id && { color: t.primary, fontWeight: "800" }]}>
                   {p.name}
                 </Text>
                 <Text style={s.productChipPrice}>R$ {p.price.toFixed(2)}</Text>
@@ -244,7 +247,7 @@ export default function StudioMarketplaceAdmin() {
           <View style={s.previewBox}>
             {loadingPreview ? (
               <View style={{ padding: 30, alignItems: "center" }}>
-                <ActivityIndicator color={StudioColors.primary} />
+                <ActivityIndicator color={t.primary} />
               </View>
             ) : previewError ? (
               <View style={s.errorBox}>
@@ -256,7 +259,7 @@ export default function StudioMarketplaceAdmin() {
                 <View style={s.previewHead}>
                   <Text style={s.previewProductName}>{preview.product_name}</Text>
                   <View style={s.handlingBadge}>
-                    <Icon name="clock" size={11} color={StudioColors.primary} />
+                    <Icon name="clock" size={11} color={t.primary} />
                     <Text style={s.handlingBadgeTxt}>{preview.handling_time_days} dias úteis</Text>
                   </View>
                 </View>
@@ -289,7 +292,7 @@ export default function StudioMarketplaceAdmin() {
                 )}
 
                 <Text style={s.note}>
-                  <Icon name="info" size={11} color={StudioColors.ink3} /> {preview.note}
+                  <Icon name="info" size={11} color={t.ink3} /> {preview.note}
                 </Text>
 
                 {/* Payload técnico */}
@@ -340,68 +343,68 @@ export default function StudioMarketplaceAdmin() {
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: t.bg },
   header: {
     flexDirection: "row", alignItems: "flex-end",
     paddingHorizontal: 28, paddingTop: 24, paddingBottom: 16, gap: 16, flexWrap: "wrap",
   },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
+  eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  title: { fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 },
+  sub: { fontSize: 13, color: t.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
   backBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
   },
-  backTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
+  backTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
 
   section: {
     marginHorizontal: 28, marginTop: 8, marginBottom: 16,
     padding: 20, gap: 8,
-    backgroundColor: StudioColors.paperCard, borderRadius: 18,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCard, borderRadius: 18,
+    borderWidth: 1, borderColor: t.ink5,
   },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.2 },
-  sectionHelp: { fontSize: 12.5, color: StudioColors.ink3, lineHeight: 18 },
+  sectionTitle: { fontSize: 16, fontWeight: "800", color: t.ink, letterSpacing: -0.2 },
+  sectionHelp: { fontSize: 12.5, color: t.ink3, lineHeight: 18 },
 
   handlingRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" },
   handlingInputWrap: {
     flexDirection: "row", alignItems: "center",
-    borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10,
+    borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
   },
   handlingInput: {
-    width: 60, fontSize: 16, fontWeight: "800", color: StudioColors.ink, padding: 4,
+    width: 60, fontSize: 16, fontWeight: "800", color: t.ink, padding: 4,
   },
-  handlingUnit: { fontSize: 12, color: StudioColors.ink3, marginLeft: 4 },
+  handlingUnit: { fontSize: 12, color: t.ink3, marginLeft: 4 },
   saveBtn: {
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10,
   },
   saveBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  handlingHint: { fontSize: 11.5, color: StudioColors.ink3, marginTop: 6 },
+  handlingHint: { fontSize: 11.5, color: t.ink3, marginTop: 6 },
 
   tabs: { flexDirection: "row", gap: 8, marginTop: 8 },
   tab: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff",
+    borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev,
   },
-  tabTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "700" },
+  tabTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "700" },
 
-  label: { fontSize: 11.5, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", marginTop: 12, letterSpacing: 0.5 },
+  label: { fontSize: 11.5, color: t.ink3, fontWeight: "700", textTransform: "uppercase", marginTop: 12, letterSpacing: 0.5 },
 
   productChip: {
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
     minWidth: 140,
   },
-  productChipTxt: { fontSize: 12.5, color: StudioColors.ink, fontWeight: "700" },
-  productChipPrice: { fontSize: 11, color: StudioColors.ink3, marginTop: 2 },
+  productChipTxt: { fontSize: 12.5, color: t.ink, fontWeight: "700" },
+  productChipPrice: { fontSize: 11, color: t.ink3, marginTop: 2 },
 
   emptyMini: { padding: 14, alignItems: "center", gap: 8, marginTop: 6 },
-  emptyMiniTxt: { fontSize: 12, color: StudioColors.ink3, textAlign: "center", maxWidth: 360, lineHeight: 17 },
+  emptyMiniTxt: { fontSize: 12, color: t.ink3, textAlign: "center", maxWidth: 360, lineHeight: 17 },
   emptyBtnMini: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginTop: 4,
   },
@@ -409,29 +412,29 @@ const s = StyleSheet.create({
 
   previewBox: { marginTop: 16, gap: 12 },
   previewHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  previewProductName: { fontSize: 15, fontWeight: "800", color: StudioColors.ink, flex: 1 },
+  previewProductName: { fontSize: 15, fontWeight: "800", color: t.ink, flex: 1 },
   handlingBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
-    backgroundColor: StudioColors.primarySoft,
+    backgroundColor: t.primarySoft,
   },
-  handlingBadgeTxt: { fontSize: 11, color: StudioColors.primary, fontWeight: "800" },
+  handlingBadgeTxt: { fontSize: 11, color: t.primary, fontWeight: "800" },
 
   mockAd: {
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderRadius: 12, padding: 14, gap: 6,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    borderWidth: 1, borderColor: t.ink5,
   },
-  mockAdLabel: { fontSize: 10, color: StudioColors.ink4, fontWeight: "800", letterSpacing: 0.5 },
-  mockAdTitle: { fontSize: 14, color: StudioColors.ink, fontWeight: "700", marginBottom: 6 },
-  mockAdDesc: { fontSize: 12, color: StudioColors.ink2, lineHeight: 17, marginBottom: 6 },
+  mockAdLabel: { fontSize: 10, color: t.ink4, fontWeight: "800", letterSpacing: 0.5 },
+  mockAdTitle: { fontSize: 14, color: t.ink, fontWeight: "700", marginBottom: 6 },
+  mockAdDesc: { fontSize: 12, color: t.ink2, lineHeight: 17, marginBottom: 6 },
   mockAdMeta: { flexDirection: "row", gap: 12, flexWrap: "wrap", marginTop: 4 },
-  mockAdMetaItem: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
+  mockAdMetaItem: { fontSize: 11, color: t.ink3, fontWeight: "600" },
 
-  note: { fontSize: 11, color: StudioColors.ink3, fontStyle: "italic" },
+  note: { fontSize: 11, color: t.ink3, fontStyle: "italic" },
 
   payloadHead: { paddingVertical: 6 },
-  payloadHeadTxt: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  payloadHeadTxt: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   codeBlock: {
     backgroundColor: "#0F172A", borderRadius: 10, padding: 14,
     maxHeight: 360,
@@ -452,6 +455,6 @@ const s = StyleSheet.create({
   statusCard: { gap: 8, marginTop: 4 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusLabel: { fontSize: 12.5, color: StudioColors.ink, fontWeight: "700", minWidth: 160 },
-  statusValue: { fontSize: 12, color: StudioColors.ink3, flex: 1 },
+  statusLabel: { fontSize: 12.5, color: t.ink, fontWeight: "700", minWidth: 160 },
+  statusValue: { fontSize: 12, color: t.ink3, flex: 1 },
 });
