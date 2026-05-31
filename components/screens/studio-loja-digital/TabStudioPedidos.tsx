@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, StudioOrder, StudioProductionStatus } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -54,6 +55,8 @@ function shortId(id: string | null | undefined): string {
 }
 
 export function TabStudioPedidos() {
+  const t = useStudioTokens();
+  const styles = useMemo(() => buildStyles(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
@@ -107,11 +110,41 @@ export function TabStudioPedidos() {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={StudioColors.primary} />
+        <ActivityIndicator size="large" color={t.primary} />
         <Text style={styles.loadingText}>Carregando pedidos…</Text>
       </View>
     );
   }
+
+  const FilterChip = ({
+    label, active, onPress, icon, color,
+  }: {
+    label: string;
+    active: boolean;
+    onPress: () => void;
+    icon?: string;
+    color?: string;
+  }) => {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={[
+          styles.chip,
+          active && { backgroundColor: color || t.primary, borderColor: color || t.primary },
+        ]}
+      >
+        {icon && (
+          <Icon
+            name={icon as any}
+            size={12}
+            color={active ? "#fff" : "#64748B"}
+            style={{ marginRight: 6 }}
+          />
+        )}
+        <Text style={[styles.chipText, active && { color: "#fff", fontWeight: "600" }]}>{label}</Text>
+      </Pressable>
+    );
+  };
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -124,7 +157,7 @@ export function TabStudioPedidos() {
           </Text>
         </View>
         <Pressable style={styles.refreshBtn} onPress={load}>
-          <Icon name="refresh-cw" size={16} color={StudioColors.primary} />
+          <Icon name="refresh-cw" size={16} color={t.primary} />
           <Text style={styles.refreshBtnText}>Atualizar</Text>
         </Pressable>
       </View>
@@ -147,7 +180,7 @@ export function TabStudioPedidos() {
         </View>
         <View style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Entregues</Text>
-          <Text style={[styles.kpiValue, { color: "#64748B" }]}>{kpis.delivered}</Text>
+          <Text style={[styles.kpiValue, { color: t.ink3 }]}>{kpis.delivered}</Text>
         </View>
       </View>
 
@@ -231,74 +264,44 @@ export function TabStudioPedidos() {
   );
 }
 
-function FilterChip({
-  label, active, onPress, icon, color,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  icon?: string;
-  color?: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.chip,
-        active && { backgroundColor: color || StudioColors.primary, borderColor: color || StudioColors.primary },
-      ]}
-    >
-      {icon && (
-        <Icon
-          name={icon as any}
-          size={12}
-          color={active ? "#fff" : "#64748B"}
-          style={{ marginRight: 6 }}
-        />
-      )}
-      <Text style={[styles.chipText, active && { color: "#fff", fontWeight: "600" }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: "#F8FAFC" },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: t.bg },
   scrollContent: { padding: 16, paddingBottom: 48 },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  loadingText: { marginTop: 12, color: "#64748B", fontSize: 14 },
+  loadingText: { marginTop: 12, color: t.ink3, fontSize: 14 },
 
   headerRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
-  title: { fontSize: 22, fontWeight: "700", color: "#0F172A" },
-  subtitle: { fontSize: 13, color: "#64748B", marginTop: 4, lineHeight: 18 },
+  title: { fontSize: 22, fontWeight: "700", color: t.ink },
+  subtitle: { fontSize: 13, color: t.ink3, marginTop: 4, lineHeight: 18 },
   refreshBtn: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: t.ink5,
     gap: 6,
   },
-  refreshBtnText: { color: StudioColors.primary, fontSize: 13, fontWeight: "600" },
-  totalLine: { fontSize: 12, color: "#64748B", marginBottom: 16 },
+  refreshBtnText: { color: t.primary, fontSize: 13, fontWeight: "600" },
+  totalLine: { fontSize: 12, color: t.ink3, marginBottom: 16 },
 
   kpiRow: { flexDirection: "row", gap: 10, marginBottom: 20, flexWrap: "wrap" },
   kpiCard: {
     flex: 1,
     minWidth: 130,
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: t.ink5,
   },
-  kpiLabel: { fontSize: 12, color: "#64748B", marginBottom: 6 },
+  kpiLabel: { fontSize: 12, color: t.ink3, marginBottom: 6 },
   kpiValue: { fontSize: 24, fontWeight: "700" },
 
   filterGroup: { marginBottom: 12 },
-  filterGroupLabel: { fontSize: 12, color: "#64748B", fontWeight: "600", marginBottom: 6 },
+  filterGroupLabel: { fontSize: 12, color: t.ink3, fontWeight: "600", marginBottom: 6 },
   chipRow: { gap: 8, paddingRight: 8 },
   chip: {
     flexDirection: "row",
@@ -306,19 +309,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: t.ink5,
   },
-  chipText: { fontSize: 12, color: "#475569" },
+  chipText: { fontSize: 12, color: t.ink2 },
 
   list: { gap: 10, marginTop: 8 },
   orderCard: {
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: t.ink5,
   },
   orderHeader: { flexDirection: "row", alignItems: "center" },
   sourceCircle: {
@@ -328,9 +331,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  customerName: { fontSize: 14, fontWeight: "600", color: "#0F172A" },
-  orderMeta: { fontSize: 11, color: "#64748B", marginTop: 2 },
-  totalValue: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
+  customerName: { fontSize: 14, fontWeight: "600", color: t.ink },
+  orderMeta: { fontSize: 11, color: t.ink3, marginTop: 2 },
+  totalValue: { fontSize: 14, fontWeight: "700", color: t.ink },
   orderFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -338,9 +341,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: t.bgSoft,
   },
-  dateText: { fontSize: 11, color: "#94A3B8" },
+  dateText: { fontSize: 11, color: t.ink4 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   statusBadgeText: { fontSize: 11, fontWeight: "600" },
 
@@ -350,6 +353,6 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
     paddingHorizontal: 24,
   },
-  emptyTitle: { fontSize: 16, fontWeight: "600", color: "#0F172A", marginTop: 12 },
-  emptyDesc: { fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 6, lineHeight: 19 },
+  emptyTitle: { fontSize: 16, fontWeight: "600", color: t.ink, marginTop: 12 },
+  emptyDesc: { fontSize: 13, color: t.ink3, textAlign: "center", marginTop: 6, lineHeight: 19 },
 });
