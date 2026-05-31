@@ -24,7 +24,8 @@ import {
   Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import {
   studioApi,
   type MarketplaceOrderStudio,
@@ -55,6 +56,8 @@ const PLATFORM_LABEL: Record<string, string> = {
 };
 
 export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const cid = company?.id;
 
@@ -155,12 +158,116 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
   const platformLabel = PLATFORM_LABEL[order.platform] || order.platform;
   const hasMultipleItems = items.length > 1;
 
+  // ============================================================
+  // Field editor (versão simplificada — sem templates por enquanto;
+  // em S-2 o lojista preenche o que o cliente forneceu por outro canal)
+  // ============================================================
+  const CollectFieldEditor = ({
+    field, value, onChange,
+  }: {
+    field: CustomizationField;
+    value: any;
+    onChange: (v: any) => void;
+  }) => {
+    if (field.type === "text") {
+      const maxChars = field.config.max_chars || 30;
+      return (
+        <View>
+          <Text style={s.fieldLabel}>
+            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
+          </Text>
+          <TextInput
+            value={String(value || "")}
+            onChangeText={(t) => onChange(t.slice(0, maxChars))}
+            placeholder={`O que o cliente pediu? (max ${maxChars} chars)`}
+            placeholderTextColor={t.ink4}
+            maxLength={maxChars}
+            style={s.input}
+          />
+          <Text style={s.charCount}>{String(value || "").length}/{maxChars}</Text>
+        </View>
+      );
+    }
+
+    if (field.type === "color") {
+      const colors = field.config.colors || ["#FFFFFF", "#000000"];
+      return (
+        <View>
+          <Text style={s.fieldLabel}>
+            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            {colors.map((c) => (
+              <Pressable
+                key={c}
+                onPress={() => onChange(c)}
+                style={{
+                  width: 36, height: 36, borderRadius: 18,
+                  backgroundColor: c,
+                  borderWidth: value === c ? 3 : 1,
+                  borderColor: value === c ? t.primary : t.ink5,
+                }}
+              />
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    if (field.type === "option") {
+      const choices = field.config.choices || [];
+      return (
+        <View>
+          <Text style={s.fieldLabel}>
+            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+            {choices.map((c) => (
+              <Pressable
+                key={c.value}
+                onPress={() => onChange(c.value)}
+                style={[
+                  s.chip,
+                  value === c.value && { backgroundColor: t.primary, borderColor: t.primary },
+                ]}
+              >
+                <Text style={[s.chipTxt, value === c.value && { color: "#fff" }]}>{c.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    if (field.type === "image" || field.type === "template") {
+      return (
+        <View>
+          <Text style={s.fieldLabel}>
+            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
+          </Text>
+          <Text style={s.fieldHelp}>
+            Cole o link da imagem que o cliente enviou (WhatsApp, e-mail, etc).
+          </Text>
+          <TextInput
+            value={String(value || "")}
+            onChangeText={onChange}
+            placeholder="https://..."
+            placeholderTextColor={t.ink4}
+            style={s.input}
+          />
+        </View>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <View style={s.modalRoot}>
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={onClose} style={s.closeBtn}>
-          <Icon name="x" size={18} color={StudioColors.ink2} />
+          <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.eyebrow}>COLETAR PERSONALIZAÇÃO · {platformLabel}</Text>
@@ -217,7 +324,7 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
           {!activeItem ? (
             <Text style={s.empty}>Pedido sem items personalizáveis.</Text>
           ) : loadingConfig ? (
-            <ActivityIndicator color={StudioColors.primary} />
+            <ActivityIndicator color={t.primary} />
           ) : !activeConfig ? null : !activeConfig.is_personalizable || !activeConfig.config ? (
             <View style={s.warningBox}>
               <Icon name="alert-circle" size={16} color="#92400E" />
@@ -291,152 +398,49 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
   );
 }
 
-// ============================================================
-// Field editor (versão simplificada — sem templates por enquanto;
-// em S-2 o lojista preenche o que o cliente forneceu por outro canal)
-// ============================================================
-function CollectFieldEditor({
-  field, value, onChange,
-}: {
-  field: CustomizationField;
-  value: any;
-  onChange: (v: any) => void;
-}) {
-  if (field.type === "text") {
-    const maxChars = field.config.max_chars || 30;
-    return (
-      <View>
-        <Text style={s.fieldLabel}>
-          {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-        </Text>
-        <TextInput
-          value={String(value || "")}
-          onChangeText={(t) => onChange(t.slice(0, maxChars))}
-          placeholder={`O que o cliente pediu? (max ${maxChars} chars)`}
-          placeholderTextColor={StudioColors.ink4}
-          maxLength={maxChars}
-          style={s.input}
-        />
-        <Text style={s.charCount}>{String(value || "").length}/{maxChars}</Text>
-      </View>
-    );
-  }
 
-  if (field.type === "color") {
-    const colors = field.config.colors || ["#FFFFFF", "#000000"];
-    return (
-      <View>
-        <Text style={s.fieldLabel}>
-          {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-        </Text>
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {colors.map((c) => (
-            <Pressable
-              key={c}
-              onPress={() => onChange(c)}
-              style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: c,
-                borderWidth: value === c ? 3 : 1,
-                borderColor: value === c ? StudioColors.primary : StudioColors.ink5,
-              }}
-            />
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  if (field.type === "option") {
-    const choices = field.config.choices || [];
-    return (
-      <View>
-        <Text style={s.fieldLabel}>
-          {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-        </Text>
-        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-          {choices.map((c) => (
-            <Pressable
-              key={c.value}
-              onPress={() => onChange(c.value)}
-              style={[
-                s.chip,
-                value === c.value && { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-              ]}
-            >
-              <Text style={[s.chipTxt, value === c.value && { color: "#fff" }]}>{c.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  if (field.type === "image" || field.type === "template") {
-    return (
-      <View>
-        <Text style={s.fieldLabel}>
-          {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-        </Text>
-        <Text style={s.fieldHelp}>
-          Cole o link da imagem que o cliente enviou (WhatsApp, e-mail, etc).
-        </Text>
-        <TextInput
-          value={String(value || "")}
-          onChangeText={onChange}
-          placeholder="https://..."
-          placeholderTextColor={StudioColors.ink4}
-          style={s.input}
-        />
-      </View>
-    );
-  }
-
-  return null;
-}
-
-const s = StyleSheet.create({
-  modalRoot: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  modalRoot: { flex: 1, backgroundColor: t.bg },
 
   header: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
-    backgroundColor: "#fff",
+    borderBottomWidth: 1, borderBottomColor: t.ink5,
+    backgroundColor: t.paperCardElev,
   },
   closeBtn: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: StudioColors.bgSoft,
+    backgroundColor: t.bgSoft,
   },
-  eyebrow: { fontSize: 10.5, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 2, letterSpacing: -0.3 },
+  eyebrow: { fontSize: 10.5, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  title: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 2, letterSpacing: -0.3 },
 
   section: {
     marginHorizontal: 20, marginTop: 12,
     padding: 16, gap: 8,
-    backgroundColor: StudioColors.paperCard, borderRadius: 14,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCard, borderRadius: 14,
+    borderWidth: 1, borderColor: t.ink5,
   },
-  sectionLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "800", letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "800", letterSpacing: 0.5 },
 
   summaryGrid: { flexDirection: "row", gap: 12, flexWrap: "wrap", marginTop: 6 },
   summaryCell: { flex: 1, minWidth: 120 },
-  summaryLabel: { fontSize: 10.5, color: StudioColors.ink4, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
-  summaryValue: { fontSize: 14, color: StudioColors.ink, fontWeight: "800", marginTop: 2 },
-  summarySub: { fontSize: 11, color: StudioColors.ink3, marginTop: 1 },
+  summaryLabel: { fontSize: 10.5, color: t.ink4, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  summaryValue: { fontSize: 14, color: t.ink, fontWeight: "800", marginTop: 2 },
+  summarySub: { fontSize: 11, color: t.ink3, marginTop: 1 },
 
   itemTab: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
     minWidth: 120,
   },
-  itemTabActive: { backgroundColor: StudioColors.primarySoft, borderColor: StudioColors.primary },
-  itemTabTxt: { fontSize: 12, fontWeight: "700", color: StudioColors.ink2 },
-  itemTabTxtActive: { color: StudioColors.primary },
-  itemTabQty: { fontSize: 10.5, color: StudioColors.ink3, marginTop: 2 },
+  itemTabActive: { backgroundColor: t.primarySoft, borderColor: t.primary },
+  itemTabTxt: { fontSize: 12, fontWeight: "700", color: t.ink2 },
+  itemTabTxtActive: { color: t.primary },
+  itemTabQty: { fontSize: 10.5, color: t.ink3, marginTop: 2 },
 
-  empty: { fontSize: 12, color: StudioColors.ink3, fontStyle: "italic", textAlign: "center", padding: 20 },
+  empty: { fontSize: 12, color: t.ink3, fontStyle: "italic", textAlign: "center", padding: 20 },
 
   warningBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
@@ -444,20 +448,20 @@ const s = StyleSheet.create({
   },
   warningTxt: { color: "#92400E", fontSize: 12, fontWeight: "600", flex: 1 },
 
-  fieldLabel: { fontSize: 12, color: StudioColors.ink2, fontWeight: "700", marginBottom: 6 },
-  fieldHelp: { fontSize: 11.5, color: StudioColors.ink3, marginBottom: 6, fontStyle: "italic" },
+  fieldLabel: { fontSize: 12, color: t.ink2, fontWeight: "700", marginBottom: 6 },
+  fieldHelp: { fontSize: 11.5, color: t.ink3, marginBottom: 6, fontStyle: "italic" },
   input: {
-    backgroundColor: "#fff", color: StudioColors.ink, padding: 12,
+    backgroundColor: t.paperCardElev, color: t.ink, padding: 12,
     borderRadius: 10, fontSize: 14,
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    borderWidth: 1.5, borderColor: t.ink5,
   },
-  charCount: { fontSize: 10.5, color: StudioColors.ink4, marginTop: 4 },
+  charCount: { fontSize: 10.5, color: t.ink4, marginTop: 4 },
 
   chip: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
   },
-  chipTxt: { fontSize: 12, color: StudioColors.ink2, fontWeight: "700" },
+  chipTxt: { fontSize: 12, color: t.ink2, fontWeight: "700" },
 
   errorBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
@@ -468,18 +472,18 @@ const s = StyleSheet.create({
 
   footer: {
     flexDirection: "row", gap: 10, padding: 16,
-    borderTopWidth: 1, borderTopColor: StudioColors.ink5,
-    backgroundColor: "#fff",
+    borderTopWidth: 1, borderTopColor: t.ink5,
+    backgroundColor: t.paperCardElev,
   },
   cancelBtn: {
     paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10,
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    borderWidth: 1.5, borderColor: t.ink5,
   },
-  cancelTxt: { fontSize: 13, color: StudioColors.ink2, fontWeight: "700" },
+  cancelTxt: { fontSize: 13, color: t.ink2, fontWeight: "700" },
   saveBtn: {
     flex: 1, flexDirection: "row", gap: 8,
     paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     alignItems: "center", justifyContent: "center",
   },
   saveTxt: { fontSize: 13, color: "#fff", fontWeight: "800" },
