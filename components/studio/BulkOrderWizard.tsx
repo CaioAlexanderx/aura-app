@@ -12,7 +12,8 @@ import { useEffect, useState, useMemo } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioBulkHubApi, type BulkPricingPreview } from "@/services/studioBulkHubApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -48,6 +49,8 @@ const DEFAULT_DRAFT: Draft = {
 };
 
 export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
@@ -99,11 +102,26 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
     }
   }
 
+
+  const Row = ({ label, value, highlight, big }: { label: string; value: string; highlight?: "green" | "primary"; big?: boolean }) => {
+    return (
+      <View style={s.sumRow}>
+        <Text style={s.sumLabel}>{label}</Text>
+        <Text style={[
+          s.sumValue,
+          big && { fontSize: 16, fontWeight: "800" },
+          highlight === "green" && { color: t.mint },
+          highlight === "primary" && { color: t.primary },
+        ]}>{value}</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <View style={s.closeRow}>
         <Pressable onPress={onClose} style={s.closeBtn}>
-          <Icon name="x" size={18} color={StudioColors.ink2} />
+          <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
       </View>
 
@@ -162,7 +180,7 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
                     unit_price: String(p.price || 0),
                   })}
                 >
-                  <View style={[s.prodDot, draft.product_id === p.id && { backgroundColor: StudioColors.primary }]}>
+                  <View style={[s.prodDot, draft.product_id === p.id && { backgroundColor: t.primary }]}>
                     {draft.product_id === p.id && <Icon name="check" size={12} color="#fff" />}
                   </View>
                   <View style={{ flex: 1 }}>
@@ -195,7 +213,7 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
               multiline
             />
             <View style={s.countBadge}>
-              <Icon name="users" size={12} color={StudioColors.primary} />
+              <Icon name="users" size={12} color={t.primary} />
               <Text style={s.countTxt}>{names.length} pessoas</Text>
             </View>
           </View>
@@ -224,10 +242,10 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
                 </View>
                 {pricing.discount_pct > 0 && (
                   <View style={s.pricingRow}>
-                    <Text style={[s.pricingLabel, { color: StudioColors.mint }]}>
+                    <Text style={[s.pricingLabel, { color: t.mint }]}>
                       Desconto {pricing.discount_pct}% (volume)
                     </Text>
-                    <Text style={[s.pricingValue, { color: StudioColors.mint }]}>
+                    <Text style={[s.pricingValue, { color: t.mint }]}>
                       − R$ {pricing.savings.toFixed(2)}
                     </Text>
                   </View>
@@ -239,12 +257,12 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
 
                 <View style={s.tiersBox}>
                   <Text style={s.tiersLabel}>FAIXAS DE DESCONTO</Text>
-                  {pricing.tiers.map((t) => (
-                    <Text key={t.from} style={[
+                  {pricing.tiers.map((tier) => (
+                    <Text key={tier.from} style={[
                       s.tier,
-                      pricing.qty >= t.from && { color: StudioColors.mint, fontWeight: "700" },
+                      pricing.qty >= tier.from && { color: t.mint, fontWeight: "700" },
                     ]}>
-                      {pricing.qty >= t.from ? "✓ " : "○ "}{t.label}
+                      {pricing.qty >= tier.from ? "✓ " : "○ "}{tier.label}
                     </Text>
                   ))}
                 </View>
@@ -309,56 +327,43 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
   );
 }
 
-function Row({ label, value, highlight, big }: { label: string; value: string; highlight?: "green" | "primary"; big?: boolean }) {
-  return (
-    <View style={s.sumRow}>
-      <Text style={s.sumLabel}>{label}</Text>
-      <Text style={[
-        s.sumValue,
-        big && { fontSize: 16, fontWeight: "800" },
-        highlight === "green" && { color: StudioColors.mint },
-        highlight === "primary" && { color: StudioColors.primary },
-      ]}>{value}</Text>
-    </View>
-  );
-}
 
-const s = StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   closeRow: { flexDirection: "row", justifyContent: "flex-end", padding: 12 },
-  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: t.paperCardElev },
   block: { maxWidth: 560 },
-  q: { fontSize: 17, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.3 },
-  help: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
-  subHelp: { fontSize: 11.5, color: StudioColors.ink3, marginTop: 4, fontStyle: "italic" },
-  label: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
-  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: StudioColors.ink },
+  q: { fontSize: 17, fontWeight: "800", color: t.ink, letterSpacing: -0.3 },
+  help: { fontSize: 13, color: t.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
+  subHelp: { fontSize: 11.5, color: t.ink3, marginTop: 4, fontStyle: "italic" },
+  label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  input: { backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: t.ink },
   row2: { flexDirection: "row", gap: 8 },
 
-  prodCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: StudioColors.ink5, backgroundColor: "#fff", marginBottom: 6 },
-  prodCardSel: { borderColor: StudioColors.primary, backgroundColor: StudioColors.primaryGhost },
-  prodDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: StudioColors.ink4, alignItems: "center", justifyContent: "center" },
-  prodName: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink },
-  prodPrice: { fontSize: 12, color: StudioColors.ink3, marginTop: 2 },
+  prodCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev, marginBottom: 6 },
+  prodCardSel: { borderColor: t.primary, backgroundColor: t.primaryGhost },
+  prodDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: t.ink4, alignItems: "center", justifyContent: "center" },
+  prodName: { fontSize: 13.5, fontWeight: "700", color: t.ink },
+  prodPrice: { fontSize: 12, color: t.ink3, marginTop: 2 },
 
-  countBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: StudioColors.primarySoft, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, marginTop: 8 },
-  countTxt: { color: StudioColors.primary, fontWeight: "800", fontSize: 12 },
+  countBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: t.primarySoft, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, marginTop: 8 },
+  countTxt: { color: t.primary, fontWeight: "800", fontSize: 12 },
 
-  pricingCard: { marginTop: 16, backgroundColor: "#fff", borderWidth: 1, borderColor: StudioColors.ink5, borderRadius: 14, padding: 16 },
+  pricingCard: { marginTop: 16, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, borderRadius: 14, padding: 16 },
   pricingRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
-  pricingLabel: { fontSize: 13, color: StudioColors.ink2 },
-  pricingValue: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink },
-  pricingTotal: { borderTopWidth: 1, borderTopColor: StudioColors.ink5, marginTop: 6, paddingTop: 12 },
-  pricingTotalLabel: { fontSize: 14, fontWeight: "800", color: StudioColors.ink },
-  pricingTotalValue: { fontSize: 18, fontWeight: "800", color: StudioColors.primary },
+  pricingLabel: { fontSize: 13, color: t.ink2 },
+  pricingValue: { fontSize: 13.5, fontWeight: "700", color: t.ink },
+  pricingTotal: { borderTopWidth: 1, borderTopColor: t.ink5, marginTop: 6, paddingTop: 12 },
+  pricingTotalLabel: { fontSize: 14, fontWeight: "800", color: t.ink },
+  pricingTotalValue: { fontSize: 18, fontWeight: "800", color: t.primary },
 
-  tiersBox: { marginTop: 14, padding: 12, backgroundColor: StudioColors.bgSoft, borderRadius: 10 },
-  tiersLabel: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.6, marginBottom: 6 },
-  tier: { fontSize: 12, color: StudioColors.ink3, paddingVertical: 2 },
+  tiersBox: { marginTop: 14, padding: 12, backgroundColor: t.bgSoft, borderRadius: 10 },
+  tiersLabel: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6, marginBottom: 6 },
+  tier: { fontSize: 12, color: t.ink3, paddingVertical: 2 },
 
-  summary: { backgroundColor: StudioColors.paperCard, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: StudioColors.ink5 },
+  summary: { backgroundColor: t.paperCard, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: t.ink5 },
   sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, alignItems: "center" },
-  sumLabel: { fontSize: 12.5, color: StudioColors.ink3 },
-  sumValue: { fontSize: 13.5, fontWeight: "600", color: StudioColors.ink, textAlign: "right", maxWidth: "60%" },
+  sumLabel: { fontSize: 12.5, color: t.ink3 },
+  sumValue: { fontSize: 13.5, fontWeight: "600", color: t.ink, textAlign: "right", maxWidth: "60%" },
 });
 
 export default BulkOrderWizard;
