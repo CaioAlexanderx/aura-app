@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { View, Text, Modal, Pressable, Platform, ActivityIndicator, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors, StudioGradients } from "@/constants/studio-tokens";
+import { StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { toast } from "@/components/Toast";
 
 type Props = {
@@ -22,6 +23,8 @@ type Props = {
 };
 
 export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [generating, setGenerating] = useState(false);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
@@ -201,7 +204,7 @@ export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props)
           <Text style={s.title}>Compartilhe seu produto</Text>
           {generating ? (
             <View style={s.previewBox}>
-              <ActivityIndicator color={StudioColors.primary} size="large" />
+              <ActivityIndicator color={t.primary} size="large" />
               <Text style={s.desc}>Gerando cartão...</Text>
             </View>
           ) : dataUrl ? (
@@ -221,19 +224,19 @@ export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props)
   );
 }
 
-const s = StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.7)", alignItems: "center", justifyContent: "center", padding: 20 },
-  card: { backgroundColor: StudioColors.paperCardElev, borderRadius: 18, padding: 24, maxWidth: 360, width: "100%", alignItems: "center" },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 20, color: StudioColors.ink, fontWeight: "800", marginTop: 6 },
-  desc: { fontSize: 13, color: StudioColors.ink3, marginTop: 12, textAlign: "center" },
-  previewBox: { width: 270, height: 480, backgroundColor: StudioColors.bgSoft, borderRadius: 12, alignItems: "center", justifyContent: "center", marginVertical: 16, gap: 8 },
+  card: { backgroundColor: t.paperCardElev, borderRadius: 18, padding: 24, maxWidth: 360, width: "100%", alignItems: "center" },
+  eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  title: { fontSize: 20, color: t.ink, fontWeight: "800", marginTop: 6 },
+  desc: { fontSize: 13, color: t.ink3, marginTop: 12, textAlign: "center" },
+  previewBox: { width: 270, height: 480, backgroundColor: t.bgSoft, borderRadius: 12, alignItems: "center", justifyContent: "center", marginVertical: 16, gap: 8 },
   actions: { flexDirection: "row", gap: 8, marginTop: 12 },
-  btnPri: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: StudioColors.primary, paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10 },
+  btnPri: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10 },
   btnPriTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
-  btnSec: { paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10, borderWidth: 1.5, borderColor: StudioColors.ink5 },
-  btnSecTxt: { color: StudioColors.ink2, fontSize: 13, fontWeight: "700" },
-  btnClose: { paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10, backgroundColor: StudioColors.primary, marginTop: 12 },
+  btnSec: { paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5 },
+  btnSecTxt: { color: t.ink2, fontSize: 13, fontWeight: "700" },
+  btnClose: { paddingVertical: 11, paddingHorizontal: 20, borderRadius: 10, backgroundColor: t.primary, marginTop: 12 },
   btnCloseTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
 });
 

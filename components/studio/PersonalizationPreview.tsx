@@ -17,7 +17,8 @@
 // no web (Expo SDK 52 + react-native-web), fallback nativo simples.
 // ============================================================
 import { View, Text, Platform } from "react-native";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { CustomizationConfig, CustomizationField } from "@/services/studioApi";
 
 type Props = {
@@ -49,6 +50,7 @@ export function PersonalizationPreview({
   productName,
   showLabel = true,
 }: Props) {
+  const t = useStudioTokens();
   // Estado vazio: sem config, mostra placeholder neutro
   if (!config) {
     return (
@@ -56,13 +58,13 @@ export function PersonalizationPreview({
         style={{
           width: size, height: size,
           borderRadius: 12,
-          backgroundColor: StudioColors.bgSoft,
+          backgroundColor: t.bgSoft,
           alignItems: "center", justifyContent: "center",
-          borderWidth: 1, borderColor: StudioColors.ink5,
+          borderWidth: 1, borderColor: t.ink5,
           borderStyle: "dashed",
         }}
       >
-        <Text style={{ color: StudioColors.ink4, fontSize: 12 }}>Sem personalização configurada</Text>
+        <Text style={{ color: t.ink4, fontSize: 12 }}>Sem personalização configurada</Text>
       </View>
     );
   }
@@ -108,7 +110,7 @@ export function PersonalizationPreview({
   <!-- Produto base -->
   <rect x="12" y="12" width="76" height="76" rx="10"
         fill="url(#bg-shade)"
-        stroke="${StudioColors.ink5}" stroke-width="0.6"/>
+        stroke="${t.ink5}" stroke-width="0.6"/>
   <!-- Sombra interna sutil pra dar volume -->
   <rect x="12" y="12" width="76" height="76" rx="10"
         fill="none"
@@ -116,12 +118,12 @@ export function PersonalizationPreview({
   <!-- Area de impressao (visualizacao) -->
   <rect x="${areaX}" y="${areaY}" width="${areaW}" height="${areaH}"
         fill="rgba(30,58,138,0.04)"
-        stroke="${StudioColors.primary}" stroke-width="0.4"
+        stroke="${t.primary}" stroke-width="0.4"
         stroke-dasharray="1.5,0.8"/>
   ${overlayUrl ? `<image href="${escapeXml(overlayUrl)}" x="${areaX}" y="${areaY}" width="${areaW}" height="${areaH}" preserveAspectRatio="xMidYMid meet"/>` : ""}
-  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="${fontSize.toFixed(2)}" font-weight="800" fill="${StudioColors.ink}">${escapeXml(textValue)}</text>` : ""}
-  ${showLabel && productName ? `<text x="50" y="96" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3.2" font-weight="600" fill="${StudioColors.ink3}">${escapeXml(productName)}</text>` : ""}
-  ${!overlayUrl && !textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${StudioColors.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
+  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="${fontSize.toFixed(2)}" font-weight="800" fill="${t.ink}">${escapeXml(textValue)}</text>` : ""}
+  ${showLabel && productName ? `<text x="50" y="96" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3.2" font-weight="600" fill="${t.ink3}">${escapeXml(productName)}</text>` : ""}
+  ${!overlayUrl && !textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
 </svg>`.trim();
 
   if (Platform.OS === "web") {
@@ -148,12 +150,12 @@ export function PersonalizationPreview({
         borderRadius: 12,
         backgroundColor: bgColor,
         alignItems: "center", justifyContent: "center",
-        borderWidth: 1, borderColor: StudioColors.ink5,
+        borderWidth: 1, borderColor: t.ink5,
       }}
     >
       {textValue ? (
         <Text style={{
-          color: StudioColors.ink,
+          color: t.ink,
           fontWeight: "800",
           fontSize: Math.min(size * 0.08, 28),
           textAlign: "center",
@@ -162,12 +164,12 @@ export function PersonalizationPreview({
           {textValue}
         </Text>
       ) : (
-        <Text style={{ color: StudioColors.ink4, fontSize: 12, fontStyle: "italic" }}>
+        <Text style={{ color: t.ink4, fontSize: 12, fontStyle: "italic" }}>
           {`${printArea.width_cm}×${printArea.height_cm}cm`}
         </Text>
       )}
       {showLabel && productName ? (
-        <Text style={{ color: StudioColors.ink3, fontSize: 11, fontWeight: "600", marginTop: 8 }}>
+        <Text style={{ color: t.ink3, fontSize: 11, fontWeight: "600", marginTop: 8 }}>
           {productName}
         </Text>
       ) : null}
