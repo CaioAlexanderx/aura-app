@@ -15,9 +15,55 @@
 // 30/05/2026 (Fase 1b · batch 4): Mark SVG/asterisco mantém paleta
 // FIXA (logo é asset de marca, NÃO troca com tema). Fallback nativo
 // e Lockup tipográfico migram pra useStudioTokens.
+//
+// 31/05/2026 (Fase 4): micro-gesto on-load — scale 0.92 → 1 com
+// spring suave + fade 0 → 1, ~360ms, behind reduceMotion. Per
+// plano Fase 4 "Micro-gesto sutil no AuraStudioMark on-load".
+// Aplicado ao container; assinatura do API preservada.
 // ============================================================
-import { View, Text, Platform } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, Platform, AccessibilityInfo } from "react-native";
+import Reanimated, {
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing,
+} from "react-native-reanimated";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+
+// ─── On-load micro-gesto hook ───────────────────────────────
+function useLogoEntrance() {
+  const scale = useSharedValue(0.92);
+  const opacity = useSharedValue(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      scale.value = 1;
+      opacity.value = 1;
+      return;
+    }
+    opacity.value = withTiming(1, {
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+    });
+    scale.value = withSpring(1, {
+      damping: 14,
+      stiffness: 180,
+      mass: 0.7,
+    });
+  }, [scale, opacity, reduceMotion]);
+
+  return useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+}
 
 // ─── Mark (símbolo somente) ────────────────────────────────
 // NOTA: o SVG do logo usa paleta fixa por design (logo NÃO troca cor
@@ -26,6 +72,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 // no modo escuro.
 export function AuraStudioMark({ size = 54 }: { size?: number }) {
   const t = useStudioTokens();
+  const entranceStyle = useLogoEntrance();
   const svg = `
     <svg width="${size}" height="${size}" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -56,31 +103,46 @@ export function AuraStudioMark({ size = 54 }: { size?: number }) {
 
   if (Platform.OS === "web") {
     return (
-      <span
-        style={{
-          width: size,
-          height: size,
-          display: "inline-flex",
-          flexShrink: 0,
-        } as any}
-        aria-label="Aura Studio"
-        dangerouslySetInnerHTML={{ __html: svg }}
-      />
+      <Reanimated.View
+        style={[
+          {
+            width: size,
+            height: size,
+            flexShrink: 0,
+          },
+          entranceStyle,
+        ]}
+        accessibilityLabel="Aura Studio"
+      >
+        <span
+          style={{
+            width: size,
+            height: size,
+            display: "inline-flex",
+            flexShrink: 0,
+          } as any}
+          aria-label="Aura Studio"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      </Reanimated.View>
     );
   }
 
   // Native fallback — tile primary com "S" texto + ponto accent.
   // Usa tokens pra não destoar em modo escuro.
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.26,
-        backgroundColor: t.primary,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+    <Reanimated.View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.26,
+          backgroundColor: t.primary,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        entranceStyle,
+      ]}
     >
       <Text style={{ color: "#fff", fontSize: size * 0.42, fontWeight: "900" }}>S</Text>
       <View
@@ -94,7 +156,7 @@ export function AuraStudioMark({ size = 54 }: { size?: number }) {
           backgroundColor: t.accent,
         }}
       />
-    </View>
+    </Reanimated.View>
   );
 }
 

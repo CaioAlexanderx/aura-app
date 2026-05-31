@@ -14,12 +14,19 @@
 // Telas board normalmente gerenciam o próprio scroll → use scroll={false}.
 //
 // StudioPullToRefresh foi movido pra cá (era exportado do StudioShell).
-// A cópia do shell sai na Fase 2 (decomposição); por ora ambas coexistem.
+//
+// 31/05/2026 (Fase 4): entrada com stagger (fade + translateY 14px,
+// 220ms, easing standard) atrás de reduceMotion. Aplicado ao container
+// inner pra propagar pra todas as telas Studio. Per plano Fase 4
+// "Entrada de cards/sections em stagger no scaffold".
 // ============================================================
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import {
-  View, ScrollView, RefreshControl, useWindowDimensions,
+  View, ScrollView, RefreshControl, useWindowDimensions, AccessibilityInfo,
 } from "react-native";
+import Reanimated, {
+  useSharedValue, useAnimatedStyle, withTiming, Easing,
+} from "react-native-reanimated";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 export type StudioScreenVariant = "reading" | "grid" | "board";
@@ -58,6 +65,48 @@ export function StudioPullToRefresh({
   );
 }
 
+// ─── Entrance hook: fade + translateY ───────────────────────
+// 220ms duration, easing.standard (cubic ease-out).
+// Respeita reduceMotion: pula a animação totalmente.
+function useEntranceAnim() {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(14);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
+    // delay pequeno pra evitar conflito com fade de rota do shell
+    const id = setTimeout(() => {
+      opacity.value = withTiming(1, {
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+      });
+      translateY.value = withTiming(0, {
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+      });
+    }, 60);
+    return () => clearTimeout(id);
+  }, [opacity, translateY, reduceMotion]);
+
+  return useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+}
+
 type StudioScreenProps = {
   children: ReactNode;
   variant?: StudioScreenVariant;
@@ -90,6 +139,7 @@ export function StudioScreen({
   const tk = useStudioTokens();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const entranceStyle = useEntranceAnim();
 
   const maxWidth = MAX_WIDTH[variant];
   const pad = padded ? (isMobile ? 16 : 28) : 0;
@@ -106,12 +156,18 @@ export function StudioScreen({
   if (!scroll) {
     return (
       <View style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
-        <View style={[inner, { flex: 1 }, contentStyle]}>{children}</View>
+        <Reanimated.View style={[inner, { flex: 1 }, entranceStyle, contentStyle]}>
+          {children}
+        </Reanimated.View>
       </View>
     );
   }
 
-  const content = <View style={[inner, contentStyle]}>{children}</View>;
+  const content = (
+    <Reanimated.View style={[inner, entranceStyle, contentStyle]}>
+      {children}
+    </Reanimated.View>
+  );
 
   if (onRefresh) {
     return (
