@@ -1,26 +1,37 @@
 // ============================================================
-// AURA STUDIO · StudioShell — Sidebar desktop (flutuante)
+// AURA STUDIO · StudioShell — Sidebar desktop (docada — Fase 5)
 //
-// Decomposição Fase 2 (31/05/2026): extraído do monólito StudioShell.tsx.
-// Renderiza apenas o branch desktop (isWide). Composição de:
-//   FloatingBubble (brand) → NavCircle (Início + grupos + Config)
-//   + ChildBubble (click) / ChildHoverBubble (hover) por grupo
-//   + avatar
+// 31/05/2026 (Fase 5 batch A): substitui rail flutuante circular
+// (com glow + bobbing + bolhas) por sidebar DOCADA/rotulada per
+// plano D3.
 //
-// Mantém comportamento atual; Fase 5 trocará pela sidebar docada.
+// Modelo:
+//   - Expandida ~248px: brand + lista vertical com label
+//     (Início, grupos como sections com children indentados,
+//     Configurações, avatar)
+//   - Recolhida ~76px: só ícones; hover em grupo abre popover
+//     à direita listando children
+//   - Estado ativo = magenta-soft (accent 10% bg + accent text +
+//     barra accent à esquerda)
+//   - Toggle de recolher/expandir acima do avatar
 //
-// 31/05/2026 (Fase 3): StudioThemeToggle removido — passou pra Topbar.
-// Aposentadoria da rail flutuante adiada pra Fase 5 (confirmação Caio).
+// API externa preservada (mesmas props). floatPause continua sendo
+// passado pelo index mas não é mais usado (mantido pra back-compat
+// se algum lugar ainda chamar a API antiga). Glow/bobbing aposentados.
+//
+// Fade route + reduceMotion gating mora no index.tsx — Sidebar
+// só anima a largura.
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
-import { FloatingBubble } from "./FloatingBubble";
-import { NavCircle } from "./NavCircle";
-import { ChildBubble, ChildHoverBubble } from "./ChildBubble";
+import { Icon } from "@/components/Icon";
+import type { StudioPalette } from "@/constants/studio-tokens";
 import { GROUPS } from "./types";
-import { makeStyles } from "./styles";
+
+const RAIL_W_EXPANDED = 248;
+const RAIL_W_COLLAPSED = 76;
 
 function initials(name?: string | null): string {
   if (!name) return "??";
@@ -32,149 +43,482 @@ function initials(name?: string | null): string {
 export function Sidebar({
   pathname,
   isHome,
-  floatPause,
   userName,
   go,
+  // floatPause preservado pra back-compat com index antigo; ignorado
+  // pelo modelo docado.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  floatPause: _floatPause,
 }: {
   pathname: string;
   isHome: boolean;
-  floatPause: boolean;
+  floatPause?: boolean;
   userName?: string | null;
   go: (href: string) => void;
 }) {
-  const tk = useStudioTokens();
-  const s = useMemo(() => makeStyles(tk), [tk]);
-
-  const [openGroup, setOpenGroup] = useState<number | null>(null);
-  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
-
-  const closeHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelCloseHover = () => {
-    if (closeHoverTimerRef.current) {
-      clearTimeout(closeHoverTimerRef.current);
-      closeHoverTimerRef.current = null;
-    }
-  };
-  const scheduleCloseHover = (groupId: string) => {
-    cancelCloseHover();
-    closeHoverTimerRef.current = setTimeout(() => {
-      setHoveredGroupId((prev) => (prev === groupId ? null : prev));
-    }, 200);
-  };
-  useEffect(() => () => cancelCloseHover(), []);
+  const t = useStudioTokens();
+  const [expanded, setExpanded] = useState(true);
 
   function navigate(href: string) {
     go(href);
-    setOpenGroup(null);
-    setHoveredGroupId(null);
-    cancelCloseHover();
   }
 
-  return (
-    <View style={s.sidebar}>
-      <FloatingBubble idx={0} pause={floatPause} style={{ marginBottom: 18 }}>
-        <Pressable
-          onPress={() => navigate("/studio")}
-          accessibilityLabel="Ir para início do Aura Studio"
-          accessibilityRole="button"
-          style={s.brandWrap}
-        >
-          <AuraStudioMark size={60} />
-        </Pressable>
-      </FloatingBubble>
+  const railW = expanded ? RAIL_W_EXPANDED : RAIL_W_COLLAPSED;
 
-      <NavCircle
+  return (
+    <View
+      style={[
+        {
+          width: railW,
+          backgroundColor: t.paperCard,
+          borderRightWidth: 1,
+          borderRightColor: t.ink5,
+          paddingTop: 18,
+          paddingBottom: 14,
+          paddingHorizontal: expanded ? 12 : 10,
+          flexDirection: "column",
+          gap: 4,
+        },
+        Platform.OS === "web" && ({ transition: "width 0.18s ease, padding 0.18s ease" } as any),
+      ]}
+      accessibilityRole={Platform.OS === "web" ? ("navigation" as any) : undefined}
+      accessibilityLabel="Navegação do Studio"
+    >
+      {/* ─── Brand ─── */}
+      <Pressable
+        onPress={() => navigate("/studio")}
+        accessibilityLabel="Ir para início do Aura Studio"
+        accessibilityRole="button"
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingVertical: 6,
+          paddingHorizontal: 6,
+          marginBottom: 8,
+          minHeight: 44,
+        }}
+      >
+        <AuraStudioMark size={36} />
+        {expanded && (
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: "900",
+                color: t.ink,
+                letterSpacing: -0.3,
+                lineHeight: 18,
+              }}
+              numberOfLines={1}
+            >
+              Aura
+            </Text>
+            <Text
+              style={{
+                fontSize: 9,
+                fontWeight: "800",
+                color: t.ink3,
+                letterSpacing: 1.4,
+                textTransform: "uppercase",
+                marginTop: 1,
+              }}
+              numberOfLines={1}
+            >
+              Studio
+            </Text>
+          </View>
+        )}
+      </Pressable>
+
+      {/* ─── Início ─── */}
+      <NavItem
+        t={t}
         icon="grid"
+        label="Início"
         active={isHome}
-        idx={1}
-        pause={floatPause}
-        accessibilityLabel="Início do Aura Studio"
+        expanded={expanded}
         onPress={() => navigate("/studio")}
       />
 
-      {GROUPS.map((g, i) => {
-        const open = openGroup === i;
-        const childActive = g.children.some((c) => pathname.startsWith(c.href));
-        const isHovered = hoveredGroupId === g.id;
-        const showHoverChildren =
-          Platform.OS === "web" && isHovered && !open;
-        const groupLabel = `Área ${g.label} — ${g.children.map((c) => c.label).join(", ")}`;
-        const childContainerHoverProps: any =
-          Platform.OS === "web"
-            ? {
-                onMouseEnter: cancelCloseHover,
-                onMouseLeave: () => scheduleCloseHover(g.id),
-              }
-            : {};
-        return (
-          <View key={g.label} style={{ position: "relative" }}>
-            <NavCircle
-              icon={g.icon}
-              idx={i + 2}
-              active={open || childActive}
-              glowing={isHovered}
-              isGroup
-              pause={floatPause}
-              accessibilityLabel={groupLabel}
-              onHoverIn={() => {
-                cancelCloseHover();
-                setHoveredGroupId(g.id);
-              }}
-              onHoverOut={() => scheduleCloseHover(g.id)}
-              onPress={() => setOpenGroup(open ? null : i)}
-            >
-              {open && (
-                <View style={s.childrenPop}>
-                  <View style={s.childrenInner}>
-                    {g.children.map((c, ci) => (
-                      <ChildBubble
-                        key={c.href}
-                        child={c}
-                        idx={ci}
-                        tone={g.toneKey}
-                        pause={floatPause}
-                        onPress={() => navigate(c.href)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-            </NavCircle>
+      {/* ─── Grupos ─── */}
+      {GROUPS.map((g) => (
+        <GroupSection
+          key={g.id}
+          t={t}
+          group={g}
+          pathname={pathname}
+          expanded={expanded}
+          navigate={navigate}
+        />
+      ))}
 
-            {showHoverChildren && (
-              <View
-                style={s.childBubblesContainer}
-                {...childContainerHoverProps}
-              >
-                {g.children.map((c, ci) => (
-                  <ChildHoverBubble
-                    key={c.href}
-                    child={c}
-                    tone={g.toneKey}
-                    delay={ci * 60}
-                    onPress={() => navigate(c.href)}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      })}
+      {/* spacer */}
+      <View style={{ flex: 1, minHeight: 12 }} />
 
-      <View style={{ flex: 1 }} />
-
-      <NavCircle
+      {/* ─── Configurações ─── */}
+      <NavItem
+        t={t}
         icon="settings"
-        idx={6}
-        pause={floatPause}
+        label="Configurações"
         active={pathname.startsWith("/studio/configuracoes")}
-        accessibilityLabel="Configurações do Studio"
+        expanded={expanded}
         onPress={() => navigate("/studio/configuracoes")}
       />
 
-      <View style={s.avatar} accessibilityLabel="Avatar do usuário">
-        <Text style={s.avatarTxt}>{initials(userName)}</Text>
+      {/* ─── Toggle recolher/expandir ─── */}
+      <Pressable
+        onPress={() => setExpanded((v) => !v)}
+        accessibilityLabel={expanded ? "Recolher menu" : "Expandir menu"}
+        accessibilityRole="button"
+        style={({ hovered }: any) => [
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: expanded ? "flex-start" : "center",
+            gap: 10,
+            paddingVertical: 8,
+            paddingHorizontal: expanded ? 10 : 8,
+            borderRadius: 8,
+            marginTop: 6,
+            marginBottom: 6,
+            minHeight: 36,
+          },
+          Platform.OS === "web" && ({ cursor: "pointer", transition: "background-color 0.15s ease" } as any),
+          hovered && { backgroundColor: t.bgSoft },
+        ]}
+      >
+        <Icon
+          name={expanded ? "chevron-left" : "chevron-right"}
+          size={14}
+          color={t.ink3}
+        />
+        {expanded && (
+          <Text style={{ fontSize: 12, color: t.ink3, fontWeight: "600" }}>
+            Recolher
+          </Text>
+        )}
+      </Pressable>
+
+      {/* ─── Avatar ─── */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingTop: 10,
+          borderTopWidth: 1,
+          borderTopColor: t.ink5,
+          paddingHorizontal: 4,
+          minHeight: 50,
+        }}
+        accessibilityLabel="Avatar do usuário"
+      >
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: t.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.3 }}>
+            {initials(userName)}
+          </Text>
+        </View>
+        {expanded && userName && (
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 12,
+              fontWeight: "700",
+              color: t.ink2,
+              letterSpacing: -0.1,
+            }}
+            numberOfLines={1}
+          >
+            {userName}
+          </Text>
+        )}
       </View>
+    </View>
+  );
+}
+
+// ─── NavItem ─────────────────────────────────────────────────
+function NavItem({
+  t,
+  icon,
+  label,
+  active,
+  expanded,
+  indent,
+  onPress,
+}: {
+  t: StudioPalette;
+  icon: string;
+  label: string;
+  active: boolean;
+  expanded: boolean;
+  indent?: boolean;
+  onPress: () => void;
+}) {
+  // Magenta-soft active state per plano "estado ativo magenta-soft":
+  // background accent 10% + accent text + barra accent à esquerda.
+  const activeBg = "rgba(236,72,153,0.10)";
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      style={({ hovered }: any) => [
+        {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingVertical: 8,
+          paddingHorizontal: expanded ? (indent ? 18 : 10) : 8,
+          minHeight: 36,
+          borderRadius: 8,
+          position: "relative",
+          justifyContent: expanded ? "flex-start" : "center",
+        },
+        Platform.OS === "web" && ({ cursor: "pointer", transition: "background-color 0.15s ease" } as any),
+        hovered && !active && { backgroundColor: t.bgSoft },
+        active && { backgroundColor: activeBg },
+      ]}
+    >
+      {active && (
+        <View
+          style={{
+            position: "absolute",
+            left: 2,
+            top: 8,
+            bottom: 8,
+            width: 3,
+            borderRadius: 2,
+            backgroundColor: t.accent,
+          }}
+          pointerEvents="none"
+        />
+      )}
+      <Icon name={icon} size={16} color={active ? t.accent : t.ink2} />
+      {expanded && (
+        <Text
+          style={{
+            flex: 1,
+            fontSize: 13,
+            fontWeight: active ? "800" : "600",
+            color: active ? t.accent : t.ink2,
+            letterSpacing: -0.1,
+          }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── GroupSection ───────────────────────────────────────────
+// Expanded: header + children indentados.
+// Collapsed: ícone do grupo só; hover abre popover à direita.
+function GroupSection({
+  t,
+  group,
+  pathname,
+  expanded,
+  navigate,
+}: {
+  t: StudioPalette;
+  group: (typeof GROUPS)[number];
+  pathname: string;
+  expanded: boolean;
+  navigate: (href: string) => void;
+}) {
+  const childActive = group.children.some(
+    (c) => pathname === c.href || pathname.startsWith(c.href + "/")
+  );
+
+  const [hovered, setHovered] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setHovered(false), 200);
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  if (expanded) {
+    return (
+      <View style={{ marginTop: 10 }}>
+        <Text
+          style={{
+            fontSize: 9,
+            fontWeight: "800",
+            color: t.ink4,
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
+            paddingHorizontal: 10,
+            marginBottom: 4,
+          }}
+        >
+          {group.label}
+        </Text>
+        {group.children.map((c) => {
+          const active = pathname === c.href || pathname.startsWith(c.href + "/");
+          return (
+            <NavItem
+              key={c.href}
+              t={t}
+              icon={c.icon}
+              label={c.label}
+              active={active}
+              expanded
+              indent
+              onPress={() => navigate(c.href)}
+            />
+          );
+        })}
+      </View>
+    );
+  }
+
+  // Collapsed: ícone só + hover popover
+  const hoverProps: any =
+    Platform.OS === "web"
+      ? {
+          onHoverIn: () => {
+            cancelClose();
+            setHovered(true);
+          },
+          onHoverOut: scheduleClose,
+        }
+      : {};
+
+  return (
+    <View style={{ position: "relative", marginTop: 4 }}>
+      <Pressable
+        accessibilityLabel={`Grupo ${group.label}`}
+        accessibilityRole="button"
+        {...hoverProps}
+        style={({ hovered: pressableHovered }: any) => [
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 8,
+            paddingHorizontal: 8,
+            minHeight: 36,
+            borderRadius: 8,
+            position: "relative",
+          },
+          Platform.OS === "web" && ({ cursor: "pointer", transition: "background-color 0.15s ease" } as any),
+          (pressableHovered || hovered) && !childActive && { backgroundColor: t.bgSoft },
+          childActive && { backgroundColor: "rgba(236,72,153,0.10)" },
+        ]}
+      >
+        {childActive && (
+          <View
+            style={{
+              position: "absolute",
+              left: 2,
+              top: 8,
+              bottom: 8,
+              width: 3,
+              borderRadius: 2,
+              backgroundColor: t.accent,
+            }}
+            pointerEvents="none"
+          />
+        )}
+        <Icon name={group.icon} size={16} color={childActive ? t.accent : t.ink2} />
+      </Pressable>
+
+      {/* Popover à direita (web hover) */}
+      {Platform.OS === "web" && hovered && (
+        <View
+          onPointerEnter={cancelClose}
+          onPointerLeave={scheduleClose}
+          style={[
+            {
+              position: "absolute",
+              left: RAIL_W_COLLAPSED - 8,
+              top: 0,
+              backgroundColor: t.paperCardElev,
+              borderWidth: 1,
+              borderColor: t.ink5,
+              borderRadius: 10,
+              paddingVertical: 8,
+              paddingHorizontal: 6,
+              minWidth: 180,
+              zIndex: 50,
+            },
+            ({ boxShadow: "0 10px 24px rgba(15,23,42,0.12)" } as any),
+          ]}
+        >
+          <Text
+            style={{
+              fontSize: 9,
+              fontWeight: "800",
+              color: t.ink4,
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              paddingHorizontal: 8,
+              marginBottom: 4,
+            }}
+          >
+            {group.label}
+          </Text>
+          {group.children.map((c) => {
+            const active = pathname === c.href || pathname.startsWith(c.href + "/");
+            return (
+              <Pressable
+                key={c.href}
+                onPress={() => {
+                  setHovered(false);
+                  cancelClose();
+                  navigate(c.href);
+                }}
+                style={({ hovered: itemHovered }: any) => [
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingVertical: 7,
+                    paddingHorizontal: 8,
+                    borderRadius: 6,
+                  },
+                  Platform.OS === "web" && ({ cursor: "pointer", transition: "background-color 0.15s ease" } as any),
+                  itemHovered && !active && { backgroundColor: t.bgSoft },
+                  active && { backgroundColor: "rgba(236,72,153,0.10)" },
+                ]}
+              >
+                <Icon name={c.icon} size={14} color={active ? t.accent : t.ink2} />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: active ? "800" : "600",
+                    color: active ? t.accent : t.ink2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {c.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
