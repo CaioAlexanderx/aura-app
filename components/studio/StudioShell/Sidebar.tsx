@@ -5,15 +5,17 @@
 // Renderiza apenas o branch desktop (isWide). Composição de:
 //   FloatingBubble (brand) → NavCircle (Início + grupos + Config)
 //   + ChildBubble (click) / ChildHoverBubble (hover) por grupo
-//   + avatar + StudioThemeToggle
+//   + avatar
 //
-// Mantém comportamento atual; Fase 3 trocará pela sidebar docada.
+// Mantém comportamento atual; Fase 5 trocará pela sidebar docada.
+//
+// 31/05/2026 (Fase 3): StudioThemeToggle removido — passou pra Topbar.
+// Aposentadoria da rail flutuante adiada pra Fase 5 (confirmação Caio).
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
-import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
 import { FloatingBubble } from "./FloatingBubble";
 import { NavCircle } from "./NavCircle";
 import { ChildBubble, ChildHoverBubble } from "./ChildBubble";
@@ -170,7 +172,6 @@ export function Sidebar({
         onPress={() => navigate("/studio/configuracoes")}
       />
 
-      <StudioThemeToggle />
       <View style={s.avatar} accessibilityLabel="Avatar do usuário">
         <Text style={s.avatarTxt}>{initials(userName)}</Text>
       </View>
