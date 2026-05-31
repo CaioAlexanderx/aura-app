@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -58,6 +59,8 @@ function fieldTypeLabel(t?: string) {
 }
 
 export function TabStudioConfigurador() {
+  const t = useStudioTokens();
+  const styles = useMemo(() => buildStyles(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
@@ -92,7 +95,7 @@ export function TabStudioConfigurador() {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={StudioColors.primary} />
+        <ActivityIndicator size="large" color={t.primary} />
         <Text style={styles.loadingText}>Carregando produtos personalizáveis…</Text>
       </View>
     );
@@ -102,7 +105,7 @@ export function TabStudioConfigurador() {
     return (
       <View style={styles.emptyWrap}>
         <View style={styles.emptyIcon}>
-          <Icon name="sparkles" size={32} color={StudioColors.primary} />
+          <Icon name="sparkles" size={32} color={t.primary} />
         </View>
         <Text style={styles.emptyTitle}>Nenhum produto personalizável</Text>
         <Text style={styles.emptySubtitle}>
@@ -126,7 +129,7 @@ export function TabStudioConfigurador() {
           </Text>
         </View>
         <Pressable onPress={goEdit} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}>
-          <Icon name="settings" size={16} color={StudioColors.primaryStrong} />
+          <Icon name="settings" size={16} color={t.primary} />
           <Text style={styles.secondaryBtnText}>Gerenciar catálogo</Text>
         </Pressable>
       </View>
@@ -148,7 +151,7 @@ export function TabStudioConfigurador() {
                   <Text style={styles.cardPrice}>{formatBRL(Number(p.price) || 0)}</Text>
                 </View>
                 <View style={styles.badge}>
-                  <Icon name="sparkles" size={12} color={StudioColors.primaryStrong} />
+                  <Icon name="sparkles" size={12} color={t.primary} />
                   <Text style={styles.badgeText}>Personalizável</Text>
                 </View>
               </View>
@@ -158,12 +161,12 @@ export function TabStudioConfigurador() {
                 {w && h ? (
                   <View style={styles.printRow}>
                     <View style={styles.printChip}>
-                      <Icon name="resize" size={12} color={StudioColors.primaryStrong} />
+                      <Icon name="resize" size={12} color={t.primary} />
                       <Text style={styles.printChipText}>{w} × {h} cm</Text>
                     </View>
                     {pos ? (
                       <View style={styles.printChip}>
-                        <Icon name="location" size={12} color={StudioColors.primaryStrong} />
+                        <Icon name="location" size={12} color={t.primary} />
                         <Text style={styles.printChipText}>{pos}</Text>
                       </View>
                     ) : null}
@@ -210,7 +213,7 @@ export function TabStudioConfigurador() {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   scroll: {
     padding: 16,
     gap: 16,
@@ -222,7 +225,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: StudioColors.textMuted,
+    color: t.ink3,
     fontSize: 13,
   },
   emptyWrap: {
@@ -238,18 +241,18 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     textAlign: "center",
     maxWidth: 480,
     lineHeight: 18,
@@ -263,11 +266,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     marginTop: 2,
   },
   grid: {
@@ -279,10 +282,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 320,
     maxWidth: 480,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: StudioColors.border,
+    borderColor: t.ink5,
     padding: 16,
     gap: 12,
   },
@@ -294,11 +297,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: StudioColors.textPrimary,
+    color: t.ink,
   },
   cardPrice: {
     fontSize: 13,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     marginTop: 2,
   },
   badge: {
@@ -308,14 +311,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
   badgeText: {
     fontSize: 11,
     fontWeight: "600",
-    color: StudioColors.primaryStrong,
+    color: t.primary,
   },
   section: {
     gap: 6,
@@ -323,7 +326,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: StudioColors.textMuted,
+    color: t.ink3,
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
@@ -339,14 +342,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
   printChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: StudioColors.primaryStrong,
+    color: t.primary,
   },
   chipsWrap: {
     flexDirection: "row",
@@ -357,9 +360,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
   chipMore: {
     backgroundColor: "transparent",
@@ -367,11 +370,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     fontWeight: "600",
-    color: StudioColors.primaryStrong,
+    color: t.primary,
   },
   muted: {
     fontSize: 12,
-    color: StudioColors.textMuted,
+    color: t.ink3,
     fontStyle: "italic",
   },
   editBtn: {
@@ -381,7 +384,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     marginTop: 4,
   },
   editBtnPressed: {
@@ -399,7 +402,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     marginTop: 8,
   },
   primaryBtnPressed: {
@@ -417,15 +420,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: StudioColors.primaryGhost,
+    backgroundColor: t.primaryGhost,
     borderWidth: 1,
-    borderColor: StudioColors.primaryBorder,
+    borderColor: t.primaryBorder,
   },
   secondaryBtnPressed: {
     opacity: 0.85,
   },
   secondaryBtnText: {
-    color: StudioColors.primaryStrong,
+    color: t.primary,
     fontSize: 12,
     fontWeight: "700",
   },

@@ -90,7 +90,7 @@ export const StudioTokens = {
   // Ink (texto)
   ink:    slate[900],
   ink2:   slate[700],
-  ink3:   slate[500],
+  ink3:   "#5E6A7A",   // AA fix Fase 0 (era slate[500]=#64748B)
   ink4:   slate[400],
   ink5:   slate[300],
 
@@ -98,6 +98,57 @@ export const StudioTokens = {
   border:      slate[400],
   borderSoft:  slate[200],
 } as const;
+
+// ─── StudioTokensDark (Fase 0 redesign — paleta dark-first) ──
+// Espelha StudioTokens (light) com paridade de chaves garantida por tipo.
+// Dark é a paleta PRINCIPAL do Studio (DA-2). Validada AA no PR da Fase 0.
+export const StudioTokensDark = {
+  primary:      navy[500],
+  primaryHover: navy[400],
+  primarySoft:  "rgba(59,130,246,0.18)",
+  primaryGhost: "rgba(59,130,246,0.08)",
+  accent:       magenta[400],
+  accentHover:  magenta[300],
+  accentSoft:   "rgba(244,114,182,0.18)",
+  accentGhost:  "rgba(244,114,182,0.08)",
+
+  success:      "#34D399",
+  successSoft:  "rgba(52,211,153,0.18)",
+  warning:      "#FBBF24",
+  warningSoft:  "rgba(251,191,36,0.18)",
+  danger:       "#EF4444",
+  dangerSoft:   "rgba(239,68,68,0.18)",
+  info:         "#60A5FA",
+  infoSoft:     "rgba(96,165,250,0.18)",
+
+  bg:            "#0F172A",
+  bgSoft:        "#1E293B",
+  paperCard:     "#1E293B",
+  paperCardElev: "#334155",
+
+  ink:    "#F8FAFC",
+  ink2:   "#CBD5E1",
+  ink3:   "#94A3B8",
+  ink4:   "#64748B",
+  ink5:   "#334155",
+
+  border:      "#475569",
+  borderSoft:  "#334155",
+} as const;
+
+// Parity guard — StudioTokens (light) e StudioTokensDark com mesmas chaves.
+type _TokensParity =
+  keyof typeof StudioTokens extends keyof typeof StudioTokensDark
+    ? keyof typeof StudioTokensDark extends keyof typeof StudioTokens
+      ? true
+      : never
+    : never;
+export const _STUDIO_TOKENS_PARITY: _TokensParity = true;
+
+export function getStudioTokensV2(isDark: boolean) {
+  return isDark ? StudioTokensDark : StudioTokens;
+}
+
 
 // ─── Gradientes nomeados (para LinearGradient) ──────────────
 export const StudioGradientsV2 = {

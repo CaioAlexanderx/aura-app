@@ -19,9 +19,10 @@
 //     rightSlot={<MeuBotao />}
 //   />
 // ============================================================
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 export function StudioPageHeader({
   eyebrow,
@@ -36,6 +37,8 @@ export function StudioPageHeader({
   rightSlot?: ReactNode;
   marginBottom?: number;
 }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   return (
     <View style={[s.row, { marginBottom }]}>
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -48,7 +51,8 @@ export function StudioPageHeader({
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -58,7 +62,7 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioColors.accent,
+    color: t.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -66,19 +70,20 @@ const s = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "800",
-    color: StudioColors.ink,
+    color: t.ink,
     marginTop: 4,
     letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: 13.5,
-    color: StudioColors.ink3,
+    color: t.ink3,
     marginTop: 4,
     maxWidth: 720,
   },
   rightSlot: {
     flexShrink: 0,
   },
-});
+  });
+}
 
 export default StudioPageHeader;

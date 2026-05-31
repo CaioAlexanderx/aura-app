@@ -16,18 +16,21 @@
 //   - Sem search box (tab focada em CRUD rapido)
 //   - Header com tom "Loja Digital" (storefront-first)
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
   TextInput, Image,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type Template, type TemplateCategory } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 export function TabStudioGaleria() {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<TemplateCategory[]>([]);
@@ -130,7 +133,7 @@ export function TabStudioGaleria() {
           style={[s.ctaPri, formOpen && s.ctaSec]}
           onPress={() => { if (formOpen) { resetForm(); setFormOpen(false); } else { setFormOpen(true); } }}
         >
-          <Icon name={formOpen ? "x" : "plus"} size={16} color={formOpen ? StudioColors.ink2 : "#fff"} />
+          <Icon name={formOpen ? "x" : "plus"} size={16} color={formOpen ? t.ink2 : "#fff"} />
           <Text style={[s.ctaPriTxt, formOpen && s.ctaSecTxt]}>
             {formOpen ? "Cancelar" : "Novo template"}
           </Text>
@@ -149,7 +152,7 @@ export function TabStudioGaleria() {
               placeholder="Ex.: Caneca Dia das Maes — Floral"
               value={fName}
               onChangeText={setFName}
-              placeholderTextColor={StudioColors.ink4}
+              placeholderTextColor={t.ink4}
             />
           </View>
 
@@ -160,7 +163,7 @@ export function TabStudioGaleria() {
               placeholder="https://..."
               value={fImage}
               onChangeText={setFImage}
-              placeholderTextColor={StudioColors.ink4}
+              placeholderTextColor={t.ink4}
               autoCapitalize="none"
             />
             {fImage.trim() ? (
@@ -198,7 +201,7 @@ export function TabStudioGaleria() {
               placeholder="floral, rosa, maes"
               value={fTags}
               onChangeText={setFTags}
-              placeholderTextColor={StudioColors.ink4}
+              placeholderTextColor={t.ink4}
               autoCapitalize="none"
             />
           </View>
@@ -237,7 +240,7 @@ export function TabStudioGaleria() {
             ]}
             onPress={() => setFilterCat(c.id)}
           >
-            {c.icon ? <Icon name={c.icon as any} size={12} color={c.color || StudioColors.ink3} /> : null}
+            {c.icon ? <Icon name={c.icon as any} size={12} color={c.color || t.ink3} /> : null}
             <Text style={[s.catChipTxt, filterCat === c.id && s.catChipTxtSel]}>{c.name}</Text>
             {c.template_count != null && <Text style={s.catCount}>{c.template_count}</Text>}
           </Pressable>
@@ -247,14 +250,14 @@ export function TabStudioGaleria() {
       {/* Loading */}
       {loading && (
         <View style={{ paddingVertical: 30, alignItems: "center" }}>
-          <ActivityIndicator size="small" color={StudioColors.primary} />
+          <ActivityIndicator size="small" color={t.primary} />
         </View>
       )}
 
       {/* Empty */}
       {!loading && templates.length === 0 && (
         <View style={s.emptyCard}>
-          <Icon name="image" size={32} color={StudioColors.ink4} />
+          <Icon name="image" size={32} color={t.ink4} />
           <Text style={s.emptyTitle}>
             {filterCat ? "Nada nessa categoria" : "Galeria vazia"}
           </Text>
@@ -275,46 +278,46 @@ export function TabStudioGaleria() {
       {/* Grid */}
       {!loading && templates.length > 0 && (
         <View style={s.grid}>
-          {templates.map((t) => {
-            const isPending = pendingDel === t.id;
+          {templates.map((tpl) => {
+            const isPending = pendingDel === tpl.id;
             return (
-              <View key={t.id} style={s.tplCard}>
+              <View key={tpl.id} style={s.tplCard}>
                 <View style={s.tplThumb}>
-                  {t.thumb_url || t.image_url ? (
-                    <Image source={{ uri: t.thumb_url || t.image_url }} style={s.tplImg} />
+                  {tpl.thumb_url || tpl.image_url ? (
+                    <Image source={{ uri: tpl.thumb_url || tpl.image_url }} style={s.tplImg} />
                   ) : (
-                    <Icon name="image" size={28} color={StudioColors.ink4} />
+                    <Icon name="image" size={28} color={t.ink4} />
                   )}
-                  {t.category_name ? (
+                  {tpl.category_name ? (
                     <View
                       style={[
                         s.tplCatBadge,
-                        t.category_color ? { backgroundColor: t.category_color } : null,
+                        tpl.category_color ? { backgroundColor: tpl.category_color } : null,
                       ]}
                     >
-                      <Text style={s.tplCatBadgeTxt}>{t.category_name}</Text>
+                      <Text style={s.tplCatBadgeTxt}>{tpl.category_name}</Text>
                     </View>
                   ) : null}
                 </View>
                 <View style={s.tplBody}>
-                  <Text style={s.tplName} numberOfLines={1}>{t.name}</Text>
-                  {(t.tags || []).length > 0 && (
+                  <Text style={s.tplName} numberOfLines={1}>{tpl.name}</Text>
+                  {(tpl.tags || []).length > 0 && (
                     <View style={s.tplTags}>
-                      {t.tags.slice(0, 3).map((tag) => (
+                      {tpl.tags.slice(0, 3).map((tag) => (
                         <Text key={tag} style={s.tplTag}>#{tag}</Text>
                       ))}
                     </View>
                   )}
                   <View style={s.tplFoot}>
-                    <Text style={s.tplUse}>{t.use_count}x usado</Text>
+                    <Text style={s.tplUse}>{tpl.use_count}x usado</Text>
                     <Pressable
-                      onPress={() => handleDelete(t)}
+                      onPress={() => handleDelete(tpl)}
                       style={[s.tplDel, isPending && s.tplDelPending]}
                     >
                       <Icon
                         name="trash"
                         size={12}
-                        color={isPending ? "#fff" : StudioColors.accent}
+                        color={isPending ? "#fff" : t.accent}
                       />
                     </Pressable>
                   </View>
@@ -328,8 +331,8 @@ export function TabStudioGaleria() {
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: t.bg },
   container: {
     padding: 24,
     paddingBottom: 60,
@@ -348,7 +351,7 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioColors.accent,
+    color: t.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -356,34 +359,34 @@ const s = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "800",
-    color: StudioColors.ink,
+    color: t.ink,
     marginTop: 4,
     letterSpacing: -0.4,
   },
-  sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4 },
+  sub: { fontSize: 13, color: t.ink3, marginTop: 4 },
 
   ctaPri: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: StudioColors.accent,
+    backgroundColor: t.accent,
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderRadius: 999,
   },
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
   ctaSec: {
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
-  ctaSecTxt: { color: StudioColors.ink2 },
+  ctaSecTxt: { color: t.ink2 },
 
   // Form
   formCard: {
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     borderRadius: 16,
     padding: 18,
     marginBottom: 20,
@@ -392,26 +395,26 @@ const s = StyleSheet.create({
   formTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: StudioColors.ink,
+    color: t.ink,
     marginBottom: 2,
   },
   field: { gap: 6 },
   label: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: StudioColors.ink3,
+    color: t.ink3,
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   input: {
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderWidth: 1.5,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
-    color: StudioColors.ink,
+    color: t.ink,
   },
   previewBox: {
     marginTop: 8,
@@ -419,9 +422,9 @@ const s = StyleSheet.create({
     height: 120,
     borderRadius: 10,
     overflow: "hidden",
-    backgroundColor: StudioColors.bg,
+    backgroundColor: t.bg,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   previewImg: { width: "100%", height: "100%" },
   catPickRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
@@ -437,40 +440,40 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderWidth: 1.5,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
   },
   catChipSel: {
-    backgroundColor: StudioColors.primary,
-    borderColor: StudioColors.primary,
+    backgroundColor: t.primary,
+    borderColor: t.primary,
   },
-  catChipTxt: { fontSize: 12.5, fontWeight: "600", color: StudioColors.ink2 },
+  catChipTxt: { fontSize: 12.5, fontWeight: "600", color: t.ink2 },
   catChipTxtSel: { color: "#fff" },
-  catCount: { fontSize: 11, color: StudioColors.ink4, fontWeight: "700" },
+  catCount: { fontSize: 11, color: t.ink4, fontWeight: "700" },
 
   // Empty
   emptyCard: {
     alignItems: "center",
     padding: 40,
     gap: 10,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: StudioColors.ink,
+    color: t.ink,
     marginTop: 6,
   },
   emptySub: {
     fontSize: 13,
-    color: StudioColors.ink3,
+    color: t.ink3,
     textAlign: "center",
     maxWidth: 360,
     marginBottom: 6,
@@ -480,16 +483,16 @@ const s = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
   tplCard: {
     width: 200,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   tplThumb: {
     width: "100%",
     aspectRatio: 1,
-    backgroundColor: StudioColors.bg,
+    backgroundColor: t.bg,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -499,16 +502,16 @@ const s = StyleSheet.create({
     position: "absolute",
     top: 8,
     left: 8,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
   },
   tplCatBadgeTxt: { color: "#fff", fontSize: 10, fontWeight: "700" },
   tplBody: { padding: 12 },
-  tplName: { fontSize: 13.5, fontWeight: "700", color: StudioColors.ink },
+  tplName: { fontSize: 13.5, fontWeight: "700", color: t.ink },
   tplTags: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 6 },
-  tplTag: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "600" },
+  tplTag: { fontSize: 10.5, color: t.ink3, fontWeight: "600" },
   tplFoot: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -516,18 +519,18 @@ const s = StyleSheet.create({
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: StudioColors.ink5,
+    borderTopColor: t.ink5,
   },
-  tplUse: { fontSize: 11, color: StudioColors.ink3, fontWeight: "600" },
+  tplUse: { fontSize: 11, color: t.ink3, fontWeight: "600" },
   tplDel: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: StudioColors.accentSoft,
+    backgroundColor: t.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  tplDelPending: { backgroundColor: StudioColors.accent },
+  tplDelPending: { backgroundColor: t.accent },
 });
 
 export default TabStudioGaleria;

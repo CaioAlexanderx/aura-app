@@ -15,13 +15,19 @@
 //
 // Memory: plano_aura_studio_vertical_24mai2026 (primary navy
 // #1E3A8A, accent magenta #EC4899, light theme).
+//
+// 31/05/2026 (Fase 3): migrado de StudioTokens estático pra
+// useStudioTokens — light+dark via provider. Banner já estava
+// slim com 1 acento magenta (eyebrow + active step dot); preserva.
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View, Text, Pressable, StyleSheet, Modal, Platform,
   Animated, Easing, useWindowDimensions,
 } from "react-native";
-import { StudioTokens, StudioRadiusV2 } from "@/constants/studio-tokens-v2";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { StudioRadiusV2 } from "@/constants/studio-tokens-v2";
+import type { StudioPalette } from "@/constants/studio-tokens";
 
 // ─── Passos hardcoded ───────────────────────────────────────
 type Step = {
@@ -66,6 +72,8 @@ export type StudioOnboardingProps = {
 };
 
 export function StudioOnboarding({ visible, onClose, onComplete }: StudioOnboardingProps) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const [currentStep, setCurrentStep] = useState(0);
   const { width: vw, height: vh } = useWindowDimensions();
   const fade = useState(new Animated.Value(0))[0];
@@ -170,7 +178,7 @@ export function StudioOnboarding({ visible, onClose, onComplete }: StudioOnboard
 export default StudioOnboarding;
 
 // ─── Styles ─────────────────────────────────────────────────
-const s = StyleSheet.create({
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.7)",
@@ -179,12 +187,12 @@ const s = StyleSheet.create({
     padding: 24,
   },
   tooltipWrap: {
-    backgroundColor: StudioTokens.paperCardElev,
+    backgroundColor: t.paperCardElev,
     borderRadius: StudioRadiusV2.xl as number,
     padding: 20,
     width: "100%",
     borderWidth: 1,
-    borderColor: StudioTokens.borderSoft,
+    borderColor: t.ink5,
     // sombra forte pra destacar do overlay
     shadowColor: "#0F172A",
     shadowOpacity: 0.35,
@@ -194,7 +202,7 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioTokens.accent,
+    color: t.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -203,13 +211,13 @@ const s = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "800",
-    color: StudioTokens.primary,
+    color: t.primary,
     letterSpacing: -0.3,
     marginBottom: 6,
   },
   text: {
     fontSize: 13.5,
-    color: StudioTokens.ink2,
+    color: t.ink2,
     lineHeight: 19,
     marginBottom: 14,
   },
@@ -222,11 +230,11 @@ const s = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: StudioTokens.borderSoft,
+    backgroundColor: t.ink5,
   },
   dotActive: {
     width: 18,
-    backgroundColor: StudioTokens.accent,
+    backgroundColor: t.accent,
   },
   actions: {
     flexDirection: "row",
@@ -239,19 +247,19 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: StudioTokens.borderSoft,
+    borderColor: t.ink5,
     backgroundColor: "transparent",
   },
   skipTxt: {
     fontSize: 13,
     fontWeight: "700",
-    color: StudioTokens.ink3,
+    color: t.ink3,
   },
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: StudioTokens.primary,
+    backgroundColor: t.primary,
   },
   primaryTxt: {
     fontSize: 13.5,
@@ -261,7 +269,7 @@ const s = StyleSheet.create({
   },
   debugTxt: {
     fontSize: 10,
-    color: StudioTokens.ink4,
+    color: t.ink4,
     marginTop: 10,
     fontStyle: "italic",
   },

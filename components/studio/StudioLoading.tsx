@@ -5,14 +5,23 @@
 // Use em vez de ActivityIndicator solto ou skeletons custom em cada tela.
 //
 // Variants:
-//   "spinner"          — ActivityIndicator centrado, padding generoso
+//   "spinner"          — AuraStudioMark com ring rotativo magenta (branded)
 //   "skeleton-list"    — 4-6 linhas verticais (lista de items)
 //   "skeleton-cards"   — grid 2x2 de cards (galeria, produtos)
 //   "skeleton-grid"    — 3 colunas (KDS, dashboard)
+//
+// 31/05/2026 (Fase 5): "spinner" virou branded — AuraStudioMark central
+// + anel cônico animado em magenta + label opcional. Respeita reduceMotion
+// (sem rotação, mark estático). Substitui ActivityIndicator genérico.
 // ============================================================
-import { useEffect, useRef } from "react";
-import { View, ActivityIndicator, StyleSheet, Animated, Easing } from "react-native";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useEffect, useRef, useMemo, useState } from "react";
+import {
+  View, Text, StyleSheet, Animated, Easing, ActivityIndicator,
+  AccessibilityInfo, Platform,
+} from "react-native";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
 
 type Variant = "spinner" | "skeleton-list" | "skeleton-cards" | "skeleton-grid";
 
@@ -25,15 +34,22 @@ export function StudioLoading({
   rows?: number;
   label?: string;
 }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   if (variant === "spinner") {
     return (
-      <View style={s.spinnerWrap}>
-        <ActivityIndicator size="large" color={StudioColors.primary} />
-        {label && (
-          <View style={{ marginTop: 12 }}>
-            <SkeletonText width={140} />
-          </View>
-        )}
+      <View
+        style={s.spinnerWrap}
+        accessibilityRole={Platform.OS === "web" ? ("status" as any) : undefined}
+        accessibilityLabel={label || "Carregando"}
+        accessibilityLiveRegion="polite"
+      >
+        <BrandedSpinner t={t} size={64} />
+        {label ? (
+          <Text style={s.spinnerLabel} numberOfLines={1}>
+            {label}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -75,41 +91,89 @@ export function StudioLoading({
   return null;
 }
 
-// ── Pieces ──────────────────────────────────────────────────
+// ─── Branded spinner ────────────────────────────────
+// AuraStudioMark + anel magenta rotativo + fallback ActivityIndicator
+// quando reduceMotion. Respeita branding canônico.
+function BrandedSpinner({ t, size = 64 }: { t: StudioPalette; size?: number }) {
+  const rotate = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
 
-function useShimmer() {
-  const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
-        Animated.timing(anim, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
-      ])
-    ).start();
-  }, [anim]);
-  return anim;
-}
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    return () => { mounted = false; };
+  }, []);
 
-function SkeletonText({ width = 100, height = 12 }: { width?: number | string; height?: number }) {
-  const anim = useShimmer();
-  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.85] });
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rotate, reduceMotion]);
+
+  // ReduceMotion: mostra mark + activity indicator simples abaixo
+  if (reduceMotion) {
+    return (
+      <View style={{ alignItems: "center", gap: 10 }}>
+        <AuraStudioMark size={Math.round(size * 0.6)} />
+        <ActivityIndicator size="small" color={t.accent} />
+      </View>
+    );
+  }
+
+  const spin = rotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  const ringSize = size + 16;
+  const markSize = Math.round(size * 0.6);
+
   return (
-    <Animated.View
+    <View
       style={{
-        width: width as any,
-        height,
-        backgroundColor: StudioColors.ink5,
-        borderRadius: 6,
-        opacity,
+        width: ringSize,
+        height: ringSize,
+        alignItems: "center",
+        justifyContent: "center",
       }}
-    />
+    >
+      {/* Ring rotativo */}
+      <Animated.View
+        style={{
+          position: "absolute",
+          width: ringSize,
+          height: ringSize,
+          borderRadius: ringSize / 2,
+          borderWidth: 2.5,
+          borderColor: "transparent",
+          borderTopColor: "#EC4899",
+          borderRightColor: "#EC4899",
+          transform: [{ rotate: spin }],
+        }}
+      />
+      <AuraStudioMark size={markSize} />
+    </View>
   );
 }
 
+// ── Pieces ─────────────────────────────────────────
+
 function SkeletonRow({ delay = 0 }: { delay?: number }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const t = setTimeout(() => {
+    const tm = setTimeout(() => {
       Animated.loop(
         Animated.sequence([
           Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: false }),
@@ -117,7 +181,7 @@ function SkeletonRow({ delay = 0 }: { delay?: number }) {
         ])
       ).start();
     }, delay);
-    return () => clearTimeout(t);
+    return () => clearTimeout(tm);
   }, [anim, delay]);
   const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.85] });
   return (
@@ -132,9 +196,11 @@ function SkeletonRow({ delay = 0 }: { delay?: number }) {
 }
 
 function SkeletonCard({ delay = 0, small = false }: { delay?: number; small?: boolean }) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const t = setTimeout(() => {
+    const tm = setTimeout(() => {
       Animated.loop(
         Animated.sequence([
           Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: false }),
@@ -142,7 +208,7 @@ function SkeletonCard({ delay = 0, small = false }: { delay?: number; small?: bo
         ])
       ).start();
     }, delay);
-    return () => clearTimeout(t);
+    return () => clearTimeout(tm);
   }, [anim, delay]);
   const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.85] });
   return (
@@ -156,12 +222,19 @@ function SkeletonCard({ delay = 0, small = false }: { delay?: number; small?: bo
   );
 }
 
-const s = StyleSheet.create({
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
   spinnerWrap: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 40,
-    gap: 8,
+    gap: 12,
+  },
+  spinnerLabel: {
+    fontSize: 12,
+    color: t.ink3,
+    fontWeight: "600",
+    letterSpacing: -0.1,
   },
   listWrap: {
     gap: 10,
@@ -181,28 +254,28 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 12,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
   },
   rowAvatar: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: StudioColors.ink5,
+    backgroundColor: t.ink5,
   },
   rowBar: {
     height: 10,
-    backgroundColor: StudioColors.ink5,
+    backgroundColor: t.ink5,
     borderRadius: 5,
   },
   card: {
     width: 180,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: StudioColors.ink5,
+    borderColor: t.ink5,
     overflow: "hidden",
   },
   cardSmall: {
@@ -210,8 +283,9 @@ const s = StyleSheet.create({
   },
   cardThumb: {
     height: 100,
-    backgroundColor: StudioColors.ink5,
+    backgroundColor: t.ink5,
   },
-});
+  });
+}
 
 export default StudioLoading;

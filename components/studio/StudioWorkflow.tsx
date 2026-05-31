@@ -9,13 +9,14 @@
 // Aplicar SÓ em features Studio-específicas (NÃO em listagens, home,
 // gestão genérica). Ver BACKLOG_AURA_STUDIO.md seção "Workflow-first".
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import {
   View, Text, Pressable, StyleSheet, ScrollView,
   ActivityIndicator, Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 
 type Props = {
   title: string;
@@ -69,6 +70,8 @@ export function StudioWorkflow({
   draftKey, draft, onDraftRestored,
   children,
 }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const [submitting, setSubmitting] = useState(false);
   const total = steps.length;
   const isLast = current >= total;
@@ -145,12 +148,12 @@ export function StudioWorkflow({
                   : <Text style={[s.stepDotTxt, active && { color: "#fff" }]}>{idx}</Text>}
               </View>
               <Text
-                style={[s.stepLabel, (active || done) && { color: StudioColors.ink2, fontWeight: "600" }]}
+                style={[s.stepLabel, (active || done) && { color: t.ink2, fontWeight: "600" }]}
                 numberOfLines={1}
               >
                 {label}
               </Text>
-              {i < steps.length - 1 && <View style={[s.stepSep, done && { backgroundColor: StudioColors.accentSoft }]} />}
+              {i < steps.length - 1 && <View style={[s.stepSep, done && { backgroundColor: t.accentSoft }]} />}
             </View>
           );
         })}
@@ -171,7 +174,7 @@ export function StudioWorkflow({
           style={[
             s.btnPri,
             primaryDisabled && { opacity: 0.45 },
-            isLast && { backgroundColor: StudioColors.mint },
+            isLast && { backgroundColor: t.mint },
           ]}
           onPress={handlePrimary}
           disabled={primaryDisabled || submitting}
@@ -191,26 +194,26 @@ export function StudioWorkflow({
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: t.bg },
   header: {
     flexDirection: "row", alignItems: "flex-start",
     paddingHorizontal: 24, paddingTop: 22, paddingBottom: 14,
-    borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
+    borderBottomWidth: 1, borderBottomColor: t.ink5,
     gap: 12,
   },
   eyebrow: {
-    fontSize: 11, color: StudioColors.accent, fontWeight: "800",
+    fontSize: 11, color: t.accent, fontWeight: "800",
     letterSpacing: 0.8, textTransform: "uppercase",
   },
-  title: { fontSize: 22, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.3 },
+  title: { fontSize: 22, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.3 },
   draftChip: {
     flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: StudioColors.mintSoft,
+    backgroundColor: t.mintSoft,
     paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999,
   },
   draftDot: {
-    width: 6, height: 6, borderRadius: 3, backgroundColor: StudioColors.mint,
+    width: 6, height: 6, borderRadius: 3, backgroundColor: t.mint,
   },
   draftTxt: { fontSize: 11, color: "#065F46", fontWeight: "700" },
 
@@ -218,22 +221,22 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 24, paddingVertical: 14,
     gap: 8,
-    borderBottomWidth: 1, borderBottomColor: StudioColors.ink5,
+    borderBottomWidth: 1, borderBottomColor: t.ink5,
     backgroundColor: "rgba(255,255,255,0.4)",
   },
   stepItem: { flexDirection: "row", alignItems: "center", gap: 8 },
   stepDot: {
     width: 24, height: 24, borderRadius: 12,
-    backgroundColor: "#fff",
-    borderWidth: 2, borderColor: StudioColors.ink4,
+    backgroundColor: t.paperCardElev,
+    borderWidth: 2, borderColor: t.ink4,
     alignItems: "center", justifyContent: "center",
   },
-  stepDotActive: { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary },
-  stepDotDone: { backgroundColor: StudioColors.mint, borderColor: StudioColors.mint },
-  stepDotTxt: { fontSize: 11, fontWeight: "800", color: StudioColors.ink3 },
-  stepLabel: { fontSize: 12, color: StudioColors.ink3 },
+  stepDotActive: { backgroundColor: t.primary, borderColor: t.primary },
+  stepDotDone: { backgroundColor: t.mint, borderColor: t.mint },
+  stepDotTxt: { fontSize: 11, fontWeight: "800", color: t.ink3 },
+  stepLabel: { fontSize: 12, color: t.ink3 },
   stepSep: {
-    width: 28, height: 1.5, backgroundColor: StudioColors.ink5,
+    width: 28, height: 1.5, backgroundColor: t.ink5,
     marginHorizontal: 4,
   },
 
@@ -242,23 +245,23 @@ const s = StyleSheet.create({
   footer: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: 24, paddingVertical: 14,
-    borderTopWidth: 1, borderTopColor: StudioColors.ink5,
-    backgroundColor: "#fff",
+    borderTopWidth: 1, borderTopColor: t.ink5,
+    backgroundColor: t.paperCardElev,
     gap: 12,
   },
   btnPri: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingVertical: 12, paddingHorizontal: 22, borderRadius: 12,
     minWidth: 160, justifyContent: "center",
   },
   btnPriTxt: { color: "#fff", fontSize: 14, fontWeight: "700" },
   btnSec: {
     paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12,
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
-    backgroundColor: "#fff",
+    borderWidth: 1.5, borderColor: t.ink5,
+    backgroundColor: t.paperCardElev,
   },
-  btnSecTxt: { color: StudioColors.ink2, fontSize: 13, fontWeight: "600" },
+  btnSecTxt: { color: t.ink2, fontSize: 13, fontWeight: "600" },
 });
 
 export default StudioWorkflow;

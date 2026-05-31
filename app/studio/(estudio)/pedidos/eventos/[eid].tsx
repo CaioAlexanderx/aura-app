@@ -9,13 +9,15 @@
 //   GET  /studio/bulk-events/:eid/orders
 //   POST /studio/bulk-events/:eid/convert
 // ============================================================
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens, useStudioTheme } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { studioBulkConvertApi, type StudioBulkEventItemRow } from "@/services/studioBulkConvertApi";
@@ -27,6 +29,9 @@ export default function EventoDetalhe() {
   const params = useLocalSearchParams();
   const eid = String(params?.eid || "");
   const { company } = useAuthStore();
+  const t = useStudioTokens();
+  const { isDark } = useStudioTheme();
+  const s = useMemo(() => buildStyles(t), [t]);
 
   const [items, setItems] = useState<StudioBulkEventItemRow[]>([]);
   const [stats, setStats] = useState<{ converted: number; total: number }>({ converted: 0, total: 0 });
@@ -66,7 +71,7 @@ export default function EventoDetalhe() {
   const pendingCount = stats.total - stats.converted;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+    <StudioScreen variant="grid">
       <StudioBreadcrumb
         items={[
           { label: "Estúdio", href: "/studio" },
@@ -86,7 +91,7 @@ export default function EventoDetalhe() {
             <Pressable
               onPress={handleConvert}
               disabled={converting}
-              style={[s.cta, { backgroundColor: StudioColors.accent, opacity: converting ? 0.6 : 1 }]}
+              style={[s.cta, { backgroundColor: t.accent, opacity: converting ? 0.6 : 1 }]}
             >
               {converting ? <ActivityIndicator color="#fff" /> : <Icon name="arrow-right" size={16} color="#fff" />}
               <Text style={s.ctaTxt}>
@@ -98,7 +103,7 @@ export default function EventoDetalhe() {
 
         {loading ? (
           <View style={{ paddingVertical: 40, alignItems: "center" }}>
-            <ActivityIndicator color={StudioColors.primary} />
+            <ActivityIndicator color={t.primary} />
           </View>
         ) : items.length === 0 ? (
           <View style={s.empty}>
@@ -109,7 +114,7 @@ export default function EventoDetalhe() {
             {items.map((it) => {
               const linked = !!it.digital_order_id;
               const status = it.studio_production_status as any;
-              const col = status ? colorStudioStatus(status) : { bg: StudioColors.bgSoft, fg: StudioColors.ink3 };
+              const col = status ? colorStudioStatus(status, isDark) : { bg: t.bgSoft, fg: t.ink3 };
               return (
                 <Pressable
                   key={it.item_id}
@@ -124,8 +129,8 @@ export default function EventoDetalhe() {
                         <Text style={[s.statusTxt, { color: col.fg }]}>{labelStudioStatus(status)}</Text>
                       </View>
                     ) : (
-                      <View style={[s.statusPill, { backgroundColor: StudioColors.bgSoft }]}>
-                        <Text style={[s.statusTxt, { color: StudioColors.ink3 }]}>aguarda conversão</Text>
+                      <View style={[s.statusPill, { backgroundColor: t.bgSoft }]}>
+                        <Text style={[s.statusTxt, { color: t.ink3 }]}>aguarda conversão</Text>
                       </View>
                     )}
                   </View>
@@ -142,7 +147,7 @@ export default function EventoDetalhe() {
                   )}
                   {linked && (
                     <View style={s.openHint}>
-                      <Icon name="chevron-right" size={12} color={StudioColors.primary} />
+                      <Icon name="chevron-right" size={12} color={t.primary} />
                       <Text style={s.openHintTxt}>Abrir pedido</Text>
                     </View>
                   )}
@@ -152,7 +157,7 @@ export default function EventoDetalhe() {
           </View>
         )}
       </View>
-    </ScrollView>
+    </StudioScreen>
   );
 }
 
@@ -167,31 +172,33 @@ function summarizeCustomization(c: any): string {
   }
 }
 
-const s = StyleSheet.create({
-  container: { padding: 22, maxWidth: 1100, alignSelf: "center", width: "100%" },
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
+  container: { width: "100%" },
   headRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 18, flexWrap: "wrap" },
-  h1: { fontSize: 22, fontWeight: "800", color: StudioColors.ink },
-  h1Sub: { fontSize: 12.5, color: StudioColors.ink3, marginTop: 4 },
+  h1: { fontSize: 22, fontWeight: "800", color: t.ink },
+  h1Sub: { fontSize: 12.5, color: t.ink3, marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12 },
   ctaTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  empty: { padding: 40, alignItems: "center", backgroundColor: StudioColors.paperCard, borderRadius: 16 },
-  emptyTxt: { color: StudioColors.ink3 },
+  empty: { padding: 40, alignItems: "center", backgroundColor: t.paperCard, borderRadius: 16 },
+  emptyTxt: { color: t.ink3 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   card: {
     width: 240, minWidth: 240,
-    backgroundColor: StudioColors.paperCard,
+    backgroundColor: t.paperCard,
     borderRadius: 16, padding: 14,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    borderWidth: 1, borderColor: t.ink5,
     opacity: 0.85,
   },
-  cardLinked: { opacity: 1, borderColor: StudioColors.primary + "40" },
+  cardLinked: { opacity: 1, borderColor: t.primary + "40" },
   cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  lineNum: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.6 },
+  lineNum: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
   statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   statusTxt: { fontSize: 10, fontWeight: "800" },
-  recipient: { fontSize: 14, fontWeight: "700", color: StudioColors.ink },
-  customSummary: { fontSize: 11, color: StudioColors.ink3, marginTop: 6, lineHeight: 16 },
-  cardMeta: { fontSize: 11, color: StudioColors.ink3, marginTop: 6, fontWeight: "600" },
+  recipient: { fontSize: 14, fontWeight: "700", color: t.ink },
+  customSummary: { fontSize: 11, color: t.ink3, marginTop: 6, lineHeight: 16 },
+  cardMeta: { fontSize: 11, color: t.ink3, marginTop: 6, fontWeight: "600" },
   openHint: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
-  openHintTxt: { fontSize: 11, color: StudioColors.primary, fontWeight: "700" },
-});
+  openHintTxt: { fontSize: 11, color: t.primary, fontWeight: "700" },
+  });
+}

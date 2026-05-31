@@ -18,13 +18,21 @@
 // Sub-label espelha Receita / Despesa em pt-BR. Faixa colorida do
 // card vira danger quando value < 0 (prejuizo) e o valor aparece
 // com sinal "-" em cor danger. Acompanha refactor do backend.
+//
+// 31/05/2026 (Fase 4): adiciona animacao stroke-dashoffset no
+// FaturamentoChart (linha desenha de esquerda pra direita 700ms)
+// e hover-lift web-only nos cards (KpiCard + chart cards). Tudo
+// behind AccessibilityInfo.isReduceMotionEnabled().
 // ============================================================
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, ReactNode } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  Platform,
+  Platform, AccessibilityInfo,
 } from "react-native";
 import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, Rect } from "react-native-svg";
+import Reanimated, {
+  useSharedValue, useAnimatedProps, withTiming, Easing,
+} from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -39,10 +47,52 @@ import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
-// ─── Guia steps (mantido pro card colapsado) ───────────────────────
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
+
+// ─── HoverLift (Fase 4 — desktop only, behind reduceMotion) ──────
+// Wrapper leve que adiciona translateY(-2) + sombra suave no hover.
+// Pressable usado pelo onHoverIn/onHoverOut do RN-Web; cursor mantém
+// default pra nao parecer clickable.
+function HoverLift({ children, style }: { children: ReactNode; style: any }) {
+  const [hovered, setHovered] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const isWeb = Platform.OS === "web";
+  const canLift = isWeb && !reduceMotion;
+  const lifted = hovered && canLift;
+
+  return (
+    <Pressable
+      onHoverIn={canLift ? () => setHovered(true) : undefined}
+      onHoverOut={canLift ? () => setHovered(false) : undefined}
+      style={[
+        style,
+        isWeb && ({
+          transition: "transform 0.18s ease, box-shadow 0.18s ease",
+          cursor: "default",
+        } as any),
+        lifted && { transform: [{ translateY: -2 }] },
+        lifted && ({ boxShadow: "0 10px 24px rgba(15,23,42,0.08)" } as any),
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+// ─── Guia steps (mantido pro card colapsado) ───────────────────
 type GuideStepStatus = "done" | "in_progress" | "todo";
 
 type GuideStep = {
@@ -135,7 +185,7 @@ export default function StudioPainel() {
 
   const { config: digitalConfig } = useDigitalChannel();
 
-  // ─── Painel data ─────────────────────────────────────────
+  // ─── Painel data ──────────────────────────────────
   const [period, setPeriod] = useState<Period>("7d");
   const [painel, setPainel] = useState<PainelData | null>(null);
   const [painelLoading, setPainelLoading] = useState(true);
@@ -268,7 +318,7 @@ export default function StudioPainel() {
   // Render guia: oculto se dismissed ou se 5/5
   const showGuide = !guideDismissed && !allDone && !guideLoading && !!nextStep;
 
-  // ─── Data shortcuts ─────────────────────────────────────────
+  // ─── Data shortcuts ───────────────────────────────────
   const d = painel || EMPTY_PAINEL;
   const kpiVendas = d.kpis.vendas_dia;
   const kpiTicket = d.kpis.ticket_medio;
@@ -284,7 +334,8 @@ export default function StudioPainel() {
   const isLoss = kpiLucro.value < 0;
 
   return (
-    <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+    <StudioScreen variant="grid" scroll={false} padded={false}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* ═══════ GUIA 5 PASSOS (colapsado) ═══════ */}
       {showGuide && nextStep && (
         <StudioGradient
@@ -402,7 +453,7 @@ export default function StudioPainel() {
           {/* ─── Charts row ─── */}
           <View style={s.chartsRow}>
             {/* Faturamento line chart */}
-            <View style={s.chartCardWide}>
+            <HoverLift style={s.chartCardWide}>
               <View style={s.chartHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.chartEyebrow}>RECEITA</Text>
@@ -415,10 +466,10 @@ export default function StudioPainel() {
                 </Text>
               </View>
               <FaturamentoChart data={d.faturamento_serie} t={t} />
-            </View>
+            </HoverLift>
 
             {/* Top 5 produtos */}
-            <View style={s.chartCardNarrow}>
+            <HoverLift style={s.chartCardNarrow}>
               <View style={s.chartHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.chartEyebrow}>TOP VENDAS</Text>
@@ -428,11 +479,11 @@ export default function StudioPainel() {
                 </View>
               </View>
               <TopProdutosList data={d.top_produtos} t={t} />
-            </View>
+            </HoverLift>
           </View>
 
           {/* ─── Funil aprovacao (full width) ─── */}
-          <View style={s.chartCardFull}>
+          <HoverLift style={s.chartCardFull}>
             <View style={s.chartHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={s.chartEyebrow}>APROVACAO DE ARTE (wa.me)</Text>
@@ -445,16 +496,18 @@ export default function StudioPainel() {
               </Text>
             </View>
             <FunilAprovacao data={d.funil_aprovacao} t={t} />
-          </View>
+          </HoverLift>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </StudioScreen>
   );
 }
 
-// ═══════ KPI Card ═══════════════════════════════════════════════
+// ═══════ KPI Card ══════════════════════════════════════════
 // variant "danger" foi adicionado pra cobrir prejuizo no card de Lucro.
 // Quando valueIsNegative, o valor numerico recebe a cor danger.
+// Fase 4: HoverLift desktop-only behind reduceMotion.
 function KpiCard({
   t, variant, label, value, format, deltaPct, subLabel, valueIsNegative,
 }: {
@@ -480,7 +533,7 @@ function KpiCard({
   const showDelta = deltaPct !== null && deltaPct !== undefined && !isNaN(deltaPct);
 
   return (
-    <View style={s.card}>
+    <HoverLift style={s.card}>
       <StudioGradient
         colors={stripeColors}
         direction="90deg"
@@ -502,7 +555,7 @@ function KpiCard({
         </View>
       )}
       {subLabel && <Text style={s.subLabel}>{subLabel}</Text>}
-    </View>
+    </HoverLift>
   );
 }
 
@@ -565,8 +618,21 @@ function buildKpiStyles(t: StudioPalette) {
   });
 }
 
-// ═══════ Faturamento line chart (SVG) ════════════════════════════
+// ═══════ Faturamento line chart (SVG) ════════════════════════
+// Fase 4: linha anima com stroke-dashoffset (700ms ease-out) ao
+// mudar `data` (period change ou refetch). Behind reduceMotion.
 function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPalette }) {
+  const progress = useSharedValue(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   if (!data || data.length === 0) {
     return (
       <View style={{ height: 220, alignItems: "center", justifyContent: "center" }}>
@@ -613,6 +679,34 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
     " L " + lastX.toFixed(1) + " " + baseY.toFixed(1) +
     " L " + firstX.toFixed(1) + " " + baseY.toFixed(1) +
     " Z";
+
+  // Pathlength estimado via soma de distancias (cross-platform safe).
+  const pathLength = (() => {
+    let total = 0;
+    for (let i = 1; i < points.length; i++) {
+      const dx = points[i].x - points[i - 1].x;
+      const dy = points[i].y - points[i - 1].y;
+      total += Math.sqrt(dx * dx + dy * dy);
+    }
+    return Math.max(total, 50);
+  })();
+
+  // Dispara animacao quando data muda. progress 0 → 1.
+  useEffect(() => {
+    if (reduceMotion) {
+      progress.value = 1;
+      return;
+    }
+    progress.value = 0;
+    progress.value = withTiming(1, {
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [data, reduceMotion, progress]);
+
+  const animatedLineProps = useAnimatedProps(() => ({
+    strokeDashoffset: pathLength * (1 - progress.value),
+  }));
 
   const todayIdx = data.findIndex((p) => p.is_today);
   const todayPt = todayIdx >= 0 ? points[todayIdx] : null;
@@ -670,14 +764,16 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
           {/* Area */}
           <Path d={areaPath} fill="url(#lineGrad)" />
 
-          {/* Line */}
-          <Path
+          {/* Line — animated stroke-dashoffset */}
+          <AnimatedPath
             d={linePath}
             fill="none"
             stroke="#EC4899"
             strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"
+            strokeDasharray={pathLength as any}
+            animatedProps={animatedLineProps}
           />
 
           {/* Dots */}
@@ -748,7 +844,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
   );
 }
 
-// ═══════ Top 5 produtos (bar horizontal) ════════════════════════
+// ═══════ Top 5 produtos (bar horizontal) ══════════════════════
 function TopProdutosList({
   data, t,
 }: {
@@ -830,7 +926,7 @@ function TopProdutosList({
   );
 }
 
-// ═══════ Funil aprovacao ════════════════════════════════════════
+// ═══════ Funil aprovacao ══════════════════════════════════
 function FunilAprovacao({
   data, t,
 }: {
@@ -952,7 +1048,7 @@ function FunilAprovacao({
   );
 }
 
-// ═══════ Styles ═════════════════════════════════════════════════
+// ═══════ Styles ═══════════════════════════════════════════
 function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
     scroll: { flex: 1, backgroundColor: t.bg },

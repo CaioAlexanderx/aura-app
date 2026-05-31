@@ -7,14 +7,16 @@
 // 409 deposit_required do backend — fonte da verdade é o servidor.
 // force: true enviado no retry quando lojista confirma fora do gate.
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking,
   Alert, Modal, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens, useStudioTheme, useStudioSemantic } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useAuthStore } from "@/stores/auth";
 import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type StudioPayment, type StudioPaymentKind } from "@/services/studioApi";
 import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
@@ -38,6 +40,10 @@ type PaymentCardProps = {
 };
 
 function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepositReleased }: PaymentCardProps) {
+  const tk = useStudioTokens();
+  const { isDark } = useStudioTheme();
+  const sem = useStudioSemantic();
+  const ps = useMemo(() => buildPs(tk), [tk]);
   const [payments, setPayments] = useState<StudioPayment[]>([]);
   const [loadingPay, setLoadingPay] = useState(true);
   const [acting, setActing] = useState(false);
@@ -103,9 +109,9 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
 
   const kindLabel: Record<StudioPaymentKind, string> = { deposit: "Sinal", balance: "Saldo", full: "Total" };
   const statusPillStyle = (status: StudioPayment["status"]) => {
-    if (status === "paid")      return { bg: "#DCFCE7", fg: "#16A34A" };
-    if (status === "cancelled") return { bg: "#F1F5F9", fg: "#64748B" };
-    return { bg: "#FEF3C7", fg: "#D97706" };
+    if (status === "paid")      return { bg: sem.approved.soft, fg: sem.approved.ink };
+    if (status === "cancelled") return { bg: sem.neutral.soft,  fg: sem.neutral.ink };
+    return { bg: sem.waiting.soft, fg: sem.waiting.ink };
   };
 
   return (
@@ -113,15 +119,15 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 }}>
         <Text style={ps.eyebrow}>PAGAMENTOS</Text>
         {hasDeposit && (
-          <View style={[ps.pill, depositPaid ? { backgroundColor: "#DCFCE7" } : { backgroundColor: "#FEF3C7" }]}>
-            <Text style={[ps.pillTxt, depositPaid ? { color: "#16A34A" } : { color: "#D97706" }]}>
+          <View style={[ps.pill, depositPaid ? { backgroundColor: sem.approved.soft } : { backgroundColor: sem.waiting.soft }]}>
+            <Text style={[ps.pillTxt, depositPaid ? { color: sem.approved.ink } : { color: sem.waiting.ink }]}>
               {depositPaid ? "✓ Sinal recebido — produção liberada" : `⚠ Sinal pendente — R$ ${Number(depositRequired).toFixed(2)}`}
             </Text>
           </View>
         )}
       </View>
 
-      {loadingPay ? <ActivityIndicator size="small" color={StudioColors.primary} /> : (
+      {loadingPay ? <ActivityIndicator size="small" color={tk.primary} /> : (
         <>
           {payments.map((p) => {
             const col = statusPillStyle(p.status);
@@ -142,10 +148,10 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
                 </View>
                 {p.status === "pending" && (
                   <View style={{ flexDirection: "row", gap: 6 }}>
-                    <Pressable style={[ps.actionBtn, { backgroundColor: "#16A34A" }]} disabled={acting} onPress={() => { setMarkTarget(p); setMarkModal(true); }}>
+                    <Pressable style={[ps.actionBtn, { backgroundColor: tk.success }]} disabled={acting} onPress={() => { setMarkTarget(p); setMarkModal(true); }}>
                       <Text style={ps.actionBtnTxt}>Registrar Pix recebido</Text>
                     </Pressable>
-                    <Pressable style={[ps.actionBtn, { backgroundColor: StudioColors.primary }]} disabled={acting} onPress={() => handleChargeLink(p)}>
+                    <Pressable style={[ps.actionBtn, { backgroundColor: tk.primary }]} disabled={acting} onPress={() => handleChargeLink(p)}>
                       <Text style={ps.actionBtnTxt}>Cobrar via loja</Text>
                     </Pressable>
                   </View>
@@ -153,7 +159,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
               </View>
             );
           })}
-          <Pressable style={[ps.actionBtn, { backgroundColor: StudioColors.accent, alignSelf: "flex-start", marginTop: 10 }]} onPress={() => setAddModal(true)}>
+          <Pressable style={[ps.actionBtn, { backgroundColor: tk.accent, alignSelf: "flex-start", marginTop: 10 }]} onPress={() => setAddModal(true)}>
             <Text style={ps.actionBtnTxt}>+ Adicionar marco</Text>
           </Pressable>
         </>
@@ -164,8 +170,8 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
           <Text style={ps.modalTitle}>Confirmar recebimento</Text>
           <Text style={ps.modalBody}>Marcar {markTarget ? `R$ ${Number(markTarget.amount).toFixed(2)}` : ""} como recebido via Pix?</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-            <Pressable style={[ps.modalBtn, { backgroundColor: "#F1F5F9" }]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}><Text style={{ color: "#374151", fontWeight: "600" }}>Cancelar</Text></Pressable>
-            <Pressable style={[ps.modalBtn, { backgroundColor: "#16A34A" }]} disabled={acting} onPress={handleMarkPaid}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.success }]} disabled={acting} onPress={handleMarkPaid}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text></Pressable>
           </View>
         </View></View>
       </Modal>
@@ -175,7 +181,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
           <Text style={ps.modalTitle}>Informações de pagamento</Text>
           {chargeInfo?.pix_code ? <View style={ps.pixBox}><Text style={ps.pixLabel}>Chave Pix</Text><Text style={ps.pixCode}>{chargeInfo.pix_code}</Text></View> : null}
           {chargeInfo?.instructions ? <Text style={[ps.modalBody, { marginTop: 10 }]}>{chargeInfo.instructions}</Text> : null}
-          <Pressable style={[ps.modalBtn, { backgroundColor: StudioColors.primary, marginTop: 16, alignSelf: "flex-end" }]} onPress={() => setChargeModal(false)}><Text style={{ color: "#fff", fontWeight: "700" }}>Fechar</Text></Pressable>
+          <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary, marginTop: 16, alignSelf: "flex-end" }]} onPress={() => setChargeModal(false)}><Text style={{ color: "#fff", fontWeight: "700" }}>Fechar</Text></Pressable>
         </View></View>
       </Modal>
 
@@ -185,7 +191,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
           <Text style={ps.inputLabel}>Tipo</Text>
           <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
             {(["deposit", "balance", "full"] as StudioPaymentKind[]).map((k) => (
-              <Pressable key={k} style={[ps.kindPill, addKind === k && { backgroundColor: StudioColors.primary, borderColor: StudioColors.primary }]} onPress={() => setAddKind(k)}>
+              <Pressable key={k} style={[ps.kindPill, addKind === k && { backgroundColor: tk.primary, borderColor: tk.primary }]} onPress={() => setAddKind(k)}>
                 <Text style={[ps.kindPillTxt, addKind === k && { color: "#fff" }]}>{kindLabel[k]}</Text>
               </Pressable>
             ))}
@@ -195,8 +201,8 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
           <Text style={ps.inputLabel}>Vencimento (opcional, AAAA-MM-DD)</Text>
           <TextInput style={ps.input} placeholder="2026-06-30" value={addDueAt} onChangeText={setAddDueAt} />
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-            <Pressable style={[ps.modalBtn, { backgroundColor: "#F1F5F9" }]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}><Text style={{ color: "#374151", fontWeight: "600" }}>Cancelar</Text></Pressable>
-            <Pressable style={[ps.modalBtn, { backgroundColor: StudioColors.primary }]} disabled={acting} onPress={handleAddMarco}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary }]} disabled={acting} onPress={handleAddMarco}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text></Pressable>
           </View>
         </View></View>
       </Modal>
@@ -210,6 +216,9 @@ export default function StudioOrderDetail() {
   const params = useLocalSearchParams();
   const oid = String(params?.id || "");
   const { company } = useAuthStore();
+  const tk = useStudioTokens();
+  const { isDark } = useStudioTheme();
+  const s = useMemo(() => buildStyles(tk), [tk]);
 
   const [data, setData] = useState<StudioOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -274,15 +283,15 @@ export default function StudioOrderDetail() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: StudioColors.bg }}>
-        <ActivityIndicator color={StudioColors.primary} />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: tk.bg }}>
+        <ActivityIndicator color={tk.primary} />
       </View>
     );
   }
 
   if (!data) {
     return (
-      <View style={{ flex: 1, padding: 24, backgroundColor: StudioColors.bg }}>
+      <View style={{ flex: 1, padding: 24, backgroundColor: tk.bg }}>
         <Text style={s.h1}>Pedido não encontrado</Text>
         <Pressable onPress={() => router.back()} style={s.linkBtn}><Text style={s.linkBtnTxt}>Voltar</Text></Pressable>
       </View>
@@ -291,12 +300,12 @@ export default function StudioOrderDetail() {
 
   const { order, items, approvals } = data;
   const status = order.studio_production_status as StudioProductionStatus | null;
-  const statusCol = status ? colorStudioStatus(status) : { bg: "#F1F5F9", fg: "#64748B" };
+  const statusCol = status ? colorStudioStatus(status, isDark) : { bg: tk.bgSoft, fg: tk.ink3 };
   const next = status ? NEXT[status] : null;
   const lastApproval = approvals?.[0] || null;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: StudioColors.bg }}>
+    <StudioScreen variant="reading">
       <StudioBreadcrumb
         items={[
           { label: "Estúdio", href: "/studio" },
@@ -319,21 +328,21 @@ export default function StudioOrderDetail() {
 
         <View style={s.actionRow}>
           {next && (
-            <Pressable onPress={advance} disabled={acting} style={[s.actionBtn, { backgroundColor: StudioColors.primary }]}>
+            <Pressable onPress={advance} disabled={acting} style={[s.actionBtn, { backgroundColor: tk.primary }]}>
               <Icon name="arrow-right" size={16} color="#fff" />
               <Text style={s.actionBtnTxt}>Avançar pra "{labelStudioStatus(next)}"</Text>
             </Pressable>
           )}
           {status === "pending_art" && (
-            <Pressable onPress={() => router.push("/studio/producao?intent=approval" as any)} style={[s.actionBtn, { backgroundColor: StudioColors.accent }]}>
+            <Pressable onPress={() => router.push("/studio/producao?intent=approval" as any)} style={[s.actionBtn, { backgroundColor: tk.accent }]}>
               <Icon name="message-circle" size={16} color="#fff" />
               <Text style={s.actionBtnTxt}>Solicitar aprovação</Text>
             </Pressable>
           )}
           {lastApproval?.mockup_url ? (
-            <Pressable onPress={() => Linking.openURL(lastApproval.mockup_url!)} style={[s.actionBtn, { backgroundColor: "#fff", borderWidth: 1, borderColor: StudioColors.ink4 }]}>
-              <Icon name="image" size={16} color={StudioColors.ink2} />
-              <Text style={[s.actionBtnTxt, { color: StudioColors.ink2 }]}>Ver mockup</Text>
+            <Pressable onPress={() => Linking.openURL(lastApproval.mockup_url!)} style={[s.actionBtn, { backgroundColor: tk.paperCardElev, borderWidth: 1, borderColor: tk.ink4 }]}>
+              <Icon name="image" size={16} color={tk.ink2} />
+              <Text style={[s.actionBtnTxt, { color: tk.ink2 }]}>Ver mockup</Text>
             </Pressable>
           ) : null}
         </View>
@@ -343,7 +352,7 @@ export default function StudioOrderDetail() {
           <Text style={s.sectionTitle}>{order.customer_name || "—"}</Text>
           {order.customer_phone ? (
             <Pressable onPress={() => Linking.openURL(`https://wa.me/${(order.customer_phone || "").replace(/\D/g, "")}`)} style={s.linkRow}>
-              <Icon name="message-circle" size={14} color={StudioColors.primary} />
+              <Icon name="message-circle" size={14} color={tk.primary} />
               <Text style={s.link}>{order.customer_phone}</Text>
             </Pressable>
           ) : null}
@@ -371,7 +380,7 @@ export default function StudioOrderDetail() {
           <View style={s.section}>
             <Text style={s.sectionEyebrow}>HISTÓRICO DE APROVAÇÃO</Text>
             {approvals.map((a) => {
-              const col = colorStudioStatus(a.status);
+              const col = colorStudioStatus(a.status, isDark);
               return (
                 <View key={a.id} style={s.approvalRow}>
                   <View style={[s.approvalDot, { backgroundColor: col.fg }]} />
@@ -398,7 +407,7 @@ export default function StudioOrderDetail() {
           />
         ) : null}
       </View>
-    </ScrollView>
+    </StudioScreen>
   );
 }
 
@@ -406,56 +415,60 @@ function safeJson(v: any): string {
   try { return JSON.stringify(v, null, 2); } catch { return String(v); }
 }
 
-const s = StyleSheet.create({
-  container: { padding: 22, maxWidth: 980, alignSelf: "center", width: "100%" },
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
+  container: { width: "100%" },
   headRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 16 },
-  h1: { fontSize: 22, fontWeight: "800", color: StudioColors.ink },
-  h1Sub: { fontSize: 12, color: StudioColors.ink3, marginTop: 4 },
+  h1: { fontSize: 22, fontWeight: "800", color: t.ink },
+  h1Sub: { fontSize: 12, color: t.ink3, marginTop: 4 },
   statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   statusTxt: { fontWeight: "800", fontSize: 12 },
   actionRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 18 },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   actionBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
-  section: { backgroundColor: StudioColors.paperCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: StudioColors.ink5, marginBottom: 14 },
-  sectionEyebrow: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: "700", color: StudioColors.ink },
-  itemCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: StudioColors.ink5 },
-  itemTitle: { fontWeight: "700", color: StudioColors.ink, fontSize: 13 },
-  itemSub: { color: StudioColors.ink3, fontSize: 12, marginTop: 2 },
-  custBox: { marginTop: 8, padding: 10, backgroundColor: StudioColors.bg, borderRadius: 10, borderWidth: 1, borderColor: StudioColors.ink5 },
-  custTitle: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.6 },
-  custBody: { fontSize: 11, color: StudioColors.ink2, marginTop: 4, fontFamily: "monospace" },
-  approvalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: StudioColors.ink5 },
+  section: { backgroundColor: t.paperCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: t.ink5, marginBottom: 14 },
+  sectionEyebrow: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", color: t.ink },
+  itemCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.ink5 },
+  itemTitle: { fontWeight: "700", color: t.ink, fontSize: 13 },
+  itemSub: { color: t.ink3, fontSize: 12, marginTop: 2 },
+  custBox: { marginTop: 8, padding: 10, backgroundColor: t.bg, borderRadius: 10, borderWidth: 1, borderColor: t.ink5 },
+  custTitle: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
+  custBody: { fontSize: 11, color: t.ink2, marginTop: 4, fontFamily: "monospace" },
+  approvalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.ink5 },
   approvalDot: { width: 8, height: 8, borderRadius: 4 },
-  approvalTitle: { fontWeight: "700", color: StudioColors.ink, fontSize: 13 },
-  approvalSub: { color: StudioColors.ink3, fontSize: 11, marginTop: 2 },
+  approvalTitle: { fontWeight: "700", color: t.ink, fontSize: 13 },
+  approvalSub: { color: t.ink3, fontSize: 11, marginTop: 2 },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
-  link: { color: StudioColors.primary, fontWeight: "600", fontSize: 12 },
-  linkBtn: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: StudioColors.primary },
+  link: { color: t.primary, fontWeight: "600", fontSize: 12 },
+  linkBtn: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: t.primary },
   linkBtnTxt: { color: "#fff", fontWeight: "700" },
-});
+  });
+}
 
-const ps = StyleSheet.create({
-  section: { backgroundColor: StudioColors.paperCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: StudioColors.ink5, marginBottom: 14 },
-  eyebrow: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.8, textTransform: "uppercase" },
+function buildPs(t: StudioPalette) {
+  return StyleSheet.create({
+  section: { backgroundColor: t.paperCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: t.ink5, marginBottom: 14 },
+  eyebrow: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.8, textTransform: "uppercase" },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   pillTxt: { fontSize: 11, fontWeight: "700" },
-  payRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: StudioColors.ink5, flexWrap: "wrap" },
-  payLabel: { fontWeight: "700", color: StudioColors.ink, fontSize: 13 },
-  payAmount: { color: StudioColors.ink2, fontSize: 13 },
-  paySub: { color: StudioColors.ink3, fontSize: 11, marginTop: 2 },
+  payRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.ink5, flexWrap: "wrap" },
+  payLabel: { fontWeight: "700", color: t.ink, fontSize: 13 },
+  payAmount: { color: t.ink2, fontSize: 13 },
+  paySub: { color: t.ink3, fontSize: 11, marginTop: 2 },
   actionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   actionBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24 },
-  modalBox: { backgroundColor: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 420 },
-  modalTitle: { fontSize: 16, fontWeight: "800", color: StudioColors.ink, marginBottom: 8 },
-  modalBody: { fontSize: 13, color: StudioColors.ink2, lineHeight: 20 },
+  modalBox: { backgroundColor: t.paperCardElev, borderRadius: 20, padding: 24, width: "100%", maxWidth: 420 },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: t.ink, marginBottom: 8 },
+  modalBody: { fontSize: 13, color: t.ink2, lineHeight: 20 },
   modalBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-  pixBox: { backgroundColor: StudioColors.bg, borderRadius: 12, padding: 14, marginTop: 10, borderWidth: 1, borderColor: StudioColors.ink5 },
-  pixLabel: { fontSize: 10, fontWeight: "800", color: StudioColors.ink3, letterSpacing: 0.6 },
-  pixCode: { fontSize: 15, fontWeight: "700", color: StudioColors.primary, marginTop: 4 },
-  inputLabel: { fontSize: 11, fontWeight: "700", color: StudioColors.ink3, marginBottom: 4, marginTop: 10 },
-  input: { borderWidth: 1, borderColor: StudioColors.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: StudioColors.ink, backgroundColor: StudioColors.bg },
-  kindPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: StudioColors.ink4, backgroundColor: "#fff" },
-  kindPillTxt: { fontWeight: "700", fontSize: 12, color: StudioColors.ink2 },
-});
+  pixBox: { backgroundColor: t.bg, borderRadius: 12, padding: 14, marginTop: 10, borderWidth: 1, borderColor: t.ink5 },
+  pixLabel: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
+  pixCode: { fontSize: 15, fontWeight: "700", color: t.primary, marginTop: 4 },
+  inputLabel: { fontSize: 11, fontWeight: "700", color: t.ink3, marginBottom: 4, marginTop: 10 },
+  input: { borderWidth: 1, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: t.ink, backgroundColor: t.bg },
+  kindPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: t.ink4, backgroundColor: t.paperCardElev },
+  kindPillTxt: { fontWeight: "700", fontSize: 12, color: t.ink2 },
+  });
+}
