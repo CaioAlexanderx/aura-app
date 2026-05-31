@@ -11,13 +11,14 @@
 // lojista tambem pode coletar pelo KDS — esta tela continua sendo a porta
 // de entrada dedicada com agregados/SLA.
 // ============================================================
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioColors } from "@/constants/studio-tokens";
+import { type StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import {
   studioApi,
   type MarketplaceOrderStudio,
@@ -49,6 +50,8 @@ type MarketplaceStats = {
 };
 
 export default function MarketplaceOrdersHub() {
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const cid = company?.id;
@@ -128,7 +131,7 @@ export default function MarketplaceOrdersHub() {
           </Text>
         </View>
         <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
-          <Icon name="refresh-cw" size={14} color={StudioColors.ink2} />
+          <Icon name="refresh-cw" size={14} color={t.ink2} />
           <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
         </Pressable>
       </View>
@@ -136,9 +139,9 @@ export default function MarketplaceOrdersHub() {
       {/* S-4: KPI strip */}
       {stats && (
         <View style={s.kpiStrip}>
-          <View style={[s.kpi, stats.pending > 0 && { borderLeftColor: StudioColors.accent, borderLeftWidth: 4 }]}>
+          <View style={[s.kpi, stats.pending > 0 && { borderLeftColor: t.accent, borderLeftWidth: 4 }]}>
             <Text style={s.kpiLabel}>Pendentes</Text>
-            <Text style={[s.kpiValue, stats.pending > 0 && { color: StudioColors.accent }]}>
+            <Text style={[s.kpiValue, stats.pending > 0 && { color: t.accent }]}>
               {stats.pending}
             </Text>
           </View>
@@ -228,7 +231,7 @@ export default function MarketplaceOrdersHub() {
       {/* Lista */}
       {loading && orders.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={StudioColors.primary} />
+          <ActivityIndicator size="large" color={t.primary} />
         </View>
       ) : orders.length === 0 ? (
         <View style={s.emptyCard}>
@@ -246,7 +249,7 @@ export default function MarketplaceOrdersHub() {
           <View style={s.emptyCtas}>
             <Pressable
               onPress={() => router.push("/studio/configuracoes/marketplace" as any)}
-              style={[s.emptyBtn, { backgroundColor: StudioColors.primary }]}
+              style={[s.emptyBtn, { backgroundColor: t.primary }]}
             >
               <Icon name="settings" size={14} color="#fff" />
               <Text style={s.emptyBtnTxt}>Configurar anúncios</Text>
@@ -326,7 +329,7 @@ export default function MarketplaceOrdersHub() {
                         onPress={() => setTrackingOpen((prev) => ({ ...prev, [o.id]: "" }))}
                         style={s.trackingBtn}
                       >
-                        <Icon name="package" size={11} color={StudioColors.primary} />
+                        <Icon name="package" size={11} color={t.primary} />
                         <Text style={s.trackingBtnTxt}>Marcar como enviado</Text>
                       </Pressable>
                     ) : (
@@ -335,7 +338,7 @@ export default function MarketplaceOrdersHub() {
                           value={trackingValue}
                           onChangeText={(v) => setTrackingOpen((prev) => ({ ...prev, [o.id]: v }))}
                           placeholder="Código de rastreio"
-                          placeholderTextColor={StudioColors.ink4}
+                          placeholderTextColor={t.ink4}
                           style={s.trackingInput}
                           autoFocus
                         />
@@ -356,7 +359,7 @@ export default function MarketplaceOrdersHub() {
                           })}
                           style={s.trackingCancel}
                         >
-                          <Icon name="x" size={14} color={StudioColors.ink3} />
+                          <Icon name="x" size={14} color={t.ink3} />
                         </Pressable>
                       </View>
                     )}
@@ -385,21 +388,21 @@ export default function MarketplaceOrdersHub() {
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: StudioColors.bg },
+const buildStyles = (t: StudioPalette) => StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: t.bg },
   header: {
     flexDirection: "row", alignItems: "flex-end",
     paddingHorizontal: 28, paddingTop: 24, paddingBottom: 12, gap: 16, flexWrap: "wrap",
   },
-  eyebrow: { fontSize: 11, color: StudioColors.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: StudioColors.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13, color: StudioColors.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
+  eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  title: { fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 },
+  sub: { fontSize: 13, color: t.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
   reloadBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
   },
-  reloadTxt: { fontSize: 12.5, color: StudioColors.ink2, fontWeight: "600" },
+  reloadTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
 
   // S-4 KPI strip
   kpiStrip: {
@@ -409,12 +412,12 @@ const s = StyleSheet.create({
   kpi: {
     flex: 1, minWidth: 140,
     padding: 14, gap: 4,
-    backgroundColor: StudioColors.paperCard,
-    borderRadius: 12, borderWidth: 1, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCard,
+    borderRadius: 12, borderWidth: 1, borderColor: t.ink5,
   },
-  kpiLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  kpiValue: { fontSize: 22, fontWeight: "800", color: StudioColors.ink, letterSpacing: -0.5 },
-  kpiSub: { fontSize: 11, color: StudioColors.ink3 },
+  kpiLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  kpiValue: { fontSize: 22, fontWeight: "800", color: t.ink, letterSpacing: -0.5 },
+  kpiSub: { fontSize: 11, color: t.ink3 },
 
   platformSplit: {
     flexDirection: "row", gap: 8, paddingHorizontal: 28, paddingBottom: 12, flexWrap: "wrap",
@@ -428,36 +431,36 @@ const s = StyleSheet.create({
 
   filterRow: { paddingHorizontal: 28, paddingBottom: 12, gap: 12, flexDirection: "row", flexWrap: "wrap" },
   filterGroup: { gap: 6 },
-  filterLabel: { fontSize: 10.5, color: StudioColors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  filterLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   tabs: { flexDirection: "row", gap: 6 },
   tab: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
   },
-  tabActive: { backgroundColor: StudioColors.primarySoft, borderColor: StudioColors.primary },
-  tabTxt: { fontSize: 12, color: StudioColors.ink2, fontWeight: "700" },
-  tabTxtActive: { color: StudioColors.primary },
+  tabActive: { backgroundColor: t.primarySoft, borderColor: t.primary },
+  tabTxt: { fontSize: 12, color: t.ink2, fontWeight: "700" },
+  tabTxtActive: { color: t.primary },
 
   list: { padding: 20, gap: 12, paddingBottom: 40 },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: t.paperCardElev,
     borderRadius: 14, padding: 14, gap: 6,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    borderWidth: 1, borderColor: t.ink5,
   },
-  cardPending: { borderColor: StudioColors.accent, borderWidth: 2 },
+  cardPending: { borderColor: t.accent, borderWidth: 2 },
   cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   platformBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   platformBadgeTxt: { fontSize: 11, fontWeight: "800" },
-  ageBadge: { fontSize: 11, color: StudioColors.ink3, fontWeight: "700" },
+  ageBadge: { fontSize: 11, color: t.ink3, fontWeight: "700" },
   ageBadgeWarn: { color: "#991B1B" },
 
-  cardOrderId: { fontSize: 11, color: StudioColors.ink4, fontWeight: "700", letterSpacing: 0.5 },
-  cardCustomer: { fontSize: 14, color: StudioColors.ink, fontWeight: "800" },
-  cardMeta: { fontSize: 11.5, color: StudioColors.ink3 },
+  cardOrderId: { fontSize: 11, color: t.ink4, fontWeight: "700", letterSpacing: 0.5 },
+  cardCustomer: { fontSize: 14, color: t.ink, fontWeight: "800" },
+  cardMeta: { fontSize: 11.5, color: t.ink3 },
 
   cardCta: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    backgroundColor: StudioColors.accent,
+    backgroundColor: t.accent,
     paddingVertical: 10, borderRadius: 10, marginTop: 6,
   },
   cardCtaTxt: { color: "#fff", fontWeight: "800", fontSize: 12.5 },
@@ -479,47 +482,47 @@ const s = StyleSheet.create({
   shippedTxt: { fontSize: 10.5, color: "#1E40AF", fontWeight: "700" },
 
   trackingArea: {
-    borderTopWidth: 1, borderTopColor: StudioColors.ink5,
+    borderTopWidth: 1, borderTopColor: t.ink5,
     paddingTop: 10, marginTop: 6,
   },
   trackingBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8,
-    backgroundColor: StudioColors.primarySoft,
+    backgroundColor: t.primarySoft,
     alignSelf: "flex-start",
   },
-  trackingBtnTxt: { color: StudioColors.primary, fontSize: 11.5, fontWeight: "800" },
+  trackingBtnTxt: { color: t.primary, fontSize: 11.5, fontWeight: "800" },
 
   trackingFormRow: { flexDirection: "row", gap: 6, alignItems: "center" },
   trackingInput: {
-    flex: 1, backgroundColor: "#fff", color: StudioColors.ink,
+    flex: 1, backgroundColor: t.paperCardElev, color: t.ink,
     padding: 8, borderRadius: 8, fontSize: 12,
-    borderWidth: 1.5, borderColor: StudioColors.ink5,
+    borderWidth: 1.5, borderColor: t.ink5,
   },
   trackingSave: {
-    backgroundColor: StudioColors.primary,
+    backgroundColor: t.primary,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
   },
   trackingSaveTxt: { color: "#fff", fontSize: 12, fontWeight: "800" },
   trackingCancel: {
     width: 30, height: 30, borderRadius: 8,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: StudioColors.bgSoft,
+    backgroundColor: t.bgSoft,
   },
 
   emptyCard: {
     flex: 1, alignItems: "center", justifyContent: "center",
     padding: 40, gap: 10, margin: 28,
-    backgroundColor: StudioColors.paperCard, borderRadius: 18,
-    borderWidth: 1, borderColor: StudioColors.ink5,
+    backgroundColor: t.paperCard, borderRadius: 18,
+    borderWidth: 1, borderColor: t.ink5,
   },
   celebrateEmoji: {
     width: 76, height: 76, borderRadius: 38,
-    backgroundColor: StudioColors.mintSoft,
+    backgroundColor: t.mintSoft,
     alignItems: "center", justifyContent: "center",
   },
-  emptyTitle: { fontSize: 18, fontWeight: "800", color: StudioColors.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: StudioColors.ink3, textAlign: "center", maxWidth: 460, lineHeight: 19 },
+  emptyTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 6 },
+  emptySub: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 460, lineHeight: 19 },
   emptyCtas: { flexDirection: "row", gap: 10, marginTop: 16 },
   emptyBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
