@@ -5,6 +5,12 @@
 // FIX: herda cor/tamanho do produto pai quando variante nao tem atributos
 // 08/05/2026: opcao "vender pai" mostra cor+tamanho do pai em vez de
 // "Sem variante especifica · generico" — quando ha atributos no pai.
+// 01/06/2026: prop opcional `blockOutOfStock` — quando true, variantes
+// (e a opcao pai) com estoque <= 0 ficam DESABILITADAS e marcadas como
+// "Esgotado", impedindo selecao. Usado na Troca (Step3) pra nao deixar
+// o operador escolher um tamanho sem estoque (que falharia no submit com
+// "Estoque insuficiente"). Default false preserva o comportamento atual
+// do PDV/venda retroativa (que so sinaliza estoque baixo, sem bloquear).
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -82,11 +88,12 @@ function buildParentLabel(parentColor?: string, parentSize?: string): { label: s
   return { label: "Sem variante especifica", sub: "genérico" };
 }
 
-export function VariantPickerModal({ visible, product, onSelect, onClose }: {
+export function VariantPickerModal({ visible, product, onSelect, onClose, blockOutOfStock = false }: {
   visible: boolean;
   product: { id: string; name: string; price: number; color?: string; size?: string; stock?: number } | null;
   onSelect: (variant: VariantChoice) => void;
   onClose: () => void;
+  blockOutOfStock?: boolean;
 }) {
   var { company } = useAuthStore();
   var [variants, setVariants] = useState<any[]>([]);
@@ -165,20 +172,33 @@ export function VariantPickerModal({ visible, product, onSelect, onClose }: {
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : product.price;
                 var stock = parseInt(v.stock_qty) || 0;
                 var hex = getColor(v, parentColor);
+                var disabled = blockOutOfStock && stock <= 0;
                 return (
-                  <Pressable key={v.id} onPress={function() { onSelect({ id: v.id, label: label, price: effectivePrice, stock: stock, barcode: v.barcode }); }}
-                    style={[s.variantRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}>
+                  <Pressable
+                    key={v.id}
+                    disabled={disabled}
+                    onPress={disabled ? undefined : function() { onSelect({ id: v.id, label: label, price: effectivePrice, stock: stock, barcode: v.barcode }); }}
+                    style={[
+                      s.variantRow,
+                      disabled && s.variantRowDisabled,
+                      isWeb && !disabled && { cursor: "pointer", transition: "all 0.15s ease" } as any,
+                    ]}>
                     {hex && <View style={[s.colorDot, { backgroundColor: hex }]} />}
                     <View style={{ flex: 1 }}>
                       <Text style={s.variantLabel}>{label}</Text>
                       <Text style={s.variantMeta}>
-                        R$ {effectivePrice.toFixed(2).replace(".", ",")} {"·"} {stock} un
+                        R$ {effectivePrice.toFixed(2).replace(".", ",")}
+                        {disabled ? "" : " · " + stock + " un"}
                         {v.barcode ? " · ..." + String(v.barcode).slice(-4) : ""}
                       </Text>
                     </View>
-                    <View style={[s.stockBadge, stock < 3 && { backgroundColor: Colors.redD }]}>
-                      <Text style={[s.stockText, stock < 3 && { color: Colors.red }]}>{stock}</Text>
-                    </View>
+                    {disabled ? (
+                      <View style={s.esgotadoBadge}><Text style={s.esgotadoText}>Esgotado</Text></View>
+                    ) : (
+                      <View style={[s.stockBadge, stock < 3 && { backgroundColor: Colors.redD }]}>
+                        <Text style={[s.stockText, stock < 3 && { color: Colors.red }]}>{stock}</Text>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
@@ -206,6 +226,10 @@ var s = StyleSheet.create({
     backgroundColor: Colors.bg4, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: Colors.border,
   },
+  variantRowDisabled: {
+    opacity: 0.5,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
   parentRow: {
     backgroundColor: "rgba(124,58,237,0.08)",
     borderColor: "rgba(167,139,250,0.25)",
@@ -220,6 +244,12 @@ var s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border2,
   },
   stockText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  esgotadoBadge: {
+    backgroundColor: Colors.redD, borderRadius: 999,
+    paddingHorizontal: 10, height: 26, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(248,113,113,0.3)",
+  },
+  esgotadoText: { fontSize: 10, color: Colors.red, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 },
 });
 
 export default VariantPickerModal;
