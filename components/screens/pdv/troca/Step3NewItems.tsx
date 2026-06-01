@@ -12,6 +12,19 @@
 //   • Default = "Levar outro produto" — caminho mais comum no varejo
 //   • Scanner sempre visível e em foco quando "Levar outro produto"
 //   • Side card com saldo financeiro vivo (crédito ↘ carrinho ↘ diferença)
+//
+// 01/06/2026 — Seleção de TAMANHO/variante no item novo.
+//   Antes: o item novo entrava SEM variant_id (preço/estoque do pai), a
+//   baixa caía no estoque do produto-pai e o operador não via estoque por
+//   tamanho — escolher um tamanho zerado falhava no submit ("Estoque
+//   insuficiente"). Agora:
+//     • Produto com has_variants abre o VariantPickerModal (mesmo do PDV)
+//       com estoque por tamanho; tamanho 0 fica "Esgotado" e não-clicável
+//       (blockOutOfStock).
+//     • Scanner resolve barcode de variante via pdvApi.scan → adiciona o
+//       tamanho certo direto (com variant_id + preço efetivo).
+//     • A NewEntry agora carrega variant_id, então a troca baixa o estoque
+//       da variante correta. Espelha hooks/usePdvState + useCart do PDV.
 // ============================================================
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -21,6 +34,9 @@ import {
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { VariantPickerModal, type VariantChoice } from "@/components/VariantPickerModal";
+import { useAuthStore } from "@/stores/auth";
+import { pdvApi } from "@/services/pdvApi";
 import type { NewEntry } from "./types";
 import { fmtBRL } from "./types";
 
@@ -45,9 +61,11 @@ export function Step3NewItems({
   products, newEntries, onChangeEntries,
   returnedValue, newValue, netAmount,
 }: Props) {
+  const { company } = useAuthStore();
   const [dest, setDest] = useState<Dest>("outro");
   const [query, setQuery] = useState("");
   const [scanBuffer, setScanBuffer] = useState("");
+  const [pendingProduct, setPendingProduct] = useState<any | null>(null);
   const scanRef = useRef<TextInput | null>(null);
   const { width } = useWindowDimensions();
   const isWide = width > 880;
@@ -70,9 +88,19 @@ export function Step3NewItems({
     }).slice(0, 50);
   }, [products, query]);
 
-  function addProduct(p: any, via: "search" | "barcode" = "search") {
+  // Insere/incrementa uma entrada no carrinho da troca. Dedup por
+  // (product_id, variant_id) pra tamanhos diferentes do mesmo produto
+  // contarem como linhas separadas.
+  function pushEntry(args: {
+    product_id: string;
+    variant_id?: string | null;
+    unit_price: number;
+    name: string;
+    via?: NewEntry["addedVia"];
+  }) {
+    const vid = args.variant_id || null;
     const idx = newEntries.findIndex(
-      (e) => e.product_id === p.id && !e.variant_id
+      (e) => e.product_id === args.product_id && (e.variant_id || null) === vid
     );
     if (idx >= 0) {
       const next = [...newEntries];
@@ -82,14 +110,45 @@ export function Step3NewItems({
       onChangeEntries([
         ...newEntries,
         {
-          product_id: p.id,
+          product_id: args.product_id,
+          variant_id: vid,
           quantity: 1,
-          unit_price: Number(p.price ?? p.unit_price ?? 0),
-          product_name_snapshot: p.name || p.title || "Produto",
-          addedVia: via,
+          unit_price: Number(args.unit_price || 0),
+          product_name_snapshot: args.name,
+          addedVia: args.via || "search",
         },
       ]);
     }
+  }
+
+  // Toque no catalogo / produto bipado: se tem variantes, abre o seletor
+  // de tamanho; senao entra direto.
+  function addProduct(p: any, via: "search" | "barcode" = "search") {
+    if (p?.has_variants) {
+      setPendingProduct(p);
+      return;
+    }
+    pushEntry({
+      product_id: p.id,
+      unit_price: Number(p.price ?? p.unit_price ?? 0),
+      name: p.name || p.title || "Produto",
+      via,
+    });
+  }
+
+  function handleVariantSelected(variant: VariantChoice) {
+    const p = pendingProduct;
+    if (!p) return;
+    const base = p.name || p.title || "Produto";
+    const label = (variant.label || "").trim();
+    pushEntry({
+      product_id: p.id,
+      variant_id: variant.id || null, // id "" = vender o pai (sem variante)
+      unit_price: Number(variant.price ?? p.price ?? 0),
+      name: label ? `${base} (${label})` : base,
+      via: "search",
+    });
+    setPendingProduct(null);
   }
 
   function setQty(idx: number, qty: number) {
@@ -106,24 +165,88 @@ export function Step3NewItems({
     onChangeEntries(newEntries.filter((_, i) => i !== idx));
   }
 
-  function handleScanSubmit() {
+  async function handleScanSubmit() {
     const code = scanBuffer.trim();
     if (!code) return;
     const list = Array.isArray(products) ? products : [];
-    const found = list.find((p) =>
+
+    // 1) Lookup local: barcode/sku do pai OU barcode de variante conhecido.
+    const localParent = list.find((p) =>
       String(p.barcode || "").trim() === code ||
       String(p.sku || "").trim() === code
     );
-    if (found) {
-      addProduct(found, "barcode");
-      toast.success(`✓ ${found.name || found.title}`);
+    const localByVariant = !localParent
+      ? list.find((p) => Array.isArray(p.variant_barcodes) && p.variant_barcodes.includes(code))
+      : null;
+
+    // 2) Se acertou o barcode do pai e nao tem variantes, entra direto.
+    if (localParent && !localParent.has_variants) {
+      addProduct(localParent, "barcode");
+      toast.success(`✓ ${localParent.name || localParent.title}`);
       setScanBuffer("");
-    } else {
-      toast.error("Código não encontrado");
+      return;
     }
+
+    // 3) Backend resolve barcode de variante -> tamanho exato (com variant_id).
+    if (company?.id) {
+      try {
+        const res = await pdvApi.scan(company.id, code);
+        if (res?.match === "exact" && res.source === "variant_barcode" && res.product && res.variant_id) {
+          const parent = list.find((p) => p.id === res.product.id);
+          const suffix = (res.product as any).sku_suffix || "Variante";
+          const pname = parent?.name || (res.product as any).name || "Produto";
+          const price = res.effective_price || parent?.price || (res.product as any).price || 0;
+          pushEntry({
+            product_id: res.product.id,
+            variant_id: res.variant_id,
+            unit_price: Number(price),
+            name: `${pname} (${suffix})`,
+            via: "barcode",
+          });
+          toast.success(`✓ ${pname} · ${suffix}`);
+          setScanBuffer("");
+          return;
+        }
+        if (res?.match === "exact" && res.product) {
+          const full = list.find((p) => p.id === res.product.id);
+          if (full) {
+            addProduct(full, "barcode"); // abre seletor se has_variants
+            if (!full.has_variants) toast.success(`✓ ${full.name || full.title}`);
+            setScanBuffer("");
+            return;
+          }
+          pushEntry({
+            product_id: res.product.id,
+            unit_price: Number(res.effective_price || (res.product as any).price || 0),
+            name: (res.product as any).name || "Produto",
+            via: "barcode",
+          });
+          toast.success(`✓ ${(res.product as any).name || "Produto"}`);
+          setScanBuffer("");
+          return;
+        }
+      } catch {
+        // cai no fallback abaixo
+      }
+    }
+
+    // 4) Pai com variantes mas sem resolver no backend: abre o seletor.
+    if (localParent && localParent.has_variants) {
+      addProduct(localParent, "barcode");
+      setScanBuffer("");
+      return;
+    }
+    if (localByVariant) {
+      addProduct(localByVariant, "barcode");
+      setScanBuffer("");
+      return;
+    }
+
+    toast.error("Código não encontrado");
   }
 
   return (
+    <>
     <View style={isWide ? s.gridWide : undefined}>
       <View style={isWide ? { flex: 1, minWidth: 0 } : undefined}>
         <Text style={s.question}>O que o cliente vai fazer com o crédito?</Text>
@@ -221,8 +344,13 @@ export function Step3NewItems({
                       >
                         {readStock(p) <= 0
                           ? "Sem estoque"
-                          : `${readStock(p)} em estoque`}
+                          : `${readStock(p)} ${p.has_variants ? "no total" : "em estoque"}`}
                       </Text>
+                      {p.has_variants && (
+                        <View style={s.varPill}>
+                          <Text style={s.varPillTxt}>Escolher tamanho</Text>
+                        </View>
+                      )}
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -245,7 +373,7 @@ export function Step3NewItems({
               )}
 
               {newEntries.map((e, idx) => (
-                <View key={`${e.product_id}-${idx}`} style={s.cartRow}>
+                <View key={`${e.product_id}-${e.variant_id || "base"}-${idx}`} style={s.cartRow}>
                   <View style={s.cartThumb}>
                     <Icon name="package" size={14} color="#a78bfa" />
                   </View>
@@ -340,6 +468,22 @@ export function Step3NewItems({
         </View>
       </View>
     </View>
+
+    <VariantPickerModal
+      visible={!!pendingProduct}
+      product={pendingProduct ? {
+        id: pendingProduct.id,
+        name: pendingProduct.name || pendingProduct.title || "Produto",
+        price: Number(pendingProduct.price ?? pendingProduct.unit_price ?? 0),
+        color: pendingProduct.color,
+        size: pendingProduct.size,
+        stock: readStock(pendingProduct),
+      } : null}
+      blockOutOfStock
+      onSelect={handleVariantSelected}
+      onClose={() => setPendingProduct(null)}
+    />
+    </>
   );
 }
 
@@ -425,6 +569,13 @@ const s = StyleSheet.create({
   catStock: { color: Colors.ink3, fontSize: 11, fontWeight: "600", marginTop: 3 },
   catStockLow: { color: "#fbbf24" },
   catStockOut: { color: "#f87171" },
+  varPill: {
+    flexDirection: "row", alignItems: "center", alignSelf: "flex-start",
+    marginTop: 6, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    borderWidth: 1, borderColor: "rgba(167,139,250,0.25)",
+  },
+  varPillTxt: { color: "#a78bfa", fontSize: 10, fontWeight: "700" },
   cartSection: { marginTop: 18 },
   cartHead: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
