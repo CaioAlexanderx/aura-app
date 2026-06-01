@@ -61,6 +61,7 @@ type StudioProduct = {
   image_url: string | null;
   category: string | null;
   stock_qty: number;
+  is_personalizable: boolean;
   customization_config: CustomizationConfig | null;
 };
 
@@ -149,7 +150,13 @@ export default function StudioCaixaPage() {
   useEffect(() => {
     if (!cid) return;
     setLoading(true);
-    request<{ products: any[] }>("/companies/" + cid + "/studio/products", { method: "GET" })
+    // include_non_personalizable=true: PDV mostra TODOS os produtos vendáveis,
+    // não só os personalizáveis. Os personalizáveis abrem o configurador;
+    // os comuns vão direto pro carrinho. (Backend já suporta o flag.)
+    request<{ products: any[] }>(
+      "/companies/" + cid + "/studio/products?include_non_personalizable=true&limit=500",
+      { method: "GET" }
+    )
       .then(async (data) => {
         const list = (data.products || [])
           .map((p: any) => ({
@@ -159,11 +166,12 @@ export default function StudioCaixaPage() {
             image_url: p.image_url || null,
             category: p.category || null,
             stock_qty: parseFloat(p.stock_qty || 0),
+            is_personalizable: !!p.is_personalizable,
             customization_config: p.customization_config,
           }));
         setProducts(list);
       })
-      .catch((e) => setError(e?.message || "Erro ao carregar produtos personalizáveis"))
+      .catch((e) => setError(e?.message || "Erro ao carregar produtos"))
       .finally(() => setLoading(false));
   }, [cid]);
 
@@ -271,6 +279,32 @@ export default function StudioCaixaPage() {
 
   function removeLine(lineId: string) {
     setCart((prev) => prev.filter((l) => l.lineId !== lineId));
+  }
+
+  // Produto NÃO personalizável: vai direto pro carrinho (sem configurador).
+  // Se já existe linha simples desse produto, só incrementa a quantidade.
+  function addSimpleToCart(p: StudioProduct) {
+    setError(null);
+    setCart((prev) => {
+      const existing = prev.find(
+        (l) => l.product.id === p.id && !l.product.is_personalizable
+      );
+      if (existing) {
+        return prev.map((l) =>
+          l.lineId === existing.lineId ? { ...l, qty: l.qty + 1 } : l
+        );
+      }
+      const lineId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7);
+      return [...prev, { lineId, product: p, qty: 1, values: {} }];
+    });
+    toast.success(p.name + " adicionado");
+  }
+
+  // Decide o caminho ao tocar num produto: personalizável abre o
+  // configurador; comum cai direto no carrinho.
+  function handleProductPress(p: StudioProduct) {
+    if (p.is_personalizable) openConfigure(p);
+    else addSimpleToCart(p);
   }
 
 
@@ -381,6 +415,8 @@ export default function StudioCaixaPage() {
         const line = cart[i];
         const si = saleItems[i];
         if (!si?.id) continue;
+        // Produtos comuns (não personalizáveis) não têm customization — pula.
+        if (!line.product.is_personalizable) continue;
         patchPromises.push(
           request<any>(
             "/companies/" + cid + "/studio/sale-items/" + si.id + "/customization",
@@ -587,7 +623,7 @@ export default function StudioCaixaPage() {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 140, maxWidth: 720, alignSelf: "center", width: "100%" }}>
-          <Text style={styles.sectionLabel}>Itens personalizados</Text>
+          <Text style={styles.sectionLabel}>Itens do pedido</Text>
           {cart.map((l) => (
             <View
               key={l.lineId}
@@ -799,7 +835,7 @@ export default function StudioCaixaPage() {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar produto personalizável..."
+          placeholder="Buscar produto..."
           placeholderTextColor={t.ink4}
           style={{
             backgroundColor: t.paperCardElev, color: t.ink, padding: 12,
@@ -831,8 +867,8 @@ export default function StudioCaixaPage() {
           ) : (
             <StudioEmpty
               icon="shopping-bag"
-              title="Catálogo personalizado vazio"
-              desc='Marque produtos como "personalizáveis" em Estúdio › Produtos pra começar a vender no PDV.'
+              title="Catálogo vazio"
+              desc='Cadastre produtos em Estúdio › Produtos. Marque os que aceitam personalização pra abrirem o configurador no PDV.'
               primaryCta={{
                 label: "Cadastrar produto",
                 onPress: () => router.push("/studio/produtos" as any),
@@ -847,53 +883,61 @@ export default function StudioCaixaPage() {
           filteredProducts.map((p) => (
             <Pressable
               key={p.id}
-              onPress={() => openConfigure(p)}
+              onPress={() => handleProductPress(p)}
               style={({ hovered, pressed }: any) => ({
                 backgroundColor: t.paperCardElev, borderRadius: 14,
                 padding: 14, paddingLeft: 16,
                 borderWidth: 1, borderColor: t.ink5,
-                borderLeftWidth: 3, borderLeftColor: accent,
+                borderLeftWidth: 3, borderLeftColor: p.is_personalizable ? accent : t.ink5,
                 flexDirection: "row", gap: 14, alignItems: "center",
                 ...(Platform.OS === "web"
                   ? ({
                       transition: "transform 0.18s ease, box-shadow 0.18s ease",
                       transform: pressed ? "scale(0.99)" : hovered ? "scale(1.01)" : "scale(1)",
                       boxShadow: hovered
-                        ? `0 8px 24px ${accent}33, 0 2px 6px rgba(0,0,0,0.05)`
-                        : `0 2px 6px ${accent}1A`,
+                        ? `0 8px 24px ${(p.is_personalizable ? accent : t.ink5)}33, 0 2px 6px rgba(0,0,0,0.05)`
+                        : `0 2px 6px ${(p.is_personalizable ? accent : t.ink5)}1A`,
                       cursor: "pointer",
                     } as any)
                   : {}),
               })}
             >
-              <PersonalizationPreview
-                config={p.customization_config}
-                values={{}}
-                size={68}
-                showLabel={false}
-              />
+              {p.is_personalizable ? (
+                <PersonalizationPreview
+                  config={p.customization_config}
+                  values={{}}
+                  size={68}
+                  showLabel={false}
+                />
+              ) : (
+                <View style={{ width: 68, height: 68, borderRadius: 10, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 24, fontWeight: "800", color: t.ink3 }}>{(p.name || "?").charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ flex: 1, gap: 2 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <Text style={{ fontSize: 15, color: t.ink, fontWeight: "800", flexShrink: 1 }}>
                     {p.name}
                   </Text>
-                  <View
-                    style={{
-                      backgroundColor: accent + "1A",
-                      borderWidth: 1, borderColor: accent + "55",
-                      paddingHorizontal: 8, paddingVertical: 2,
-                      borderRadius: 999,
-                    }}
-                  >
-                    <Text
+                  {p.is_personalizable ? (
+                    <View
                       style={{
-                        fontSize: 9, color: accent, fontWeight: "800",
-                        letterSpacing: 0.6, textTransform: "uppercase",
+                        backgroundColor: accent + "1A",
+                        borderWidth: 1, borderColor: accent + "55",
+                        paddingHorizontal: 8, paddingVertical: 2,
+                        borderRadius: 999,
                       }}
                     >
-                      Personalizável
-                    </Text>
-                  </View>
+                      <Text
+                        style={{
+                          fontSize: 9, color: accent, fontWeight: "800",
+                          letterSpacing: 0.6, textTransform: "uppercase",
+                        }}
+                      >
+                        Personalizável
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 {p.category ? (
                   <Text style={{ fontSize: 10, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -907,11 +951,11 @@ export default function StudioCaixaPage() {
               <View
                 style={{
                   alignSelf: "center", paddingHorizontal: 14, paddingVertical: 9,
-                  borderRadius: 999, backgroundColor: accent,
+                  borderRadius: 999, backgroundColor: p.is_personalizable ? accent : primary,
                 }}
               >
                 <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.3 }}>
-                  Personalizar →
+                  {p.is_personalizable ? "Personalizar →" : "Adicionar +"}
                 </Text>
               </View>
             </Pressable>
