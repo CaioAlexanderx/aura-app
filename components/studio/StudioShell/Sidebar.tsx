@@ -318,7 +318,7 @@ function NavItem({
             flex: 1,
             fontSize: 13,
             fontWeight: active ? "800" : "600",
-            color: active ? t.accent : t.ink2,
+            color: active ? t.accentInk : t.ink2,
             letterSpacing: -0.1,
           }}
           numberOfLines={1}
@@ -517,7 +517,7 @@ function GroupSection({
                   style={{
                     fontSize: 12,
                     fontWeight: active ? "800" : "600",
-                    color: active ? t.accent : t.ink2,
+                    color: active ? t.accentInk : t.ink2,
                   }}
                   numberOfLines={1}
                 >

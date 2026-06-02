@@ -32,6 +32,7 @@ export const StudioColors = {
   accent2:       "#F472B6",
   accentSoft:    "#FCE7F3",
   accentGhost:   "#FDF2F8",
+  accentInk:     "#BE185D",   // AA fix Fase 5: texto magenta sobre activeBg tinted (4.97:1) — accent puro dava 2.9:1
 
   // ── Cores complementares pras bolinhas-filhas ────────────
   warm:          "#F59E0B",
@@ -141,6 +142,7 @@ export const StudioColorsDark = {
   accent2:       "#F9A8D4",
   accentSoft:    "rgba(244,114,182,0.18)",
   accentGhost:   "rgba(244,114,182,0.08)",
+  accentInk:     "#F9A8D4",   // AA fix Fase 5: texto ativo sobre activeBg dark (6.1:1) — #F472B6 dava só 4.18:1
 
   // Cores complementares
   warm:          "#FBBF24",
