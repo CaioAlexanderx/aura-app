@@ -24,7 +24,7 @@ import { StageConfigure } from "./StageConfigure";
 import { StageCheckout } from "./StageCheckout";
 import { StageDone } from "./StageDone";
 import { QuoteModal } from "./QuoteModal";
-import { AuraArcsBackground } from "./AuraArcsBackground";
+import { AuraArcsBackground } from "@/components/studio/AuraArcsBackground";
 import { CategoryChip, money } from "./ui";
 import { Ic } from "./icons";
 

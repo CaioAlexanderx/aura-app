@@ -213,7 +213,7 @@ export default function StudioEstoque() {
   );
 
   return (
-    <StudioScreen variant="grid" scroll={false} padded={false}>
+    <StudioScreen variant="board" scroll={false} padded={false}>
       <View style={s.container}>
       <ScrollView contentContainerStyle={s.scrollContent}>
         {expandedProduct ? (
@@ -890,7 +890,7 @@ function BasicoForm({
 function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
-    scrollContent: { padding: 24, paddingBottom: 80, gap: 18 },
+    scrollContent: { padding: 24, paddingBottom: 80, gap: 18, maxWidth: 1440, alignSelf: "center", width: "100%" },
 
     // CTA primário
     btnPri: {
