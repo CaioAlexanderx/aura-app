@@ -126,6 +126,24 @@ export type FinancialReceivables = {
   };
 };
 
+// ─── Lançamento manual ────────────────────────────────────────
+export type ManualEntryPayload = {
+  customer_id?: string;
+  new_customer?: { name: string; phone: string };
+  amount: number;
+  installments?: number;
+  interest_rate?: number;   // decimal (0.025 = 2.5% ao mês)
+  first_due_date?: string;  // YYYY-MM-DD
+  description?: string;
+};
+
+export type ManualEntryResult = {
+  customer: { id: string; name: string };
+  transaction: { id: string; amount: number; type: string; notes: string; created_at: string };
+  installments: CreditInstallment[];
+  new_balance: number;
+};
+
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
 export const creditApi = {
@@ -242,5 +260,15 @@ export const creditApi = {
   /** F3-2D (29/05/2026): A receber crediario no Financeiro. Negocio+. */
   getReceivables(companyId: string) {
     return request<FinancialReceivables>(`/companies/${companyId}/financial/receivables`);
+  },
+
+  /** Busca clientes por nome/telefone/CPF. Mínimo 2 chars. */
+  searchCustomers(companyId: string, q: string): Promise<{ customers: Array<{ id: string; name: string; phone: string | null; cpf_cnpj: string | null }> }> {
+    return request(`${base(companyId)}/customers/search?q=${encodeURIComponent(q)}`);
+  },
+
+  /** Cria lançamento manual no crediário (sem venda vinculada). */
+  createManualEntry(companyId: string, payload: ManualEntryPayload): Promise<ManualEntryResult> {
+    return request(`${base(companyId)}/manual-entry`, { method: 'POST', body: payload });
   },
 };
