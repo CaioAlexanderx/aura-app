@@ -61,7 +61,7 @@ export function CartSidebar({
   return (
     <View style={{ flex: 1, backgroundColor: t.paperCard, borderLeftWidth: 1, borderLeftColor: t.ink5 }}>
       {/* head */}
-      <View style={{ padding: 16, gap: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
+      <View dataSet={{ flyTarget: "cart" }} style={{ padding: 16, gap: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
         <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" }}>Total da venda</Text>
         <Text style={{ fontSize: 30, color: t.ink, fontWeight: "800" }}>
           <Text style={{ fontSize: 16, color: t.ink3 }}>R$ </Text>{money(subtotal)}
