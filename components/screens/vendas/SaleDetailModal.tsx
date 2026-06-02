@@ -12,16 +12,12 @@ import { useAuthStore } from "@/stores/auth";
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
 //
 // MULTICNPJ Onda 2.4 (03/05/2026): aceita prop `companyId` opcional.
-// Em modo consolidated, vendas.tsx passa o sale.company_id da listagem
-// pra que useSaleDetail e useCancelSale chamem o endpoint correto.
-// Default (modo per-company) = company.id do auth store.
 //
-// Tambem aceita `companyName` opcional pra mostrar badge no header
-// indicando qual loja registrou a venda.
-//
-// Seller edit (06/05/2026): lapis no card "Vendedora" abre picker
-// com lista de funcionarios. Salva via PATCH /companies/:id/sales/:saleId.
-// Persiste seller_name denormalizado no backend — robusto a demissoes.
+// 02/06/2026 — Troca segmentada: quando sale.type='troca', o card de total
+// vira um card de troca (Levou / Devolveu / Diferença / Pagamentos /
+// Conciliação no Financeiro) e o "Cancelar venda" vira "Cancelar troca"
+// (reverte estoque dos dois lados + transações + NF-e). Dados no bloco
+// detail.troca (backend Aura-backend#138).
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -41,10 +37,16 @@ const PAYMENT_LABELS: Record<string, string> = {
   dinheiro: "Dinheiro",
   credit: "Cartao Credito",
   credito: "Cartao Credito",
+  cartao: "Cartao Credito",
   debit: "Cartao Debito",
   debito: "Cartao Debito",
+  crediario: "Crediario",
+  crediario_credito: "Credito da troca",
   voucher: "Voucher",
+  vale: "Vale",
 };
+
+const TROCA_ORANGE = "#fb923c";
 
 export function SaleDetailModal({
   visible, saleId, onClose, onEditTransaction,
@@ -54,7 +56,6 @@ export function SaleDetailModal({
   saleId: string | null;
   onClose: () => void;
   onEditTransaction?: (transactionId: string) => void;
-  // MULTICNPJ Onda 2.4: passados em modo consolidated (sale.company_id+name)
   companyId?: string;
   companyName?: string;
 }) {
@@ -69,7 +70,6 @@ export function SaleDetailModal({
   const [editingSeller, setEditingSeller] = useState(false);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
 
-  // Carrega funcionarios de forma lazy — so dispara quando o picker abre
   const { data: empData, isLoading: isLoadingEmps } = useQuery({
     queryKey: ["employees", effectiveCompanyId],
     queryFn: function() {
@@ -88,10 +88,18 @@ export function SaleDetailModal({
     if (!saleId) return;
     try {
       const result = await cancelSale({ saleId: saleId, reason: cancelReason.trim() });
-      toast.success(
-        "Venda cancelada. " + result.items_returned + " item(s) devolvido(s) ao estoque e " +
-        fmt(result.refunded_amount) + " removido(s) da receita."
-      );
+      if ((result as any)?.type === "troca") {
+        toast.success("Troca cancelada. Estoque dos dois lados revertido e financeiro ajustado.");
+        const warns = (result as any)?.fiscal_warnings;
+        if (Array.isArray(warns) && warns.length) {
+          toast.error("Atencao fiscal: " + warns[0]);
+        }
+      } else {
+        toast.success(
+          "Venda cancelada. " + result.items_returned + " item(s) devolvido(s) ao estoque e " +
+          fmt(result.refunded_amount) + " removido(s) da receita."
+        );
+      }
       setConfirmCancel(false);
       setCancelReason("");
       onClose();
@@ -135,6 +143,10 @@ export function SaleDetailModal({
   const seller = detail?.seller;
   const paymentLabel = sale?.payment_method ? (PAYMENT_LABELS[sale.payment_method.toLowerCase()] || sale.payment_method) : "-";
 
+  // 02/06/2026: troca segmentada
+  const isTroca = (sale?.type as string) === "troca";
+  const troca = detail?.troca || null;
+
   return (
     <View style={s.overlay}>
       <View style={s.modal}>
@@ -142,13 +154,18 @@ export function SaleDetailModal({
         <View style={s.header}>
           <View style={{ flex: 1 }}>
             <View style={s.headerTitleRow}>
-              <Text style={s.headerTitle}>Detalhes da venda</Text>
+              <Text style={s.headerTitle}>{isTroca ? "Detalhes da troca" : "Detalhes da venda"}</Text>
+              {isTroca && !isCancelled && (
+                <View style={s.trocaBadge}>
+                  <Icon name="repeat" size={9} color={TROCA_ORANGE} />
+                  <Text style={s.trocaBadgeText}>Troca</Text>
+                </View>
+              )}
               {isCancelled && (
                 <View style={s.cancelledBadge}>
                   <Text style={s.cancelledText}>Cancelada</Text>
                 </View>
               )}
-              {/* MULTICNPJ Onda 2.4: badge da loja */}
               {companyName && (
                 <View style={s.companyBadge}>
                   <Text style={s.companyBadgeText} numberOfLines={1}>{companyName}</Text>
@@ -179,29 +196,104 @@ export function SaleDetailModal({
         {/* Conteudo */}
         {detail && sale && (
           <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 4 }}>
-            <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
-              <Text style={s.totalLabel}>Valor da venda</Text>
-              <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(sale.total_amount)}</Text>
-              {sale.discount_amount > 0 && (
-                <Text style={s.totalHint}>Desconto: {fmt(sale.discount_amount)}</Text>
-              )}
-              <View style={s.totalMetaRow}>
-                <View style={s.totalMetaItem}>
-                  <Text style={s.totalMetaLabel}>Pagamento</Text>
-                  <Text style={s.totalMetaValue}>{paymentLabel}</Text>
-                </View>
-                <View style={s.totalMetaItem}>
-                  <Text style={s.totalMetaLabel}>Itens</Text>
-                  <Text style={s.totalMetaValue}>{items.length}</Text>
-                </View>
-                {sale.coupon_code && (
+            {/* Venda normal: card de total */}
+            {!isTroca && (
+              <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
+                <Text style={s.totalLabel}>Valor da venda</Text>
+                <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(sale.total_amount)}</Text>
+                {sale.discount_amount > 0 && (
+                  <Text style={s.totalHint}>Desconto: {fmt(sale.discount_amount)}</Text>
+                )}
+                <View style={s.totalMetaRow}>
                   <View style={s.totalMetaItem}>
-                    <Text style={s.totalMetaLabel}>Cupom</Text>
-                    <Text style={s.totalMetaValue}>{sale.coupon_code}</Text>
+                    <Text style={s.totalMetaLabel}>Pagamento</Text>
+                    <Text style={s.totalMetaValue}>{paymentLabel}</Text>
+                  </View>
+                  <View style={s.totalMetaItem}>
+                    <Text style={s.totalMetaLabel}>Itens</Text>
+                    <Text style={s.totalMetaValue}>{items.length}</Text>
+                  </View>
+                  {sale.coupon_code && (
+                    <View style={s.totalMetaItem}>
+                      <Text style={s.totalMetaLabel}>Cupom</Text>
+                      <Text style={s.totalMetaValue}>{sale.coupon_code}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Troca: card segmentado */}
+            {isTroca && troca && (
+              <View style={[s.trocaCard, isCancelled && s.totalCardCancelled]}>
+                {/* Levou */}
+                <View style={s.trocaSegHead}>
+                  <Text style={[s.trocaSegTitle, { color: Colors.green }]}>Levou (produtos novos)</Text>
+                  <Text style={[s.trocaSegVal, { color: Colors.green }]}>{fmt(troca.new_value)}</Text>
+                </View>
+                {/* Devolveu */}
+                <View style={s.trocaDivider} />
+                <View style={s.trocaSegHead}>
+                  <Text style={[s.trocaSegTitle, { color: TROCA_ORANGE }]}>Devolveu (produtos retirados)</Text>
+                  <Text style={[s.trocaSegVal, { color: TROCA_ORANGE }]}>- {fmt(troca.returned_value)}</Text>
+                </View>
+                {troca.returned_items.map(function(ri, idx) {
+                  return (
+                    <View key={idx} style={s.trocaItemRow}>
+                      <View style={s.trocaItemThumb}>
+                        {ri.image_url ? (
+                          <Image source={{ uri: ri.image_url }} style={s.itemImageInner} />
+                        ) : (
+                          <Icon name="package" size={12} color={Colors.ink3} />
+                        )}
+                      </View>
+                      <Text style={s.trocaItemName} numberOfLines={1}>{ri.product_name}</Text>
+                      <Text style={s.trocaItemMeta}>{ri.quantity}x</Text>
+                      <Text style={s.trocaItemPrice}>{fmt(ri.unit_price)}</Text>
+                    </View>
+                  );
+                })}
+                {/* Diferenca */}
+                <View style={s.trocaDiff}>
+                  <Text style={s.trocaDiffLabel}>
+                    {troca.net_amount >= 0 ? "Diferenca — cliente pagou" : "Diferenca — loja devolveu"}
+                  </Text>
+                  <Text style={s.trocaDiffVal}>{fmt(Math.abs(troca.net_amount))}</Text>
+                </View>
+                {/* Pagamentos */}
+                {troca.payments && troca.payments.length > 0 && (
+                  <View style={s.trocaSub}>
+                    <Text style={s.trocaSubLabel}>Formas de pagamento</Text>
+                    <View style={s.trocaPayWrap}>
+                      {troca.payments.map(function(p, idx) {
+                        var lbl = PAYMENT_LABELS[(p.method || "").toLowerCase()] || p.method;
+                        return (
+                          <View key={idx} style={s.trocaPill}>
+                            <Text style={s.trocaPillTxt}>{lbl} · {fmt(p.amount)}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
                   </View>
                 )}
+                {/* Conciliacao financeiro */}
+                <View style={s.trocaSub}>
+                  <Text style={s.trocaSubLabel}>Conciliacao no Financeiro</Text>
+                  <View style={s.trocaFinRow}>
+                    <Text style={s.trocaFinLab}>Troca - Venda</Text>
+                    <Text style={[s.trocaFinVal, { color: Colors.green }]}>+ {fmt(troca.new_value)}</Text>
+                  </View>
+                  <View style={s.trocaFinRow}>
+                    <Text style={s.trocaFinLab}>Troca - Devolucao</Text>
+                    <Text style={[s.trocaFinVal, { color: Colors.red }]}>- {fmt(troca.returned_value)}</Text>
+                  </View>
+                  <View style={[s.trocaFinRow, s.trocaFinNet]}>
+                    <Text style={[s.trocaFinLab, { fontWeight: "800", color: Colors.ink }]}>Liquido</Text>
+                    <Text style={[s.trocaFinVal, { color: TROCA_ORANGE, fontWeight: "800" }]}>+ {fmt(troca.net_amount)}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
+            )}
 
             <View style={s.peopleRow}>
               <View style={s.personCard}>
@@ -228,7 +320,7 @@ export function SaleDetailModal({
               </View>
             </View>
 
-            <Text style={s.sectionTitle}>Mercadorias</Text>
+            <Text style={s.sectionTitle}>{isTroca ? "Produtos levados" : "Mercadorias"}</Text>
             <View style={s.itemsBox}>
               {items.length === 0 && (
                 <Text style={s.noItems}>Esta venda nao possui itens.</Text>
@@ -267,14 +359,15 @@ export function SaleDetailModal({
               <View style={s.cancelledHint}>
                 <Icon name="info" size={12} color={Colors.red} />
                 <Text style={s.cancelledHintText}>
-                  Esta venda foi cancelada em {fmtDateTime(sale.cancelled_at)}.
-                  O estoque foi devolvido e o valor saiu da receita.
+                  {isTroca
+                    ? "Esta troca foi cancelada em " + fmtDateTime(sale.cancelled_at) + ". Estoque dos dois lados revertido e financeiro ajustado."
+                    : "Esta venda foi cancelada em " + fmtDateTime(sale.cancelled_at) + ". O estoque foi devolvido e o valor saiu da receita."}
                 </Text>
               </View>
             )}
 
             <View style={s.actionsRow}>
-              {sale.transaction_id && onEditTransaction && (
+              {sale.transaction_id && onEditTransaction && !isTroca && (
                 <Pressable
                   onPress={handleEditClick}
                   style={[s.actionBtn, s.actionEdit]}
@@ -294,7 +387,7 @@ export function SaleDetailModal({
                   ) : (
                     <>
                       <Icon name="x" size={13} color={Colors.red} />
-                      <Text style={s.actionCancelText}>Cancelar venda</Text>
+                      <Text style={s.actionCancelText}>{isTroca ? "Cancelar troca" : "Cancelar venda"}</Text>
                     </>
                   )}
                 </Pressable>
@@ -308,10 +401,11 @@ export function SaleDetailModal({
       {confirmCancel && (
         <View style={s.confirmOverlay}>
           <View style={s.confirmModal}>
-            <Text style={s.confirmTitle}>Cancelar venda?</Text>
+            <Text style={s.confirmTitle}>{isTroca ? "Cancelar troca?" : "Cancelar venda?"}</Text>
             <Text style={s.confirmMsg}>
-              Os {items.length} item(s) voltam para o estoque e o valor sai da receita.
-              Esta ação não pode ser desfeita.
+              {isTroca
+                ? "Os produtos novos voltam ao estoque, o produto devolvido sai do estoque, as transacoes da troca somem do financeiro e a NF-e de devolucao nao autorizada e removida. Acao irreversivel."
+                : "Os " + items.length + " item(s) voltam para o estoque e o valor sai da receita. Esta acao nao pode ser desfeita."}
             </Text>
             <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
             <TextInput
@@ -339,7 +433,7 @@ export function SaleDetailModal({
                 {isCancelling ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={s.confirmBtnConfirmText}>Sim, cancelar venda</Text>
+                  <Text style={s.confirmBtnConfirmText}>{isTroca ? "Sim, cancelar troca" : "Sim, cancelar venda"}</Text>
                 )}
               </Pressable>
             </View>
@@ -429,7 +523,8 @@ const s = StyleSheet.create({
   headerDate: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
   cancelledBadge: { backgroundColor: Colors.redD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.red + "55" },
   cancelledText: { fontSize: 9, color: Colors.red, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
-  // MULTICNPJ Onda 2.4
+  trocaBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(251,146,60,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(251,146,60,0.4)" },
+  trocaBadgeText: { fontSize: 9, color: TROCA_ORANGE, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   companyBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 200 },
   companyBadgeText: { fontSize: 9, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.4 },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
@@ -450,6 +545,30 @@ const s = StyleSheet.create({
   totalMetaItem: { alignItems: "center" },
   totalMetaLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   totalMetaValue: { fontSize: 12, color: Colors.ink, fontWeight: "600", marginTop: 3 },
+
+  // Troca card
+  trocaCard: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "rgba(251,146,60,0.25)" },
+  trocaDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 10 },
+  trocaSegHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  trocaSegTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
+  trocaSegVal: { fontSize: 14, fontWeight: "800" },
+  trocaItemThumb: { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
+  trocaItemRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
+  trocaItemName: { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  trocaItemMeta: { fontSize: 11, color: Colors.ink3 },
+  trocaItemPrice: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  trocaDiff: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
+  trocaDiffLabel: { fontSize: 12, color: Colors.ink2, fontWeight: "700" },
+  trocaDiffVal: { fontSize: 20, color: TROCA_ORANGE, fontWeight: "900", letterSpacing: -0.3 },
+  trocaSub: { marginTop: 12 },
+  trocaSubLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 7 },
+  trocaPayWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  trocaPill: { backgroundColor: Colors.bg3, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
+  trocaPillTxt: { fontSize: 11, color: Colors.ink, fontWeight: "600" },
+  trocaFinRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
+  trocaFinLab: { fontSize: 12, color: Colors.ink2 },
+  trocaFinVal: { fontSize: 12.5, fontWeight: "700" },
+  trocaFinNet: { borderTopWidth: 1, borderTopColor: Colors.border2, marginTop: 5, paddingTop: 8 },
 
   peopleRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   personCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 4 },
@@ -499,7 +618,6 @@ const s = StyleSheet.create({
   confirmBtnConfirm: { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: Colors.red, alignItems: "center" },
   confirmBtnConfirmText: { fontSize: 12, color: "#fff", fontWeight: "700" },
 
-  // Seller picker
   sellerPickerModal: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, maxWidth: 380, width: "88%", borderWidth: 1, borderColor: Colors.border2, maxHeight: "60%" },
   sellerList: { maxHeight: 280, marginBottom: 14 },
   sellerItem: { paddingVertical: 11, paddingHorizontal: 12, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
