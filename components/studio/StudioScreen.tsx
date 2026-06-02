@@ -22,8 +22,10 @@
 // ============================================================
 import React, { ReactNode, useEffect, useState } from "react";
 import {
-  View, ScrollView, RefreshControl, useWindowDimensions, AccessibilityInfo,
+  View, ScrollView, RefreshControl, useWindowDimensions, AccessibilityInfo, Platform,
 } from "react-native";
+import { usePathname } from "expo-router";
+import { AuraArcsBackground } from "@/components/studio/AuraArcsBackground";
 import Reanimated, {
   useSharedValue, useAnimatedStyle, withTiming, Easing,
 } from "react-native-reanimated";
@@ -141,6 +143,24 @@ export function StudioScreen({
   const isMobile = width < 768;
   const entranceStyle = useEntranceAnim();
 
+  const pathname = usePathname() || "";
+  // Arcos em todas as telas Studio, EXCETO o grupo Gestão (genérico/varejo) e a Loja Digital.
+  const showArcs =
+    !/\/studio\/gestao\/(financeiro|nfe|contabilidade)/.test(pathname) &&
+    !pathname.startsWith("/studio/vendas/loja-digital");
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (document.getElementById("aura-studio-scrollbar")) return;
+    const st = document.createElement("style");
+    st.id = "aura-studio-scrollbar";
+    st.textContent =
+      "[data-aura-studio]{scrollbar-width:thin;scrollbar-color:rgba(148,163,184,0.40) transparent}" +
+      "[data-aura-studio] ::-webkit-scrollbar{width:10px;height:10px}" +
+      "[data-aura-studio] ::-webkit-scrollbar-track{background:transparent}" +
+      "[data-aura-studio] ::-webkit-scrollbar-thumb{background:rgba(148,163,184,0.40);border-radius:8px;border:3px solid transparent;background-clip:content-box}" +
+      "[data-aura-studio] ::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,0.62)}";
+    document.head.appendChild(st);
+  }, []);
   const maxWidth = MAX_WIDTH[variant];
   const pad = padded ? (isMobile ? 16 : 28) : 0;
 
@@ -155,7 +175,8 @@ export function StudioScreen({
 
   if (!scroll) {
     return (
-      <View style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
+      <View dataSet={{ auraStudio: "true" }} style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
+        {showArcs ? <AuraArcsBackground t={tk} /> : null}
         <Reanimated.View style={[inner, { flex: 1 }, entranceStyle, contentStyle]}>
           {children}
         </Reanimated.View>
@@ -171,7 +192,8 @@ export function StudioScreen({
 
   if (onRefresh) {
     return (
-      <View style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
+      <View dataSet={{ auraStudio: "true" }} style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
+        {showArcs ? <AuraArcsBackground t={tk} /> : null}
         <StudioPullToRefresh
           refreshing={!!refreshing}
           onRefresh={onRefresh}
@@ -184,7 +206,8 @@ export function StudioScreen({
   }
 
   return (
-    <View style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
+    <View dataSet={{ auraStudio: "true" }} style={[{ flex: 1, backgroundColor: tk.bg }, style]}>
+        {showArcs ? <AuraArcsBackground t={tk} /> : null}
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>{content}</ScrollView>
     </View>
   );

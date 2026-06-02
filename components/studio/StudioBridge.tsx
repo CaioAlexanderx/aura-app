@@ -59,7 +59,7 @@ export function StudioBridge({
             <Icon name={bridgeIcon as any} size={20} color="#fff" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.bridgeTitle}>Por enquanto, isso vem do Aura Varejo</Text>
+            <Text style={s.bridgeTitle}>Por enquanto, essa área usa o módulo padrão</Text>
             <Text style={s.bridgeSub}>
               {bridgeNote || "Funcional e completo; quando a versão Studio nativa chegar, fica integrada aqui."}
             </Text>

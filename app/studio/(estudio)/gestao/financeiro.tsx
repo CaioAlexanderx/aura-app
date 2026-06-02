@@ -40,7 +40,7 @@ export default function StudioGestaoFinanceiro() {
         <Text style={s.eyebrow}>GESTÃO · FINANCEIRO</Text>
         <Text style={s.title}>Financeiro do estúdio</Text>
         <Text style={s.subtitle}>
-          Sua receita Studio entra automaticamente no caixa unificado. Use abaixo as mesmas ferramentas do Aura Varejo.
+          Receita, despesas e margem do seu estúdio em um só lugar.
         </Text>
       </View>
 
