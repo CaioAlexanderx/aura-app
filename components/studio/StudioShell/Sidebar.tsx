@@ -27,6 +27,12 @@
 // paperCard em ambos os temas (light 2.4:1, dark 3.1:1). Active state
 // magenta (accent em label sobre rgba(236,72,153,0.10) → 2.99:1 light) é
 // residual conhecido — follow-up vai separar accentInk pra texto.
+//
+// 02/06/2026 (Shell clareza):
+//   - NavItem agora aceita `subtitle` e `primary` de NavChild
+//   - Porta primária Caixa/PDV recebe destaque visual (left-bar navy + bg tinted)
+//   - Subtítulo de 1 linha exibido quando sidebar expandida
+//   - Labels e subtítulos derivados de STUDIO_NAV via types.ts (sem strings duplicadas)
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, Platform, AccessibilityInfo } from "react-native";
@@ -278,6 +284,8 @@ function NavItem({
   active,
   expanded,
   indent,
+  subtitle,
+  primary,
   enterDelay = 0,
   reduced = false,
   onPress,
@@ -288,6 +296,8 @@ function NavItem({
   active: boolean;
   expanded: boolean;
   indent?: boolean;
+  subtitle?: string;
+  primary?: boolean;
   enterDelay?: number;
   reduced?: boolean;
   onPress: () => void;
@@ -295,6 +305,8 @@ function NavItem({
   // Magenta-soft active state per plano "estado ativo magenta-soft":
   // background accent 10% + accent text + barra accent à esquerda.
   const activeBg = "rgba(236,72,153,0.10)";
+  // Porta primária (Caixa/PDV): usa tint navy suave ao invés do magenta genérico
+  const primaryBg = "rgba(30,58,138,0.08)";
   const web = Platform.OS === "web";
   // Wrapper externo = animação de entrada (não conflita com o transform de
   // hover/press do Pressable interno).
@@ -308,9 +320,9 @@ function NavItem({
         style={({ hovered, pressed }: any) => [
           {
             flexDirection: "row",
-            alignItems: "center",
+            alignItems: subtitle && expanded ? "flex-start" : "center",
             gap: 10,
-            paddingVertical: 8,
+            paddingVertical: subtitle && expanded ? 9 : 8,
             paddingHorizontal: expanded ? (indent ? 18 : 10) : 8,
             minHeight: 36,
             borderRadius: 8,
@@ -322,6 +334,8 @@ function NavItem({
           hovered && !active && { backgroundColor: t.accentSoft },
           hovered && !active && web && ({ boxShadow: `0 2px 12px ${t.accent}26` } as any),
           active && { backgroundColor: activeBg },
+          // porta primária inativa recebe tint navy sutil
+          !active && primary && { backgroundColor: primaryBg },
           // clique: expande levemente o magenta (pop)
           web && pressed && !reduced && ({ transform: "scale(1.03)", backgroundColor: activeBg } as any),
         ]}
@@ -343,20 +357,51 @@ function NavItem({
                 pointerEvents="none"
               />
             )}
-            <Icon name={icon} size={16} color={active || hovered ? t.accent : t.ink2} />
-            {expanded && (
-              <Text
+            {/* Porta primária inativa: barra navy sutil */}
+            {!active && primary && (
+              <View
                 style={{
-                  flex: 1,
-                  fontSize: 13,
-                  fontWeight: active ? "800" : "600",
-                  color: active ? t.accentInk : hovered ? t.ink : t.ink2,
-                  letterSpacing: -0.1,
+                  position: "absolute",
+                  left: 2,
+                  top: 8,
+                  bottom: 8,
+                  width: 3,
+                  borderRadius: 2,
+                  backgroundColor: t.primary,
+                  opacity: 0.5,
                 }}
-                numberOfLines={1}
-              >
-                {label}
-              </Text>
+                pointerEvents="none"
+              />
+            )}
+            <Icon name={icon} size={16} color={active || hovered ? t.accent : primary ? t.primary : t.ink2} />
+            {expanded && (
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: active ? "800" : primary ? "700" : "600",
+                    color: active ? t.accentInk : hovered ? t.ink : primary ? t.primary : t.ink2,
+                    letterSpacing: -0.1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+                {subtitle && (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      // ink3 garante ≥4.5:1 sobre paperCard (5.1:1 light, 5.7:1 dark)
+                      color: t.ink3,
+                      fontWeight: "400",
+                      marginTop: 1,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {subtitle}
+                  </Text>
+                )}
+              </View>
             )}
           </>
         )}
@@ -430,6 +475,8 @@ function GroupSection({
               t={t}
               icon={c.icon}
               label={c.label}
+              subtitle={c.subtitle}
+              primary={c.primary}
               active={active}
               expanded
               indent
@@ -555,16 +602,31 @@ function GroupSection({
                 ]}
               >
                 <Icon name={c.icon} size={14} color={active ? t.accent : t.ink2} />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: active ? "800" : "600",
-                    color: active ? t.accentInk : t.ink2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {c.label}
-                </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: active ? "800" : "600",
+                      color: active ? t.accentInk : t.ink2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {c.label}
+                  </Text>
+                  {c.subtitle && (
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: t.ink3,
+                        fontWeight: "400",
+                        marginTop: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {c.subtitle}
+                    </Text>
+                  )}
+                </View>
               </Pressable>
             );
           })}

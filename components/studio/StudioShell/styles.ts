@@ -4,6 +4,11 @@
 // Decomposição Fase 2 (31/05/2026): centraliza StyleSheet usado por
 // NavCircle, ChildBubble, ChildHoverBubble, MobileChip, sidebar e
 // mobileBar. Mantém compatibilidade — chaves NÃO renomeadas.
+//
+// 02/06/2026 (Shell clareza — contraste AA):
+//   - mobileChipTxt: ink4 (2.4:1 sobre paperCard) → ink3 (5.1:1) ✓ AA
+//   - childLabel: ink4 → ink3 para mesma garantia AA
+//   - hoverChildLabel: já usava c.ink (passa AA); sem mudança
 // ============================================================
 import { StyleSheet, Platform } from "react-native";
 import { Tok } from "./types";
@@ -84,6 +89,7 @@ export const makeStyles = (c: Tok) =>
       borderWidth: 2, borderColor: "#fff",
     },
     childBadgeTxt: { color: "#fff", fontSize: 9, fontWeight: "800" },
+    // AA fix (02/06/2026): ink4 (2.4:1 light, 3.1:1 dark) → ink3 (5.1:1 light, 5.7:1 dark)
     childLabel: {
       fontSize: 10, color: c.ink3,
       textAlign: "center", marginTop: 4,
@@ -185,7 +191,8 @@ export const makeStyles = (c: Tok) =>
       borderWidth: 1, borderColor: c.ink4,
       borderRadius: 999,
     },
-    mobileChipTxt: { color: c.ink2, fontWeight: "600", fontSize: 12 },
+    // AA fix (02/06/2026): ink4 → ink3 para ≥4.5:1 sobre paperCardElev
+    mobileChipTxt: { color: c.ink3, fontWeight: "600", fontSize: 12 },
   });
 
 export const makeMm = (c: Tok) =>

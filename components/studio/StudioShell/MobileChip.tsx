@@ -3,6 +3,9 @@
 //
 // Decomposição Fase 2 (31/05/2026): extraído do monólito StudioShell.tsx.
 // Chip horizontal usado na mobileBar (mobile + tablet).
+//
+// 02/06/2026 (Shell clareza): mobileChipTxt usa ink3 (≥4.5:1 AA)
+// ao invés de ink4 (2.4:1, falha AA). Sem mudança de API.
 // ============================================================
 import { useMemo } from "react";
 import { Pressable, Text } from "react-native";
