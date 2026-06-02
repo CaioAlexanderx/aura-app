@@ -29,6 +29,7 @@ import { TopSellersCard } from "@/components/screens/dashboard/TopSellersCard";
 import { BirthdaysCard } from "@/components/screens/dashboard/BirthdaysCard";
 import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
 import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
+import { CalendarioComercialCard } from "@/components/screens/dashboard/CalendarioComercialCard";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "pdv", route: "/pdv" },
@@ -141,6 +142,7 @@ export default function DashboardScreen() {
     queryClient.invalidateQueries({ queryKey: ["employees-ranking"] });
     queryClient.invalidateQueries({ queryKey: ["birthdays", company?.id] });
     queryClient.invalidateQueries({ queryKey: ["birthday-sent", company?.id] });
+    queryClient.invalidateQueries({ queryKey: ["commercial-dates", company?.id] });
     setTimeout(function() { setRefreshing(false); }, 600);
   }
 
@@ -243,6 +245,11 @@ export default function DashboardScreen() {
               <View style={s.secCount}><Text style={s.secCountText}>{currentMonth().slice(0, 3).toLowerCase()} {String(new Date().getFullYear()).slice(-2)}</Text></View>
             </View>
             <KPIGrid d={d} onNavigate={go} />
+
+            {/* ---- CALENDARIO COMERCIAL (datas que movimentam o comercio) ----
+                Posicao: abaixo dos KPIs e acima de Vendas. Per-company
+                (escondido em consolidado e demo). */}
+            {!isDemo && !consolidatedView && <CalendarioComercialCard />}
 
             {/* ---- VENDAS (analytics) ---- */}
             {/* MULTICNPJ Onda 2.6: SalesAnalyticsCard agora funciona em consolidated
