@@ -1,7 +1,9 @@
 // ============================================================
-// AURA STUDIO · Hub Studio (Fase 7) — visão unificada
+// AURA STUDIO · Hub de Pedidos (Fase 7) — visão unificada multi-canal
 //
-// Substitui placeholder. Mostra KPIs + alertas + feed unificado
+// Hub centralizado para TODOS os pedidos do Studio, independente
+// do canal de origem: Loja Digital, PDV ou marketplaces integrados.
+// Mostra KPIs + alertas de produção + feed unificado
 // (digital_orders + bulk_events). Botão "Novo pedido pra evento"
 // abre BulkOrderWizard (Fase 6).
 //
@@ -15,6 +17,9 @@
 // Residual (26/05): migrado pra useStudioTokens() — StyleSheet
 // vira factory memoizado por tokens, suporta light/dark theme.
 // SEVERITY_TONE virou severityTone(t) theme-aware (Fase 1b).
+//
+// Agente E (02/06/2026): copy do header reforça posição de hub
+// multi-canal. Lógica, rotas, eyebrow e tabs inalterados.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -106,7 +111,6 @@ export default function StudioPedidosHub() {
       setBulkOpen(true);
     } catch (e: any) {
       // Mesmo se falhar, abre o wizard — usuário pode cadastrar produto manualmente depois.
-      // (Próxima iteração: bloqueia abertura se produtos vazios e mostra CTA "Cadastrar produto")
       setProducts([]);
       setBulkOpen(true);
       console.warn("[studio/pedidos] Falha ao carregar produtos:", e?.message);
@@ -115,11 +119,11 @@ export default function StudioPedidosHub() {
 
   return (
     <StudioScreen variant="reading">
-      {/* Header (Fase 3 — global StudioPageHeader) */}
+      {/* Header — hub multi-canal */}
       <StudioPageHeader
         eyebrow="HUB · PEDIDOS"
-        title="Todos os pedidos Studio"
-        subtitle="Unifica pedidos da Loja Digital, PDV e marketplaces. Acompanhe status de produção, conversão de eventos em vendas."
+        title="Hub de Pedidos"
+        subtitle="Visão unificada de todos os canais: Loja Digital, PDV e marketplaces. Acompanhe status de produção e converta eventos em vendas."
         rightSlot={
           <Pressable style={s.ctaPri} onPress={openBulkWizard}>
             <Icon name="users" size={16} color="#fff" />
