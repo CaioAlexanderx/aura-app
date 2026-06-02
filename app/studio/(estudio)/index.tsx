@@ -99,16 +99,17 @@ type GuideStep = {
   id: "products" | "customization" | "templates" | "sla_wa" | "publish";
   num: number;
   title: string;
+  desc: string;
   cta: string;
   href: string;
 };
 
 const GUIDE_STEPS: GuideStep[] = [
-  { id: "products",      num: 1, title: "Cadastre seus produtos",            cta: "Cadastrar produto",       href: "/studio/produtos" },
-  { id: "customization", num: 2, title: "Configure a personalizacao",        cta: "Configurar",              href: "/studio/produtos" },
-  { id: "templates",     num: 3, title: "Suba templates de arte",            cta: "Subir templates",         href: "/studio/galeria" },
-  { id: "sla_wa",        num: 4, title: "Defina SLA e WhatsApp",             cta: "Configurar",              href: "/studio/configuracoes" },
-  { id: "publish",       num: 5, title: "Publique a Loja Digital",           cta: "Configurar",              href: "/canal-digital" },
+  { id: "products",      num: 1, title: "Cadastre seus produtos",     desc: "Adicione ao menos 1 produto ao catálogo do estúdio.",            cta: "Cadastrar",        href: "/studio/produtos" },
+  { id: "customization", num: 2, title: "Configure a personalização", desc: "Marque produtos como personalizáveis e defina os campos da arte.", cta: "Configurar",       href: "/studio/produtos" },
+  { id: "templates",     num: 3, title: "Suba templates de arte",     desc: "Suba pelo menos 3 artes/templates pra agilizar os pedidos.",       cta: "Subir artes",      href: "/studio/galeria" },
+  { id: "sla_wa",        num: 4, title: "Defina SLA e WhatsApp",      desc: "Defina o prazo (SLA) e o WhatsApp de aprovação de arte.",          cta: "Configurar",       href: "/studio/configuracoes" },
+  { id: "publish",       num: 5, title: "Publique a Loja Digital",    desc: "Publique sua Loja Digital pra receber pedidos online.",            cta: "Publicar",         href: "/canal-digital" },
 ];
 
 type Period = "hoje" | "7d" | "30d";
@@ -217,6 +218,7 @@ export default function StudioPainel() {
     products: "todo", customization: "todo", templates: "todo", sla_wa: "todo", publish: "todo",
   });
   const [dismissing, setDismissing] = useState(false);
+  const [guideExpanded, setGuideExpanded] = useState(false);
 
   const runGuideDetection = useCallback(async () => {
     if (!cid) return;
@@ -341,47 +343,66 @@ export default function StudioPainel() {
         <StudioGradient
           colors={["#1E3A8A", "#EC4899"]}
           direction="135deg"
-          style={s.guideCompactCard}
+          style={s.guideCard}
         >
-          <View style={s.guideDotsWrap}>
-            {GUIDE_STEPS.map((step) => {
-              const isDone = stepStatus[step.id] === "done";
-              return (
-                <View
-                  key={step.id}
-                  style={[s.guideDot, isDone && s.guideDotDone]}
-                />
-              );
-            })}
+          {/* Header */}
+          <View style={s.guideHeaderRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.guideHeaderTitle} numberOfLines={1}>Configure seu estúdio</Text>
+              <Text style={s.guideCompactSub}>
+                {doneCount} de {GUIDE_STEPS.length} passos concluídos
+                {!guideExpanded && nextStep ? " · próximo: " + nextStep.title.toLowerCase() : ""}
+              </Text>
+              <View style={[s.guideDotsWrap, { marginTop: 8 }]}>
+                {GUIDE_STEPS.map((step) => (
+                  <View key={step.id} style={[s.guideDot, stepStatus[step.id] === "done" && s.guideDotDone]} />
+                ))}
+              </View>
+            </View>
+            <Pressable onPress={() => setGuideExpanded((v) => !v)} style={s.guideCompactBtn} accessibilityLabel={guideExpanded ? "Recolher guia" : "Ver passos"}>
+              <Text style={s.guideCompactBtnTxt}>{guideExpanded ? "Recolher" : "Ver passos"}</Text>
+              <Icon name={guideExpanded ? "chevron-up" : "chevron-down"} size={12} color="#fff" />
+            </Pressable>
+            <Pressable onPress={handleDismissGuide} disabled={dismissing} style={s.guideCompactX} hitSlop={8}>
+              {dismissing ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="x" size={14} color="#fff" />}
+            </Pressable>
           </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.guideCompactTitle} numberOfLines={1}>
-              Proximo passo: {nextStep.title.toLowerCase()}
-            </Text>
-            <Text style={s.guideCompactSub}>
-              {doneCount} de {GUIDE_STEPS.length} passos
-              {GUIDE_STEPS.length - doneCount > 0
-                ? " . faltam " + (GUIDE_STEPS.length - doneCount) + " pra completar o setup"
-                : ""}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => router.push(nextStep.href as any)}
-            style={s.guideCompactBtn}
-          >
-            <Text style={s.guideCompactBtnTxt}>Continuar</Text>
-            <Icon name="arrow-right" size={12} color="#fff" />
-          </Pressable>
-          <Pressable
-            onPress={handleDismissGuide}
-            disabled={dismissing}
-            style={s.guideCompactX}
-            hitSlop={8}
-          >
-            {dismissing
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Icon name="x" size={14} color="#fff" />}
-          </Pressable>
+
+          {/* Passos (expandido) */}
+          {guideExpanded && (
+            <View style={s.guideSteps}>
+              {GUIDE_STEPS.map((step) => {
+                const st = stepStatus[step.id];
+                const done = st === "done";
+                const inprog = st === "in_progress";
+                return (
+                  <View key={step.id} style={s.guideStepRow}>
+                    <View style={[s.guideStepIcon, done && s.guideStepIconDone]}>
+                      {done ? <Icon name="check" size={13} color="#1E3A8A" /> : <Text style={s.guideStepNum}>{step.num}</Text>}
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[s.guideStepTitle, done && s.guideStepTitleDone]} numberOfLines={1}>{step.title}</Text>
+                      <Text style={s.guideStepDesc}>{done ? "Concluído" : (inprog ? "Em andamento · " : "") + step.desc}</Text>
+                    </View>
+                    {!done && (
+                      <Pressable onPress={() => router.push(step.href as any)} style={s.guideStepCta}>
+                        <Text style={s.guideStepCtaTxt}>{inprog ? "Continuar" : step.cta}</Text>
+                        <Icon name="arrow-right" size={11} color="#1E3A8A" />
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* CTA rápido do próximo passo (colapsado) */}
+          {!guideExpanded && nextStep && (
+            <Pressable onPress={() => router.push(nextStep.href as any)} style={[s.guideCompactBtn, { alignSelf: "flex-start", marginTop: 12 }]}>
+              <Text style={s.guideCompactBtnTxt}>{nextStep.cta}: {nextStep.title.toLowerCase()}</Text>
+              <Icon name="arrow-right" size={12} color="#fff" />
+            </Pressable>
+          )}
         </StudioGradient>
       )}
 
@@ -1100,6 +1121,34 @@ function buildStyles(t: StudioPalette) {
       width: 28, height: 28, borderRadius: 14,
       alignItems: "center", justifyContent: "center",
     },
+    guideCard: {
+      borderRadius: 18,
+      padding: 18,
+      marginBottom: 18,
+      ...(Platform.OS === "web" ? ({ boxShadow: "0 6px 16px rgba(15,23,42,0.12)" } as any) : null),
+    },
+    guideHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+    guideHeaderTitle: { fontSize: 15, fontWeight: "800", color: "#fff" },
+    guideSteps: { marginTop: 14, gap: 8 },
+    guideStepRow: {
+      flexDirection: "row", alignItems: "center", gap: 12,
+      backgroundColor: "rgba(255,255,255,0.10)", borderRadius: 12, padding: 10,
+    },
+    guideStepIcon: {
+      width: 28, height: 28, borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.18)",
+      alignItems: "center", justifyContent: "center",
+    },
+    guideStepIconDone: { backgroundColor: "#fff" },
+    guideStepNum: { color: "#fff", fontSize: 13, fontWeight: "800" },
+    guideStepTitle: { color: "#fff", fontSize: 13, fontWeight: "700" },
+    guideStepTitleDone: { opacity: 0.7 },
+    guideStepDesc: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, marginTop: 1 },
+    guideStepCta: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    },
+    guideStepCtaTxt: { color: "#1E3A8A", fontSize: 12, fontWeight: "800" },
 
     // ── Page header ──
     pageHeader: {

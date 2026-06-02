@@ -295,61 +295,73 @@ function NavItem({
   // Magenta-soft active state per plano "estado ativo magenta-soft":
   // background accent 10% + accent text + barra accent à esquerda.
   const activeBg = "rgba(236,72,153,0.10)";
+  const web = Platform.OS === "web";
+  // Wrapper externo = animação de entrada (não conflita com o transform de
+  // hover/press do Pressable interno).
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="link"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
-      style={({ hovered }: any) => [
-        {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          paddingVertical: 8,
-          paddingHorizontal: expanded ? (indent ? 18 : 10) : 8,
-          minHeight: 36,
-          borderRadius: 8,
-          position: "relative",
-          justifyContent: expanded ? "flex-start" : "center",
-        },
-        Platform.OS === "web" && ({ cursor: "pointer", transition: "background-color 0.15s ease" } as any),
-        hovered && !active && { backgroundColor: t.bgSoft },
-        active && { backgroundColor: activeBg },
-        enterStyle(enterDelay, reduced),
-      ]}
-    >
-      {active && (
-        <View
-          style={{
-            position: "absolute",
-            left: 2,
-            top: 8,
-            bottom: 8,
-            width: 3,
-            borderRadius: 2,
-            backgroundColor: t.accent,
-            ...(Platform.OS === "web" && !reduced ? ({ animation: "auraSbBar .3s ease both", transformOrigin: "center" } as any) : {}),
-          }}
-          pointerEvents="none"
-        />
-      )}
-      <Icon name={icon} size={16} color={active ? t.accent : t.ink2} />
-      {expanded && (
-        <Text
-          style={{
-            flex: 1,
-            fontSize: 13,
-            fontWeight: active ? "800" : "600",
-            color: active ? t.accentInk : t.ink2,
-            letterSpacing: -0.1,
-          }}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-      )}
-    </Pressable>
+    <View style={web ? enterStyle(enterDelay, reduced) : undefined}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="link"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: active }}
+        style={({ hovered, pressed }: any) => [
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingVertical: 8,
+            paddingHorizontal: expanded ? (indent ? 18 : 10) : 8,
+            minHeight: 36,
+            borderRadius: 8,
+            position: "relative",
+            justifyContent: expanded ? "flex-start" : "center",
+          },
+          web && ({ cursor: "pointer", transition: "background-color .15s ease, box-shadow .15s ease, transform .12s ease" } as any),
+          // hover: "acende" em magenta suave + glow
+          hovered && !active && { backgroundColor: t.accentSoft },
+          hovered && !active && web && ({ boxShadow: `0 2px 12px ${t.accent}26` } as any),
+          active && { backgroundColor: activeBg },
+          // clique: expande levemente o magenta (pop)
+          web && pressed && !reduced && ({ transform: "scale(1.03)", backgroundColor: activeBg } as any),
+        ]}
+      >
+        {({ hovered }: any) => (
+          <>
+            {active && (
+              <View
+                style={{
+                  position: "absolute",
+                  left: 2,
+                  top: 8,
+                  bottom: 8,
+                  width: 3,
+                  borderRadius: 2,
+                  backgroundColor: t.accent,
+                  ...(web && !reduced ? ({ animation: "auraSbBar .3s ease both", transformOrigin: "center" } as any) : {}),
+                }}
+                pointerEvents="none"
+              />
+            )}
+            <Icon name={icon} size={16} color={active || hovered ? t.accent : t.ink2} />
+            {expanded && (
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  fontWeight: active ? "800" : "600",
+                  color: active ? t.accentInk : hovered ? t.ink : t.ink2,
+                  letterSpacing: -0.1,
+                }}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+            )}
+          </>
+        )}
+      </Pressable>
+    </View>
   );
 }
 

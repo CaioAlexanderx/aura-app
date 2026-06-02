@@ -47,7 +47,8 @@ export function useStudioCatalog(
             stock_qty: parseFloat(p.stock_qty || 0),
             is_personalizable: !!p.is_personalizable,
             customization_config: p.customization_config,
-            sku: p.sku || p.barcode || p.code || null,
+            sku: p.sku || null,
+            barcode: p.barcode || null,
           }))
         );
       })
@@ -92,14 +93,16 @@ export function useStudioCatalog(
     return products.filter(
       (p) =>
         (cat === "all" || (p.category || "Sem categoria") === cat) &&
-        (!q || p.name.toLowerCase().includes(q) || (p.sku || "").toLowerCase().includes(q))
+        (!q || p.name.toLowerCase().includes(q) || (p.sku || "").toLowerCase().includes(q) || (p.barcode || "").toLowerCase().includes(q))
     );
   }, [products, cat, query]);
 
   const findByCode = useCallback(
     (code: string): ScanResult => {
       const c = code.trim().toLowerCase();
-      const hit = products.find((p) => (p.sku || "").toLowerCase() === c);
+      const hit = products.find(
+        (p) => (p.barcode || "").toLowerCase() === c || (p.sku || "").toLowerCase() === c
+      );
       return hit ? { ok: true, product: hit } : { ok: false };
     },
     [products]

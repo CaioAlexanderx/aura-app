@@ -23,6 +23,7 @@ import { StageConfigure } from "./StageConfigure";
 import { StageCheckout } from "./StageCheckout";
 import { StageDone } from "./StageDone";
 import { QuoteModal } from "./QuoteModal";
+import { AuraArcsBackground } from "./AuraArcsBackground";
 import { CategoryChip, money } from "./ui";
 import { Ic } from "./icons";
 
@@ -163,6 +164,7 @@ export default function StudioCaixaPage() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
+      <AuraArcsBackground t={t} />
       {wide ? (
         <View style={{ flex: 1, flexDirection: "row" }}>
           {MainScroll}
