@@ -38,7 +38,13 @@ import type { SalesListItem, SalesFilters } from "@/services/api";
 //
 // 29/05/2026: badge "Troca" nas linhas com type='troca'. A troca sempre
 // apareceu na listagem (backend nao filtra type), mas sem rotulo parecia
-// venda normal. O valor exibido na troca e o "levado" (newValue).
+// venda normal.
+//
+// 02/06/2026: a linha da troca agora mostra o LIQUIDO (net_amount =
+// levado - devolvido) como valor principal em laranja, com o valor cheio
+// dos produtos (total_amount) riscado/secundario embaixo. Antes mostrava
+// o "levado" cheio, inflando a leitura de faturamento. Backend manda
+// net_amount/returned_value na listagem (Aura-backend#138).
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
@@ -355,6 +361,9 @@ export default function VendasScreen() {
           {sales.map(function(sale: SaleListRow) {
             const isCancelled = sale.status === "cancelled";
             const isTroca = sale.type === "troca";
+            // 02/06/2026: troca mostra o liquido (net). Fallback p/ total se
+            // o backend ainda nao mandar net_amount (deploy parcial).
+            const trocaNet = (sale as any).net_amount != null ? (sale as any).net_amount : sale.total_amount;
             return (
               <Pressable
                 key={sale.id}
@@ -401,9 +410,20 @@ export default function VendasScreen() {
                   </View>
                 </View>
                 <View style={s.rowRight}>
-                  <Text style={[s.rowAmount, isCancelled && s.rowAmountStrike, isTroca && { color: "#fb923c" }]}>
-                    {fmt(sale.total_amount)}
-                  </Text>
+                  {isTroca ? (
+                    <View style={s.rowRightStack}>
+                      <Text style={[s.rowAmount, { color: "#fb923c" }, isCancelled && s.rowAmountStrike]}>
+                        {(trocaNet >= 0 ? "+ " : "- ") + fmt(Math.abs(trocaNet))}
+                      </Text>
+                      <Text style={s.rowTrocaSub} numberOfLines={1}>
+                        liquido · <Text style={s.rowTrocaStrike}>{fmt(sale.total_amount)}</Text>
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={[s.rowAmount, isCancelled && s.rowAmountStrike]}>
+                      {fmt(sale.total_amount)}
+                    </Text>
+                  )}
                   {isCancelled && (
                     <View style={s.rowCancelBadge}>
                       <Text style={s.rowCancelText}>Cancelada</Text>
@@ -533,7 +553,11 @@ const s = StyleSheet.create({
   // MULTICNPJ Onda 2.4: pill da loja (violeta pra destacar)
   rowCompanyPill: { backgroundColor: Colors.violetD, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 140 },
   rowCompanyPillText: { fontSize: 9.5, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.2 },
-  rowRight: { alignItems: "flex-end", gap: 4, flexDirection: "row" },
+  rowRight: { alignItems: "center", gap: 4, flexDirection: "row" },
+  // 02/06/2026: stack vertical p/ troca (liquido + valor cheio riscado)
+  rowRightStack: { alignItems: "flex-end" },
+  rowTrocaSub: { fontSize: 9.5, color: Colors.ink3, marginTop: 1 },
+  rowTrocaStrike: { textDecorationLine: "line-through" as any, color: Colors.ink3 },
   rowAmount: { fontSize: 13, color: Colors.green, fontWeight: "700" },
   rowAmountStrike: { color: Colors.red, textDecorationLine: "line-through" as any },
   rowCancelBadge: { backgroundColor: Colors.redD, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: Colors.red + "55" },
