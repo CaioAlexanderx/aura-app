@@ -10,6 +10,23 @@ export type ProductCategoryRow = {
   product_count: number;
 };
 
+// Calendário comercial (datas que movimentam o comércio). Resposta de
+// GET /companies/:id/commercial-dates — ver Aura-backend migration 143.
+export type CommercialDateRow = {
+  slug: string;
+  name: string;
+  description: string | null;
+  intensity: 1 | 2 | 3;
+  date: string;            // YYYY-MM-DD da próxima ocorrência
+  days_until: number;
+  is_period: boolean;
+  window_before_days: number;
+  window_start: string;    // YYYY-MM-DD
+  in_window: boolean;
+  is_custom: boolean;
+};
+export type CommercialDatesResponse = { reference_date: string; dates: CommercialDateRow[] };
+
 // 30/05/2026: parametros expandidos do ranking ABC (PR fix Eryca).
 // Backend novo aceita limit/offset/abc — UI consome em chunks de 25.
 export type ProductsRankingOpts = {
@@ -84,6 +101,11 @@ export var companiesApi = {
   retention: function(companyId: string, period?: string) { return request<any>("/companies/" + companyId + "/customers/retention?period=" + (period || "month")); },
   birthdays: function(companyId: string, days: number) {
     return request<{ days: number; total: number; customers: any[] }>("/companies/" + companyId + "/customers/birthdays?days=" + days, { retry: 1 });
+  },
+  // Calendário comercial: próxima ocorrência de cada data, ordenada por
+  // proximidade (datas que movimentam o comércio, intensidade 1/2/3).
+  commercialDates: function(companyId: string, horizon?: number) {
+    return request<CommercialDatesResponse>("/companies/" + companyId + "/commercial-dates" + (horizon ? "?horizon=" + horizon : ""), { retry: 1 });
   },
   reviews: function(companyId: string, rating?: number) { return request<any>("/companies/" + companyId + "/reviews" + (rating ? "?rating=" + rating : "")); },
   requestReview: function(companyId: string, saleId: string, customerId?: string) { return request<any>("/companies/" + companyId + "/reviews/request", { method: "POST", body: { sale_id: saleId, customer_id: customerId } }); },
