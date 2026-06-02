@@ -4,10 +4,12 @@
 // preview ao vivo + CTA "Personalizar →") vs comum (neutro + inicial
 // + CTA "Adicionar +"). Hover-lift no web.
 // ============================================================
+import { useRef } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import type { StudioProduct } from "./types";
+import type { FlyRect } from "./flyToCart";
 import { PersonalizableBadge, money } from "./ui";
 import { Ic } from "./icons";
 
@@ -17,15 +19,26 @@ export function ProductCard({
   t: StudioPalette;
   product: StudioProduct;
   inCartQty: number;
-  onPress: (p: StudioProduct) => void;
+  onPress: (p: StudioProduct, rect?: FlyRect | null) => void;
 }) {
   const p = product;
   const custom = p.is_personalizable;
   const edge = custom ? t.accent : t.ink5;
+  const ref = useRef<any>(null);
+
+  function measureAndPress() {
+    let rect: FlyRect | null = null;
+    if (Platform.OS === "web" && ref.current && (ref.current as any).getBoundingClientRect) {
+      const r = (ref.current as any).getBoundingClientRect();
+      rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+    }
+    onPress(p, rect);
+  }
 
   return (
     <Pressable
-      onPress={() => onPress(p)}
+      ref={ref}
+      onPress={measureAndPress}
       style={({ hovered, pressed }: any) => ({
         backgroundColor: t.paperCardElev, borderRadius: 14, padding: 13,
         borderWidth: 1, borderColor: t.ink5,

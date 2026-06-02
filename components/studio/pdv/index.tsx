@@ -5,7 +5,7 @@
 // Lógica de dados/negócio reaproveitada do caixa.tsx original.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { View, Text, Pressable, ScrollView, Platform, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, ScrollView, Platform, useWindowDimensions, AccessibilityInfo } from "react-native";
 import { useAuthStore } from "@/stores/auth";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioLoading } from "@/components/studio/StudioLoading";
@@ -18,6 +18,7 @@ import { useStudioCart } from "./useStudioCart";
 import { useStudioCheckout } from "./useStudioCheckout";
 import { Hero, KpiStrip, Toolbar } from "./Chrome";
 import { ProductCard } from "./ProductCard";
+import { flyToCart, type FlyRect } from "./flyToCart";
 import { CartSidebar } from "./CartSidebar";
 import { StageConfigure } from "./StageConfigure";
 import { StageCheckout } from "./StageCheckout";
@@ -29,7 +30,18 @@ import { Ic } from "./icons";
 
 type ConfigureTarget = { product: StudioProduct; values: Record<string, any>; qty: number; editLineId: string | null };
 
+function useReduceMotion() {
+  const [rm, setRm] = useState(false);
+  useEffect(() => {
+    let m = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((e) => { if (m) setRm(!!e); });
+    return () => { m = false; };
+  }, []);
+  return rm;
+}
+
 export default function StudioCaixaPage() {
+  const reducedMotion = useReduceMotion();
   const auth = useAuthStore();
   const t = useStudioTokens();
   const cid = (auth.company as any)?.id as string | undefined;
@@ -55,10 +67,12 @@ export default function StudioCaixaPage() {
     setConfigure({ product: p, values: line?.values || {}, qty: line?.qty || 1, editLineId: line?.lineId || null });
   }, []);
 
-  const handleProductPress = useCallback((p: StudioProduct) => {
-    if (p.is_personalizable) openConfigure(p);
-    else { cart.addSimple(p); toast.success(p.name + " adicionado"); }
-  }, [cart, openConfigure]);
+  const handleProductPress = useCallback((p: StudioProduct, rect?: FlyRect | null) => {
+    if (p.is_personalizable) { openConfigure(p); return; }
+    cart.addSimple(p);
+    toast.success(p.name + " adicionado");
+    if (!reducedMotion) flyToCart(rect, (p.name || "?").charAt(0).toUpperCase(), t.primary);
+  }, [cart, openConfigure, reducedMotion, t.primary]);
 
   const catalog = useStudioCatalog(cid, handleProductPress);
 
@@ -182,6 +196,7 @@ export default function StudioCaixaPage() {
           {cart.count > 0 && (
             <Pressable
               onPress={() => setStage("checkout")}
+              dataSet={{ flyTarget: "cart" }}
               style={{ position: "absolute", left: 12, right: 12, bottom: 12, backgroundColor: t.ink, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}) }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
