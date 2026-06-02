@@ -47,6 +47,12 @@ export type SalesListItem = {
   // 29/05/2026: 'sale' | 'troca'. Backend GET /sales expoe o type pra UI
   // marcar a linha como "Troca" (a troca sempre apareceu na listagem).
   type?: "sale" | "troca" | string;
+  // 02/06/2026: troca segmentada. exchange_of_sale_id = venda original;
+  // returned_value = valor devolvido; net_amount = liquido (novos - devolvidos)
+  // pra venda normal, net_amount === total_amount.
+  exchange_of_sale_id?: string | null;
+  returned_value?: number;
+  net_amount?: number;
   cancelled_at?: string | null;
   created_at: string;
   customer: { id: string; name: string } | null;
@@ -71,6 +77,27 @@ export type SalesListResponse = {
   stats: SalesStats;
 };
 
+// 02/06/2026: item devolvido na troca (lado "saiu do carrinho do cliente").
+export type SaleReturnedItem = {
+  product_id: string | null;
+  variant_id: string | null;
+  quantity: number;
+  unit_price: number;
+  product_name: string;
+  image_url?: string | null;
+  original_sale_id: string | null;
+};
+
+// 02/06/2026: bloco `troca` no detalhe — so presente quando sale.type === 'troca'.
+export type SaleTrocaBlock = {
+  exchange_of_sale_id: string | null;
+  returned_value: number;
+  new_value: number;
+  net_amount: number;
+  returned_items: SaleReturnedItem[];
+  payments: Array<{ method: string; amount: number }>;
+};
+
 export type SaleDetailFull = {
   sale: {
     id: string;
@@ -78,6 +105,9 @@ export type SaleDetailFull = {
     discount_amount: number;
     payment_method: string | null;
     status: SaleStatus;
+    // 02/06/2026: type + exchange_of_sale_id no detalhe.
+    type?: "sale" | "troca" | string;
+    exchange_of_sale_id?: string | null;
     cancelled_at?: string | null;
     created_at: string;
     notes: string | null;
@@ -88,6 +118,23 @@ export type SaleDetailFull = {
   customer: { id: string; name: string; phone: string | null; email: string | null } | null;
   seller: { id: string | null; name: string | null };
   items: SaleDetailsItem[];
+  // 02/06/2026: null em venda normal; preenchido em troca.
+  troca?: SaleTrocaBlock | null;
+};
+
+// 02/06/2026: retorno do cancel — campos de troca quando type='troca'.
+export type CancelSaleResult = {
+  ok: boolean;
+  sale_id: string;
+  type?: "sale" | "troca" | string;
+  refunded_amount: number;
+  items_returned: number;
+  payments_removed?: number;
+  payments_amount?: number;
+  troca_returned_decremented?: number;
+  troca_tx_removed?: number;
+  payouts_reversed?: number;
+  fiscal_warnings?: string[];
 };
 
 export type SalesFilters = {
@@ -98,9 +145,6 @@ export type SalesFilters = {
   customer_id?: string;
   q?: string;
   // 11/05/2026: filtro de busca por codigo de barras do produto.
-  // Backend (sales.js buildWhere) lista vendas que contem item cujo
-  // product.barcode OU variant.barcode bate. Usado pela TrocaModal pra
-  // localizar venda original via codigo bipado pelo cliente.
   product_barcode?: string;
   limit?: number;
   offset?: number;
@@ -125,7 +169,7 @@ export var salesApi = {
     return request<SaleDetailFull>("/companies/" + companyId + "/sales/" + saleId, { retry: 1 });
   },
   cancel: function(companyId: string, saleId: string, reason?: string) {
-    return request<{ ok: boolean; sale_id: string; refunded_amount: number; items_returned: number }>(
+    return request<CancelSaleResult>(
       "/companies/" + companyId + "/sales/" + saleId + "/cancel",
       { method: "POST", body: { reason: reason || "" }, retry: 0, timeout: 15000 }
     );
