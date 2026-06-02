@@ -12,6 +12,7 @@ import { useAuthStore } from "@/stores/auth";
 import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import type { AgingRow } from "@/services/creditApi";
+import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 
 var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,6 +45,7 @@ export default function CrediarioScreen() {
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
+  const [showCriar, setShowCriar] = useState(false);
 
   // F3-3B (29/05/2026): IS_WIDE/IS_NARROW calculados em tempo de execucao via
   // useWindowDimensions, nao mais como constante de modulo (que nao recalculava em resize).
@@ -150,10 +152,16 @@ export default function CrediarioScreen() {
             <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
           </View>
         </View>
-        <Pressable onPress={() => router.push("/crediario/settings" as any)} style={s.settingsBtn}>
-          <Icon name="settings" size={15} color={Colors.violet3} />
-          <Text style={s.settingsBtnText}>Régua</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable onPress={() => setShowCriar(true)} style={s.settingsBtn}>
+            <Icon name="plus" size={15} color={Colors.violet3} />
+            <Text style={s.settingsBtnText}>Lançamento</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push("/crediario/settings" as any)} style={s.settingsBtn}>
+            <Icon name="settings" size={15} color={Colors.violet3} />
+            <Text style={s.settingsBtnText}>Régua</Text>
+          </Pressable>
+        </View>
       </View>
 
       {kpis && (
@@ -330,6 +338,8 @@ export default function CrediarioScreen() {
           )}
         </>
       )}
+
+      <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} />
     </ScrollView>
   );
 }
