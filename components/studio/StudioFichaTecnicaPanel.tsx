@@ -171,9 +171,7 @@ export default function StudioFichaTecnicaPanel({
   const [openPickerIdx, setOpenPickerIdx] = useState<number | null>(null);
   const [pickerQuery, setPickerQuery] = useState<string>("");
   const [novoInsumoOpen, setNovoInsumoOpen] = useState(false);
-  // Tracks which variant field is currently chosen per row (when multiple variants exist)
   const [activeVariantFieldByIdx, setActiveVariantFieldByIdx] = useState<Record<number, string>>({});
-  // Tracks open-picker for "Varia por" select per row
   const [openVariantPickerIdx, setOpenVariantPickerIdx] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -193,7 +191,6 @@ export default function StudioFichaTecnicaPanel({
       setNotes(compRes?.composition?.notes || "");
       setInputs(Array.isArray(inputsRes?.inputs) ? inputsRes.inputs : []);
 
-      // Pre-populate activeVariantFieldByIdx from saved data
       const initActive: Record<number, string> = {};
       loadedItems.forEach((it, idx) => {
         if (it.qty_multiplier_by_option) {
@@ -207,12 +204,7 @@ export default function StudioFichaTecnicaPanel({
       const code = e?.code;
       const message = e?.message;
       const data = e?.data || {};
-      console.error("[StudioFichaTecnicaPanel.load]", {
-        status,
-        code,
-        message,
-        data,
-      });
+      console.error("[StudioFichaTecnicaPanel.load]", { status, code, message, data });
       toast.error("[" + (status || "?") + "] " + (data.error || message || "Erro ao carregar ficha tecnica"));
     } finally {
       setLoading(false);
@@ -223,13 +215,11 @@ export default function StudioFichaTecnicaPanel({
     load();
   }, [load]);
 
-  // Compute "average multiplier" for a row (used in totalCost / footer estimation)
   const computeAvgMultiplier = useCallback(
     (it: CompositionItem): number => {
       if (!it.qty_multiplier_by_option) return 1;
       const fieldKeys = Object.keys(it.qty_multiplier_by_option);
       if (fieldKeys.length === 0) return 1;
-      // Use first variant field
       const fk = fieldKeys[0];
       const map = it.qty_multiplier_by_option[fk] || {};
       const values = Object.values(map).map((v) => Number(v) || 0);
@@ -262,6 +252,12 @@ export default function StudioFichaTecnicaPanel({
   );
 
   const marginTone = useMemo(() => getMarginTone(marginPct, t), [marginPct, t]);
+
+  // True quando a ficha está vazia (nenhum item com insumo e qty > 0)
+  const fichaVazia = useMemo(
+    () => items.length === 0 || !items.some((it) => it.input_id && Number(it.qty_per_unit) > 0),
+    [items]
+  );
 
   const addRow = useCallback(() => {
     setItems((prev) => [
@@ -313,11 +309,9 @@ export default function StudioFichaTecnicaPanel({
     []
   );
 
-  // Toggle Fixa <-> Por variante for a row
   const toggleVariantMode = useCallback(
     (idx: number, on: boolean) => {
       if (!on) {
-        // Switch back to Fixa
         setItems((prev) =>
           prev.map((it, i) =>
             i === idx ? { ...it, qty_multiplier_by_option: null } : it
@@ -334,7 +328,6 @@ export default function StudioFichaTecnicaPanel({
         toast.error("Produto sem variantes. Cadastre options em Personalizacao");
         return;
       }
-      // Pick variant: if only 1, use it; else default to first and let user change
       const chosen = variants[0];
       const initialMap: Record<string, number> = {};
       chosen.values.forEach((v) => {
@@ -420,12 +413,7 @@ export default function StudioFichaTecnicaPanel({
       const code = e?.code;
       const message = e?.message;
       const data = e?.data || {};
-      console.error("[StudioFichaTecnicaPanel.save]", {
-        status,
-        code,
-        message,
-        data,
-      });
+      console.error("[StudioFichaTecnicaPanel.save]", { status, code, message, data });
       toast.error("[" + (status || "?") + "] " + (data.error || message || "Erro ao salvar"));
     } finally {
       setSaving(false);
@@ -511,13 +499,23 @@ export default function StudioFichaTecnicaPanel({
             <Text style={styles.kpiLabel}>Preco de venda</Text>
             <Text style={[styles.kpiValue, { color: t.ink }]}>{formatBRL(safeProductPrice)}</Text>
           </View>
-          <View style={[styles.kpiBox, styles.kpiMargin, { backgroundColor: marginTone.bg }]}>
-            <Text style={[styles.kpiLabel, { color: marginTone.fg }]}>Margem</Text>
-            <Text style={[styles.kpiValue, { color: marginTone.fg }]}>
-              {marginPct == null ? "-" : marginPct.toFixed(1) + "%"}
-            </Text>
-            <Text style={[styles.kpiSub, { color: marginTone.fg }]}>{formatBRL(marginValue)}</Text>
-          </View>
+          {/* Margem: só exibe se a ficha tem itens reais; caso contrário mostra callout */}
+          {fichaVazia ? (
+            <View style={[styles.kpiBox, styles.kpiMargin, styles.kpiMarginEmpty]}>
+              <Feather name="info" size={13} color={t.ink3} />
+              <Text style={[styles.kpiEmptyMsg, { color: t.ink3 }]}>
+                Defina a ficha tecnica para ver custo e margem
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.kpiBox, styles.kpiMargin, { backgroundColor: marginTone.bg }]}>
+              <Text style={[styles.kpiLabel, { color: marginTone.fg }]}>Margem</Text>
+              <Text style={[styles.kpiValue, { color: marginTone.fg }]}>
+                {marginPct == null ? "-" : marginPct.toFixed(1) + "%"}
+              </Text>
+              <Text style={[styles.kpiSub, { color: marginTone.fg }]}>{formatBRL(marginValue)}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -772,7 +770,6 @@ export default function StudioFichaTecnicaPanel({
                       </View>
                     ) : null}
 
-                    {/* Multipliers table */}
                     <View style={styles.multiplierTable}>
                       <View style={[styles.multiplierHeaderRow, { backgroundColor: t.bgSoft }]}>
                         <Text style={[styles.multiplierHeaderCell, { flex: 1 }]}>Valor</Text>
@@ -996,6 +993,20 @@ function buildStyles(t: StudioPalette) {
     },
     kpiMargin: {
       borderWidth: 0,
+    },
+    // Estado vazio da margem: sem custo/itens
+    kpiMarginEmpty: {
+      backgroundColor: t.bgSoft,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      justifyContent: "center",
+    },
+    kpiEmptyMsg: {
+      fontSize: 11,
+      fontWeight: "600",
+      flex: 1,
+      lineHeight: 15,
     },
     kpiLabel: {
       fontSize: 11,
