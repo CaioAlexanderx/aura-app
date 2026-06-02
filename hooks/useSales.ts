@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { salesApi, type SalesListResponse, type SaleDetailFull } from "@/services/api";
+import type { EmitNfceBody } from "@/services/salesApi";
 import { meAggregatesApi, type SalesFilters, type SalesConsolidatedResponse } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 
@@ -28,6 +29,10 @@ import { useAuthStore } from "@/stores/auth";
 // useUpdateSaleSeller(companyId?): mutation pra alterar/remover vendedor
 //   - companyId opcional: mesmo padrao do useCancelSale.
 //   - invalida lista + detalhes ao concluir.
+//
+// 02/06/2026 (b) — useEmitNfce / useReemitTrocaFiscal: emite NFC-e (venda)
+//   ou reprocessa NF-e 55 de devolucao (troca) a partir do detalhe. Ambas
+//   invalidam o detalhe pra atualizar o status fiscal exibido.
 // ============================================================
 
 export function useSalesList(filters?: SalesFilters) {
@@ -149,6 +154,54 @@ export function useUpdateSaleSeller(companyId?: string) {
   return {
     updateSeller: function(args: { saleId: string; seller_id: string | null }) { return mutation.mutateAsync(args); },
     isUpdating: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}
+
+// 02/06/2026 (b): emite NFC-e (modelo 65) por venda a partir do detalhe.
+export function useEmitNfce(companyId?: string) {
+  const { company } = useAuthStore();
+  const targetCompanyId = companyId || company?.id;
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: function(args: { body: EmitNfceBody }) {
+      if (!targetCompanyId) throw new Error("no company");
+      return salesApi.emitNfce(targetCompanyId, args.body);
+    },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["sale-detail"] });
+      qc.invalidateQueries({ queryKey: ["nfce"] });
+    },
+  });
+
+  return {
+    emitNfce: function(args: { body: EmitNfceBody }) { return mutation.mutateAsync(args); },
+    isEmitting: mutation.isPending,
+    error: mutation.error as Error | null,
+  };
+}
+
+// 02/06/2026 (b): reprocessa a NF-e 55 de devolucao da troca a partir do detalhe.
+export function useReemitTrocaFiscal(companyId?: string) {
+  const { company } = useAuthStore();
+  const targetCompanyId = companyId || company?.id;
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: function(args: { trocaSaleId: string }) {
+      if (!targetCompanyId) throw new Error("no company");
+      return salesApi.reemitTrocaFiscal(targetCompanyId, args.trocaSaleId);
+    },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["sale-detail"] });
+      qc.invalidateQueries({ queryKey: ["nfce"] });
+    },
+  });
+
+  return {
+    reemitTrocaFiscal: function(args: { trocaSaleId: string }) { return mutation.mutateAsync(args); },
+    isReemitting: mutation.isPending,
     error: mutation.error as Error | null,
   };
 }

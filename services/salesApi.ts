@@ -98,6 +98,22 @@ export type SaleTrocaBlock = {
   payments: Array<{ method: string; amount: number }>;
 };
 
+// 02/06/2026 (b): emissao fiscal da venda (NFC-e 65 / NF-e 55 devolucao).
+export type SaleFiscalEmission = {
+  id: string;
+  tipo: "nfce" | "nfe" | "nfe_devolucao" | string;
+  status: string; // autorizada | rejeitada | processando | pendente | falha | cancelada | erro
+  numero: number | null;
+  serie: number | null;
+  chave_acesso: string | null;
+  pdf_url: string | null;
+  qr_code: string | null;
+  url_consulta: string | null;
+  error_message: string | null;
+  created_at: string;
+  authorized_at: string | null;
+};
+
 export type SaleDetailFull = {
   sale: {
     id: string;
@@ -120,6 +136,8 @@ export type SaleDetailFull = {
   items: SaleDetailsItem[];
   // 02/06/2026: null em venda normal; preenchido em troca.
   troca?: SaleTrocaBlock | null;
+  // 02/06/2026 (b): emissoes fiscais da venda (pode ser vazio).
+  fiscal?: SaleFiscalEmission[];
 };
 
 // 02/06/2026: retorno do cancel — campos de troca quando type='troca'.
@@ -135,6 +153,53 @@ export type CancelSaleResult = {
   troca_tx_removed?: number;
   payouts_reversed?: number;
   fiscal_warnings?: string[];
+};
+
+// 02/06/2026 (b): emitir NFC-e/NF-e por venda (POST /nfce/emit).
+export type EmitNfceItem = {
+  product_id?: string | null;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  discount?: number;
+  ncm?: string | null;
+  barcode?: string | null;
+};
+
+export type EmitNfceBody = {
+  sale_id: string;
+  items: EmitNfceItem[];
+  tipo?: "nfce" | "nfe";
+  payment_method?: string;
+  customer_cpf?: string | null;
+  customer_name?: string | null;
+};
+
+export type EmitNfceResult = {
+  nfce: any;
+  tipo: string;
+  pdf_url?: string | null;
+  xml_url?: string | null;
+  qr_code?: string | null;
+  url_consulta?: string | null;
+  motivo?: string | null;
+  cStat?: string | null;
+  idempotent?: boolean;
+};
+
+// 02/06/2026 (b): reprocessar NF-e 55 de devolucao da troca.
+export type ReemitTrocaResult = {
+  success: boolean;
+  message?: string;
+  fiscal: {
+    per_origin: Array<{
+      origin_sale_id?: string;
+      strategy?: string;
+      status?: string;
+      chave_acesso?: string | null;
+      error?: string | null;
+    }>;
+  };
 };
 
 export type SalesFilters = {
@@ -178,6 +243,21 @@ export var salesApi = {
     return request<{ ok: boolean; sale_id: string; seller_id: string | null; seller_name: string | null }>(
       "/companies/" + companyId + "/sales/" + saleId,
       { method: "PATCH", body: { seller_id: seller_id }, retry: 0 }
+    );
+  },
+  // 02/06/2026 (b): emite NFC-e (ou NF-e) por venda. Idempotente no backend
+  // (se ja existe nota autorizada/processando da mesma tipo, devolve ela).
+  emitNfce: function(companyId: string, body: EmitNfceBody) {
+    return request<EmitNfceResult>(
+      "/companies/" + companyId + "/nfce/emit",
+      { method: "POST", body: body, retry: 0, timeout: 30000 }
+    );
+  },
+  // 02/06/2026 (b): reprocessa a NF-e 55 de devolucao da troca (pendente/falha).
+  reemitTrocaFiscal: function(companyId: string, trocaSaleId: string) {
+    return request<ReemitTrocaResult>(
+      "/companies/" + companyId + "/pdv/troca/" + trocaSaleId + "/reemitir-fiscal",
+      { method: "POST", body: {}, retry: 0, timeout: 30000 }
     );
   },
 };

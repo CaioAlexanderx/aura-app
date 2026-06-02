@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { useSaleDetail, useCancelSale, useUpdateSaleSeller } from "@/hooks/useSales";
+import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
 import { employeesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
@@ -18,6 +18,11 @@ import { useAuthStore } from "@/stores/auth";
 // Conciliação no Financeiro) e o "Cancelar venda" vira "Cancelar troca"
 // (reverte estoque dos dois lados + transações + NF-e). Dados no bloco
 // detail.troca (backend Aura-backend#138).
+//
+// 02/06/2026 (b) — Secao "Nota fiscal": mostra o status da emissao da venda
+// (detail.fiscal) e um botao pra Emitir NFC-e (venda) ou Reprocessar a NF-e
+// 55 de devolucao (troca). Links DANFE/consulta quando autorizada; motivo
+// quando rejeitada.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -46,7 +51,21 @@ const PAYMENT_LABELS: Record<string, string> = {
   vale: "Vale",
 };
 
+const FISCAL_STATUS_LABELS: Record<string, string> = {
+  autorizada: "Autorizada",
+  rejeitada: "Rejeitada",
+  processando: "Processando",
+  pendente: "Pendente",
+  falha: "Falha",
+  cancelada: "Cancelada",
+  erro: "Erro",
+};
+
 const TROCA_ORANGE = "#fb923c";
+
+function fiscalStatusLabel(st: string) {
+  return FISCAL_STATUS_LABELS[(st || "").toLowerCase()] || st || "—";
+}
 
 export function SaleDetailModal({
   visible, saleId, onClose, onEditTransaction,
@@ -62,6 +81,8 @@ export function SaleDetailModal({
   const { detail, isLoading, error } = useSaleDetail(visible ? saleId : null, companyId);
   const { cancelSale, isCancelling } = useCancelSale(companyId);
   const { updateSeller, isUpdating } = useUpdateSaleSeller(companyId);
+  const { emitNfce, isEmitting } = useEmitNfce(companyId);
+  const { reemitTrocaFiscal, isReemitting } = useReemitTrocaFiscal(companyId);
   const { company } = useAuthStore();
   const effectiveCompanyId = companyId || company?.id;
 
@@ -136,6 +157,48 @@ export function SaleDetailModal({
     }
   }
 
+  function openFiscalLink(em: any) {
+    const url = (em && (em.pdf_url || em.url_consulta)) || null;
+    if (url) { try { Linking.openURL(url); } catch (_) {} }
+  }
+
+  async function handleEmitFiscal() {
+    if (!saleId || !sale) return;
+    try {
+      if (isTroca) {
+        const r = await reemitTrocaFiscal({ trocaSaleId: saleId });
+        const po = (r && r.fiscal && r.fiscal.per_origin) || [];
+        const okAny = po.some(function(p: any) { return (p.status || "").toLowerCase().indexOf("autoriz") >= 0; });
+        const errAny = po.find(function(p: any) { return p.error || (p.status || "").toLowerCase().indexOf("rejeit") >= 0; });
+        if (okAny) toast.success("NF-e de devolucao reprocessada com sucesso.");
+        else if (errAny) toast.error("Reprocessada com pendencia: " + (errAny.error || fiscalStatusLabel(errAny.status)));
+        else toast.success((r && r.message) || "Reprocessamento disparado.");
+      } else {
+        const body = {
+          sale_id: saleId,
+          tipo: "nfce" as const,
+          payment_method: sale.payment_method || "dinheiro",
+          items: items.map(function(it) {
+            return {
+              product_id: it.product_id,
+              product_name: it.product_name,
+              quantity: it.quantity,
+              unit_price: it.unit_price,
+              discount: it.discount,
+            };
+          }),
+        };
+        const r = await emitNfce({ body: body });
+        const st = (r && r.nfce && r.nfce.status) || "";
+        if (st === "rejeitada") toast.error("NFC-e rejeitada: " + ((r && r.motivo) || "ver detalhe"));
+        else if (r && r.idempotent) toast.success("Esta venda ja tinha NFC-e emitida.");
+        else toast.success("NFC-e emitida com sucesso.");
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.message || "Erro ao emitir nota fiscal");
+    }
+  }
+
   const sale = detail?.sale;
   const isCancelled = sale?.status === "cancelled";
   const items = detail?.items || [];
@@ -146,6 +209,15 @@ export function SaleDetailModal({
   // 02/06/2026: troca segmentada
   const isTroca = (sale?.type as string) === "troca";
   const troca = detail?.troca || null;
+
+  // 02/06/2026 (b): estado fiscal — emissao relevante por tipo de venda.
+  const fiscalList = detail?.fiscal || [];
+  const relTipos = isTroca ? ["nfe", "nfe_devolucao"] : ["nfce"];
+  const relevantFiscal = fiscalList.filter(function(f) { return relTipos.indexOf(f.tipo) >= 0; });
+  const authorizedEmission = relevantFiscal.find(function(f) { return f.status === "autorizada"; }) || null;
+  const latestFiscal = relevantFiscal.length ? relevantFiscal[0] : null;
+  const fiscalDocLabel = isTroca ? "NF-e de devolucao" : "NFC-e";
+  const fiscalBusy = isEmitting || isReemitting;
 
   return (
     <View style={s.overlay}>
@@ -352,6 +424,61 @@ export function SaleDetailModal({
               <View style={s.notesBox}>
                 <Text style={s.notesLabel}>Observacoes</Text>
                 <Text style={s.notesText}>{sale.notes}</Text>
+              </View>
+            )}
+
+            {/* 02/06/2026 (b): Nota fiscal */}
+            {!isCancelled && (
+              <View style={s.fiscalBox}>
+                <Text style={s.fiscalTitle}>Nota fiscal</Text>
+                {authorizedEmission ? (
+                  <View style={s.fiscalRow}>
+                    <View style={s.fiscalOkPill}>
+                      <Icon name="info" size={11} color={Colors.green} />
+                      <Text style={s.fiscalOkText}>
+                        {fiscalDocLabel}{authorizedEmission.numero ? (" no " + authorizedEmission.numero) : ""} autorizada
+                      </Text>
+                    </View>
+                    {(authorizedEmission.pdf_url || authorizedEmission.url_consulta) && (
+                      <Pressable onPress={function() { openFiscalLink(authorizedEmission); }} style={s.fiscalLinkBtn}>
+                        <Icon name="info" size={12} color={Colors.violet3} />
+                        <Text style={s.fiscalLinkText}>{authorizedEmission.pdf_url ? "Ver DANFE" : "Consultar SEFAZ"}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ) : (
+                  <>
+                    {latestFiscal && latestFiscal.status !== "autorizada" ? (
+                      <View style={s.fiscalErr}>
+                        <Icon name="alert" size={12} color={Colors.red} />
+                        <Text style={s.fiscalErrText}>
+                          {fiscalStatusLabel(latestFiscal.status)}
+                          {latestFiscal.error_message ? (" — " + latestFiscal.error_message) : ""}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={s.fiscalNone}>
+                        {isTroca ? "A NF-e de devolucao desta troca ainda nao foi emitida." : "Esta venda ainda nao tem NFC-e emitida."}
+                      </Text>
+                    )}
+                    <Pressable
+                      onPress={handleEmitFiscal}
+                      disabled={fiscalBusy}
+                      style={[s.actionBtn, s.fiscalEmitBtn]}
+                    >
+                      {fiscalBusy ? (
+                        <ActivityIndicator color={Colors.violet3} size="small" />
+                      ) : (
+                        <>
+                          <Icon name="info" size={13} color={Colors.violet3} />
+                          <Text style={s.fiscalEmitText}>
+                            {isTroca ? "Reprocessar NF-e de devolucao" : "Emitir NFC-e"}
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </>
+                )}
               </View>
             )}
 
@@ -591,6 +718,20 @@ const s = StyleSheet.create({
   notesBox: { backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
   notesLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
   notesText: { fontSize: 12, color: Colors.ink, marginTop: 4, lineHeight: 17 },
+
+  // 02/06/2026 (b): Nota fiscal
+  fiscalBox: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 12, gap: 8 },
+  fiscalTitle: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  fiscalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
+  fiscalOkPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: Colors.green + "33" },
+  fiscalOkText: { fontSize: 11.5, color: Colors.green, fontWeight: "700" },
+  fiscalLinkBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  fiscalLinkText: { fontSize: 11.5, color: Colors.violet3, fontWeight: "700" },
+  fiscalErr: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red + "33" },
+  fiscalErrText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 15 },
+  fiscalNone: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
+  fiscalEmitBtn: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  fiscalEmitText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
 
   cancelledHint: { flexDirection: "row", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: Colors.red + "33" },
   cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 15 },
