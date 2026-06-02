@@ -17,6 +17,7 @@ export type StudioProduct = {
   is_personalizable: boolean;
   customization_config: CustomizationConfig | null;
   sku?: string | null;        // usado pelo leitor de código (DD-8)
+  barcode?: string | null;    // código de barras (campo mais populado p/ scanner)
 };
 
 export type CartLine = {

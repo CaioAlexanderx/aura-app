@@ -520,7 +520,6 @@ function ProductExpanded({
             </Text>
           </View>
           <View style={s.expandedChipsRow}>
-            <ProductQualityScore product={product as any} badgeOnly />
             {personalizableChip && (
               <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
                 <Icon name="sparkles" size={10} color={t.primary} />
@@ -538,6 +537,9 @@ function ProductExpanded({
           </View>
         </View>
       </View>
+
+      {/* Qualidade do cadastro — checklist acionável do que falta melhorar */}
+      <ProductQualityScore product={product as any} />
 
       {/* Seção 1 — Dados básicos */}
       <SectionCard

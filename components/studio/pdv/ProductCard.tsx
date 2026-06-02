@@ -73,7 +73,7 @@ export function ProductCard({
           {p.name}
         </Text>
         <Text style={{ fontSize: 10.5, color: t.ink3 }} numberOfLines={1}>
-          {p.sku ? "SKU " + String(p.sku).slice(-6) : (p.category || "—")}
+          {p.sku ? "SKU " + String(p.sku).slice(-6) : p.barcode ? "Cód " + String(p.barcode).slice(-6) : (p.category || "—")}
         </Text>
       </View>
 
