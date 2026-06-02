@@ -27,6 +27,7 @@ import Reanimated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing,
 } from "react-native-reanimated";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { Fonts } from "@/constants/fonts";
 
 // ─── On-load micro-gesto hook ───────────────────────────────
 function useLogoEntrance() {
@@ -65,6 +66,29 @@ function useLogoEntrance() {
   }));
 }
 
+// ─── Garante Instrument Serif pro wordmark, mesmo sob o override
+// global "* { font-family: DM Sans !important }" do layout do varejo.
+// Seletor de atributo [data-aura-wm] + !important vence o "*"; link da
+// fonte com id próprio pra não colidir com o loader de fontes do app.
+function useStudioBrandFont() {
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (!document.getElementById("aura-studio-serif")) {
+      const lk = document.createElement("link");
+      lk.id = "aura-studio-serif";
+      lk.rel = "stylesheet";
+      lk.href = "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap";
+      document.head.appendChild(lk);
+    }
+    if (!document.getElementById("aura-studio-wm-font")) {
+      const st = document.createElement("style");
+      st.id = "aura-studio-wm-font";
+      st.textContent = "[data-aura-wm]{font-family:'Instrument Serif',Georgia,serif !important;}";
+      document.head.appendChild(st);
+    }
+  }, []);
+}
+
 // ─── Mark (símbolo somente) ────────────────────────────────
 // NOTA: o SVG do logo usa paleta fixa por design (logo NÃO troca cor
 // com tema — mantém identidade). O fallback nativo (sem SVG) puxa
@@ -78,25 +102,16 @@ export function AuraStudioMark({ size = 54 }: { size?: number }) {
       <defs>
         <linearGradient id="aura-studio-bg-${size}" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stop-color="#1E3A8A"/>
-          <stop offset="100%" stop-color="#3B82F6"/>
+          <stop offset="45%" stop-color="#4338CA"/>
+          <stop offset="100%" stop-color="#DB2777"/>
         </linearGradient>
       </defs>
-      <!-- Tile base com gradient navy -->
-      <rect x="0" y="0" width="54" height="54" rx="14" fill="url(#aura-studio-bg-${size})"/>
-      <!-- "S" estilizado em branco -->
-      <path
-        d="M37 18 Q37 14 32 14 L22 14 Q17 14 17 19 L17 22 Q17 26 22 26 L32 26 Q37 26 37 30 L37 35 Q37 39 32 39 L22 39 Q17 39 17 35"
-        stroke="#FFFFFF"
-        stroke-width="3.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        fill="none"
-      />
-      <!-- Asterisco/sparkle magenta — referência a "personalizado/arte custom" -->
-      <g transform="translate(43 11)">
-        <circle cx="0" cy="0" r="5" fill="#EC4899"/>
-        <path d="M0 -2.5 L0 2.5 M-2.5 0 L2.5 0 M-1.8 -1.8 L1.8 1.8 M-1.8 1.8 L1.8 -1.8"
-              stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round"/>
+      <!-- Tile base com gradiente da marca (navy → indigo → magenta) -->
+      <rect x="0" y="0" width="54" height="54" rx="15" fill="url(#aura-studio-bg-${size})"/>
+      <!-- Sparkle branco — a faísca da personalização (glifo aprovado) -->
+      <g transform="translate(11 11) scale(0.32)" fill="#FFFFFF">
+        <path d="M50 5 C54.5 31 69 45.5 95 50 C69 54.5 54.5 69 50 95 C45.5 69 31 54.5 5 50 C31 45.5 45.5 31 50 5 Z"/>
+        <path d="M82 14 C83.4 21.6 86.4 24.6 94 26 C86.4 27.4 83.4 30.4 82 38 C80.6 30.4 77.6 27.4 70 26 C77.6 24.6 80.6 21.6 82 14 Z" opacity="0.9"/>
       </g>
     </svg>
   `.trim();
@@ -144,18 +159,7 @@ export function AuraStudioMark({ size = 54 }: { size?: number }) {
         entranceStyle,
       ]}
     >
-      <Text style={{ color: "#fff", fontSize: size * 0.42, fontWeight: "900" }}>S</Text>
-      <View
-        style={{
-          position: "absolute",
-          top: size * 0.1,
-          right: size * 0.1,
-          width: size * 0.18,
-          height: size * 0.18,
-          borderRadius: size * 0.09,
-          backgroundColor: t.accent,
-        }}
-      />
+      <Text style={{ color: "#fff", fontSize: size * 0.5, lineHeight: size * 0.56 }}>✦</Text>
     </Reanimated.View>
   );
 }
@@ -169,36 +173,27 @@ export function AuraStudioLockup({
   variant?: "dark" | "light";
 }) {
   const t = useStudioTokens();
+  useStudioBrandFont();
   const txtColor = variant === "dark" ? t.ink : "#FFFFFF";
-  const subColor = variant === "dark" ? t.ink3 : "rgba(255,255,255,0.7)";
+  const subColor = variant === "dark" ? t.ink3 : "rgba(255,255,255,0.72)";
+  // Instrument Serif (editorial) — wordmark da marca. dataSet=aura-wm
+  // ativa a regra CSS que vence o override global de fonte no web.
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       <AuraStudioMark size={size} />
-      <View style={{ flexDirection: "column" }}>
-        <Text
-          style={{
-            color: txtColor,
-            fontSize: size * 0.5,
-            fontWeight: "900",
-            letterSpacing: -0.4,
-            lineHeight: size * 0.6,
-          }}
-        >
-          Aura
-        </Text>
-        <Text
-          style={{
-            color: subColor,
-            fontSize: size * 0.28,
-            fontWeight: "700",
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-            marginTop: -2,
-          }}
-        >
-          Studio
-        </Text>
-      </View>
+      <Text
+        dataSet={{ auraWm: "true" }}
+        style={{
+          fontFamily: Fonts.heading,
+          fontSize: size * 0.64,
+          letterSpacing: -0.5,
+          lineHeight: size * 0.74,
+        }}
+      >
+        <Text dataSet={{ auraWm: "true" }} style={{ color: txtColor }}>Aura</Text>
+        <Text dataSet={{ auraWm: "true" }} style={{ color: subColor }}> Studio</Text>
+        <Text dataSet={{ auraWm: "true" }} style={{ color: t.accent }}>.</Text>
+      </Text>
     </View>
   );
 }
