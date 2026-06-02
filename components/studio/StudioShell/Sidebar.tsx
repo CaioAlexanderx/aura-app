@@ -29,15 +29,42 @@
 // residual conhecido — follow-up vai separar accentInk pra texto.
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
-import { View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, Platform, AccessibilityInfo } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
+import { Fonts } from "@/constants/fonts";
 import { GROUPS } from "./types";
 
 const RAIL_W_EXPANDED = 248;
 const RAIL_W_COLLAPSED = 76;
+
+// ─── Motion (Fase 6.1): entrada escalonada + barra ativa, web-only,
+// atrás de reduceMotion. Keyframes injetados uma vez no head.
+function injectSidebarMotion() {
+  if (Platform.OS !== "web" || typeof document === "undefined") return;
+  if (document.getElementById("aura-sb-motion")) return;
+  const st = document.createElement("style");
+  st.id = "aura-sb-motion";
+  st.textContent =
+    "@keyframes auraSbIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}" +
+    "@keyframes auraSbBar{from{opacity:0;transform:scaleY(0.25)}to{opacity:1;transform:scaleY(1)}}";
+  document.head.appendChild(st);
+}
+function useReduceMotion() {
+  const [rm, setRm] = useState(false);
+  useEffect(() => {
+    let m = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((e) => { if (m) setRm(!!e); });
+    return () => { m = false; };
+  }, []);
+  return rm;
+}
+function enterStyle(delay: number, reduced: boolean): any {
+  if (Platform.OS !== "web" || reduced) return {};
+  return { animation: "auraSbIn .42s cubic-bezier(.4,0,.2,1) both", animationDelay: delay + "ms" };
+}
 
 function initials(name?: string | null): string {
   if (!name) return "??";
@@ -64,6 +91,8 @@ export function Sidebar({
 }) {
   const t = useStudioTokens();
   const [expanded, setExpanded] = useState(true);
+  const reduced = useReduceMotion();
+  useEffect(() => { injectSidebarMotion(); }, []);
 
   function navigate(href: string) {
     go(href);
@@ -107,33 +136,15 @@ export function Sidebar({
       >
         <AuraStudioMark size={36} />
         {expanded && (
-          <View style={{ flexShrink: 1, minWidth: 0 }}>
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: "900",
-                color: t.ink,
-                letterSpacing: -0.3,
-                lineHeight: 18,
-              }}
-              numberOfLines={1}
-            >
-              Aura
-            </Text>
-            <Text
-              style={{
-                fontSize: 9,
-                fontWeight: "800",
-                color: t.ink3,
-                letterSpacing: 1.4,
-                textTransform: "uppercase",
-                marginTop: 1,
-              }}
-              numberOfLines={1}
-            >
-              Studio
-            </Text>
-          </View>
+          <Text
+            dataSet={{ auraWm: "true" }}
+            style={{ flexShrink: 1, fontFamily: Fonts.heading, fontSize: 22, letterSpacing: -0.5, lineHeight: 24 }}
+            numberOfLines={1}
+          >
+            <Text dataSet={{ auraWm: "true" }} style={{ color: t.ink }}>Aura</Text>
+            <Text dataSet={{ auraWm: "true" }} style={{ color: t.ink3 }}> Studio</Text>
+            <Text dataSet={{ auraWm: "true" }} style={{ color: t.accent }}>.</Text>
+          </Text>
         )}
       </Pressable>
 
@@ -144,17 +155,21 @@ export function Sidebar({
         label="Início"
         active={isHome}
         expanded={expanded}
+        enterDelay={0}
+        reduced={reduced}
         onPress={() => navigate("/studio")}
       />
 
       {/* ─── Grupos ─── */}
-      {GROUPS.map((g) => (
+      {GROUPS.map((g, gi) => (
         <GroupSection
           key={g.id}
           t={t}
           group={g}
           pathname={pathname}
           expanded={expanded}
+          enterDelay={(gi + 1) * 70}
+          reduced={reduced}
           navigate={navigate}
         />
       ))}
@@ -169,6 +184,8 @@ export function Sidebar({
         label="Configurações"
         active={pathname.startsWith("/studio/configuracoes")}
         expanded={expanded}
+        enterDelay={(GROUPS.length + 1) * 70}
+        reduced={reduced}
         onPress={() => navigate("/studio/configuracoes")}
       />
 
@@ -261,6 +278,8 @@ function NavItem({
   active,
   expanded,
   indent,
+  enterDelay = 0,
+  reduced = false,
   onPress,
 }: {
   t: StudioPalette;
@@ -269,6 +288,8 @@ function NavItem({
   active: boolean;
   expanded: boolean;
   indent?: boolean;
+  enterDelay?: number;
+  reduced?: boolean;
   onPress: () => void;
 }) {
   // Magenta-soft active state per plano "estado ativo magenta-soft":
@@ -295,6 +316,7 @@ function NavItem({
         Platform.OS === "web" && ({ cursor: "pointer", transition: "background-color 0.15s ease" } as any),
         hovered && !active && { backgroundColor: t.bgSoft },
         active && { backgroundColor: activeBg },
+        enterStyle(enterDelay, reduced),
       ]}
     >
       {active && (
@@ -307,6 +329,7 @@ function NavItem({
             width: 3,
             borderRadius: 2,
             backgroundColor: t.accent,
+            ...(Platform.OS === "web" && !reduced ? ({ animation: "auraSbBar .3s ease both", transformOrigin: "center" } as any) : {}),
           }}
           pointerEvents="none"
         />
@@ -338,12 +361,16 @@ function GroupSection({
   group,
   pathname,
   expanded,
+  enterDelay = 0,
+  reduced = false,
   navigate,
 }: {
   t: StudioPalette;
   group: (typeof GROUPS)[number];
   pathname: string;
   expanded: boolean;
+  enterDelay?: number;
+  reduced?: boolean;
   navigate: (href: string) => void;
 }) {
   const childActive = group.children.some(
@@ -378,11 +405,12 @@ function GroupSection({
             textTransform: "uppercase",
             paddingHorizontal: 10,
             marginBottom: 4,
+            ...enterStyle(enterDelay, reduced),
           }}
         >
           {group.label}
         </Text>
-        {group.children.map((c) => {
+        {group.children.map((c, ci) => {
           const active = pathname === c.href || pathname.startsWith(c.href + "/");
           return (
             <NavItem
@@ -393,6 +421,8 @@ function GroupSection({
               active={active}
               expanded
               indent
+              enterDelay={enterDelay + (ci + 1) * 38}
+              reduced={reduced}
               onPress={() => navigate(c.href)}
             />
           );
