@@ -1,6 +1,8 @@
 // ============================================================
 // AURA STUDIO · Wizard: Configurar personalização do produto
 // (Fase 1 skeleton — 24/05/2026)
+// Agente H (03/06/2026): seção "Serviço de Arte" no Step 2
+// Agente I (03/06/2026): seção "Guia de Medidas" no Step 2 + Step 3 preview
 //
 // Primeira aplicação do <StudioWorkflow> canônico.
 // 4 passos: Área de impressão → Campos permitidos → Preview → Salvar.
@@ -11,9 +13,9 @@
 // experiência rica (drag-drop de fields, preview SVG ao vivo,
 // galeria de fontes) entra em iterações da Fase 1.
 // ============================================================
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
-  View, Text, TextInput, Pressable, StyleSheet, ScrollView,
+  View, Text, TextInput, Pressable, StyleSheet, ScrollView, Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -23,10 +25,53 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { request } from "@/services/api";
 
 const FONTS_PRESET   = ["Pacifico", "Caveat", "Playfair Display", "Bebas Neue", "Inter"];
 const COLORS_PRESET  = ["#0F172A", "#BE185D", "#7C3AED", "#1D4ED8", "#D97706", "#059669", "#EC4899", "#FFFFFF"];
 const FORMATS_PRESET = ["png", "jpg", "jpeg", "pdf"];
+
+// ─── ART_SERVICE_FIELD_ID canônico ───────────────────────────────────────────
+// Usado em buildConfig() e na seção de preview (Step 3).
+// Manter em sincronia com FieldArtService.tsx (ART_FIELD_ID = 'art_service').
+export const ART_SERVICE_FIELD_ID  = "art_service";
+export const ART_SERVICE_BRIEF_ID  = "art_service_brief";
+
+// ─── Agente I: tipo do guia de medidas ───────────────────────────────────────
+// Shape gravado em customization_config.size_guide:
+// { file_url: string; content_type: string }
+// Ex: { file_url: "https://r2.../guia.pdf", content_type: "application/pdf" }
+export type SizeGuideShape = {
+  file_url: string;
+  content_type: string;
+};
+
+// ─── Endpoint de upload autenticado (lojista) ─────────────────────────────────
+// Reusa POST /companies/:id/studio/upload-mockup (já aceita pdf).
+// Retorna { url: string }.
+async function uploadSizeGuide(
+  companyId: string,
+  file: File
+): Promise<{ url: string; content_type: string }> {
+  const reader = new FileReader();
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+    reader.readAsDataURL(file);
+  });
+  const data = await request<{ url: string }>(
+    "/companies/" + companyId + "/studio/upload-mockup",
+    {
+      method: "POST",
+      body: {
+        content_base64: dataUrl.split(",")[1],
+        content_type: file.type,
+        filename: file.name,
+      },
+    }
+  );
+  return { url: data.url, content_type: file.type };
+}
 
 type DraftState = {
   print_area_w: string;
@@ -36,6 +81,11 @@ type DraftState = {
   allow_image: boolean;
   allow_template: boolean;
   text_max_chars: string;
+  // ─── Agente H: Serviço de Arte ───
+  allow_art_service: boolean;
+  art_service_price: string;  // R$ como string (input de texto)
+  // ─── Agente I: Guia de Medidas ───
+  size_guide: SizeGuideShape | null;
 };
 
 const DEFAULT_DRAFT: DraftState = {
@@ -46,6 +96,11 @@ const DEFAULT_DRAFT: DraftState = {
   allow_image: true,
   allow_template: true,
   text_max_chars: "20",
+  // Agente H
+  allow_art_service: false,
+  art_service_price: "30,00",
+  // Agente I
+  size_guide: null,
 };
 
 export default function PersonalizacaoWizard() {
@@ -58,6 +113,11 @@ export default function PersonalizacaoWizard() {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<DraftState>(DEFAULT_DRAFT);
 
+  // Agente I: estado de upload do guia
+  const [guideUploading, setGuideUploading] = useState(false);
+  const [guideError, setGuideError] = useState<string | null>(null);
+  const fileInputRef = useRef<any>(null);
+
   const draftKey = `personalizacao-${productId}`;
 
   // helpers
@@ -68,12 +128,62 @@ export default function PersonalizacaoWizard() {
     step === 1
       ? Number(draft.print_area_w) > 0 && Number(draft.print_area_h) > 0
       : step === 2
-      ? draft.allow_text || draft.allow_image || draft.allow_template
+      ? draft.allow_text || draft.allow_image || draft.allow_template || draft.allow_art_service
       : true;
+
+  // ─── Agente H: parse do preço ─────────────────────────────────────────────
+  function parseArtPrice(raw: string): number {
+    // Aceita "30", "30,00", "30.00"
+    const normalized = raw.replace(",", ".").replace(/[^\d.]/g, "");
+    const n = parseFloat(normalized);
+    return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
+  }
+
+  // ─── Agente I: upload do guia de medidas ─────────────────────────────────
+  async function handleGuideFileSelect(ev: any) {
+    const file: File | undefined = ev?.target?.files?.[0];
+    if (!file) return;
+
+    const allowed = [
+      "image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf",
+    ];
+    if (!allowed.includes(file.type)) {
+      setGuideError("Aceitos: PNG, JPG, WEBP ou PDF");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setGuideError("Arquivo grande demais (max 15 MB)");
+      return;
+    }
+    if (!company?.id) {
+      setGuideError("Empresa não identificada");
+      return;
+    }
+
+    setGuideUploading(true);
+    setGuideError(null);
+    try {
+      const { url, content_type } = await uploadSizeGuide(company.id, file);
+      updateDraft({ size_guide: { file_url: url, content_type } });
+      toast.success("Guia de medidas enviado!");
+      // Limpa o input para permitir re-upload do mesmo arquivo
+      try { if (fileInputRef.current) fileInputRef.current.value = ""; } catch (_) {}
+    } catch (e: any) {
+      setGuideError(e?.message || "Erro no upload do guia");
+    } finally {
+      setGuideUploading(false);
+    }
+  }
+
+  function removeGuide() {
+    updateDraft({ size_guide: null });
+    setGuideError(null);
+  }
 
   // Monta o config final pra mandar pro backend
   function buildConfig(): CustomizationConfig {
     const fields: CustomizationField[] = [];
+
     if (draft.allow_text) {
       fields.push({
         id: "text",
@@ -87,15 +197,17 @@ export default function PersonalizacaoWizard() {
         },
       });
     }
+
     if (draft.allow_image) {
       fields.push({
         id: "image",
         type: "image",
         label: "Sua arte",
-        required: false,
+        required: false,   // required:false — cliente pode optar pelo Crie minha arte
         config: { formats: FORMATS_PRESET, max_mb: 10, min_dpi: 150 },
       });
     }
+
     if (draft.allow_template) {
       fields.push({
         id: "template",
@@ -105,7 +217,63 @@ export default function PersonalizacaoWizard() {
         config: { category_ids: [] },
       });
     }
-    return {
+
+    // ─── Agente H: campo art_service ─────────────────────────────────────────
+    // DECISÃO D2: campo type='option' + config.is_art_service:true.
+    // O motor computeChoicesDelta no backend soma price_delta de choices selecionadas
+    // sem qualquer mudança de backend. Apenas a choice 'designer' carrega o delta.
+    //
+    // SHAPE EXATO (gravado no customization_config.fields):
+    // {
+    //   id: 'art_service',
+    //   type: 'option',
+    //   label: 'Crie minha arte',
+    //   required: false,
+    //   config: {
+    //     is_art_service: true,
+    //     choices: [
+    //       { value: 'none',     label: 'Vou enviar minha arte',      price_delta: 0          },
+    //       { value: 'designer', label: 'Crie minha arte pra mim',    price_delta: <preco>    }
+    //     ]
+    //   }
+    // }
+    if (draft.allow_art_service) {
+      const artPrice = parseArtPrice(draft.art_service_price);
+      fields.push({
+        id: ART_SERVICE_FIELD_ID,
+        type: "option",
+        label: "Crie minha arte",
+        required: false,
+        config: {
+          is_art_service: true,
+          choices: [
+            { value: "none",     label: "Vou enviar minha arte",   price_delta: 0        },
+            { value: "designer", label: "Crie minha arte pra mim", price_delta: artPrice },
+          ],
+        } as any,  // is_art_service é extensão do config; backend ignora campos extras
+      });
+
+      // Campo complementar: briefing do cliente (text simples, never required)
+      // Armazenado em values['art_service_brief'] — não influi no preço,
+      // apenas enriquece o pedido para o lojista/designer.
+      fields.push({
+        id: ART_SERVICE_BRIEF_ID,
+        type: "text",
+        label: "Briefing da arte",
+        required: false,
+        config: {
+          max_chars: 600,
+          fonts: [],
+          colors: [],
+        },
+      });
+    }
+
+    // ─── Agente I: size_guide injetado no config ──────────────────────────────
+    // SHAPE: customization_config.size_guide = { file_url: string, content_type: string }
+    // Fica como campo de nível raiz no config (não é um field de input do cliente).
+    // O backend expõe via customization_config diretamente (Agente K já expôs).
+    const config: CustomizationConfig & { size_guide?: SizeGuideShape | null } = {
       print_area: {
         width_cm: Number(draft.print_area_w),
         height_cm: Number(draft.print_area_h),
@@ -113,6 +281,16 @@ export default function PersonalizacaoWizard() {
       },
       fields,
     };
+
+    // Só inclui size_guide se existir (não polui o config com null)
+    if (draft.size_guide?.file_url) {
+      (config as any).size_guide = draft.size_guide;
+    } else {
+      // Envia explicitamente null para remover guia existente no backend
+      (config as any).size_guide = null;
+    }
+
+    return config as CustomizationConfig;
   }
 
   async function handleConcluir() {
@@ -225,6 +403,174 @@ export default function PersonalizacaoWizard() {
             onToggle={() => updateDraft({ allow_template: !draft.allow_template })}
             tone="warm"
           />
+
+          {/* ─── Agente H: Seção Serviço de Arte ─────────────────────────── */}
+          <View style={s.artServiceDivider}>
+            <View style={s.artServiceDividerLine} />
+            <Text style={s.artServiceDividerTxt}>Serviço Premium</Text>
+            <View style={s.artServiceDividerLine} />
+          </View>
+
+          <Toggle
+            label="Oferecer 'Crie minha arte'"
+            sub="Cliente paga pra sua equipe criar a arte (sem precisar ter arquivo)"
+            checked={draft.allow_art_service}
+            onToggle={() => updateDraft({ allow_art_service: !draft.allow_art_service })}
+            tone="pink"
+          />
+
+          {draft.allow_art_service && (
+            <View style={s.subBlock}>
+              <Text style={s.label}>Preço do serviço (R$)</Text>
+              <TextInput
+                style={[s.input, { width: 160 }]}
+                keyboardType="decimal-pad"
+                value={draft.art_service_price}
+                placeholder="30,00"
+                placeholderTextColor="#94A3B8"
+                onChangeText={(v) => updateDraft({ art_service_price: v })}
+              />
+              <Text style={s.subHelp}>
+                Cobrado automaticamente quando o cliente escolher "Crie minha arte pra mim".
+                O campo de upload (Minha arte) continua disponível como opção gratuita.
+              </Text>
+              <View style={s.artServiceNote}>
+                <Text style={s.artServiceNoteTxt}>
+                  💡 O preço entra no total do pedido automaticamente via motor de escolhas — sem mudança no backend.
+                </Text>
+              </View>
+            </View>
+          )}
+          {/* ─── Fim seção Agente H ────────────────────────────────────── */}
+
+          {/* ═══════════════════════════════════════════════════════════════
+              SEÇÃO AGENTE I — GUIA DE MEDIDAS
+              Início
+          ═══════════════════════════════════════════════════════════════ */}
+          <View style={s.sizeGuideDivider}>
+            <View style={s.sizeGuideDividerLine} />
+            <Text style={s.sizeGuideDividerTxt}>Guia de Medidas</Text>
+            <View style={s.sizeGuideDividerLine} />
+          </View>
+
+          <View style={s.sizeGuideCard}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+              <Text style={{ fontSize: 20 }}>📐</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sizeGuideTitle}>Guia de medidas (opcional)</Text>
+                <Text style={s.sizeGuideDesc}>
+                  Suba uma imagem ou PDF mostrando as medidas do produto (ex: tabela de tamanhos).
+                  O cliente verá um link "Ver guia de medidas" na tela de personalização.
+                </Text>
+              </View>
+            </View>
+
+            {draft.size_guide?.file_url ? (
+              // Preview do guia atual
+              <View style={s.sizeGuidePreview}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 16 }}>
+                    {draft.size_guide.content_type === "application/pdf" ? "📄" : "🖼️"}
+                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.sizeGuideFileName} numberOfLines={1}>
+                      {draft.size_guide.content_type === "application/pdf"
+                        ? "Guia PDF enviado"
+                        : "Imagem do guia enviada"}
+                    </Text>
+                    <Text style={s.sizeGuideFileType}>
+                      {draft.size_guide.content_type}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {/* Visualizar */}
+                  {Platform.OS === "web" && (
+                    <Pressable
+                      onPress={() => {
+                        if (typeof window !== "undefined") {
+                          window.open(draft.size_guide!.file_url, "_blank");
+                        }
+                      }}
+                      style={s.sizeGuideBtnSecondary}
+                    >
+                      <Text style={s.sizeGuideBtnSecondaryTxt}>Abrir</Text>
+                    </Pressable>
+                  )}
+                  {/* Remover */}
+                  <Pressable onPress={removeGuide} style={s.sizeGuideBtnRemove}>
+                    <Text style={s.sizeGuideBtnRemoveTxt}>Remover</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              // Upload
+              <View style={{ gap: 8 }}>
+                {Platform.OS === "web" ? (
+                  <View>
+                    {/* @ts-ignore — label/input nativos no web */}
+                    <label
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        padding: 20,
+                        backgroundColor: t.paperCardElev,
+                        border: "2px dashed " + t.ink5,
+                        borderRadius: 10,
+                        cursor: guideUploading ? "wait" : "pointer",
+                        opacity: guideUploading ? 0.6 : 1,
+                      } as any}
+                    >
+                      <Text style={{ fontSize: 24 }}>{guideUploading ? "⏳" : "📤"}</Text>
+                      <Text style={{ fontSize: 13, color: t.ink, fontWeight: "700" }}>
+                        {guideUploading ? "Enviando..." : "Escolher arquivo"}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: t.ink3 }}>
+                        PNG, JPG, WEBP ou PDF — até 15 MB
+                      </Text>
+                      {/* @ts-ignore */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                        onChange={handleGuideFileSelect}
+                        disabled={guideUploading}
+                        style={{ display: "none" } as any}
+                      />
+                    </label>
+                  </View>
+                ) : (
+                  // Native: sem file picker — instrução ao usuário
+                  <View
+                    style={{
+                      padding: 16,
+                      borderRadius: 10,
+                      backgroundColor: t.paperCardElev,
+                      borderWidth: 1,
+                      borderColor: t.ink5,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: t.ink3, textAlign: "center" }}>
+                      Upload de guia de medidas disponível somente na versão web do Studio.
+                    </Text>
+                  </View>
+                )}
+                {guideError && (
+                  <Text style={{ fontSize: 11.5, color: t.error ?? "#EF4444" }}>
+                    {guideError}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+          {/* ═══════════════════════════════════════════════════════════════
+              SEÇÃO AGENTE I — GUIA DE MEDIDAS
+              Fim
+          ═══════════════════════════════════════════════════════════════ */}
         </View>
       )}
 
@@ -264,6 +610,39 @@ export default function PersonalizacaoWizard() {
                 <Icon name="grid" size={14} color={t.primary} />
                 <Text style={s.previewTxt}>
                   Galeria pronta — vincule categorias em Estúdio › Galeria
+                </Text>
+              </View>
+            )}
+            {/* Agente H: preview do serviço de arte */}
+            {draft.allow_art_service && (
+              <View style={s.previewRow}>
+                <Icon name="star" size={14} color={t.accent} />
+                <Text style={s.previewTxt}>
+                  Serviço de arte:{" "}
+                  <Text style={s.previewBold}>
+                    +R$ {parseFloat(draft.art_service_price.replace(",", ".") || "0").toFixed(2).replace(".", ",")}
+                  </Text>{" "}
+                  (cliente escolhe "Crie minha arte" ou faz upload)
+                </Text>
+              </View>
+            )}
+            {/* Agente I: preview do guia de medidas */}
+            {draft.size_guide?.file_url ? (
+              <View style={s.previewRow}>
+                <Icon name="file_text" size={14} color={t.primary} />
+                <Text style={s.previewTxt}>
+                  Guia de medidas:{" "}
+                  <Text style={s.previewBold}>
+                    {draft.size_guide.content_type === "application/pdf" ? "PDF" : "Imagem"}
+                  </Text>{" "}
+                  — botão visível na tela de personalização do cliente
+                </Text>
+              </View>
+            ) : (
+              <View style={s.previewRow}>
+                <Icon name="file_text" size={14} color={t.ink4} />
+                <Text style={[s.previewTxt, { color: t.ink4 }]}>
+                  Sem guia de medidas (opcional)
                 </Text>
               </View>
             )}
@@ -372,5 +751,121 @@ function buildStyles(t: StudioPalette) {
   previewRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   previewTxt: { fontSize: 13, color: t.ink2, flex: 1 },
   previewBold: { fontWeight: "700", color: t.ink },
+
+  // ─── Agente H: estilos da seção Serviço de Arte ──
+  artServiceDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  artServiceDividerLine: {
+    flex: 1, height: 1, backgroundColor: t.ink5,
+  },
+  artServiceDividerTxt: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: t.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  artServiceNote: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(236,72,153,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(236,72,153,0.15)",
+  },
+  artServiceNoteTxt: {
+    fontSize: 11.5,
+    color: t.ink3,
+    lineHeight: 17,
+  },
+
+  // ─── Agente I: estilos da seção Guia de Medidas ──
+  sizeGuideDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  sizeGuideDividerLine: {
+    flex: 1, height: 1, backgroundColor: t.ink5,
+  },
+  sizeGuideDividerTxt: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: t.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  sizeGuideCard: {
+    backgroundColor: t.paperCardElev,
+    borderWidth: 1.5,
+    borderColor: t.ink5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  sizeGuideTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: t.ink,
+    marginBottom: 2,
+  },
+  sizeGuideDesc: {
+    fontSize: 12,
+    color: t.ink3,
+    lineHeight: 17,
+  },
+  sizeGuidePreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: t.paperCard,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: t.ink5,
+  },
+  sizeGuideFileName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: t.ink,
+  },
+  sizeGuideFileType: {
+    fontSize: 10.5,
+    color: t.ink4,
+    marginTop: 1,
+  },
+  sizeGuideBtnSecondary: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+    backgroundColor: "rgba(30,58,138,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(30,58,138,0.2)",
+  },
+  sizeGuideBtnSecondaryTxt: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: t.primary,
+  },
+  sizeGuideBtnRemove: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+    backgroundColor: "#fee2e2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  sizeGuideBtnRemoveTxt: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#EF4444",
+  },
   });
 }
