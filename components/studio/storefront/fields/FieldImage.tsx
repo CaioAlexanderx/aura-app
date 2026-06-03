@@ -1,29 +1,24 @@
 // ============================================================
 // components/studio/storefront/fields/FieldImage.tsx
-// Campo type="image" — upload/link de imagem.
+// Campo type="image" — upload real de arte client-side.
 //
-// PONTO DE PLUGUE ONDA 1 (Agente G):
-//   Este componente encapsula toda a lógica do campo image.
-//   Para substituir por upload real (file picker → R2), o Agente G
-//   reescreve SOMENTE este arquivo. O contrato com o exterior
-//   NÃO muda: onChange(url: string) é chamado com a URL pública
-//   após upload bem-sucedido.
-//
-// CONTRATO (não alterar assinatura):
+// CONTRATO (imutável — Agente J consome onChange(url)):
 //   props.field      — CustomizationField com type="image"
-//   props.value      — string | undefined (URL atual ou undefined)
+//   props.value      — string | undefined  (URL pública atual ou undefined)
 //   props.onChange   — (url: string) => void  (grava no customization)
-//   props.slug       — string (necessário pra montar a URL do endpoint de upload)
+//   props.slug       — string  (monta URL do endpoint de upload)
 //
-// COMO O AGENTE G USA:
-//   1. Adiciona file picker web (input type=file / expo-image-picker)
-//   2. Converte arquivo → base64
-//   3. Chama POST /storefront/{slug}/studio/upload com {content_base64, content_type, filename}
-//   4. Recebe {url} e chama props.onChange(url)
-//   O estado uploading/uploadError é local a este componente.
+// UPLOAD:
+//   POST /storefront/{slug}/studio/upload
+//   body: { content_base64, content_type, filename }
+//   resp: { url: string }   → onChange(url)
+//
+// Nota: useStorefront expõe sf.uploadImage() mas FieldImage só recebe
+// onChange (sem acesso ao sf inteiro), portanto o POST é feito aqui mesmo,
+// seguindo exatamente a mesma lógica de useStorefront.uploadImage.
 // ============================================================
-import { useState } from "react";
-import { View, Text, Pressable, TextInput, Platform } from "react-native";
+import { useState, useRef, useCallback } from "react";
+import { View, Text, Pressable, Platform, ActivityIndicator } from "react-native";
 import type { CustomizationField } from "../types";
 import { T, sectionLabel } from "../types";
 
@@ -31,162 +26,432 @@ const API_BASE =
   (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
   "https://aura-backend-production-f805.up.railway.app/api/v1";
 
+// Formatos suportados: pdf + rasters. Fallback quando field.config.formats não vier.
+const DEFAULT_FORMATS = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
+const FORMAT_LABELS: Record<string, string> = {
+  "image/png": "PNG",
+  "image/jpeg": "JPG",
+  "image/jpg": "JPG",
+  "image/webp": "WEBP",
+  "application/pdf": "PDF",
+};
+
+function buildAccept(formats: string[]): string {
+  return formats.join(",");
+}
+
+function buildFormatLabel(formats: string[]): string {
+  const labels = [...new Set(formats.map((f) => FORMAT_LABELS[f] ?? f.split("/")[1].toUpperCase()))];
+  return labels.join(", ");
+}
+
+function isPdf(contentType: string): boolean {
+  return contentType === "application/pdf";
+}
+
+function isRaster(contentType: string): boolean {
+  return ["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(contentType);
+}
+
+// ----------------------------------------------------------------
+// FieldImage
+// ----------------------------------------------------------------
 export function FieldImage({
   field, value, slug, onChange,
 }: {
   field: CustomizationField;
-  /** URL pública já enviada, ou undefined/empty se nada enviado ainda */
   value: any;
-  /** Slug da loja — necessário para o endpoint de upload */
   slug: string;
-  /** Chamado com a URL pública R2 após upload ou com "" para remover */
   onChange: (url: string) => void;
 }) {
+  // --- estado local ---
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // guarda o content_type e nome do arquivo que foi enviado (para UI do chip PDF)
+  const [uploadedMeta, setUploadedMeta] = useState<{ name: string; type: string } | null>(null);
+  const inputRef = useRef<any>(null);
 
-  // Handler de upload (web — file input)
-  // AGENTE G: substitua ou estenda esta função para usar expo-image-picker
-  // ou adicionar suporte a PDF. O contrato onChange(url) não muda.
-  async function handleFileSelect(ev: any) {
-    const file: File | undefined = ev?.target?.files?.[0];
-    if (!file) return;
-    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-    if (!allowed.includes(file.type)) {
-      setUploadError("Aceitos: PNG, JPG, WEBP");
-      return;
+  // reduceMotion: respeita prefers-reduced-motion via CSS quando possível;
+  // ActivityIndicator já é silencioso em acessibilidade.
+
+  // --- derivações de config ---
+  const maxMb: number = field.config?.max_mb ?? 15;
+  const allowedFormats: string[] = (() => {
+    const cf = field.config?.formats;
+    if (Array.isArray(cf) && cf.length > 0) return cf;
+    return DEFAULT_FORMATS;
+  })();
+  const acceptAttr = buildAccept(allowedFormats);
+  const formatLabel = buildFormatLabel(allowedFormats);
+
+  // --- handler principal ---
+  const handleFileSelect = useCallback(
+    async (ev: any) => {
+      const file: File | undefined = ev?.target?.files?.[0];
+      if (!file) return;
+
+      // Validação de formato
+      if (!allowedFormats.includes(file.type)) {
+        setUploadError(`Formato inválido. Aceitos: ${formatLabel}`);
+        try { ev.target.value = ""; } catch (_) {}
+        return;
+      }
+      // Validação de tamanho
+      if (file.size > maxMb * 1024 * 1024) {
+        setUploadError(`Arquivo grande demais (máx ${maxMb} MB)`);
+        try { ev.target.value = ""; } catch (_) {}
+        return;
+      }
+
+      setUploading(true);
+      setUploadError(null);
+
+      try {
+        // Lê como base64
+        const reader = new FileReader();
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Erro ao ler o arquivo"));
+          reader.readAsDataURL(file);
+        });
+
+        // POST para o backend
+        const res = await fetch(
+          `${API_BASE}/storefront/${slug}/studio/upload`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content_base64: dataUrl.split(",")[1],
+              content_type: file.type,
+              filename: file.name,
+            }),
+          }
+        );
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (!data.url) throw new Error("Resposta inesperada do servidor");
+
+        setUploadedMeta({ name: file.name, type: file.type });
+        onChange(data.url);
+      } catch (e: any) {
+        setUploadError(e?.message || "Erro no upload. Tente novamente.");
+      } finally {
+        setUploading(false);
+        // limpa input para permitir re-seleção do mesmo arquivo
+        try { ev.target.value = ""; } catch (_) {}
+      }
+    },
+    [allowedFormats, formatLabel, maxMb, onChange, slug]
+  );
+
+  // --- acionar o file picker programaticamente (botão "trocar arquivo") ---
+  const triggerPicker = useCallback(() => {
+    if (inputRef.current) {
+      try { inputRef.current.click(); } catch (_) {}
     }
-    if (file.size > (field.config.max_mb || 15) * 1024 * 1024) {
-      setUploadError(`Arquivo grande demais (max ${field.config.max_mb || 15}MB)`);
-      return;
-    }
-    setUploading(true);
+  }, []);
+
+  // --- remover ---
+  const handleRemove = useCallback(() => {
+    onChange("");
+    setUploadedMeta(null);
     setUploadError(null);
-    try {
-      const reader = new FileReader();
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
-        reader.readAsDataURL(file);
-      });
-      const res = await fetch(API_BASE + "/storefront/" + slug + "/studio/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content_base64: dataUrl.split(",")[1],
-          content_type: file.type,
-          filename: file.name,
-        }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      onChange(data.url);
-      // limpa o input pra permitir re-upload do mesmo arquivo
-      try { ev.target.value = ""; } catch (_) {}
-    } catch (e: any) {
-      setUploadError(e?.message || "Erro no upload");
-    } finally {
-      setUploading(false);
-    }
-  }
+  }, [onChange]);
+
+  // ================================================================
+  // Render
+  // ================================================================
+  const hasValue = Boolean(value && String(value).length > 0);
+  // Determina se o arquivo enviado é PDF ou raster
+  // (uploadedMeta tem o type do arquivo; se veio de uma URL já salva sem meta, infer pelo .pdf)
+  const isPdfFile =
+    (uploadedMeta && isPdf(uploadedMeta.type)) ||
+    (!uploadedMeta && hasValue && String(value).toLowerCase().endsWith(".pdf"));
+  const isRasterFile =
+    (uploadedMeta && isRaster(uploadedMeta.type)) ||
+    (!uploadedMeta && hasValue && !String(value).toLowerCase().endsWith(".pdf"));
 
   return (
     <View>
+      {/* Label */}
       <Text style={sectionLabel}>
-        {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
+        {field.label}{" "}
+        {field.required && <Text style={{ color: T.red }}>*</Text>}
       </Text>
-      {value ? (
-        <View style={{ gap: 8 }}>
-          {Platform.OS === "web" ? (
-            // @ts-ignore - native img on web
+
+      {/* ---- Estado: ARQUIVO ENVIADO ---- */}
+      {hasValue && (
+        <View style={{ gap: 8, marginTop: 6 }}>
+          {/* Thumbnail para raster */}
+          {isRasterFile && Platform.OS === "web" && (
+            // @ts-ignore — native img on web
             <img
               src={String(value)}
-              alt="preview"
+              alt="preview da arte"
               style={{
-                width: "100%", maxHeight: 200, objectFit: "contain",
-                borderRadius: 8, border: "1px solid " + T.border,
+                width: "100%",
+                maxHeight: 200,
+                objectFit: "contain",
+                borderRadius: 8,
+                border: "1px solid " + T.border,
                 backgroundColor: T.bg,
               } as any}
             />
-          ) : (
-            <Text style={{ fontSize: 12, color: T.green }}>Imagem enviada ✓</Text>
           )}
-          <Pressable
-            onPress={() => { onChange(""); setUploadError(null); }}
-            style={{
-              alignSelf: "flex-start",
-              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6,
-              backgroundColor: "#fee2e2",
-            }}
-          >
-            <Text style={{ color: T.red, fontSize: 11, fontWeight: "700" }}>Remover</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={{ gap: 8 }}>
-          {Platform.OS === "web" ? (
-            <View>
-              {/* @ts-ignore - native label/input on web */}
-              <label
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "center",
-                  justifyContent: "center", gap: 6,
-                  padding: 20, backgroundColor: T.card,
-                  border: "2px dashed " + T.border, borderRadius: 10,
-                  cursor: uploading ? "wait" : "pointer",
-                  opacity: uploading ? 0.6 : 1,
-                } as any}
-              >
-                <Text style={{ fontSize: 24 }}>{uploading ? "⏳" : "📷"}</Text>
-                <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>
-                  {uploading ? "Enviando..." : "Escolher foto"}
+          {isRasterFile && Platform.OS !== "web" && (
+            <View
+              style={{
+                padding: 10,
+                backgroundColor: T.card,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: T.green,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>🖼️</Text>
+              <Text style={{ fontSize: 12, color: T.green, fontWeight: "700", flex: 1 }}>
+                Imagem enviada com sucesso
+              </Text>
+            </View>
+          )}
+
+          {/* Chip para PDF */}
+          {isPdfFile && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                padding: 10,
+                backgroundColor: "#f0fdf4",
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: T.green,
+              }}
+            >
+              <Text style={{ fontSize: 18 }}>📄</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: T.green, fontWeight: "700" }}>
+                  Arquivo enviado
                 </Text>
-                <Text style={{ fontSize: 11, color: T.ink3 }}>PNG, JPG ou WEBP até {field.config.max_mb || 15}MB</Text>
-                {/* @ts-ignore */}
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  onChange={handleFileSelect}
-                  disabled={uploading}
-                  style={{ display: "none" } as any}
-                />
-              </label>
-              <Text style={{ fontSize: 10, color: T.ink3, marginTop: 6, textAlign: "center" }}>
-                ou cole o link da imagem abaixo
-              </Text>
-              <TextInput
-                value={String(value || "")}
-                onChangeText={onChange}
-                placeholder="https://..."
-                placeholderTextColor={T.ink4}
-                style={{
-                  backgroundColor: T.card, color: T.ink, padding: 10,
-                  borderRadius: 8, fontSize: 12,
-                  borderWidth: 1, borderColor: T.border,
-                  marginTop: 4,
-                }}
-              />
-            </View>
-          ) : (
-            <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, color: T.ink3 }}>
-                Cole o link da imagem (ou envie por WhatsApp depois)
-              </Text>
-              <TextInput
-                value={String(value || "")}
-                onChangeText={onChange}
-                placeholder="https://..."
-                placeholderTextColor={T.ink4}
-                style={{
-                  backgroundColor: T.card, color: T.ink, padding: 12,
-                  borderRadius: 8, fontSize: 13,
-                  borderWidth: 1, borderColor: T.border,
-                }}
-              />
+                {uploadedMeta?.name && (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: T.ink3,
+                      marginTop: 1,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {uploadedMeta.name}
+                  </Text>
+                )}
+              </View>
+              {/* Link para abrir o PDF */}
+              {Platform.OS === "web" && (
+                // @ts-ignore — native anchor on web
+                <a
+                  href={String(value)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: 11,
+                    color: T.primary,
+                    fontWeight: "700",
+                    textDecoration: "underline",
+                    whiteSpace: "nowrap",
+                  } as any}
+                >
+                  Abrir
+                </a>
+              )}
             </View>
           )}
+
+          {/* Ações: trocar / remover */}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {Platform.OS === "web" && (
+              <>
+                {/* Botão "Trocar arquivo" — aciona o mesmo input hidden */}
+                {/* @ts-ignore */}
+                <label
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                    backgroundColor: T.card,
+                    border: "1px solid " + T.border,
+                    cursor: uploading ? "wait" : "pointer",
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: T.ink2,
+                    opacity: uploading ? 0.5 : 1,
+                  } as any}
+                >
+                  {uploading ? "Enviando…" : "Trocar arquivo"}
+                  {/* @ts-ignore */}
+                  <input
+                    type="file"
+                    accept={acceptAttr}
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                    style={{ display: "none" } as any}
+                  />
+                </label>
+              </>
+            )}
+            <Pressable
+              onPress={handleRemove}
+              disabled={uploading}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 6,
+                backgroundColor: "#fee2e2",
+                opacity: uploading ? 0.5 : 1,
+              }}
+            >
+              <Text style={{ color: T.red, fontSize: 11, fontWeight: "700" }}>Remover</Text>
+            </Pressable>
+          </View>
+
+          {/* Spinner de troca */}
+          {uploading && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <ActivityIndicator size="small" color={T.primary} />
+              <Text style={{ fontSize: 11, color: T.ink3 }}>Enviando novo arquivo…</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ---- Estado: SEM ARQUIVO (picker) ---- */}
+      {!hasValue && (
+        <View style={{ gap: 8, marginTop: 6 }}>
+          {Platform.OS === "web" ? (
+            // @ts-ignore — native label/input on web
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                padding: 24,
+                backgroundColor: T.card,
+                border: uploadError
+                  ? "2px dashed " + T.red
+                  : "2px dashed " + T.border,
+                borderRadius: 10,
+                cursor: uploading ? "wait" : "pointer",
+                opacity: uploading ? 0.7 : 1,
+                transition: "border-color 0.2s",
+              } as any}
+            >
+              {uploading ? (
+                <ActivityIndicator size="large" color={T.primary} />
+              ) : (
+                <Text style={{ fontSize: 28 }}>📁</Text>
+              )}
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: T.ink,
+                  fontWeight: "700",
+                  textAlign: "center",
+                }}
+              >
+                {uploading ? "Enviando…" : "Escolher arquivo de arte"}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: T.ink3,
+                  textAlign: "center",
+                }}
+              >
+                {formatLabel} · Máx {maxMb} MB
+              </Text>
+              {/* @ts-ignore */}
+              <input
+                ref={inputRef}
+                type="file"
+                accept={acceptAttr}
+                onChange={handleFileSelect}
+                disabled={uploading}
+                style={{ display: "none" } as any}
+              />
+            </label>
+          ) : (
+            /* Native (RN) — sem suporte a file picker nativo aqui;
+               orientar o usuário a enviar pelo WhatsApp (comportamento legado). */
+            <View
+              style={{
+                padding: 14,
+                backgroundColor: T.card,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: T.border,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: T.ink3, lineHeight: 18 }}>
+                Envie a arte pelo WhatsApp após confirmar o pedido, ou acesse esta
+                página pelo navegador do computador para fazer upload direto.
+              </Text>
+            </View>
+          )}
+
+          {/* ---- Estado: ERRO ---- */}
           {uploadError && (
-            <Text style={{ fontSize: 11, color: T.red }}>{uploadError}</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                padding: 10,
+                backgroundColor: "#fff1f2",
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#fecdd3",
+              }}
+            >
+              <Text style={{ fontSize: 15 }}>⚠️</Text>
+              <Text style={{ fontSize: 12, color: T.red, flex: 1 }}>{uploadError}</Text>
+              {/* Retry: reabre o picker */}
+              {Platform.OS === "web" && (
+                // @ts-ignore
+                <label
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 6,
+                    backgroundColor: T.red,
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: "#fff",
+                    whiteSpace: "nowrap",
+                  } as any}
+                >
+                  Tentar novamente
+                  {/* @ts-ignore */}
+                  <input
+                    type="file"
+                    accept={acceptAttr}
+                    onChange={(ev) => {
+                      setUploadError(null);
+                      handleFileSelect(ev);
+                    }}
+                    disabled={uploading}
+                    style={{ display: "none" } as any}
+                  />
+                </label>
+              )}
+            </View>
           )}
         </View>
       )}
