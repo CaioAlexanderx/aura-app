@@ -19,7 +19,11 @@
 // SEVERITY_TONE virou severityTone(t) theme-aware (Fase 1b).
 //
 // Agente E (02/06/2026): copy do header reforça posição de hub
-// multi-canal. Lógica, rotas, eyebrow e tabs inalterados.
+// multi-canal. Lógica, rotas e tabs inalterados.
+//
+// Integração (03/06/2026): eyebrow explícito removido — deriva
+// automaticamente via eyebrowForRoute(usePathname()) em
+// StudioPageHeader → resultado: "VENDAS · PEDIDOS".
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -119,9 +123,8 @@ export default function StudioPedidosHub() {
 
   return (
     <StudioScreen variant="reading">
-      {/* Header — hub multi-canal */}
+      {/* Header — hub multi-canal; eyebrow deriva automaticamente via nav.ts */}
       <StudioPageHeader
-        eyebrow="HUB · PEDIDOS"
         title="Hub de Pedidos"
         subtitle="Visão unificada de todos os canais: Loja Digital, PDV e marketplaces. Acompanhe status de produção e converta eventos em vendas."
         rightSlot={
