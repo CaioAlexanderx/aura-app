@@ -5,7 +5,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
-import { employeesApi } from "@/services/api";
+import { employeesApi, request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
 // ============================================================
@@ -23,6 +23,11 @@ import { useAuthStore } from "@/stores/auth";
 // (detail.fiscal) e um botao pra Emitir NFC-e (venda) ou Reprocessar a NF-e
 // 55 de devolucao (troca). Links DANFE/consulta quando autorizada; motivo
 // quando rejeitada.
+//
+// 02/06/2026 (c) — Polish: busca /nfce/config (lazy) pra (1) esconder o botao
+// Emitir quando a empresa nao tem NFC-e ativa, mostrando uma nota de config;
+// (2) marcar com badge "teste/homologacao" quando ambiente=homologacao (a
+// nota sai como 'autorizada' fake, sem valor fiscal real).
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -102,6 +107,19 @@ export function SaleDetailModal({
     retry: 1,
   });
   const employees: any[] = (empData as any)?.employees || [];
+
+  // 02/06/2026 (c): config fiscal (lazy) — so quando o detalhe abriu.
+  // Cache longo: config raramente muda.
+  const { data: nfceCfg } = useQuery({
+    queryKey: ["nfce-config", effectiveCompanyId],
+    queryFn: function() {
+      if (!effectiveCompanyId) throw new Error("no company");
+      return request("/companies/" + effectiveCompanyId + "/nfce/config", { retry: 1 });
+    },
+    enabled: !!effectiveCompanyId && !!detail,
+    staleTime: 300_000,
+    retry: 1,
+  });
 
   if (!visible) return null;
 
@@ -218,6 +236,11 @@ export function SaleDetailModal({
   const latestFiscal = relevantFiscal.length ? relevantFiscal[0] : null;
   const fiscalDocLabel = isTroca ? "NF-e de devolucao" : "NFC-e";
   const fiscalBusy = isEmitting || isReemitting;
+
+  // 02/06/2026 (c): config fiscal — habilita o botao + sinaliza homologacao.
+  const fiscalEnabled = !!((nfceCfg as any)?.config?.is_active);
+  const fiscalAmbiente = (nfceCfg as any)?.config?.ambiente || null;
+  const fiscalHomolog = fiscalEnabled && fiscalAmbiente === "homologacao";
 
   return (
     <View style={s.overlay}>
@@ -427,10 +450,17 @@ export function SaleDetailModal({
               </View>
             )}
 
-            {/* 02/06/2026 (b): Nota fiscal */}
+            {/* 02/06/2026 (b/c): Nota fiscal */}
             {!isCancelled && (
               <View style={s.fiscalBox}>
-                <Text style={s.fiscalTitle}>Nota fiscal</Text>
+                <View style={s.fiscalHeadRow}>
+                  <Text style={s.fiscalTitle}>Nota fiscal</Text>
+                  {fiscalHomolog && (
+                    <View style={s.fiscalHomologPill}>
+                      <Text style={s.fiscalHomologText}>Teste · homologacao</Text>
+                    </View>
+                  )}
+                </View>
                 {authorizedEmission ? (
                   <View style={s.fiscalRow}>
                     <View style={s.fiscalOkPill}>
@@ -461,22 +491,28 @@ export function SaleDetailModal({
                         {isTroca ? "A NF-e de devolucao desta troca ainda nao foi emitida." : "Esta venda ainda nao tem NFC-e emitida."}
                       </Text>
                     )}
-                    <Pressable
-                      onPress={handleEmitFiscal}
-                      disabled={fiscalBusy}
-                      style={[s.actionBtn, s.fiscalEmitBtn]}
-                    >
-                      {fiscalBusy ? (
-                        <ActivityIndicator color={Colors.violet3} size="small" />
-                      ) : (
-                        <>
-                          <Icon name="info" size={13} color={Colors.violet3} />
-                          <Text style={s.fiscalEmitText}>
-                            {isTroca ? "Reprocessar NF-e de devolucao" : "Emitir NFC-e"}
-                          </Text>
-                        </>
-                      )}
-                    </Pressable>
+                    {fiscalEnabled ? (
+                      <Pressable
+                        onPress={handleEmitFiscal}
+                        disabled={fiscalBusy}
+                        style={[s.actionBtn, s.fiscalEmitBtn]}
+                      >
+                        {fiscalBusy ? (
+                          <ActivityIndicator color={Colors.violet3} size="small" />
+                        ) : (
+                          <>
+                            <Icon name="info" size={13} color={Colors.violet3} />
+                            <Text style={s.fiscalEmitText}>
+                              {isTroca ? "Reprocessar NF-e de devolucao" : "Emitir NFC-e"}
+                            </Text>
+                          </>
+                        )}
+                      </Pressable>
+                    ) : (
+                      <Text style={s.fiscalConfigNote}>
+                        Emissao de nota fiscal nao configurada. Ative em Configuracoes › Nota Fiscal.
+                      </Text>
+                    )}
                   </>
                 )}
               </View>
@@ -719,9 +755,12 @@ const s = StyleSheet.create({
   notesLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
   notesText: { fontSize: 12, color: Colors.ink, marginTop: 4, lineHeight: 17 },
 
-  // 02/06/2026 (b): Nota fiscal
+  // 02/06/2026 (b/c): Nota fiscal
   fiscalBox: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 12, gap: 8 },
+  fiscalHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   fiscalTitle: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  fiscalHomologPill: { backgroundColor: "rgba(251,191,36,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(251,191,36,0.4)" },
+  fiscalHomologText: { fontSize: 9, color: "#fbbf24", fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
   fiscalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
   fiscalOkPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: Colors.green + "33" },
   fiscalOkText: { fontSize: 11.5, color: Colors.green, fontWeight: "700" },
@@ -732,6 +771,7 @@ const s = StyleSheet.create({
   fiscalNone: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
   fiscalEmitBtn: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   fiscalEmitText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  fiscalConfigNote: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16, fontStyle: "italic" },
 
   cancelledHint: { flexDirection: "row", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: Colors.red + "33" },
   cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 15 },
