@@ -83,7 +83,7 @@ function CaixaScreenInner() {
       showCrediario={st.showCrediario}
       customerId={selectedCustomerId}
       customerName={selectedCustomerName}
-      saleTotal={st.totalFinal}
+      saleTotal={st.crediarioModalAmount}
       onCrediarioConfirm={st.handleCrediarioConfirm}
       onCrediarioClose={st.closeCrediario}
     />
@@ -150,7 +150,7 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Layout wide (desktop) ──────────────────────────────────────
+  // ── Layout wide (desktop) ─────────────────────────────────────
   if (wide) {
     return (
       <View style={s.root}>
@@ -279,7 +279,7 @@ function CaixaScreenInner() {
     );
   }
 
-  // ── Layout mobile ──────────────────────────────────────────────
+  // ── Layout mobile ──────────────────────────────────────────
   // Em mobile usa grid auto-fit também (2 colunas em <360px, 3 em >360px).
   return (
     <View style={{ flex: 1 }}>

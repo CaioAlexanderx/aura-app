@@ -4,7 +4,7 @@ import { pdvApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
-export type CartItem = { productId: string; name: string; price: number; qty: number };
+export type CartItem = { productId: string; name: string; price: number; qty: number; listPrice?: number };
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
 // O backend mapeia method PDV → tPag SEFAZ (dinheiro→01, cartao→03, debito→04, pix→17,
@@ -196,7 +196,7 @@ export function useCart() {
     setCart(function(prev) {
       var existing = prev.find(function(i) { return i.productId === cartKey; });
       if (existing) return prev.map(function(i) { return i.productId === cartKey ? { ...i, qty: i.qty + 1 } : i; });
-      return [...prev, { productId: cartKey, name: displayName, price: effectivePrice, qty: 1 }];
+      return [...prev, { productId: cartKey, name: displayName, price: effectivePrice, qty: 1, listPrice: effectivePrice }];
     });
     if (couponApplied) setCouponApplied(null);
   }
@@ -286,11 +286,18 @@ export function useCart() {
     var saleData: any = {
       items: cartSnapshot.map(function(i) {
         var decomposed = decomposeCartKey(i.productId);
+        // Lapis do PDV: mantem o preco de tabela do estoque (listPrice) como
+        // unit_price e lanca a diferenca como desconto do item (total da linha).
+        // O backend desconta item_discount do total da linha.
+        var listPrice = (i.listPrice != null && i.listPrice > 0) ? i.listPrice : i.price;
+        var unitOriginal = Math.max(listPrice, i.price);
+        var itemDiscount = round2(Math.max(0, unitOriginal - i.price) * i.qty);
         return {
           product_id: decomposed.pid,
           variant_id: decomposed.vid || undefined,
           quantity: i.qty,
-          unit_price: i.price,
+          unit_price: unitOriginal,
+          item_discount: itemDiscount > 0 ? itemDiscount : undefined,
           product_name_snapshot: i.name,
         };
       }),
@@ -314,7 +321,13 @@ export function useCart() {
 
     // Crediário parcelado: adiciona installments no body da venda.
     // O backend (F1 creditLedger) cria as credit_installments DENTRO da transacao principal.
-    if (crediario && crediario.installments > 1 && primaryPayment === "crediario") {
+    // Crediario parcelado: anexa installments quando ha QUALQUER parcela no
+    // credito -- single (primaryPayment) OU split (uma das entradas e crediario).
+    // O backend (creditLedger) cria as credit_installments sobre o valor do
+    // crediario (calcCreditAmount), nao sobre o total da venda.
+    var hasCreditPortion = primaryPayment === "crediario" ||
+      (!!paymentsSnapshot && paymentsSnapshot.some(function(p){ return p.method === "crediario" && p.value > 0; }));
+    if (crediario && crediario.installments > 1 && hasCreditPortion) {
       saleData.installments = crediario.installments;
       saleData.first_due_date = crediario.first_due_date;
     }
