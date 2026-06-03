@@ -502,7 +502,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
 const s = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.72)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -512,10 +512,17 @@ const s = StyleSheet.create({
     maxWidth: 480,
   },
   sheet: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.bg3,
     borderRadius: 20,
     overflow: "hidden",
     maxHeight: "90%",
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    elevation: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.55,
+    shadowRadius: 20,
   },
   header: {
     flexDirection: "row",
@@ -524,6 +531,7 @@ const s = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border2,
+    backgroundColor: Colors.bg3,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerIcon: {
@@ -570,7 +578,7 @@ const s = StyleSheet.create({
     paddingVertical: 11,
     fontSize: 14,
     color: Colors.ink,
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.bg2,
   },
   searchRow: {
     flexDirection: "row",
@@ -580,7 +588,7 @@ const s = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     gap: 8,
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.bg2,
     marginTop: 6,
   },
   searchInput: { flex: 1, paddingVertical: 11, fontSize: 14, color: Colors.ink },
@@ -643,7 +651,7 @@ const s = StyleSheet.create({
     borderColor: Colors.border2,
     borderRadius: 10,
     paddingHorizontal: 14,
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.bg2,
     gap: 8,
   },
   amountPrefix: { fontSize: 15, fontWeight: "600", color: Colors.ink3 },
@@ -668,7 +676,7 @@ const s = StyleSheet.create({
   previewBox: {
     marginTop: 16,
     padding: 14,
-    backgroundColor: Colors.bg2,
+    backgroundColor: Colors.bg3,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border2,
