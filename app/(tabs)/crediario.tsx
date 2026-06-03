@@ -76,6 +76,14 @@ export default function CrediarioScreen() {
     staleTime: 60_000,
   });
 
+  // Configurações (chave Pix p/ a mensagem de cobrança)
+  const rulesQ = useQuery({
+    queryKey: ["credit-rules", company?.id],
+    queryFn: () => creditApi.getCollectionRules(company!.id),
+    enabled: !!company?.id,
+    staleTime: 5 * 60_000,
+  });
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
@@ -86,18 +94,39 @@ export default function CrediarioScreen() {
     setRefreshing(false);
   }, [company?.id]);
 
-  // F3-3B: envia mensagem WhatsApp de cobranca (wa.me eh o dispositivo canonico)
-  const handleTriggerWA = useCallback(async (customerName: string, phone: string | null, totalOverdue: number, overdueCount: number) => {
+  // Cobrança unificada no WhatsApp (wa.me): mensagem rica com compra (dia + produtos),
+  // próxima parcela/valor + vencimento e a chave Pix da loja, pronta pra pagamento.
+  const handleCobrar = useCallback(async (customerId: string, customerName: string, phone: string | null) => {
     if (!phone) { toast.error("Cliente sem telefone cadastrado"); return; }
-    const clean = phone.replace(/\D/g, "");
-    const num   = clean.startsWith("55") ? clean : `55${clean}`;
-    const msg   = encodeURIComponent(
-      `Olá, ${customerName}! Passando para avisar que você tem ${overdueCount} parcela${overdueCount !== 1 ? "s" : ""} em aberto totalizando ${fmt(totalOverdue)} no nosso crediário. Entre em contato para regularizar.`
-    );
-    const url = `https://wa.me/${num}?text=${msg}`;
-    try { await Linking.openURL(url); }
-    catch { toast.error("Erro ao abrir WhatsApp"); }
-  }, []);
+    setTriggeringId(customerId);
+    try {
+      const detail = await creditApi.getCustomerHistory(company!.id, customerId);
+      const store  = company?.name || "nossa loja";
+      const pixKey = String((rulesQ.data as any)?.pix_key || "").trim();
+      const debit  = (detail.transactions || []).find(t => t.type === "debit");
+      const prodMatch = debit?.notes ? debit.notes.match(/\(([^)]+)\)/) : null;
+      const products  = prodMatch ? prodMatch[1] : "";
+      const buyDate   = debit ? fmtDate(debit.created_at) : "";
+      const open = (detail.open_installments || []).slice()
+        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+      const nextDue = open[0];
+      const lines: string[] = [
+        `Olá, ${customerName}! Tudo bem? Passando pra lembrar do seu crediário aqui na ${store}.`,
+      ];
+      if (debit) lines.push(`Referente à compra do dia ${buyDate}${products ? ` (${products})` : ""}.`);
+      if (nextDue) lines.push(`A parcela ${nextDue.installment_number}/${nextDue.total_installments} de ${fmt(nextDue.remaining ?? nextDue.amount_due)} vence em ${fmtDate(nextDue.due_date)}.`);
+      else lines.push(`Seu saldo em aberto é de ${fmt(detail.balance)}.`);
+      if (pixKey) lines.push(`Chave Pix para pagamento: ${pixKey}`);
+      lines.push(`— ${store}`);
+      const clean = phone.replace(/\D/g, "");
+      const num   = clean.startsWith("55") ? clean : `55${clean}`;
+      await Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(lines.join("\n\n"))}`);
+    } catch {
+      toast.error("Erro ao montar a cobrança");
+    } finally {
+      setTriggeringId(null);
+    }
+  }, [company?.id, company?.name, rulesQ.data]);
 
   const kpis = dashQ.data?.kpis;
   const topDefaulters = dashQ.data?.top_defaulters || [];
@@ -159,7 +188,7 @@ export default function CrediarioScreen() {
           </Pressable>
           <Pressable onPress={() => router.push("/crediario/settings" as any)} style={s.settingsBtn}>
             <Icon name="settings" size={15} color={Colors.violet3} />
-            <Text style={s.settingsBtnText}>Régua</Text>
+            <Text style={s.settingsBtnText}>Configurações</Text>
           </Pressable>
         </View>
       </View>
@@ -234,7 +263,16 @@ export default function CrediarioScreen() {
                         {cust.last_activity_at ? ` · ult. mov. ${fmtDate(cust.last_activity_at)}` : ""}
                       </Text>
                     </View>
-                    <View style={s.debtorRight}>
+                    <View style={s.carteiraRight}>
+                      <Pressable
+                        style={[s.waBtn, triggeringId === cust.id && { opacity: 0.4 }]}
+                        disabled={triggeringId === cust.id}
+                        onPress={() => handleCobrar(cust.id, cust.name, cust.phone)}
+                      >
+                        {triggeringId === cust.id
+                          ? <ActivityIndicator size="small" color={Colors.green} />
+                          : <Icon name="message_circle" size={14} color={Colors.green} />}
+                      </Pressable>
                       <Text style={[s.debtorAmount, { color: isOverdue ? Colors.red : Colors.ink }]}>
                         {fmt(cust.balance)}
                       </Text>
@@ -304,16 +342,11 @@ export default function CrediarioScreen() {
                     <View style={s.debtorRight}>
                       <Text style={s.debtorAmount}>{fmt(d.total_overdue)}</Text>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        {/* F3-3B: botão cobranca WhatsApp (wa.me dispositivo canonico) */}
+                        {/* Cobrança WhatsApp unificada (mensagem rica + chave Pix) */}
                         <Pressable
                           style={[s.triggerBtn, isTrig && { opacity: 0.4 }]}
                           disabled={isTrig}
-                          onPress={(e) => {
-                            // Impede que o press propague para o Pressable pai (navegação)
-                            setTriggeringId(d.customer_id);
-                            handleTriggerWA(d.customer_name, d.phone, d.total_overdue, d.overdue_count)
-                              .finally(() => setTriggeringId(null));
-                          }}
+                          onPress={() => handleCobrar(d.customer_id, d.customer_name, d.phone)}
                         >
                           {isTrig
                             ? <ActivityIndicator size="small" color={Colors.violet3} />
@@ -383,6 +416,8 @@ const s = StyleSheet.create({
   scorePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   scorePillText: { fontSize: 9.5, fontWeight: "700" },
   debtorRight: { alignItems: "flex-end", gap: 6 },
+  carteiraRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+  waBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)", alignItems: "center", justifyContent: "center" },
   debtorAmount: { fontSize: 14, fontWeight: "800", color: Colors.red },
   triggerBtn: {
     width: 30, height: 30, borderRadius: 8,
