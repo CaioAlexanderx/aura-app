@@ -13,6 +13,7 @@ import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import type { AgingRow } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
+import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 
 var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -46,6 +47,7 @@ export default function CrediarioScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [showCriar, setShowCriar] = useState(false);
+  const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
 
   // F3-3B (29/05/2026): IS_WIDE/IS_NARROW calculados em tempo de execucao via
   // useWindowDimensions, nao mais como constante de modulo (que nao recalculava em resize).
@@ -249,9 +251,7 @@ export default function CrediarioScreen() {
                   <Pressable
                     key={cust.id}
                     style={s.debtorRow}
-                    onPress={() =>
-                      router.push(`/crediario/cliente/${cust.id}?name=${encodeURIComponent(cust.name)}` as any)
-                    }
+                    onPress={() => setModalCust({ id: cust.id, name: cust.name })}
                   >
                     <View style={s.debtorLeft}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
@@ -320,9 +320,7 @@ export default function CrediarioScreen() {
                   <Pressable
                     key={d.customer_id}
                     style={s.debtorRow}
-                    onPress={() =>
-                      router.push(`/crediario/cliente/${d.customer_id}?name=${encodeURIComponent(d.customer_name)}` as any)
-                    }
+                    onPress={() => setModalCust({ id: d.customer_id, name: d.customer_name })}
                   >
                     <View style={s.debtorLeft}>
                       <Text style={s.debtorName} numberOfLines={1}>{d.customer_name}</Text>
@@ -373,6 +371,22 @@ export default function CrediarioScreen() {
       )}
 
       <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} />
+
+      <ClienteCrediarioModal
+        visible={!!modalCust}
+        companyId={company?.id || ""}
+        customerId={modalCust?.id || null}
+        customerName={modalCust?.name || null}
+        pixKey={(rulesQ.data as any)?.pix_key || null}
+        storeName={company?.name || null}
+        onCobrar={handleCobrar}
+        onChanged={() => {
+          qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });
+          qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] });
+          qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
+        }}
+        onClose={() => setModalCust(null)}
+      />
     </ScrollView>
   );
 }
