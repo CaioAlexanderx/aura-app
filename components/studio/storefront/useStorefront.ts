@@ -1,47 +1,47 @@
 // ============================================================
 // components/studio/storefront/useStorefront.ts
-// Fonte única de estado do storefront público Studio.
-// CONTRATO CONGELADO — Onda 0.
+// Fonte unica de estado do storefront publico Studio.
+// CONTRATO CONGELADO -- Onda 0.
 //
-// API pública (contratos para Onda 1):
+// API publica (contratos para Onda 1):
 //
 //   const sf = useStorefront(slug);
 //
 //   // Estado da loja
-//   sf.store           — StorePayload | null
-//   sf.loading         — boolean
-//   sf.error           — string | null
-//   sf.setError        — (msg: string | null) => void
+//   sf.store           -- StorePayload | null
+//   sf.loading         -- boolean
+//   sf.error           -- string | null
+//   sf.setError        -- (msg: string | null) => void
 //
-//   // Navegação
-//   sf.stage           — Stage
-//   sf.goTo(stage)     — navega entre stages
+//   // Navegacao
+//   sf.stage           -- Stage
+//   sf.goTo(stage)     -- navega entre stages
 //
 //   // Produto sendo configurado
-//   sf.activeProduct   — StudioStoreProduct | null
-//   sf.editingValues   — Record<fieldId, any>  (valores correntes dos fields)
-//   sf.setFieldValue(fieldId, value) — grava valor de um field
-//   sf.editingQty      — number
-//   sf.setEditingQty   — (n: number) => void
-//   sf.editingAddBack  — boolean  (cliente optou pelo verso)
-//   sf.setEditingAddBack — (b: boolean) => void
-//   sf.configuringUnitPrice — número calculado (base + choices + verso)
-//   sf.openConfigure(product) — abre o configurador pra um produto
-//   sf.editCartLine(line)     — reabre o configurador pra editar linha
-//   sf.commitConfigure()      — valida + commita no carrinho + volta pra "list"
+//   sf.activeProduct   -- StudioStoreProduct | null
+//   sf.editingValues   -- Record<fieldId, any>  (valores correntes dos fields)
+//   sf.setFieldValue(fieldId, value) -- grava valor de um field
+//   sf.editingQty      -- number
+//   sf.setEditingQty   -- (n: number) => void
+//   sf.editingAddBack  -- boolean  (cliente optou pelo verso)
+//   sf.setEditingAddBack -- (b: boolean) => void
+//   sf.configuringUnitPrice -- numero calculado (base + choices + verso)
+//   sf.openConfigure(product) -- abre o configurador pra um produto
+//   sf.editCartLine(line)     -- reabre o configurador pra editar linha
+//   sf.commitConfigure()      -- valida + commita no carrinho + volta pra "list"
 //
 //   // Upload de imagem (campo type=image)
 //   // Agente G (FieldImage) chama sf.uploadImage() e depois sf.setFieldValue()
-//   sf.uploadImage(fieldId, file) — Promise<void>
-//     internamente: FileReader → base64 → POST /upload → setFieldValue(fieldId, url)
+//   sf.uploadImage(fieldId, file) -- Promise<void>
+//     internamente: FileReader -> base64 -> POST /upload -> setFieldValue(fieldId, url)
 //     estados: sf.uploadingFieldId (string|null), sf.uploadError (string|null)
-//   sf.uploadingFieldId  — string | null  (qual field está em upload)
-//   sf.uploadError       — string | null
-//   sf.clearUploadError  — () => void
+//   sf.uploadingFieldId  -- string | null  (qual field esta em upload)
+//   sf.uploadError       -- string | null
+//   sf.clearUploadError  -- () => void
 //
 //   // Carrinho
-//   sf.cart            — CartLine[]
-//   sf.cartSubtotal    — number
+//   sf.cart            -- CartLine[]
+//   sf.cartSubtotal    -- number
 //   sf.removeCartLine(lineId)
 //
 //   // Checkout
@@ -57,12 +57,18 @@
 //   sf.addressState     sf.setAddressState
 //   sf.addressZip       sf.setAddressZip
 //   sf.notes            sf.setNotes
-//   sf.sending          — boolean
-//   sf.submitOrder()    — async, chama POST /order e seta sentOrder + stage="sent"
+//   sf.sending          -- boolean
+//   sf.submitOrder()    -- async, chama POST /order e seta sentOrder + stage="sent"
 //
-//   // Confirmação
-//   sf.sentOrder        — SentOrder | null
-//   sf.resetToList()    — volta pra lista após "sent"
+//   // Confirmacao
+//   sf.sentOrder        -- SentOrder | null
+//   sf.resetToList()    -- volta pra lista apos "sent"
+//
+//   // Internos (prefixo _ -- nao usar fora dos sub-componentes de display)
+//   sf._editingLineId   -- string | null  (para saber se e edicao ou novo)
+//   sf._effectiveBackSelected(cfg, explicit) -- boolean
+//   sf._lineUnitPrice(line) -- number
+//   sf._lineTotal(line)     -- number
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
 import { Platform } from "react-native";
@@ -75,9 +81,9 @@ const API_BASE =
   (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
   "https://aura-backend-production-f805.up.railway.app/api/v1";
 
-// ─── Helpers de preço (idênticos ao monolito) ────────────────
+// --- Helpers de preco (identicos ao monolito) ---
 function choicesDelta(
-  cfg: StorePayload["products"][0]["customization_config"] | null | undefined,
+  cfg: StudioStoreProduct["customization_config"] | null | undefined,
   values: Record<string, any>
 ): number {
   if (!cfg?.fields) return 0;
@@ -131,7 +137,7 @@ function lineTotal(line: CartLine): number {
   return lineUnitPrice(line) * line.qty;
 }
 
-// ─── Hook ────────────────────────────────────────────────────
+// --- Hook ---
 export function useStorefront(slug: string) {
   const [store, setStore] = useState<StorePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -292,14 +298,14 @@ export function useStorefront(slug: string) {
   }
 
   /**
-   * uploadImage — CONTRATO para Agente G (FieldImage)
+   * uploadImage -- CONTRATO para Agente G (FieldImage)
    *
    * Chame com o fieldId e o File selecionado pelo picker.
-   * O hook faz: FileReader → base64 → POST /upload → setFieldValue(fieldId, url)
+   * O hook faz: FileReader -> base64 -> POST /upload -> setFieldValue(fieldId, url)
    * Estados expostos: uploadingFieldId, uploadError, clearUploadError
    *
-   * O Agente G pode usar esta função OU reimplementar dentro do FieldImage
-   * (que recebe `onChange` direto). Esta implementação é o fallback/referência.
+   * O Agente G pode usar esta funcao OU reimplementar dentro do FieldImage
+   * (que recebe `onChange` direto). Esta implementacao e o fallback/referencia.
    */
   async function uploadImage(fieldId: string, file: File, maxMb: number = 15): Promise<void> {
     const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
@@ -420,7 +426,7 @@ export function useStorefront(slug: string) {
   return {
     // Loja
     store, loading, error, setError,
-    // Navegação
+    // Navegacao
     stage, goTo,
     // Configurador
     activeProduct,
@@ -448,9 +454,10 @@ export function useStorefront(slug: string) {
     addressZip, setAddressZip,
     notes, setNotes,
     sending, submitOrder,
-    // Confirmação
+    // Confirmacao
     sentOrder, resetToList,
-    // Helpers expostos pra sub-componentes que precisam
+    // Internos (prefixo _ -- sub-componentes de display apenas)
+    _editingLineId: editingLineId,
     _effectiveBackSelected: effectiveBackSelected,
     _lineUnitPrice: lineUnitPrice,
     _lineTotal: lineTotal,

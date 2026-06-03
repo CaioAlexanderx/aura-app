@@ -1,7 +1,7 @@
 // ============================================================
 // components/studio/storefront/ProductConfigurator.tsx
 // Orquestra os fields de um produto: frente/verso, opt-in verso,
-// LivePreview, quantidade, botão Adicionar/Atualizar.
+// LivePreview, quantidade, botao Adicionar/Atualizar.
 // ============================================================
 import { View, Text, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
@@ -17,10 +17,22 @@ const qtyBtn: any = {
 };
 const qtyTxt: any = { color: T.ink, fontSize: 16, fontWeight: "800" };
 
-export function ProductConfigurator({ sf }: { sf: StorefrontState }) {
-  const { activeProduct, editingValues, setFieldValue, editingQty, setEditingQty,
+export function ProductConfigurator({
+  sf,
+  slug,
+}: {
+  sf: StorefrontState;
+  /** Slug da loja — necessario para o endpoint de upload no FieldImage */
+  slug: string;
+}) {
+  const {
+    activeProduct, editingValues, setFieldValue, editingQty, setEditingQty,
     editingAddBack, setEditingAddBack, configuringUnitPrice, commitConfigure,
-    goTo, error } = sf;
+    goTo, error,
+    // editingLineId nao e exposto diretamente — inferimos pelo comportamento:
+    // quando activeProduct nao e null E tem um lineId travado, e edicao.
+    // O hook sabe internamente; o texto do botao muda via sf._isEditing.
+  } = sf;
 
   if (!activeProduct) return null;
 
@@ -42,7 +54,7 @@ export function ProductConfigurator({ sf }: { sf: StorefrontState }) {
       field={f}
       value={editingValues[f.id]}
       templates={activeProduct.templates}
-      slug={sf.store?.site ? String((sf as any).slug ?? "") : ""}
+      slug={slug}
       onChange={(v) => setFieldValue(f.id, v)}
     />
   );
@@ -180,7 +192,7 @@ export function ProductConfigurator({ sf }: { sf: StorefrontState }) {
               </Text>
             )}
 
-            {/* Fields do verso (só quando ativo) */}
+            {/* Fields do verso (so quando ativo) */}
             {showBackBody && backFields.map(renderField)}
           </>
         )}
@@ -206,14 +218,14 @@ export function ProductConfigurator({ sf }: { sf: StorefrontState }) {
         )}
       </ScrollView>
 
-      {/* Botão CTA */}
+      {/* Botao CTA */}
       <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
         <Pressable
           onPress={commitConfigure}
           style={{ backgroundColor: T.primary, paddingVertical: 14, borderRadius: 10, alignItems: "center" }}
         >
           <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
-            {sf.editingValues.__isEditing__ ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
+            {(sf as any)._editingLineId ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
           </Text>
         </Pressable>
       </View>

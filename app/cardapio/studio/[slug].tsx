@@ -3,8 +3,15 @@
 // Shell fino do storefront Studio.
 // Onda 0: monolito decomposto em sub-componentes.
 //
-// Este arquivo só monta o hook de estado + roteia entre stages.
-// Toda a UI está em components/studio/storefront/.
+// Este arquivo so monta o hook de estado + roteia entre stages.
+// Toda a UI esta em components/studio/storefront/.
+//
+// Sub-componentes:
+//   useStorefront         -- estado + API calls
+//   ProductList           -- stage="list" (hero + grade de produtos)
+//   ProductConfigurator   -- stage="configure" (fields + preview)
+//   Checkout              -- stage="checkout" (dados + pagamento)
+//   SentConfirmation      -- stage="sent" (confirmacao + pix + revisoes)
 // ============================================================
 import { useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, View, Text } from "react-native";
@@ -50,7 +57,9 @@ export default function StudioStorefrontPage() {
     return <SentConfirmation sf={sf} />;
   }
   if (sf.stage === "configure" && sf.activeProduct) {
-    return <ProductConfigurator sf={sf} />;
+    // slug e passado explicitamente pro ProductConfigurator
+    // para que o FieldImage monte a URL do endpoint de upload
+    return <ProductConfigurator sf={sf} slug={slug} />;
   }
   if (sf.stage === "checkout") {
     return <Checkout sf={sf} />;
