@@ -24,17 +24,25 @@
 //
 // "Novo produto" abre StudioNewProductWizard (Sprint 4) — sem mudança.
 //
+// Deep-links:
+//   ?action=novo-produto      → abre wizard automaticamente no mount
+//   ?action=edit-product&id=<pid> → expande produto correspondente
+//     inline (mesma ação de clicar na lista). Se os produtos ainda não
+//     carregaram no mount, o expand é aplicado após o load() via ref.
+//     Param consumido via router.replace para não reabrir em re-renders.
+//
 // Convenções (não negociar):
 //   - useStudioTokens() de @/contexts/StudioThemeMode
 //   - useMemo(() => buildStyles(t), [t])
 //   - StudioPalette type
 //   - toast com erro REAL ([status] data.error || message)
 // ============================================================
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
   TextInput, Image, Platform,
 } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
@@ -106,6 +114,59 @@ export default function StudioEstoque() {
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
+
+  // ── Deep-link params ──────────────────────────────────────────────────────
+  // Captura action + id para tratar tanto ?action=novo-produto quanto
+  // ?action=edit-product&id=<pid> no mesmo useEffect de mount.
+  const params = useLocalSearchParams<{ action?: string; id?: string }>();
+  const router = useRouter();
+
+  // Ref para expand pendente: quando edit-product chega antes do load()
+  // terminar, guardamos o id aqui e aplicamos após products ser populado.
+  const pendingExpandIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (params.action === "novo-produto") {
+      setWizardOpen(true);
+      // Consome o param para não reabrir em re-renders
+      router.replace("/studio/estoque" as any);
+    } else if (params.action === "edit-product" && params.id) {
+      const targetId = params.id;
+      // Consome o param imediatamente para não reabrir em re-renders
+      router.replace("/studio/estoque" as any);
+      // Se produtos já carregados: expande direto (mesma ação de clicar na lista)
+      // Se ainda carregando: salva na ref para aplicar após load()
+      setProducts((current) => {
+        const found = current.find((p) => p.id === targetId);
+        if (found) {
+          setExpandedId(targetId);
+        } else {
+          // Produtos ainda não carregados — pendingExpandIdRef será lido no useEffect de products
+          pendingExpandIdRef.current = targetId;
+        }
+        return current; // sem mutação
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Aplica expand pendente após products carregar ─────────────────────────
+  // Quando edit-product chega e produtos ainda estavam vazios no mount,
+  // este efeito aplica o expand assim que a lista é populada.
+  useEffect(() => {
+    if (!loading && pendingExpandIdRef.current) {
+      const targetId = pendingExpandIdRef.current;
+      pendingExpandIdRef.current = null;
+      const found = products.find((p) => p.id === targetId);
+      if (found) {
+        setExpandedId(targetId);
+      } else {
+        // Produto não encontrado na lista (inativo ou de outra empresa):
+        // fallback silencioso — permanece na lista sem expansão.
+        console.warn("[StudioEstoque] edit-product: produto não encontrado na lista, id=", targetId);
+      }
+    }
+  }, [loading, products]);
 
   // ── Loader ───────────────────────────────────────────────
   const load = useCallback(async () => {

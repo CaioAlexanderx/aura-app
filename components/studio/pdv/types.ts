@@ -20,11 +20,23 @@ export type StudioProduct = {
   barcode?: string | null;    // código de barras (campo mais populado p/ scanner)
 };
 
+/**
+ * kind discrimina a origem do item no carrinho:
+ *   'quick'        — adicionado direto (1 toque), sem personalização preenchida
+ *   'personalizado'— passou pelo StageConfigure (tem values significativos)
+ *
+ * Itens de produtos NÃO personalizáveis são sempre 'quick'.
+ * O campo é display-only no carrinho e no orçamento; não afeta
+ * o payload de checkout (sale_payments / finalizeSale).
+ */
+export type CartLineKind = 'quick' | 'personalizado';
+
 export type CartLine = {
   lineId: string;
   product: StudioProduct;
   qty: number;
   values: Record<string, any>; // customização (vazio = produto comum)
+  kind: CartLineKind;          // NEW: quick-add vs personalizado
 };
 
 export type Stage = "list" | "configure" | "checkout" | "done";
@@ -50,4 +62,4 @@ export const PAY_METHODS: { id: string; label: string; icon: string }[] = [
   { id: "crediario", label: "Crediário", icon: "clipboard" },
 ];
 
-export const isCustomLine = (l: CartLine) => !!l.product.is_personalizable;
+export const isCustomLine = (l: CartLine) => l.kind === 'personalizado';

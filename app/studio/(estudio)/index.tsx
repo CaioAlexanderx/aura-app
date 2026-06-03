@@ -23,6 +23,11 @@
 // FaturamentoChart (linha desenha de esquerda pra direita 700ms)
 // e hover-lift web-only nos cards (KpiCard + chart cards). Tudo
 // behind AccessibilityInfo.isReduceMotionEnabled().
+//
+// 02/06/2026 (Onda 2 — Agente F): integra checklist-herói
+// StudioOnboarding no topo. KPIs ficam discretos (opacity 0.55)
+// enquanto temVenda=false. Quando temVenda=true, oculta checklist
+// e KPIs voltam ao normal. guia 5 passos antigo removido.
 // ============================================================
 import { useEffect, useState, useMemo, useCallback, ReactNode } from "react";
 import {
@@ -43,12 +48,11 @@ import {
   type PainelData,
   type PainelSeriePoint,
 } from "@/services/studioApi";
-import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
-import { useDigitalChannel } from "@/hooks/useDigitalChannel";
+import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
@@ -91,26 +95,6 @@ function HoverLift({ children, style }: { children: ReactNode; style: any }) {
     </Pressable>
   );
 }
-
-// ─── Guia steps (mantido pro card colapsado) ───────────────────
-type GuideStepStatus = "done" | "in_progress" | "todo";
-
-type GuideStep = {
-  id: "products" | "customization" | "templates" | "sla_wa" | "publish";
-  num: number;
-  title: string;
-  desc: string;
-  cta: string;
-  href: string;
-};
-
-const GUIDE_STEPS: GuideStep[] = [
-  { id: "products",      num: 1, title: "Cadastre seus produtos",     desc: "Adicione ao menos 1 produto ao catálogo do estúdio.",            cta: "Cadastrar",        href: "/studio/produtos" },
-  { id: "customization", num: 2, title: "Configure a personalização", desc: "Marque produtos como personalizáveis e defina os campos da arte.", cta: "Configurar",       href: "/studio/produtos" },
-  { id: "templates",     num: 3, title: "Suba templates de arte",     desc: "Suba pelo menos 3 artes/templates pra agilizar os pedidos.",       cta: "Subir artes",      href: "/studio/galeria" },
-  { id: "sla_wa",        num: 4, title: "Defina SLA e WhatsApp",      desc: "Defina o prazo (SLA) e o WhatsApp de aprovação de arte.",          cta: "Configurar",       href: "/studio/configuracoes" },
-  { id: "publish",       num: 5, title: "Publique a Loja Digital",    desc: "Publique sua Loja Digital pra receber pedidos online.",            cta: "Publicar",         href: "/canal-digital" },
-];
 
 type Period = "hoje" | "7d" | "30d";
 
@@ -184,9 +168,11 @@ export default function StudioPainel() {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
 
-  const { config: digitalConfig } = useDigitalChannel();
+  // ─── Checklist-herói: controla se KPIs ficam discretos ───
+  // temVenda=true → checklist some, KPIs tomam o papel principal
+  const [setupComplete, setSetupComplete] = useState(false);
 
-  // ─── Painel data ──────────────────────────────────
+  // ─── Painel data ──────────────────────────────────────────
   const [period, setPeriod] = useState<Period>("7d");
   const [painel, setPainel] = useState<PainelData | null>(null);
   const [painelLoading, setPainelLoading] = useState(true);
@@ -211,116 +197,7 @@ export default function StudioPainel() {
 
   useEffect(() => { fetchPainel(); }, [fetchPainel]);
 
-  // ─── Guia 5 passos (mantido — detecta progresso real) ──────
-  const [guideLoading, setGuideLoading] = useState(true);
-  const [guideDismissed, setGuideDismissed] = useState(false);
-  const [stepStatus, setStepStatus] = useState<Record<GuideStep["id"], GuideStepStatus>>({
-    products: "todo", customization: "todo", templates: "todo", sla_wa: "todo", publish: "todo",
-  });
-  const [dismissing, setDismissing] = useState(false);
-  const [guideExpanded, setGuideExpanded] = useState(false);
-
-  const runGuideDetection = useCallback(async () => {
-    if (!cid) return;
-    setGuideLoading(true);
-    try {
-      const [productsRes, settingsRes, templatesRes] = await Promise.allSettled([
-        request<any>("/companies/" + cid + "/products?limit=500", { method: "GET", retry: 1, timeout: 10000 }),
-        studioApi.getSettings(cid),
-        studioApi.listTemplates(cid, { limit: 10 }),
-      ]);
-
-      // Lista de produtos (passos 1 e 2)
-      let productList: any[] = [];
-      if (productsRes.status === "fulfilled") {
-        const data = productsRes.value;
-        productList = Array.isArray(data) ? data : (data?.products || data?.items || []);
-      }
-
-      // Passo 1: >=1 produto
-      const products: GuideStepStatus = productList.length >= 1 ? "done" : "todo";
-
-      // Passo 2: produto personalizavel com customization_config nao-vazio
-      const personalizables = productList.filter((p) => p && p.is_personalizable);
-      const withCfg = personalizables.filter((p) => {
-        const cfg = p.customization_config;
-        if (!cfg || typeof cfg !== "object") return false;
-        const fields = (cfg as any).fields;
-        return Array.isArray(fields) && fields.length > 0;
-      });
-      let customization: GuideStepStatus = "todo";
-      if (withCfg.length >= 1 && withCfg.length === personalizables.length && personalizables.length > 0) {
-        customization = "done";
-      } else if (withCfg.length >= 1 || personalizables.length >= 1) {
-        customization = "in_progress";
-      }
-
-      // Passo 3: >=3 templates
-      let templatesCount = 0;
-      if (templatesRes.status === "fulfilled") {
-        templatesCount = (templatesRes.value.templates || []).length;
-      }
-      const templates: GuideStepStatus =
-        templatesCount >= 3 ? "done" :
-        templatesCount >= 1 ? "in_progress" : "todo";
-
-      // Passo 4: SLA + WhatsApp
-      let slaWa: GuideStepStatus = "todo";
-      let dismissed = false;
-      if (settingsRes.status === "fulfilled") {
-        const st: StudioSettings = settingsRes.value.settings || {};
-        const hasSla = !!(st.default_sla_days && st.default_sla_days > 0);
-        const hasWa = !!(st.approval_wa_phone && String(st.approval_wa_phone).trim().length > 5);
-        if (hasSla && hasWa) slaWa = "done";
-        else if (hasSla || hasWa) slaWa = "in_progress";
-        dismissed = !!st.guide_dismissed;
-      }
-
-      // Passo 5: Loja Digital publicada
-      const publish: GuideStepStatus =
-        (digitalConfig && (digitalConfig as any).is_published === true) ? "done" : "todo";
-
-      setStepStatus({ products, customization, templates, sla_wa: slaWa, publish });
-      setGuideDismissed(dismissed);
-    } catch (err) {
-      console.error("[StudioPainel] runGuideDetection:", err);
-    } finally {
-      setGuideLoading(false);
-    }
-  }, [cid, digitalConfig]);
-
-  useEffect(() => { runGuideDetection(); }, [runGuideDetection]);
-
-  const doneCount = useMemo(
-    () => Object.values(stepStatus).filter((v) => v === "done").length,
-    [stepStatus]
-  );
-  const allDone = doneCount === GUIDE_STEPS.length;
-
-  // Proximo passo nao concluido — usado pra CTA do card colapsado
-  const nextStep = useMemo(() => {
-    return GUIDE_STEPS.find((step) => stepStatus[step.id] !== "done") || null;
-  }, [stepStatus]);
-
-  const handleDismissGuide = useCallback(async () => {
-    if (!cid) return;
-    setDismissing(true);
-    try {
-      await studioApi.saveSettings(cid, { guide_dismissed: true } as any);
-      setGuideDismissed(true);
-      toast.success("Guia oculto.");
-    } catch (err: any) {
-      console.error("[StudioPainel] handleDismissGuide:", err);
-      toast.error(err?.message || "Erro ao ocultar guia");
-    } finally {
-      setDismissing(false);
-    }
-  }, [cid]);
-
-  // Render guia: oculto se dismissed ou se 5/5
-  const showGuide = !guideDismissed && !allDone && !guideLoading && !!nextStep;
-
-  // ─── Data shortcuts ───────────────────────────────────
+  // ─── Data shortcuts ───────────────────────────────────────
   const d = painel || EMPTY_PAINEL;
   const kpiVendas = d.kpis.vendas_dia;
   const kpiTicket = d.kpis.ticket_medio;
@@ -335,191 +212,136 @@ export default function StudioPainel() {
   // Prejuizo no mes: faixa danger + valor em vermelho
   const isLoss = kpiLucro.value < 0;
 
+  // KPIs secundários enquanto setup não completo
+  const kpiOpacity = setupComplete ? 1 : 0.55;
+
   return (
     <StudioScreen variant="grid" scroll={false} padded={false}>
       <ScrollView style={s.scroll} contentContainerStyle={s.container}>
-      {/* ═══════ GUIA 5 PASSOS (colapsado) ═══════ */}
-      {showGuide && nextStep && (
-        <StudioGradient
-          colors={["#1E3A8A", "#EC4899"]}
-          direction="135deg"
-          style={s.guideCard}
-        >
-          {/* Header */}
-          <View style={s.guideHeaderRow}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.guideHeaderTitle} numberOfLines={1}>Configure seu estúdio</Text>
-              <Text style={s.guideCompactSub}>
-                {doneCount} de {GUIDE_STEPS.length} passos concluídos
-                {!guideExpanded && nextStep ? " · próximo: " + nextStep.title.toLowerCase() : ""}
-              </Text>
-              <View style={[s.guideDotsWrap, { marginTop: 8 }]}>
-                {GUIDE_STEPS.map((step) => (
-                  <View key={step.id} style={[s.guideDot, stepStatus[step.id] === "done" && s.guideDotDone]} />
-                ))}
+
+        {/* ═══════ CHECKLIST-HERÓI (Onda 2) ═══════
+            Visível enquanto temVenda=false. Quando completo some.
+            onComplete seta setupComplete=true → KPIs voltam ao normal. */}
+        <StudioOnboarding
+          onComplete={() => setSetupComplete(true)}
+        />
+
+        {/* ═══════ HEADER + Toggle periodo ═══════ */}
+        <View style={s.pageHeader}>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={s.eyebrow}>ESTUDIO . PAINEL</Text>
+            <Text style={s.pageTitle}>Indicadores do dia</Text>
+            <Text style={s.pageSub}>Acompanhe vendas, pedidos e margem em tempo real.</Text>
+          </View>
+          <View style={s.togglePeriod}>
+            {(["hoje", "7d", "30d"] as Period[]).map((p) => {
+              const active = period === p;
+              return (
+                <Pressable
+                  key={p}
+                  onPress={() => setPeriod(p)}
+                  style={[s.toggleChip, active && s.toggleChipActive]}
+                >
+                  <Text style={[s.toggleChipTxt, active && s.toggleChipTxtActive]}>
+                    {periodLabel(p)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ═══════ LOADING (full) ═══════ */}
+        {painelLoading && !painel && (
+          <StudioLoading variant="spinner" label="Carregando painel..." />
+        )}
+
+        {/* ═══════ Conteudo (mesmo durante refetch, com opacity reduzida) ═══════ */}
+        {(!painelLoading || painel) && (
+          <View style={[painelLoading && { opacity: 0.6 }]}>
+            {/* ─── KPI row — discretos enquanto setup não completo ─── */}
+            <View style={[{ opacity: kpiOpacity }]}>
+              <View style={s.kpiRow}>
+                <KpiCard
+                  t={t}
+                  variant="primary"
+                  label="Vendas no dia"
+                  value={kpiVendas.value}
+                  format="currency"
+                  deltaPct={kpiVendas.delta_pct}
+                  subLabel={kpiVendas.sub_label || "Hoje"}
+                />
+                <KpiCard
+                  t={t}
+                  variant="accent"
+                  label={"Ticket medio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
+                  value={kpiTicket.value}
+                  format="currency"
+                  deltaPct={kpiTicket.delta_pct}
+                  subLabel={kpiTicket.sub_label || "Periodo selecionado"}
+                />
+                <KpiCard
+                  t={t}
+                  variant={isLoss ? "danger" : "success"}
+                  label="Lucro Liquido . mes"
+                  value={kpiLucro.value}
+                  format="currency"
+                  deltaPct={kpiLucro.delta_pct}
+                  subLabel={lucroSubLabel}
+                  valueIsNegative={isLoss}
+                />
               </View>
             </View>
-            <Pressable onPress={() => setGuideExpanded((v) => !v)} style={s.guideCompactBtn} accessibilityLabel={guideExpanded ? "Recolher guia" : "Ver passos"}>
-              <Text style={s.guideCompactBtnTxt}>{guideExpanded ? "Recolher" : "Ver passos"}</Text>
-              <Icon name={guideExpanded ? "chevron-up" : "chevron-down"} size={12} color="#fff" />
-            </Pressable>
-            <Pressable onPress={handleDismissGuide} disabled={dismissing} style={s.guideCompactX} hitSlop={8}>
-              {dismissing ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="x" size={14} color="#fff" />}
-            </Pressable>
-          </View>
 
-          {/* Passos (expandido) */}
-          {guideExpanded && (
-            <View style={s.guideSteps}>
-              {GUIDE_STEPS.map((step) => {
-                const st = stepStatus[step.id];
-                const done = st === "done";
-                const inprog = st === "in_progress";
-                return (
-                  <View key={step.id} style={s.guideStepRow}>
-                    <View style={[s.guideStepIcon, done && s.guideStepIconDone]}>
-                      {done ? <Icon name="check" size={13} color="#1E3A8A" /> : <Text style={s.guideStepNum}>{step.num}</Text>}
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[s.guideStepTitle, done && s.guideStepTitleDone]} numberOfLines={1}>{step.title}</Text>
-                      <Text style={s.guideStepDesc}>{done ? "Concluído" : (inprog ? "Em andamento · " : "") + step.desc}</Text>
-                    </View>
-                    {!done && (
-                      <Pressable onPress={() => router.push(step.href as any)} style={s.guideStepCta}>
-                        <Text style={s.guideStepCtaTxt}>{inprog ? "Continuar" : step.cta}</Text>
-                        <Icon name="arrow-right" size={11} color="#1E3A8A" />
-                      </Pressable>
-                    )}
+            {/* ─── Charts row ─── */}
+            <View style={s.chartsRow}>
+              {/* Faturamento line chart */}
+              <HoverLift style={s.chartCardWide}>
+                <View style={s.chartHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.chartEyebrow}>RECEITA</Text>
+                    <Text style={s.chartTitle}>
+                      Faturamento {period === "hoje" ? "de hoje" : "ultimos " + (period === "30d" ? "30 dias" : "7 dias")}
+                    </Text>
                   </View>
-                );
-              })}
+                  <Text style={s.chartMeta}>
+                    Total: {formatBRL(d.faturamento_total, 2)}
+                  </Text>
+                </View>
+                <FaturamentoChart data={d.faturamento_serie} t={t} />
+              </HoverLift>
+
+              {/* Top 5 produtos */}
+              <HoverLift style={s.chartCardNarrow}>
+                <View style={s.chartHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.chartEyebrow}>TOP VENDAS</Text>
+                    <Text style={s.chartTitle}>
+                      Top 5 produtos . {periodLabel(period).toLowerCase()}
+                    </Text>
+                  </View>
+                </View>
+                <TopProdutosList data={d.top_produtos} t={t} />
+              </HoverLift>
             </View>
-          )}
 
-          {/* CTA rápido do próximo passo (colapsado) */}
-          {!guideExpanded && nextStep && (
-            <Pressable onPress={() => router.push(nextStep.href as any)} style={[s.guideCompactBtn, { alignSelf: "flex-start", marginTop: 12 }]}>
-              <Text style={s.guideCompactBtnTxt}>{nextStep.cta}: {nextStep.title.toLowerCase()}</Text>
-              <Icon name="arrow-right" size={12} color="#fff" />
-            </Pressable>
-          )}
-        </StudioGradient>
-      )}
-
-      {/* ═══════ HEADER + Toggle periodo ═══════ */}
-      <View style={s.pageHeader}>
-        <View style={{ flexShrink: 1, minWidth: 0 }}>
-          <Text style={s.eyebrow}>ESTUDIO . PAINEL</Text>
-          <Text style={s.pageTitle}>Indicadores do dia</Text>
-          <Text style={s.pageSub}>Acompanhe vendas, pedidos e margem em tempo real.</Text>
-        </View>
-        <View style={s.togglePeriod}>
-          {(["hoje", "7d", "30d"] as Period[]).map((p) => {
-            const active = period === p;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => setPeriod(p)}
-                style={[s.toggleChip, active && s.toggleChipActive]}
-              >
-                <Text style={[s.toggleChipTxt, active && s.toggleChipTxtActive]}>
-                  {periodLabel(p)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* ═══════ LOADING (full) ═══════ */}
-      {painelLoading && !painel && (
-        <StudioLoading variant="spinner" label="Carregando painel..." />
-      )}
-
-      {/* ═══════ Conteudo (mesmo durante refetch, com opacity reduzida) ═══════ */}
-      {(!painelLoading || painel) && (
-        <View style={[painelLoading && { opacity: 0.6 }]}>
-          {/* ─── KPI row ─── */}
-          <View style={s.kpiRow}>
-            <KpiCard
-              t={t}
-              variant="primary"
-              label="Vendas no dia"
-              value={kpiVendas.value}
-              format="currency"
-              deltaPct={kpiVendas.delta_pct}
-              subLabel={kpiVendas.sub_label || "Hoje"}
-            />
-            <KpiCard
-              t={t}
-              variant="accent"
-              label={"Ticket medio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
-              value={kpiTicket.value}
-              format="currency"
-              deltaPct={kpiTicket.delta_pct}
-              subLabel={kpiTicket.sub_label || "Periodo selecionado"}
-            />
-            <KpiCard
-              t={t}
-              variant={isLoss ? "danger" : "success"}
-              label="Lucro Liquido . mes"
-              value={kpiLucro.value}
-              format="currency"
-              deltaPct={kpiLucro.delta_pct}
-              subLabel={lucroSubLabel}
-              valueIsNegative={isLoss}
-            />
-          </View>
-
-          {/* ─── Charts row ─── */}
-          <View style={s.chartsRow}>
-            {/* Faturamento line chart */}
-            <HoverLift style={s.chartCardWide}>
+            {/* ─── Funil aprovacao (full width) ─── */}
+            <HoverLift style={s.chartCardFull}>
               <View style={s.chartHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.chartEyebrow}>RECEITA</Text>
+                  <Text style={s.chartEyebrow}>APROVACAO DE ARTE (wa.me)</Text>
                   <Text style={s.chartTitle}>
-                    Faturamento {period === "hoje" ? "de hoje" : "ultimos " + (period === "30d" ? "30 dias" : "7 dias")}
+                    Funil de aprovacao . {periodLabel(period).toLowerCase()}
                   </Text>
                 </View>
                 <Text style={s.chartMeta}>
-                  Total: {formatBRL(d.faturamento_total, 2)}
+                  {d.funil_aprovacao.total_enviados} links enviados
                 </Text>
               </View>
-              <FaturamentoChart data={d.faturamento_serie} t={t} />
-            </HoverLift>
-
-            {/* Top 5 produtos */}
-            <HoverLift style={s.chartCardNarrow}>
-              <View style={s.chartHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.chartEyebrow}>TOP VENDAS</Text>
-                  <Text style={s.chartTitle}>
-                    Top 5 produtos . {periodLabel(period).toLowerCase()}
-                  </Text>
-                </View>
-              </View>
-              <TopProdutosList data={d.top_produtos} t={t} />
+              <FunilAprovacao data={d.funil_aprovacao} t={t} />
             </HoverLift>
           </View>
-
-          {/* ─── Funil aprovacao (full width) ─── */}
-          <HoverLift style={s.chartCardFull}>
-            <View style={s.chartHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.chartEyebrow}>APROVACAO DE ARTE (wa.me)</Text>
-                <Text style={s.chartTitle}>
-                  Funil de aprovacao . {periodLabel(period).toLowerCase()}
-                </Text>
-              </View>
-              <Text style={s.chartMeta}>
-                {d.funil_aprovacao.total_enviados} links enviados
-              </Text>
-            </View>
-            <FunilAprovacao data={d.funil_aprovacao} t={t} />
-          </HoverLift>
-        </View>
-      )}
+        )}
       </ScrollView>
     </StudioScreen>
   );
@@ -1080,75 +902,6 @@ function buildStyles(t: StudioPalette) {
       alignSelf: "center",
       width: "100%",
     },
-
-    // ── Guia colapsado ──
-    guideCompactCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 16,
-      borderRadius: 18,
-      padding: 16,
-      paddingHorizontal: 20,
-      marginBottom: 18,
-      ...(Platform.OS === "web" ? ({ boxShadow: "0 6px 16px rgba(15,23,42,0.12)" } as any) : null),
-    },
-    guideDotsWrap: { flexDirection: "row", gap: 4 },
-    guideDot: {
-      width: 24, height: 8, borderRadius: 4,
-      backgroundColor: "rgba(255,255,255,0.3)",
-    },
-    guideDotDone: { backgroundColor: "#fff" },
-    guideCompactTitle: {
-      fontSize: 14, fontWeight: "700", color: "#fff",
-    },
-    guideCompactSub: {
-      fontSize: 12, color: "rgba(255,255,255,0.85)",
-      marginTop: 2,
-    },
-    guideCompactBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      borderWidth: 1, borderColor: "rgba(255,255,255,0.4)",
-      paddingHorizontal: 14, paddingVertical: 8,
-      borderRadius: 999,
-    },
-    guideCompactBtnTxt: {
-      color: "#fff", fontSize: 12, fontWeight: "700",
-    },
-    guideCompactX: {
-      width: 28, height: 28, borderRadius: 14,
-      alignItems: "center", justifyContent: "center",
-    },
-    guideCard: {
-      borderRadius: 18,
-      padding: 18,
-      marginBottom: 18,
-      ...(Platform.OS === "web" ? ({ boxShadow: "0 6px 16px rgba(15,23,42,0.12)" } as any) : null),
-    },
-    guideHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-    guideHeaderTitle: { fontSize: 15, fontWeight: "800", color: "#fff" },
-    guideSteps: { marginTop: 14, gap: 8 },
-    guideStepRow: {
-      flexDirection: "row", alignItems: "center", gap: 12,
-      backgroundColor: "rgba(255,255,255,0.10)", borderRadius: 12, padding: 10,
-    },
-    guideStepIcon: {
-      width: 28, height: 28, borderRadius: 14,
-      backgroundColor: "rgba(255,255,255,0.18)",
-      alignItems: "center", justifyContent: "center",
-    },
-    guideStepIconDone: { backgroundColor: "#fff" },
-    guideStepNum: { color: "#fff", fontSize: 13, fontWeight: "800" },
-    guideStepTitle: { color: "#fff", fontSize: 13, fontWeight: "700" },
-    guideStepTitleDone: { opacity: 0.7 },
-    guideStepDesc: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, marginTop: 1 },
-    guideStepCta: {
-      flexDirection: "row", alignItems: "center", gap: 5,
-      backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    },
-    guideStepCtaTxt: { color: "#1E3A8A", fontSize: 12, fontWeight: "800" },
 
     // ── Page header ──
     pageHeader: {
