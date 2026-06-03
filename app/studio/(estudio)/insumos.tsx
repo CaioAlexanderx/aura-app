@@ -1,23 +1,28 @@
 // ============================================================
-// AURA STUDIO · Insumos / Matéria-prima + Fichas Técnicas (Fase 3 + Fase D BOM)
+// AURA STUDIO · Insumos / Matéria-prima + Fichas Técnicas
 //
 // Duas abas:
-//   "Insumos"       — CRUD funcional de matérias-primas (existente, sem alteração)
-//   "Fichas Técnicas" — BOM: vincular insumos a produtos, calcular custo + margem
+//   "Insumos"         — CRUD funcional de matérias-primas
+//   "Fichas Técnicas" — Lista SOMENTE-LEITURA: produto + custo + margem.
+//                       Tocar numa linha navega para /studio/estoque
+//                       com ?action=edit-product&id=<pid>, onde o editor
+//                       canônico (StudioFichaTecnicaPanel) vive.
+//                       Nenhum caminho de escrita de ficha existe aqui.
 //
-// Fase D (Camada 1, 30/05/2026): plug BOM usando endpoints já existentes no backend:
-//   getComposition / saveComposition / listCompositionsSummary (studioApi)
+// Deep-link: ?action=novo-insumo → abre NovoInsumoModal automaticamente
+// no mount (param consumido via router.replace para não reabrir em
+// re-renders).
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   TextInput,
 } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { type StudioPalette } from "@/constants/studio-tokens";
-import { studioApi, type StudioInput, type CompositionItem, type CompositionSummary } from "@/services/studioApi";
-import { companiesApi } from "@/services/companiesApi";
+import { studioApi, type StudioInput, type CompositionSummary } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { StudioLoading } from "@/components/studio/StudioLoading";
@@ -25,6 +30,7 @@ import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
+import NovoInsumoModal from "@/components/studio/NovoInsumoModal";
 
 const UNITS = ["un", "g", "kg", "ml", "L", "folha", "cm", "m"];
 
@@ -40,16 +46,27 @@ function marginLabel(pct: number | null): string {
   return pct.toFixed(1) + "%";
 }
 
-// ─── Tipo simples para lista de produtos ─────────────────────────────────────
-type SimpleProduct = { id: string; name: string; price: number };
-
 export default function StudioInsumos() {
   const { company } = useAuthStore();
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
+  const router = useRouter();
 
   // ── Tab ───────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"insumos" | "fichas">("insumos");
+
+  // ── Deep-link: ?action=novo-insumo abre modal no mount ────────────────────
+  const params = useLocalSearchParams<{ action?: string }>();
+  const [novoInsumoOpen, setNovoInsumoOpen] = useState(false);
+
+  useEffect(() => {
+    if (params.action === "novo-insumo") {
+      setNovoInsumoOpen(true);
+      // Consome o param para não reabrir em re-renders
+      router.replace("/studio/insumos" as any);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ABA INSUMOS — estado e lógica (ORIGINAL, sem alteração)
@@ -120,57 +137,19 @@ export default function StudioInsumos() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ABA FICHAS TÉCNICAS — estado e lógica (NOVO — Fase D BOM)
+  // ABA FICHAS TÉCNICAS — lista somente-leitura
+  // Toque navega para o editor canônico em /studio/estoque
   // ═══════════════════════════════════════════════════════════════════════════
   const [fichasLoading, setFichasLoading] = useState(false);
   const [compositions, setCompositions] = useState<CompositionSummary[]>([]);
-  const [allProducts, setAllProducts] = useState<SimpleProduct[]>([]);
   const [fichasLoaded, setFichasLoaded] = useState(false);
-
-  // Estado do editor de composição
-  const [editorProductId, setEditorProductId] = useState<string | null>(null);
-  const [editorLoading, setEditorLoading] = useState(false);
-  const [editorItems, setEditorItems] = useState<CompositionItem[]>([]);
-  const [editorSummary, setEditorSummary] = useState<{
-    total_cost: number; margin_pct: number | null; product_price: number; product_name: string;
-  } | null>(null);
-  const [editorNotes, setEditorNotes] = useState("");
-  const [editorSaving, setEditorSaving] = useState(false);
-
-  // Produto que está sendo editado (metadados)
-  const editorProduct = useMemo(
-    () => allProducts.find((p) => p.id === editorProductId) || null,
-    [allProducts, editorProductId]
-  );
-
-  // Busca de produto para nova ficha
-  const [productSearch, setProductSearch] = useState("");
-  const [showProductPicker, setShowProductPicker] = useState(false);
-
-  const filteredProducts = useMemo(() => {
-    if (!productSearch.trim()) return allProducts.slice(0, 20);
-    const q = productSearch.toLowerCase();
-    return allProducts.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 20);
-  }, [allProducts, productSearch]);
-
-  // IDs de produtos que já têm ficha
-  const existingProductIds = useMemo(
-    () => new Set(compositions.map((c) => c.product_id)),
-    [compositions]
-  );
 
   const loadFichas = useCallback(async () => {
     if (!company?.id) return;
     setFichasLoading(true);
     try {
-      const [compRes, prodRes] = await Promise.all([
-        studioApi.listCompositionsSummary(company.id),
-        companiesApi.products(company.id),
-      ]);
+      const compRes = await studioApi.listCompositionsSummary(company.id);
       setCompositions(compRes.compositions || []);
-      // Backend devolve produtos em prodRes.products ou array direto
-      const raw: any[] = Array.isArray(prodRes) ? prodRes : (prodRes?.products || []);
-      setAllProducts(raw.map((p: any) => ({ id: p.id, name: p.name, price: Number(p.price || 0) })));
       setFichasLoaded(true);
     } catch (e: any) {
       toast.error(e?.message || "Erro ao carregar fichas");
@@ -184,95 +163,9 @@ export default function StudioInsumos() {
     }
   }, [activeTab, fichasLoaded, loadFichas]);
 
-  // Insumos já carregados pela aba insumos — reutiliza o estado `inputs`
-  // mas pode ser necessário recarregar se a aba ficha foi acessada antes
-  useEffect(() => {
-    if (activeTab === "fichas" && inputs.length === 0 && !loading) {
-      load();
-    }
-  }, [activeTab, inputs.length, loading, load]);
-
-  async function openEditor(productId: string) {
-    if (!company?.id) return;
-    setEditorProductId(productId);
-    setEditorLoading(true);
-    setEditorItems([]);
-    setEditorSummary(null);
-    setEditorNotes("");
-    try {
-      const r = await studioApi.getComposition(company.id, productId);
-      setEditorItems(r.items || []);
-      setEditorSummary(r.summary);
-      setEditorNotes(r.composition?.notes || "");
-    } catch (e: any) {
-      toast.error(e?.message || "Erro ao carregar composição");
-    } finally { setEditorLoading(false); }
-  }
-
-  function closeEditor() {
-    setEditorProductId(null);
-    setEditorItems([]);
-    setEditorSummary(null);
-    setEditorNotes("");
-  }
-
-  // Custo total calculado localmente a partir dos items + inputs
-  const localTotalCost = useMemo(() => {
-    return editorItems.reduce((acc, item) => {
-      const input = inputs.find((i) => i.id === item.input_id);
-      const unitCost = input?.unit_cost ?? item.input_unit_cost ?? 0;
-      return acc + Number(unitCost) * Number(item.qty_per_unit || 0);
-    }, 0);
-  }, [editorItems, inputs]);
-
-  const localMarginPct = useMemo(() => {
-    const price = editorSummary?.product_price ?? editorProduct?.price ?? 0;
-    if (!price || price === 0) return null;
-    return ((price - localTotalCost) / price) * 100;
-  }, [localTotalCost, editorSummary, editorProduct]);
-
-  function addItem() {
-    setEditorItems((prev) => [
-      ...prev,
-      { input_id: "", qty_per_unit: 1 },
-    ]);
-  }
-
-  function removeItem(idx: number) {
-    setEditorItems((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  function updateItem(idx: number, patch: Partial<CompositionItem>) {
-    setEditorItems((prev) =>
-      prev.map((item, i) => (i === idx ? { ...item, ...patch } : item))
-    );
-  }
-
-  async function saveComposition() {
-    if (!company?.id || !editorProductId) return;
-    const validItems = editorItems.filter((it) => it.input_id && Number(it.qty_per_unit) > 0);
-    if (validItems.length === 0) {
-      toast.error("Adicione ao menos um insumo com quantidade válida");
-      return;
-    }
-    setEditorSaving(true);
-    try {
-      await studioApi.saveComposition(company.id, editorProductId, {
-        notes: editorNotes || undefined,
-        items: validItems.map((it, idx) => ({
-          input_id: it.input_id,
-          qty_per_unit: Number(it.qty_per_unit),
-          notes: it.notes || undefined,
-          sort_order: idx,
-        })),
-      });
-      toast.success("Ficha técnica salva!");
-      // Recarrega summary e fecha editor
-      await loadFichas();
-      closeEditor();
-    } catch (e: any) {
-      toast.error(e?.message || "Erro ao salvar ficha");
-    } finally { setEditorSaving(false); }
+  // Navega para o editor canônico de produto em Catálogo
+  function navigateToProductEditor(productId: string) {
+    router.push(`/studio/estoque?action=edit-product&id=${productId}` as any);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -292,11 +185,6 @@ export default function StudioInsumos() {
               <Icon name="plus" size={16} color="#fff" />
               <Text style={s.ctaPriTxt}>Novo insumo</Text>
             </Pressable>
-          ) : editorProductId == null ? (
-            <Pressable style={s.ctaPri} onPress={() => { setShowProductPicker(true); setProductSearch(""); }}>
-              <Icon name="plus" size={16} color="#fff" />
-              <Text style={s.ctaPriTxt}>Nova ficha</Text>
-            </Pressable>
           ) : null
         }
       />
@@ -305,7 +193,7 @@ export default function StudioInsumos() {
       <View style={s.tabRow}>
         <Pressable
           style={[s.tabBtn, activeTab === "insumos" && s.tabBtnActive]}
-          onPress={() => { setActiveTab("insumos"); setEditorProductId(null); }}
+          onPress={() => setActiveTab("insumos")}
         >
           <Icon name="package" size={14} color={activeTab === "insumos" ? "#fff" : t.ink3} />
           <Text style={[s.tabBtnTxt, activeTab === "insumos" && s.tabBtnTxtActive]}>Insumos</Text>
@@ -526,289 +414,97 @@ export default function StudioInsumos() {
       )}
 
       {/* ══════════════════════════════════════════════════════ */}
-      {/* ABA: FICHAS TÉCNICAS                                  */}
+      {/* ABA: FICHAS TÉCNICAS — somente-leitura                */}
+      {/* Toque → navega pro editor canônico em Catálogo        */}
       {/* ══════════════════════════════════════════════════════ */}
       {activeTab === "fichas" && (
         <>
+          {/* Callout explicativo */}
+          <View style={s.fichasHint}>
+            <Icon name="info" size={14} color={t.infoInk ?? t.ink3} />
+            <Text style={[s.fichasHintText, { color: t.infoInk ?? t.ink3 }]}>
+              Toque numa ficha para editar no Catálogo. O editor canônico fica na tela de produto.
+            </Text>
+          </View>
+
           {/* Loading */}
           {fichasLoading && <StudioLoading variant="skeleton-list" rows={4} />}
 
-          {/* ── Picker de produto (nova ficha) ── */}
-          {!fichasLoading && showProductPicker && editorProductId == null && (
-            <View style={s.pickerCard}>
-              <View style={s.formHead}>
-                <Text style={s.formTitle}>Selecionar produto</Text>
-                <Pressable onPress={() => setShowProductPicker(false)}>
-                  <Icon name="x" size={18} color={t.ink3} />
-                </Pressable>
+          {/* Lista vazia */}
+          {!fichasLoading && compositions.length === 0 && (
+            <StudioEmpty
+              icon="clipboard-list"
+              title="Nenhuma ficha técnica"
+              desc="Crie fichas técnicas pelo Catálogo — abra um produto e expanda a seção Ficha Técnica."
+              primaryCta={{
+                label: "Ir para o Catálogo",
+                onPress: () => router.push("/studio/estoque" as any),
+              }}
+            />
+          )}
+
+          {/* Lista de fichas — somente-leitura */}
+          {!fichasLoading && compositions.length > 0 && (
+            <>
+              {/* Cabeçalho da lista */}
+              <View style={s.listHeader}>
+                <Text style={[s.listHeaderTxt, { flex: 2 }]}>Produto</Text>
+                <Text style={[s.listHeaderTxt, { flex: 1, textAlign: "right" }]}>Custo</Text>
+                <Text style={[s.listHeaderTxt, { flex: 1, textAlign: "right" }]}>Margem</Text>
+                <Text style={[s.listHeaderTxt, { width: 60, textAlign: "right" }]}>Insumos</Text>
+                <View style={{ width: 28 }} />
               </View>
-              <TextInput
-                style={[s.input, { marginBottom: 12 }]}
-                placeholder="Buscar produto pelo nome…"
-                value={productSearch}
-                onChangeText={setProductSearch}
-                autoFocus
-              />
-              {filteredProducts.length === 0 && (
-                <Text style={s.emptyPickerTxt}>Nenhum produto encontrado.</Text>
-              )}
-              {filteredProducts.map((p) => {
-                const hasComp = existingProductIds.has(p.id);
-                return (
+
+              <View style={s.list}>
+                {compositions.map((c) => (
                   <Pressable
-                    key={p.id}
-                    style={s.pickerRow}
-                    onPress={() => {
-                      setShowProductPicker(false);
-                      openEditor(p.id);
-                    }}
+                    key={c.composition_id}
+                    style={s.fichaRow}
+                    onPress={() => navigateToProductEditor(c.product_id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar ficha de ${c.product_name} no Catálogo`}
                   >
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={s.pickerName} numberOfLines={1}>{p.name}</Text>
-                      <Text style={s.pickerPrice}>R$ {Number(p.price).toFixed(2)}</Text>
+                    <View style={[s.itemDot, { backgroundColor: t.primarySoft }]}>
+                      <Icon name="clipboard-list" size={14} color={t.primary} />
                     </View>
-                    {hasComp && (
-                      <View style={s.hasCompBadge}>
-                        <Text style={s.hasCompTxt}>Ficha existente</Text>
-                      </View>
-                    )}
+                    <View style={{ flex: 2, minWidth: 0 }}>
+                      <Text style={s.itemName} numberOfLines={1}>{c.product_name}</Text>
+                      <Text style={s.itemMeta}>
+                        Venda: R$ {Number(c.product_price).toFixed(2)}
+                      </Text>
+                    </View>
+                    <Text style={[s.fichaCell, { flex: 1, textAlign: "right" }]}>
+                      R$ {Number(c.total_cost).toFixed(2)}
+                    </Text>
+                    <View style={{ flex: 1, alignItems: "flex-end" }}>
+                      <Text style={[s.fichaCell, { color: marginColor(c.margin_pct), fontWeight: "800" }]}>
+                        {marginLabel(c.margin_pct)}
+                      </Text>
+                      <View style={[s.marginDot, { backgroundColor: marginColor(c.margin_pct), marginTop: 3 }]} />
+                    </View>
+                    <Text style={[s.fichaCell, { width: 60, textAlign: "right", color: t.ink3 }]}>
+                      {c.item_count}
+                    </Text>
                     <Icon name="chevron-right" size={14} color={t.ink4} />
                   </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {/* ── Editor de composição ── */}
-          {!fichasLoading && editorProductId != null && (
-            <View style={s.editorCard}>
-              {/* Header do editor */}
-              <View style={s.editorHead}>
-                <Pressable onPress={closeEditor} hitSlop={10}>
-                  <Icon name="arrow-left" size={16} color={t.ink3} />
-                </Pressable>
-                <View style={{ flex: 1, minWidth: 0, marginHorizontal: 12 }}>
-                  <Text style={s.editorTitle} numberOfLines={1}>
-                    {editorSummary?.product_name ?? editorProduct?.name ?? "Carregando…"}
-                  </Text>
-                  {(editorSummary?.product_price ?? editorProduct?.price) ? (
-                    <Text style={s.editorSubtitle}>
-                      Preço de venda: R$ {Number(editorSummary?.product_price ?? editorProduct?.price ?? 0).toFixed(2)}
-                    </Text>
-                  ) : null}
-                </View>
+                ))}
               </View>
-
-              {editorLoading && <StudioLoading variant="skeleton-list" rows={3} />}
-
-              {!editorLoading && (
-                <>
-                  {/* KPI bar: custo + margem */}
-                  <View style={s.kpiBar}>
-                    <View style={s.kpiItem}>
-                      <Text style={s.kpiLabel}>CUSTO TOTAL</Text>
-                      <Text style={s.kpiValue}>R$ {localTotalCost.toFixed(2)}</Text>
-                    </View>
-                    <View style={[s.kpiItem, s.kpiItemRight]}>
-                      <Text style={s.kpiLabel}>MARGEM</Text>
-                      <Text style={[s.kpiValue, { color: marginColor(localMarginPct) }]}>
-                        {marginLabel(localMarginPct)}
-                      </Text>
-                      <View style={[s.marginDot, { backgroundColor: marginColor(localMarginPct) }]} />
-                    </View>
-                  </View>
-
-                  {/* Tabela de itens */}
-                  {editorItems.length > 0 && (
-                    <View style={s.itemsTable}>
-                      {/* Cabeçalho */}
-                      <View style={s.tableHeader}>
-                        <Text style={[s.tableHeaderTxt, { flex: 2 }]}>Insumo</Text>
-                        <Text style={[s.tableHeaderTxt, { flex: 1, textAlign: "right" }]}>Qtd/un</Text>
-                        <Text style={[s.tableHeaderTxt, { flex: 1, textAlign: "right" }]}>Custo/un</Text>
-                        <Text style={[s.tableHeaderTxt, { flex: 1, textAlign: "right" }]}>Subtotal</Text>
-                        <View style={{ width: 30 }} />
-                      </View>
-
-                      {editorItems.map((item, idx) => {
-                        const input = inputs.find((i) => i.id === item.input_id);
-                        const unitCost = input?.unit_cost ?? item.input_unit_cost ?? 0;
-                        const subtotal = Number(unitCost) * Number(item.qty_per_unit || 0);
-                        return (
-                          <View key={idx} style={s.tableRow}>
-                            {/* Select de insumo */}
-                            <View style={{ flex: 2, minWidth: 120 }}>
-                              <View style={s.insumoSelect}>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 36 }}>
-                                  <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-                                    {inputs.map((inp) => (
-                                      <Pressable
-                                        key={inp.id}
-                                        style={[s.insumoChip, item.input_id === inp.id && s.insumoChipSel]}
-                                        onPress={() => updateItem(idx, { input_id: inp.id })}
-                                      >
-                                        <Text style={[s.insumoChipTxt, item.input_id === inp.id && s.insumoChipTxtSel]} numberOfLines={1}>
-                                          {inp.name}
-                                        </Text>
-                                      </Pressable>
-                                    ))}
-                                  </View>
-                                </ScrollView>
-                                {input && (
-                                  <Text style={s.insumoSelected} numberOfLines={1}>{input.name}</Text>
-                                )}
-                              </View>
-                            </View>
-
-                            {/* Qtd */}
-                            <TextInput
-                              style={[s.input, { flex: 1, textAlign: "right", minWidth: 60 }]}
-                              keyboardType="decimal-pad"
-                              value={String(item.qty_per_unit ?? "")}
-                              onChangeText={(v) =>
-                                updateItem(idx, { qty_per_unit: parseFloat(v.replace(",", ".")) || 0 })
-                              }
-                            />
-
-                            {/* Custo/un (calculado) */}
-                            <Text style={[s.tableCell, { flex: 1, textAlign: "right" }]}>
-                              {input ? `R$ ${Number(input.unit_cost).toFixed(2)}` : "—"}
-                            </Text>
-
-                            {/* Subtotal */}
-                            <Text style={[s.tableCell, { flex: 1, textAlign: "right", fontWeight: "700" }]}>
-                              R$ {subtotal.toFixed(2)}
-                            </Text>
-
-                            {/* Remover */}
-                            <Pressable style={s.delBtn} onPress={() => removeItem(idx)} hitSlop={10}>
-                              <Icon name="x" size={13} color={t.ink4} />
-                            </Pressable>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-
-                  {editorItems.length === 0 && (
-                    <StudioEmpty
-                      icon="clipboard-list"
-                      title="Nenhum insumo nesta ficha"
-                      desc="Adicione os insumos que compõem este produto para calcular o custo e a margem."
-                      compact
-                    />
-                  )}
-
-                  {/* Botão adicionar insumo */}
-                  <Pressable style={s.addItemBtn} onPress={addItem}>
-                    <Icon name="plus" size={14} color={t.primary} />
-                    <Text style={s.addItemTxt}>Adicionar insumo</Text>
-                  </Pressable>
-
-                  {/* Observações */}
-                  <Text style={[s.label, { marginTop: 14 }]}>Observações (opcional)</Text>
-                  <TextInput
-                    style={[s.input, { minHeight: 60 }]}
-                    placeholder="Ex: Rendimento por peça, condições especiais…"
-                    value={editorNotes}
-                    onChangeText={setEditorNotes}
-                    multiline
-                  />
-
-                  {/* Footer com CTA */}
-                  <View style={s.editorFooter}>
-                    <View style={s.footerCosts}>
-                      <Text style={s.footerCostLine}>
-                        Custo total:{" "}
-                        <Text style={{ fontWeight: "800", color: t.ink }}>R$ {localTotalCost.toFixed(2)}</Text>
-                      </Text>
-                      <Text style={[s.footerCostLine, { color: marginColor(localMarginPct) }]}>
-                        Margem sobre preço:{" "}
-                        <Text style={{ fontWeight: "800" }}>{marginLabel(localMarginPct)}</Text>
-                        {localMarginPct != null && localMarginPct >= 30 && " ✓"}
-                        {localMarginPct != null && localMarginPct >= 10 && localMarginPct < 30 && " ⚠"}
-                        {localMarginPct != null && localMarginPct < 10 && " ✗"}
-                      </Text>
-                    </View>
-                    <Pressable
-                      style={[s.btnPri, editorSaving && { opacity: 0.6 }]}
-                      onPress={saveComposition}
-                      disabled={editorSaving}
-                    >
-                      <Icon name={editorSaving ? "loader" : "save"} size={14} color="#fff" />
-                      <Text style={s.btnPriTxt}>{editorSaving ? "Salvando…" : "Salvar ficha"}</Text>
-                    </Pressable>
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-
-          {/* ── Lista de fichas existentes ── */}
-          {!fichasLoading && editorProductId == null && !showProductPicker && (
-            <>
-              {compositions.length === 0 && (
-                <StudioEmpty
-                  icon="clipboard-list"
-                  title="Nenhuma ficha técnica"
-                  desc="Crie fichas técnicas para vincular insumos aos produtos e calcular o custo + margem de cada peça."
-                  primaryCta={{
-                    label: "Nova ficha técnica",
-                    onPress: () => { setShowProductPicker(true); setProductSearch(""); },
-                  }}
-                />
-              )}
-
-              {compositions.length > 0 && (
-                <>
-                  {/* Cabeçalho da lista */}
-                  <View style={s.listHeader}>
-                    <Text style={[s.listHeaderTxt, { flex: 2 }]}>Produto</Text>
-                    <Text style={[s.listHeaderTxt, { flex: 1, textAlign: "right" }]}>Custo</Text>
-                    <Text style={[s.listHeaderTxt, { flex: 1, textAlign: "right" }]}>Margem</Text>
-                    <Text style={[s.listHeaderTxt, { width: 60, textAlign: "right" }]}>Insumos</Text>
-                    <View style={{ width: 28 }} />
-                  </View>
-
-                  <View style={s.list}>
-                    {compositions.map((c) => (
-                      <Pressable
-                        key={c.composition_id}
-                        style={s.fichaRow}
-                        onPress={() => openEditor(c.product_id)}
-                      >
-                        <View style={[s.itemDot, { backgroundColor: t.primarySoft }]}>
-                          <Icon name="clipboard-list" size={14} color={t.primary} />
-                        </View>
-                        <View style={{ flex: 2, minWidth: 0 }}>
-                          <Text style={s.itemName} numberOfLines={1}>{c.product_name}</Text>
-                          <Text style={s.itemMeta}>
-                            Venda: R$ {Number(c.product_price).toFixed(2)}
-                          </Text>
-                        </View>
-                        <Text style={[s.fichaCell, { flex: 1, textAlign: "right" }]}>
-                          R$ {Number(c.total_cost).toFixed(2)}
-                        </Text>
-                        <View style={{ flex: 1, alignItems: "flex-end" }}>
-                          <Text style={[s.fichaCell, { color: marginColor(c.margin_pct), fontWeight: "800" }]}>
-                            {marginLabel(c.margin_pct)}
-                          </Text>
-                          <View style={[s.marginDot, { backgroundColor: marginColor(c.margin_pct), marginTop: 3 }]} />
-                        </View>
-                        <Text style={[s.fichaCell, { width: 60, textAlign: "right", color: t.ink3 }]}>
-                          {c.item_count}
-                        </Text>
-                        <Icon name="chevron-right" size={14} color={t.ink4} />
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              )}
             </>
           )}
         </>
       )}
       </ScrollView>
+
+      {/* Modal novo insumo (acessível via aba Insumos + deep-link) */}
+      <NovoInsumoModal
+        visible={novoInsumoOpen}
+        companyId={company?.id || ""}
+        onClose={() => setNovoInsumoOpen(false)}
+        onCreated={(insumo) => {
+          setInputs((prev) => [insumo as unknown as StudioInput, ...prev]);
+          setNovoInsumoOpen(false);
+        }}
+      />
     </StudioScreen>
   );
 }
@@ -884,68 +580,14 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   itemMin: { fontSize: 11, color: t.ink4, marginTop: 1 },
   delBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
 
-  // ─── Fichas: picker de produto ───────────────────────────────────────────
-  pickerCard: {
-    backgroundColor: t.paperCardElev, borderRadius: 18, padding: 22, marginBottom: 18,
-    borderWidth: 1, borderColor: t.primarySoft,
-  },
-  pickerRow: {
-    flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: t.ink5,
-  },
-  pickerName: { fontSize: 14, fontWeight: "700", color: t.ink },
-  pickerPrice: { fontSize: 12, color: t.ink3, marginTop: 2 },
-  hasCompBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: t.primaryGhost },
-  hasCompTxt: { fontSize: 10, fontWeight: "700", color: t.primary },
-  emptyPickerTxt: { fontSize: 13, color: t.ink3, textAlign: "center", paddingVertical: 20 },
-
-  // ─── Fichas: editor ──────────────────────────────────────────────────────
-  editorCard: {
-    backgroundColor: t.paperCardElev, borderRadius: 18, padding: 22, marginBottom: 18,
-    borderWidth: 1, borderColor: t.primarySoft,
-  },
-  editorHead: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  editorTitle: { fontSize: 17, fontWeight: "800", color: t.ink },
-  editorSubtitle: { fontSize: 12, color: t.ink3, marginTop: 2 },
-
-  kpiBar: {
-    flexDirection: "row", backgroundColor: t.bgSoft, borderRadius: 14,
-    padding: 16, marginBottom: 18, gap: 0,
-  },
-  kpiItem: { flex: 1 },
-  kpiItemRight: { alignItems: "flex-end", borderLeftWidth: 1, borderLeftColor: t.ink5 },
-  kpiLabel: { fontSize: 10, fontWeight: "700", color: t.ink4, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 },
-  kpiValue: { fontSize: 22, fontWeight: "800", color: t.ink, letterSpacing: -0.5 },
-  marginDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
-
-  itemsTable: { marginBottom: 10 },
-  tableHeader: { flexDirection: "row", alignItems: "center", paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.ink5, marginBottom: 4 },
-  tableHeaderTxt: { fontSize: 10, fontWeight: "700", color: t.ink4, textTransform: "uppercase", letterSpacing: 0.4 },
-  tableRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink6 ?? t.ink5 },
-  tableCell: { fontSize: 13, color: t.ink2 },
-
-  insumoSelect: { gap: 4 },
-  insumoChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },
-  insumoChipSel: { backgroundColor: t.primary, borderColor: t.primary },
-  insumoChipTxt: { fontSize: 11, fontWeight: "600", color: t.ink3 },
-  insumoChipTxtSel: { color: "#fff" },
-  insumoSelected: { fontSize: 12, fontWeight: "700", color: t.primary, marginTop: 2 },
-
-  addItemBtn: {
+  // ─── Fichas: hint somente-leitura ────────────────────────────────────────
+  fichasHint: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
-    borderWidth: 1.5, borderStyle: "dashed", borderColor: t.primary,
-    alignSelf: "flex-start", marginTop: 8,
+    padding: 12, borderRadius: 10,
+    backgroundColor: t.infoSoft ?? t.bgSoft,
+    marginBottom: 16,
   },
-  addItemTxt: { fontSize: 13, fontWeight: "700", color: t.primary },
-
-  editorFooter: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: t.ink5,
-    flexWrap: "wrap", gap: 12,
-  },
-  footerCosts: { gap: 4 },
-  footerCostLine: { fontSize: 13, color: t.ink2 },
+  fichasHintText: { fontSize: 12, fontWeight: "500", flex: 1, lineHeight: 17 },
 
   // ─── Fichas: lista resumo ────────────────────────────────────────────────
   listHeader: { flexDirection: "row", alignItems: "center", paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.ink5, marginBottom: 4 },
@@ -955,4 +597,5 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     padding: 14, backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5,
   },
   fichaCell: { fontSize: 13, color: t.ink2 },
+  marginDot: { width: 8, height: 8, borderRadius: 4 },
 });

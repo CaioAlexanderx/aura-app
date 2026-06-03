@@ -24,6 +24,9 @@
 //
 // "Novo produto" abre StudioNewProductWizard (Sprint 4) — sem mudança.
 //
+// Deep-link: ?action=novo-produto → abre wizard automaticamente
+// no mount (param consumido via router.replace para não reabrir).
+//
 // Convenções (não negociar):
 //   - useStudioTokens() de @/contexts/StudioThemeMode
 //   - useMemo(() => buildStyles(t), [t])
@@ -35,6 +38,7 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
   TextInput, Image, Platform,
 } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
@@ -106,6 +110,19 @@ export default function StudioEstoque() {
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
+
+  // ── Deep-link: ?action=novo-produto abre wizard no mount ──────────────
+  const params = useLocalSearchParams<{ action?: string }>();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (params.action === "novo-produto") {
+      setWizardOpen(true);
+      // Consome o param para não reabrir em re-renders
+      router.replace("/studio/estoque" as any);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Loader ───────────────────────────────────────────────
   const load = useCallback(async () => {
