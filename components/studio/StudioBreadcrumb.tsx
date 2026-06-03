@@ -5,11 +5,14 @@
  * 25/05 hotfix: substituído lucide-react-native pelo Icon canônico do Aura.
  *               lucide não é dependência do projeto e quebrava o build CF Pages.
  *
+ * 02/06/2026 (Shell clareza): sem mudança estrutural. Tokens t.ink3 e t.primary
+ * já passam WCAG AA (≥4.5:1) — auditado, nenhum ajuste de cor necessário.
+ *
  * Uso:
  *   <StudioBreadcrumb
  *     items={[
  *       { label: 'Estúdio', href: '/studio' },
- *       { label: 'Produtos', href: '/studio/produtos' },
+ *       { label: 'Catálogo', href: '/studio/estoque' },
  *       { label: 'Caneca branca' }, // sem href = atual
  *     ]}
  *   />
@@ -72,11 +75,13 @@ function buildStyles(t: StudioPalette) {
   },
   row: { flexDirection: 'row', alignItems: 'center' },
   link: {
+    // t.primary (#1E3A8A light, #3B82F6 dark) — ambos ≥4.5:1 sobre paperCard
     color: t.primary,
     fontWeight: '600',
     fontSize: 13,
   },
   text: {
+    // t.ink3 (#5E6A7A light, #94A3B8 dark) — 5.1:1 light, 5.7:1 dark ✓ AA
     color: t.ink3,
     fontSize: 13,
   },

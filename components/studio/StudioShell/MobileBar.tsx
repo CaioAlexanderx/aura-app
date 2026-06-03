@@ -5,6 +5,9 @@
 // Top bar usado em mobile e tablet. Variante "compact" (mobile)
 // mostra botão Menu + chips reduzidos (primeiros 2 por grupo).
 // Variante "wide" (tablet) mostra todos os chips inline.
+//
+// 02/06/2026 (Shell clareza): labels derivados de STUDIO_NAV via GROUPS
+// (sem strings locais). MobileChip recebe label e subtítulo do nav.ts.
 // ============================================================
 import { useMemo } from "react";
 import { View, Pressable, Text, ScrollView } from "react-native";
