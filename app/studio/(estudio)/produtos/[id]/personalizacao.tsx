@@ -629,7 +629,7 @@ export default function PersonalizacaoWizard() {
             {/* Agente I: preview do guia de medidas */}
             {draft.size_guide?.file_url ? (
               <View style={s.previewRow}>
-                <Icon name="ruler" size={14} color={t.primary} />
+                <Icon name="file_text" size={14} color={t.primary} />
                 <Text style={s.previewTxt}>
                   Guia de medidas:{" "}
                   <Text style={s.previewBold}>
@@ -640,7 +640,7 @@ export default function PersonalizacaoWizard() {
               </View>
             ) : (
               <View style={s.previewRow}>
-                <Icon name="ruler" size={14} color={t.ink4} />
+                <Icon name="file_text" size={14} color={t.ink4} />
                 <Text style={[s.previewTxt, { color: t.ink4 }]}>
                   Sem guia de medidas (opcional)
                 </Text>
