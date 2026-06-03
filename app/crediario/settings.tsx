@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Switch, ActivityIndicator, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Switch, ActivityIndicator, Platform, TextInput } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -39,6 +39,7 @@ export default function CrediarioSettingsScreen() {
   const qc = useQueryClient();
   const [enabled, setEnabled] = useState(true);
   const [stages, setStages] = useState<Stage[]>(DEFAULT_STAGES);
+  const [pixKey, setPixKey] = useState("");
   const [dirty, setDirty] = useState(false);
 
   const rulesQ = useQuery({
@@ -50,15 +51,16 @@ export default function CrediarioSettingsScreen() {
   useEffect(() => {
     if (!rulesQ.data) return;
     setEnabled(rulesQ.data.enabled ?? true);
+    setPixKey((rulesQ.data as any).pix_key || "");
     if (Array.isArray(rulesQ.data.rules) && rulesQ.data.rules.length > 0) {
       setStages(rulesQ.data.rules as Stage[]);
     }
   }, [rulesQ.data]);
 
   const saveMut = useMutation({
-    mutationFn: () => creditApi.updateCollectionRules(company!.id, { enabled, rules: stages as any }),
+    mutationFn: () => creditApi.updateCollectionRules(company!.id, { enabled, rules: stages, pix_key: pixKey.trim() } as any),
     onSuccess: () => {
-      toast.success("Régua salva!");
+      toast.success("Configurações salvas!");
       setDirty(false);
       qc.invalidateQueries({ queryKey: ["credit-rules", company?.id] });
     },
@@ -80,9 +82,9 @@ export default function CrediarioSettingsScreen() {
         </Pressable>
       </View>
 
-      <Text style={st.pageTitle}>Régua de Cobrança</Text>
+      <Text style={st.pageTitle}>Configurações do Crediário</Text>
       <Text style={st.pageSubtitle}>
-        Configure quando e como o sistema dispara lembretes e cobranças automáticas por parcelas.
+        Chave Pix para cobrança e régua de lembretes automáticos por parcela.
       </Text>
 
       {rulesQ.isLoading && (
@@ -93,6 +95,26 @@ export default function CrediarioSettingsScreen() {
 
       {!rulesQ.isLoading && (
         <>
+          {/* Chave Pix para cobrança */}
+          <Text style={st.stagesTitle}>Chave Pix para cobrança</Text>
+          <View style={st.pixCard}>
+            <Icon name="dollar" size={16} color={Colors.violet3} />
+            <TextInput
+              style={st.pixInput}
+              value={pixKey}
+              onChangeText={(v) => { setPixKey(v); setDirty(true); }}
+              placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+              placeholderTextColor={Colors.ink3}
+              autoCapitalize="none"
+            />
+          </View>
+          <Text style={st.pixHint}>
+            Essa chave entra automaticamente na mensagem de cobrança do WhatsApp, pronta para o cliente pagar.
+          </Text>
+
+          {/* Régua de cobrança */}
+          <Text style={st.stagesTitle}>Régua de lembretes</Text>
+
           {/* Toggle global */}
           <View style={st.toggleCard}>
             <View style={{ flex: 1 }}>
@@ -181,7 +203,10 @@ const st = StyleSheet.create({
   toggleTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 3 },
   toggleDesc: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
 
-  stagesTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 10 },
+  stagesTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 10, marginTop: 4 },
+  pixCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border2 },
+  pixInput: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600", paddingVertical: 0 },
+  pixHint: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16, marginTop: 8, marginBottom: 20 },
 
   stageCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   stageCardDisabled: { opacity: 0.6 },
