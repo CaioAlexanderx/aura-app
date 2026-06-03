@@ -1,1 +1,55 @@
-{\n  \"name\": \"aura-app\",\n  \"version\": \"1.0.0\",\n  \"main\": \"expo-router/entry\",\n  \"scripts\": {\n    \"start\": \"expo start\",\n    \"android\": \"expo start --android\",\n    \"ios\": \"expo start --ios\",\n    \"web\": \"expo start --web\",\n    \"test\": \"node node_modules/jest/bin/jest.js\",\n    \"test:watch\": \"node node_modules/jest/bin/jest.js --watch\",\n    \"test:coverage\": \"node node_modules/jest/bin/jest.js --coverage\",\n    \"test:components\": \"node node_modules/jest/bin/jest.js --testPathPatterns=__tests__/components\"\n  },\n  \"dependencies\": {\n    \"@hookform/resolvers\": \"^3.9.0\",\n    \"@tanstack/react-query\": \"^5.62.0\",\n    \"expo\": \"~52.0.0\",\n    \"expo-constants\": \"~17.0.0\",\n    \"expo-document-picker\": \"~13.0.0\",\n    \"expo-font\": \"~13.0.0\",\n    \"expo-image-picker\": \"^55.0.19\",\n    \"expo-linking\": \"~7.0.0\",\n    \"expo-router\": \"~4.0.0\",\n    \"expo-secure-store\": \"~14.0.0\",\n    \"expo-splash-screen\": \"~0.29.0\",\n    \"expo-status-bar\": \"~2.0.0\",\n    \"expo-web-browser\": \"~14.0.0\",\n    \"qrcode-svg\": \"^1.1.0\",\n    \"react\": \"18.3.1\",\n    \"react-dom\": \"18.3.1\",\n    \"react-hook-form\": \"^7.54.0\",\n    \"react-native\": \"0.76.5\",\n    \"react-native-gesture-handler\": \"~2.20.0\",\n    \"react-native-reanimated\": \"~3.16.0\",\n    \"react-native-safe-area-context\": \"4.12.0\",\n    \"react-native-screens\": \"~4.1.0\",\n    \"react-native-svg\": \"15.8.0\",\n    \"react-native-web\": \"~0.19.10\",\n    \"xlsx\": \"^0.18.5\",\n    \"zod\": \"^3.23.8\",\n    \"zustand\": \"^5.0.2\"\n  },\n  \"devDependencies\": {\n    \"@babel/core\": \"^7.25.0\",\n    \"@testing-library/jest-native\": \"^5.4.3\",\n    \"@testing-library/react-native\": \"^12.9.0\",\n    \"@types/react\": \"~18.3.0\",\n    \"jest\": \"^30.3.0\",\n    \"jest-environment-jsdom\": \"^30.3.0\",\n    \"jest-expo\": \"^55.0.13\",\n    \"react-test-renderer\": \"^18.3.1\",\n    \"typescript\": \"^5.3.3\"\n  }\n}\n
+{
+  "name": "aura-app",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "node node_modules/jest/bin/jest.js",
+    "test:watch": "node node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node node_modules/jest/bin/jest.js --coverage",
+    "test:components": "node node_modules/jest/bin/jest.js --testPathPatterns=__tests__/components"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "@tanstack/react-query": "^5.62.0",
+    "expo": "~52.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-document-picker": "~13.0.0",
+    "expo-font": "~13.0.0",
+    "expo-image-picker": "^55.0.19",
+    "expo-linking": "~7.0.0",
+    "expo-router": "~4.0.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-splash-screen": "~0.29.0",
+    "expo-status-bar": "~2.0.0",
+    "expo-web-browser": "~14.0.0",
+    "qrcode-svg": "^1.1.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-hook-form": "^7.54.0",
+    "react-native": "0.76.5",
+    "react-native-gesture-handler": "~2.20.0",
+    "react-native-reanimated": "~3.16.0",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.1.0",
+    "react-native-svg": "15.8.0",
+    "react-native-web": "~0.19.10",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^12.9.0",
+    "@types/react": "~18.3.0",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "jest-expo": "^55.0.13",
+    "react-test-renderer": "^18.3.1",
+    "typescript": "^5.3.3"
+  }
+}
