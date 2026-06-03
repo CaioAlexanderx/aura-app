@@ -1,276 +1,513 @@
 // ============================================================
-// AURA STUDIO · StudioOnboarding (Fase 5A)
+// AURA STUDIO · StudioOnboarding (Onda 2 — checklist-herói)
 //
-// Walkthrough de 4 passos pra apresentar o Studio na primeira
-// entrada. Componente standalone — a integracao com refs reais
-// dos targets (sidebar, checklist, marketplaces, settings)
-// acontece na parte B.
+// Substitui o banner/tour modal por um checklist-herói inline que
+// guia o usuário de zero até a primeira venda:
+//   1) Cadastrar um insumo  → /studio/insumos?action=novo-insumo
+//   2) Montar ficha técnica → /studio/estoque (catálogo)
+//   3) Publicar um produto  → /studio/estoque?action=novo-produto
+//   4) Fazer a 1ª venda     → /studio/vendas/caixa
 //
-// Por enquanto: overlay escuro full-screen, SEM "buraco" — o
-// foco visual é só o tooltip flutuante centralizado, com eyebrow
-// magenta + titulo navy + texto + 2 botões (Pular / Próximo).
-// Último passo: "Próximo →" vira "Começar".
+// Status lido SEMPRE do endpoint fresco (Agente B):
+//   GET /companies/:id/studio/onboarding-status
+//   → { temInsumo, temFicha, temProduto, temVenda }
 //
-// Esc fecha (web). Back button fecha (native via Modal).
+// Comportamento:
+//   - Barra de progresso real ("X de 4 prontos")
+//   - Próximo passo pendente recebe destaque navy (ring + CTA primário)
+//   - Quando todos os 4 done (ou temVenda=true): some silenciosamente
+//   - reduceMotion: animação de progresso desativada
+//   - Multi-CNPJ: status é por empresa (cid do contexto)
 //
-// Memory: plano_aura_studio_vertical_24mai2026 (primary navy
-// #1E3A8A, accent magenta #EC4899, light theme).
-//
-// 31/05/2026 (Fase 3): migrado de StudioTokens estático pra
-// useStudioTokens — light+dark via provider. Banner já estava
-// slim com 1 acento magenta (eyebrow + active step dot); preserva.
+// 02/06/2026 — Agente F, Onda 2, feat/studio-shell-clareza
 // ============================================================
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
-  View, Text, Pressable, StyleSheet, Modal, Platform,
-  Animated, Easing, useWindowDimensions,
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  Platform,
+  AccessibilityInfo,
+  Animated,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioRadiusV2 } from "@/constants/studio-tokens-v2";
+import { Icon } from "@/components/Icon";
+import { studioApi } from "@/services/studioApi";
+import { useAuthStore } from "@/stores/auth";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
-// ─── Passos hardcoded ───────────────────────────────────────
-type Step = {
-  target: string; // chave abstrata (parte B vai mapear pra ref real)
-  eyebrow?: string;
-  title: string;
-  text: string;
+// ─── Tipo do status retornado pelo endpoint ──────────────────
+export type OnboardingStatus = {
+  temInsumo: boolean;
+  temFicha: boolean;
+  temProduto: boolean;
+  temVenda: boolean;
 };
 
-const STEPS: Step[] = [
+const EMPTY_STATUS: OnboardingStatus = {
+  temInsumo: false,
+  temFicha: false,
+  temProduto: false,
+  temVenda: false,
+};
+
+// ─── Definição dos 4 passos ──────────────────────────────────
+type ChecklistStep = {
+  id: keyof OnboardingStatus;
+  num: 1 | 2 | 3 | 4;
+  title: string;
+  why: string;  // "o porquê" — 1 linha
+  cta: string;
+  href: string;
+};
+
+const STEPS: ChecklistStep[] = [
   {
-    target: "sidebar",
-    eyebrow: "BEM-VINDO AO STUDIO",
-    title: "Tudo organizado em 3 áreas",
-    text:
-      "Estúdio, Vendas e Gestão. Cada bolinha agrupa 2–4 telas — toque ou passe o mouse pra explorar.",
+    id: "temInsumo",
+    num: 1,
+    title: "Cadastrar um insumo",
+    why: "É o que você consome de verdade — papel, tinta, embalagem.",
+    cta: "Cadastrar insumo",
+    href: "/studio/insumos?action=novo-insumo",
   },
   {
-    target: "checklist",
-    title: "4 passos pra vender",
-    text:
-      "Termine essa lista pra deixar sua loja pronta. Cada item leva à tela certa.",
+    id: "temFicha",
+    num: 2,
+    title: "Montar a ficha técnica",
+    why: "Junta os insumos no produto — o Studio calcula seu custo.",
+    cta: "Abrir catálogo",
+    href: "/studio/estoque",
   },
   {
-    target: "marketplaces",
-    title: "Conecte ML/Shopee",
-    text:
-      "Se você já vende em marketplaces, conecte sua conta aqui pra unificar pedidos.",
+    id: "temProduto",
+    num: 3,
+    title: "Publicar um produto",
+    why: "Com a ficha pronta, sua margem aparece automática.",
+    cta: "Novo produto",
+    href: "/studio/estoque?action=novo-produto",
   },
   {
-    target: "settings_revisions",
-    title: "Sua política de revisões",
-    text:
-      "Diga quantas alterações de arte são grátis pro cliente.",
+    id: "temVenda",
+    num: 4,
+    title: "Fazer a 1ª venda",
+    why: "Abra o PDV e venda em 1 toque.",
+    cta: "Abrir caixa",
+    href: "/studio/vendas/caixa",
   },
 ];
 
+const TOTAL = STEPS.length;
+
+// ─── Props públicas ──────────────────────────────────────────
 export type StudioOnboardingProps = {
-  visible: boolean;
-  onClose: () => void;
-  onComplete: () => void;
+  /** Quando true, renderiza nada (já superado). */
+  visible?: boolean;
+  /** Callback chamado quando temVenda=true (checklist completo). */
+  onComplete?: () => void;
 };
 
-export function StudioOnboarding({ visible, onClose, onComplete }: StudioOnboardingProps) {
+export function StudioOnboarding({
+  visible = true,
+  onComplete,
+}: StudioOnboardingProps) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
-  const [currentStep, setCurrentStep] = useState(0);
-  const { width: vw, height: vh } = useWindowDimensions();
-  const fade = useState(new Animated.Value(0))[0];
+  const router = useRouter();
 
-  // ─── Reset step quando reabre ─────────────────────────────
-  useEffect(() => {
-    if (visible) {
-      setCurrentStep(0);
-      Animated.timing(fade, {
-        toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-      }).start();
-    } else {
-      fade.setValue(0);
+  const auth = useAuthStore();
+  const cid = (auth.company as any)?.id as string | undefined;
+
+  // ─── Status fresco do endpoint ────────────────────────────
+  const [status, setStatus] = useState<OnboardingStatus>(EMPTY_STATUS);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    if (!cid) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await studioApi.getOnboardingStatus(cid);
+      setStatus(data);
+      if (data.temVenda) onComplete?.();
+    } catch (err: any) {
+      console.error("[StudioOnboarding] fetchStatus:", err);
+      setError("Não foi possível carregar o progresso.");
+    } finally {
+      setLoading(false);
     }
-  }, [visible, fade]);
+  }, [cid, onComplete]);
 
-  // ─── Esc fecha (web) ──────────────────────────────────────
+  // Refetch no mount (nunca confia no JWT)
   useEffect(() => {
-    if (!visible || Platform.OS !== "web" || typeof window === "undefined") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [visible, onClose]);
+    fetchStatus();
+  }, [fetchStatus]);
 
-  const isLast = currentStep === STEPS.length - 1;
-  const step = STEPS[currentStep];
+  // ─── reduceMotion ─────────────────────────────────────────
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (mounted) setReduceMotion(v);
+    });
+    return () => { mounted = false; };
+  }, []);
 
-  const next = useCallback(() => {
-    if (isLast) {
-      onComplete();
-    } else {
-      setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1));
+  // ─── Barra de progresso animada ───────────────────────────
+  const doneCount = useMemo(
+    () => STEPS.filter((step) => status[step.id]).length,
+    [status]
+  );
+  const progressPct = doneCount / TOTAL;
+
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      progressAnim.setValue(progressPct);
+      return;
     }
-  }, [isLast, onComplete]);
+    Animated.timing(progressAnim, {
+      toValue: progressPct,
+      duration: 450,
+      useNativeDriver: false, // width não suporta native driver
+    }).start();
+  }, [progressPct, reduceMotion, progressAnim]);
 
+  // ─── Próximo passo pendente ───────────────────────────────
+  const nextStep = useMemo(
+    () => STEPS.find((step) => !status[step.id]) ?? null,
+    [status]
+  );
+
+  // ─── Ocultar quando completo ──────────────────────────────
   if (!visible) return null;
-
-  // Tooltip centralizado (parte B vai posicionar relativo ao target)
-  const tooltipMaxW = Math.min(320, vw - 48);
+  if (!loading && status.temVenda) return null;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <Animated.View style={[s.overlay, { opacity: fade }]}>
-        {/* Backdrop clicável fecha (escape natural) */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-
-        {/* Tooltip flutuante */}
-        <View style={[s.tooltipWrap, { maxWidth: tooltipMaxW }]}>
-          {step.eyebrow && (
-            <Text style={s.eyebrow}>{step.eyebrow}</Text>
-          )}
-          <Text style={s.title}>{step.title}</Text>
-          <Text style={s.text}>{step.text}</Text>
-
-          {/* Dots de progresso */}
-          <View style={s.dots}>
-            {STEPS.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  s.dot,
-                  i === currentStep && s.dotActive,
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Ações */}
-          <View style={s.actions}>
-            <Pressable style={s.skipBtn} onPress={onClose} accessibilityLabel="Pular tour">
-              <Text style={s.skipTxt}>Pular tour</Text>
-            </Pressable>
-            <Pressable
-              style={s.primaryBtn}
-              onPress={next}
-              accessibilityLabel={isLast ? "Começar" : "Próximo"}
-            >
-              <Text style={s.primaryTxt}>
-                {isLast ? "Começar" : "Próximo →"}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Target hint (debug-ish — parte B remove) */}
-          {__DEV__ && (
-            <Text style={s.debugTxt}>target: {step.target}</Text>
-          )}
+    <View style={s.card}>
+      {/* Cabeçalho */}
+      <View style={s.cardHeader}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.eyebrow}>CONFIGURAÇÃO</Text>
+          <Text style={s.cardTitle}>Primeiros passos</Text>
+          <Text style={s.cardSub}>
+            {loading
+              ? "Verificando seu progresso..."
+              : error
+              ? error
+              : doneCount === TOTAL
+              ? "Tudo pronto! ✓"
+              : `${doneCount} de ${TOTAL} prontos`}
+          </Text>
         </View>
-      </Animated.View>
-    </Modal>
+
+        {/* Botão recarregar em caso de erro */}
+        {error && !loading && (
+          <Pressable
+            onPress={fetchStatus}
+            style={s.retryBtn}
+            accessibilityLabel="Tentar novamente"
+          >
+            <Icon name="refresh-cw" size={14} color={t.primary} />
+          </Pressable>
+        )}
+
+        {loading && (
+          <ActivityIndicator size="small" color={t.accent} />
+        )}
+      </View>
+
+      {/* Barra de progresso */}
+      <View style={s.progressTrack}>
+        <Animated.View
+          style={[
+            s.progressFill,
+            {
+              width: progressAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0%", "100%"],
+              }),
+            },
+          ]}
+        />
+      </View>
+
+      {/* Lista de passos */}
+      {!loading && !error && (
+        <View style={s.stepsList}>
+          {STEPS.map((step) => {
+            const done = status[step.id];
+            const isNext = step.id === nextStep?.id;
+
+            return (
+              <View
+                key={step.id}
+                style={[
+                  s.stepRow,
+                  done && s.stepRowDone,
+                  isNext && s.stepRowNext,
+                ]}
+              >
+                {/* Número / Check */}
+                <View
+                  style={[
+                    s.stepBadge,
+                    done && s.stepBadgeDone,
+                    isNext && s.stepBadgeNext,
+                  ]}
+                >
+                  {done ? (
+                    <Icon name="check" size={12} color="#fff" />
+                  ) : (
+                    <Text
+                      style={[
+                        s.stepNum,
+                        isNext && s.stepNumNext,
+                      ]}
+                    >
+                      {step.num}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Texto */}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={[
+                      s.stepTitle,
+                      done && s.stepTitleDone,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {step.title}
+                  </Text>
+                  <Text style={s.stepWhy} numberOfLines={2}>
+                    {done ? "Concluído" : step.why}
+                  </Text>
+                </View>
+
+                {/* CTA (apenas não concluídos) */}
+                {!done && (
+                  <Pressable
+                    onPress={() => router.push(step.href as any)}
+                    style={[
+                      s.stepCta,
+                      isNext && s.stepCtaNext,
+                    ]}
+                    accessibilityLabel={step.cta}
+                  >
+                    <Text
+                      style={[
+                        s.stepCtaTxt,
+                        isNext && s.stepCtaTxtNext,
+                      ]}
+                    >
+                      {step.cta}
+                    </Text>
+                    <Icon
+                      name="arrow-right"
+                      size={11}
+                      color={isNext ? "#fff" : t.primary}
+                    />
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Skeleton (loading) */}
+      {loading && (
+        <View style={s.skeletonWrap}>
+          {[1, 2, 3, 4].map((i) => (
+            <View key={i} style={s.skeletonRow}>
+              <View style={s.skeletonCircle} />
+              <View style={{ flex: 1, gap: 5 }}>
+                <View style={[s.skeletonLine, { width: "60%" }]} />
+                <View style={[s.skeletonLine, { width: "85%", opacity: 0.5 }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
 export default StudioOnboarding;
 
 // ─── Styles ─────────────────────────────────────────────────
-const buildStyles = (t: StudioPalette) => StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(15,23,42,0.7)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  tooltipWrap: {
-    backgroundColor: t.paperCardElev,
-    borderRadius: StudioRadiusV2.xl as number,
-    padding: 20,
-    width: "100%",
-    borderWidth: 1,
-    borderColor: t.ink5,
-    // sombra forte pra destacar do overlay
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.35,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 12,
-  },
-  eyebrow: {
-    fontSize: 11,
-    color: t.accent,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 6,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: t.primary,
-    letterSpacing: -0.3,
-    marginBottom: 6,
-  },
-  text: {
-    fontSize: 13.5,
-    color: t.ink2,
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  dots: {
-    flexDirection: "row",
-    gap: 6,
-    marginBottom: 14,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: t.ink5,
-  },
-  dotActive: {
-    width: 18,
-    backgroundColor: t.accent,
-  },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 10,
-  },
-  skipBtn: {
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: t.ink5,
-    backgroundColor: "transparent",
-  },
-  skipTxt: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: t.ink3,
-  },
-  primaryBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: t.primary,
-  },
-  primaryTxt: {
-    fontSize: 13.5,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: 0.2,
-  },
-  debugTxt: {
-    fontSize: 10,
-    color: t.ink4,
-    marginTop: 10,
-    fontStyle: "italic",
-  },
-});
+const buildStyles = (t: StudioPalette) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: t.paperCard,
+      borderRadius: StudioRadiusV2.xl as number,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      padding: 20,
+      marginBottom: 18,
+      ...(Platform.OS === "web"
+        ? ({ boxShadow: "0 2px 12px rgba(15,23,42,0.06)" } as any)
+        : null),
+    },
+
+    // ── Header ──
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      marginBottom: 14,
+    },
+    eyebrow: {
+      fontSize: 10,
+      color: t.accent,
+      fontWeight: "800",
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      marginBottom: 3,
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: t.ink,
+      letterSpacing: -0.2,
+    },
+    cardSub: {
+      fontSize: 12,
+      color: t.ink3,
+      marginTop: 3,
+    },
+    retryBtn: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: t.bgSoft,
+    },
+
+    // ── Barra de progresso ──
+    progressTrack: {
+      height: 6,
+      backgroundColor: t.bgSoft,
+      borderRadius: 999,
+      overflow: "hidden",
+      marginBottom: 18,
+    },
+    progressFill: {
+      height: "100%",
+      backgroundColor: t.primary,
+      borderRadius: 999,
+    },
+
+    // ── Passos ──
+    stepsList: { gap: 8 },
+    stepRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: t.bgSoft,
+    },
+    stepRowDone: {
+      opacity: 0.6,
+    },
+    stepRowNext: {
+      backgroundColor: t.paperCardElev,
+      borderWidth: 2,
+      borderColor: t.primary,
+    },
+
+    // Badge (número ou check)
+    stepBadge: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: t.ink5,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    stepBadgeDone: {
+      backgroundColor: t.success ?? "#10B981",
+    },
+    stepBadgeNext: {
+      backgroundColor: t.primary,
+    },
+    stepNum: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: t.ink3,
+    },
+    stepNumNext: {
+      color: "#fff",
+    },
+
+    // Textos
+    stepTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: t.ink,
+    },
+    stepTitleDone: {
+      textDecorationLine: "line-through",
+      color: t.ink4,
+    },
+    stepWhy: {
+      fontSize: 11.5,
+      color: t.ink3,
+      marginTop: 2,
+      lineHeight: 16,
+    },
+
+    // CTAs
+    stepCta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: t.primary,
+      backgroundColor: "transparent",
+      flexShrink: 0,
+    },
+    stepCtaNext: {
+      backgroundColor: t.primary,
+      borderColor: t.primary,
+    },
+    stepCtaTxt: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: t.primary,
+    },
+    stepCtaTxtNext: {
+      color: "#fff",
+    },
+
+    // ── Skeleton ──
+    skeletonWrap: { gap: 10 },
+    skeletonRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: t.bgSoft,
+    },
+    skeletonCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: t.ink5,
+    },
+    skeletonLine: {
+      height: 11,
+      borderRadius: 6,
+      backgroundColor: t.ink5,
+    },
+  });
