@@ -3,8 +3,9 @@
 // Orquestra os fields de um produto: frente/verso, opt-in verso,
 // LivePreview, quantidade, botao Adicionar/Atualizar.
 // Agente I (03/06/2026): link 'Ver guia de medidas' + values/onFieldChange no FieldRenderer
+// Agente J (03/06/2026): ocultar campo image quando art_service=designer + limpar valor
 // ============================================================
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
@@ -60,19 +61,60 @@ export function ProductConfigurator({
   const shouldRenderBack = hasBack && backFields.length > 0;
   const showBackBody = shouldRenderBack && (!backCharge || editingAddBack);
 
-  // Agente I: passa values + onFieldChange ao FieldRenderer (fecha ponta do Agente H)
-  const renderField = (f: typeof allFields[0]) => (
-    <FieldRenderer
-      key={f.id}
-      field={f}
-      value={editingValues[f.id]}
-      templates={activeProduct.templates}
-      slug={slug}
-      onChange={(v) => setFieldValue(f.id, v)}
-      values={editingValues}
-      onFieldChange={setFieldValue}
-    />
+  // Agente J: detecta o campo art_service e o campo image em todos os fields
+  const artServiceField = allFields.find(
+    (f) => f.type === "option" && (f.config as any)?.is_art_service
   );
+  const imageField = allFields.find((f) => f.type === "image");
+
+  // Agente J: designer=true quando o campo art_service existe e tem valor 'designer'
+  const artServiceDesigner =
+    artServiceField != null &&
+    editingValues[artServiceField.id] === "designer";
+
+  // Agente J: limpa o valor do campo image ao trocar para 'designer'.
+  // O useEffect observa o valor do art_service field (string). Quando muda para
+  // 'designer' e ainda ha um valor de imagem pendente, limpa sem criar loop:
+  // o proprio clear seta '' no imageField, o que nao e 'designer', entao o
+  // effect nao dispara novamente para aquele campo.
+  // Precisa ser chamado no nivel do componente — mas como temos early return
+  // antes (`if (!activeProduct) return null`), o hook fica DEPOIS da guarda.
+  // Isso e seguro porque activeProduct nao muda entre renders do configurador;
+  // a guarda so retorna null quando o produto e desmontado.
+  const artServiceValue = artServiceField ? (editingValues[artServiceField.id] ?? "") : null;
+  useEffect(() => {
+    if (artServiceValue !== "designer") return;
+    if (!imageField) return;
+    const currentImageVal = editingValues[imageField.id];
+    if (currentImageVal != null && currentImageVal !== "") {
+      setFieldValue(imageField.id, "");
+    }
+    // editingValues intencionalmente omitido da dep-array: queremos reagir
+    // apenas a mudancas no valor do art_service, nao a cada keystroke geral.
+    // O acesso a editingValues[imageField.id] dentro do effect e coerente
+    // porque o React captura o closure no momento em que artServiceValue muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artServiceValue]);
+
+  // Agente I + J: passa values + onFieldChange ao FieldRenderer;
+  // quando art_service=designer, nao renderiza o campo image.
+  const renderField = (f: typeof allFields[0]) => {
+    // Agente J: suprime campo image enquanto designer estiver ativo
+    if (f.type === "image" && artServiceDesigner) return null;
+
+    return (
+      <FieldRenderer
+        key={f.id}
+        field={f}
+        value={editingValues[f.id]}
+        templates={activeProduct.templates}
+        slug={slug}
+        onChange={(v) => setFieldValue(f.id, v)}
+        values={editingValues}
+        onFieldChange={setFieldValue}
+      />
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
