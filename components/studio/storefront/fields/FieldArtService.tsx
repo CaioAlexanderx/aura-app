@@ -18,7 +18,6 @@
 //   - NÃO toca em FieldImage.tsx, LivePreview.tsx, ProductConfigurator.tsx
 //   - dark tokens via T (paleta Studio), reduceMotion respeitado
 // ============================================================
-import { useReducedMotion } from "react-native-reanimated";
 import { View, Text, Pressable, TextInput, StyleSheet, Platform } from "react-native";
 import type { CustomizationField } from "../types";
 import { T } from "../types";
