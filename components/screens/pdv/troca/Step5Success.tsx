@@ -26,6 +26,12 @@
 //     abre em nova aba. A rota /print/danfe/devolucao/:saleId exige auth;
 //     window.open direto nao manda o Bearer -> 401. Mesmo padrao do
 //     NfceActions (openPrintNfceTermica).
+// 02/06/2026 (fix cupom da troca):
+//   - openReceipt ficou de fora da correcao de auth de 29/05 e ainda fazia
+//     window.open(url) direto -> a rota /print/receipt exige auth e devolvia
+//     {"error":"Token nao fornecido"}. Agora busca o HTML via fetch com
+//     Authorization (rota /preview, autoprint) e escreve numa nova janela,
+//     mesmo padrao do SaleComplete (venda normal).
 // ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
@@ -153,13 +159,34 @@ export function Step5Success({
     }
   };
 
-  function openReceipt() {
+  // 02/06/2026: cupom da troca. A rota /print/receipt exige auth — window.open
+  // direto devolvia {"error":"Token nao fornecido"}. Busca o HTML via fetch com
+  // Authorization (variante /preview, autoprint) e escreve numa nova janela
+  // (mesmo padrao de SaleComplete/openDanfe). Sem token na URL.
+  async function openReceipt() {
     if (!receiptUrl) return;
-    const fullUrl = receiptUrl.startsWith("http") ? receiptUrl : `${getApiBase()}${receiptUrl}`;
-    if (Platform.OS === "web") {
-      window.open(fullUrl, "_blank");
-    } else {
-      Linking.openURL(fullUrl).catch(() => {});
+    const baseFull = receiptUrl.startsWith("http") ? receiptUrl : `${getApiBase()}${receiptUrl}`;
+    const previewUrl = baseFull.includes("/preview")
+      ? baseFull
+      : `${baseFull.replace(/\/$/, "")}/preview`;
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      Linking.openURL(previewUrl).catch(() => {});
+      return;
+    }
+    try {
+      const resp = await fetch(previewUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!resp.ok) {
+        let msg = "Nao foi possivel gerar o cupom da troca.";
+        try { const j = await resp.json(); if (j?.error) msg = j.error; } catch {}
+        window.alert(msg);
+        return;
+      }
+      const html = await resp.text();
+      const win = window.open("", "_blank", "width=420,height=700,scrollbars=yes");
+      if (win) { win.document.write(html); win.document.close(); }
+      else window.alert("Pop-up bloqueado. Permita pop-ups para imprimir o cupom.");
+    } catch {
+      window.alert("Erro ao gerar o cupom da troca.");
     }
   }
 
