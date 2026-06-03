@@ -147,12 +147,12 @@ export default function CrediarioScreen() {
   if (isLoading) {
     return (
       <ScrollView style={s.screen} contentContainerStyle={[s.content, { padding: isWide ? 32 : 16 }]}>
-        <View style={s.headerRow}>
+        <View style={[s.headerRow, !isWide && s.headerRowMobile]}>
           <View style={s.headerTitleGroup}>
             <View style={s.headerIconBox}><Icon name="percent" size={18} color={Colors.violet3} /></View>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.pageTitle}>Crediário</Text>
-              <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
+              <Text style={s.pageSubtitle} numberOfLines={1}>Controle de inadimplência e cobranças</Text>
             </View>
           </View>
         </View>
@@ -175,20 +175,20 @@ export default function CrediarioScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
     >
       {/* Header */}
-      <View style={s.headerRow}>
+      <View style={[s.headerRow, !isWide && s.headerRowMobile]}>
         <View style={s.headerTitleGroup}>
           <View style={s.headerIconBox}><Icon name="percent" size={18} color={Colors.violet3} /></View>
-          <View>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.pageTitle}>Crediário</Text>
-            <Text style={s.pageSubtitle}>Controle de inadimplência e cobranças</Text>
+            <Text style={s.pageSubtitle} numberOfLines={1}>Controle de inadimplência e cobranças</Text>
           </View>
         </View>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Pressable onPress={() => setShowCriar(true)} style={s.settingsBtn}>
+        <View style={[{ flexDirection: "row", gap: 8 }, !isWide && { width: "100%" }]}>
+          <Pressable onPress={() => setShowCriar(true)} style={[s.settingsBtn, !isWide && s.headerBtnMobile]}>
             <Icon name="plus" size={15} color={Colors.violet3} />
             <Text style={s.settingsBtnText}>Lançamento</Text>
           </Pressable>
-          <Pressable onPress={() => router.push("/crediario/settings" as any)} style={s.settingsBtn}>
+          <Pressable onPress={() => router.push("/crediario/settings" as any)} style={[s.settingsBtn, !isWide && s.headerBtnMobile]}>
             <Icon name="settings" size={15} color={Colors.violet3} />
             <Text style={s.settingsBtnText}>Configurações</Text>
           </Pressable>
@@ -395,7 +395,9 @@ const s = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingBottom: 48, maxWidth: 900, alignSelf: "center", width: "100%" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  headerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  headerRowMobile: { flexDirection: "column", alignItems: "stretch", gap: 14 },
+  headerBtnMobile: { flex: 1, justifyContent: "center" },
   headerIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.4 },
   pageSubtitle: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
