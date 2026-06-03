@@ -1,6 +1,7 @@
 // ============================================================
 // AURA STUDIO · Wizard: Configurar personalização do produto
 // (Fase 1 skeleton — 24/05/2026)
+// Agente H (03/06/2026): seção "Serviço de Arte" no Step 2
 //
 // Primeira aplicação do <StudioWorkflow> canônico.
 // 4 passos: Área de impressão → Campos permitidos → Preview → Salvar.
@@ -28,6 +29,12 @@ const FONTS_PRESET   = ["Pacifico", "Caveat", "Playfair Display", "Bebas Neue", 
 const COLORS_PRESET  = ["#0F172A", "#BE185D", "#7C3AED", "#1D4ED8", "#D97706", "#059669", "#EC4899", "#FFFFFF"];
 const FORMATS_PRESET = ["png", "jpg", "jpeg", "pdf"];
 
+// ─── ART_SERVICE_FIELD_ID canônico ───────────────────────────────────────────
+// Usado em buildConfig() e na seção de preview (Step 3).
+// Manter em sincronia com FieldArtService.tsx (ART_FIELD_ID = 'art_service').
+export const ART_SERVICE_FIELD_ID  = "art_service";
+export const ART_SERVICE_BRIEF_ID  = "art_service_brief";
+
 type DraftState = {
   print_area_w: string;
   print_area_h: string;
@@ -36,6 +43,9 @@ type DraftState = {
   allow_image: boolean;
   allow_template: boolean;
   text_max_chars: string;
+  // ─── Agente H: Serviço de Arte ───
+  allow_art_service: boolean;
+  art_service_price: string;  // R$ como string (input de texto)
 };
 
 const DEFAULT_DRAFT: DraftState = {
@@ -46,6 +56,9 @@ const DEFAULT_DRAFT: DraftState = {
   allow_image: true,
   allow_template: true,
   text_max_chars: "20",
+  // Agente H
+  allow_art_service: false,
+  art_service_price: "30,00",
 };
 
 export default function PersonalizacaoWizard() {
@@ -68,12 +81,21 @@ export default function PersonalizacaoWizard() {
     step === 1
       ? Number(draft.print_area_w) > 0 && Number(draft.print_area_h) > 0
       : step === 2
-      ? draft.allow_text || draft.allow_image || draft.allow_template
+      ? draft.allow_text || draft.allow_image || draft.allow_template || draft.allow_art_service
       : true;
+
+  // ─── Agente H: parse do preço ─────────────────────────────────────────────
+  function parseArtPrice(raw: string): number {
+    // Aceita "30", "30,00", "30.00"
+    const normalized = raw.replace(",", ".").replace(/[^\d.]/g, "");
+    const n = parseFloat(normalized);
+    return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
+  }
 
   // Monta o config final pra mandar pro backend
   function buildConfig(): CustomizationConfig {
     const fields: CustomizationField[] = [];
+
     if (draft.allow_text) {
       fields.push({
         id: "text",
@@ -87,15 +109,17 @@ export default function PersonalizacaoWizard() {
         },
       });
     }
+
     if (draft.allow_image) {
       fields.push({
         id: "image",
         type: "image",
         label: "Sua arte",
-        required: false,
+        required: false,   // required:false — cliente pode optar pelo Crie minha arte
         config: { formats: FORMATS_PRESET, max_mb: 10, min_dpi: 150 },
       });
     }
+
     if (draft.allow_template) {
       fields.push({
         id: "template",
@@ -105,6 +129,58 @@ export default function PersonalizacaoWizard() {
         config: { category_ids: [] },
       });
     }
+
+    // ─── Agente H: campo art_service ─────────────────────────────────────────
+    // DECISÃO D2: campo type='option' + config.is_art_service:true.
+    // O motor computeChoicesDelta no backend soma price_delta de choices selecionadas
+    // sem qualquer mudança de backend. Apenas a choice 'designer' carrega o delta.
+    //
+    // SHAPE EXATO (gravado no customization_config.fields):
+    // {
+    //   id: 'art_service',
+    //   type: 'option',
+    //   label: 'Crie minha arte',
+    //   required: false,
+    //   config: {
+    //     is_art_service: true,
+    //     choices: [
+    //       { value: 'none',     label: 'Vou enviar minha arte',      price_delta: 0          },
+    //       { value: 'designer', label: 'Crie minha arte pra mim',    price_delta: <preco>    }
+    //     ]
+    //   }
+    // }
+    if (draft.allow_art_service) {
+      const artPrice = parseArtPrice(draft.art_service_price);
+      fields.push({
+        id: ART_SERVICE_FIELD_ID,
+        type: "option",
+        label: "Crie minha arte",
+        required: false,
+        config: {
+          is_art_service: true,
+          choices: [
+            { value: "none",     label: "Vou enviar minha arte",   price_delta: 0        },
+            { value: "designer", label: "Crie minha arte pra mim", price_delta: artPrice },
+          ],
+        } as any,  // is_art_service é extensão do config; backend ignora campos extras
+      });
+
+      // Campo complementar: briefing do cliente (text simples, never required)
+      // Armazenado em values['art_service_brief'] — não influi no preço,
+      // apenas enriquece o pedido para o lojista/designer.
+      fields.push({
+        id: ART_SERVICE_BRIEF_ID,
+        type: "text",
+        label: "Briefing da arte",
+        required: false,
+        config: {
+          max_chars: 600,
+          fonts: [],
+          colors: [],
+        },
+      });
+    }
+
     return {
       print_area: {
         width_cm: Number(draft.print_area_w),
@@ -225,6 +301,45 @@ export default function PersonalizacaoWizard() {
             onToggle={() => updateDraft({ allow_template: !draft.allow_template })}
             tone="warm"
           />
+
+          {/* ─── Agente H: Seção Serviço de Arte ─────────────────────────── */}
+          <View style={s.artServiceDivider}>
+            <View style={s.artServiceDividerLine} />
+            <Text style={s.artServiceDividerTxt}>Serviço Premium</Text>
+            <View style={s.artServiceDividerLine} />
+          </View>
+
+          <Toggle
+            label="Oferecer 'Crie minha arte'"
+            sub="Cliente paga pra sua equipe criar a arte (sem precisar ter arquivo)"
+            checked={draft.allow_art_service}
+            onToggle={() => updateDraft({ allow_art_service: !draft.allow_art_service })}
+            tone="pink"
+          />
+
+          {draft.allow_art_service && (
+            <View style={s.subBlock}>
+              <Text style={s.label}>Preço do serviço (R$)</Text>
+              <TextInput
+                style={[s.input, { width: 160 }]}
+                keyboardType="decimal-pad"
+                value={draft.art_service_price}
+                placeholder="30,00"
+                placeholderTextColor="#94A3B8"
+                onChangeText={(v) => updateDraft({ art_service_price: v })}
+              />
+              <Text style={s.subHelp}>
+                Cobrado automaticamente quando o cliente escolher "Crie minha arte pra mim".
+                O campo de upload (Minha arte) continua disponível como opção gratuita.
+              </Text>
+              <View style={s.artServiceNote}>
+                <Text style={s.artServiceNoteTxt}>
+                  💡 O preço entra no total do pedido automaticamente via motor de escolhas — sem mudança no backend.
+                </Text>
+              </View>
+            </View>
+          )}
+          {/* ─── Fim seção Agente H ────────────────────────────────────── */}
         </View>
       )}
 
@@ -264,6 +379,19 @@ export default function PersonalizacaoWizard() {
                 <Icon name="grid" size={14} color={t.primary} />
                 <Text style={s.previewTxt}>
                   Galeria pronta — vincule categorias em Estúdio › Galeria
+                </Text>
+              </View>
+            )}
+            {/* Agente H: preview do serviço de arte */}
+            {draft.allow_art_service && (
+              <View style={s.previewRow}>
+                <Icon name="star" size={14} color={t.accent} />
+                <Text style={s.previewTxt}>
+                  Serviço de arte:{" "}
+                  <Text style={s.previewBold}>
+                    +R$ {parseFloat(draft.art_service_price.replace(",", ".") || "0").toFixed(2).replace(".", ",")}
+                  </Text>{" "}
+                  (cliente escolhe "Crie minha arte" ou faz upload)
                 </Text>
               </View>
             )}
@@ -372,5 +500,37 @@ function buildStyles(t: StudioPalette) {
   previewRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   previewTxt: { fontSize: 13, color: t.ink2, flex: 1 },
   previewBold: { fontWeight: "700", color: t.ink },
+
+  // ─── Agente H: estilos da seção Serviço de Arte ──
+  artServiceDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  artServiceDividerLine: {
+    flex: 1, height: 1, backgroundColor: t.ink5,
+  },
+  artServiceDividerTxt: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: t.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  artServiceNote: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(236,72,153,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(236,72,153,0.15)",
+  },
+  artServiceNoteTxt: {
+    fontSize: 11.5,
+    color: t.ink3,
+    lineHeight: 17,
+  },
   });
 }
