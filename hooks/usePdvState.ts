@@ -73,7 +73,7 @@ export function usePdvState() {
   const { customers } = useCustomers();
   const { settings: pdvSettings } = usePdvSettings();
 
-  // ── Plano / módulos ──────────────────────────────────────────
+  // ── Plano / módulos ─────────────────────────────────────────
   const plan = (company?.plan || "essencial").toLowerCase();
   const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
   const moduleOverrides = ((company as any)?.module_overrides ?? {}) as Record<string, boolean>;
@@ -83,27 +83,27 @@ export function usePdvState() {
     : planDefault;
   const clientesEnabled = isModuleEnabled("clientes", isNegocioPlus);
 
-  // ── Toggles PDV settings ──────────────────────────────────────
+  // ── Toggles PDV settings ────────────────────────────────────
   const caixaEnabled      = !!(pdvSettings as any)?.caixa_enabled;
   const cashTenderEnabled = (pdvSettings as any)?.cash_tender_modal_enabled !== false;
   const crediarioEnabled  = !!(pdvSettings as any)?.crediario_enabled;
 
-  // ── Caixa ─────────────────────────────────────────────────────
+  // ── Caixa ───────────────────────────────────────────────
   const { sessaoAtiva, isAberto, isLoading: caixaLoading, invalidate: invalidateCaixa } = useCaixa();
   const [showCaixaModal, setShowCaixaModal] = useState(false);
 
-  // ── Modal de troco ────────────────────────────────────────────
+  // ── Modal de troco ───────────────────────────────────────
   const [showChangeModal,  setShowChangeModal]  = useState(false);
   const [cashModalAmount,  setCashModalAmount]  = useState(0);
   const [cashModalIsSplit, setCashModalIsSplit] = useState(false);
 
-  // ── Crediário parcelado ───────────────────────────────────────
+  // ── Crediário parcelado ────────────────────────────────────
   const [showCrediario, setShowCrediario] = useState(false);
 
-  // ── Scanner ───────────────────────────────────────────────────
+  // ── Scanner ───────────────────────────────────────────
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
-  // ── Employees ─────────────────────────────────────────────────
+  // ── Employees ─────────────────────────────────────────
   const { data: empData } = useQuery({
     queryKey:  ["employees", company?.id],
     queryFn:   () => employeesApi.list(company!.id),
@@ -117,7 +117,7 @@ export function usePdvState() {
     [empData],
   );
 
-  // ── NFC-e config ──────────────────────────────────────────────
+  // ── NFC-e config ─────────────────────────────────────────
   const { data: nfceConfigData } = useQuery({
     queryKey:  ["nfce-config", company?.id],
     queryFn:   () => nfceApi.getConfig(company!.id),
@@ -127,7 +127,7 @@ export function usePdvState() {
   const autoEmitNfce =
     !!nfceConfigData?.config?.auto_emit_nfce && nfceConfigData?.config?.is_active;
 
-  // ── Cart ──────────────────────────────────────────────────────
+  // ── Cart ───────────────────────────────────────────────
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
@@ -143,26 +143,26 @@ export function usePdvState() {
     splitRemaining, splitIsBalanced,
   } = useCart();
 
-  // ── Viewport ──────────────────────────────────────────────────
+  // ── Viewport ───────────────────────────────────────────
   const vp         = useViewport();
   const wide        = vp.wide;
   const productCols = productColumnsFor(vp);
   const cartWidth   = cartWidthFor(vp);
 
-  // ── Ref do CartPanel (flyToCart) ──────────────────────────────
+  // ── Ref do CartPanel (flyToCart) ─────────────────────────────────
   const cartHeadRef = useRef<any>(null);
 
-  // ── Filtros / busca ───────────────────────────────────────────
+  // ── Filtros / busca ───────────────────────────────────────
   const [query,          setQuery]          = useState("");
   const [cat,            setCat]            = useState<string>("all");
   const [showOutOfStock, setShowOutOfStock] = useState(false);
 
-  // ── Estados de modais ─────────────────────────────────────────
+  // ── Estados de modais ──────────────────────────────────────
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [pendingProduct,  setPendingProduct]  = useState<Product | null>(null);
   const [showTroca,       setShowTroca]       = useState(false);
 
-  // ── Categorias ────────────────────────────────────────────────
+  // ── Categorias ───────────────────────────────────────────
   const categories = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of products) {
@@ -180,7 +180,7 @@ export function usePdvState() {
     [products],
   );
 
-  // ── Índice de busca ───────────────────────────────────────────
+  // ── Índice de busca ────────────────────────────────────────
   const productIndex = useMemo(() => {
     const idx = new Map<string, string>();
     for (const p of products) idx.set((p as any).id, buildProductHaystack(p));
@@ -211,7 +211,7 @@ export function usePdvState() {
     return m;
   }, [cart]);
 
-  // ── Handlers ──────────────────────────────────────────────────
+  // ── Handlers ───────────────────────────────────────────
 
   function pickCustomerWithPhone(v: { id: string; name: string } | null) {
     if (!v) { selectCustomer(null, null, null); return; }
@@ -327,6 +327,25 @@ export function usePdvState() {
       return;
     }
 
+    // Split com uma parcela no crediário — abre o modal de parcelas já
+    // escopado ao valor do crediário (as outras formas NÃO entram no a receber).
+    const splitHasCrediario = splitMode &&
+      splitPayments.some(p => p.method === "crediario" && (Number(p.value) || 0) > 0);
+    if (splitHasCrediario) {
+      if (!splitIsBalanced) {
+        toast.error(splitRemaining > 0
+          ? `Faltam R$ ${splitRemaining.toFixed(2)} pra fechar`
+          : `Sobrando R$ ${Math.abs(splitRemaining).toFixed(2)} nos pagamentos`);
+        return;
+      }
+      if (!selectedCustomerId) {
+        toast.error("Selecione um cliente para usar o crediário");
+        return;
+      }
+      setShowCrediario(true);
+      return;
+    }
+
     // Modal de troco — single ou split com parcelas em dinheiro
     const splitOk    = !splitMode || splitIsBalanced;
     const cashAmount = splitMode
@@ -411,7 +430,7 @@ export function usePdvState() {
     toast.success("Orçamento gerado");
   }
 
-  // ── Scanner gate ──────────────────────────────────────────────
+  // ── Scanner gate ──────────────────────────────────────────
   const scannerListening =
     !lastSale &&
     !pendingProduct &&
@@ -422,16 +441,26 @@ export function usePdvState() {
     !showCrediario;
   useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
 
-  // ── Dados derivados para renderização ─────────────────────────
+  // ── Dados derivados para renderização ────────────────────────────────
   const displayItems: CartDisplayItem[] = cart.map(it => {
     const base = it.productId.split("__")[0];
-    return { productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty };
+    return { productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice };
   });
 
   const subtotal       = totalRaw;
   const couponDiscount = couponApplied?.discount || 0;
   const discountAmount = couponDiscount + (manualDiscountAmount || 0);
   const totalFinal     = totalAfterCoupon;
+
+  // Valor destinado ao crediário (passado ao CreditInstallmentModal):
+  // split → soma só as entradas "crediario"; single "crediario" → total da venda.
+  const crediarioSplitAmount = Math.round(
+    splitPayments.filter(p => p.method === "crediario")
+      .reduce((s, p) => s + (Number(p.value) || 0), 0) * 100
+  ) / 100;
+  const crediarioModalAmount = splitMode && crediarioSplitAmount > 0
+    ? crediarioSplitAmount
+    : totalFinal;
   const discountLabel  = couponApplied?.code
     ? couponApplied.code
     : manualDiscountAmount > 0
@@ -511,6 +540,7 @@ export function usePdvState() {
     cancelChange: () => setShowChangeModal(false),
     // Crediário parcelado
     showCrediario,
+    crediarioModalAmount,
     handleCrediarioConfirm,
     handleOpenCrediario,
     closeCrediario: () => setShowCrediario(false),
