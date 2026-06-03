@@ -2,13 +2,16 @@
 // components/studio/storefront/ProductConfigurator.tsx
 // Orquestra os fields de um produto: frente/verso, opt-in verso,
 // LivePreview, quantidade, botao Adicionar/Atualizar.
+// Agente I (03/06/2026): link 'Ver guia de medidas' + values/onFieldChange no FieldRenderer
 // ============================================================
+import { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { FieldRenderer } from "./FieldRenderer";
 import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
 import { PoweredByAura } from "./ui/PoweredByAura";
+import { SizeGuideModal } from "./SizeGuideModal";
 
 const qtyBtn: any = {
   width: 30, height: 30, borderRadius: 8,
@@ -34,10 +37,19 @@ export function ProductConfigurator({
     // O hook sabe internamente; o texto do botao muda via sf._isEditing.
   } = sf;
 
+  // Agente I: estado local do modal do guia de medidas
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
+
   if (!activeProduct) return null;
 
   const cfg = activeProduct.customization_config;
   const hasDelta = configuringUnitPrice !== Number(activeProduct.price);
+
+  // Agente I: extrai size_guide do customization_config
+  const sizeGuide = (cfg as any)?.size_guide as
+    | { file_url: string; content_type: string }
+    | undefined;
+  const hasSizeGuide = !!(sizeGuide?.file_url);
 
   const allFields = cfg?.fields || [];
   const frontFields = allFields.filter((f) => ((f as any).side || "front") === "front");
@@ -48,6 +60,7 @@ export function ProductConfigurator({
   const shouldRenderBack = hasBack && backFields.length > 0;
   const showBackBody = shouldRenderBack && (!backCharge || editingAddBack);
 
+  // Agente I: passa values + onFieldChange ao FieldRenderer (fecha ponta do Agente H)
   const renderField = (f: typeof allFields[0]) => (
     <FieldRenderer
       key={f.id}
@@ -56,11 +69,21 @@ export function ProductConfigurator({
       templates={activeProduct.templates}
       slug={slug}
       onChange={(v) => setFieldValue(f.id, v)}
+      values={editingValues}
+      onFieldChange={setFieldValue}
     />
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Modal guia de medidas */}
+      {showSizeGuide && hasSizeGuide && (
+        <SizeGuideModal
+          sizeGuide={sizeGuide!}
+          onClose={() => setShowSizeGuide(false)}
+        />
+      )}
+
       {/* Header */}
       <View
         style={{
@@ -88,6 +111,38 @@ export function ProductConfigurator({
               Estúdio · Arte personalizada
             </Text>
           </View>
+
+          {/* Agente I: link 'Ver guia de medidas' — só quando size_guide existe */}
+          {hasSizeGuide && (
+            <Pressable
+              onPress={() => setShowSizeGuide(true)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                marginTop: 6,
+                alignSelf: "flex-start",
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: "rgba(30,58,138,0.25)",
+                backgroundColor: "rgba(30,58,138,0.05)",
+              }}
+            >
+              <Text style={{ fontSize: 11 }}>📐</Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: T.primary,
+                  fontWeight: "700",
+                  textDecorationLine: "underline",
+                }}
+              >
+                Ver guia de medidas
+              </Text>
+            </Pressable>
+          )}
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontSize: 15, fontWeight: "800", color: T.primary }}>
