@@ -20,10 +20,56 @@
 //   em values[field.id] após o FieldImage chamar onChange(url).
 //   O PersonalizationPreview existente já lê esse campo e renderiza.
 //   Agente J só precisa garantir que a URL R2 é passada em values.
+//
+// TRATAMENTO PDF (D1):
+//   Quando values[fieldId] de um campo type='image' é uma URL .pdf,
+//   o PersonalizationPreview tentaria renderizar via <image href> — o
+//   que falha silenciosamente no browser. Portanto este wrap detecta
+//   PDFs, remove o valor do campo antes de repassar ao PersonalizationPreview
+//   (mantendo o mockup limpo do produto), e exibe uma nota discreta abaixo.
 // ============================================================
-import { Platform } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import type { CustomizationConfig } from "./types";
+import { T } from "./types";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Retorna true se a string parece ser uma URL de PDF. */
+function isPdfUrl(v: unknown): boolean {
+  if (typeof v !== "string" || !v) return false;
+  // Remove query string / fragment antes de checar a extensão
+  try {
+    const pathname = new URL(v).pathname;
+    return pathname.toLowerCase().endsWith(".pdf");
+  } catch {
+    // URL relativa ou inválida — checa direto na string
+    return v.split("?")[0].toLowerCase().endsWith(".pdf");
+  }
+}
+
+/**
+ * Encontra o primeiro campo type='image' que contém uma URL PDF em values.
+ * Retorna { fieldId } se encontrou, null caso contrário.
+ */
+function findPdfImageField(
+  config: CustomizationConfig | null,
+  values: Record<string, any>,
+): { fieldId: string } | null {
+  if (!config?.fields) return null;
+  for (const field of config.fields) {
+    if (field.type === "image" && isPdfUrl(values[field.id])) {
+      return { fieldId: field.id };
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Componente
+// ---------------------------------------------------------------------------
 
 export function LivePreview({
   config, values, size, productName, showLabel,
@@ -39,14 +85,62 @@ export function LivePreview({
   /** Exibir label interno do preview? false no configurador e checkout */
   showLabel: boolean;
 }) {
+  // -------------------------------------------------------------------------
+  // D1: Tratamento de PDF
+  // -------------------------------------------------------------------------
+  const pdfField = findPdfImageField(config, values);
+
+  // Se há um campo image com PDF, stripa o valor antes de passar ao preview
+  // para que o SVG mostre o mockup limpo (sem <image href> quebrado).
+  const safeValues: Record<string, any> = pdfField
+    ? { ...values, [pdfField.fieldId]: undefined }
+    : values;
+
   return (
-    <PersonalizationPreview
-      config={config}
-      values={values}
-      size={size}
-      productName={productName}
-      showLabel={showLabel}
-    />
+    <View style={{ alignItems: "center", gap: 6 }}>
+      <PersonalizationPreview
+        config={config}
+        values={safeValues}
+        size={size}
+        productName={productName}
+        showLabel={showLabel}
+      />
+
+      {/* Nota discreta quando o cliente enviou um PDF */}
+      {pdfField && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 999,
+            backgroundColor: "rgba(100,116,139,0.10)", // T.ink3 @ 10%
+            borderWidth: 1,
+            borderColor: "rgba(100,116,139,0.20)",
+            // Não ultrapassa a largura do preview
+            maxWidth: size,
+          }}
+          accessibilityRole="text"
+          accessibilityLabel="PDF enviado. Pré-visualização indisponível."
+        >
+          {/* Ícone de documento — texto puro, sem dependência de lib de ícone */}
+          <Text style={{ fontSize: 12, color: T.ink3 }}>📄</Text>
+          <Text
+            style={{
+              fontSize: 11,
+              color: T.ink3,
+              fontWeight: "600",
+              flexShrink: 1,
+            }}
+            numberOfLines={1}
+          >
+            PDF enviado — pré-visualização indisponível
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
