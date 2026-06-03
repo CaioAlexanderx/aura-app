@@ -41,9 +41,41 @@ export function ProductConfigurator({
   // Agente I: estado local do modal do guia de medidas
   const [showSizeGuide, setShowSizeGuide] = useState(false);
 
+  // Agente J: detecta o campo art_service e o campo image em todos os fields.
+  // Calculado ANTES do early return para que o useEffect abaixo possa ser
+  // chamado incondicionalmente (Rules of Hooks).
+  const cfg = activeProduct?.customization_config;
+  const allFieldsForHooks = cfg?.fields || [];
+  const artServiceField = allFieldsForHooks.find(
+    (f) => f.type === "option" && (f.config as any)?.is_art_service
+  );
+  const imageField = allFieldsForHooks.find((f) => f.type === "image");
+
+  // Agente J: valor atual do campo art_service (null quando o campo nao existe
+  // ou quando activeProduct ainda nao esta carregado).
+  const artServiceValue =
+    artServiceField != null
+      ? (editingValues[artServiceField.id] ?? "")
+      : null;
+
+  // Agente J: limpa o valor do campo image ao trocar para 'designer'.
+  // DEVE ficar ANTES de qualquer early return para respeitar as Rules of Hooks.
+  // O corpo do effect e defensivo: retorna cedo se activeProduct for null,
+  // se nao houver campo image ou se o art_service nao for 'designer'.
+  useEffect(() => {
+    if (artServiceValue !== "designer") return;
+    if (!imageField) return;
+    const currentImageVal = editingValues[imageField.id];
+    if (currentImageVal != null && currentImageVal !== "") {
+      setFieldValue(imageField.id, "");
+    }
+    // editingValues intencionalmente omitido da dep-array: queremos reagir
+    // apenas a mudancas no valor do art_service, nao a cada keystroke geral.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artServiceValue]);
+
   if (!activeProduct) return null;
 
-  const cfg = activeProduct.customization_config;
   const hasDelta = configuringUnitPrice !== Number(activeProduct.price);
 
   // Agente I: extrai size_guide do customization_config
@@ -61,40 +93,10 @@ export function ProductConfigurator({
   const shouldRenderBack = hasBack && backFields.length > 0;
   const showBackBody = shouldRenderBack && (!backCharge || editingAddBack);
 
-  // Agente J: detecta o campo art_service e o campo image em todos os fields
-  const artServiceField = allFields.find(
-    (f) => f.type === "option" && (f.config as any)?.is_art_service
-  );
-  const imageField = allFields.find((f) => f.type === "image");
-
   // Agente J: designer=true quando o campo art_service existe e tem valor 'designer'
   const artServiceDesigner =
     artServiceField != null &&
     editingValues[artServiceField.id] === "designer";
-
-  // Agente J: limpa o valor do campo image ao trocar para 'designer'.
-  // O useEffect observa o valor do art_service field (string). Quando muda para
-  // 'designer' e ainda ha um valor de imagem pendente, limpa sem criar loop:
-  // o proprio clear seta '' no imageField, o que nao e 'designer', entao o
-  // effect nao dispara novamente para aquele campo.
-  // Precisa ser chamado no nivel do componente — mas como temos early return
-  // antes (`if (!activeProduct) return null`), o hook fica DEPOIS da guarda.
-  // Isso e seguro porque activeProduct nao muda entre renders do configurador;
-  // a guarda so retorna null quando o produto e desmontado.
-  const artServiceValue = artServiceField ? (editingValues[artServiceField.id] ?? "") : null;
-  useEffect(() => {
-    if (artServiceValue !== "designer") return;
-    if (!imageField) return;
-    const currentImageVal = editingValues[imageField.id];
-    if (currentImageVal != null && currentImageVal !== "") {
-      setFieldValue(imageField.id, "");
-    }
-    // editingValues intencionalmente omitido da dep-array: queremos reagir
-    // apenas a mudancas no valor do art_service, nao a cada keystroke geral.
-    // O acesso a editingValues[imageField.id] dentro do effect e coerente
-    // porque o React captura o closure no momento em que artServiceValue muda.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artServiceValue]);
 
   // Agente I + J: passa values + onFieldChange ao FieldRenderer;
   // quando art_service=designer, nao renderiza o campo image.
