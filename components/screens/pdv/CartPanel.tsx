@@ -23,6 +23,7 @@ export type CartDisplayItem = {
   name: string;
   price: number;
   qty: number;
+  listPrice?: number;
 };
 
 export type PayChip = { key: string; label: string; icon: string };
@@ -490,7 +491,7 @@ function SplitRow({
   );
 }
 
-// ── CartItem em 2 linhas ─────────────────────────────────────────
+// ── CartItem em 2 linhas ─────────────────────────────────────
 // Linha 1: [avatar] [nome flex:1]                  [total] [trash]
 // Linha 2:          [R$ unit ✏]    spacer    [- qty +]
 // Avatar ocupa só linha 1; linha 2 alinha à esquerda do nome (indent).
@@ -578,6 +579,10 @@ function CartItem({
 
   const accent = accentForProduct(item.productBaseId);
   const letter = productLetter(item.name);
+  // Lápis = desconto: se o preço efetivo ficou abaixo do preço de tabela
+  // (listPrice), mostra o preço cheio riscado + o % de desconto.
+  const hasDiscount = item.listPrice != null && item.listPrice > item.price + 0.001;
+  const discPct = hasDiscount ? Math.round((1 - item.price / (item.listPrice as number)) * 100) : 0;
   const imgBg = webOnly({
     background:
       "radial-gradient(circle at 30% 30%, " +
@@ -632,9 +637,17 @@ function CartItem({
           </View>
         ) : onPriceChange ? (
           <Pressable onPress={handlePriceFocus} style={s.priceEditableTouch}>
-            <Text style={s.itemMeta} numberOfLines={1}>
+            {hasDiscount && (
+              <Text style={s.itemMetaStrike} numberOfLines={1}>
+                {fmtCurrency(item.listPrice as number)}
+              </Text>
+            )}
+            <Text style={[s.itemMeta, hasDiscount && s.itemMetaDiscounted]} numberOfLines={1}>
               {fmtCurrency(item.price)}
             </Text>
+            {hasDiscount && (
+              <Text style={s.itemDiscBadge} numberOfLines={1}>−{discPct}%</Text>
+            )}
             <Icon name="edit" size={9} color={Colors.violet3} />
           </Pressable>
         ) : (
@@ -703,6 +716,9 @@ const s = StyleSheet.create({
   itemLetter: { fontSize: 12, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600", flex: 1, minWidth: 0 },
   itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10.5, color: Colors.ink3, letterSpacing: 0.2 },
+  itemMetaStrike: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, letterSpacing: 0.2, textDecorationLine: "line-through", opacity: 0.7 },
+  itemMetaDiscounted: { color: Colors.green, fontWeight: "700" },
+  itemDiscBadge: { fontSize: 9, fontWeight: "800", color: Colors.green, backgroundColor: Colors.green + "1A", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   // Edição inline do preço — Pressable que vira TextInput
   priceEditableTouch: {
     flexDirection: "row", alignItems: "center", gap: 4,
