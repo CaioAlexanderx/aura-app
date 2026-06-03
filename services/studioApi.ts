@@ -4,6 +4,7 @@
 //
 // 30/05/2026 (Camada 1 — Fase 0 Gate): tipos + stubs completos
 // 30/05/2026 (P1): updateProductionStatus ganha force?: boolean
+// 02/06/2026 (Onda 2 — Agente F): getOnboardingStatus (Agente B endpoint)
 // ============================================================
 import { request } from "./api";
 
@@ -495,6 +496,15 @@ export type StudioPayment = {
   updated_at?: string;
 };
 
+// ─── Onda 2 — Onboarding Status (02/06/2026, Agente F) ────────────────
+// Entregue pelo Agente B: GET /companies/:id/studio/onboarding-status
+export type OnboardingStatus = {
+  temInsumo: boolean;
+  temFicha: boolean;
+  temProduto: boolean;
+  temVenda: boolean;
+};
+
 // ════════════════════════════════════════════════════════
 // API
 // ════════════════════════════════════════════════════════
@@ -539,6 +549,12 @@ export const studioApi = {
 
   getPainel: (cid: string, days = 7) =>
     request<PainelData>(base(cid) + "/painel?days=" + days, { method: "GET", retry: 1, timeout: 10000 }),
+
+  // ── Onda 2: Onboarding Status (Agente F, 02/06/2026) ──
+  // Endpoint entregue pelo Agente B.
+  // Defensivo: retry=1, timeout=5000. Status é derivado/sem efeito colateral.
+  getOnboardingStatus: (cid: string) =>
+    request<OnboardingStatus>(base(cid) + "/onboarding-status", { method: "GET", retry: 1, timeout: 5000 }),
 
   // ── Marketplaces S-1 ──
   getMarketplaceListingPreview: (cid: string, pid: string, platform: MarketplacePlatform = "mercado_livre") =>
