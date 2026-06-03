@@ -3,8 +3,9 @@
 // Orquestra os fields de um produto: frente/verso, opt-in verso,
 // LivePreview, quantidade, botao Adicionar/Atualizar.
 // Agente I (03/06/2026): link 'Ver guia de medidas' + values/onFieldChange no FieldRenderer
+// Agente J (03/06/2026): ocultar campo image quando art_service=designer + limpar valor
 // ============================================================
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
@@ -40,9 +41,41 @@ export function ProductConfigurator({
   // Agente I: estado local do modal do guia de medidas
   const [showSizeGuide, setShowSizeGuide] = useState(false);
 
+  // Agente J: detecta o campo art_service e o campo image em todos os fields.
+  // Calculado ANTES do early return para que o useEffect abaixo possa ser
+  // chamado incondicionalmente (Rules of Hooks).
+  const cfg = activeProduct?.customization_config;
+  const allFieldsForHooks = cfg?.fields || [];
+  const artServiceField = allFieldsForHooks.find(
+    (f) => f.type === "option" && (f.config as any)?.is_art_service
+  );
+  const imageField = allFieldsForHooks.find((f) => f.type === "image");
+
+  // Agente J: valor atual do campo art_service (null quando o campo nao existe
+  // ou quando activeProduct ainda nao esta carregado).
+  const artServiceValue =
+    artServiceField != null
+      ? (editingValues[artServiceField.id] ?? "")
+      : null;
+
+  // Agente J: limpa o valor do campo image ao trocar para 'designer'.
+  // DEVE ficar ANTES de qualquer early return para respeitar as Rules of Hooks.
+  // O corpo do effect e defensivo: retorna cedo se activeProduct for null,
+  // se nao houver campo image ou se o art_service nao for 'designer'.
+  useEffect(() => {
+    if (artServiceValue !== "designer") return;
+    if (!imageField) return;
+    const currentImageVal = editingValues[imageField.id];
+    if (currentImageVal != null && currentImageVal !== "") {
+      setFieldValue(imageField.id, "");
+    }
+    // editingValues intencionalmente omitido da dep-array: queremos reagir
+    // apenas a mudancas no valor do art_service, nao a cada keystroke geral.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artServiceValue]);
+
   if (!activeProduct) return null;
 
-  const cfg = activeProduct.customization_config;
   const hasDelta = configuringUnitPrice !== Number(activeProduct.price);
 
   // Agente I: extrai size_guide do customization_config
@@ -60,19 +93,30 @@ export function ProductConfigurator({
   const shouldRenderBack = hasBack && backFields.length > 0;
   const showBackBody = shouldRenderBack && (!backCharge || editingAddBack);
 
-  // Agente I: passa values + onFieldChange ao FieldRenderer (fecha ponta do Agente H)
-  const renderField = (f: typeof allFields[0]) => (
-    <FieldRenderer
-      key={f.id}
-      field={f}
-      value={editingValues[f.id]}
-      templates={activeProduct.templates}
-      slug={slug}
-      onChange={(v) => setFieldValue(f.id, v)}
-      values={editingValues}
-      onFieldChange={setFieldValue}
-    />
-  );
+  // Agente J: designer=true quando o campo art_service existe e tem valor 'designer'
+  const artServiceDesigner =
+    artServiceField != null &&
+    editingValues[artServiceField.id] === "designer";
+
+  // Agente I + J: passa values + onFieldChange ao FieldRenderer;
+  // quando art_service=designer, nao renderiza o campo image.
+  const renderField = (f: typeof allFields[0]) => {
+    // Agente J: suprime campo image enquanto designer estiver ativo
+    if (f.type === "image" && artServiceDesigner) return null;
+
+    return (
+      <FieldRenderer
+        key={f.id}
+        field={f}
+        value={editingValues[f.id]}
+        templates={activeProduct.templates}
+        slug={slug}
+        onChange={(v) => setFieldValue(f.id, v)}
+        values={editingValues}
+        onFieldChange={setFieldValue}
+      />
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
