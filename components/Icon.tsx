@@ -61,10 +61,7 @@ const PATHS: Record<string, string> = {
   // Usado em PDV troca v2: Step 1 (QR cupom NFC-e) e Step 3 (QR produto).
   qr_code:        "M3 3h7v7H3z M5 5h3v3H5z M14 3h7v7h-7z M16 5h3v3h-3z M3 14h7v7H3z M5 16h3v3H5z M14 14h3v3h-3z M19 14h2v2h-2z M14 19h2v2h-2z M19 19h2v2h-2z",
   camera:         "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z M12 17a4 4 0 100-8 4 4 0 000 8z",
-  // Caixa 3D (Catalogo Studio nav) — Feather "box"
-  // NOTA: visualmente parecido com `package` (Insumos & estoque).
-  // Decisao de design pendente com Caio: manter box aqui ou trocar por
-  // layout-grid / shirt se a ambiguidade visual incomodar.
+  // Caixa 3D (mantido para retrocompatibilidade) — Feather "box"
   box:            "M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
   // Caminhao de entrega — logistica/frete no storefront
   truck:          "M1 3h15v13H1z M16 8h4l3 3v5h-7V8z M5.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z M18.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
@@ -149,6 +146,7 @@ const ALIASES: Record<string, string> = {
   "map-pin":         "location",
   "create":          "edit",
   "add":             "plus",
+  "layout-grid":     "grid",
 };
 
 function resolveName(name: string): string {
