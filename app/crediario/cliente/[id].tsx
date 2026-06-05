@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
-import type { CreditInstallment } from "@/services/creditApi";
+import type { CreditInstallment, CustomerTermsOverrides } from "@/services/creditApi";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
 
@@ -44,9 +44,6 @@ function phoneToWa(raw: string): string {
   return digits.startsWith("55") ? digits : "55" + digits;
 }
 
-// F3-3C (29/05/2026): fonte de verdade do saldo descoberto de uma parcela.
-// covered_amount (FIFO do applyPayment) substitui amount_paid.
-// Fallback para amount_paid para compatibilidade com dados legados.
 function installmentRemaining(inst: CreditInstallment): number {
   const covered = Number(inst.covered_amount ?? inst.amount_paid ?? 0);
   return Math.max(0, Number(inst.amount_due) - covered);
@@ -74,7 +71,6 @@ const PAYMENT_METHODS = [
   { key: "cartao", label: "Cartão" },
 ];
 
-// ─── Semáforo de status ──────────────────────────────────────
 function computeTrafficLight(status: string, installments: CreditInstallment[]) {
   if (status === "blocked") return "red";
   const overdue = installments.filter(i => i.status === "overdue");
@@ -89,9 +85,7 @@ const TRAFFIC_LIGHT_COLORS: Record<string, string> = {
   red: Colors.red,
 };
 
-// ─── Modal de baixa de parcela ───────────────────────────────
-// F3-3C: usa covered_amount como fonte do saldo + campo de método de pagamento.
-// Valor livre: não travado no amount_due — caixa pode receber valor parcial.
+// ─── Modal de baixa de parcela ─────────────────────────────
 type PayModalProps = {
   installment: CreditInstallment;
   config?: { interest_rate: number; late_fee_rate: number; late_interest_daily: number };
@@ -101,7 +95,6 @@ type PayModalProps = {
 };
 
 function PayInstallmentModal({ installment, config, onClose, onConfirm, isPending }: PayModalProps) {
-  // F3-3C: remaining usa covered_amount (FIFO) como fonte de verdade
   const remaining = installmentRemaining(installment);
   const late = installment.status === "overdue" ? daysLate(installment.due_date) : 0;
   const lateFee = late > 0 && config ? remaining * (config.late_fee_rate / 100) : 0;
@@ -192,7 +185,7 @@ function PayInstallmentModal({ installment, config, onClose, onConfirm, isPendin
   );
 }
 
-// ─── Modal de pagamento avulso (saldo fiado) ─────────────────
+// ─── Modal de pagamento avulso (saldo fiado) ───────────────────
 type FiadoPayModalProps = {
   onClose: () => void;
   onConfirm: (amount: number, method: string) => void;
@@ -261,7 +254,7 @@ function FiadoPayModal({ onClose, onConfirm, isPending }: FiadoPayModalProps) {
   );
 }
 
-// ─── Modal de bloquear/desbloquear ───────────────────────────
+// ─── Modal de bloquear/desbloquear ──────────────────────────
 type BlockModalProps = {
   isBlocked: boolean;
   onClose: () => void;
@@ -319,7 +312,259 @@ function BlockModal({ isBlocked, onClose, onConfirm, isPending }: BlockModalProp
   );
 }
 
-// ─── Tela principal ──────────────────────────────────────────
+// ─── F2: Card "Condições deste cliente" ────────────────────────
+// Campos editaveis: cada um opt-in (vazio = usa padrão da loja).
+// Mostra discretamente o valor "efetivo" quando override vazio.
+type TermsCardProps = {
+  companyId: string;
+  customerId: string;
+};
+
+type PeriodKind = "semanal" | "quinzenal" | "mensal" | "custom";
+
+function periodKindFromOverride(unit: string | null, count: number | null): PeriodKind {
+  if (!unit) return "mensal";
+  if (unit === "week" && count === 1) return "semanal";
+  if (unit === "week" && count === 2) return "quinzenal";
+  if (unit === "month") return "mensal";
+  return "custom";
+}
+
+function TermsCard({ companyId, customerId }: TermsCardProps) {
+  const qc = useQueryClient();
+  const profileQ = useQuery({
+    queryKey: ["credit-profile", companyId, customerId],
+    queryFn: () => creditApi.getCustomerProfile(companyId, customerId),
+    enabled: !!companyId && !!customerId,
+    staleTime: 30_000,
+  });
+
+  const terms = profileQ.data?.terms;
+  const ov = terms?.overrides;
+  const ef = terms?.effective;
+
+  // Local edit state
+  const [editing, setEditing] = useState(false);
+  const [interestRate, setInterestRate] = useState("");
+  const [maxInstallments, setMaxInstallments] = useState("");
+  const [periodKind, setPeriodKind] = useState<PeriodKind>("mensal");
+  const [periodDays, setPeriodDays] = useState("20");
+  const [dueDay, setDueDay] = useState("");
+  const [lateFeeRate, setLateFeeRate] = useState("");
+  const [lateInterestDaily, setLateInterestDaily] = useState("");
+
+  function startEdit() {
+    if (!ov) return;
+    setInterestRate(ov.interest_rate != null ? String((ov.interest_rate * 100).toFixed(2)) : "");
+    setMaxInstallments(ov.max_installments != null ? String(ov.max_installments) : "");
+    setPeriodKind(periodKindFromOverride(ov.period_unit, ov.period_count));
+    setPeriodDays(ov.period_count != null && ov.period_unit === "day" ? String(ov.period_count) : "20");
+    setDueDay(ov.due_day != null ? String(ov.due_day) : "");
+    setLateFeeRate(ov.late_fee_rate != null ? String((ov.late_fee_rate * 100).toFixed(2)) : "");
+    setLateInterestDaily(ov.late_interest_daily != null ? String((ov.late_interest_daily * 100).toFixed(4)) : "");
+    setEditing(true);
+  }
+
+  const termsMut = useMutation({
+    mutationFn: (body: Partial<CustomerTermsOverrides>) =>
+      creditApi.updateCustomerTerms(companyId, customerId, body),
+    onSuccess: () => {
+      toast.success("Condições atualizadas!");
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+    },
+    onError: (err: any) => toast.error(err?.data?.error || "Erro ao salvar condições"),
+  });
+
+  function handleSave() {
+    function parseOptFloat(v: string): number | null {
+      const n = parseFloat(v.replace(",", "."));
+      return v.trim() === "" ? null : isFinite(n) ? n / 100 : null;
+    }
+    function parseOptInt(v: string): number | null {
+      const n = parseInt(v, 10);
+      return v.trim() === "" ? null : isFinite(n) ? n : null;
+    }
+    let periodUnit: "day" | "week" | "month" | null = null;
+    let periodCount: number | null = null;
+    if (periodKind === "semanal") { periodUnit = "week"; periodCount = 1; }
+    else if (periodKind === "quinzenal") { periodUnit = "week"; periodCount = 2; }
+    else if (periodKind === "mensal") { periodUnit = "month"; periodCount = 1; }
+    else if (periodKind === "custom") {
+      periodUnit = "day";
+      const d = parseInt(periodDays, 10);
+      periodCount = isFinite(d) && d > 0 ? d : null;
+    }
+
+    const body: Partial<CustomerTermsOverrides> = {
+      interest_rate: parseOptFloat(interestRate),
+      max_installments: parseOptInt(maxInstallments),
+      period_unit: periodUnit,
+      period_count: periodCount,
+      due_day: parseOptInt(dueDay),
+      late_fee_rate: parseOptFloat(lateFeeRate),
+      late_interest_daily: parseOptFloat(lateInterestDaily),
+    };
+    termsMut.mutate(body);
+  }
+
+  const PERIOD_OPTS: Array<[PeriodKind, string]> = [
+    ["semanal", "Semanal"],
+    ["quinzenal", "Quinzenal"],
+    ["mensal", "Mensal"],
+    ["custom", "Personalizado"],
+  ];
+
+  if (!terms && !profileQ.isLoading) return null; // backend ainda nao suporta terms
+
+  return (
+    <View style={s.sectionCard}>
+      <View style={[s.sectionTitleRow]}>
+        <Text style={s.sectionTitle}>Condições deste cliente</Text>
+        {!editing && (
+          <Pressable style={s.editBtn} onPress={startEdit}>
+            <Icon name="edit" size={13} color={Colors.violet3} />
+            <Text style={s.editBtnTxt}>Editar</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {profileQ.isLoading && <ActivityIndicator color={Colors.violet3} style={{ marginVertical: 8 }} />}
+
+      {!editing && ov && ef && (
+        <View style={s.termsGrid}>
+          {([
+            ["Juros ao mês", ov.interest_rate != null ? `${(ov.interest_rate * 100).toFixed(2)}%` : null, ef.interest_rate != null ? `${(ef.interest_rate * 100).toFixed(2)}%` : null],
+            ["Prazo máximo", ov.max_installments != null ? `${ov.max_installments}x` : null, ef.max_installments != null ? `${ef.max_installments}x` : null],
+            ["Dia de vencimento", ov.due_day != null ? `Dia ${ov.due_day}` : null, ef.due_day != null ? `Dia ${ef.due_day}` : null],
+            ["Multa", ov.late_fee_rate != null ? `${(ov.late_fee_rate * 100).toFixed(2)}%` : null, ef.late_fee_rate != null ? `${(ef.late_fee_rate * 100).toFixed(2)}%` : null],
+            ["Juros de mora/dia", ov.late_interest_daily != null ? `${(ov.late_interest_daily * 100).toFixed(4)}%` : null, ef.late_interest_daily != null ? `${(ef.late_interest_daily * 100).toFixed(4)}%` : null],
+          ] as [string, string | null, string | null][]).map(([label, override, effective]) => (
+            <View key={label} style={s.termsRow}>
+              <Text style={s.termsLabel}>{label}</Text>
+              {override != null
+                ? <Text style={s.termsValue}>{override}</Text>
+                : <Text style={s.termsValueDefault}>{effective ?? —""} <Text style={s.termsValueDefaultHint}>(padrão)</Text></Text>
+              }
+            </View>
+          ))}
+        </View>
+      )}
+
+      {!editing && !ov && !profileQ.isLoading && (
+        <Text style={s.termsHint}>Todas as condições seguem o padrão da loja. Toque em Editar para personalizar.</Text>
+      )}
+
+      {editing && (
+        <View style={s.termsEditForm}>
+          {/* Juros ao mês */}
+          <View style={s.termsField}>
+            <Text style={s.termsFieldLabel}>Juros ao mês % <Text style={s.termsFieldHint}>(vazio = padrão {ef?.interest_rate != null ? `${(ef.interest_rate * 100).toFixed(2)}%` : ""})</Text></Text>
+            <TextInput
+              style={s.termsInput}
+              value={interestRate}
+              onChangeText={setInterestRate}
+              placeholder="Ex: 2,50"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          {/* Prazo máximo */}
+          <View style={s.termsField}>
+            <Text style={s.termsFieldLabel}>Prazo máximo (parcelas) <Text style={s.termsFieldHint}>(vazio = padrão {ef?.max_installments ?? ""}x)</Text></Text>
+            <TextInput
+              style={s.termsInput}
+              value={maxInstallments}
+              onChangeText={v => setMaxInstallments(v.replace(/\D/g, ""))}
+              placeholder="Ex: 12"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="numeric"
+            />
+          </View>
+          {/* Periodicidade */}
+          <Text style={s.termsFieldLabel}>Periodicidade <Text style={s.termsFieldHint}>(vazio = padrão loja)</Text></Text>
+          <View style={s.termsPeriodChips}>
+            {PERIOD_OPTS.map(([k, lbl]) => (
+              <Pressable
+                key={k}
+                onPress={() => setPeriodKind(k)}
+                style={[s.termsPeriodChip, periodKind === k && s.termsPeriodChipOn]}
+              >
+                <Text style={[s.termsPeriodChipTxt, periodKind === k && s.termsPeriodChipTxtOn]}>{lbl}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {periodKind === "custom" && (
+            <View style={s.termsCustomDaysRow}>
+              <Text style={s.termsCustomDaysLbl}>A cada</Text>
+              <TextInput
+                style={s.termsCustomDaysInput}
+                value={periodDays}
+                keyboardType="numeric"
+                onChangeText={v => setPeriodDays(v.replace(/\D/g, "").slice(0, 3))}
+              />
+              <Text style={s.termsCustomDaysLbl}>dias</Text>
+            </View>
+          )}
+          {/* Dia de vencimento */}
+          <View style={s.termsField}>
+            <Text style={s.termsFieldLabel}>Dia de vencimento (1-31) <Text style={s.termsFieldHint}>(vazio = padrão)</Text></Text>
+            <TextInput
+              style={s.termsInput}
+              value={dueDay}
+              onChangeText={v => setDueDay(v.replace(/\D/g, "").slice(0, 2))}
+              placeholder="Ex: 10"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="numeric"
+            />
+          </View>
+          {/* Multa */}
+          <View style={s.termsField}>
+            <Text style={s.termsFieldLabel}>Multa % <Text style={s.termsFieldHint}>(vazio = padrão {ef?.late_fee_rate != null ? `${(ef.late_fee_rate * 100).toFixed(2)}%` : ""})</Text></Text>
+            <TextInput
+              style={s.termsInput}
+              value={lateFeeRate}
+              onChangeText={setLateFeeRate}
+              placeholder="Ex: 2,00"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          {/* Juros de mora */}
+          <View style={s.termsField}>
+            <Text style={s.termsFieldLabel}>Juros de mora %/dia <Text style={s.termsFieldHint}>(vazio = padrão {ef?.late_interest_daily != null ? `${(ef.late_interest_daily * 100).toFixed(4)}%` : ""})</Text></Text>
+            <TextInput
+              style={s.termsInput}
+              value={lateInterestDaily}
+              onChangeText={setLateInterestDaily}
+              placeholder="Ex: 0,0333"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          <View style={s.termsBtnRow}>
+            <Pressable style={s.termsCancelBtn} onPress={() => setEditing(false)}>
+              <Text style={s.termsCancelBtnTxt}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              style={[s.termsSaveBtn, termsMut.isPending && { opacity: 0.6 }]}
+              onPress={handleSave}
+              disabled={termsMut.isPending}
+            >
+              {termsMut.isPending
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={s.termsSaveBtnTxt}>Salvar condições</Text>
+              }
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Tela principal ─────────────────────────────────────────
 export default function CrediarioClienteScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const { company } = useAuthStore();
@@ -332,7 +577,6 @@ export default function CrediarioClienteScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Parcelado profile
   const profileQ = useQuery({
     queryKey: ["credit-profile", company?.id, id],
     queryFn: () => creditApi.getCustomerProfile(company!.id, id),
@@ -340,7 +584,6 @@ export default function CrediarioClienteScreen() {
     staleTime: 30_000,
   });
 
-  // Fiado legado
   const historyQ = useQuery({
     queryKey: ["credit-history", company?.id, id],
     queryFn: () => creditApi.getCustomerHistory(company!.id, id),
@@ -348,7 +591,6 @@ export default function CrediarioClienteScreen() {
     staleTime: 30_000,
   });
 
-  // Baixa de parcela — F3-3C: passa payment_method para applyPayment via creditLedger
   const payMut = useMutation({
     mutationFn: ({ iid, amount, method }: { iid: string; amount: number; method: string }) =>
       creditApi.payInstallment(company!.id, iid, { amount_paid: amount, payment_method: method }),
@@ -361,7 +603,6 @@ export default function CrediarioClienteScreen() {
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao dar baixa na parcela"),
   });
 
-  // Pagamento fiado — valor livre, applyPayment via creditLedger
   const fiadoMut = useMutation({
     mutationFn: ({ amount, method }: { amount: number; method: string }) =>
       creditApi.receivePayment(company!.id, id, { amount, payment_method: method }),
@@ -375,7 +616,6 @@ export default function CrediarioClienteScreen() {
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao registrar recebimento"),
   });
 
-  // Bloquear/desbloquear
   const blockMut = useMutation({
     mutationFn: ({ action, reason }: { action: "block" | "unblock"; reason?: string }) =>
       creditApi.blockCustomer(company!.id, id, action, reason),
@@ -387,7 +627,6 @@ export default function CrediarioClienteScreen() {
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao alterar status"),
   });
 
-  // Cobrança via WhatsApp (wa.me deep link)
   const collectMut = useMutation({
     mutationFn: (installmentId: string) =>
       creditApi.triggerCollection(company!.id, installmentId),
@@ -420,12 +659,9 @@ export default function CrediarioClienteScreen() {
   const trafficColor = TRAFFIC_LIGHT_COLORS[trafficLight];
   const scoreLabel = profile?.label ? (SCORE_LABEL_MAP[profile.label] || profile.label) : null;
   const scoreLabelColor = profile?.label ? (SCORE_COLORS[profile.label] || Colors.ink3) : Colors.ink3;
-
-  // F3-3C: usa installmentRemaining (covered_amount) como fonte de verdade
   const totalOpenInstallmentsAmount = openInstallments.reduce(
     (sum, i) => sum + installmentRemaining(i), 0
   );
-
   const isLoading = profileQ.isLoading;
 
   return (
@@ -444,7 +680,6 @@ export default function CrediarioClienteScreen() {
             <Text style={s.backText}>Crediário</Text>
           </Pressable>
 
-          {/* 3-pontinhos */}
           <View style={{ position: "relative" }}>
             <Pressable style={s.menuBtn} onPress={() => setMenuOpen(v => !v)}>
               <Icon name="more" size={18} color={Colors.ink3} />
@@ -466,7 +701,7 @@ export default function CrediarioClienteScreen() {
           </View>
         </View>
 
-        {/* Identidade do cliente */}
+        {/* Identidade */}
         <View style={s.clientHeader}>
           <View style={s.clientAvatarBox}>
             <Text style={s.clientAvatarText}>
@@ -475,7 +710,6 @@ export default function CrediarioClienteScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.clientName} numberOfLines={1}>{name || "Cliente"}</Text>
-            {/* Semáforo */}
             <View style={s.trafficRow}>
               <View style={[s.trafficDot, { backgroundColor: trafficColor }]} />
               <Text style={[s.trafficLabel, { color: trafficColor }]}>
@@ -499,11 +733,10 @@ export default function CrediarioClienteScreen() {
 
         {!isLoading && profile && (
           <>
-            {/* Seção: Resumo */}
+            {/* Resumo */}
             <View style={s.sectionCard}>
               <Text style={s.sectionTitle}>Resumo</Text>
 
-              {/* Saldo fiado legado */}
               {history && (
                 <View style={s.resumeRow}>
                   <View style={s.resumeLeft}>
@@ -516,7 +749,6 @@ export default function CrediarioClienteScreen() {
                 </View>
               )}
 
-              {/* Parcelas abertas */}
               <View style={[s.resumeRow, { marginTop: history ? 12 : 0 }]}>
                 <View style={s.resumeLeft}>
                   <Text style={s.resumeLabel}>Parcelas abertas</Text>
@@ -532,7 +764,6 @@ export default function CrediarioClienteScreen() {
                 </Text>
               </View>
 
-              {/* Score label */}
               {scoreLabel && (
                 <View style={[s.scoreBadge, { backgroundColor: scoreLabelColor + "18", borderColor: scoreLabelColor + "44" }]}>
                   <View style={[s.scoreDot, { backgroundColor: scoreLabelColor }]} />
@@ -541,12 +772,16 @@ export default function CrediarioClienteScreen() {
               )}
             </View>
 
-            {/* Seção: Parcelas em aberto */}
+            {/* F2: Condições do cliente */}
+            {company?.id && id && (
+              <TermsCard companyId={company.id} customerId={id} />
+            )}
+
+            {/* Parcelas em aberto */}
             {openInstallments.length > 0 && (
               <View style={s.sectionCard}>
                 <Text style={s.sectionTitle}>Parcelas em aberto</Text>
                 {openInstallments.map((inst) => {
-                  // F3-3C: remaining usa covered_amount (FIFO) como fonte de verdade
                   const remaining = installmentRemaining(inst);
                   const late = inst.status === "overdue" ? daysLate(inst.due_date) : 0;
                   const isOverdue = inst.status === "overdue";
@@ -582,7 +817,6 @@ export default function CrediarioClienteScreen() {
                           </Text>
                         </View>
                         <View style={s.installmentActions}>
-                          {/* Botão WhatsApp — só para parcelas vencidas */}
                           {isOverdue && (
                             <Pressable
                               style={[s.waBtn, isCollecting && { opacity: 0.6 }]}
@@ -616,7 +850,7 @@ export default function CrediarioClienteScreen() {
               </View>
             )}
 
-            {/* Seção: Histórico (colapsável) */}
+            {/* Histórico (colapsável) */}
             {history && (
               <View style={s.sectionCard}>
                 <Pressable
@@ -668,7 +902,6 @@ export default function CrediarioClienteScreen() {
           </>
         )}
 
-        {/* Espaço pra o rodapé fixo não cobrir conteúdo */}
         <View style={{ height: 90 }} />
       </ScrollView>
 
@@ -685,7 +918,6 @@ export default function CrediarioClienteScreen() {
         </View>
       )}
 
-      {/* Overlay para fechar o menu de 3 pontos */}
       {menuOpen && (
         <Pressable
           style={StyleSheet.absoluteFillObject}
@@ -693,7 +925,6 @@ export default function CrediarioClienteScreen() {
         />
       )}
 
-      {/* Modais */}
       {payingInstallment && (
         <PayInstallmentModal
           installment={payingInstallment}
@@ -724,7 +955,7 @@ export default function CrediarioClienteScreen() {
   );
 }
 
-// ─── Estilos da tela ─────────────────────────────────────────
+// ─── Estilos ─────────────────────────────────────────────────
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 24, maxWidth: 720, alignSelf: "center", width: "100%" },
@@ -747,10 +978,7 @@ const s = StyleSheet.create({
   },
   menuItemText: { fontSize: 13, fontWeight: "600" },
 
-  clientHeader: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    marginBottom: 20,
-  },
+  clientHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 },
   clientAvatarBox: {
     width: 52, height: 52, borderRadius: 16,
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
@@ -770,10 +998,17 @@ const s = StyleSheet.create({
     backgroundColor: Colors.bg3, borderRadius: 16, padding: 16,
     borderWidth: 1, borderColor: Colors.border, marginBottom: 14,
   },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
   sectionTitle: {
     fontSize: 10, fontWeight: "800", color: Colors.ink3,
-    letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 14,
+    letterSpacing: 0.8, textTransform: "uppercase",
   },
+  editBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  editBtnTxt: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
 
   // Resumo
   resumeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -788,6 +1023,37 @@ const s = StyleSheet.create({
   },
   scoreDot: { width: 7, height: 7, borderRadius: 3.5 },
   scoreBadgeText: { fontSize: 11.5, fontWeight: "700" },
+
+  // F2: Termos
+  termsGrid: { gap: 10 },
+  termsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  termsLabel: { fontSize: 12, color: Colors.ink3 },
+  termsValue: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  termsValueDefault: { fontSize: 12, color: Colors.ink3 },
+  termsValueDefaultHint: { fontSize: 11, color: Colors.ink3 },
+  termsHint: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  termsEditForm: { gap: 0 },
+  termsField: { marginTop: 12 },
+  termsFieldLabel: { fontSize: 11, fontWeight: "600", color: Colors.ink2, marginBottom: 5 },
+  termsFieldHint: { fontWeight: "400", color: Colors.ink3 },
+  termsInput: {
+    borderWidth: 1, borderColor: Colors.border2, borderRadius: 9,
+    paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: Colors.ink,
+    backgroundColor: Colors.bg2,
+  },
+  termsPeriodChips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 6 },
+  termsPeriodChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
+  termsPeriodChipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  termsPeriodChipTxt: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
+  termsPeriodChipTxtOn: { color: "#fff" },
+  termsCustomDaysRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, padding: 9 },
+  termsCustomDaysLbl: { fontSize: 13, color: Colors.ink2, fontWeight: "600" },
+  termsCustomDaysInput: { width: 55, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 7, paddingVertical: 6, textAlign: "center", color: Colors.ink, fontWeight: "800", fontSize: 13 },
+  termsBtnRow: { flexDirection: "row", gap: 10, marginTop: 16 },
+  termsCancelBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  termsCancelBtnTxt: { fontSize: 13, fontWeight: "600", color: Colors.ink3 },
+  termsSaveBtn: { flex: 2, paddingVertical: 11, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center" },
+  termsSaveBtnTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
 
   // Parcelas
   installmentRow: {
@@ -821,7 +1087,6 @@ const s = StyleSheet.create({
   },
   emptyInstallmentsText: { fontSize: 13, color: Colors.green, fontWeight: "600" },
 
-  // Histórico
   historyToggleRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     marginBottom: 0,
@@ -836,7 +1101,6 @@ const s = StyleSheet.create({
   txDate: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
   txAmount: { fontSize: 13, fontWeight: "700" },
 
-  // Rodapé
   footer: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     padding: 16, paddingBottom: Platform.OS === "ios" ? 32 : 16,
@@ -851,7 +1115,6 @@ const s = StyleSheet.create({
   footerBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
 
-// ─── Estilos dos modais ──────────────────────────────────────
 const pm = StyleSheet.create({
   backdrop: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.55)",
