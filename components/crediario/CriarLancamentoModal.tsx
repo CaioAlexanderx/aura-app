@@ -2,6 +2,11 @@
 // AURA. — CriarLancamentoModal
 // Modal 2 etapas: seleção de cliente + detalhes do lançamento.
 // Usado na tela de Crediário para criar débitos manuais sem venda.
+//
+// 05/06/2026: campo "Data do lançamento" (default hoje, SP). Permite
+//   registrar uma compra fiado retroativa (ex.: levou mercadoria ontem,
+//   lançado hoje com a data de ontem). Envia entry_date -> backdata o
+//   created_at do débito no ledger.
 // ============================================================
 import { useState, useCallback, useRef } from "react";
 import {
@@ -22,7 +27,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, type ManualEntryPayload } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
-import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
+import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 type Step = "customer" | "details";
 type Mode = "search" | "create";
@@ -70,6 +75,12 @@ function defaultDueDate(): string {
   return `${day}/${month}/${year}`;
 }
 
+// Hoje em America/Sao_Paulo no formato dd/mm/aaaa (default da data do lançamento).
+function todayBrSp(): string {
+  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD
+  return formatIsoToBr(iso);
+}
+
 export function CriarLancamentoModal({ visible, onClose }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -94,6 +105,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [installments, setInstallments] = useState("1");
   const [interestRate, setInterestRate] = useState("");
   const [firstDueDate, setFirstDueDate] = useState(defaultDueDate());
+  const [entryDate, setEntryDate]       = useState(todayBrSp());
   const [description, setDescription]   = useState("");
 
   const reset = useCallback(() => {
@@ -108,6 +120,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setInstallments("1");
     setInterestRate("");
     setFirstDueDate(defaultDueDate());
+    setEntryDate(todayBrSp());
     setDescription("");
   }, []);
 
@@ -162,6 +175,12 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     const firstDue = parseBrDate(firstDueDate) || undefined;
     if (firstDueDate && !firstDue) { toast.error("Data inválida — use dd/mm/aaaa"); return; }
 
+    const entryIso = parseBrDate(entryDate) || undefined;
+    if (entryDate && entryDate.length === 10 && !entryIso) {
+      toast.error("Data do lançamento inválida — use dd/mm/aaaa");
+      return;
+    }
+
     let rate: number | undefined;
     if (interestRate.trim()) {
       rate = parseFloat(interestRate.replace(",", ".")) / 100;
@@ -177,6 +196,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       installments:  n,
       interest_rate: rate,
       first_due_date: firstDue,
+      entry_date:    entryIso,
       description:   description.trim() || undefined,
     };
 
@@ -381,6 +401,17 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   />
                 </View>
 
+                <Text style={s.label}>Data do lançamento</Text>
+                <DateInput
+                  style={s.input}
+                  value={entryDate}
+                  onChangeText={setEntryDate}
+                  placeholder="dd/mm/aaaa"
+                />
+                <Text style={s.dateHint}>
+                  Quando a compra foi feita. Use uma data anterior para lançar retroativo.
+                </Text>
+
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.label}>Parcelas</Text>
@@ -558,6 +589,7 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: 20, paddingBottom: 24 },
   label: { fontSize: 12, fontWeight: "600", color: Colors.ink2, marginBottom: 6, marginTop: 14 },
   labelOptional: { fontWeight: "400", color: Colors.ink3 },
+  dateHint: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
   input: {
     borderWidth: 1,
     borderColor: Colors.border2,
