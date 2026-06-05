@@ -8,6 +8,31 @@
  * dentro do POST /pdv/sale (bloco best-effort após COMMIT).
  * O step de "criação via API separada" foi removido — evita double-create.
  *
+ * BUGFIX (05/06/2026): RangeError "Invalid time value" quando o usuário
+ * digitava data parcial no input livre `firstDueDate`. Causa raiz:
+ *   - input era TextInput puro, sem máscara, com placeholder "AAAA-MM-DD"
+ *   - usuário apaga/edita → string vira algo como "2026-0" / "" / "abc"
+ *   - useMemo de simInstallments faz `new Date(firstDueDate).toISOString()`
+ *     dentro do Array.from → Invalid Date → toISOString joga RangeError
+ *     → ErrorBoundary engole o modal inteiro (incluindo saldo em aberto)
+ *
+ * Fix:
+ *   1. Input agora usa <DateInput/> com máscara dd/mm/aaaa (padrão BR)
+ *   2. State interno guarda firstDueDateBr (dd/mm/aaaa) e firstDueDateIso
+ *      (YYYY-MM-DD) derivado via parseBrDate — null se inválido/incompleto
+ *   3. simInstallments retorna [] se ISO null (não tenta new Date)
+ *   4. Camada extra defensiva: `safeIso(date)` checa `Number.isNaN` antes
+ *      de chamar toISOString (cobre paste/autocomplete/outras fontes)
+ *   5. Submit bloqueado se ISO null (botão Confirmar disabled + forceShow)
+ *
+ * BUGFIX (05/06/2026, Parte 2): saldo em aberto da cliente não aparecia.
+ * Causa: modal só mostrava `profile.credit_used`, que (a) podia estar
+ * stale, (b) virava 0 quando o profile não existia, (c) o modal nem
+ * renderizava quando o crash de data acima estourava no useMemo.
+ * Fix: agregar `profile.open_installments[].remaining` (campo que o
+ * backend já devolve) em `openBalance` + `openCount` e exibir como
+ * linha destacada "Saldo em aberto" — sempre visível, mesmo sem profile.
+ *
  * Props:
  *   visible        — controla visibilidade
  *   companyId      — empresa atual
@@ -23,6 +48,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { creditApi } from "@/services/creditApi";
+import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 type ConfirmPayload = {
   installments: number;
@@ -43,10 +69,30 @@ var fmtCur = function(n: number) {
   return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-var fmtDate = function(iso: string) {
-  try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }); }
-  catch { return iso; }
-};
+/**
+ * Formata uma data (Date ou ISO YYYY-MM-DD) como dd/mm/aa para preview.
+ * Retorna "—" se a data for inválida (evita "Invalid Date" no preview).
+ */
+function fmtDateSafe(input: Date | string | null | undefined): string {
+  if (!input) return "—";
+  try {
+    const d = input instanceof Date ? input : new Date(input);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  } catch {
+    return "—";
+  }
+}
+
+/** Retorna ISO YYYY-MM-DD se a Date for válida, senão null. NUNCA joga. */
+function safeIsoDate(d: Date): string | null {
+  if (!d || Number.isNaN(d.getTime())) return null;
+  try {
+    return d.toISOString().split("T")[0];
+  } catch {
+    return null;
+  }
+}
 
 const SCORE_LABEL: Record<string, string> = {
   premium: "Premium ★", bom: "Bom", regular: "Regular", restrito: "Restrito ⚠️", bloqueado: "Bloqueado 🚫",
@@ -56,24 +102,33 @@ const SCORE_COLOR: Record<string, string> = {
   premium: Colors.green, bom: "#34d399", regular: Colors.amber, restrito: "#f97316", bloqueado: Colors.red,
 };
 
-function nextMonthDate(): string {
+/** Próximo mês em dd/mm/aaaa — formato BR do nosso DateInput. */
+function nextMonthBrDate(): string {
   var d = new Date();
   d.setMonth(d.getMonth() + 1);
-  return d.toISOString().split("T")[0];
+  // safe: new Date() sempre válida
+  var iso = safeIsoDate(d);
+  return formatIsoToBr(iso) || "";
 }
 
 export function CreditInstallmentModal({ visible, companyId, customerId, customerName, totalAmount, onConfirm, onClose }: Props) {
   const [step, setStep] = useState(1);
   const [numInstallments, setNumInstallments] = useState(2);
-  const [firstDueDate, setFirstDueDate] = useState(() => nextMonthDate());
+  // BR-formatted (dd/mm/aaaa) — fonte de verdade do que o usuário digita.
+  const [firstDueDateBr, setFirstDueDateBr] = useState(() => nextMonthBrDate());
   const [amount, setAmount] = useState(totalAmount?.toFixed(2) || "");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  // ISO derivado da string BR — null se inválido/incompleto.
+  const firstDueDateIso = useMemo(() => parseBrDate(firstDueDateBr), [firstDueDateBr]);
 
   // Resetar quando abre
   useEffect(() => {
     if (visible) {
       setStep(1);
       setNumInstallments(2);
-      setFirstDueDate(nextMonthDate());
+      setFirstDueDateBr(nextMonthBrDate());
+      setSubmitAttempted(false);
       if (totalAmount !== undefined) setAmount(totalAmount.toFixed(2));
     }
   }, [visible, totalAmount]);
@@ -93,23 +148,42 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
   const available = profile ? (Number(profile.credit_limit) - Number(profile.credit_used)) : 0;
   const isBlocked = profile?.status === "blocked";
 
-  // Simular parcelas
+  // Saldo em aberto agregado das parcelas pendentes/overdue (fonte canônica).
+  // Backend já devolve `profile.open_installments[].remaining`. Não dependemos
+  // mais de `profile.credit_used` (que pode estar stale ou ausente sem profile).
+  const { openBalance, openCount, openOverdueCount } = useMemo(() => {
+    const list = profile?.open_installments || [];
+    let sum = 0;
+    let overdue = 0;
+    for (const ins of list) {
+      const rem = Number((ins as any).remaining);
+      if (!Number.isFinite(rem)) continue;
+      sum += rem;
+      if (ins.status === "overdue") overdue += 1;
+    }
+    return { openBalance: sum, openCount: list.length, openOverdueCount: overdue };
+  }, [profile]);
+
+  // Simular parcelas — defensivo: skip se ISO inválido (impede Invalid time value).
   const simInstallments = useMemo(() => {
     if (!totalNum || numInstallments < 1) return [];
+    if (!firstDueDateIso) return []; // <-- fix do crash: sem ISO válido, não simula
     var base = Math.floor(totalNum / numInstallments * 100) / 100;
     var remainder = Math.round((totalNum - base * numInstallments) * 100) / 100;
-    var firstDate = new Date(firstDueDate);
+    var firstDate = new Date(firstDueDateIso);
+    if (Number.isNaN(firstDate.getTime())) return []; // dupla checagem
     return Array.from({ length: numInstallments }, (_, i) => {
       var amt = i === numInstallments - 1 ? base + remainder : base;
       var d = new Date(firstDate);
       d.setMonth(d.getMonth() + i);
-      return { num: i + 1, amount: amt, date: d.toISOString().split("T")[0] };
+      var iso = safeIsoDate(d); // safe: nunca joga
+      return { num: i + 1, amount: amt, date: iso, dateBr: fmtDateSafe(d) };
     });
-  }, [totalNum, numInstallments, firstDueDate]);
+  }, [totalNum, numInstallments, firstDueDateIso]);
 
   function canProceed() {
     if (step === 1) return !profileQ.isLoading && !isBlocked;
-    if (step === 2) return totalNum > 0 && numInstallments >= 1 && !!firstDueDate;
+    if (step === 2) return totalNum > 0 && numInstallments >= 1 && !!firstDueDateIso;
     return false;
   }
 
@@ -117,21 +191,14 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
     if (step === 1) {
       setStep(2);
     } else if (step === 2) {
+      setSubmitAttempted(true);
+      if (!firstDueDateIso) return; // bloqueia submit com data inválida
       // Apenas devolve os dados — o backend cria as parcelas no POST /pdv/sale
-      onConfirm({ installments: numInstallments, first_due_date: firstDueDate });
+      onConfirm({ installments: numInstallments, first_due_date: firstDueDateIso });
     }
   }
 
   if (!visible) return null;
-
-  // Resumo compacto das parcelas (preview inline)
-  const previewText = simInstallments.length > 0
-    ? simInstallments
-        .slice(0, 4)
-        .map(ins => `${ins.num}ª ${fmtCur(ins.amount)} · ${fmtDate(ins.date)}`)
-        .join("  •  ")
-        + (simInstallments.length > 4 ? ` ... +${simInstallments.length - 4} parcelas` : "")
-    : null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -171,6 +238,30 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                   </View>
                 )}
 
+                {/* Saldo em aberto — SEMPRE visível quando há parcelas pendentes,
+                    independente do profile estar configurado ou não. */}
+                {!profileQ.isLoading && openCount > 0 && (
+                  <View style={[m.openBalanceCard, openOverdueCount > 0 && m.openBalanceCardOverdue]}>
+                    <View style={m.openBalanceHeader}>
+                      <Icon
+                        name={openOverdueCount > 0 ? "alert" : "clock"}
+                        size={14}
+                        color={openOverdueCount > 0 ? Colors.red : Colors.amber}
+                      />
+                      <Text style={[m.openBalanceLabel, openOverdueCount > 0 && { color: Colors.red }]}>
+                        Saldo em aberto
+                      </Text>
+                    </View>
+                    <Text style={[m.openBalanceValue, openOverdueCount > 0 && { color: Colors.red }]}>
+                      {fmtCur(openBalance)}
+                    </Text>
+                    <Text style={m.openBalanceDetail}>
+                      {openCount} parcela{openCount === 1 ? "" : "s"} pendente{openCount === 1 ? "" : "s"}
+                      {openOverdueCount > 0 ? ` · ${openOverdueCount} em atraso` : ""}
+                    </Text>
+                  </View>
+                )}
+
                 {!profileQ.isLoading && profile && (
                   <>
                     <View style={m.profileCard}>
@@ -182,14 +273,19 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                           </Text>
                         </View>
                       </View>
-                      <View style={m.profileRow}>
-                        <Text style={m.profileLabel}>Limite disponível</Text>
-                        <Text style={[m.profileValue, { color: Colors.green }]}>{fmtCur(available)}</Text>
-                      </View>
-                      <View style={m.profileRow}>
-                        <Text style={m.profileLabel}>Em uso</Text>
-                        <Text style={m.profileValue}>{fmtCur(Number(profile.credit_used))}</Text>
-                      </View>
+                      {Number(profile.credit_limit) > 0 && (
+                        <View style={m.profileRow}>
+                          <Text style={m.profileLabel}>Limite disponível</Text>
+                          <Text style={[m.profileValue, { color: Colors.green }]}>{fmtCur(available)}</Text>
+                        </View>
+                      )}
+                      {/* "Em uso" continua só por compatibilidade visual quando há limite */}
+                      {Number(profile.credit_limit) > 0 && (
+                        <View style={m.profileRow}>
+                          <Text style={m.profileLabel}>Em uso</Text>
+                          <Text style={m.profileValue}>{fmtCur(Number(profile.credit_used))}</Text>
+                        </View>
+                      )}
                     </View>
 
                     {isBlocked && (
@@ -201,7 +297,7 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                   </>
                 )}
 
-                {!profileQ.isLoading && !profile && (
+                {!profileQ.isLoading && !profile && openCount === 0 && (
                   <View style={[m.alertBox, { borderColor: Colors.violet + "33", backgroundColor: Colors.violetD }]}>
                     <Icon name="clock" size={14} color={Colors.violet3} />
                     <Text style={[m.alertText, { color: Colors.violet3 }]}>Perfil sem limite configurado. O parcelamento será criado automaticamente.</Text>
@@ -251,12 +347,12 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                 {/* Data da 1ª parcela */}
                 <View style={m.fieldWrap}>
                   <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
-                  <TextInput
-                    style={m.fieldInput}
-                    value={firstDueDate}
-                    onChangeText={setFirstDueDate}
-                    placeholder="AAAA-MM-DD"
-                    placeholderTextColor={Colors.ink3}
+                  <DateInput
+                    value={firstDueDateBr}
+                    onChangeText={setFirstDueDateBr}
+                    placeholder="dd/mm/aaaa"
+                    forceShowError={submitAttempted && !firstDueDateIso}
+                    errorMessage="Informe uma data válida (dd/mm/aaaa)."
                   />
                 </View>
 
@@ -267,7 +363,7 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                     {simInstallments.map(ins => (
                       <View key={ins.num} style={m.simRow}>
                         <Text style={m.simNum}>{ins.num}ª</Text>
-                        <Text style={m.simDate}>{fmtDate(ins.date)}</Text>
+                        <Text style={m.simDate}>{ins.dateBr}</Text>
                         <Text style={m.simAmt}>{fmtCur(ins.amount)}</Text>
                       </View>
                     ))}
@@ -325,6 +421,24 @@ const m = StyleSheet.create({
 
   loadingBox: { paddingVertical: 32, alignItems: "center", gap: 10 },
   loadingText: { fontSize: 12, color: Colors.ink3 },
+
+  // Saldo em aberto — card destacado (laranja/âmbar quando só pendente, vermelho com overdue)
+  openBalanceCard: {
+    backgroundColor: Colors.amber + "10",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.amber + "44",
+    gap: 4,
+  },
+  openBalanceCardOverdue: {
+    backgroundColor: Colors.redD,
+    borderColor: Colors.red + "55",
+  },
+  openBalanceHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  openBalanceLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase", color: Colors.amber },
+  openBalanceValue: { fontSize: 22, fontWeight: "800", color: Colors.amber, marginTop: 2 },
+  openBalanceDetail: { fontSize: 11, color: Colors.ink3 },
 
   profileCard: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 10 },
   profileRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
