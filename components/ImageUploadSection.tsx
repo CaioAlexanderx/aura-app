@@ -57,12 +57,12 @@ export function ImageUploadSection({ productId, currentImageUrl, onImageChange }
         if (res.ok && data.image_url) {
           setImageUrl(data.image_url);
           onImageChange?.(data.image_url);
-          toast.success("Imagem salva!");
+          toast.success("Imagem carregada com sucesso");
         } else {
-          toast.error(data.error || "Erro ao salvar imagem");
+          toast.error(data.error || "Falha ao carregar imagem");
         }
       } catch {
-        toast.error("Erro ao fazer upload");
+        toast.error("Falha ao carregar imagem");
       } finally { setUploading(false); }
     };
 
