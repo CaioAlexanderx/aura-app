@@ -22,6 +22,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, type ManualEntryPayload } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
+import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
 
 type Step = "customer" | "details";
 type Mode = "search" | "create";
@@ -58,19 +59,8 @@ function fmtPhone(v: string): string {
   return d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
 }
 
-function fmtDate(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
-}
-
-function parseDateInput(v: string): string | undefined {
-  const d = v.replace(/\D/g, "");
-  if (d.length < 8) return undefined;
-  return `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}`;
-}
-
+// Helpers de data agora vêm de @/components/inputs/DateInput (padrão único do app).
+// Mantemos só defaultDueDate local porque é específico desse modal (1 mês à frente).
 function defaultDueDate(): string {
   const d = new Date();
   d.setMonth(d.getMonth() + 1);
@@ -169,8 +159,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     const n = parseInt(installments, 10) || 1;
     if (n < 1 || n > 36) { toast.error("Parcelas: 1 a 36"); return; }
 
-    const firstDue = parseDateInput(firstDueDate);
-    if (firstDueDate && !firstDue) { toast.error("Data inválida — use DD/MM/AAAA"); return; }
+    const firstDue = parseBrDate(firstDueDate) || undefined;
+    if (firstDueDate && !firstDue) { toast.error("Data inválida — use dd/mm/aaaa"); return; }
 
     let rate: number | undefined;
     if (interestRate.trim()) {
@@ -408,13 +398,11 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.label}>1º vencimento</Text>
-                    <TextInput
+                    <DateInput
                       style={s.input}
-                      placeholder="DD/MM/AAAA"
-                      placeholderTextColor={Colors.ink3}
                       value={firstDueDate}
-                      onChangeText={(v) => setFirstDueDate(fmtDate(v))}
-                      keyboardType="numeric"
+                      onChangeText={setFirstDueDate}
+                      placeholder="dd/mm/aaaa"
                     />
                   </View>
                 </View>
