@@ -5,19 +5,54 @@
 //   - Toggle "Exigir sinal pago para iniciar produção" (opt-in, default off)
 //   - lê require_deposit_for_production de studioApi.getSettings (ao invés de health)
 //   - salva via studioApi.saveSettings no mesmo save() existente
+//
+// 05/06/2026 (#7 Equipe & acessos):
+//   - Card "Equipe & acessos" com MembersSection reutilizado do varejo
+//   - Gate negocio+: plano essencial vê upsell, negocio/expansao/personalizado
+//     veem o componente completo (mesma lógica de fallback do varejo)
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
   TextInput, Switch,
 } from "react-native";
+import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { MembersSection } from "@/components/MembersSection";
 import { useStudioTokens, useStudioTheme, type StudioThemeMode } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { studioApi, type StudioHealth } from "@/services/studioApi";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+
+// ============================================================
+// EQUIPE GATE — upsell para plano Essencial
+// Espelha o padrão do varejo (EquipeGate em app/(tabs)/configuracoes.tsx)
+// mas com tematização Studio (tokens navy/magenta).
+// ============================================================
+function EquipeGateStudio({ t }: { t: ReturnType<typeof useStudioTokens> }) {
+  const eg = useMemo(() => StyleSheet.create({
+    wrap:      { backgroundColor: t.bgSoft, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: t.ink5, gap: 10 },
+    row:       { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 10 },
+    label:     { fontSize: 13, color: t.ink3, flex: 1, lineHeight: 18 },
+    badge:     { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, alignSelf: "flex-start" as const, backgroundColor: t.paperCardElev, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: t.ink5 },
+    badgeText: { fontSize: 11, color: t.ink3, fontWeight: "600" as const },
+  }), [t]);
+
+  return (
+    <View style={eg.wrap}>
+      <View style={eg.row}>
+        <Icon name="users" size={16} color={t.ink3} />
+        <Text style={eg.label}>Convide sua equipe e defina permissões de acesso por módulo.</Text>
+      </View>
+      <Pressable onPress={() => router.push("/(tabs)/planos")} style={eg.badge}>
+        <Icon name="lock" size={11} color={t.ink3} />
+        <Text style={eg.badgeText}>A partir do plano Negócio</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function StudioConfiguracoes() {
   const { company } = useAuthStore();
@@ -36,6 +71,15 @@ export default function StudioConfiguracoes() {
   const [approvalMode, setApprovalMode] = useState<"wa_me" | "whatsapp_business">("wa_me");
   // P1: gate de produção por sinal (opt-in, default false)
   const [requireDeposit, setRequireDeposit] = useState(false);
+
+  // ============================================================
+  // Gate equipe: negocio+ libera MembersSection.
+  // Lógica idêntica ao fallback do varejo (sem fetch billing aqui
+  // — Studio config é uma tela leve; o próprio MembersSection já
+  // busca /members/billing internamente quando montado).
+  // ============================================================
+  const plan = company?.plan || "essencial";
+  const hasTeamCapacity = plan !== "essencial";
 
   const load = useCallback(async () => {
     if (!company?.id) return;
@@ -177,7 +221,7 @@ export default function StudioConfiguracoes() {
           <View style={{ flex: 1 }}>
             <Text style={s.toggleLabel}>Exigir sinal pago para iniciar produção</Text>
             <Text style={s.toggleSub}>
-              Quando ativo, o pedido não avança para “Em produção” sem sinal confirmado. O lojista pode forçar manualmente caso a caso.
+              Quando ativo, o pedido não avança para "Em produção" sem sinal confirmado. O lojista pode forçar manualmente caso a caso.
             </Text>
           </View>
           <Switch
@@ -197,7 +241,7 @@ export default function StudioConfiguracoes() {
         <View style={s.toggleRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.toggleLabel}>Habilitar fluxo de aprovação</Text>
-            <Text style={s.toggleSub}>Pedidos personalizados ficam em “Aguardando arte” até aprovação</Text>
+            <Text style={s.toggleSub}>Pedidos personalizados ficam em "Aguardando arte" até aprovação</Text>
           </View>
           <Switch value={approvalEnabled} onValueChange={setApprovalEnabled} trackColor={{ false: t.ink5, true: t.primary }} thumbColor="#fff" />
         </View>
@@ -227,6 +271,18 @@ export default function StudioConfiguracoes() {
             </View>
           </View>
         )}
+      </View>
+
+      {/* Equipe & acessos */}
+      <View style={s.card}>
+        <Text style={s.cardTitle}>Equipe & acessos</Text>
+        <Text style={s.cardSub}>
+          Convide colaboradores, defina permissões por módulo e gerencie quem acessa o Studio.
+        </Text>
+        {hasTeamCapacity
+          ? <MembersSection />
+          : <EquipeGateStudio t={t} />
+        }
       </View>
 
       {/* Save */}
