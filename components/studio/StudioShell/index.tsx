@@ -5,7 +5,6 @@
 // `components/studio/StudioShell/`. Este index só orquestra:
 //   - Provider StudioAccentTheme (via useDigitalChannel)
 //   - Branch responsivo (mobile / tablet / desktop)
-//   - StudioOnboarding overlay
 //   - FAB por rota (resolveFab)
 //   - reduceMotion + fade de troca de rota
 //   - pause da animação flutuante após 10s
@@ -25,6 +24,11 @@
 // preserva 100% do comportamento.
 //
 // StudioPullToRefresh foi removido daqui — canônico em StudioScreen.tsx.
+//
+// 05/06/2026: StudioOnboarding overlay removido do Shell — o
+// checklist-herói canônico (Onda 2) vive inline na home
+// (app/studio/(estudio)/index.tsx). Overlay aqui causava fetch duplo
+// + AbortError no desmonte.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -47,8 +51,6 @@ import {
   deriveAccentFromColors,
 } from "@/contexts/StudioAccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
-import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
-import { useStudioOnboarding } from "@/hooks/useStudioOnboarding";
 import { StudioFab } from "@/components/studio/StudioFab";
 import { useAuthStore } from "@/stores/auth";
 import { Sidebar } from "./Sidebar";
@@ -82,15 +84,6 @@ export function StudioShell() {
     }
     return studioDefaultAccent;
   }, [config?.primary_color, config?.accent_color]);
-
-  const { shouldShow, markSeen } = useStudioOnboarding();
-  const [onboardingVisible, setOnboardingVisible] = useState(false);
-  useEffect(() => {
-    if (shouldShow) {
-      const t = setTimeout(() => setOnboardingVisible(true), 800);
-      return () => clearTimeout(t);
-    }
-  }, [shouldShow]);
 
   const [floatPause, setFloatPause] = useState(false);
   useEffect(() => {
@@ -189,11 +182,6 @@ export function StudioShell() {
             isHome={isHome}
           />
           <FloatingApprovalButton />
-          <StudioOnboarding
-            visible={onboardingVisible}
-            onClose={() => { setOnboardingVisible(false); markSeen(); }}
-            onComplete={() => { setOnboardingVisible(false); markSeen(); }}
-          />
         </View>
       </StudioAccentTheme>
     );
@@ -224,11 +212,6 @@ export function StudioShell() {
             />
           )}
           <FloatingApprovalButton />
-          <StudioOnboarding
-            visible={onboardingVisible}
-            onClose={() => { setOnboardingVisible(false); markSeen(); }}
-            onComplete={() => { setOnboardingVisible(false); markSeen(); }}
-          />
         </View>
       </StudioAccentTheme>
     );
@@ -255,11 +238,6 @@ export function StudioShell() {
         </View>
 
         <FloatingApprovalButton />
-        <StudioOnboarding
-          visible={onboardingVisible}
-          onClose={() => { setOnboardingVisible(false); markSeen(); }}
-          onComplete={() => { setOnboardingVisible(false); markSeen(); }}
-        />
       </View>
     </StudioAccentTheme>
   );
