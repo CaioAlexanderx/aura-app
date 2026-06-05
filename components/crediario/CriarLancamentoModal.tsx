@@ -7,8 +7,11 @@
 //   - "Conta geral" (default) — sem account_id
 //   - escolher carnê existente — envia account_id
 //   - "Novo carnê" — campo de nome, envia new_account_name
+//
+// Os carnês são buscados do backend após a seleção do cliente
+// (via creditApi.getCustomerHistory), não dependem de prop.
 // ============================================================
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Modal,
   View,
@@ -43,8 +46,6 @@ interface CustomerOption {
 interface Props {
   visible: boolean;
   onClose: () => void;
-  /** Carnês existentes do cliente selecionado (opcional; passado pelo pai se disponível) */
-  existingAccounts?: CreditAccount[];
 }
 
 function fmtCurrency(raw: string): string {
@@ -89,7 +90,7 @@ function periodToPayload(kind: PeriodKind, customDays: string): { period_unit: P
   return { period_unit: "month", period_count: 1 };
 }
 
-export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Props) {
+export function CriarLancamentoModal({ visible, onClose }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
 
@@ -118,10 +119,12 @@ export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Pro
   const [periodDays, setPeriodDays]     = useState("20");
   const [description, setDescription]   = useState("");
 
-  // F3: seletor de carnê
-  const [accountMode, setAccountMode]       = useState<AccountMode>("general");
+  // F3: seletor de carnê — buscados do backend após seleção do cliente
+  const [accountMode, setAccountMode]             = useState<AccountMode>("general");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountName, setNewAccountName]       = useState("");
+  const [fetchedAccounts, setFetchedAccounts]     = useState<CreditAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts]     = useState(false);
 
   const reset = useCallback(() => {
     setStep("customer");
@@ -142,6 +145,7 @@ export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Pro
     setAccountMode("general");
     setSelectedAccountId(null);
     setNewAccountName("");
+    setFetchedAccounts([]);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -172,14 +176,31 @@ export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Pro
     [company]
   );
 
+  // Após selecionar cliente, busca os carnês dele no backend
+  const fetchAccountsForCustomer = useCallback(async (customerId: string) => {
+    if (!company?.id) return;
+    setLoadingAccounts(true);
+    try {
+      const data = await creditApi.getCustomerHistory(company.id, customerId);
+      setFetchedAccounts(data.accounts || []);
+    } catch {
+      setFetchedAccounts([]);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, [company]);
+
   const handleSelectCustomer = (c: CustomerOption) => {
     setSelectedCustomer(c);
     setStep("details");
+    fetchAccountsForCustomer(c.id);
   };
 
   const handleConfirmNewCustomer = () => {
     if (!newName.trim())  { toast.error("Nome obrigatório"); return; }
     if (!newPhone.trim()) { toast.error("Telefone obrigatório"); return; }
+    // Novo cliente não tem carnês ainda
+    setFetchedAccounts([]);
     setStep("details");
   };
 
@@ -242,6 +263,9 @@ export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Pro
       qc.invalidateQueries({ queryKey: ["credit-balances",   company!.id] });
       qc.invalidateQueries({ queryKey: ["credit-dashboard",  company!.id] });
       qc.invalidateQueries({ queryKey: ["credit-aging",      company!.id] });
+      if (selectedCustomer?.id) {
+        qc.invalidateQueries({ queryKey: ["credit-customer", company!.id, selectedCustomer.id] });
+      }
       handleClose();
     } catch (err: any) {
       toast.error(err?.message || "Erro ao criar lançamento");
@@ -271,8 +295,8 @@ export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Pro
     ["semanal", "Semanal"], ["quinzenal", "Quinzenal"], ["mensal", "Mensal"], ["custom", "Personalizado"],
   ];
 
-  // Carnês disponíveis para seleção (filtra conta geral id=null)
-  const selectableAccounts = (existingAccounts || []).filter(a => a.id !== null && a.status === "open");
+  // Carnês disponíveis para seleção (filtra conta geral id=null e fechados)
+  const selectableAccounts = fetchedAccounts.filter(a => a.id !== null && a.status === "open");
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
@@ -503,63 +527,69 @@ export function CriarLancamentoModal({ visible, onClose, existingAccounts }: Pro
 
                 {/* F3: Seletor de carnê */}
                 <Text style={s.label}>Carnê / conta</Text>
-                <View style={s.accountModeRow}>
-                  {([
-                    ["general", "Conta geral"],
-                    ["existing", "Carnê existente"],
-                    ["new", "Novo carnê"],
-                  ] as [AccountMode, string][]).map(([k, lbl]) => (
-                    <Pressable
-                      key={k}
-                      onPress={() => setAccountMode(k)}
-                      style={[s.accountModeChip, accountMode === k && s.accountModeChipOn]}
-                    >
-                      <Text style={[s.accountModeChipTxt, accountMode === k && s.accountModeChipTxtOn]}>
-                        {lbl}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {accountMode === "existing" && (
-                  selectableAccounts.length === 0 ? (
-                    <Text style={s.accountHint}>Nenhum carnê aberto. Escolha "Novo carnê" para criar.</Text>
-                  ) : (
-                    <View style={s.accountList}>
-                      {selectableAccounts.map(acc => (
+                {loadingAccounts ? (
+                  <ActivityIndicator size="small" color={Colors.violet3} style={{ marginBottom: 8 }} />
+                ) : (
+                  <>
+                    <View style={s.accountModeRow}>
+                      {([
+                        ["general", "Conta geral"],
+                        ["existing", "Carnê existente"],
+                        ["new", "Novo carnê"],
+                      ] as [AccountMode, string][]).map(([k, lbl]) => (
                         <Pressable
-                          key={acc.id}
-                          style={[s.accountRow, selectedAccountId === acc.id && s.accountRowOn]}
-                          onPress={() => setSelectedAccountId(acc.id)}
+                          key={k}
+                          onPress={() => setAccountMode(k)}
+                          style={[s.accountModeChip, accountMode === k && s.accountModeChipOn]}
                         >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[s.accountRowName, selectedAccountId === acc.id && { color: Colors.violet3 }]}>
-                              {acc.name}
-                            </Text>
-                            <Text style={s.accountRowSub}>
-                              Saldo: R$ {(acc.balance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                              {acc.overdue ? " · Em atraso" : ""}
-                            </Text>
-                          </View>
-                          {selectedAccountId === acc.id && (
-                            <Icon name="check" size={14} color={Colors.violet3} />
-                          )}
+                          <Text style={[s.accountModeChipTxt, accountMode === k && s.accountModeChipTxtOn]}>
+                            {lbl}
+                          </Text>
                         </Pressable>
                       ))}
                     </View>
-                  )
-                )}
 
-                {accountMode === "new" && (
-                  <>
-                    <TextInput
-                      style={[s.input, { marginTop: 8 }]}
-                      placeholder="Nome do carnê (ex.: Compras de junho)"
-                      placeholderTextColor={Colors.ink3}
-                      value={newAccountName}
-                      onChangeText={setNewAccountName}
-                    />
-                    <Text style={s.dateHint}>Um novo carnê será criado com este lançamento.</Text>
+                    {accountMode === "existing" && (
+                      selectableAccounts.length === 0 ? (
+                        <Text style={s.accountHint}>Nenhum carnê aberto. Escolha "Novo carnê" para criar.</Text>
+                      ) : (
+                        <View style={s.accountList}>
+                          {selectableAccounts.map(acc => (
+                            <Pressable
+                              key={acc.id}
+                              style={[s.accountRow, selectedAccountId === acc.id && s.accountRowOn]}
+                              onPress={() => setSelectedAccountId(acc.id)}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={[s.accountRowName, selectedAccountId === acc.id && { color: Colors.violet3 }]}>
+                                  {acc.name}
+                                </Text>
+                                <Text style={s.accountRowSub}>
+                                  Saldo: R$ {(acc.balance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  {acc.overdue ? " · Em atraso" : ""}
+                                </Text>
+                              </View>
+                              {selectedAccountId === acc.id && (
+                                <Icon name="check" size={14} color={Colors.violet3} />
+                              )}
+                            </Pressable>
+                          ))}
+                        </View>
+                      )
+                    )}
+
+                    {accountMode === "new" && (
+                      <>
+                        <TextInput
+                          style={[s.input, { marginTop: 8 }]}
+                          placeholder="Nome do carnê (ex.: Compras de junho)"
+                          placeholderTextColor={Colors.ink3}
+                          value={newAccountName}
+                          onChangeText={setNewAccountName}
+                        />
+                        <Text style={s.dateHint}>Um novo carnê será criado com este lançamento.</Text>
+                      </>
+                    )}
                   </>
                 )}
 
