@@ -2,6 +2,9 @@
 // AURA STUDIO · PDV — modal de orçamento (Fase 6).
 // Gera PDF imprimível (openQuotePdf, client-side, sem backend) + wa.me
 // opcional. NÃO fecha venda. Disponível em todos os planos.
+//
+// 05/06/2026: linhas usam o preço de venda efetivo (lineSalePrice) pra
+// refletir o lápis do caixa e bater com o subtotal exibido.
 // ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
@@ -10,6 +13,7 @@ import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 import { maskPhone } from "@/utils/masks";
 import { toast } from "@/components/Toast";
 import type { CartLine } from "./types";
+import { lineSalePrice } from "./checkoutMath";
 import { FInput, money } from "./ui";
 import { Ic } from "./icons";
 
@@ -30,7 +34,7 @@ export function QuoteModal({
     if (cart.length === 0) { toast.info("Adicione itens antes de gerar orçamento"); return; }
     setSending(true);
     try {
-      const items: QuoteItem[] = cart.map((l) => ({ name: l.product.name, qty: l.qty, unitPrice: l.product.price }));
+      const items: QuoteItem[] = cart.map((l) => ({ name: l.product.name, qty: l.qty, unitPrice: lineSalePrice(l) }));
       const profile = company?.profile || {};
       const companyName = company?.trade_name || company?.legal_name || company?.name || "Estúdio";
       openQuotePdf({

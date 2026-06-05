@@ -9,10 +9,9 @@
 //   handleCustomize — abre StageConfigure (kind='personalizado')
 //   ProductCard recebe AMBOS via onQuickAdd + onCustomize.
 //
-// O leitor de código de barras (useGlobalBarcodeScanner via
-// useStudioCatalog) permanece INALTERADO: o scanner sempre chama
-// handleProductPress que agora mapeia para handleQuickAdd, mesmo
-// comportamento de antes para produtos não-personalizáveis.
+// 05/06/2026 (paridade Negócio): desconto manual + cupom + split de
+// pagamento + lápis de preço/qtd por item. Matemática em checkoutMath;
+// cupom é limpo ao editar item (qtd/preço/remoção) pra evitar desconto stale.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -34,6 +33,12 @@ import { PAY_METHODS } from "./types";
 import { useStudioCatalog } from "./useStudioCatalog";
 import { useStudioCart } from "./useStudioCart";
 import { useStudioCheckout } from "./useStudioCheckout";
+import {
+  manualDiscountAmount,
+  totalAfter,
+  splitRemaining as calcSplitRemaining,
+  splitIsBalanced as calcSplitBalanced,
+} from "./checkoutMath";
 import { Hero, KpiStrip, Toolbar } from "./Chrome";
 import { ProductCard } from "./ProductCard";
 import { flyToCart, type FlyRect } from "./flyToCart";
@@ -95,7 +100,23 @@ export default function StudioCaixaPage() {
   const cart = useStudioCart();
   const checkout = useStudioCheckout(cid);
 
-  // ── abrir configurador (Personalizar) ──────────────────────
+  // ── derivados de desconto/cupom/total/split (checkoutMath, fonte única) ──
+  const manualDiscount = manualDiscountAmount(cart.subtotal, checkout.discountType, checkout.discountValue);
+  const couponDiscount = checkout.couponApplied?.discount || 0;
+  const totalFinal = totalAfter(cart.subtotal, manualDiscount, couponDiscount);
+  const splitRem = calcSplitRemaining(totalFinal, checkout.splitPayments);
+  const splitBal = calcSplitBalanced(totalFinal, checkout.splitPayments);
+
+  // ── edição de itens: limpa cupom (precisa revalidar com o novo subtotal) ──
+  const editGuard = useCallback(() => {
+    if (checkout.couponApplied) checkout.clearCoupon();
+  }, [checkout]);
+  const onSetQtyDelta = useCallback((lineId: string, d: number) => { cart.setQty(lineId, d); editGuard(); }, [cart, editGuard]);
+  const onSetQtyTo = useCallback((lineId: string, qty: number) => { cart.setQtyTo(lineId, qty); editGuard(); }, [cart, editGuard]);
+  const onSetPrice = useCallback((lineId: string, price: number) => { cart.setUnitPrice(lineId, price); editGuard(); }, [cart, editGuard]);
+  const onRemoveLine = useCallback((lineId: string) => { cart.removeLine(lineId); editGuard(); }, [cart, editGuard]);
+
+  // ── abrir configurador (Personalizar) ──
   const openConfigure = useCallback(
     (p: StudioProduct, line?: CartLine) => {
       setConfigure({
@@ -108,10 +129,7 @@ export default function StudioCaixaPage() {
     [],
   );
 
-  // ── Quick-add: 1 toque, sem modal ─────────────────────────
-  // Usado tanto pelo botão "Adicionar" quanto pelo scanner de código de barras
-  // para produtos NÃO personalizáveis. Para personalizáveis, o scanner
-  // também cai aqui (adiciona quick sem abrir modal).
+  // ── Quick-add: 1 toque, sem modal ──
   const handleQuickAdd = useCallback(
     (p: StudioProduct, rect?: FlyRect | null) => {
       cart.addSimple(p);
@@ -123,7 +141,7 @@ export default function StudioCaixaPage() {
     [cart, reducedMotion, t.primary],
   );
 
-  // ── Personalizar: abre StageConfigure ────────────────────
+  // ── Personalizar: abre StageConfigure ──
   const handleCustomize = useCallback(
     (p: StudioProduct) => {
       openConfigure(p);
@@ -131,10 +149,6 @@ export default function StudioCaixaPage() {
     [openConfigure],
   );
 
-  // handleProductPress: entrada legada do scanner (useStudioCatalog).
-  // O scanner não distingue quick vs personalizar — por decisão de UX,
-  // produtos escaneados sempre fazem quick-add (operador pode personalizar
-  // depois tocando em "Editar arte" no carrinho).
   const handleProductPress = useCallback(
     (p: StudioProduct, rect?: FlyRect | null) => {
       handleQuickAdd(p, rect);
@@ -150,8 +164,8 @@ export default function StudioCaixaPage() {
   }, [configure?.product.id]);
 
   const payLabel = useMemo(
-    () => PAY_METHODS.find((m) => m.id === checkout.pay)?.label || "—",
-    [checkout.pay],
+    () => (checkout.splitMode ? "Dividido" : PAY_METHODS.find((m) => m.id === checkout.pay)?.label || "—"),
+    [checkout.pay, checkout.splitMode],
   );
   const hasStats =
     catalog.stats.pedidos_hoje > 0 ||
@@ -241,6 +255,30 @@ export default function StudioCaixaPage() {
         error={checkout.error}
         onBack={() => setStage("list")}
         onFinalize={onFinalize}
+        onSetQty={onSetQtyTo}
+        onSetPrice={onSetPrice}
+        onRemoveLine={onRemoveLine}
+        discountType={checkout.discountType}
+        setDiscountType={checkout.setDiscountType}
+        discountValue={checkout.discountValue}
+        setDiscountValue={checkout.setDiscountValue}
+        manualDiscount={manualDiscount}
+        couponInput={checkout.couponInput}
+        setCouponInput={checkout.setCouponInput}
+        couponApplied={checkout.couponApplied}
+        couponValidating={checkout.couponValidating}
+        onApplyCoupon={() => checkout.validateCoupon(cart.subtotal)}
+        onClearCoupon={checkout.clearCoupon}
+        splitMode={checkout.splitMode}
+        splitPayments={checkout.splitPayments}
+        onToggleSplit={() => checkout.toggleSplit(totalFinal)}
+        onAddSplit={() => checkout.addSplit(totalFinal)}
+        onUpdateSplit={checkout.updateSplit}
+        onRemoveSplit={checkout.removeSplit}
+        splitRemaining={splitRem}
+        splitBalanced={splitBal}
+        couponDiscount={couponDiscount}
+        total={totalFinal}
       />
     );
   }
@@ -396,8 +434,10 @@ export default function StudioCaixaPage() {
               count={cart.count}
               customCount={cart.customCount}
               payLabel={payLabel}
-              onSetQty={cart.setQty}
-              onRemove={cart.removeLine}
+              onSetQty={onSetQtyDelta}
+              onSetQtyTo={onSetQtyTo}
+              onSetPrice={onSetPrice}
+              onRemove={onRemoveLine}
               onEdit={(l) => openConfigure(l.product, l)}
               onQuote={() => setShowQuote(true)}
               onCheckout={() => setStage("checkout")}

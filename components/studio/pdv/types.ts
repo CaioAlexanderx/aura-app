@@ -4,6 +4,12 @@
 // Mantém o modelo de dados REAL (backend /studio/products), não o
 // modelo estático do mockup. Configurador é data-driven por
 // customization_config.fields.
+//
+// 05/06/2026 (paridade checkout Negócio):
+//   - CartLine.unitPrice: preço de venda efetivo (lápis). Ausente = usa
+//     product.price (tabela). A diferença vira item_discount no backend.
+//   - PaymentEntry: entrada de split (uma detPag por forma no backend).
+//   - PAY_METHODS restrito a dinheiro/PIX/cartão (decisão com Caio).
 // ============================================================
 import type { CustomizationConfig } from "@/services/studioApi";
 
@@ -26,8 +32,7 @@ export type StudioProduct = {
  *   'personalizado'— passou pelo StageConfigure (tem values significativos)
  *
  * Itens de produtos NÃO personalizáveis são sempre 'quick'.
- * O campo é display-only no carrinho e no orçamento; não afeta
- * o payload de checkout (sale_payments / finalizeSale).
+ * O campo é display-only no carrinho e no orçamento.
  */
 export type CartLineKind = 'quick' | 'personalizado';
 
@@ -36,7 +41,11 @@ export type CartLine = {
   product: StudioProduct;
   qty: number;
   values: Record<string, any>; // customização (vazio = produto comum)
-  kind: CartLineKind;          // NEW: quick-add vs personalizado
+  kind: CartLineKind;          // quick-add vs personalizado
+  // 05/06/2026: preço de venda efetivo (lápis do caixa). Quando presente e
+  // menor que product.price, a diferença × qtd vira item_discount no backend.
+  // product.price (tabela do estoque) permanece intacto.
+  unitPrice?: number;
 };
 
 export type Stage = "list" | "configure" | "checkout" | "done";
@@ -54,12 +63,19 @@ export type SaleDone = {
   wa_link: string | null;
 };
 
+// Multi-pagamento (split): cada entrada vira uma detPag no backend
+// (tPag = method, vPag = value). O backend mapeia method PDV → tPag SEFAZ.
+export type PaymentEntry = {
+  method: string;   // "dinheiro" | "pix" | "cartao"
+  value: number;    // valor em R$
+};
+
+// Checkout do Studio: só dinheiro, PIX e cartão (decisão 05/06/2026 com Caio).
+// 'cartao' = crédito, alinhado ao mapeamento tPag do backend (igual ao Negócio).
 export const PAY_METHODS: { id: string; label: string; icon: string }[] = [
   { id: "dinheiro", label: "Dinheiro", icon: "cash" },
   { id: "pix", label: "PIX", icon: "pix" },
-  { id: "credito", label: "Crédito", icon: "card" },
-  { id: "debito", label: "Débito", icon: "card" },
-  { id: "crediario", label: "Crediário", icon: "clipboard" },
+  { id: "cartao", label: "Cartão", icon: "card" },
 ];
 
 export const isCustomLine = (l: CartLine) => l.kind === 'personalizado';
