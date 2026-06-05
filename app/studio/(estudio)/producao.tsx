@@ -23,6 +23,11 @@
 //
 // 05/06/2026 (M2 DnD): drag-and-drop via useStudioKanbanDnD (web-only).
 // Botões de avanço mantidos como fallback (mobile/native).
+//
+// fix(build): KanbanColumn sub-component extraído pra que useDropZoneRef
+// seja chamado no top-level de um componente (não dentro de .map()).
+// O genérico <StudioProductionStatus> dentro do .map() fazia o Babel
+// interpretar o angle bracket como JSX e lançar SyntaxError.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -100,13 +105,13 @@ function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "lat
 // Separado para poder chamar useDraggableCardRef como hook (regra dos hooks:
 // não pode ser chamado dentro de .map() diretamente).
 function DraggableCard({
-  o, col, t, s, dnd, NEXT_STATUS, PLATFORM_LABELS, onAdvance, onApproval, router,
+  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, router,
 }: {
   o: StudioOrder;
   col: Column;
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
-  dnd: ReturnType<typeof useStudioKanbanDnD<StudioProductionStatus>>;
+  dnd: ReturnType<typeof useStudioKanbanDnD>;
   NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null>;
   PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
   onAdvance: (order: StudioOrder) => void;
@@ -115,7 +120,7 @@ function DraggableCard({
 }) {
   const cardRef = useDraggableCardRef(dnd.isWeb, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
   const sla = fmtSla(o.created_at);
-  const next = NEXT_STATUS[col.key];
+  const next = NEXT[col.key];
   const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
   const isDragging = dnd.draggingId === o.id;
 
@@ -192,6 +197,70 @@ function DraggableCard({
         )}
       </View>
     </Pressable>
+  );
+}
+
+// ── KanbanColumn ─────────────────────────────────────────────────────────────
+// Sub-componente para cada coluna do kanban.
+// useDropZoneRef é chamado aqui no top-level — nunca dentro de .map().
+// O genérico é omitido na chamada (inferência de tipo) para evitar que o
+// Babel interprete o angle-bracket como JSX em contexto de expressão.
+function KanbanColumn({
+  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, router,
+}: {
+  col: Column;
+  orders: StudioOrder[];
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+  dnd: ReturnType<typeof useStudioKanbanDnD>;
+  PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
+  onAdvance: (order: StudioOrder) => void;
+  onApproval: (order: StudioOrder) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  // Hook chamado no top-level do componente — sem genérico explícito (inferido).
+  const dropRef = useDropZoneRef(col.key as StudioProductionStatus, dnd.onDrop, dnd.onHoverChange);
+  const isHovered = dnd.hoverStatus === col.key && dnd.draggingId !== null;
+
+  return (
+    <View
+      ref={dropRef}
+      style={[
+        s.col,
+        isHovered && { borderColor: col.color, borderWidth: 2, backgroundColor: col.bg },
+      ]}
+    >
+      <View style={[s.colHead, { backgroundColor: col.bg }]}>
+        <View style={[s.colDot, { backgroundColor: col.color }]}>
+          <Icon name={col.icon as any} size={12} color="#fff" />
+        </View>
+        <Text style={[s.colTitle, { color: col.color }]}>{col.label}</Text>
+        <AnimatedKpiCounter
+          value={orders.length}
+          fontSize={12}
+          color={t.ink2}
+        />
+      </View>
+      <ScrollView style={s.colScroll} contentContainerStyle={{ padding: 10, gap: 10 }}>
+        {orders.length === 0 ? (
+          <Text style={s.colEmpty}>—</Text>
+        ) : orders.map((o) => (
+          <DraggableCard
+            key={o.id}
+            o={o}
+            col={col}
+            t={t}
+            s={s}
+            dnd={dnd}
+            NEXT_STATUS={NEXT_STATUS}
+            PLATFORM_LABELS={PLATFORM_LABELS}
+            onAdvance={onAdvance}
+            onApproval={onApproval}
+            router={router}
+          />
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -288,7 +357,7 @@ export default function StudioProducao() {
     moveTo(order, toStatus);
   }, [orders, moveTo]);
 
-  const dnd = useStudioKanbanDnD<StudioProductionStatus>(onDrop);
+  const dnd = useStudioKanbanDnD(onDrop);
 
   const byStatus: Record<string, StudioOrder[]> = {};
   for (const col of COLUMNS) byStatus[col.key] = [];
@@ -340,57 +409,20 @@ export default function StudioProducao() {
         />
       ) : (
         <ScrollView horizontal style={s.boardScroll} contentContainerStyle={s.board}>
-          {COLUMNS.map((col) => {
-            // Drop zone ref por coluna
-            // eslint-disable-next-line react-hooks/rules-of-hooks
-            const dropRef = useDropZoneRef<StudioProductionStatus>(
-              col.key,
-              dnd.onDrop,
-              dnd.onHoverChange,
-            );
-            const isHovered = dnd.hoverStatus === col.key && dnd.draggingId !== null;
-            return (
-              <View
-                key={col.key}
-                ref={dropRef}
-                style={[
-                  s.col,
-                  isHovered && { borderColor: col.color, borderWidth: 2, backgroundColor: col.bg },
-                ]}
-              >
-                <View style={[s.colHead, { backgroundColor: col.bg }]}>
-                  <View style={[s.colDot, { backgroundColor: col.color }]}>
-                    <Icon name={col.icon as any} size={12} color="#fff" />
-                  </View>
-                  <Text style={[s.colTitle, { color: col.color }]}>{col.label}</Text>
-                  <AnimatedKpiCounter
-                    value={byStatus[col.key].length}
-                    fontSize={12}
-                    color={t.ink2}
-                  />
-                </View>
-                <ScrollView style={s.colScroll} contentContainerStyle={{ padding: 10, gap: 10 }}>
-                  {byStatus[col.key].length === 0 ? (
-                    <Text style={s.colEmpty}>—</Text>
-                  ) : byStatus[col.key].map((o) => (
-                    <DraggableCard
-                      key={o.id}
-                      o={o}
-                      col={col}
-                      t={t}
-                      s={s}
-                      dnd={dnd}
-                      NEXT_STATUS={NEXT_STATUS}
-                      PLATFORM_LABELS={PLATFORM_LABELS}
-                      onAdvance={advance}
-                      onApproval={setApprovalFor}
-                      router={router}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            );
-          })}
+          {COLUMNS.map((col) => (
+            <KanbanColumn
+              key={col.key}
+              col={col}
+              orders={byStatus[col.key]}
+              t={t}
+              s={s}
+              dnd={dnd}
+              PLATFORM_LABELS={PLATFORM_LABELS}
+              onAdvance={advance}
+              onApproval={setApprovalFor}
+              router={router}
+            />
+          ))}
         </ScrollView>
       )}
 
