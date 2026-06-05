@@ -58,9 +58,12 @@ export function ProductImageUpload({ productId, imageUrl, onImageChange, compact
     if (!company?.id) return;
     setUploading(true);
     try {
+      // timeout:60000 — imagens de até 5MB viram ~6.7MB de JSON em base64;
+      // o default de 10s é curto demais em conexões lentas e dispara AbortError.
       var res = await request("/companies/" + company.id + "/products/" + productId + "/image", {
         method: "POST",
         body: { content: base64, content_type: contentType },
+        timeout: 60000,
       });
       var url = (res as any)?.image_url || "";
       setPreviewUrl(url);

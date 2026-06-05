@@ -118,6 +118,12 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
     } catch (err: any) {
       lastError = err;
       if (err instanceof ApiError) throw err;
+      // AbortError = timeout do AbortController disparou. Não tem sentido
+      // retentar (o próximo attempt também vai abortar no mesmo timeout).
+      // Lança imediatamente com mensagem clara em vez de repetir N vezes.
+      if (err && err.name === "AbortError") {
+        throw new ApiError("Tempo limite excedido. Verifique sua conexao e tente novamente.", 0, null, true, "timeout");
+      }
       if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 800 * (attempt + 1)); }); continue; }
     }
   }
