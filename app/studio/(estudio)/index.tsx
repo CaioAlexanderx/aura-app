@@ -216,7 +216,7 @@ export default function StudioPainel() {
   const kpiOpacity = setupComplete ? 1 : 0.55;
 
   return (
-    <StudioScreen variant="grid" scroll={false} padded={false}>
+    <StudioScreen variant="board" scroll={false} padded={false}>
       <ScrollView style={s.scroll} contentContainerStyle={s.container}>
 
         {/* ═══════ CHECKLIST-HERÓI (Onda 2) ═══════
