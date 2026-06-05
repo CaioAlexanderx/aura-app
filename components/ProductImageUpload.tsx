@@ -66,9 +66,9 @@ export function ProductImageUpload({ productId, imageUrl, onImageChange, compact
       setPreviewUrl(url);
       if (onImageChange) onImageChange(url);
       qc.invalidateQueries({ queryKey: ["products", company.id] });
-      toast.success("Foto salva!");
+      toast.success("Imagem carregada com sucesso");
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao salvar foto");
+      toast.error(err?.message || "Falha ao carregar imagem");
       setPreviewUrl(imageUrl || null);
     } finally { setUploading(false); }
   }
