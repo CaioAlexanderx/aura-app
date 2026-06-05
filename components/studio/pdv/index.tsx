@@ -6,6 +6,7 @@
 // 05/06/2026 (paridade Negócio): desconto manual + cupom + split de
 // pagamento + lápis de preço/qtd por item. Matemática em checkoutMath;
 // cupom limpo ao editar item. Carrinho recebe pay/setPay (chips no rodapé).
+// Rail usa height:100% (não 100vh) pra não estourar abaixo da topbar.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -411,13 +412,13 @@ export default function StudioCaixaPage() {
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <AuraArcsBackground t={t} />
       {wide ? (
-        <View style={{ flex: 1, flexDirection: "row" }}>
+        <View style={{ flex: 1, minHeight: 0, flexDirection: "row" }}>
           {MainScroll}
           <View
             style={{
               width: 360,
               ...(Platform.OS === "web"
-                ? ({ position: "sticky", top: 0, height: "100vh" } as any)
+                ? ({ height: "100%", alignSelf: "stretch" } as any)
                 : {}),
             }}
           >
