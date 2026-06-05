@@ -398,8 +398,8 @@ export default function StudioEstoque() {
             ) : products.length === 0 ? (
               <StudioEmpty
                 icon="package"
-                title="Catálogo vazio"
-                desc="Cadastre seu primeiro produto pra começar a vender."
+                title="Catalogo vazio"
+                desc="Cadastre seu primeiro produto pra comecar a vender."
                 primaryCta={{
                   label: "Cadastrar produto",
                   onPress: () => setWizardOpen(true),
@@ -500,7 +500,7 @@ function ProductRow({
           {product.is_personalizable && (
             <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
               <Icon name="sparkles" size={10} color={t.primary} />
-              <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizável</Text>
+              <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizavel</Text>
             </View>
           )}
           {(product.template_count || 0) > 0 && (
@@ -640,14 +640,14 @@ function ProductExpanded({
             </Text>
             <Text style={s.rowDot}>·</Text>
             <Text style={s.expandedQty}>
-              {product.stock_qty != null ? `${product.stock_qty} un em estoque` : "Estoque não informado"}
+              {product.stock_qty != null ? `${product.stock_qty} un em estoque` : "Estoque nao informado"}
             </Text>
           </View>
           <View style={s.expandedChipsRow}>
             {personalizableChip && (
               <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
                 <Icon name="sparkles" size={10} color={t.primary} />
-                <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizável</Text>
+                <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizavel</Text>
               </View>
             )}
             {templateChipQty > 0 && (
@@ -667,7 +667,7 @@ function ProductExpanded({
 
       {/* Seção 1 — Dados básicos */}
       <SectionCard
-        title="Dados básicos"
+        title="Dados basicos"
         icon="edit"
         status={basicoStatus}
         open={openSections.basico}
@@ -690,7 +690,7 @@ function ProductExpanded({
 
       {/* Seção 2 — Personalização */}
       <SectionCard
-        title="Personalização"
+        title="Personalizacao"
         icon="sparkles"
         status={personalizacaoStatus}
         open={openSections.personalizacao}
@@ -711,7 +711,7 @@ function ProductExpanded({
 
       {/* Seção 3 — Ficha técnica */}
       <SectionCard
-        title="Ficha técnica"
+        title="Ficha tecnica"
         icon="clipboard"
         status={fichaStatus}
         open={openSections.ficha}
@@ -832,7 +832,7 @@ function BasicoForm({
 
   async function uploadImage() {
     if (!companyId || Platform.OS !== "web") {
-      toast.error("Upload disponível apenas na versão web");
+      toast.error("Upload disponivel apenas na versao web");
       return;
     }
     const file = await pickFileWeb("image/*");
@@ -853,10 +853,10 @@ function BasicoForm({
       });
       setLocalImage(r.url);
       onPatched({ image_url: r.url });
-      toast.success("Foto atualizada!");
+      toast.success("Imagem carregada com sucesso");
     } catch (e: any) {
       const status = e?.status ? `[${e.status}] ` : "";
-      toast.error(`${status}${e?.data?.error || e?.message || "Erro no upload"}`);
+      toast.error(`${status}${e?.data?.error || e?.message || "Falha ao carregar imagem"}`);
     } finally {
       setUploadingImg(false);
     }
@@ -866,7 +866,7 @@ function BasicoForm({
     const trimmed = name.trim();
     if (trimmed.length < 2) { toast.error("Nome precisa ter ao menos 2 caracteres"); return; }
     const priceNum = parseFloat(price.replace(",", "."));
-    if (!Number.isFinite(priceNum) || priceNum <= 0) { toast.error("Preço inválido"); return; }
+    if (!Number.isFinite(priceNum) || priceNum <= 0) { toast.error("Preco invalido"); return; }
     const body: Record<string, any> = {
       name: trimmed,
       price: priceNum,
@@ -885,7 +885,7 @@ function BasicoForm({
         retry: 0,
         timeout: 12000,
       });
-      toast.success("Alterações salvas");
+      toast.success("Alteracoes salvas");
       onPatched({
         name: trimmed,
         price: priceNum,
@@ -955,7 +955,7 @@ function BasicoForm({
 
       <View style={s.row2}>
         <View style={[s.field, { flex: 1 }]}>
-          <Text style={s.fieldLabel}>Preço (R$)</Text>
+          <Text style={s.fieldLabel}>Preco (R$)</Text>
           <TextInput
             value={price}
             onChangeText={(v) => setPrice(v.replace(/[^0-9.,]/g, ""))}
@@ -979,7 +979,7 @@ function BasicoForm({
       </View>
 
       <View style={s.field}>
-        <Text style={s.fieldLabel}>Descrição</Text>
+        <Text style={s.fieldLabel}>Descricao</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -1000,7 +1000,7 @@ function BasicoForm({
         ) : (
           <>
             <Icon name="check" size={14} color="#fff" />
-            <Text style={s.btnPriTxt}>Salvar alterações</Text>
+            <Text style={s.btnPriTxt}>Salvar alteracoes</Text>
           </>
         )}
       </Pressable>
