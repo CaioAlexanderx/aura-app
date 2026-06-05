@@ -20,6 +20,7 @@
 //   - Multi-CNPJ: status é por empresa (cid do contexto)
 //
 // 02/06/2026 — Agente F, Onda 2, feat/studio-shell-clareza
+// 05/06/2026 — fix: silenciar AbortError no catch do fetchStatus
 // ============================================================
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
@@ -135,8 +136,9 @@ export function StudioOnboarding({
       setStatus(data);
       if (data.temVenda) onComplete?.();
     } catch (err: any) {
-      console.error("[StudioOnboarding] fetchStatus:", err);
+      if (err?.name === "AbortError" || err?.code === 20) return; // fetch abortado — normal no desmonte
       setError("Não foi possível carregar o progresso.");
+      console.error("[StudioOnboarding] fetchStatus:", err);
     } finally {
       setLoading(false);
     }
