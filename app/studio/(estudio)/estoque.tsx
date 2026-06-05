@@ -36,6 +36,12 @@
 //   - useMemo(() => buildStyles(t), [t])
 //   - StudioPalette type
 //   - toast com erro REAL ([status] data.error || message)
+//
+// 05/06/2026 (#4): filtro por categoria de produto
+//   - variant="board" já estava correto (scroll fix não necessário)
+//   - studioApi.listProductCategories carregado junto com produtos
+//   - chips de categoria abaixo dos chips personalizable/não-personalizable
+//   - filtragem por product.category === categoria.name (texto)
 // ============================================================
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -56,6 +62,7 @@ import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
 import StudioNewProductWizard from "@/components/studio/StudioNewProductWizard";
 import { Icon } from "@/components/Icon";
 import { request } from "@/services/api";
+import { studioApi } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { toast } from "@/components/Toast";
@@ -75,6 +82,7 @@ type StudioProduct = {
   customization_config?: any;
   template_count?: number;
   extra_images_count?: number;
+  category?: string | null;
 };
 
 type SectionKey = "basico" | "personalizacao" | "ficha" | "templates";
@@ -108,6 +116,10 @@ export default function StudioEstoque() {
   const [products, setProducts] = useState<StudioProduct[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
+
+  // Filtro por categoria (#4)
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null); // null = "Todas"
 
   // Inline expand
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -179,16 +191,17 @@ export default function StudioEstoque() {
     }
     setLoading(true);
     try {
-      // 27/05/2026: usa endpoint Studio dedicado (mesma fonte do PDV Studio).
-      // include_non_personalizable=true pra cobrir os 3 filtros da tela
-      // (Todos / Personalizáveis / Não personalizáveis).
-      // O endpoint genérico /products filtra por vertical=varejo silenciosamente
-      // e retorna vazio pra contas Studio (bug "Catálogo vazio" 27/05).
-      const r = await request<any>(`/companies/${cid}/studio/products?include_non_personalizable=true&limit=500`, {
-        method: "GET",
-        retry: 1,
-        timeout: 15000,
-      });
+      // Carrega produtos e categorias em paralelo (#4)
+      const [r, catResult] = await Promise.all([
+        request<any>(`/companies/${cid}/studio/products?include_non_personalizable=true&limit=500`, {
+          method: "GET",
+          retry: 1,
+          timeout: 15000,
+        }),
+        studioApi.listProductCategories(cid).catch(() => null),
+      ]);
+
+      // Produtos
       const list: StudioProduct[] = Array.isArray(r)
         ? r
         : Array.isArray(r?.products)
@@ -207,7 +220,17 @@ export default function StudioEstoque() {
         customization_config: p.customization_config || null,
         template_count: Number(p.template_count) || 0,
         extra_images_count: Number(p.extra_images_count) || 0,
+        category: p.category || null,
       })));
+
+      // Categorias (#4)
+      if (catResult?.categories) {
+        setCategories(catResult.categories.map((c: any) => ({
+          id: String(c.id),
+          name: String(c.name || ""),
+          color: c.color || null,
+        })));
+      }
     } catch (e: any) {
       const status = e?.status ? `[${e.status}] ` : "";
       console.error("[StudioEstoque.load]", {
@@ -230,10 +253,12 @@ export default function StudioEstoque() {
     return products.filter((p) => {
       if (filter === "personalizable" && !p.is_personalizable) return false;
       if (filter === "nonpersonalizable" && p.is_personalizable) return false;
+      // Filtro por categoria (#4): compara texto do campo category
+      if (categoryFilter !== null && p.category !== categoryFilter) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [products, filter, search]);
+  }, [products, filter, categoryFilter, search]);
 
   const expandedProduct = useMemo(
     () => (expandedId ? products.find((p) => p.id === expandedId) || null : null),
@@ -258,6 +283,7 @@ export default function StudioEstoque() {
         customization_config: r.customization_config || null,
         template_count: Number(r.template_count) || 0,
         extra_images_count: Number(r.extra_images_count) || 0,
+        category: r.category || null,
       };
       setProducts((prev) => prev.map((p) => (p.id === expandedId ? { ...p, ...fresh } : p)));
     } catch (e) {
@@ -299,7 +325,7 @@ export default function StudioEstoque() {
               rightSlot={headerRight}
             />
 
-            {/* Filtros */}
+            {/* Filtros personalizable */}
             <View style={s.filtersRow}>
               <View style={s.chipsRow}>
                 {FILTERS.map((f) => {
@@ -335,6 +361,37 @@ export default function StudioEstoque() {
               </View>
             </View>
 
+            {/* Filtro por categoria (#4) — só exibe se existirem categorias */}
+            {categories.length > 0 && (
+              <View style={s.categoryRow}>
+                <Pressable
+                  onPress={() => setCategoryFilter(null)}
+                  style={[s.filterChip, categoryFilter === null && s.filterChipActive]}
+                >
+                  <Text style={[s.filterChipTxt, categoryFilter === null && s.filterChipTxtActive]}>
+                    Todas
+                  </Text>
+                </Pressable>
+                {categories.map((c) => {
+                  const active = categoryFilter === c.name;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => setCategoryFilter(active ? null : c.name)}
+                      style={[s.filterChip, active && s.filterChipActive]}
+                    >
+                      {c.color ? (
+                        <View style={[s.catDot, { backgroundColor: c.color }]} />
+                      ) : null}
+                      <Text style={[s.filterChipTxt, active && s.filterChipTxtActive]}>
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
             {/* Lista */}
             {loading ? (
               <StudioLoading variant="skeleton-list" rows={5} />
@@ -355,7 +412,7 @@ export default function StudioEstoque() {
                 desc="Ajuste o filtro ou a busca pra ver mais produtos."
                 primaryCta={{
                   label: "Limpar filtros",
-                  onPress: () => { setFilter("all"); setSearch(""); },
+                  onPress: () => { setFilter("all"); setSearch(""); setCategoryFilter(null); },
                 }}
                 compact
               />
@@ -454,6 +511,12 @@ function ProductRow({
               </Text>
             </View>
           )}
+          {product.category ? (
+            <View style={[s.tinyChip, { backgroundColor: t.bgSoft }]}>
+              <Icon name="tag" size={10} color={t.ink3} />
+              <Text style={[s.tinyChipTxt, { color: t.ink3 }]}>{product.category}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -989,6 +1052,9 @@ function buildStyles(t: StudioPalette) {
     },
     chipsRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
     filterChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 999,
@@ -999,6 +1065,19 @@ function buildStyles(t: StudioPalette) {
     filterChipActive: { backgroundColor: t.primarySoft, borderColor: t.primary },
     filterChipTxt: { fontSize: 12, color: t.ink2, fontWeight: "700" },
     filterChipTxtActive: { color: t.primary },
+
+    // Filtro por categoria (#4)
+    categoryRow: {
+      flexDirection: "row",
+      gap: 6,
+      flexWrap: "wrap",
+      alignItems: "center",
+    },
+    catDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
 
     searchWrap: {
       flexDirection: "row",
