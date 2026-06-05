@@ -1,23 +1,18 @@
 // ============================================================
 // AURA. — Crediário · Modal de detalhe do cliente
 //
-// Substitui a rota app/crediario/cliente/[id] por um modal padrão
-// (DNA TrocaModal): X + clique-fora fecham e voltam pra lista do
-// crediário, sem mexer na navegação de tabs (antes voltava pro Painel).
+// F3 (05/06/2026): reescrita multi-carnê.
+//   - Card de resumo consolidado (saldo total, nº de carnês, em atraso).
+//   - Seção "Carnês": card por carnê com badge periodicidade,
+//     saldo, status, próxima parcela e ações Receber/Cobrar.
+//   - Botao "Novo carnê" cria inline via createAccount.
+//   - Recebimento: toggle FIFO (account_id) vs Distribuir (allocations).
+//   - Fallback sem accounts: comporta-se como antes (saldo único).
+//   - Histórico: transacções com tag do carnê quando account_name presente.
 //
-// 03/06/2026 (polish crediário):
-//   1. Modal padrão (X + backdrop)
-//   2. Histórico de pagamentos (compra + recebimentos, com datas)
-//   3. Recebimento de valor livre (1x) — POST /credit/customer/:cid/payment
-//   4. Cobrança no WhatsApp (mensagem rica + chave Pix) via onCobrar
-//
-// 05/06/2026: campo "Data do recebimento" (default hoje, SP). Permite
-//   registrar recebimento retroativo (ex.: Pix recebido ontem à noite,
-//   lançado hoje com a data de ontem). Envia paid_at -> applyPayment.
-//
-// Fonte: creditApi.getCustomerHistory -> balance + transactions
-// (debit=compra, payment=recebimento) + open_installments.
-// Recebimento usa creditApi.receivePayment -> applyPayment (FIFO).
+// F2 (05/06/2026): parcelas e saldo continuam funcionando igual.
+// 03/06/2026: modal padrão (X + backdrop).
+// 05/06/2026: campo "Data do recebimento" (default hoje, SP).
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -27,7 +22,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { creditApi } from "@/services/creditApi";
+import { creditApi, type CreditAccount, type PaymentAllocation } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
@@ -49,6 +44,8 @@ const PAYMENT_METHODS = [
   { key: "cartao", label: "Cartão" },
 ];
 
+type ReceiveMode = "fifo" | "distribute";
+
 function fmt(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -56,9 +53,8 @@ function fmtDate(iso: string) {
   try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
   catch { return ""; }
 }
-// Hoje em America/Sao_Paulo no formato dd/mm/aaaa (default do campo de data).
 function todayBrSp(): string {
-  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD
+  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   return formatIsoToBr(iso);
 }
 function parseAmount(raw: string): number {
@@ -71,15 +67,33 @@ function productsFromNotes(notes?: string | null): string {
   const mt = notes.match(/\(([^)]+)\)/);
   return mt ? mt[1] : "";
 }
+function periodLabel(acc: CreditAccount): string {
+  const { period_unit, period_count } = acc;
+  if (period_unit === "month" && period_count === 1) return "Mensal";
+  if (period_unit === "week" && period_count === 1) return "Semanal";
+  if (period_unit === "week" && period_count === 2) return "Quinzenal";
+  if (period_unit === "day") return `A cada ${period_count}d`;
+  return `${period_count}${period_unit === "week" ? "sem" : period_unit === "month" ? "mês" : "d"}`;
+}
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
   onClose, onCobrar, onChanged,
 }: Props) {
   const qc = useQueryClient();
+
+  // Recebimento estado
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("dinheiro");
   const [dateBr, setDateBr] = useState(todayBrSp());
+  const [receiveMode, setReceiveMode] = useState<ReceiveMode>("fifo");
+  const [fifoAccountId, setFifoAccountId] = useState<string | null | undefined>(undefined); // undefined = todos
+  const [distributions, setDistributions] = useState<Record<string, string>>({}); // account_id|"general" -> "valor"
+
+  // Novo carnê inline
+  const [showNewAccount, setShowNewAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ["credit-customer", companyId, customerId],
@@ -89,28 +103,69 @@ export function ClienteCrediarioModal({
   });
 
   useEffect(() => {
-    if (visible) { setAmount(""); setMethod("dinheiro"); setDateBr(todayBrSp()); }
+    if (visible) {
+      setAmount("");
+      setMethod("dinheiro");
+      setDateBr(todayBrSp());
+      setReceiveMode("fifo");
+      setFifoAccountId(undefined);
+      setDistributions({});
+      setShowNewAccount(false);
+      setNewAccountName("");
+    }
   }, [visible, customerId]);
 
   const detail = detailQ.data;
+  const accounts: CreditAccount[] = detail?.accounts || [];
+  const hasAccounts = accounts.length > 0;
   const balance = detail?.balance ?? 0;
+
+  // Resumo consolidado dos carnês (quando existem)
+  const totalBalance = hasAccounts
+    ? accounts.reduce((s, a) => s + (a.balance || 0), 0)
+    : balance;
+  const overdueAccounts = accounts.filter(a => a.overdue);
+
   const openInst = useMemo(
     () => (detail?.open_installments || []).slice()
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()),
     [detail],
   );
-  const hasOverdue = openInst.some(i => i.status === "overdue");
+  const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => i.status === "overdue");
   const openSum = openInst.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
 
+  // Distribuição: total alocado
+  const distributionTotal = useMemo(() => {
+    return Object.values(distributions).reduce((s, v) => s + parseAmount(v), 0);
+  }, [distributions]);
+
+  // Mutação: receber pagamento
   const payMut = useMutation({
-    mutationFn: (amt: number) => creditApi.receivePayment(companyId, customerId!, {
-      amount: amt,
-      payment_method: method,
-      paid_at: parseBrDate(dateBr) || undefined,
-    }),
+    mutationFn: () => {
+      const paidAt = parseBrDate(dateBr) || undefined;
+      if (receiveMode === "distribute" && hasAccounts) {
+        const allocations: PaymentAllocation[] = Object.entries(distributions)
+          .map(([key, val]) => ({ account_id: key === "general" ? null : key, amount: parseAmount(val) }))
+          .filter(a => a.amount > 0);
+        return creditApi.receivePayment(companyId, customerId!, {
+          payment_method: method,
+          paid_at: paidAt,
+          allocations,
+        });
+      }
+      // FIFO (ou sem carnês)
+      const amt = parseAmount(amount);
+      return creditApi.receivePayment(companyId, customerId!, {
+        amount: amt,
+        payment_method: method,
+        paid_at: paidAt,
+        account_id: fifoAccountId,
+      });
+    },
     onSuccess: (res) => {
       toast.success("Recebimento registrado! Saldo: " + fmt(res.new_balance));
       setAmount("");
+      setDistributions({});
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
       qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
@@ -120,17 +175,36 @@ export function ClienteCrediarioModal({
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao registrar recebimento"),
   });
 
-  const amountNum = parseAmount(amount);
-  const afterBalance = Math.max(0, Math.round((balance - amountNum) * 100) / 100);
+  const amountNum = receiveMode === "distribute" ? distributionTotal : parseAmount(amount);
+  const afterBalance = Math.max(0, Math.round((totalBalance - amountNum) * 100) / 100);
   const dateInvalid = dateBr.length === 10 && parseBrDate(dateBr) === null;
 
   function confirmReceive() {
     if (amountNum <= 0) { toast.error("Informe um valor maior que zero"); return; }
     if (dateInvalid) { toast.error("Data inválida — use dd/mm/aaaa"); return; }
-    payMut.mutate(amountNum);
+    if (receiveMode === "distribute" && hasAccounts) {
+      // validação de soma já foi feita pelo botao
+    }
+    payMut.mutate();
   }
   function prefill(v: number) {
     setAmount(v.toFixed(2).replace(".", ","));
+  }
+
+  async function handleCreateAccount() {
+    if (!newAccountName.trim()) { toast.error("Nome do carnê é obrigatório"); return; }
+    setCreatingAccount(true);
+    try {
+      await creditApi.createAccount(companyId, customerId!, { name: newAccountName.trim() });
+      toast.success("Carnê criado!");
+      setShowNewAccount(false);
+      setNewAccountName("");
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+    } catch (err: any) {
+      toast.error(err?.data?.error || "Erro ao criar carnê");
+    } finally {
+      setCreatingAccount(false);
+    }
   }
 
   const name = detail?.customer?.name || customerName || "Cliente";
@@ -183,12 +257,19 @@ export function ClienteCrediarioModal({
               </View>
             ) : (
               <>
-                {/* Resumo */}
+                {/* Resumo consolidado */}
                 <View style={m.card}>
                   <Text style={m.cardTitle}>Resumo</Text>
                   <View style={m.row}>
-                    <View><Text style={m.rowK}>Saldo devedor (crediário)</Text><Text style={m.rowKsub}>Ledger acumulado</Text></View>
-                    <Text style={[m.rowV, { color: Colors.red }]}>{fmt(balance)}</Text>
+                    <View>
+                      <Text style={m.rowK}>Saldo devedor total</Text>
+                      <Text style={m.rowKsub}>
+                        {hasAccounts
+                          ? `${accounts.length} carnê${accounts.length !== 1 ? "s" : ""}${overdueAccounts.length > 0 ? ` · ${overdueAccounts.length} em atraso` : ""}`
+                          : "Ledger acumulado"}
+                      </Text>
+                    </View>
+                    <Text style={[m.rowV, { color: Colors.red }]}>{fmt(totalBalance)}</Text>
                   </View>
                   {openInst.length > 0 && (
                     <View style={m.row}>
@@ -198,8 +279,96 @@ export function ClienteCrediarioModal({
                   )}
                 </View>
 
-                {/* Parcelas em aberto */}
-                {openInst.length > 0 && (
+                {/* Seção de Carnês (F3) */}
+                {hasAccounts && (
+                  <View style={m.card}>
+                    <View style={m.cardTitleRow}>
+                      <Text style={m.cardTitle}>Carnês / contas</Text>
+                      <Pressable
+                        style={m.newAccBtn}
+                        onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
+                      >
+                        <Icon name="plus" size={12} color={Colors.violet3} />
+                        <Text style={m.newAccTxt}>Novo carnê</Text>
+                      </Pressable>
+                    </View>
+
+                    {showNewAccount && (
+                      <View style={m.newAccRow}>
+                        <TextInput
+                          style={m.newAccInput}
+                          placeholder="Nome do carnê"
+                          placeholderTextColor={Colors.ink3}
+                          value={newAccountName}
+                          onChangeText={setNewAccountName}
+                          autoFocus
+                        />
+                        <Pressable
+                          style={[m.newAccConfirm, creatingAccount && { opacity: 0.5 }]}
+                          onPress={handleCreateAccount}
+                          disabled={creatingAccount}
+                        >
+                          {creatingAccount
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Text style={m.newAccConfirmTxt}>Criar</Text>}
+                        </Pressable>
+                      </View>
+                    )}
+
+                    {accounts.map((acc) => {
+                      const isOverdueAcc = acc.overdue;
+                      const statusColor = isOverdueAcc ? Colors.red : Colors.green;
+                      return (
+                        <View key={acc.id ?? "general"} style={m.accCard}>
+                          <View style={m.accTop}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={m.accName}>{acc.name}</Text>
+                              <View style={m.accMeta}>
+                                <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
+                                  <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
+                                </View>
+                                <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
+                                  <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
+                                </View>
+                              </View>
+                            </View>
+                            <View style={{ alignItems: "flex-end" }}>
+                              <Text style={[m.accBalance, { color: acc.balance > 0 ? Colors.red : Colors.ink3 }]}>
+                                {fmt(acc.balance)}
+                              </Text>
+                              {acc.next_due_date && (
+                                <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date)}</Text>
+                              )}
+                            </View>
+                          </View>
+                          <View style={m.accActions}>
+                            <Pressable
+                              style={m.accActionBtn}
+                              onPress={() => {
+                                setReceiveMode("fifo");
+                                setFifoAccountId(acc.id);
+                                prefill(acc.balance);
+                              }}
+                            >
+                              <Text style={m.accActionTxt}>Receber</Text>
+                            </Pressable>
+                            {!!phone && (
+                              <Pressable
+                                style={[m.accActionBtn, m.accActionWa]}
+                                onPress={() => onCobrar?.(customerId!, name, phone)}
+                              >
+                                <Text style={[m.accActionTxt, { color: Colors.green }]}>Cobrar</Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Parcelas em aberto (sem carnês) */}
+                {!hasAccounts && openInst.length > 0 && (
                   <View style={m.card}>
                     <Text style={m.cardTitle}>Parcelas em aberto</Text>
                     {openInst.map((ins) => {
@@ -223,33 +392,110 @@ export function ClienteCrediarioModal({
                   </View>
                 )}
 
-                {/* Registrar recebimento (valor livre) */}
+                {/* Registrar recebimento */}
                 <View style={m.freeBox}>
                   <Text style={m.freeTitle}>Registrar recebimento</Text>
-                  <Text style={m.fieldLabel}>Valor recebido</Text>
-                  <View style={m.amountIn}>
-                    <Text style={m.amountPrefix}>R$</Text>
-                    <TextInput
-                      style={m.amountInput}
-                      value={amount}
-                      onChangeText={(v) => setAmount(v.replace(/[^\d,.]/g, ""))}
-                      placeholder="0,00"
-                      placeholderTextColor={Colors.ink3}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={m.quickRow}>
-                    {[50, 100, 200].map(v => (
-                      <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
-                        <Text style={m.qChipTxt}>{fmt(v)}</Text>
-                      </Pressable>
-                    ))}
-                    {balance > 0 && (
-                      <Pressable style={m.qChip} onPress={() => prefill(balance)}>
-                        <Text style={m.qChipTxt}>Quitar ({fmt(balance)})</Text>
-                      </Pressable>
-                    )}
-                  </View>
+
+                  {/* Toggle de modo (só quando há carnês) */}
+                  {hasAccounts && (
+                    <View style={m.modeRow}>
+                      {(["fifo", "distribute"] as ReceiveMode[]).map(mode => (
+                        <Pressable
+                          key={mode}
+                          style={[m.modeChip, receiveMode === mode && m.modeChipOn]}
+                          onPress={() => setReceiveMode(mode)}
+                        >
+                          <Text style={[m.modeChipTxt, receiveMode === mode && m.modeChipTxtOn]}>
+                            {mode === "fifo" ? "Em um carnê (FIFO)" : "Distribuir entre carnês"}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* FIFO: seleção de carnê por chips */}
+                  {hasAccounts && receiveMode === "fifo" && (
+                    <View style={[m.fieldBlock, { marginTop: 10 }]}>
+                      <Text style={m.fieldLabel}>Carnê</Text>
+                      <View style={m.chipRow}>
+                        <Pressable
+                          style={[m.chip, fifoAccountId === undefined && m.chipOn]}
+                          onPress={() => setFifoAccountId(undefined)}
+                        >
+                          <Text style={[m.chipTxt, fifoAccountId === undefined && m.chipTxtOn]}>Todos (FIFO)</Text>
+                        </Pressable>
+                        {accounts.map(acc => (
+                          <Pressable
+                            key={acc.id ?? "general"}
+                            style={[m.chip, fifoAccountId === acc.id && m.chipOn]}
+                            onPress={() => setFifoAccountId(acc.id)}
+                          >
+                            <Text style={[m.chipTxt, fifoAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Distribuir: input por carnê */}
+                  {hasAccounts && receiveMode === "distribute" && (
+                    <View style={m.fieldBlock}>
+                      {accounts.map(acc => {
+                        const key = acc.id ?? "general";
+                        return (
+                          <View key={key} style={m.distRow}>
+                            <Text style={m.distLabel} numberOfLines={1}>{acc.name}</Text>
+                            <View style={m.distInput}>
+                              <Text style={m.amountPrefix}>R$</Text>
+                              <TextInput
+                                style={m.distField}
+                                value={distributions[key] || ""}
+                                onChangeText={v => setDistributions(prev => ({ ...prev, [key]: v.replace(/[^\d,.]/g, "") }))}
+                                placeholder="0,00"
+                                placeholderTextColor={Colors.ink3}
+                                keyboardType="decimal-pad"
+                              />
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <View style={m.distTotal}>
+                        <Text style={m.distTotalLbl}>Total</Text>
+                        <Text style={m.distTotalVal}>{fmt(distributionTotal)}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Valor (modo FIFO ou sem carnês) */}
+                  {(!hasAccounts || receiveMode === "fifo") && (
+                    <>
+                      <Text style={m.fieldLabel}>Valor recebido</Text>
+                      <View style={m.amountIn}>
+                        <Text style={m.amountPrefix}>R$</Text>
+                        <TextInput
+                          style={m.amountInput}
+                          value={amount}
+                          onChangeText={(v) => setAmount(v.replace(/[^\d,.]/g, ""))}
+                          placeholder="0,00"
+                          placeholderTextColor={Colors.ink3}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={m.quickRow}>
+                        {[50, 100, 200].map(v => (
+                          <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
+                            <Text style={m.qChipTxt}>{fmt(v)}</Text>
+                          </Pressable>
+                        ))}
+                        {totalBalance > 0 && (
+                          <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
+                            <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </>
+                  )}
+
                   <Text style={[m.fieldLabel, { marginTop: 14 }]}>Data do recebimento</Text>
                   <DateInput
                     value={dateBr}
@@ -258,6 +504,7 @@ export function ClienteCrediarioModal({
                     style={m.dateInput}
                   />
                   <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
+
                   <Text style={[m.fieldLabel, { marginTop: 14 }]}>Forma</Text>
                   <View style={m.methods}>
                     {PAYMENT_METHODS.map(pm => (
@@ -266,6 +513,7 @@ export function ClienteCrediarioModal({
                       </Pressable>
                     ))}
                   </View>
+
                   {amountNum > 0 && (
                     <View style={m.after}>
                       <Text style={m.afterK}>Saldo após recebimento</Text>
@@ -288,7 +536,14 @@ export function ClienteCrediarioModal({
                           <View style={[m.tlDot, { backgroundColor: isPay ? Colors.green : Colors.violet3 }]} />
                           <View style={{ flex: 1 }}>
                             <View style={m.tlLine}>
-                              <Text style={m.tlMain}>{isPay ? `Recebimento${t.payment_method ? " · " + t.payment_method : ""}` : "Compra no crediário"}</Text>
+                              <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                                <Text style={m.tlMain}>{isPay ? `Recebimento${t.payment_method ? " · " + t.payment_method : ""}` : "Compra no crediário"}</Text>
+                                {t.account_name && (
+                                  <View style={m.tlAccTag}>
+                                    <Text style={m.tlAccTagTxt}>{t.account_name}</Text>
+                                  </View>
+                                )}
+                              </View>
                               <Text style={[m.tlAmt, { color: isPay ? Colors.green : Colors.ink }]}>{isPay ? "+ " : ""}{fmt(t.amount)}</Text>
                             </View>
                             <Text style={m.tlSub}>{fmtDate(t.created_at)}{prods ? ` · ${prods}` : (t.notes && !isPay ? ` · ${t.notes}` : "")}</Text>
@@ -344,11 +599,34 @@ const m = StyleSheet.create({
   waTxt: { fontSize: 12, fontWeight: "700", color: Colors.green },
 
   card: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 13 },
-  cardTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 12 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  cardTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 11 },
   rowK: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   rowKsub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
   rowV: { fontSize: 17, fontWeight: "800" },
+
+  // Novo carnê inline
+  newAccBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
+  newAccTxt: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
+  newAccRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  newAccInput: { flex: 1, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, color: Colors.ink, fontSize: 13, backgroundColor: Colors.bg2 },
+  newAccConfirm: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8, alignItems: "center", justifyContent: "center" },
+  newAccConfirmTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+
+  // Card de carnê
+  accCard: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12, marginTop: 4, paddingBottom: 4 },
+  accTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  accName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  accMeta: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 5 },
+  accBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, borderWidth: 1 },
+  accBadgeTxt: { fontSize: 10, fontWeight: "700" },
+  accBalance: { fontSize: 16, fontWeight: "800" },
+  accNextDue: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  accActions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  accActionBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 13, paddingVertical: 7 },
+  accActionWa: { backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)" },
+  accActionTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
   parc: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: Colors.border },
   parcT: { fontSize: 13, fontWeight: "700", color: Colors.ink },
@@ -358,9 +636,29 @@ const m = StyleSheet.create({
   receberBtn: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
   receberTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
+  // Recebimento
   freeBox: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 14, marginBottom: 13 },
   freeTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 10 },
+  modeRow: { flexDirection: "row", gap: 7, marginBottom: 10 },
+  modeChip: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 8 },
+  modeChipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  modeChipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2, textAlign: "center" },
+  modeChipTxtOn: { color: "#fff" },
+  fieldBlock: { marginTop: 4 },
   fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 10 },
+  chip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
+  chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  chipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
+  chipTxtOn: { color: "#fff" },
+  // Distribuir
+  distRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  distLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.ink },
+  distInput: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
+  distField: { width: 80, color: Colors.ink, fontSize: 13, fontWeight: "700", paddingVertical: 0 },
+  distTotal: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  distTotalLbl: { fontSize: 12, color: Colors.ink3 },
+  distTotalVal: { fontSize: 14, fontWeight: "800", color: Colors.amber },
   amountIn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg2, borderWidth: 1.5, borderColor: Colors.violet2, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11 },
   amountPrefix: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
   amountInput: { flex: 1, color: Colors.ink, fontSize: 20, fontWeight: "800", paddingVertical: 0 },
@@ -377,12 +675,15 @@ const m = StyleSheet.create({
   afterK: { fontSize: 12, color: Colors.ink3 },
   afterV: { fontSize: 14, fontWeight: "800", color: Colors.amber },
 
+  // Histórico
   tlItem: { flexDirection: "row", gap: 11, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
   tlDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   tlLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
   tlMain: { fontSize: 13, fontWeight: "600", color: Colors.ink },
   tlAmt: { fontSize: 13, fontWeight: "800" },
   tlSub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  tlAccTag: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
+  tlAccTagTxt: { fontSize: 10, fontWeight: "700", color: Colors.violet3 },
   emptyTxt: { fontSize: 12, color: Colors.ink3, paddingVertical: 6 },
 
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: Colors.border },

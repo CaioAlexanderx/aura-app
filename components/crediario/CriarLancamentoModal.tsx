@@ -1,13 +1,17 @@
 // ============================================================
 // AURA. — CriarLancamentoModal
 // Modal 2 etapas: seleção de cliente + detalhes do lançamento.
-// Usado na tela de Crediário para criar débitos manuais sem venda.
 //
-// 05/06/2026: campo "Data do lançamento" (default hoje, SP) para lançamento
-//   retroativo (entry_date) + seletor de periodicidade das parcelas
-//   (semanal/quinzenal/mensal/personalizado -> period_unit/period_count).
+// 05/06/2026: data retroativa + periodicidade.
+// F3 (05/06/2026): seletor de carnê na etapa de detalhes.
+//   - "Conta geral" (default) — sem account_id
+//   - escolher carnê existente — envia account_id
+//   - "Novo carnê" — campo de nome, envia new_account_name
+//
+// Os carnês são buscados do backend após a seleção do cliente
+// (via creditApi.getCustomerHistory), não dependem de prop.
 // ============================================================
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Modal,
   View,
@@ -24,13 +28,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
-import { creditApi, type ManualEntryPayload, type PeriodUnit } from "@/services/creditApi";
+import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 type Step = "customer" | "details";
 type Mode = "search" | "create";
 type PeriodKind = "semanal" | "quinzenal" | "mensal" | "custom";
+type AccountMode = "general" | "existing" | "new";
 
 interface CustomerOption {
   id: string;
@@ -64,8 +69,6 @@ function fmtPhone(v: string): string {
   return d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
 }
 
-// Helpers de data agora vêm de @/components/inputs/DateInput (padrão único do app).
-// Mantemos só defaultDueDate local porque é específico desse modal (1 mês à frente).
 function defaultDueDate(): string {
   const d = new Date();
   d.setMonth(d.getMonth() + 1);
@@ -75,9 +78,8 @@ function defaultDueDate(): string {
   return `${day}/${month}/${year}`;
 }
 
-// Hoje em America/Sao_Paulo no formato dd/mm/aaaa (default da data do lançamento).
 function todayBrSp(): string {
-  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD
+  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   return formatIsoToBr(iso);
 }
 
@@ -117,6 +119,13 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [periodDays, setPeriodDays]     = useState("20");
   const [description, setDescription]   = useState("");
 
+  // F3: seletor de carnê — buscados do backend após seleção do cliente
+  const [accountMode, setAccountMode]             = useState<AccountMode>("general");
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [newAccountName, setNewAccountName]       = useState("");
+  const [fetchedAccounts, setFetchedAccounts]     = useState<CreditAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts]     = useState(false);
+
   const reset = useCallback(() => {
     setStep("customer");
     setMode("search");
@@ -133,6 +142,10 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setPeriodKind("mensal");
     setPeriodDays("20");
     setDescription("");
+    setAccountMode("general");
+    setSelectedAccountId(null);
+    setNewAccountName("");
+    setFetchedAccounts([]);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -140,7 +153,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     onClose();
   }, [reset, onClose]);
 
-  // ── Customer search ──────────────────────────────────────────────
   const handleSearch = useCallback(
     (q: string) => {
       setSearchQ(q);
@@ -164,18 +176,34 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     [company]
   );
 
+  // Após selecionar cliente, busca os carnês dele no backend
+  const fetchAccountsForCustomer = useCallback(async (customerId: string) => {
+    if (!company?.id) return;
+    setLoadingAccounts(true);
+    try {
+      const data = await creditApi.getCustomerHistory(company.id, customerId);
+      setFetchedAccounts(data.accounts || []);
+    } catch {
+      setFetchedAccounts([]);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, [company]);
+
   const handleSelectCustomer = (c: CustomerOption) => {
     setSelectedCustomer(c);
     setStep("details");
+    fetchAccountsForCustomer(c.id);
   };
 
   const handleConfirmNewCustomer = () => {
     if (!newName.trim())  { toast.error("Nome obrigatório"); return; }
     if (!newPhone.trim()) { toast.error("Telefone obrigatório"); return; }
+    // Novo cliente não tem carnês ainda
+    setFetchedAccounts([]);
     setStep("details");
   };
 
-  // ── Submit ───────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const amountNum = parseCurrencyInput(amountRaw);
     if (!amountNum || amountNum <= 0) { toast.error("Valor inválido"); return; }
@@ -189,6 +217,16 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     const entryIso = parseBrDate(entryDate) || undefined;
     if (entryDate && entryDate.length === 10 && !entryIso) {
       toast.error("Data do lançamento inválida — use dd/mm/aaaa");
+      return;
+    }
+
+    // F3: validar campo novo carnê
+    if (accountMode === "new" && !newAccountName.trim()) {
+      toast.error("Informe o nome do novo carnê");
+      return;
+    }
+    if (accountMode === "existing" && !selectedAccountId) {
+      toast.error("Selecione um carnê");
       return;
     }
 
@@ -213,6 +251,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       period_unit:   period.period_unit,
       period_count:  period.period_count,
       description:   description.trim() || undefined,
+      // F3: carnê
+      account_id:       accountMode === "existing" ? selectedAccountId : undefined,
+      new_account_name: accountMode === "new" ? newAccountName.trim() : undefined,
     };
 
     setLoading(true);
@@ -222,6 +263,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       qc.invalidateQueries({ queryKey: ["credit-balances",   company!.id] });
       qc.invalidateQueries({ queryKey: ["credit-dashboard",  company!.id] });
       qc.invalidateQueries({ queryKey: ["credit-aging",      company!.id] });
+      if (selectedCustomer?.id) {
+        qc.invalidateQueries({ queryKey: ["credit-customer", company!.id, selectedCustomer.id] });
+      }
       handleClose();
     } catch (err: any) {
       toast.error(err?.message || "Erro ao criar lançamento");
@@ -230,7 +274,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     }
   };
 
-  // ── Preview de parcelas ──────────────────────────────────────────
   const amountNum  = parseCurrencyInput(amountRaw);
   const nParcelas  = Math.max(1, parseInt(installments, 10) || 1);
   const rateNum    = interestRate.trim()
@@ -242,7 +285,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       : amountNum;
   const valorParcela = amountNum > 0 ? totalComJuros / nParcelas : 0;
 
-  // ── Render ───────────────────────────────────────────────────────
   const customerLabel = selectedCustomer
     ? selectedCustomer.name
     : mode === "create"
@@ -253,6 +295,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     ["semanal", "Semanal"], ["quinzenal", "Quinzenal"], ["mensal", "Mensal"], ["custom", "Personalizado"],
   ];
 
+  // Carnês disponíveis para seleção (filtra conta geral id=null e fechados)
+  const selectableAccounts = fetchedAccounts.filter(a => a.id !== null && a.status === "open");
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <Pressable style={s.backdrop} onPress={handleClose}>
@@ -261,7 +306,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
           style={s.kvWrapper}
         >
           <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
-            {/* ── Header ── */}
+            {/* Header */}
             <View style={s.header}>
               <View style={s.headerLeft}>
                 <View style={s.headerIcon}>
@@ -279,16 +324,14 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
               </Pressable>
             </View>
 
-            {/* ── Steps indicator ── */}
+            {/* Steps indicator */}
             <View style={s.stepsRow}>
               <View style={[s.stepDot, step === "customer" && s.stepDotActive]} />
               <View style={s.stepLine} />
               <View style={[s.stepDot, step === "details" && s.stepDotActive]} />
             </View>
 
-            {/* ══════════════════════════════════════════════════════ */}
-            {/* STEP 1 — Cliente                                       */}
-            {/* ══════════════════════════════════════════════════════ */}
+            {/* STEP 1 — Cliente busca */}
             {step === "customer" && mode === "search" && (
               <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
                 <Text style={s.label}>Buscar cliente</Text>
@@ -342,6 +385,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
               </ScrollView>
             )}
 
+            {/* STEP 1 — Cliente criar */}
             {step === "customer" && mode === "create" && (
               <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
                 <Pressable
@@ -382,9 +426,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
               </ScrollView>
             )}
 
-            {/* ══════════════════════════════════════════════════════ */}
-            {/* STEP 2 — Detalhes                                      */}
-            {/* ══════════════════════════════════════════════════════ */}
+            {/* STEP 2 — Detalhes */}
             {step === "details" && (
               <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
                 {/* Cliente selecionado */}
@@ -483,6 +525,74 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   </View>
                 )}
 
+                {/* F3: Seletor de carnê */}
+                <Text style={s.label}>Carnê / conta</Text>
+                {loadingAccounts ? (
+                  <ActivityIndicator size="small" color={Colors.violet3} style={{ marginBottom: 8 }} />
+                ) : (
+                  <>
+                    <View style={s.accountModeRow}>
+                      {([
+                        ["general", "Conta geral"],
+                        ["existing", "Carnê existente"],
+                        ["new", "Novo carnê"],
+                      ] as [AccountMode, string][]).map(([k, lbl]) => (
+                        <Pressable
+                          key={k}
+                          onPress={() => setAccountMode(k)}
+                          style={[s.accountModeChip, accountMode === k && s.accountModeChipOn]}
+                        >
+                          <Text style={[s.accountModeChipTxt, accountMode === k && s.accountModeChipTxtOn]}>
+                            {lbl}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    {accountMode === "existing" && (
+                      selectableAccounts.length === 0 ? (
+                        <Text style={s.accountHint}>Nenhum carnê aberto. Escolha "Novo carnê" para criar.</Text>
+                      ) : (
+                        <View style={s.accountList}>
+                          {selectableAccounts.map(acc => (
+                            <Pressable
+                              key={acc.id}
+                              style={[s.accountRow, selectedAccountId === acc.id && s.accountRowOn]}
+                              onPress={() => setSelectedAccountId(acc.id)}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={[s.accountRowName, selectedAccountId === acc.id && { color: Colors.violet3 }]}>
+                                  {acc.name}
+                                </Text>
+                                <Text style={s.accountRowSub}>
+                                  Saldo: R$ {(acc.balance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  {acc.overdue ? " · Em atraso" : ""}
+                                </Text>
+                              </View>
+                              {selectedAccountId === acc.id && (
+                                <Icon name="check" size={14} color={Colors.violet3} />
+                              )}
+                            </Pressable>
+                          ))}
+                        </View>
+                      )
+                    )}
+
+                    {accountMode === "new" && (
+                      <>
+                        <TextInput
+                          style={[s.input, { marginTop: 8 }]}
+                          placeholder="Nome do carnê (ex.: Compras de junho)"
+                          placeholderTextColor={Colors.ink3}
+                          value={newAccountName}
+                          onChangeText={setNewAccountName}
+                        />
+                        <Text style={s.dateHint}>Um novo carnê será criado com este lançamento.</Text>
+                      </>
+                    )}
+                  </>
+                )}
+
                 <Text style={[s.label, { marginTop: 14 }]}>
                   Juros ao mês %{" "}
                   <Text style={s.labelOptional}>(opcional)</Text>
@@ -562,7 +672,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -730,6 +839,18 @@ const s = StyleSheet.create({
   customDaysRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, padding: 10 },
   customDaysLbl: { fontSize: 13, color: Colors.ink2, fontWeight: "600" },
   customDaysNum: { width: 60, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingVertical: 7, textAlign: "center", color: Colors.ink, fontWeight: "800", fontSize: 14 },
+  // F3: seletor de carnê
+  accountModeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  accountModeChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
+  accountModeChipOn: { backgroundColor: Colors.violetD, borderColor: Colors.violet2 },
+  accountModeChipTxt: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
+  accountModeChipTxtOn: { color: Colors.violet3 },
+  accountHint: { fontSize: 12, color: Colors.ink3, marginTop: 8 },
+  accountList: { marginTop: 8, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, overflow: "hidden" },
+  accountRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border2, backgroundColor: Colors.bg2 },
+  accountRowOn: { backgroundColor: Colors.violetD },
+  accountRowName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  accountRowSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   customerChip: {
     flexDirection: "row",
     alignItems: "center",
