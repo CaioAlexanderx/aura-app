@@ -37,11 +37,15 @@ export type CreditProfile = {
   config?: CreditPlanConfig;
 };
 
+/** Periodicidade entre parcelas. Semanal=week×1, quinzenal=week×2, mensal=month×1, personalizado=day×N. */
+export type PeriodUnit = "day" | "week" | "month";
+
 export type CreditPlanConfig = {
   company_id: string; max_installments: number;
   min_installment_value: number; interest_rate: number;
   late_fee_rate: number; late_interest_daily: number;
   require_score_min: number; auto_block_days: number;
+  period_unit?: PeriodUnit; period_count?: number;
 };
 
 export type CreditInstallment = {
@@ -82,6 +86,7 @@ export type AgingRow = {
 
 export type CollectionRules = {
   company_id: string; enabled: boolean; whatsapp_connected: boolean;
+  pix_key?: string | null;
   rules: Array<{
     id: string; name: string; days_relative: number;
     template: string; channel: string; enabled: boolean;
@@ -135,6 +140,8 @@ export type ManualEntryPayload = {
   interest_rate?: number;   // decimal (0.025 = 2.5% ao mês)
   first_due_date?: string;  // YYYY-MM-DD
   entry_date?: string;      // YYYY-MM-DD — data do lançamento (retroativo); default hoje no backend
+  period_unit?: PeriodUnit; // periodicidade das parcelas; default = config da loja
+  period_count?: number;
   description?: string;
 };
 
@@ -211,6 +218,7 @@ export const creditApi = {
   createInstallments(companyId: string, body: {
     customer_id: string; sale_id?: string; total_amount: number;
     installments: number; first_due_date: string;
+    period_unit?: PeriodUnit; period_count?: number;
   }) {
     return request<{ installments: CreditInstallment[] }>(
       `${base(companyId)}/installments`, { method: "POST", body }
