@@ -26,6 +26,11 @@ const PATHS: Record<string, string> = {
   refresh:        "M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15",
   repeat:         "M17 1l4 4-4 4 M3 11V9a4 4 0 014-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 01-4 4H3",
   drag_handle:    "M8 6h.01 M8 12h.01 M8 18h.01 M16 6h.01 M16 12h.01 M16 18h.01",
+  // Setas direcionais — usadas em CTAs e onboarding do Studio
+  arrow_right:    "M5 12h14 M12 5l7 7-7 7",
+  arrow_left:     "M19 12H5 M12 19l-7-7 7-7",
+  // Link externo — abre em nova aba (storefront, marketplaces)
+  external_link:  "M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6 M15 3h6v6 M10 14L21 3",
   // ── Security ────────────────────────────────────────────────
   lock:           "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z M7 11V7a5 5 0 0110 0v4",
   unlock:         "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z M7 11V7a5 5 0 019.9-1",
@@ -56,6 +61,14 @@ const PATHS: Record<string, string> = {
   // Usado em PDV troca v2: Step 1 (QR cupom NFC-e) e Step 3 (QR produto).
   qr_code:        "M3 3h7v7H3z M5 5h3v3H5z M14 3h7v7h-7z M16 5h3v3h-3z M3 14h7v7H3z M5 16h3v3H5z M14 14h3v3h-3z M19 14h2v2h-2z M14 19h2v2h-2z M19 19h2v2h-2z",
   camera:         "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z M12 17a4 4 0 100-8 4 4 0 000 8z",
+  // Caixa 3D (mantido para retrocompatibilidade) — Feather "box"
+  box:            "M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
+  // Caminhao de entrega — logistica/frete no storefront
+  truck:          "M1 3h15v13H1z M16 8h4l3 3v5h-7V8z M5.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z M18.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
+  // Redimensionar / expand — usado em previews e modais de galeria
+  resize:         "M15 3h6v6 M9 21H3v-6 M21 3l-7 7 M3 21l7-7",
+  // Pin de localizacao — endereco de retirada no storefront
+  location:       "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z M12 13a3 3 0 100-6 3 3 0 000 6z",
   // ── People ──────────────────────────────────────────────────
   users:          "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
   user_plus:      "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M8.5 11a4 4 0 100-8 4 4 0 000 8z M20 8v6 M23 11h-6",
@@ -125,6 +138,15 @@ const ALIASES: Record<string, string> = {
   "eye-off":         "eye_off",
   "qr-code":         "qr_code",
   "drag-handle":     "drag_handle",
+  // Novos aliases (fix/studio-icons)
+  "refresh-cw":      "refresh",
+  "arrow-right":     "arrow_right",
+  "arrow-left":      "arrow_left",
+  "external-link":   "external_link",
+  "map-pin":         "location",
+  "create":          "edit",
+  "add":             "plus",
+  "layout-grid":     "grid",
 };
 
 function resolveName(name: string): string {
@@ -182,6 +204,9 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     // Novos (25/05)
     shopping_bag: "B", shopping_cart: "C", credit_card: "$",
     message_circle: "M", alert_circle: "!", briefcase: "B", image: "I",
+    // Novos (fix/studio-icons)
+    arrow_right: ">", arrow_left: "<", external_link: "^", box: "B",
+    truck: "T", resize: "R", location: "P",
   };
 
   return (

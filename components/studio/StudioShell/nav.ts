@@ -53,7 +53,7 @@ export const STUDIO_NAV: StudioNavItem[] = [
     route: '/studio/estoque',
     label: 'Catálogo',
     group: 'ESTÚDIO',
-    icon: 'box',
+    icon: 'layout-grid',
   },
   {
     route: '/studio/galeria',
