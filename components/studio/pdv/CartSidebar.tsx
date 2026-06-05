@@ -6,8 +6,7 @@
 // 05/06/2026 (paridade Negócio):
 //   - quantidade digitável entre as setas + lápis de preço de venda;
 //   - desconto por item exibido em PORCENTAGEM (−X% · −R$ Y);
-//   - rodapé ganha chips de forma de pagamento + botão Finalizar venda,
-//     pra não depender de navegar até a tela de checkout.
+//   - rodapé com chips de forma de pagamento + botão Finalizar venda.
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, Platform } from "react-native";
@@ -165,7 +164,7 @@ export function CartSidebar({
 }) {
   const has = cart.length > 0;
   return (
-    <View style={{ flex: 1, backgroundColor: t.paperCard, borderLeftWidth: 1, borderLeftColor: t.ink5 }}>
+    <View style={{ flex: 1, minHeight: 0, backgroundColor: t.paperCard, borderLeftWidth: 1, borderLeftColor: t.ink5 }}>
       {/* head */}
       <View dataSet={{ flyTarget: "cart" }} style={{ padding: 16, gap: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
         <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" }}>Total da venda</Text>
@@ -183,7 +182,7 @@ export function CartSidebar({
       </View>
 
       {/* body */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, gap: 8 }}>
+      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ padding: 12, gap: 8 }}>
         {!has ? (
           <View style={{ alignItems: "center", gap: 8, paddingVertical: 40 }}>
             <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: t.bgSoft, alignItems: "center", justifyContent: "center" }}>
@@ -218,7 +217,6 @@ export function CartSidebar({
           </View>
         </View>
 
-        <SumRow t={t} label="Subtotal" value={subtotal} />
         <SumRow t={t} label="Total" value={subtotal} big />
 
         <View style={{ flexDirection: "row", gap: 8, marginTop: 2 }}>
