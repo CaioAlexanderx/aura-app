@@ -20,6 +20,9 @@
 // 30/05/2026 (P1 Camada 1): advance() agora trata 409 deposit_required.
 // Quando backend retorna 409, reverte o optimistic update e exibe Alert
 // de confirmação. Ao confirmar, reenvia com force:true.
+//
+// 05/06/2026 (M2 DnD): drag-and-drop via useStudioKanbanDnD (web-only).
+// Botões de avanço mantidos como fallback (mobile/native).
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -39,6 +42,11 @@ import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
+import {
+  useStudioKanbanDnD,
+  useDraggableCardRef,
+  useDropZoneRef,
+} from "@/components/studio/kanban/useStudioKanbanDnD";
 
 type Column = {
   key: StudioProductionStatus;
@@ -88,6 +96,105 @@ function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "lat
   return                   { txt: `${Math.round(hours / 24)}d (urgente)`,  tone: "late" };
 }
 
+// ── DraggableCard (sub-componente que consome o ref do hook) ─────────────────
+// Separado para poder chamar useDraggableCardRef como hook (regra dos hooks:
+// não pode ser chamado dentro de .map() diretamente).
+function DraggableCard({
+  o, col, t, s, dnd, NEXT_STATUS, PLATFORM_LABELS, onAdvance, onApproval, router,
+}: {
+  o: StudioOrder;
+  col: Column;
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+  dnd: ReturnType<typeof useStudioKanbanDnD<StudioProductionStatus>>;
+  NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null>;
+  PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
+  onAdvance: (order: StudioOrder) => void;
+  onApproval: (order: StudioOrder) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const cardRef = useDraggableCardRef(dnd.isWeb, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
+  const sla = fmtSla(o.created_at);
+  const next = NEXT_STATUS[col.key];
+  const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
+  const isDragging = dnd.draggingId === o.id;
+
+  return (
+    <Pressable
+      ref={cardRef}
+      key={o.id}
+      style={[s.card, isDragging && s.cardDragging]}
+      onPress={() => router.push(`/studio/pedidos/${o.id}` as any)}
+    >
+      {dnd.isWeb && (
+        <View style={s.dragHandle}>
+          <Icon name="drag-handle" size={14} color={t.ink4} />
+        </View>
+      )}
+      <View style={s.cardHead}>
+        <Text style={s.cardId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
+        <View style={[s.slaChip,
+                      sla.tone === "warm"  ? { backgroundColor: t.warningSoft } :
+                      sla.tone === "late"  ? { backgroundColor: t.dangerSoft } : null]}>
+          <Text style={[s.slaTxt,
+                        sla.tone === "warm" ? { color: t.warningInk } :
+                        sla.tone === "late" ? { color: t.dangerInk } : null]}>
+            {sla.txt}
+          </Text>
+        </View>
+      </View>
+      <Text style={s.cardName} numberOfLines={1}>
+        {o.display_name || "Sem cadastro"}
+      </Text>
+      <Text style={s.cardMeta}>
+        {o.item_count} item{o.item_count === 1 ? "" : "s"} · R$ {Number(o.total_amount).toFixed(2)}
+      </Text>
+      {platformMeta && (
+        <View style={[s.platformBadge, { backgroundColor: platformMeta.bg }]}>
+          <Icon name="shopping-bag" size={10} color={platformMeta.fg} />
+          <Text style={[s.platformBadgeTxt, { color: platformMeta.fg }]}>
+            {platformMeta.label}
+          </Text>
+        </View>
+      )}
+      {o.pending_approval_url && (
+        <View style={s.approvalBadge}>
+          <Icon name="message-circle" size={10} color={t.infoInk} />
+          <Text style={s.approvalBadgeTxt}>Aprovação enviada</Text>
+        </View>
+      )}
+      <View style={s.cardActions}>
+        {col.key === "awaiting_customization" && (
+          <Pressable
+            style={[s.btnApproval, { backgroundColor: t.accent }]}
+            onPress={(e) => { e.stopPropagation && e.stopPropagation(); router.push(`/studio/pedidos/${o.id}` as any); }}
+          >
+            <Icon name="message-circle" size={12} color="#fff" />
+            <Text style={s.btnApprovalTxt}>Coletar personalização</Text>
+          </Pressable>
+        )}
+        {col.key === "pending_art" && (
+          <Pressable
+            style={s.btnApproval}
+            onPress={(e) => { e.stopPropagation && e.stopPropagation(); onApproval(o); }}
+          >
+            <Icon name="message-circle" size={12} color="#fff" />
+            <Text style={s.btnApprovalTxt}>Solicitar aprovação</Text>
+          </Pressable>
+        )}
+        {next && (
+          <Pressable
+            style={[s.btnAdvance, { backgroundColor: col.color }]}
+            onPress={(e) => { e.stopPropagation && e.stopPropagation(); onAdvance(o); }}
+          >
+            <Text style={s.btnAdvanceTxt}>{col.nextLabel} →</Text>
+          </Pressable>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
 export default function StudioProducao() {
   const router = useRouter();
   const t = useStudioTokens();
@@ -114,17 +221,24 @@ export default function StudioProducao() {
 
   useEffect(() => { load(); }, [load]);
 
-  // P1 (30/05): forceDeposit=true bypassa o gate require_deposit_for_production.
-  // Quando backend retorna 409 deposit_required, reverte o optimistic update
-  // e pergunta ao lojista se quer forçar mesmo sem sinal confirmado.
-  async function advance(order: StudioOrder, forceDeposit?: boolean) {
+  // ── moveTo: lógica central de mover um pedido para qualquer status ────────
+  // Preserva o tratamento de 409 deposit_required (P1 Camada 1).
+  // advance() chama moveTo(order, NEXT_STATUS[cur]) para manter compat.
+  // onDrop() de DnD também chama moveTo(order, targetStatus).
+  const moveTo = useCallback(async (
+    order: StudioOrder,
+    targetStatus: StudioProductionStatus,
+    force?: boolean,
+  ) => {
+    if (!company?.id) return;
     const cur = (order.studio_production_status || "pending_art") as StudioProductionStatus;
-    const next = NEXT_STATUS[cur];
-    if (!next || !company?.id) return;
-    setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, studio_production_status: next } : o));
+    // Optimistic update
+    setOrders((prev) => prev.map((o) =>
+      o.id === order.id ? { ...o, studio_production_status: targetStatus } : o
+    ));
     try {
-      await studioApi.updateProductionStatus(company.id, order.id, next, forceDeposit);
-      const col = COLUMNS.find((c) => c.key === next);
+      await studioApi.updateProductionStatus(company.id, order.id, targetStatus, force);
+      const col = COLUMNS.find((c) => c.key === targetStatus);
       toast.success(`✨ Movido pra ${col?.label}`);
     } catch (e: any) {
       // P1: gate de sinal — backend retorna 409 deposit_required quando
@@ -146,7 +260,7 @@ export default function StudioProducao() {
             {
               text: "Iniciar mesmo assim",
               style: "destructive",
-              onPress: () => advance(order, true),
+              onPress: () => moveTo(order, targetStatus, true),
             },
           ]
         );
@@ -155,7 +269,26 @@ export default function StudioProducao() {
       toast.error(e?.message || "Erro ao atualizar");
       load();
     }
-  }
+  }, [company?.id, COLUMNS, load]);
+
+  // advance() = atalho para mover para o próximo status canônico
+  const advance = useCallback((order: StudioOrder) => {
+    const cur = (order.studio_production_status || "pending_art") as StudioProductionStatus;
+    const next = NEXT_STATUS[cur];
+    if (!next) return;
+    moveTo(order, next);
+  }, [moveTo]);
+
+  // ── DnD setup ───────────────────────────────────────────────────────────
+  // onDrop: recebe (orderId, toStatus) do drop zone e chama moveTo.
+  // Política v1: permite drop em qualquer coluna — o gate 409 continua valendo.
+  const onDrop = useCallback((orderId: string, toStatus: StudioProductionStatus) => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+    moveTo(order, toStatus);
+  }, [orders, moveTo]);
+
+  const dnd = useStudioKanbanDnD<StudioProductionStatus>(onDrop);
 
   const byStatus: Record<string, StudioOrder[]> = {};
   for (const col of COLUMNS) byStatus[col.key] = [];
@@ -176,7 +309,7 @@ export default function StudioProducao() {
         <StudioPageHeader
           eyebrow="FLUXO DE PRODUÇÃO"
           title="Fila de produção"
-          subtitle="Kanban dos pedidos em produção. Arraste pelos status pra mover."
+          subtitle="Arraste os cards (ou use os botoes) pra mover."
           rightSlot={
             <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
               <Icon name="refresh-cw" size={14} color={t.ink2} />
@@ -207,98 +340,57 @@ export default function StudioProducao() {
         />
       ) : (
         <ScrollView horizontal style={s.boardScroll} contentContainerStyle={s.board}>
-          {COLUMNS.map((col) => (
-            <View key={col.key} style={s.col}>
-              <View style={[s.colHead, { backgroundColor: col.bg }]}>
-                <View style={[s.colDot, { backgroundColor: col.color }]}>
-                  <Icon name={col.icon as any} size={12} color="#fff" />
+          {COLUMNS.map((col) => {
+            // Drop zone ref por coluna
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            const dropRef = useDropZoneRef<StudioProductionStatus>(
+              col.key,
+              dnd.onDrop,
+              dnd.onHoverChange,
+            );
+            const isHovered = dnd.hoverStatus === col.key && dnd.draggingId !== null;
+            return (
+              <View
+                key={col.key}
+                ref={dropRef}
+                style={[
+                  s.col,
+                  isHovered && { borderColor: col.color, borderWidth: 2, backgroundColor: col.bg },
+                ]}
+              >
+                <View style={[s.colHead, { backgroundColor: col.bg }]}>
+                  <View style={[s.colDot, { backgroundColor: col.color }]}>
+                    <Icon name={col.icon as any} size={12} color="#fff" />
+                  </View>
+                  <Text style={[s.colTitle, { color: col.color }]}>{col.label}</Text>
+                  <AnimatedKpiCounter
+                    value={byStatus[col.key].length}
+                    fontSize={12}
+                    color={t.ink2}
+                  />
                 </View>
-                <Text style={[s.colTitle, { color: col.color }]}>{col.label}</Text>
-                <AnimatedKpiCounter
-                  value={byStatus[col.key].length}
-                  fontSize={12}
-                  color={t.ink2}
-                />
-              </View>
-              <ScrollView style={s.colScroll} contentContainerStyle={{ padding: 10, gap: 10 }}>
-                {byStatus[col.key].length === 0 ? (
-                  <Text style={s.colEmpty}>—</Text>
-                ) : byStatus[col.key].map((o) => {
-                  const sla = fmtSla(o.created_at);
-                  const next = NEXT_STATUS[col.key];
-                  const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
-                  return (
-                    <Pressable
+                <ScrollView style={s.colScroll} contentContainerStyle={{ padding: 10, gap: 10 }}>
+                  {byStatus[col.key].length === 0 ? (
+                    <Text style={s.colEmpty}>—</Text>
+                  ) : byStatus[col.key].map((o) => (
+                    <DraggableCard
                       key={o.id}
-                      style={s.card}
-                      onPress={() => router.push(`/studio/pedidos/${o.id}` as any)}
-                    >
-                      <View style={s.cardHead}>
-                        <Text style={s.cardId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
-                        <View style={[s.slaChip,
-                                      sla.tone === "warm"  ? { backgroundColor: t.warningSoft } :
-                                      sla.tone === "late"  ? { backgroundColor: t.dangerSoft } : null]}>
-                          <Text style={[s.slaTxt,
-                                        sla.tone === "warm" ? { color: t.warningInk } :
-                                        sla.tone === "late" ? { color: t.dangerInk } : null]}>
-                            {sla.txt}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={s.cardName} numberOfLines={1}>
-                        {o.display_name || "Sem cadastro"}
-                      </Text>
-                      <Text style={s.cardMeta}>
-                        {o.item_count} item{o.item_count === 1 ? "" : "s"} · R$ {Number(o.total_amount).toFixed(2)}
-                      </Text>
-                      {platformMeta && (
-                        <View style={[s.platformBadge, { backgroundColor: platformMeta.bg }]}>
-                          <Icon name="shopping-bag" size={10} color={platformMeta.fg} />
-                          <Text style={[s.platformBadgeTxt, { color: platformMeta.fg }]}>
-                            {platformMeta.label}
-                          </Text>
-                        </View>
-                      )}
-                      {o.pending_approval_url && (
-                        <View style={s.approvalBadge}>
-                          <Icon name="message-circle" size={10} color={t.infoInk} />
-                          <Text style={s.approvalBadgeTxt}>Aprovação enviada</Text>
-                        </View>
-                      )}
-                      <View style={s.cardActions}>
-                        {col.key === "awaiting_customization" && (
-                          <Pressable
-                            style={[s.btnApproval, { backgroundColor: t.accent }]}
-                            onPress={(e) => { e.stopPropagation && e.stopPropagation(); router.push(`/studio/pedidos/${o.id}` as any); }}
-                          >
-                            <Icon name="message-circle" size={12} color="#fff" />
-                            <Text style={s.btnApprovalTxt}>Coletar personalização</Text>
-                          </Pressable>
-                        )}
-                        {col.key === "pending_art" && (
-                          <Pressable
-                            style={s.btnApproval}
-                            onPress={(e) => { e.stopPropagation && e.stopPropagation(); setApprovalFor(o); }}
-                          >
-                            <Icon name="message-circle" size={12} color="#fff" />
-                            <Text style={s.btnApprovalTxt}>Solicitar aprovação</Text>
-                          </Pressable>
-                        )}
-                        {next && (
-                          <Pressable
-                            style={[s.btnAdvance, { backgroundColor: col.color }]}
-                            onPress={(e) => { e.stopPropagation && e.stopPropagation(); advance(o); }}
-                          >
-                            <Text style={s.btnAdvanceTxt}>{col.nextLabel} →</Text>
-                          </Pressable>
-                        )}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ))}
+                      o={o}
+                      col={col}
+                      t={t}
+                      s={s}
+                      dnd={dnd}
+                      NEXT_STATUS={NEXT_STATUS}
+                      PLATFORM_LABELS={PLATFORM_LABELS}
+                      onAdvance={advance}
+                      onApproval={setApprovalFor}
+                      router={router}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -357,6 +449,13 @@ function buildStyles(t: StudioPalette) {
       borderRadius: 12, padding: 12,
       borderWidth: 1, borderColor: t.ink5,
       gap: 6,
+    },
+    cardDragging: {
+      opacity: 0.55,
+    },
+    dragHandle: {
+      alignSelf: "center",
+      marginBottom: 2,
     },
     cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     cardId: { fontSize: 10.5, color: t.ink4, fontWeight: "700", letterSpacing: 0.5 },
