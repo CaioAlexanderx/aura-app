@@ -172,7 +172,7 @@ export default function StudioInsumos() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <StudioScreen variant="grid" scroll={false} padded={false}>
+    <StudioScreen variant="board" scroll={false} padded={false}>
       <ScrollView style={s.scroll} contentContainerStyle={s.container}>
       {/* Header */}
       <StudioPageHeader
