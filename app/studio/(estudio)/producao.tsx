@@ -128,7 +128,7 @@ function DraggableCard({
     >
       {dnd.isWeb && (
         <View style={s.dragHandle}>
-          <Icon name="grip-vertical" size={14} color={t.ink4} />
+          <Icon name="drag-handle" size={14} color={t.ink4} />
         </View>
       )}
       <View style={s.cardHead}>
