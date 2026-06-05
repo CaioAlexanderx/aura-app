@@ -6,12 +6,22 @@
 // QUICK-ADD (agent/pdv):
 //   addSimple  → kind = 'quick'        (1 toque, sem modal)
 //   addCustom  → kind = 'personalizado' (passou pelo StageConfigure)
+//
+// 05/06/2026 (paridade Negócio):
+//   setQtyTo    → define a quantidade ABSOLUTA (campo digitável entre as setas)
+//   setUnitPrice→ preço de venda livre (lápis). product.price (tabela) fica intacto.
+//   subtotal    → agora usa o preço de venda efetivo (unitPrice ?? price).
 // ============================================================
 import { useState, useCallback, useMemo } from "react";
 import type { CartLine, StudioProduct } from "./types";
 
 function newLineId() {
   return String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7);
+}
+
+/** Preço de venda efetivo: lápis (unitPrice) sobrescreve o de tabela. */
+function salePrice(l: CartLine): number {
+  return l.unitPrice != null && l.unitPrice >= 0 ? l.unitPrice : l.product.price;
 }
 
 export function useStudioCart() {
@@ -61,12 +71,35 @@ export function useStudioCart() {
     [],
   );
 
+  /** Ajuste relativo (−/+) usado pelos botões de stepper. */
   const setQty = useCallback((lineId: string, delta: number) => {
     setCart((prev) =>
       prev.flatMap((l) => {
         if (l.lineId !== lineId) return [l];
         const q = l.qty + delta;
         return q <= 0 ? [] : [{ ...l, qty: q }];
+      })
+    );
+  }, []);
+
+  /** Quantidade absoluta (campo digitável). Mínimo 1; ≤ 0 mantém a linha. */
+  const setQtyTo = useCallback((lineId: string, qty: number) => {
+    setCart((prev) =>
+      prev.map((l) => {
+        if (l.lineId !== lineId) return l;
+        const q = Math.max(1, Math.floor(Number(qty) || 0));
+        return { ...l, qty: q };
+      })
+    );
+  }, []);
+
+  /** Preço de venda livre (lápis). product.price (tabela) permanece intacto. */
+  const setUnitPrice = useCallback((lineId: string, price: number) => {
+    setCart((prev) =>
+      prev.map((l) => {
+        if (l.lineId !== lineId) return l;
+        if (!isFinite(price) || price < 0) return l;
+        return { ...l, unitPrice: Math.round(price * 100) / 100 };
       })
     );
   }, []);
@@ -78,7 +111,7 @@ export function useStudioCart() {
   const clear = useCallback(() => setCart([]), []);
 
   const subtotal = useMemo(
-    () => cart.reduce((a, l) => a + l.product.price * l.qty, 0),
+    () => cart.reduce((a, l) => a + salePrice(l) * l.qty, 0),
     [cart],
   );
   const count = useMemo(() => cart.reduce((a, l) => a + l.qty, 0), [cart]);
@@ -106,6 +139,8 @@ export function useStudioCart() {
     addSimple,
     addCustom,
     setQty,
+    setQtyTo,
+    setUnitPrice,
     removeLine,
     clear,
     subtotal,
