@@ -134,6 +134,7 @@ export type ManualEntryPayload = {
   installments?: number;
   interest_rate?: number;   // decimal (0.025 = 2.5% ao mês)
   first_due_date?: string;  // YYYY-MM-DD
+  entry_date?: string;      // YYYY-MM-DD — data do lançamento (retroativo); default hoje no backend
   description?: string;
 };
 
@@ -160,7 +161,7 @@ export const creditApi = {
   getCustomerHistory(companyId: string, customerId: string) {
     return request<CreditCustomerDetail>(`${base(companyId)}/customer/${customerId}`);
   },
-  receivePayment(companyId: string, customerId: string, body: { amount: number; payment_method?: string; notes?: string }) {
+  receivePayment(companyId: string, customerId: string, body: { amount: number; payment_method?: string; notes?: string; paid_at?: string }) {
     return request<{ transaction: CreditTransaction; new_balance: number; settled: any[]; legacy_amount: number }>(
       `${base(companyId)}/customer/${customerId}/payment`, { method: "POST", body }
     );
