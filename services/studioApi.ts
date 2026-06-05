@@ -5,6 +5,7 @@
 // 30/05/2026 (Camada 1 — Fase 0 Gate): tipos + stubs completos
 // 30/05/2026 (P1): updateProductionStatus ganha force?: boolean
 // 02/06/2026 (Onda 2 — Agente F): getOnboardingStatus (Agente B endpoint)
+// 05/06/2026 (#4): product category CRUD (listProductCategories, createProductCategory, updateProductCategory, deleteProductCategory)
 // ============================================================
 import { request } from "./api";
 
@@ -505,6 +506,16 @@ export type OnboardingStatus = {
   temVenda: boolean;
 };
 
+// ─── Product Categories (#4, 05/06/2026) ──────────────────────
+export type ProductCategory = {
+  id: string;
+  name: string;
+  color: string | null;
+  sort_order: number;
+  type: string;
+  product_count: number;
+};
+
 // ════════════════════════════════════════════════════════
 // API
 // ════════════════════════════════════════════════════════
@@ -746,6 +757,19 @@ export const studioApi = {
       base(cid) + "/payments/" + pid + "/charge-link",
       { method: "POST", retry: 0, timeout: 10000 }
     ),
+
+  // ── Product Categories (#4) ──
+  listProductCategories: (cid: string, type: "product" | "service" = "product") =>
+    request<{ categories: ProductCategory[]; total: number; type: string }>(
+      "/companies/" + cid + "/product-categories?type=" + type,
+      { method: "GET", retry: 1, timeout: 8000 }
+    ),
+  createProductCategory: (cid: string, body: { name: string; color?: string; sort_order?: number; type?: "product" | "service" }) =>
+    request<any>("/companies/" + cid + "/product-categories", { method: "POST", body, retry: 0, timeout: 8000 }),
+  updateProductCategory: (cid: string, catId: string, body: { name?: string; color?: string; sort_order?: number }) =>
+    request<any>("/companies/" + cid + "/product-categories/" + catId, { method: "PATCH", body, retry: 0, timeout: 8000 }),
+  deleteProductCategory: (cid: string, catId: string, moveTo?: string) =>
+    request<any>("/companies/" + cid + "/product-categories/" + catId + (moveTo ? "?move_to=" + encodeURIComponent(moveTo) : ""), { method: "DELETE", retry: 0, timeout: 8000 }),
 };
 
 export default studioApi;
