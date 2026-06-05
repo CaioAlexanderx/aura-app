@@ -3,10 +3,9 @@
 // Modal 2 etapas: seleção de cliente + detalhes do lançamento.
 // Usado na tela de Crediário para criar débitos manuais sem venda.
 //
-// 05/06/2026: campo "Data do lançamento" (default hoje, SP). Permite
-//   registrar uma compra fiado retroativa (ex.: levou mercadoria ontem,
-//   lançado hoje com a data de ontem). Envia entry_date -> backdata o
-//   created_at do débito no ledger.
+// 05/06/2026: campo "Data do lançamento" (default hoje, SP) para lançamento
+//   retroativo (entry_date) + seletor de periodicidade das parcelas
+//   (semanal/quinzenal/mensal/personalizado -> period_unit/period_count).
 // ============================================================
 import { useState, useCallback, useRef } from "react";
 import {
@@ -25,12 +24,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
-import { creditApi, type ManualEntryPayload } from "@/services/creditApi";
+import { creditApi, type ManualEntryPayload, type PeriodUnit } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 type Step = "customer" | "details";
 type Mode = "search" | "create";
+type PeriodKind = "semanal" | "quinzenal" | "mensal" | "custom";
 
 interface CustomerOption {
   id: string;
@@ -81,6 +81,13 @@ function todayBrSp(): string {
   return formatIsoToBr(iso);
 }
 
+function periodToPayload(kind: PeriodKind, customDays: string): { period_unit: PeriodUnit; period_count: number } {
+  if (kind === "semanal")   return { period_unit: "week", period_count: 1 };
+  if (kind === "quinzenal") return { period_unit: "week", period_count: 2 };
+  if (kind === "custom")    return { period_unit: "day", period_count: Math.max(1, parseInt(customDays, 10) || 1) };
+  return { period_unit: "month", period_count: 1 };
+}
+
 export function CriarLancamentoModal({ visible, onClose }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -106,6 +113,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [interestRate, setInterestRate] = useState("");
   const [firstDueDate, setFirstDueDate] = useState(defaultDueDate());
   const [entryDate, setEntryDate]       = useState(todayBrSp());
+  const [periodKind, setPeriodKind]     = useState<PeriodKind>("mensal");
+  const [periodDays, setPeriodDays]     = useState("20");
   const [description, setDescription]   = useState("");
 
   const reset = useCallback(() => {
@@ -121,6 +130,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setInterestRate("");
     setFirstDueDate(defaultDueDate());
     setEntryDate(todayBrSp());
+    setPeriodKind("mensal");
+    setPeriodDays("20");
     setDescription("");
   }, []);
 
@@ -187,6 +198,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       if (isNaN(rate) || rate < 0) { toast.error("Taxa de juros inválida"); return; }
     }
 
+    const period = periodToPayload(periodKind, periodDays);
+
     const payload: ManualEntryPayload = {
       customer_id:   selectedCustomer?.id,
       new_customer:  !selectedCustomer
@@ -197,6 +210,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       interest_rate: rate,
       first_due_date: firstDue,
       entry_date:    entryIso,
+      period_unit:   period.period_unit,
+      period_count:  period.period_count,
       description:   description.trim() || undefined,
     };
 
@@ -233,6 +248,10 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     : mode === "create"
     ? newName || "Novo cliente"
     : null;
+
+  const PERIOD_CHIPS: Array<[PeriodKind, string]> = [
+    ["semanal", "Semanal"], ["quinzenal", "Quinzenal"], ["mensal", "Mensal"], ["custom", "Personalizado"],
+  ];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
@@ -438,7 +457,33 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   </View>
                 </View>
 
-                <Text style={s.label}>
+                {/* Periodicidade */}
+                <Text style={s.label}>Periodicidade</Text>
+                <View style={s.periodChips}>
+                  {PERIOD_CHIPS.map(([k, lbl]) => (
+                    <Pressable
+                      key={k}
+                      onPress={() => setPeriodKind(k)}
+                      style={[s.periodChip, periodKind === k && s.periodChipOn]}
+                    >
+                      <Text style={[s.periodChipTxt, periodKind === k && s.periodChipTxtOn]}>{lbl}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {periodKind === "custom" && (
+                  <View style={s.customDaysRow}>
+                    <Text style={s.customDaysLbl}>A cada</Text>
+                    <TextInput
+                      style={s.customDaysNum}
+                      value={periodDays}
+                      keyboardType="numeric"
+                      onChangeText={(v) => setPeriodDays(v.replace(/\D/g, "").slice(0, 3))}
+                    />
+                    <Text style={s.customDaysLbl}>dias</Text>
+                  </View>
+                )}
+
+                <Text style={[s.label, { marginTop: 14 }]}>
                   Juros ao mês %{" "}
                   <Text style={s.labelOptional}>(opcional)</Text>
                 </Text>
@@ -677,6 +722,14 @@ const s = StyleSheet.create({
   amountPrefix: { fontSize: 15, fontWeight: "600", color: Colors.ink3 },
   amountInput:  { flex: 1, paddingVertical: 11, fontSize: 18, fontWeight: "700", color: Colors.ink },
   row2: { flexDirection: "row", gap: 12 },
+  periodChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  periodChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
+  periodChipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  periodChipTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.ink2 },
+  periodChipTxtOn: { color: "#fff" },
+  customDaysRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, padding: 10 },
+  customDaysLbl: { fontSize: 13, color: Colors.ink2, fontWeight: "600" },
+  customDaysNum: { width: 60, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingVertical: 7, textAlign: "center", color: Colors.ink, fontWeight: "800", fontSize: 14 },
   customerChip: {
     flexDirection: "row",
     alignItems: "center",
