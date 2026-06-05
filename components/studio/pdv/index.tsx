@@ -2,16 +2,10 @@
 // AURA STUDIO · PDV (Caixa do estúdio) — orquestrador (Fase 6 + agent/pdv)
 // Conecta catálogo+scanner, carrinho e checkout aos stages e ao
 // layout (desktop 2 colunas / mobile coluna única + barra).
-// Lógica de dados/negócio reaproveitada do caixa.tsx original.
-//
-// QUICK-ADD (agent/pdv):
-//   handleQuickAdd  — adiciona direto (kind='quick'), pula StageConfigure
-//   handleCustomize — abre StageConfigure (kind='personalizado')
-//   ProductCard recebe AMBOS via onQuickAdd + onCustomize.
 //
 // 05/06/2026 (paridade Negócio): desconto manual + cupom + split de
 // pagamento + lápis de preço/qtd por item. Matemática em checkoutMath;
-// cupom é limpo ao editar item (qtd/preço/remoção) pra evitar desconto stale.
+// cupom limpo ao editar item. Carrinho recebe pay/setPay (chips no rodapé).
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -434,6 +428,8 @@ export default function StudioCaixaPage() {
               count={cart.count}
               customCount={cart.customCount}
               payLabel={payLabel}
+              pay={checkout.pay}
+              setPay={checkout.setPay}
               onSetQty={onSetQtyDelta}
               onSetQtyTo={onSetQtyTo}
               onSetPrice={onSetPrice}

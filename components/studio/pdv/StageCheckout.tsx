@@ -3,6 +3,7 @@
 // Tela cheia: itens editáveis (qtd + lápis de preço) · cliente (opcional) ·
 // pagamento (chips + split) · cupom · desconto manual · totais · concluir.
 // Cliente nunca obrigatório. Sem modal de troco (decisão 05/06).
+// Desconto por item exibido em porcentagem.
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, Platform, TextInput } from "react-native";
@@ -29,6 +30,7 @@ function ItemRow({
   const list = lineListPrice(l);
   const sale = lineSalePrice(l);
   const disc = lineDiscount(l);
+  const pct = list > 0 && disc > 0 ? Math.round((1 - sale / list) * 100) : 0;
   const [editing, setEditing] = useState(false);
   const [priceText, setPriceText] = useState(sale.toFixed(2));
   const [qtyText, setQtyText] = useState(String(l.qty));
@@ -90,29 +92,26 @@ function ItemRow({
           onBlur={commitQty}
           onSubmitEditing={commitQty}
           keyboardType="number-pad"
-          style={{ minWidth: 34, textAlign: "center", fontSize: 13, fontWeight: "800", color: t.ink, paddingVertical: 5, ...webNoOutline() }}
+          style={{ width: 40, textAlign: "center", fontSize: 13, fontWeight: "800", color: t.ink, paddingVertical: 5, ...webNoOutline() }}
         />
         <Pressable onPress={() => onSetQty(l.lineId, l.qty + 1)} style={{ paddingHorizontal: 9, paddingVertical: 7, backgroundColor: t.bgSoft, ...webPointer() }}>
           <Ic name="plus" size={13} color={t.ink2} />
         </Pressable>
       </View>
 
-      {/* preço + lápis + desconto */}
+      {/* preço + lápis + desconto (em %) */}
       <View style={{ minWidth: 104, alignItems: "flex-end" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
           {sale < list && (
             <Text style={{ fontSize: 11, color: t.ink4, textDecorationLine: "line-through" }}>R$ {money(list * l.qty)}</Text>
           )}
           <Text style={{ fontSize: 13.5, color: t.ink, fontWeight: "800" }}>R$ {money(sale * l.qty)}</Text>
-          <Pressable
-            onPress={() => setEditing((e) => !e)}
-            style={{ width: 26, height: 26, borderRadius: 7, borderWidth: 1, borderColor: editing ? t.accent : t.ink5, backgroundColor: editing ? t.accentSoft : t.bgSoft, alignItems: "center", justifyContent: "center", ...webPointer() }}
-          >
+          <Pressable onPress={() => setEditing((e) => !e)} style={{ width: 26, height: 26, borderRadius: 7, borderWidth: 1, borderColor: editing ? t.accent : t.ink5, backgroundColor: editing ? t.accentSoft : t.bgSoft, alignItems: "center", justifyContent: "center", ...webPointer() }}>
             <Ic name="edit" size={13} color={editing ? t.accentInk : t.ink3} />
           </Pressable>
         </View>
         {disc > 0 && (
-          <Text style={{ fontSize: 10.5, color: t.accentInk, fontWeight: "700", marginTop: 3 }}>desconto −R$ {money(disc)}</Text>
+          <Text style={{ fontSize: 10.5, color: t.accentInk, fontWeight: "700", marginTop: 3 }}>desconto −{pct}% · −R$ {money(disc)}</Text>
         )}
       </View>
 
