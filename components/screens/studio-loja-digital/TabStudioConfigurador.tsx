@@ -70,10 +70,12 @@ export function TabStudioConfigurador() {
     if (!company?.id) return;
     setLoading(true);
     try {
-      const r: any = await request(`/companies/${company.id}/products?limit=500`, {
+      // Use the Studio-specific endpoint — the generic /products endpoint filters
+      // by vertical=varejo internally and returns an empty list for Studio accounts.
+      const r: any = await request(`/companies/${company.id}/studio/products?include_non_personalizable=true&limit=500`, {
         method: "GET",
         retry: 1,
-        timeout: 10000,
+        timeout: 15000,
       });
       const list: ProductRow[] = Array.isArray(r) ? r : (r?.products || r?.items || []);
       setProducts(list.filter((p) => !!p?.is_personalizable));
