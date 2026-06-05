@@ -444,7 +444,7 @@ function TermsCard({ companyId, customerId }: TermsCardProps) {
               <Text style={s.termsLabel}>{label}</Text>
               {override != null
                 ? <Text style={s.termsValue}>{override}</Text>
-                : <Text style={s.termsValueDefault}>{effective ?? —""} <Text style={s.termsValueDefaultHint}>(padrão)</Text></Text>
+                : <Text style={s.termsValueDefault}>{effective ?? ""} <Text style={s.termsValueDefaultHint}>(padrão)</Text></Text>
               }
             </View>
           ))}
