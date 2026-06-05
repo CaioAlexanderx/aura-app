@@ -23,6 +23,14 @@
 //     personalização) pros panels embedados
 //   - panelWrap simplificado pra remover double-padding (panel
 //     filho já tem container próprio com padding)
+//
+// 05/06/2026 (#4) — Category selector wired to studioApi:
+//   - Categorias carregadas via studioApi.listProductCategories
+//   - "+ Nova categoria" usa studioApi.createProductCategory
+//   - Payload envia `category` (texto = nome) em vez de `category_id` (FK)
+//     conforme contrato: campo category no produto é TEXT
+//   - O que já existia: chips de seleção, input de nova categoria, UI completa
+//   - O que foi completado: wiring ao studioApi + payload correto
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -44,6 +52,7 @@ import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { request } from "@/services/api";
+import { studioApi } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
 import {
   fileToBase64Web,
@@ -65,7 +74,8 @@ type Props = {
   onCreated?: (product: { id: string; name: string; price: number }) => void;
 };
 
-type Category = { id: string; name: string };
+// Categoria: id para seleção local, name para enviar no payload (campo TEXT no produto)
+type Category = { id: string; name: string; color?: string | null };
 
 type CreatedProduct = {
   id: string;
@@ -94,7 +104,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   const [price, setPrice] = useState("");
   const [stockQty, setStockQty] = useState("");
   const [sku, setSku] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
+  // categoryName: texto que vai pro payload (campo TEXT no produto)
+  const [categoryName, setCategoryName] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [imageUrl, setImageUrl] = useState<string>("");
@@ -124,7 +135,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
         setPrice("");
         setStockQty("");
         setSku("");
-        setCategoryId("");
+        setCategoryName("");
         setNewCategoryName("");
         setShowNewCategoryInput(false);
         setImageUrl("");
@@ -138,23 +149,24 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     return undefined;
   }, [visible]);
 
-  // ── Carrega categorias ao abrir ─────────────────────────
+  // ── Carrega categorias via studioApi (#4) ───────────────
   useEffect(() => {
     if (!visible || !companyId) return;
     let cancelled = false;
     setLoadingCategories(true);
-    request<{ categories?: Category[] } | Category[]>(
-      `/companies/${companyId}/product-categories`,
-      { method: "GET", retry: 1, timeout: 10000 }
-    )
+    studioApi.listProductCategories(companyId)
       .then((r) => {
         if (cancelled) return;
-        const list = Array.isArray(r) ? r : Array.isArray((r as any)?.categories) ? (r as any).categories : [];
-        setCategories(list.map((c: any) => ({ id: String(c.id), name: String(c.name || "") })));
+        const list = r?.categories ?? [];
+        setCategories(list.map((c) => ({
+          id: String(c.id),
+          name: String(c.name || ""),
+          color: c.color || null,
+        })));
       })
       .catch((e) => {
-        console.log("[StudioNewProductWizard] Erro ao carregar categorias", e);
         // Nao bloqueia: usuario pode criar produto sem categoria
+        console.log("[StudioNewProductWizard] Erro ao carregar categorias", e);
       })
       .finally(() => {
         if (!cancelled) setLoadingCategories(false);
@@ -196,7 +208,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     }
   }
 
-  // ── Cria categoria nova inline ──────────────────────────
+  // ── Cria categoria nova via studioApi (#4) ──────────────
   async function handleCreateCategory() {
     const trimmed = newCategoryName.trim();
     if (trimmed.length < 2) {
@@ -204,18 +216,18 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
       return;
     }
     try {
-      const r = await request<any>(`/companies/${companyId}/product-categories`, {
-        method: "POST",
-        body: { name: trimmed },
-        retry: 0,
-        timeout: 10000,
-      });
-      const newCat: Category = { id: String(r?.id || r?.category?.id || ""), name: trimmed };
+      const r = await studioApi.createProductCategory(companyId, { name: trimmed });
+      const newCat: Category = {
+        id: String(r?.id || r?.category?.id || ""),
+        name: trimmed,
+        color: r?.color || null,
+      };
       if (!newCat.id) {
         throw new Error("Backend nao retornou id da categoria");
       }
       setCategories((prev) => [...prev, newCat]);
-      setCategoryId(newCat.id);
+      // Seleciona a nova categoria pelo nome (campo TEXT)
+      setCategoryName(trimmed);
       setNewCategoryName("");
       setShowNewCategoryInput(false);
       toast.success("Categoria criada");
@@ -226,6 +238,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   }
 
   // ── Submit step 1: cria produto ─────────────────────────
+  // (#4): envia `category` como texto (nome), não `category_id` (FK)
+  // O campo de categoria no produto é TEXT no backend.
   async function submitStep1(advanceAfter: boolean) {
     if (!canSubmitStep1) return;
     setSubmitting(true);
@@ -238,7 +252,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
       const stockNum = parseInt(stockQty.replace(/\D/g, ""), 10);
       if (!isNaN(stockNum)) body.stock_qty = stockNum;
       if (sku.trim()) body.sku = sku.trim();
-      if (categoryId) body.category_id = categoryId;
+      // Envia o nome da categoria como texto (não FK) — contrato do backend
+      if (categoryName) body.category = categoryName;
       if (imageUrl) body.image_url = imageUrl;
 
       console.log("[StudioNewProductWizard] POST produto", { companyId, body });
@@ -378,8 +393,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     setSku={setSku}
                     categories={categories}
                     loadingCategories={loadingCategories}
-                    categoryId={categoryId}
-                    setCategoryId={setCategoryId}
+                    categoryName={categoryName}
+                    setCategoryName={setCategoryName}
                     showNewCategoryInput={showNewCategoryInput}
                     setShowNewCategoryInput={setShowNewCategoryInput}
                     newCategoryName={newCategoryName}
@@ -509,6 +524,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
 
 // ───────────────────────────────────────────────────────────
 // Step 1 — Basico (componente filho pra manter o pai limpo)
+// (#4): categoryName (texto) substitui categoryId (FK)
 // ───────────────────────────────────────────────────────────
 function Step1Basico(props: {
   t: StudioPalette;
@@ -525,8 +541,8 @@ function Step1Basico(props: {
   setSku: (v: string) => void;
   categories: Category[];
   loadingCategories: boolean;
-  categoryId: string;
-  setCategoryId: (v: string) => void;
+  categoryName: string;
+  setCategoryName: (v: string) => void;
   showNewCategoryInput: boolean;
   setShowNewCategoryInput: (v: boolean) => void;
   newCategoryName: string;
@@ -554,8 +570,8 @@ function Step1Basico(props: {
     setSku,
     categories,
     loadingCategories,
-    categoryId,
-    setCategoryId,
+    categoryName,
+    setCategoryName,
     showNewCategoryInput,
     setShowNewCategoryInput,
     newCategoryName,
@@ -647,7 +663,7 @@ function Step1Basico(props: {
         />
       </View>
 
-      {/* Categoria */}
+      {/* Categoria — chips por nome (campo TEXT, não FK) */}
       <View style={styles.field}>
         <Text style={styles.label}>Categoria</Text>
         {loadingCategories ? (
@@ -655,13 +671,16 @@ function Step1Basico(props: {
         ) : (
           <View style={styles.catWrap}>
             {categories.map((c) => {
-              const sel = c.id === categoryId;
+              const sel = c.name === categoryName;
               return (
                 <Pressable
                   key={c.id}
                   style={[styles.catChip, sel && styles.catChipSel]}
-                  onPress={() => setCategoryId(sel ? "" : c.id)}
+                  onPress={() => setCategoryName(sel ? "" : c.name)}
                 >
+                  {c.color ? (
+                    <View style={[styles.catDot, { backgroundColor: c.color }]} />
+                  ) : null}
                   <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{c.name}</Text>
                 </Pressable>
               );
@@ -931,6 +950,9 @@ function buildStyles(t: StudioPalette) {
     // ── Categorias ────────────────────────────────────────
     catWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     catChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 999,
@@ -957,6 +979,11 @@ function buildStyles(t: StudioPalette) {
       backgroundColor: t.primaryGhost,
     },
     catChipAddTxt: { fontSize: 12, color: t.primary, fontWeight: "700" },
+    catDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
     btnInlineCreate: {
       backgroundColor: t.primary,
       paddingHorizontal: 16,
