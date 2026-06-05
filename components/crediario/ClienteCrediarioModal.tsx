@@ -11,6 +11,10 @@
 //   3. Recebimento de valor livre (1x) — POST /credit/customer/:cid/payment
 //   4. Cobrança no WhatsApp (mensagem rica + chave Pix) via onCobrar
 //
+// 05/06/2026: campo "Data do recebimento" (default hoje, SP). Permite
+//   registrar recebimento retroativo (ex.: Pix recebido ontem à noite,
+//   lançado hoje com a data de ontem). Envia paid_at -> applyPayment.
+//
 // Fonte: creditApi.getCustomerHistory -> balance + transactions
 // (debit=compra, payment=recebimento) + open_installments.
 // Recebimento usa creditApi.receivePayment -> applyPayment (FIFO).
@@ -25,6 +29,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
+import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 type Props = {
   visible: boolean;
@@ -51,6 +56,11 @@ function fmtDate(iso: string) {
   try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
   catch { return ""; }
 }
+// Hoje em America/Sao_Paulo no formato dd/mm/aaaa (default do campo de data).
+function todayBrSp(): string {
+  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD
+  return formatIsoToBr(iso);
+}
 function parseAmount(raw: string): number {
   const s = raw.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, "");
   const n = parseFloat(s);
@@ -69,6 +79,7 @@ export function ClienteCrediarioModal({
   const qc = useQueryClient();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("dinheiro");
+  const [dateBr, setDateBr] = useState(todayBrSp());
 
   const detailQ = useQuery({
     queryKey: ["credit-customer", companyId, customerId],
@@ -78,7 +89,7 @@ export function ClienteCrediarioModal({
   });
 
   useEffect(() => {
-    if (visible) { setAmount(""); setMethod("dinheiro"); }
+    if (visible) { setAmount(""); setMethod("dinheiro"); setDateBr(todayBrSp()); }
   }, [visible, customerId]);
 
   const detail = detailQ.data;
@@ -92,7 +103,11 @@ export function ClienteCrediarioModal({
   const openSum = openInst.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
 
   const payMut = useMutation({
-    mutationFn: (amt: number) => creditApi.receivePayment(companyId, customerId!, { amount: amt, payment_method: method }),
+    mutationFn: (amt: number) => creditApi.receivePayment(companyId, customerId!, {
+      amount: amt,
+      payment_method: method,
+      paid_at: parseBrDate(dateBr) || undefined,
+    }),
     onSuccess: (res) => {
       toast.success("Recebimento registrado! Saldo: " + fmt(res.new_balance));
       setAmount("");
@@ -107,9 +122,11 @@ export function ClienteCrediarioModal({
 
   const amountNum = parseAmount(amount);
   const afterBalance = Math.max(0, Math.round((balance - amountNum) * 100) / 100);
+  const dateInvalid = dateBr.length === 10 && parseBrDate(dateBr) === null;
 
   function confirmReceive() {
     if (amountNum <= 0) { toast.error("Informe um valor maior que zero"); return; }
+    if (dateInvalid) { toast.error("Data inválida — use dd/mm/aaaa"); return; }
     payMut.mutate(amountNum);
   }
   function prefill(v: number) {
@@ -209,7 +226,7 @@ export function ClienteCrediarioModal({
                 {/* Registrar recebimento (valor livre) */}
                 <View style={m.freeBox}>
                   <Text style={m.freeTitle}>Registrar recebimento</Text>
-                  <Text style={m.fieldLabel}>Valor recebido agora</Text>
+                  <Text style={m.fieldLabel}>Valor recebido</Text>
                   <View style={m.amountIn}>
                     <Text style={m.amountPrefix}>R$</Text>
                     <TextInput
@@ -233,6 +250,14 @@ export function ClienteCrediarioModal({
                       </Pressable>
                     )}
                   </View>
+                  <Text style={[m.fieldLabel, { marginTop: 14 }]}>Data do recebimento</Text>
+                  <DateInput
+                    value={dateBr}
+                    onChangeText={setDateBr}
+                    placeholder="dd/mm/aaaa"
+                    style={m.dateInput}
+                  />
+                  <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
                   <Text style={[m.fieldLabel, { marginTop: 14 }]}>Forma</Text>
                   <View style={m.methods}>
                     {PAYMENT_METHODS.map(pm => (
@@ -280,8 +305,8 @@ export function ClienteCrediarioModal({
           {/* Footer */}
           <View style={m.footer}>
             <Pressable
-              style={[m.cta, (amountNum <= 0 || payMut.isPending) && { opacity: 0.45 }]}
-              disabled={amountNum <= 0 || payMut.isPending}
+              style={[m.cta, (amountNum <= 0 || dateInvalid || payMut.isPending) && { opacity: 0.45 }]}
+              disabled={amountNum <= 0 || dateInvalid || payMut.isPending}
               onPress={confirmReceive}
             >
               {payMut.isPending
@@ -342,6 +367,8 @@ const m = StyleSheet.create({
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
   qChip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
   qChipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
+  dateInput: { backgroundColor: Colors.bg2, borderColor: Colors.violet2, borderWidth: 1.5, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: Colors.ink },
+  dateHint: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
   methods: { flexDirection: "row", gap: 7 },
   method: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 9 },
   methodActive: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
