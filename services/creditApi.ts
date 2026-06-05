@@ -189,6 +189,7 @@ export type ManualEntryResult = {
   transaction: { id: string; amount: number; type: string; notes: string; created_at: string };
   installments: CreditInstallment[];
   new_balance: number;
+  account_id: string | null;
 };
 
 // ─── Recebimento (F3) ─────────────────────────────────────────
@@ -196,6 +197,26 @@ export type PaymentAllocation = { account_id: string | null; amount: number };
 export type ReceivePaymentBody =
   | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null }
   | { payment_method?: string; paid_at?: string; allocations: PaymentAllocation[] };
+
+// Resposta do receivePayment (F3):
+//   modo simples: { mode, account_id, transaction, new_balance, settled_receivables, notes }
+//   modo allocations: { mode, allocations, new_balance, notes }
+export type ReceivePaymentResult = {
+  mode: "global" | "account" | "allocations";
+  account_id?: string | null;
+  transaction?: CreditTransaction;
+  new_balance: number;
+  settled_receivables?: any[];
+  allocations?: Array<{
+    account_id: string | null;
+    amount: number;
+    transaction: CreditTransaction | null;
+    settled: any[];
+  }>;
+  notes?: string | null;
+  // legado (mantido por compatibilidade — pode vir em respostas antigas)
+  legacy_amount?: number;
+};
 
 // ─── Novo carnê ───────────────────────────────────────────────
 export type CreateAccountBody = {
@@ -226,7 +247,7 @@ export const creditApi = {
     return request<CreditCustomerDetail>(`${base(companyId)}/customer/${customerId}`);
   },
   receivePayment(companyId: string, customerId: string, body: ReceivePaymentBody) {
-    return request<{ transaction: CreditTransaction; new_balance: number; settled: any[]; legacy_amount: number }>(
+    return request<ReceivePaymentResult>(
       `${base(companyId)}/customer/${customerId}/payment`, { method: "POST", body }
     );
   },
