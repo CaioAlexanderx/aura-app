@@ -6,13 +6,18 @@
 // CHIP DE TIPO (agent/pdv):
 //   kind='quick'        → chip "venda rápida" (fundo neutro t.bgSoft)
 //   kind='personalizado'→ chip "personalizado" (fundo t.accentSoft)
+//
+// 05/06/2026 (paridade Negócio): quantidade digitável entre as setas +
+// lápis de preço de venda por item (preenço de tabela riscado + desconto).
 // ============================================================
-import { View, Text, Pressable, ScrollView, Platform } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, TextInput, Platform } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import type { CartLine } from "./types";
 import { SumRow, money } from "./ui";
 import { Ic } from "./icons";
+import { lineSalePrice, lineListPrice, lineDiscount } from "./checkoutMath";
 
 /** Chip que indica a origem do item no carrinho. */
 function KindChip({ t, kind }: { t: StudioPalette; kind: CartLine["kind"] }) {
@@ -53,17 +58,44 @@ function CartItem({
   t,
   line,
   onSetQty,
+  onSetQtyTo,
+  onSetPrice,
   onRemove,
   onEdit,
 }: {
   t: StudioPalette;
   line: CartLine;
   onSetQty: (lineId: string, d: number) => void;
+  onSetQtyTo: (lineId: string, qty: number) => void;
+  onSetPrice: (lineId: string, price: number) => void;
   onRemove: (lineId: string) => void;
   onEdit: (line: CartLine) => void;
 }) {
   const p = line.product;
   const custom = p.is_personalizable;
+  const list = lineListPrice(line);
+  const sale = lineSalePrice(line);
+  const disc = lineDiscount(line);
+
+  const [editing, setEditing] = useState(false);
+  const [priceText, setPriceText] = useState(sale.toFixed(2));
+  const [qtyText, setQtyText] = useState(String(line.qty));
+
+  useEffect(() => { setQtyText(String(line.qty)); }, [line.qty]);
+  useEffect(() => { if (!editing) setPriceText(sale.toFixed(2)); }, [sale, editing]);
+
+  function commitQty() {
+    const n = parseInt((qtyText || "").replace(/[^0-9]/g, ""), 10);
+    if (!n || n < 1) { setQtyText(String(line.qty)); return; }
+    if (n !== line.qty) onSetQtyTo(line.lineId, n);
+  }
+  function commitPrice() {
+    const v = parseFloat((priceText || "").replace(",", "."));
+    if (isNaN(v) || v < 0) { setPriceText(sale.toFixed(2)); setEditing(false); return; }
+    onSetPrice(line.lineId, v);
+    setEditing(false);
+  }
+
   return (
     <View
       style={{
@@ -140,6 +172,7 @@ function CartItem({
             marginTop: 6,
           }}
         >
+          {/* stepper com campo digitável entre as setas */}
           <View
             style={{
               flexDirection: "row",
@@ -156,17 +189,23 @@ function CartItem({
             >
               <Ic name="minus" size={13} color={t.ink2} />
             </Pressable>
-            <Text
+            <TextInput
+              value={qtyText}
+              onChangeText={setQtyText}
+              onBlur={commitQty}
+              onSubmitEditing={commitQty}
+              keyboardType="number-pad"
               style={{
-                minWidth: 26,
+                minWidth: 30,
                 textAlign: "center",
                 fontSize: 12.5,
                 fontWeight: "800",
                 color: t.ink,
+                paddingVertical: 4,
+                paddingHorizontal: 2,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
               }}
-            >
-              {line.qty}
-            </Text>
+            />
             <Pressable
               onPress={() => onSetQty(line.lineId, 1)}
               style={qtyBtn(t)}
@@ -174,17 +213,89 @@ function CartItem({
               <Ic name="plus" size={13} color={t.ink2} />
             </Pressable>
           </View>
-          <Text
-            style={{
-              flex: 1,
-              fontSize: 12.5,
-              color: t.ink,
-              fontWeight: "700",
-              textAlign: "right",
-            }}
-          >
-            R$ {money(p.price * line.qty)}
-          </Text>
+
+          {/* preço de venda + lápis */}
+          <View style={{ flex: 1, alignItems: "flex-end" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {sale < list && (
+                <Text
+                  style={{
+                    fontSize: 10.5,
+                    color: t.ink4,
+                    textDecorationLine: "line-through",
+                  }}
+                >
+                  R$ {money(list * line.qty)}
+                </Text>
+              )}
+              <Text style={{ fontSize: 12.5, color: t.ink, fontWeight: "700" }}>
+                R$ {money(sale * line.qty)}
+              </Text>
+              <Pressable
+                onPress={() => setEditing((e) => !e)}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: editing ? t.accent : t.ink5,
+                  backgroundColor: editing ? t.accentSoft : t.bgSoft,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+                }}
+              >
+                <Ic name="edit" size={12} color={editing ? t.accentInk : t.ink3} />
+              </Pressable>
+            </View>
+            {disc > 0 && (
+              <Text style={{ fontSize: 10, color: t.accentInk, fontWeight: "700", marginTop: 2 }}>
+                desconto −R$ {money(disc)}
+              </Text>
+            )}
+            {editing && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
+                <Text style={{ fontSize: 10.5, color: t.ink3 }}>Preço un.</Text>
+                <TextInput
+                  value={priceText}
+                  onChangeText={setPriceText}
+                  onBlur={commitPrice}
+                  onSubmitEditing={commitPrice}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                  style={{
+                    width: 78,
+                    height: 30,
+                    borderWidth: 1,
+                    borderColor: t.primary,
+                    borderRadius: 8,
+                    textAlign: "right",
+                    paddingHorizontal: 8,
+                    fontSize: 12.5,
+                    fontWeight: "700",
+                    color: t.ink,
+                    backgroundColor: t.bgSoft,
+                    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
+                  }}
+                />
+                <Pressable
+                  onPress={commitPrice}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: t.primary,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+                  }}
+                >
+                  <Ic name="check" size={14} color="#fff" />
+                </Pressable>
+              </View>
+            )}
+          </View>
+
           <Pressable
             onPress={() => onRemove(line.lineId)}
             style={{ padding: 4 }}
@@ -211,6 +322,8 @@ export function CartSidebar({
   customCount,
   payLabel,
   onSetQty,
+  onSetQtyTo,
+  onSetPrice,
   onRemove,
   onEdit,
   onQuote,
@@ -223,6 +336,8 @@ export function CartSidebar({
   customCount: number;
   payLabel: string;
   onSetQty: (lineId: string, d: number) => void;
+  onSetQtyTo: (lineId: string, qty: number) => void;
+  onSetPrice: (lineId: string, price: number) => void;
   onRemove: (lineId: string) => void;
   onEdit: (line: CartLine) => void;
   onQuote: () => void;
@@ -327,6 +442,8 @@ export function CartSidebar({
               t={t}
               line={l}
               onSetQty={onSetQty}
+              onSetQtyTo={onSetQtyTo}
+              onSetPrice={onSetPrice}
               onRemove={onRemove}
               onEdit={onEdit}
             />
