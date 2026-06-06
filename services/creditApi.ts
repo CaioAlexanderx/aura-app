@@ -337,6 +337,12 @@ export const creditApi = {
       `${base(companyId)}/installments/${installmentId}/cancel`, { method: "PATCH", body: {} }
     );
   },
+  editInstallmentDueDate(companyId: string, installmentId: string, dueDate: string) {
+    return request<{ success: boolean; updated_count: number }>(
+      `/credit/installments/${installmentId}/due-date`,
+      { method: "PATCH", body: JSON.stringify({ due_date: dueDate }), companyId }
+    );
+  },
 
   // ── Dashboard / analytics ────────────────────────────────────────
   getDashboard(companyId: string) {

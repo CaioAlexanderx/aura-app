@@ -12,6 +12,7 @@ import { useAuthStore } from "@/stores/auth";
 import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import type { CreditInstallment, CustomerTermsOverrides } from "@/services/creditApi";
+import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
 
@@ -275,16 +276,65 @@ function TermsModal({ profile, config, onClose, onSave, isPending }: TermsModalP
   );
 }
 
+// ─── Modal de edição de vencimento de parcela ──────────────────
+type EditDueDateModalProps = {
+  installment: CreditInstallment;
+  onClose: () => void;
+  onConfirm: (id: string, newDueDate: string) => void;
+  isPending: boolean;
+};
+
+function EditDueDateModal({ installment, onClose, onConfirm, isPending }: EditDueDateModalProps) {
+  const [dateInput, setDateInput] = useState(formatIsoToBr(installment.due_date));
+  const [error, setError] = useState("");
+
+  function handleConfirm() {
+    const iso = parseBrDate(dateInput);
+    if (!iso) { setError("Data inválida"); return; }
+    onConfirm(installment.id, iso);
+  }
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={pm.backdrop} onPress={onClose}>
+        <Pressable style={[pm.sheet, { maxWidth: 400 }]} onPress={() => {}}>
+          <Text style={pm.title}>Alterar Vencimento</Text>
+          <Text style={pm.subtitle}>
+            Parcela {installment.installment_number}/{installment.total_installments} · as parcelas seguintes serão recalculadas.
+          </Text>
+          <Text style={[pm.inputLabel, { marginTop: 8 }]}>NOVA DATA (DD/MM/AAAA)</Text>
+          <DateInput
+            value={dateInput}
+            onChangeText={v => { setDateInput(v); setError(""); }}
+            placeholder="15/07/2026"
+            forceShowError={!!error}
+          />
+          {error ? <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{error}</Text> : null}
+          <View style={[pm.btnRow, { marginTop: 20 }]}>
+            <Pressable style={pm.cancelBtn} onPress={onClose}>
+              <Text style={pm.cancelBtnText}>Cancelar</Text>
+            </Pressable>
+            <Pressable style={pm.confirmBtn} onPress={handleConfirm} disabled={isPending}>
+              <Text style={pm.confirmBtnText}>{isPending ? "Salvando..." : "Confirmar"}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ─── Tela principal ─────────────────────────────────────────────
 export default function ClienteCrediarioScreen() {
   const { id: customerId } = useLocalSearchParams<{ id: string }>();
   const { companyId } = useAuthStore();
   const qc = useQueryClient();
 
-  const [payingInst, setPayingInst]   = useState<CreditInstallment | null>(null);
-  const [showTerms, setShowTerms]     = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showAllInst, setShowAllInst] = useState(false);
+  const [payingInst, setPayingInst]       = useState<CreditInstallment | null>(null);
+  const [showTerms, setShowTerms]         = useState(false);
+  const [showHistory, setShowHistory]     = useState(false);
+  const [showAllInst, setShowAllInst]     = useState(false);
+  const [editingDueDate, setEditingDueDate] = useState<CreditInstallment | null>(null);
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
@@ -323,6 +373,17 @@ export default function ClienteCrediarioScreen() {
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
     },
     onError: (e: any) => toast.error(e?.message || "Erro ao alterar bloqueio"),
+  });
+
+  const editDueDateMut = useMutation({
+    mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
+      creditApi.editInstallmentDueDate(companyId!, id, dueDate),
+    onSuccess: () => {
+      setEditingDueDate(null);
+      toast.success("Vencimento atualizado!");
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao alterar vencimento"),
   });
 
   const isBlocked = profile?.status === "blocked";
@@ -495,6 +556,14 @@ export default function ClienteCrediarioScreen() {
                               {isOverdue ? `Atrasada ${late}d` : "No prazo"}
                             </Text>
                           </View>
+                          {/* botão editar data — sempre visível */}
+                          <Pressable
+                            style={s.calBtn}
+                            onPress={() => setEditingDueDate(inst)}
+                          >
+                            <Icon name="Calendar" size={13} color={Colors.violet} />
+                          </Pressable>
+                          {/* botão WA — só se overdue */}
                           {isOverdue && (
                             <Pressable
                               style={s.waBtn}
@@ -575,6 +644,14 @@ export default function ClienteCrediarioScreen() {
           onClose={() => setShowTerms(false)}
           onSave={(overrides) => termsMut.mutate(overrides)}
           isPending={termsMut.isPending}
+        />
+      )}
+      {editingDueDate && (
+        <EditDueDateModal
+          installment={editingDueDate}
+          onClose={() => setEditingDueDate(null)}
+          onConfirm={(id, dueDate) => editDueDateMut.mutate({ id, dueDate })}
+          isPending={editDueDateMut.isPending}
         />
       )}
     </View>
@@ -704,6 +781,12 @@ const s = StyleSheet.create({
     minWidth: 36, alignItems: "center", justifyContent: "center",
   },
   waBtnText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  calBtn: {
+    backgroundColor: Colors.violetD, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6,
+    minWidth: 30, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.violet + "44",
+  },
 
   emptyInstallments: {
     flexDirection: "row", alignItems: "center", gap: 8,
