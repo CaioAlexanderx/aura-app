@@ -13,6 +13,7 @@ export interface KarateFederationContextValue {
   federationName: string;
 }
 
+// TODO(fase-login): federationId vir do JWT
 const MOCK_FEDERATION_ID =
   (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_KARATE_FEDERATION_ID) ||
   "00000000-0000-0000-0000-000000000001"; // placeholder para dev/mock
@@ -23,7 +24,7 @@ const KarateFederationContext = createContext<KarateFederationContextValue>({
 });
 
 export function KarateFederationProvider({ children }: { children: ReactNode }) {
-  // TODO: ler do auth store quando o login de federação for implementado
+  // TODO(fase-login): federationId vir do JWT
   const value: KarateFederationContextValue = {
     federationId:   MOCK_FEDERATION_ID,
     federationName: "Federação Paulista de Karatê Tradicional",
