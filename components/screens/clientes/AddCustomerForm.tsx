@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, TextInput, Dimensions } from "react-
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import type { Customer } from "./types";
-import { maskPhone, maskDate } from "@/utils/masks";
+import { maskPhone } from "@/utils/masks";
+import { DateInput } from "@/components/inputs/DateInput";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -79,7 +80,7 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Aniversario (DD/MM ou DD/MM/AAAA)</Text>
-          <TextInput style={s.input} value={birthday} onChangeText={v => setBirthday(maskDate(v))} placeholder="15/06" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
+          <DateInput style={s.input} value={birthday} onChangeText={setBirthday} placeholder="15/06/1990" />
           <View style={{ height: 16 }} />
         </View>
       </View>
