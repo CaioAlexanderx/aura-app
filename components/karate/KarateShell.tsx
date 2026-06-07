@@ -6,6 +6,7 @@
 // Cores Shoji: vermelho primary, fundo paper.
 //
 // Track B: adicionado item Financeiro à navegação.
+// Track C: adicionado item Eventos à navegação.
 // ============================================================
 import React from "react";
 import {
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { label: "Dojôs",      icon: "home-outline",         route: "/(karate)/dojos" },
   { label: "Praticantes",icon: "people-outline",       route: "/(karate)/praticantes" },
   { label: "Financeiro", icon: "card-outline",         route: "/(karate)/financeiro" },
+  { label: "Eventos",    icon: "calendar-outline",     route: "/(karate)/eventos" },
   { label: "Importar",   icon: "cloud-upload-outline", route: "/(karate)/importacao" },
 ] as const;
 
@@ -83,9 +85,12 @@ function BottomTabNav() {
   const router = useRouter();
   const path   = usePathname();
 
+  // On mobile, show 5 tabs max; hide Importar to keep it tidy
+  const MOBILE_TABS = NAV_ITEMS.filter((i) => i.label !== "Importar");
+
   return (
     <View style={styles.bottomBar}>
-      {NAV_ITEMS.map((item) => {
+      {MOBILE_TABS.map((item) => {
         const active = path.startsWith(item.route.replace("/(karate)", "/karate"));
         return (
           <TouchableOpacity
