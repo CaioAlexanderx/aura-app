@@ -1,42 +1,41 @@
 // ============================================================
 // Financeiro — Aura Karatê
 //
-// Tela principal com 4 sub-tabs:
+// Tela principal com 5 sub-tabs:
 //   1. Visão Geral (DRE + fluxo de caixa)
-//   2. Anuidades Dojô (tabela editável de porte + cobrança)
+//   2. Anuidades Dojô (tabela editável de porte + cobrança PIX)
 //   3. Anuidades CPF (praticantes individuais)
 //   4. Saídas (despesas)
+//   5. Inadimplentes (lista completa + cobrança)
 //
-// Wired: GET /financial/overview, /financial/annuities/dojos,
-//        /financial/annuities/cpf, /financial/expenses, /financial/fees
-// MOCK: todos os endpoints com shapes fieis ao contrato
-//       (karate-fase1-openapi.yaml) até backend responder.
+// Wired against karate-fase1-openapi.yaml.
 // ============================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  RefreshControl,
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { OverviewTab } from "./tabs/OverviewTab";
-import { DojoAnnuitiesTab } from "./tabs/DojoAnnuitiesTab";
-import { CpfAnnuitiesTab } from "./tabs/CpfAnnuitiesTab";
-import { ExpensesTab } from "./tabs/ExpensesTab";
+import { OverviewTab }       from "./tabs/OverviewTab";
+import { DojoAnnuitiesTab }  from "./tabs/DojoAnnuitiesTab";
+import { CpfAnnuitiesTab }   from "./tabs/CpfAnnuitiesTab";
+import { ExpensesTab }       from "./tabs/ExpensesTab";
+import { InadimplentesTab }  from "./tabs/InadimplentesTab";
 
-type Tab = "overview" | "dojos" | "cpf" | "saidas";
+type Tab = "overview" | "dojos" | "cpf" | "saidas" | "inadimplentes";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "overview", label: "Visão Geral" },
-  { key: "dojos",    label: "Anuidades Dojô" },
-  { key: "cpf",      label: "Anuidades CPF" },
-  { key: "saidas",   label: "Saídas" },
+  { key: "overview",        label: "Visão Geral" },
+  { key: "dojos",           label: "Anuidades Dojô" },
+  { key: "cpf",             label: "Anuidades CPF" },
+  { key: "saidas",          label: "Saídas" },
+  { key: "inadimplentes",   label: "Inadimplentes" },
 ];
 
 export default function FinanceiroScreen() {
@@ -78,10 +77,11 @@ export default function FinanceiroScreen() {
 
       {/* Tab content */}
       <View style={styles.content}>
-        {activeTab === "overview" && <OverviewTab federationId={federationId} />}
-        {activeTab === "dojos"    && <DojoAnnuitiesTab federationId={federationId} />}
-        {activeTab === "cpf"      && <CpfAnnuitiesTab federationId={federationId} />}
-        {activeTab === "saidas"   && <ExpensesTab federationId={federationId} />}
+        {activeTab === "overview"      && <OverviewTab      federationId={federationId} />}
+        {activeTab === "dojos"         && <DojoAnnuitiesTab federationId={federationId} />}
+        {activeTab === "cpf"           && <CpfAnnuitiesTab  federationId={federationId} />}
+        {activeTab === "saidas"        && <ExpensesTab       federationId={federationId} />}
+        {activeTab === "inadimplentes" && <InadimplentesTab  federationId={federationId} />}
       </View>
     </View>
   );
