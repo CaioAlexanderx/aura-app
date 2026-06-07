@@ -7,9 +7,9 @@
 //
 // Wired: GET /financial/annuities/dojos
 //        POST /financial/annuities/dojos/{dojoId}/charge
-//        POST /financial/annuities/dojos/{dojoId}/pay
+//        POST /financial/annuities/dojos/{dojoId}/pix
 //        GET /financial/fees  PUT /financial/fees
-// MOCK: dados gerados com shape fiel ao contrato.
+// MOCK: dados gerados com shape fiel ao contrato v0.2.0.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -42,11 +42,13 @@ import {
 } from "@/services/karateApi";
 
 // ── MOCK ───────────────────────────────────────────────────
+// Shape matches contract DojoAnnuity schema (v0.2.0):
+// transaction_id + annuity_history_id present; no size_tier (not in contract).
 const MOCK_DOJO_ANNUITIES: DojoAnnuity[] = [
-  { dojo_id: "d1", dojo_name: "Dojô Shotokan ABC",      fpkt_affiliation_id: "FPKT-001", size_tier: "41_90",   amount: 1200, reference_period: "2026", due_date: "2026-03-31", paid_at: null, status: "overdue",    days_overdue: 67, nfse_id: null },
-  { dojo_id: "d2", dojo_name: "Dojô Karatê Esperança", fpkt_affiliation_id: "FPKT-002", size_tier: "up_to_40", amount: 600,  reference_period: "2026", due_date: "2026-04-30", paid_at: null, status: "due",       days_overdue: 0,  nfse_id: null },
-  { dojo_id: "d3", dojo_name: "Academia Bushido",        fpkt_affiliation_id: "FPKT-003", size_tier: "91_150",  amount: 2000, reference_period: "2026", due_date: "2026-01-31", paid_at: "2026-01-28", status: "paid",   days_overdue: 0,  nfse_id: "nf-001" },
-  { dojo_id: "d4", dojo_name: "Centro Karatê Zen",      fpkt_affiliation_id: "FPKT-004", size_tier: "over_150",amount: 3000, reference_period: "2026", due_date: "2026-02-28", paid_at: null, status: "defaulting", days_overdue: 100, nfse_id: null },
+  { dojo_id: "d1", dojo_name: "Dojô Shotokan ABC",      fpkt_affiliation_id: "FPKT-001", amount: 1200, reference_period: "2026", due_date: "2026-03-31", paid_at: null, status: "overdue",    days_overdue: 67, nfse_id: null, transaction_id: null, annuity_history_id: "ah-001" },
+  { dojo_id: "d2", dojo_name: "Dojô Karatê Esperança", fpkt_affiliation_id: "FPKT-002", amount: 600,  reference_period: "2026", due_date: "2026-04-30", paid_at: null, status: "due",       days_overdue: 0,  nfse_id: null, transaction_id: null, annuity_history_id: "ah-002" },
+  { dojo_id: "d3", dojo_name: "Academia Bushido",        fpkt_affiliation_id: "FPKT-003", amount: 2000, reference_period: "2026", due_date: "2026-01-31", paid_at: "2026-01-28", status: "paid",   days_overdue: 0,  nfse_id: "nf-001", transaction_id: "tx-003", annuity_history_id: "ah-003" },
+  { dojo_id: "d4", dojo_name: "Centro Karatê Zen",      fpkt_affiliation_id: "FPKT-004", amount: 3000, reference_period: "2026", due_date: "2026-02-28", paid_at: null, status: "defaulting", days_overdue: 100, nfse_id: null, transaction_id: null, annuity_history_id: "ah-004" },
 ];
 
 const MOCK_FEES: AnnualFee[] = [
@@ -261,7 +263,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={st.annuityName}>{ann.dojo_name}</Text>
               <Text style={st.annuityMeta}>
-                {ann.fpkt_affiliation_id} · {SIZE_TIER_LABELS[ann.size_tier as SizeTier] ?? ann.size_tier} praticantes
+                {ann.fpkt_affiliation_id}
               </Text>
               {ann.days_overdue > 0 && (
                 <Text style={st.annuityOverdue}>
@@ -289,10 +291,14 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
       )}
 
       {/* PIX Payment Modal */}
-      {pixTarget && (
+      {pixTarget && pixTarget.annuity_history_id && (
         <PixPaymentModal
           visible={!!pixTarget}
           federationId={federationId}
+          target={{
+            dojoId: pixTarget.dojo_id,
+            annuityHistoryId: pixTarget.annuity_history_id,
+          }}
           amount={pixTarget.amount}
           description={`Anuidade ${pixTarget.reference_period} — ${pixTarget.dojo_name}`}
           isAdmin

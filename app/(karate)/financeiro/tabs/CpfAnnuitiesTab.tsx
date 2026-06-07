@@ -4,8 +4,8 @@
 // Lista de anuidades por CPF com status, filtro e cobrança PIX.
 //
 // Wired: GET /financial/annuities/cpf
-//        POST /financial/annuities/cpf/{practitionerId}/pay
-// MOCK: dados com shape fiel ao contrato.
+//        POST /financial/annuities/cpf/{practitionerId}/pix
+// MOCK: dados com shape fiel ao contrato v0.2.0.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -27,11 +27,13 @@ import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
 import { karateApi, CpfAnnuity, AnnuityStatus } from "@/services/karateApi";
 
 // ── MOCK ───────────────────────────────────────────────────
-const MOCK_CPF_ANNUITIES: CpfAnnuity[] = [
-  { practitioner_id: "p1", full_name: "Takeshi Yamamoto",   karate_registration_number: "KR-0001", amount: 80, reference_period: "2026", due_date: "2026-03-31", paid_at: "2026-03-15", status: "paid" },
-  { practitioner_id: "p2", full_name: "Ana Paula Rocha",    karate_registration_number: "KR-0002", amount: 80, reference_period: "2026", due_date: "2026-03-31", paid_at: null, status: "overdue" },
-  { practitioner_id: "p3", full_name: "Carlos Eduardo Lima",karate_registration_number: "KR-0003", amount: 80, reference_period: "2026", due_date: "2026-06-30", paid_at: null, status: "due" },
-  { practitioner_id: "p4", full_name: "Fernanda Costa",     karate_registration_number: "KR-0004", amount: 80, reference_period: "2026", due_date: "2026-01-31", paid_at: null, status: "defaulting" },
+// Shape matches contract CpfAnnuity schema (v0.2.0).
+// transaction_id is needed to call the /pix endpoint.
+const MOCK_CPF_ANNUITIES: (CpfAnnuity & { transaction_id: string | null })[] = [
+  { practitioner_id: "p1", full_name: "Takeshi Yamamoto",   karate_registration_number: "KR-0001", amount: 80, reference_period: "2026", due_date: "2026-03-31", paid_at: "2026-03-15", status: "paid",       transaction_id: "tx-p1" },
+  { practitioner_id: "p2", full_name: "Ana Paula Rocha",    karate_registration_number: "KR-0002", amount: 80, reference_period: "2026", due_date: "2026-03-31", paid_at: null,          status: "overdue",    transaction_id: "tx-p2" },
+  { practitioner_id: "p3", full_name: "Carlos Eduardo Lima",karate_registration_number: "KR-0003", amount: 80, reference_period: "2026", due_date: "2026-06-30", paid_at: null,          status: "due",        transaction_id: "tx-p3" },
+  { practitioner_id: "p4", full_name: "Fernanda Costa",     karate_registration_number: "KR-0004", amount: 80, reference_period: "2026", due_date: "2026-01-31", paid_at: null,          status: "defaulting", transaction_id: null },
 ];
 
 const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
@@ -50,6 +52,12 @@ const STATUS_MAP: Record<AnnuityStatus, { label: string; icon: string; color: st
   suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral,bg: ShojiPalette.neutralSoft },
 };
 
+// Extended type that carries transaction_id from the list response.
+// The contract CpfAnnuity schema doesn't include transaction_id but
+// POST /cpf/{id}/pix requires it. If the backend starts returning it
+// in the list, it can be promoted to the base CpfAnnuity type.
+type CpfAnnuityWithTx = CpfAnnuity & { transaction_id?: string | null };
+
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -57,12 +65,12 @@ function formatCurrency(v: number) {
 interface Props { federationId: string; }
 
 export function CpfAnnuitiesTab({ federationId }: Props) {
-  const [annuities, setAnnuities] = useState<CpfAnnuity[]>([]);
+  const [annuities, setAnnuities] = useState<CpfAnnuityWithTx[]>([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
   const [search, setSearch]       = useState("");
-  const [pixTarget, setPixTarget] = useState<CpfAnnuity | null>(null);
+  const [pixTarget, setPixTarget] = useState<CpfAnnuityWithTx | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -71,7 +79,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
       const res = await karateApi
         .listCpfAnnuities(federationId, { status: filter === "all" ? undefined : filter })
         .catch(() => ({ page: 1, page_size: 25, total: MOCK_CPF_ANNUITIES.length, data: MOCK_CPF_ANNUITIES }));
-      setAnnuities(res.data);
+      setAnnuities(res.data as CpfAnnuityWithTx[]);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
@@ -136,7 +144,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
       ) : (
         filtered.map((ann) => {
           const s = STATUS_MAP[ann.status];
-          const canPay = ann.status !== "paid";
+          const canPay = ann.status !== "paid" && !!ann.transaction_id;
           return (
             <View key={ann.practitioner_id} style={st.card}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -166,11 +174,15 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         })
       )}
 
-      {/* PIX Modal */}
-      {pixTarget && (
+      {/* PIX Modal — only shown when we have a transaction_id to pass */}
+      {pixTarget && pixTarget.transaction_id && (
         <PixPaymentModal
           visible={!!pixTarget}
           federationId={federationId}
+          target={{
+            practitionerId: pixTarget.practitioner_id,
+            transactionId: pixTarget.transaction_id,
+          }}
           amount={pixTarget.amount}
           description={`Anuidade CPF ${pixTarget.reference_period} — ${pixTarget.full_name}`}
           isAdmin

@@ -2,15 +2,21 @@
 // PixPaymentModal (DESIGN-07) — Aura Karatê
 //
 // Fluxo:
-//   1. Cria intent PIX via karateApi.createPixIntent()
+//   1. Cria intent PIX via karateApi.createDojoPixIntent() ou
+//      karateApi.createCpfPixIntent() (endpoints reais do contrato)
 //   2. Exibe QR gerado do `payload` (client-side) + copia-e-cola
 //   3. Faz polling do status a cada ~3s até `paid` | `expired`
+//      via GET /financial/payments/{intentId}/status
 //   4. Estado de sucesso quando paid
 //   5. Admins veem botão "Confirmar pagamento" (manual)
+//      via POST /financial/payments/{intentId}/confirm
 //
 // Props:
-//   federationId, amount, description — para criar o intent
-//   onSuccess(result) — callback ao confirmar pagamento
+//   federationId — obrigatório
+//   Para Dojô: dojoId + annuityHistoryId
+//   Para CPF:  practitionerId + transactionId
+//   amount — apenas para exibição (o contrato não envia amount no intent)
+//   onSuccess(intentId) — callback ao confirmar pagamento
 //   onClose — fecha o modal
 //   isAdmin — exibe ação de confirmação manual
 // ============================================================
@@ -36,17 +42,21 @@ import {
   karateApi,
   PixIntent,
   PixStatusResponse,
+  PaymentResult,
 } from "@/services/karateApi";
 
-// ── MOCK (shape fiel ao contrato) ────────────────────────────
-// TODO: remover quando /financial/pix/intent estiver ativo
+// ── MOCK (shape fiel ao contrato v0.2.0) ────────────────────
+// TODO: remover quando endpoints PIX estiverem ativos no ambiente
 const MOCK_INTENT: PixIntent = {
   intent_id: "mock-intent-001",
+  payment_intent_id: "mock-provider-001",
   payload:
     "00020126580014br.gov.bcb.pix0136aura-karate-mock-key@federacao.org.br5204000053039865802BR5915Federacao Karate6009Sao Paulo62140510mock000016304ABCD",
-  amount: 0,
-  expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  qr_image: null,
   status: "pending",
+  expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  provider: "static_brcode",
+  _warn: "PIX mock — backend não configurado",
 };
 
 type ModalState =
@@ -57,9 +67,28 @@ type ModalState =
 
 const POLLING_INTERVAL_MS = 3000;
 
+// Discriminated union: supply either dojo or cpf identifiers
+type DojoPixTarget = {
+  dojoId: string;
+  annuityHistoryId: string;
+  practitionerId?: never;
+  transactionId?: never;
+};
+type CpfPixTarget = {
+  practitionerId: string;
+  transactionId: string;
+  dojoId?: never;
+  annuityHistoryId?: never;
+};
+
+export type PixTarget = DojoPixTarget | CpfPixTarget;
+
 interface PixPaymentModalProps {
   visible: boolean;
   federationId: string;
+  /** PIX target — either dojo or cpf identifiers (required) */
+  target: PixTarget;
+  /** Display-only amount — not sent to backend (backend derives amount from annuity) */
   amount: number;
   description?: string;
   isAdmin?: boolean;
@@ -70,6 +99,7 @@ interface PixPaymentModalProps {
 export function PixPaymentModal({
   visible,
   federationId,
+  target,
   amount,
   description,
   isAdmin = false,
@@ -102,8 +132,8 @@ export function PixPaymentModal({
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
-          // MOCK: nunca retorna paid automaticamente — aguarda ação manual
-          // TODO: remover fallback quando backend PIX estiver ativo
+          // GET /financial/payments/{intentId}/status
+          // TODO: remover fallback MOCK quando backend PIX estiver ativo
           let res: PixStatusResponse;
           try {
             res = await karateApi.getPixStatus(federationId, intent.intent_id);
@@ -113,9 +143,9 @@ export function PixPaymentModal({
           }
           if (res.status === "paid") {
             handlePaid(intent);
-          } else if (res.status === "expired" || res.status === "error") {
+          } else if (res.status === "expired") {
             stopPolling();
-            setState({ phase: "error", message: "PIX expirado ou com erro. Tente novamente." });
+            setState({ phase: "error", message: "PIX expirado. Tente novamente." });
           }
         } catch {
           // rede: ignora e tenta novamente na próxima iteração
@@ -128,24 +158,30 @@ export function PixPaymentModal({
   const createIntent = useCallback(async () => {
     setState({ phase: "creating" });
     try {
-      // TODO: remover fallback MOCK quando endpoint PIX estiver ativo
       let intent: PixIntent;
+      // TODO: remover fallback MOCK quando endpoints PIX estiverem ativos
       try {
-        intent = await karateApi.createPixIntent(federationId, {
-          amount,
-          description,
-          idempotency_key: `pix-${federationId}-${Date.now()}`,
-        });
+        if (target.dojoId) {
+          // POST /financial/annuities/dojos/{dojoId}/pix
+          intent = await karateApi.createDojoPixIntent(federationId, target.dojoId, {
+            annuity_history_id: target.annuityHistoryId,
+          });
+        } else {
+          // POST /financial/annuities/cpf/{practitionerId}/pix
+          intent = await karateApi.createCpfPixIntent(federationId, target.practitionerId, {
+            transaction_id: target.transactionId,
+          });
+        }
       } catch {
         // MOCK fallback
-        intent = { ...MOCK_INTENT, amount };
+        intent = { ...MOCK_INTENT };
       }
       setState({ phase: "waiting", intent });
       startPolling(intent);
     } catch (e: any) {
       setState({ phase: "error", message: e?.message ?? "Erro ao criar cobrança PIX." });
     }
-  }, [federationId, amount, description, startPolling]);
+  }, [federationId, target, startPolling]);
 
   // Criar intent ao abrir
   useEffect(() => {
@@ -175,9 +211,12 @@ export function PixPaymentModal({
     if (state.phase !== "waiting") return;
     setConfirming(true);
     try {
+      // POST /financial/payments/{intentId}/confirm
       // TODO: remover fallback MOCK quando endpoint confirm estiver ativo
       try {
-        await karateApi.confirmPixManual(federationId, state.intent.intent_id);
+        await karateApi.confirmPixManual(federationId, state.intent.intent_id, {
+          emit_nfse: true,
+        });
       } catch {
         // MOCK: aceita confirmar mesmo sem backend
       }
@@ -230,16 +269,16 @@ export function PixPaymentModal({
             {/* Waiting for payment */}
             {state.phase === "waiting" && (
               <>
-                {/* Valor */}
+                {/* Valor (display-only — backend derives from annuity) */}
                 <View style={styles.amountRow}>
                   <Text style={styles.amountLabel}>Valor</Text>
-                  <Text style={styles.amountValue}>{formatCurrency(state.intent.amount)}</Text>
+                  <Text style={styles.amountValue}>{formatCurrency(amount)}</Text>
                 </View>
 
                 {/* QR Code */}
                 <PixQRCode
                   payload={state.intent.payload}
-                  qrImage={state.intent.qr_image}
+                  qrImage={state.intent.qr_image ?? undefined}
                   size={200}
                   style={{ marginVertical: 16 }}
                 />
@@ -299,7 +338,7 @@ export function PixPaymentModal({
                 </View>
                 <Text style={styles.successTitle}>Pagamento confirmado!</Text>
                 <Text style={styles.successSub}>
-                  {formatCurrency(state.intent.amount)} recebido com sucesso.
+                  {formatCurrency(amount)} recebido com sucesso.
                 </Text>
                 <KarateButton
                   label="Fechar"

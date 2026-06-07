@@ -2,7 +2,7 @@
 // KARATE API — Aura Karatê
 //
 // Wired against karate-fase0-openapi.yaml (Fase 0) and
-// karate-fase1-openapi.yaml (Fase 1 – Track B financial).
+// karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
 import { request } from "@/services/api";
@@ -166,7 +166,7 @@ export interface ImportResult {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Fase 1 — Financial types (karate-fase1-openapi.yaml)
+// Fase 1 — Financial types (karate-fase1-openapi.yaml v0.2.0)
 // ─────────────────────────────────────────────────────────────
 
 export type AnnuityStatus = "paid" | "due" | "overdue" | "defaulting" | "suspended";
@@ -177,10 +177,11 @@ export type ExpenseCategory =
   | "expense_certificate"
   | "expense_award"
   | "expense_other";
-export type PaymentMethod = "pix" | "boleto" | "cartao" | "dinheiro" | "transferencia";
 export type NfseStatus = "pending" | "issued" | "error" | "cancelled";
 export type OverdueTargetType = "dojo" | "cpf";
 export type ReminderChannel = "whatsapp" | "email";
+// PixProvider as defined by the contract
+export type PixProvider = "static_brcode" | "asaas";
 
 export interface AnnualFeeInput {
   fee_type: "dojo" | "cpf";
@@ -199,17 +200,48 @@ export interface ChargeInput {
   reference_period: string;
 }
 
-export interface PaymentInput {
-  amount: number;
-  method: PaymentMethod;
-  paid_at?: string;
-  idempotency_key?: string;
-  emit_nfse?: boolean;
+// Request body for POST /financial/annuities/dojos/{dojoId}/pix
+export interface DojoPixInput {
+  annuity_history_id: string;
 }
 
-export interface PaymentResult {
+// Request body for POST /financial/annuities/cpf/{practitionerId}/pix
+export interface CpfPixInput {
   transaction_id: string;
+}
+
+// PixIntent — exact contract shape (karate-fase1-openapi.yaml PixIntent schema)
+export interface PixIntent {
+  intent_id: string;
+  /** ID externo do provider */
+  payment_intent_id: string;
+  /** BR Code EMV (static_brcode) ou null — used by front to render QR client-side */
+  payload: string;
+  /** base64 QR image (Asaas) ou null */
+  qr_image?: string | null;
+  status: "pending" | "paid" | "expired";
+  expires_at: string | null;
+  provider: PixProvider;
+  /** aviso se PIX não configurado (fallback mock) */
+  _warn?: string | null;
+}
+
+// GET /financial/payments/{intentId}/status response
+export interface PixStatusResponse {
+  intent_id: string;
+  payment_intent_id: string;
+  provider: string;
+  status: "pending" | "paid" | "expired";
+  expires_at: string | null;
+  paid_at: string | null;
+}
+
+// POST /financial/payments/{intentId}/confirm response
+export interface PaymentResult {
+  intent_id: string;
+  transaction_id: string | null;
   status: "paid";
+  paid_at: string;
   nfse_id: string | null;
   idempotent_hit: boolean;
 }
@@ -218,7 +250,6 @@ export interface DojoAnnuity {
   dojo_id: string;
   dojo_name: string;
   fpkt_affiliation_id: string;
-  size_tier: SizeTier;
   amount: number;
   reference_period: string;
   due_date: string | null;
@@ -226,6 +257,8 @@ export interface DojoAnnuity {
   status: AnnuityStatus;
   days_overdue: number;
   nfse_id: string | null;
+  transaction_id: string | null;
+  annuity_history_id: string | null;
 }
 
 export interface CpfAnnuity {
@@ -247,6 +280,7 @@ export interface Expense {
   due_date?: string;
   reference_type?: string | null;
   reference_id?: string | null;
+  status: string;
   created_at: string;
 }
 
@@ -304,28 +338,6 @@ export interface FinancialOverview {
   };
   cashflow: CashflowMonth[];
   projected_receivables: ProjectedReceivable[];
-}
-
-// PIX intent types (MVP — client-side QR rendering)
-export interface PixIntentInput {
-  amount: number;
-  description?: string;
-  idempotency_key?: string;
-}
-
-export interface PixIntent {
-  intent_id: string;
-  payload: string;        // copia-e-cola PIX (EMV string) — usado para gerar QR no client
-  qr_image?: string;      // base64 PNG opcional do backend; front usa payload se ausente
-  amount: number;
-  expires_at: string;
-  status: "pending" | "paid" | "expired" | "error";
-}
-
-export interface PixStatusResponse {
-  intent_id: string;
-  status: "pending" | "paid" | "expired" | "error";
-  paid_at?: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -408,9 +420,11 @@ export const karateApi = {
 
   // ─────────────────────────────────────────────────────────────
   // Fase 1 — Financial endpoints
+  // All paths match karate-fase1-openapi.yaml v0.2.0 exactly.
   // ─────────────────────────────────────────────────────────────
 
   // Visão geral (DRE + fluxo)
+  // GET /federation/{federationId}/financial/overview
   getFinancialOverview: (
     federationId: string,
     params?: { from?: string; to?: string }
@@ -423,9 +437,11 @@ export const karateApi = {
   },
 
   // Tabela de anuidades
+  // GET /federation/{federationId}/financial/fees
   getAnnualFees: (federationId: string): Promise<AnnualFee[]> =>
     request(`/federation/${federationId}/financial/fees`),
 
+  // PUT /federation/{federationId}/financial/fees
   updateAnnualFees: (
     federationId: string,
     body: { effective_from: string; fees: AnnualFeeInput[] }
@@ -433,6 +449,7 @@ export const karateApi = {
     request(`/federation/${federationId}/financial/fees`, { method: "PUT", body }),
 
   // Anuidades Dojô
+  // GET /federation/{federationId}/financial/annuities/dojos
   listDojoAnnuities: (
     federationId: string,
     params?: { status?: AnnuityStatus; page?: number; pageSize?: number }
@@ -445,6 +462,7 @@ export const karateApi = {
     return request(`/federation/${federationId}/financial/annuities/dojos${query}`);
   },
 
+  // POST /federation/{federationId}/financial/annuities/dojos/{dojoId}/charge
   chargeDojoAnnuity: (
     federationId: string,
     dojoId: string,
@@ -455,17 +473,20 @@ export const karateApi = {
       body,
     }),
 
-  payDojoAnnuity: (
+  // POST /federation/{federationId}/financial/annuities/dojos/{dojoId}/pix
+  // body: { annuity_history_id }
+  createDojoPixIntent: (
     federationId: string,
     dojoId: string,
-    body: PaymentInput
-  ): Promise<PaymentResult> =>
-    request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/pay`, {
+    body: DojoPixInput
+  ): Promise<PixIntent> =>
+    request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/pix`, {
       method: "POST",
       body,
     }),
 
   // Anuidades CPF
+  // GET /federation/{federationId}/financial/annuities/cpf
   listCpfAnnuities: (
     federationId: string,
     params?: { status?: AnnuityStatus; page?: number; pageSize?: number }
@@ -478,17 +499,31 @@ export const karateApi = {
     return request(`/federation/${federationId}/financial/annuities/cpf${query}`);
   },
 
-  payCpfAnnuity: (
+  // POST /federation/{federationId}/financial/annuities/cpf/{practitionerId}/charge
+  chargeCpfAnnuity: (
     federationId: string,
     practitionerId: string,
-    body: PaymentInput
-  ): Promise<PaymentResult> =>
-    request(`/federation/${federationId}/financial/annuities/cpf/${practitionerId}/pay`, {
+    body: ChargeInput
+  ): Promise<CpfAnnuity> =>
+    request(`/federation/${federationId}/financial/annuities/cpf/${practitionerId}/charge`, {
+      method: "POST",
+      body,
+    }),
+
+  // POST /federation/{federationId}/financial/annuities/cpf/{practitionerId}/pix
+  // body: { transaction_id }
+  createCpfPixIntent: (
+    federationId: string,
+    practitionerId: string,
+    body: CpfPixInput
+  ): Promise<PixIntent> =>
+    request(`/federation/${federationId}/financial/annuities/cpf/${practitionerId}/pix`, {
       method: "POST",
       body,
     }),
 
   // Saídas
+  // GET /federation/{federationId}/financial/expenses
   listExpenses: (
     federationId: string,
     params?: { page?: number; pageSize?: number }
@@ -500,10 +535,12 @@ export const karateApi = {
     return request(`/federation/${federationId}/financial/expenses${query}`);
   },
 
+  // POST /federation/{federationId}/financial/expenses
   createExpense: (federationId: string, body: ExpenseInput): Promise<Expense> =>
     request(`/federation/${federationId}/financial/expenses`, { method: "POST", body }),
 
   // NFS-e
+  // GET /federation/{federationId}/financial/nfse
   listNfse: (
     federationId: string,
     params?: { page?: number; pageSize?: number }
@@ -516,9 +553,11 @@ export const karateApi = {
   },
 
   // Inadimplência
+  // GET /federation/{federationId}/financial/overdue
   listOverdue: (federationId: string): Promise<OverdueItem[]> =>
     request(`/federation/${federationId}/financial/overdue`),
 
+  // POST /federation/{federationId}/financial/overdue/{targetId}/remind
   remindOverdue: (
     federationId: string,
     targetId: string,
@@ -530,32 +569,27 @@ export const karateApi = {
     }),
 
   // ─────────────────────────────────────────────────────────────
-  // PIX intent / status / confirm manual
-  // MVP: backend retorna payload (EMV) e QR opcional;
-  // front gera QR a partir do payload client-side.
+  // PIX payments — status polling and manual confirmation
+  // These are shared endpoints used after createDojoPixIntent /
+  // createCpfPixIntent return an intent_id.
   // ─────────────────────────────────────────────────────────────
 
-  createPixIntent: (
-    federationId: string,
-    body: PixIntentInput
-  ): Promise<PixIntent> =>
-    request(`/federation/${federationId}/financial/pix/intent`, {
-      method: "POST",
-      body,
-    }),
-
+  // GET /federation/{federationId}/financial/payments/{intentId}/status
   getPixStatus: (
     federationId: string,
     intentId: string
   ): Promise<PixStatusResponse> =>
-    request(`/federation/${federationId}/financial/pix/intent/${intentId}/status`),
+    request(`/federation/${federationId}/financial/payments/${intentId}/status`),
 
+  // POST /federation/{federationId}/financial/payments/{intentId}/confirm
+  // body: { paid_at?, emit_nfse? } — both optional
   confirmPixManual: (
     federationId: string,
-    intentId: string
-  ): Promise<{ confirmed: boolean }> =>
-    request(`/federation/${federationId}/financial/pix/intent/${intentId}/confirm`, {
+    intentId: string,
+    body?: { paid_at?: string; emit_nfse?: boolean }
+  ): Promise<PaymentResult> =>
+    request(`/federation/${federationId}/financial/payments/${intentId}/confirm`, {
       method: "POST",
-      body: {},
+      body: body ?? {},
     }),
 };
