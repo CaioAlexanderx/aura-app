@@ -4,6 +4,8 @@
 // Shell responsivo (mobile: bottom-tabs + topbar; web: sidebar).
 // Usa expo-router Slot para renderizar a tela ativa.
 // Cores Shoji: vermelho primary, fundo paper.
+//
+// Track B: adicionado item Financeiro à navegação.
 // ============================================================
 import React from "react";
 import {
@@ -23,10 +25,11 @@ import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateThem
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: "grid-outline",        route: "/(karate)/" },
-  { label: "Dojôs",     icon: "home-outline",         route: "/(karate)/dojos" },
-  { label: "Praticantes",icon: "people-outline",      route: "/(karate)/praticantes" },
-  { label: "Importar",  icon: "cloud-upload-outline", route: "/(karate)/importacao" },
+  { label: "Dashboard",  icon: "grid-outline",        route: "/(karate)/" },
+  { label: "Dojôs",      icon: "home-outline",         route: "/(karate)/dojos" },
+  { label: "Praticantes",icon: "people-outline",       route: "/(karate)/praticantes" },
+  { label: "Financeiro", icon: "card-outline",         route: "/(karate)/financeiro" },
+  { label: "Importar",   icon: "cloud-upload-outline", route: "/(karate)/importacao" },
 ] as const;
 
 const BREAKPOINT_SIDEBAR = 768;
