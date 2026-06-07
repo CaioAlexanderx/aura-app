@@ -1,17 +1,15 @@
 // ============================================================
 // KARATE API — Aura Karatê
 //
-// Wired against karate-fase0-openapi.yaml contract.
+// Wired against karate-fase0-openapi.yaml (Fase 0) and
+// karate-fase1-openapi.yaml (Fase 1 – Track B financial).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
-//
-// TODO: substituir MOCK_FEDERATION_ID por leitura do
-// store/context de federação quando o login de federação
-// for implementado. Por ora, lemos de env ou fallback mock.
 // ============================================================
 import { request } from "@/services/api";
 
-// — tipos espelhando o OpenAPI schema —
-
+// ─────────────────────────────────────────────────────────────
+// Fase 0 types
+// ─────────────────────────────────────────────────────────────
 export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended";
 export type AffiliationModel = "annual" | "biannual" | "quarterly";
 export type AffiliationStatus = "active" | "pending" | "inactive";
@@ -168,9 +166,171 @@ export interface ImportResult {
 }
 
 // ─────────────────────────────────────────────────────────────
-// API calls
+// Fase 1 — Financial types (karate-fase1-openapi.yaml)
 // ─────────────────────────────────────────────────────────────
 
+export type AnnuityStatus = "paid" | "due" | "overdue" | "defaulting" | "suspended";
+export type SizeTier = "up_to_40" | "41_90" | "91_150" | "over_150";
+export type ExpenseCategory =
+  | "expense_cost"
+  | "expense_repasse"
+  | "expense_certificate"
+  | "expense_award"
+  | "expense_other";
+export type PaymentMethod = "pix" | "boleto" | "cartao" | "dinheiro" | "transferencia";
+export type NfseStatus = "pending" | "issued" | "error" | "cancelled";
+export type OverdueTargetType = "dojo" | "cpf";
+export type ReminderChannel = "whatsapp" | "email";
+
+export interface AnnualFeeInput {
+  fee_type: "dojo" | "cpf";
+  size_tier?: SizeTier;
+  amount: number;
+}
+
+export interface AnnualFee extends AnnualFeeInput {
+  id: string;
+  effective_from: string;
+}
+
+export interface ChargeInput {
+  amount: number;
+  due_date: string;
+  reference_period: string;
+}
+
+export interface PaymentInput {
+  amount: number;
+  method: PaymentMethod;
+  paid_at?: string;
+  idempotency_key?: string;
+  emit_nfse?: boolean;
+}
+
+export interface PaymentResult {
+  transaction_id: string;
+  status: "paid";
+  nfse_id: string | null;
+  idempotent_hit: boolean;
+}
+
+export interface DojoAnnuity {
+  dojo_id: string;
+  dojo_name: string;
+  fpkt_affiliation_id: string;
+  size_tier: SizeTier;
+  amount: number;
+  reference_period: string;
+  due_date: string | null;
+  paid_at: string | null;
+  status: AnnuityStatus;
+  days_overdue: number;
+  nfse_id: string | null;
+}
+
+export interface CpfAnnuity {
+  practitioner_id: string;
+  full_name: string;
+  karate_registration_number: string;
+  amount: number;
+  reference_period: string;
+  due_date: string | null;
+  paid_at: string | null;
+  status: AnnuityStatus;
+}
+
+export interface Expense {
+  id: string;
+  amount: number;
+  category: ExpenseCategory;
+  description: string;
+  due_date?: string;
+  reference_type?: string | null;
+  reference_id?: string | null;
+  created_at: string;
+}
+
+export interface ExpenseInput {
+  amount: number;
+  category: ExpenseCategory;
+  description: string;
+  due_date?: string;
+  reference_type?: string | null;
+  reference_id?: string | null;
+}
+
+export interface NfseItem {
+  nfse_id: string;
+  transaction_id: string;
+  number: string | null;
+  amount: number;
+  status: NfseStatus;
+  issued_at: string | null;
+}
+
+export interface OverdueItem {
+  target_type: OverdueTargetType;
+  target_id: string;
+  name: string;
+  amount: number;
+  days_overdue: number;
+  status: AnnuityStatus;
+  last_reminder_at: string | null;
+}
+
+export interface DRECategory {
+  category: string;
+  amount: number;
+}
+
+export interface CashflowMonth {
+  month: string;
+  inflow: number;
+  outflow: number;
+  balance: number;
+}
+
+export interface ProjectedReceivable {
+  due_date: string;
+  amount: number;
+}
+
+export interface FinancialOverview {
+  period: { from: string; to: string };
+  dre: {
+    revenue: DRECategory[];
+    expenses: DRECategory[];
+    net: number;
+  };
+  cashflow: CashflowMonth[];
+  projected_receivables: ProjectedReceivable[];
+}
+
+// PIX intent types (MVP — client-side QR rendering)
+export interface PixIntentInput {
+  amount: number;
+  description?: string;
+  idempotency_key?: string;
+}
+
+export interface PixIntent {
+  intent_id: string;
+  payload: string;        // copia-e-cola PIX (EMV string) — usado para gerar QR no client
+  qr_image?: string;      // base64 PNG opcional do backend; front usa payload se ausente
+  amount: number;
+  expires_at: string;
+  status: "pending" | "paid" | "expired" | "error";
+}
+
+export interface PixStatusResponse {
+  intent_id: string;
+  status: "pending" | "paid" | "expired" | "error";
+  paid_at?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// API calls — Fase 0
+// ─────────────────────────────────────────────────────────────
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -233,9 +393,6 @@ export const karateApi = {
     file: FormData,
     mode: "preview" | "commit" = "preview"
   ): Promise<ImportResult> => {
-    // multipart/form-data — não usa JSON body, passa FormData direto
-    // TODO: adaptar request() para suportar FormData ou usar fetch direto
-    // Por ora, chamada direta ao fetch com base URL da env
     const baseUrl =
       (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
       "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -248,4 +405,157 @@ export const karateApi = {
       body: file,
     }).then((r) => r.json());
   },
+
+  // ─────────────────────────────────────────────────────────────
+  // Fase 1 — Financial endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  // Visão geral (DRE + fluxo)
+  getFinancialOverview: (
+    federationId: string,
+    params?: { from?: string; to?: string }
+  ): Promise<FinancialOverview> => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/overview${query}`);
+  },
+
+  // Tabela de anuidades
+  getAnnualFees: (federationId: string): Promise<AnnualFee[]> =>
+    request(`/federation/${federationId}/financial/fees`),
+
+  updateAnnualFees: (
+    federationId: string,
+    body: { effective_from: string; fees: AnnualFeeInput[] }
+  ): Promise<AnnualFee[]> =>
+    request(`/federation/${federationId}/financial/fees`, { method: "PUT", body }),
+
+  // Anuidades Dojô
+  listDojoAnnuities: (
+    federationId: string,
+    params?: { status?: AnnuityStatus; page?: number; pageSize?: number }
+  ): Promise<Paginated<DojoAnnuity>> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/annuities/dojos${query}`);
+  },
+
+  chargeDojoAnnuity: (
+    federationId: string,
+    dojoId: string,
+    body: ChargeInput
+  ): Promise<DojoAnnuity> =>
+    request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/charge`, {
+      method: "POST",
+      body,
+    }),
+
+  payDojoAnnuity: (
+    federationId: string,
+    dojoId: string,
+    body: PaymentInput
+  ): Promise<PaymentResult> =>
+    request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/pay`, {
+      method: "POST",
+      body,
+    }),
+
+  // Anuidades CPF
+  listCpfAnnuities: (
+    federationId: string,
+    params?: { status?: AnnuityStatus; page?: number; pageSize?: number }
+  ): Promise<Paginated<CpfAnnuity>> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/annuities/cpf${query}`);
+  },
+
+  payCpfAnnuity: (
+    federationId: string,
+    practitionerId: string,
+    body: PaymentInput
+  ): Promise<PaymentResult> =>
+    request(`/federation/${federationId}/financial/annuities/cpf/${practitionerId}/pay`, {
+      method: "POST",
+      body,
+    }),
+
+  // Saídas
+  listExpenses: (
+    federationId: string,
+    params?: { page?: number; pageSize?: number }
+  ): Promise<Paginated<Expense>> => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/expenses${query}`);
+  },
+
+  createExpense: (federationId: string, body: ExpenseInput): Promise<Expense> =>
+    request(`/federation/${federationId}/financial/expenses`, { method: "POST", body }),
+
+  // NFS-e
+  listNfse: (
+    federationId: string,
+    params?: { page?: number; pageSize?: number }
+  ): Promise<Paginated<NfseItem>> => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/nfse${query}`);
+  },
+
+  // Inadimplência
+  listOverdue: (federationId: string): Promise<OverdueItem[]> =>
+    request(`/federation/${federationId}/financial/overdue`),
+
+  remindOverdue: (
+    federationId: string,
+    targetId: string,
+    body: { channel: ReminderChannel; target_type: OverdueTargetType }
+  ): Promise<{ queued: boolean }> =>
+    request(`/federation/${federationId}/financial/overdue/${targetId}/remind`, {
+      method: "POST",
+      body,
+    }),
+
+  // ─────────────────────────────────────────────────────────────
+  // PIX intent / status / confirm manual
+  // MVP: backend retorna payload (EMV) e QR opcional;
+  // front gera QR a partir do payload client-side.
+  // ─────────────────────────────────────────────────────────────
+
+  createPixIntent: (
+    federationId: string,
+    body: PixIntentInput
+  ): Promise<PixIntent> =>
+    request(`/federation/${federationId}/financial/pix/intent`, {
+      method: "POST",
+      body,
+    }),
+
+  getPixStatus: (
+    federationId: string,
+    intentId: string
+  ): Promise<PixStatusResponse> =>
+    request(`/federation/${federationId}/financial/pix/intent/${intentId}/status`),
+
+  confirmPixManual: (
+    federationId: string,
+    intentId: string
+  ): Promise<{ confirmed: boolean }> =>
+    request(`/federation/${federationId}/financial/pix/intent/${intentId}/confirm`, {
+      method: "POST",
+      body: {},
+    }),
 };
