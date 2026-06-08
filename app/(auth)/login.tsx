@@ -12,9 +12,12 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
+// DESIGN-29: animação de login Shoji é exibida só quando o vertical é karatê.
+const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
 
 // Web-only CSS: aura rings, particles, grid, magnetic button, input focus
 if (typeof document !== "undefined" && !document.getElementById("aura-login-v2-css")) {
@@ -134,6 +137,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [karateIntro, setKarateIntro] = useState(false);
   const { login, isLoading } = useAuthStore();
 
   // Native fade-in for mobile
@@ -145,6 +149,12 @@ export default function LoginScreen() {
       Animated.timing(translateY, { toValue: 0, duration: 600, delay: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
+
+  // DESIGN-29: a animação só existe quando disparada pela AÇÃO de login (abaixo).
+  // Nunca é montada no shell — portanto não reaparece em navegações/re-mounts.
+  if (karateIntro) {
+    return <KarateLoginTransition onDone={() => router.replace("/karate")} />;
+  }
 
   async function handleLogin() {
     if (!email || !password) { toast.error("Preencha e-mail e senha"); return; }
@@ -160,6 +170,11 @@ export default function LoginScreen() {
       } else {
         toast.success("Login efetuado!");
       }
+      // Karatê tem porta dedicada: dispara a animação Shoji (one-shot) e
+      // navega para /karate ao final. Demais verticais seguem o fluxo normal.
+      const co = useAuthStore.getState().company as any;
+      const vertical = co?.vertical_active ?? co?.vertical;
+      if (KARATE_VERTICALS.includes(vertical)) { setKarateIntro(true); return; }
       router.replace("/(tabs)");
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";
