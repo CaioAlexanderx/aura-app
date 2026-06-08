@@ -16,6 +16,14 @@ import { toast } from "@/components/Toast";
 //     nota explícita: só aviso, nunca bloqueia.
 //   - require_score_min removido da UI (campo deprecado; enviamos
 //     score_warn_min no PUT e omitimos require_score_min).
+// Fase 2 FE (08/06/2026):
+//   - Seção "Encargos por atraso": toggle late_charges_enabled,
+//     multa (late_fee_rate, teto 2% CDC), mora/mês (exibe mensal,
+//     envia diário via late_interest_daily = mensal/100/30),
+//     carência em dias (late_grace_days).
+//   - Banner âmbar com texto legal CDC.
+//   - Validação inline (>2% / >1%) bloqueia salvar antes de chegar
+//     no backend; trata 422 LATE_FEE_ABOVE_CAP / LATE_INTEREST_ABOVE_CAP.
 // ============================================================
 
 type Rule = { id: string; name: string; days_relative: number; template: string; channel: string; enabled: boolean };
@@ -48,6 +56,21 @@ function periodKey(unit: PeriodUnit, count: number): "semanal" | "quinzenal" | "
   return "custom";
 }
 
+// ── Helpers mora: exibir mensal ↔ enviar diário ──────────────
+// Backend armazena e espera late_interest_daily (mora ao DIA, decimal).
+// UI exibe e recebe do usuário a taxa MENSAL em %.
+// Conversão:
+//   exibir  → moraMonthlyPct = late_interest_daily * 30 * 100
+//   salvar  → late_interest_daily = (moraMonthlyPct / 100) / 30
+function dailyToMonthlyPct(daily: number): string {
+  // daily = fração diária (ex.: 0.000333...) → 0.000333 * 30 * 100 = 0.999...%
+  return pctToStr(+((daily || 0) * 30 * 100).toFixed(4));
+}
+function monthlyPctToDaily(monthlyPctStr: string): number {
+  // "1" → 0.01/30 = 0.000333...
+  return +(num(monthlyPctStr) / 100 / 30).toFixed(8);
+}
+
 export default function CrediarioSettingsScreen() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -74,6 +97,18 @@ export default function CrediarioSettingsScreen() {
   // Cobrança
   const [pixKey, setPixKey] = useState("");
   const [rules, setRules] = useState<Rule[]>(DEFAULT_RULES);
+
+  // ── Fase 2: encargos por atraso ─────────────────────────────
+  const [lateChargesOn, setLateChargesOn] = useState(false);
+  /** Multa em %, ex.: "2" = 2% = 0.02 */
+  const [lateFeePct, setLateFeePct] = useState("2");
+  /** Mora MENSAL em %, ex.: "1" = 1%/mês = 0.01/30 diário */
+  const [moraMonthlyPct, setMoraMonthlyPct] = useState("1");
+  /** Carência em dias (inteiro) */
+  const [graceStr, setGraceStr] = useState("3");
+  /** Erros de validação inline (CDC) */
+  const [lateFeeError, setLateFeePctError] = useState<string | null>(null);
+  const [moraPctError, setMoraPctError] = useState<string | null>(null);
 
   const cfgQ = useQuery({
     queryKey: ["credit-plan-config", company?.id],
@@ -111,6 +146,18 @@ export default function CrediarioSettingsScreen() {
       : (c.require_score_min ?? 0);
     setScoreWarnOn(swm > 0);
     if (swm > 0) setScoreWarnMin(String(swm));
+
+    // ── Fase 2: encargos por atraso ──────────────────────────
+    // late_charges_enabled pode vir undefined em configs antigas → tratar como false
+    setLateChargesOn(c.late_charges_enabled === true);
+    // late_fee_rate já é decimal (ex.: 0.02 = 2%); exibir como %
+    const lfr = Number(c.late_fee_rate || 0);
+    if (lfr > 0) setLateFeePct(pctToStr(+(lfr * 100).toFixed(4)));
+    // late_interest_daily → converter para % mensal para exibição
+    const lid = Number(c.late_interest_daily || 0);
+    if (lid > 0) setMoraMonthlyPct(dailyToMonthlyPct(lid));
+    // late_grace_days pode vir undefined → default 3
+    if (c.late_grace_days != null) setGraceStr(String(c.late_grace_days));
   }, [cfgQ.data]);
 
   // Hidrata Pix + régua
@@ -137,20 +184,60 @@ export default function CrediarioSettingsScreen() {
     else { setPeriodUnit("day"); setPeriodCount(Math.max(1, parseInt(customDays, 10) || 1)); }
   }
 
+  // Validação CDC inline
+  function validateLateCharges(): boolean {
+    let ok = true;
+    if (lateChargesOn) {
+      const feeVal = num(lateFeePct);
+      if (feeVal > 2) {
+        setLateFeePctError("Máximo 2% (CDC)");
+        ok = false;
+      } else {
+        setLateFeePctError(null);
+      }
+      const moraVal = num(moraMonthlyPct);
+      if (moraVal > 1) {
+        setMoraPctError("Máximo 1%/mês (CDC)");
+        ok = false;
+      } else {
+        setMoraPctError(null);
+      }
+    } else {
+      setLateFeePctError(null);
+      setMoraPctError(null);
+    }
+    return ok;
+  }
+
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!validateLateCharges()) {
+        throw new Error("Valores acima do teto CDC.");
+      }
       const finalUnit: PeriodUnit = pKey === "custom" ? "day" : periodUnit;
       const finalCount = pKey === "custom" ? Math.max(1, parseInt(customDays, 10) || 1) : periodCount;
+
+      // Fase 2: calcular late_interest_daily a partir de % mensal
+      const lateInterestDailyValue = lateChargesOn && num(moraMonthlyPct) > 0
+        ? monthlyPctToDaily(moraMonthlyPct)
+        : 0;
+      const lateFeeRateValue = lateChargesOn && num(lateFeePct) > 0
+        ? +(num(lateFeePct) / 100).toFixed(6)
+        : 0;
+
       await creditApi.updatePlanConfig(company!.id, {
         max_installments: Math.max(1, parseInt(maxInst, 10) || 1),
         min_installment_value: num(minInst),
         interest_rate: interestOn ? +(num(interestPct) / 100).toFixed(4) : 0,
-        late_fee_rate: lateFeeOn ? num(lateFee) : 0,
-        late_interest_daily: moraOn ? num(mora) : 0,
+        late_fee_rate: lateFeeRateValue,
+        late_interest_daily: lateInterestDailyValue,
         // Fase 1: envia score_warn_min; omite require_score_min (deprecado)
         score_warn_min: scoreWarnOn ? Math.max(0, parseInt(scoreWarnMin, 10) || 0) : null,
         period_unit: finalUnit,
         period_count: finalCount,
+        // Fase 2: encargos por atraso
+        late_charges_enabled: lateChargesOn,
+        late_grace_days: lateChargesOn ? Math.max(0, parseInt(graceStr, 10) || 0) : undefined,
       } as any);
       await creditApi.updateCollectionRules(company!.id, {
         enabled: (rulesQ.data as any)?.enabled ?? true,
@@ -164,7 +251,22 @@ export default function CrediarioSettingsScreen() {
       qc.invalidateQueries({ queryKey: ["credit-plan-config", company?.id] });
       qc.invalidateQueries({ queryKey: ["credit-rules", company?.id] });
     },
-    onError: (err: any) => toast.error(err?.data?.error || "Erro ao salvar"),
+    onError: (err: any) => {
+      // Tratar 422 do backend (LATE_FEE_ABOVE_CAP / LATE_INTEREST_ABOVE_CAP)
+      const code = err?.data?.code;
+      const max = err?.data?.max;
+      if (code === "LATE_FEE_ABOVE_CAP") {
+        const maxPct = max != null ? (Number(max) * 100).toFixed(0) : "2";
+        setLateFeePctError(`Acima do teto permitido: máx. ${maxPct}% (CDC)`);
+        toast.error(`Multa acima do teto CDC: máx. ${maxPct}%`);
+      } else if (code === "LATE_INTEREST_ABOVE_CAP") {
+        const maxMonthly = max != null ? (Number(max) * 30 * 100).toFixed(2) : "1";
+        setMoraPctError(`Acima do teto permitido: máx. ${maxMonthly}%/mês (CDC)`);
+        toast.error(`Mora acima do teto CDC: máx. ${maxMonthly}%/mês`);
+      } else {
+        toast.error(err?.data?.error || err?.message || "Erro ao salvar");
+      }
+    },
   });
 
   function updateRule(i: number, patch: Partial<Rule>) {
@@ -180,6 +282,9 @@ export default function CrediarioSettingsScreen() {
     if (pKey === "mensal") return "A cada mês (padrão)";
     return `A cada ${customDays || "?"} dias`;
   }, [pKey, customDays]);
+
+  // Bloquear salvar se houver erros CDC
+  const hasCdcErrors = !!lateFeeError || !!moraPctError;
 
   return (
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
@@ -250,13 +355,112 @@ export default function CrediarioSettingsScreen() {
             <ToggleRow label="Juros de financiamento" sub="aplicado ao parcelar uma venda" suffix="% mês"
               on={interestOn} setOn={(v) => { setInterestOn(v); touch(); }}
               value={interestPct} setValue={(v) => { setInterestPct(v); touch(); }} />
-            <ToggleRow label="Multa por atraso" sub="cobrada uma vez na parcela vencida" suffix="%"
+            <ToggleRow label="Multa por atraso (parcelado)" sub="cobrada uma vez na parcela vencida" suffix="% dia"
               on={lateFeeOn} setOn={(v) => { setLateFeeOn(v); touch(); }}
               value={lateFee} setValue={(v) => { setLateFee(v); touch(); }} />
-            <ToggleRow label="Juros de mora ao dia" sub="acumula por dia de atraso" suffix="% dia"
+            <ToggleRow label="Juros de mora ao dia (parcelado)" sub="acumula por dia de atraso" suffix="% dia"
               on={moraOn} setOn={(v) => { setMoraOn(v); touch(); }}
               value={mora} setValue={(v) => { setMora(v); touch(); }} />
             <Text style={st.hint}>Tudo opcional. Deixe desligado para não cobrar juros — você decide.</Text>
+          </View>
+
+          {/* ENCARGOS POR ATRASO (Fase 2) */}
+          <Text style={st.sectionTitle}>Encargos por atraso</Text>
+          <View style={st.card}>
+            {/* Banner legal âmbar */}
+            <View style={st.cdcBanner}>
+              <Icon name="alert_triangle" size={13} color={Colors.amber} />
+              <Text style={st.cdcBannerTxt}>
+                Tetos seguem o <Text style={{ fontWeight: "700" }}>CDC</Text>: multa até{" "}
+                <Text style={{ fontWeight: "700" }}>2%</Text> e mora até{" "}
+                <Text style={{ fontWeight: "700" }}>1% ao mês</Text>.
+              </Text>
+            </View>
+
+            {/* Toggle principal */}
+            <View style={st.trow}>
+              <View style={{ flex: 1 }}>
+                <Text style={st.trowTitle}>Cobrar mora e multa no atraso</Text>
+                <Text style={st.trowSub}>aplica encargos em parcelas vencidas além da carência</Text>
+              </View>
+              <Switch
+                value={lateChargesOn}
+                onValueChange={(v) => { setLateChargesOn(v); setLateFeePctError(null); setMoraPctError(null); touch(); }}
+                trackColor={{ false: Colors.bg4 as any, true: Colors.violet }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {lateChargesOn && (
+              <>
+                {/* Multa */}
+                <View style={[st.trow, { alignItems: "flex-start" }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.trowTitle}>Multa por atraso (%)</Text>
+                    <Text style={st.trowSub}>cobrada uma única vez · máx. 2% (CDC)</Text>
+                    {!!lateFeeError && (
+                      <Text style={st.cdcError}>{lateFeeError}</Text>
+                    )}
+                  </View>
+                  <View style={[st.miniInpWrap, !!lateFeeError && { borderColor: Colors.red }]}>
+                    <TextInput
+                      style={st.miniInp}
+                      value={lateFeePct}
+                      keyboardType="decimal-pad"
+                      onChangeText={(v) => {
+                        const cleaned = v.replace(/[^\d,.]/g, "");
+                        setLateFeePct(cleaned);
+                        setLateFeePctError(num(cleaned) > 2 ? "Máximo 2% (CDC)" : null);
+                        touch();
+                      }}
+                    />
+                    <Text style={st.miniSuffix}>%</Text>
+                  </View>
+                </View>
+
+                {/* Mora mensal */}
+                <View style={[st.trow, { alignItems: "flex-start" }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.trowTitle}>Mora ao mês (%)</Text>
+                    <Text style={st.trowSub}>acumula diariamente · máx. 1%/mês (CDC)</Text>
+                    {!!moraPctError && (
+                      <Text style={st.cdcError}>{moraPctError}</Text>
+                    )}
+                  </View>
+                  <View style={[st.miniInpWrap, !!moraPctError && { borderColor: Colors.red }]}>
+                    <TextInput
+                      style={st.miniInp}
+                      value={moraMonthlyPct}
+                      keyboardType="decimal-pad"
+                      onChangeText={(v) => {
+                        const cleaned = v.replace(/[^\d,.]/g, "");
+                        setMoraMonthlyPct(cleaned);
+                        setMoraPctError(num(cleaned) > 1 ? "Máximo 1%/mês (CDC)" : null);
+                        touch();
+                      }}
+                    />
+                    <Text style={st.miniSuffix}>%/mês</Text>
+                  </View>
+                </View>
+
+                {/* Carência */}
+                <View style={st.trow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.trowTitle}>Carência (dias)</Text>
+                    <Text style={st.trowSub}>dias após o vencimento sem cobrança de encargos</Text>
+                  </View>
+                  <View style={st.miniInpWrap}>
+                    <TextInput
+                      style={st.miniInp}
+                      value={graceStr}
+                      keyboardType="numeric"
+                      onChangeText={(v) => { setGraceStr(v.replace(/\D/g, "").slice(0, 3)); touch(); }}
+                    />
+                    <Text style={st.miniSuffix}>dias</Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
 
           {/* POLÍTICA DE VENDA — Fase 1: score_warn_min */}
@@ -292,7 +496,7 @@ export default function CrediarioSettingsScreen() {
             </View>
 
             <Text style={[st.lbl, { marginTop: 18 }]}>Régua de cobrança</Text>
-            <Text style={st.reguaSub}>Mensagens por etapa. Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em “Cobrar”. Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.  </Text>
+            <Text style={st.reguaSub}>Mensagens por etapa. Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em "Cobrar". Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.  </Text>
 
             {rules.map((r, i) => (
               <View key={r.id} style={[st.stage, !r.enabled && st.stageOff]}>
@@ -316,8 +520,8 @@ export default function CrediarioSettingsScreen() {
             ))}
           </View>
 
-          <Pressable onPress={() => saveMut.mutate()} disabled={!dirty || saveMut.isPending}
-            style={[st.saveBtn, (!dirty || saveMut.isPending) && st.saveBtnDisabled]}>
+          <Pressable onPress={() => saveMut.mutate()} disabled={!dirty || saveMut.isPending || hasCdcErrors}
+            style={[st.saveBtn, (!dirty || saveMut.isPending || hasCdcErrors) && st.saveBtnDisabled]}>
             {saveMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={st.saveBtnText}>Salvar configurações</Text>}
           </Pressable>
         </>
@@ -389,6 +593,11 @@ const st = StyleSheet.create({
   miniInp: { width: 52, paddingVertical: 7, fontSize: 13, fontWeight: "700", color: Colors.ink, textAlign: "right" },
   miniSuffix: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
 
+  // Banner âmbar CDC (Fase 2)
+  cdcBanner: { flexDirection: "row", alignItems: "flex-start", gap: 7, backgroundColor: Colors.amber + "14", borderRadius: 9, padding: 10, marginBottom: 4, borderWidth: 1, borderColor: Colors.amber + "33" },
+  cdcBannerTxt: { flex: 1, fontSize: 11, color: Colors.amber, lineHeight: 16 },
+  cdcError: { fontSize: 11, color: Colors.red, marginTop: 3, fontWeight: "600" },
+
   // Nota de aviso score
   warnNote: { flexDirection: "row", alignItems: "flex-start", gap: 7, backgroundColor: Colors.amber + "14", borderRadius: 9, padding: 10, marginTop: 10, borderWidth: 1, borderColor: Colors.amber + "33" },
   warnNoteTxt: { flex: 1, fontSize: 11, color: Colors.amber, lineHeight: 16 },
@@ -409,4 +618,4 @@ const st = StyleSheet.create({
   saveBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 15, alignItems: "center", marginTop: 22 },
   saveBtnDisabled: { opacity: 0.45 },
   saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-});
+} as any);
