@@ -34,7 +34,7 @@ export const BELT_LABEL: Record<BeltSlug, string> = {
 };
 
 // Remove acentos + normaliza espaços/caixa para casar variações de digitação.
-function norm(s: string): string {
+function norm(s?: string | null): string {
   return (s || "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
