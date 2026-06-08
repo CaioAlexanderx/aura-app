@@ -3,8 +3,13 @@
 // F2/F3 (05/06/2026): CreditAccount, termos por cliente,
 //   receivePayment com account_id/allocations, createAccount,
 //   updateCustomerTerms.
+// Fase 1 FE (07/06/2026): score_label, available_limit,
+//   score_warning em CreditProfile; account_id em CreditInstallment;
+//   period_unit/period_count/score_warn_min em CreditPlanConfig;
+//   helper printCarne (fetch + document.write, auth obrigatória).
 // ============================================================
-import { request } from "@/services/api";
+import { request, BASE_URL } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
 
 // ─── Fiado (legado) ──────────────────────────────────────────
 export type CreditBalanceItem = {
@@ -66,6 +71,13 @@ export type CustomerTerms = {
   effective: CustomerTermsEffective;
 };
 
+// ─── Fase 1: score_warning ────────────────────────────────────
+export type ScoreWarning = {
+  below_min: true;
+  threshold: number;
+  actual: number;
+};
+
 export type CreditProfile = {
   id: string; company_id: string; customer_id: string;
   credit_limit: number; credit_used: number; credit_score: number;
@@ -77,6 +89,10 @@ export type CreditProfile = {
   open_installments?: CreditInstallment[];
   config?: CreditPlanConfig;
   terms?: CustomerTerms;
+  // Fase 1 FE — campos novos (podem vir undefined em respostas antigas)
+  score_label?: string | null;
+  available_limit?: number;
+  score_warning?: ScoreWarning | null;
 };
 
 export type PeriodUnit = "day" | "week" | "month";
@@ -85,8 +101,13 @@ export type CreditPlanConfig = {
   company_id: string; max_installments: number;
   min_installment_value: number; interest_rate: number;
   late_fee_rate: number; late_interest_daily: number;
-  require_score_min: number; auto_block_days: number;
-  period_unit?: PeriodUnit; period_count?: number;
+  /** @deprecated use score_warn_min instead */
+  require_score_min?: number;
+  auto_block_days: number;
+  period_unit?: PeriodUnit;
+  period_count?: number;
+  /** Fase 1: aviso quando score < score_warn_min. Nunca bloqueia — só alerta. */
+  score_warn_min?: number | null;
 };
 
 export type CreditInstallment = {
@@ -100,6 +121,7 @@ export type CreditInstallment = {
   pix_link: string | null; late_fee: number; late_interest: number;
   collection_stage: number;
   customer_name?: string; customer_phone?: string;
+  // Fase 1 FE: account_id pode vir undefined em respostas antigas — tratar como null
   account_id?: string | null;
 };
 
@@ -198,9 +220,6 @@ export type ReceivePaymentBody =
   | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null }
   | { payment_method?: string; paid_at?: string; allocations: PaymentAllocation[] };
 
-// Resposta do receivePayment (F3):
-//   modo simples: { mode, account_id, transaction, new_balance, settled_receivables, notes }
-//   modo allocations: { mode, allocations, new_balance, notes }
 export type ReceivePaymentResult = {
   mode: "global" | "account" | "allocations";
   account_id?: string | null;
@@ -214,7 +233,6 @@ export type ReceivePaymentResult = {
     settled: any[];
   }>;
   notes?: string | null;
-  // legado (mantido por compatibilidade — pode vir em respostas antigas)
   legacy_amount?: number;
 };
 
@@ -229,6 +247,44 @@ export type CreateAccountBody = {
   late_fee_rate?: number;
   late_interest_daily?: number;
 };
+
+// ─── Fase 1: Print carnê (autenticado) ───────────────────────
+// ARMADILHA: GET /print/credit/:cid/carne exige Authorization header.
+// window.open() direto dá "Token não fornecido".
+// Solução: fetch com Bearer token → texto HTML → document.write em nova janela.
+export async function printCarne(companyId: string, customerId: string): Promise<void> {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const token = useAuthStore.getState().token;
+  const url = BASE_URL + "/companies/" + companyId + "/print/credit/" + customerId + "/carne";
+  let win: Window | null = null;
+  try {
+    win = window.open("", "_blank");
+    if (!win) { alert("Permita pop-ups para imprimir o carnê."); return; }
+    win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Carregando carnê...</body></html>");
+
+    const resp = await fetch(url, {
+      headers: token ? { Authorization: "Bearer " + token } : {},
+    });
+    if (!resp.ok) {
+      win.document.write("<html><body>Erro ao carregar carnê (" + resp.status + ").</body></html>");
+      return;
+    }
+    const html = await resp.text();
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    // Dispara print depois que o HTML renderizou
+    setTimeout(() => {
+      try { win?.focus(); win?.print(); } catch {}
+    }, 400);
+  } catch (err) {
+    if (win) {
+      win.document.open();
+      win.document.write("<html><body>Erro de conexão ao carregar carnê.</body></html>");
+      win.document.close();
+    }
+  }
+}
 
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
@@ -273,10 +329,10 @@ export const creditApi = {
   },
 
   // ── F2: Termos por cliente ───────────────────────────────────────
-  updateCustomerTerms(companyId: string, customerId: string, body: Partial<CustomerTermsOverrides>) {
+  updateCustomerTerms(companyId: string, customerId: string, body: Partial<CustomerTermsOverrides> | null) {
     return request<CreditProfile>(
       `${base(companyId)}/customers/${customerId}/terms`,
-      { method: "PUT", body }
+      { method: "PUT", body: body ?? null }
     );
   },
 
@@ -340,7 +396,7 @@ export const creditApi = {
   editInstallmentDueDate(companyId: string, installmentId: string, dueDate: string) {
     return request<{ success: boolean; updated_count: number }>(
       `/credit/installments/${installmentId}/due-date`,
-      { method: "PATCH", body: JSON.stringify({ due_date: dueDate }), companyId }
+      { method: "PATCH", body: JSON.stringify({ due_date: dueDate }), companyId } as any
     );
   },
 
