@@ -1297,8 +1297,6 @@ const m = StyleSheet.create({
   cta: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   ctaTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
 
-  // Missing Colors references
-  bg4: Colors.bg3,
 } as any);
 
 export default ClienteCrediarioModal;
