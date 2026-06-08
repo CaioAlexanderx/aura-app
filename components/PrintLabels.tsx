@@ -16,7 +16,7 @@ type Props = {
   onSelectionChange: (ids: string[]) => void;
 };
 
-type EAN13Entry = { name: string; originalCode: string; generated: string };
+type EAN13Entry = { name: string; originalCode: string; generated: string; productId?: string; variantId?: string };
 
 var SIZE_ATTRS = new Set(["tamanho", "size", "tam", "tam.", "variacao", "variacao", "medida", "numero", "num", "numeracao", "n"]);
 var COLOR_ATTRS = new Set(["cor", "color", "colour"]);
@@ -174,7 +174,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
       if (hasAnyVariant) {
         if (includeParentInPrint[id]) {
-          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
+          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id });
         }
         if (selVars && selVars.size > 0) {
           variants.forEach(function(v: any) {
@@ -182,11 +182,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             var sc = variantSizeColor(v);
             var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
             var effectiveBarcode = v.barcode || p.barcode || p.code;
-            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id) });
+            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id), productId: id, variantId: v.id });
           });
         }
       } else {
-        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id) });
+        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id });
       }
     });
     return items;
@@ -225,16 +225,21 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     // 2. Verificacao EAN-13: produtos sem EAN-13 valido recebem codigo gerado
     var noEan13 = items.filter(function(item) { return !isValidEAN13(item.barcode); });
     if (noEan13.length > 0) {
-      // Gera EAN-13 deterministico para cada codigo unico sem EAN-13
+      // 08/06/2026: gera EAN-13 deterministico por PRODUTO/VARIANTE (nao por
+      // codigo). Seed = id da variante (ou do produto) -> codigo unico e estavel
+      // e que pode ser gravado de volta no cadastro (ver handleConfirmEan13).
       var seen = new Set<string>();
       var genList: EAN13Entry[] = [];
       noEan13.forEach(function(item) {
-        if (seen.has(item.barcode)) return;
-        seen.add(item.barcode);
+        var identity = item.variantId || item.productId || item.barcode || item.name;
+        if (seen.has(identity)) return;
+        seen.add(identity);
         genList.push({
           name: buildLabelName(item.name, item.size, item.color),
           originalCode: item.barcode,
-          generated: generateEAN13(item.barcode || item.name),
+          generated: generateEAN13(identity),
+          productId: item.productId,
+          variantId: item.variantId,
         });
       });
       setPendingPrintItems(items);
@@ -248,15 +253,43 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   }
 
   // Confirma a geracao de EAN-13 e imprime substituindo os codigos
-  function handleConfirmEan13() {
-    var codeMap: Record<string, string> = {};
-    ean13GenList.forEach(function(g) { codeMap[g.originalCode] = g.generated; });
+  async function handleConfirmEan13() {
+    // Mapeia o codigo gerado por IDENTIDADE (variante ou produto).
+    var codeByIdentity: Record<string, string> = {};
+    ean13GenList.forEach(function(g) {
+      var identity = g.variantId || g.productId || g.originalCode;
+      if (identity) codeByIdentity[identity] = g.generated;
+    });
 
     var resolvedItems = pendingPrintItems.map(function(item) {
       if (isValidEAN13(item.barcode)) return item;
-      var gen = codeMap[item.barcode];
+      var identity = item.variantId || item.productId || item.barcode;
+      var gen = identity ? codeByIdentity[identity] : undefined;
       return gen ? { ...item, barcode: gen } : item;
     });
+
+    // 08/06/2026: persiste o codigo gerado no cadastro (produto OU variante)
+    // ANTES de imprimir. Sem isso o EAN-13 existe so na etiqueta e o PDV nao
+    // encontra o item ao bipar (busca casa em products.barcode / variant.barcode).
+    if (company?.id) {
+      var cid = company.id;
+      var saves = ean13GenList
+        .filter(function(g) { return !!g.productId; })
+        .map(function(g) {
+          return g.variantId
+            ? companiesApi.updateVariant(cid, g.productId as string, g.variantId, { barcode: g.generated })
+            : companiesApi.updateProduct(cid, g.productId as string, { barcode: g.generated });
+        });
+      if (saves.length > 0) {
+        try {
+          await Promise.all(saves);
+          toast.success(saves.length + " codigo(s) gravado(s) no cadastro");
+        } catch (err) {
+          console.error("[PrintLabels] Falha ao salvar EAN-13 gerado:", err);
+          toast.error("Etiquetas geradas, mas falhou ao gravar o codigo no cadastro — o PDV pode nao reconhecer ao bipar.");
+        }
+      }
+    }
 
     setShowEan13Panel(false);
     doPrint(resolvedItems);
@@ -491,7 +524,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             </Pressable>
           </View>
           <Text style={s.ean13Hint}>
-            Um EAN-13 interno sera gerado automaticamente (prefixo 200 — uso interno GS1, sem registro). O mesmo produto sempre gera o mesmo codigo.
+            Um EAN-13 interno sera gerado automaticamente (prefixo 200 — uso interno GS1, sem registro). O mesmo produto sempre gera o mesmo codigo. O codigo gerado sera salvo no cadastro do produto.
           </Text>
           <ScrollView style={s.ean13List} nestedScrollEnabled>
             {ean13GenList.map(function(entry, idx) {
