@@ -1,14 +1,15 @@
 // ============================================================
 // Ficha do Praticante — Aura Karatê
 //
-// Tabs: Cadastro | Trajetória (wired) | Carteirinha | Documentos | Competições
+// Tabs: Cadastro | Trajetória | Certif./Exames | Carteirinha | Documentos
 // Wired: GET /federation/{id}/practitioners/{practitionerId}
-// Trajetória: wired (belt_history do endpoint acima)
-// Demais abas: placeholder (backend não define endpoint ainda)
+// Track C (Fase 2): aba "Certif./Exames" mostra a nova faixa após aprovacão
+//   e o status/URL do certificado com botão "Solicitar emissão".
+// DECISÃO FPKT #3: certificado sob demanda via karateApi.issueCertificate.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Alert,
   StyleSheet, ViewStyle, TextStyle, ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
@@ -17,10 +18,12 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import { Skeleton } from "@/components/karate/Skeleton";
-import { KarateEmptyState } from "@/components/karate/EmptyState";
-import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry } from "@/services/karateApi";
+import { EmptyState } from "@/components/karate/EmptyState";
+import { KarateButton } from "@/components/karate/KarateButton";
+import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
+// [MOCK]
 const MOCK_PRACTITIONER: PractitionerDetail = {
   id: "p1", full_name: "Carlos Eduardo Silva",
   karate_registration_number: "FPKT-A-00001",
@@ -30,18 +33,26 @@ const MOCK_PRACTITIONER: PractitionerDetail = {
   is_student: true, is_arbiter: false, is_instructor: true, is_examiner: false,
   photo_url: null, parent_guardian_id: null,
   affiliation_status: "active",
-  current_belt: { belt_level: "preta", belt_name: "Preta", current_since: "2015-08-20" },
+  current_belt: { belt_level: "verde", belt_name: "Verde", current_since: "2026-03-15" },
   belt_history: [
-    { id: "bh1", belt_level: "preta",      belt_name: "Preta",      belt_schema: "fpkt_shotokan", graduated_at: "2015-08-20", is_legacy: false, exam_id: "e10" },
-    { id: "bh2", belt_level: "marrom",     belt_name: "Marrom",     belt_schema: "fpkt_shotokan", graduated_at: "2013-04-10", is_legacy: false, exam_id: "e08" },
-    { id: "bh3", belt_level: "azul_escuro",belt_name: "Azul Escuro",belt_schema: "fpkt_shotokan", graduated_at: "2011-11-05", is_legacy: false, exam_id: "e06" },
-    { id: "bh4", belt_level: "verde",      belt_name: "Verde",      belt_schema: "legacy",         graduated_at: "2008-06-01", is_legacy: true,  exam_id: null  },
-    { id: "bh5", belt_level: "amarela",    belt_name: "Amarela",    belt_schema: "legacy",         graduated_at: "2006-03-10", is_legacy: true,  exam_id: null  },
-    { id: "bh6", belt_level: "branca",     belt_name: "Branca",     belt_schema: "legacy",         graduated_at: "2005-01-01", is_legacy: true,  exam_id: null  },
+    { id: "bh1", belt_level: "verde",  belt_name: "Verde",  belt_schema: "fpkt_shotokan", graduated_at: "2026-03-15", is_legacy: false, exam_id: "exam-h1" },
+    { id: "bh2", belt_level: "laranja", belt_name: "Laranja", belt_schema: "fpkt_shotokan", graduated_at: "2024-08-10", is_legacy: false, exam_id: "exam-h0" },
+    { id: "bh3", belt_level: "amarela", belt_name: "Amarela", belt_schema: "fpkt_shotokan", graduated_at: "2023-04-01", is_legacy: false, exam_id: null },
+    { id: "bh4", belt_level: "branca",  belt_name: "Branca",  belt_schema: "legacy",         graduated_at: "2022-01-10", is_legacy: true,  exam_id: null },
   ],
 };
 
-const TABS = ["Cadastro", "Trajetória", "Carteirinha", "Documentos", "Competições"] as const;
+// [MOCK] certificados do praticante ligados a exames aprovados
+const MOCK_CERTIFICATES: Array<Certificate & { exam_title?: string }> = [
+  {
+    id: "cert-1", candidate_id: "c1", practitioner_id: "p1",
+    full_name: "Carlos Eduardo Silva", belt_level: "verde",
+    exam_date: "2026-03-15", status: "pending", issued_at: null, pdf_url: null,
+    exam_title: "Exame Faixa Mar/2026",
+  },
+];
+
+const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Documentos"] as const;
 type Tab = typeof TABS[number];
 
 function CadastroTab({ p }: { p: PractitionerDetail }) {
@@ -66,19 +77,30 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
       <View style={tabStyles.rolesRow}>
         {p.is_instructor && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Instrutor</Text></View>}
-        {p.is_arbiter    && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Árbitro</Text></View>}
+        {p.is_arbiter    && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}Árbitro</Text></View>}
         {p.is_examiner   && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Examinador</Text></View>}
       </View>
     </View>
   );
 }
 
-function TrajetoriaTab({ history }: { history: BeltHistoryEntry[] }) {
+function TrajetoriaTab({ history, currentBelt }: { history: BeltHistoryEntry[]; currentBelt: PractitionerDetail["current_belt"] }) {
   if (history.length === 0) {
-    return <KarateEmptyState icon="ribbon-outline" title="Sem histórico de faixas" style={{ paddingVertical: 32 }} />;
+    return <EmptyState icon="ribbon-outline" title="Sem histórico de faixas" style={{ paddingVertical: 32 }} />;
   }
   return (
     <View style={tabStyles.tab}>
+      {/* Nova faixa após aprovação — Track C */}
+      {currentBelt && (
+        <View style={tabStyles.currentBeltBanner}>
+          <Ionicons name="ribbon" size={16} color={KarateColors.primary} />
+          <View style={tabStyles.currentBeltInfo}>
+            <Text style={tabStyles.currentBeltLabel}>Faixa atual</Text>
+            <BeltBadge beltLevel={currentBelt.belt_level} beltName={currentBelt.belt_name} />
+            <Text style={tabStyles.currentBeltSince}>Desde: {currentBelt.current_since}</Text>
+          </View>
+        </View>
+      )}
       {history.map((entry) => (
         <View key={entry.id} style={tabStyles.beltEntry}>
           <View style={tabStyles.beltLine} />
@@ -91,6 +113,7 @@ function TrajetoriaTab({ history }: { history: BeltHistoryEntry[] }) {
             <Text style={tabStyles.beltDate}>
               {new Date(entry.graduated_at).toLocaleDateString("pt-BR")}
               {entry.belt_schema === "legacy" ? " · Registro histórico" : ""}
+              {entry.exam_id ? ` · Exame: ${entry.exam_id}` : ""}
             </Text>
           </View>
         </View>
@@ -99,9 +122,90 @@ function TrajetoriaTab({ history }: { history: BeltHistoryEntry[] }) {
   );
 }
 
+// Track C: aba de certificados
+function CertificadosTab({
+  federationId,
+  practitionerId,
+}: {
+  federationId: string;
+  practitionerId: string;
+}) {
+  const [certs, setCerts] = useState<Array<Certificate & { exam_title?: string }>>(MOCK_CERTIFICATES);
+  const [issuingId, setIssuingId] = useState<string | null>(null);
+
+  const certStatusLabel: Record<string, string> = {
+    pending: "Pendente", generated: "Gerado", sent: "Enviado", error: "Erro",
+  };
+  const certStatusBadge: Record<string, "neutral" | "ok" | "warn" | "alert"> = {
+    pending: "neutral", generated: "ok", sent: "ok", error: "alert",
+  };
+
+  // DECISÃO FPKT #3: emissão sob demanda
+  const handleIssue = async (cert: Certificate) => {
+    setIssuingId(cert.id);
+    try {
+      const updated = await karateApi.issueCertificate(federationId, cert.candidate_id);
+      setCerts(prev => prev.map(c => c.candidate_id === cert.candidate_id
+        ? { ...c, status: updated.status, pdf_url: updated.pdf_url, issued_at: updated.issued_at }
+        : c
+      ));
+      Alert.alert("Solicitação enviada", `Status: ${updated.status}`);
+    } catch {
+      // [MOCK fallback]
+      setCerts(prev => prev.map(c => c.candidate_id === cert.candidate_id
+        ? { ...c, status: "pending" }
+        : c
+      ));
+      Alert.alert("Solicitação enviada [MOCK]", "Certif. enfileirado para emissão.");
+    } finally {
+      setIssuingId(null);
+    }
+  };
+
+  if (certs.length === 0) {
+    return <EmptyState icon="document-text-outline" title="Nenhum certificado" subtitle="Certificados aparecem após aprovação em exame." style={{ paddingVertical: 32 }} />;
+  }
+
+  return (
+    <View style={tabStyles.tab}>
+      <Text style={tabStyles.certHint}>
+        Certificados emitidos sob demanda (Decisão FPKT #3). Clique em "Solicitar emissão" para iniciar.
+      </Text>
+      {certs.map((cert) => (
+        <View key={cert.id} style={tabStyles.certCard}>
+          <View style={tabStyles.certHeader}>
+            <View style={tabStyles.certInfo}>
+              <Text style={tabStyles.certTitle}>{cert.exam_title ?? `Exame ${cert.exam_date}`}</Text>
+              <Text style={tabStyles.certMeta}>Faixa: {cert.belt_level} · Data: {cert.exam_date}</Text>
+            </View>
+            <Badge
+              status={certStatusBadge[cert.status]}
+              label={certStatusLabel[cert.status]}
+            />
+          </View>
+          {cert.issued_at && (
+            <Text style={tabStyles.certMeta}>Emitido em: {cert.issued_at}</Text>
+          )}
+          {cert.pdf_url ? (
+            <Text style={tabStyles.certUrl} numberOfLines={1}>{cert.pdf_url}</Text>
+          ) : (
+            <KarateButton
+              label={issuingId === cert.id ? "Solicitando..." : "Solicitar emissão do certificado"}
+              variant="secondary"
+              size="sm"
+              loading={issuingId === cert.id}
+              onPress={() => handleIssue(cert)}
+            />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function PlaceholderTab({ label }: { label: string }) {
   return (
-    <KarateEmptyState
+    <EmptyState
       icon="construct-outline"
       title={`${label} — Em desenvolvimento`}
       subtitle="Esta aba será implementada em uma próxima fase."
@@ -175,11 +279,11 @@ export default function FichaPraticanteScreen() {
 
       {/* Tab Content */}
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
-        {activeTab === "Cadastro"    && <CadastroTab p={data} />}
-        {activeTab === "Trajetória"  && <TrajetoriaTab history={data.belt_history} />}
-        {activeTab === "Carteirinha" && <PlaceholderTab label="Carteirinha" />}
-        {activeTab === "Documentos"  && <PlaceholderTab label="Documentos" />}
-        {activeTab === "Competições" && <PlaceholderTab label="Competições" />}
+        {activeTab === "Cadastro"       && <CadastroTab p={data} />}
+        {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} />}
+        {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
+        {activeTab === "Carteirinha"    && <PlaceholderTab label="Carteirinha" />}
+        {activeTab === "Documentos"     && <PlaceholderTab label="Documentos" />}
       </ScrollView>
     </View>
   );
@@ -202,14 +306,32 @@ const styles = StyleSheet.create({
 });
 
 const tabStyles = StyleSheet.create({
-  tab:         { padding: 16, gap: 10 } as ViewStyle,
-  infoRow:     { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
-  infoLabel:   { fontSize: 12, color: KarateColors.ink3, width: 88 } as TextStyle,
-  infoVal:     { fontSize: 13, color: KarateColors.ink, flex: 1 } as TextStyle,
-  rolesRow:    { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
-  roleChip:    { paddingVertical: 3, paddingHorizontal: 10, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
-  roleChipText:{ fontSize: 11, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  beltEntry:   { flexDirection: "row", gap: 12, alignItems: "flex-start", paddingVertical: 8 } as ViewStyle,
-  beltLine:    { width: 3, borderRadius: 2, backgroundColor: KarateColors.border, alignSelf: "stretch", minHeight: 40 } as ViewStyle,
-  beltDate:    { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  tab:              { padding: 16, gap: 10 } as ViewStyle,
+  infoRow:          { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
+  infoLabel:        { fontSize: 12, color: KarateColors.ink3, width: 88 } as TextStyle,
+  infoVal:          { fontSize: 13, color: KarateColors.ink, flex: 1 } as TextStyle,
+  rolesRow:         { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
+  roleChip:         { paddingVertical: 3, paddingHorizontal: 10, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
+  roleChipText:     { fontSize: 11, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  // Track C: nova faixa banner
+  currentBeltBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: KarateColors.primarySoft, padding: 12,
+    borderRadius: KarateRadius.md, marginBottom: 4,
+  } as ViewStyle,
+  currentBeltInfo:  { flex: 1, gap: 4 } as ViewStyle,
+  currentBeltLabel: { fontSize: 11, fontWeight: "800", color: KarateColors.primary, textTransform: "uppercase", letterSpacing: 0.8 } as TextStyle,
+  currentBeltSince: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
+  // Trajetória
+  beltEntry:        { flexDirection: "row", gap: 12, alignItems: "flex-start", paddingVertical: 8 } as ViewStyle,
+  beltLine:         { width: 3, borderRadius: 2, backgroundColor: KarateColors.border, alignSelf: "stretch", minHeight: 40 } as ViewStyle,
+  beltDate:         { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  // Certificados (Track C)
+  certHint:         { fontSize: 12, color: KarateColors.ink3, marginBottom: 4 } as TextStyle,
+  certCard:         { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
+  certHeader:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 } as ViewStyle,
+  certInfo:         { flex: 1, gap: 2 } as ViewStyle,
+  certTitle:        { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  certMeta:         { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
+  certUrl:          { fontSize: 11, color: KarateColors.primary } as TextStyle,
 });
