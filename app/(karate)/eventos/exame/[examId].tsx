@@ -186,7 +186,7 @@ export default function ExameDetalhe() {
             <View style={styles.candidateRow}>
               <View style={styles.candidateInfo}>
                 <Text style={styles.candidateName}>{c.full_name}</Text>
-                <Text style={styles.candidateMeta}>{c.karate_registration_number} · Faixa atual: {c.current_belt ?? —}</Text>
+                <Text style={styles.candidateMeta}>{c.karate_registration_number} · Faixa atual: {c.current_belt ?? "—"}</Text>
               </View>
               <Badge status={RESULT_BADGE[c.result]} label={RESULT_LABEL[c.result]} />
             </View>
