@@ -73,7 +73,10 @@ function AuthGuard() {
     // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
     // (link enviado via wa.me pro cliente — não exige login).
     const onPublicApproval = segments[0] === "aprovacao";
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval) return;
+    // Track D Karatê: verificação pública da carteirinha em /karate/verify/[token]
+    // (aberta via QR, sem login). Fica FORA do grupo autenticado (federation).
+    const onKarateVerify = segments[0] === "karate" && segments[1] === "verify";
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKarateVerify) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
