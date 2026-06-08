@@ -10,10 +10,10 @@ import { Slot, usePathname, useRouter } from "expo-router";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
 const TABS = [
-  { label: "Visão Geral", route: "/(karate)/eventos" },
-  { label: "Próximos",    route: "/(karate)/eventos/proximos" },
-  { label: "Histórico",   route: "/(karate)/eventos/historico" },
-  { label: "Resultados",  route: "/(karate)/eventos/resultados" },
+  { label: "Visão Geral", route: "/karate/eventos" },
+  { label: "Próximos",    route: "/karate/eventos/proximos" },
+  { label: "Histórico",   route: "/karate/eventos/historico" },
+  { label: "Resultados",  route: "/karate/eventos/resultados" },
 ] as const;
 
 export default function EventosLayout() {
@@ -21,8 +21,8 @@ export default function EventosLayout() {
   const path    = usePathname();
 
   const isActive = (route: string) => {
-    const normalized = route.replace("/(karate)/", "/karate/");
-    if (route === "/(karate)/eventos") {
+    const normalized = route.replace("/karate/", "/karate/");
+    if (route === "/karate/eventos") {
       return path === "/karate/eventos" || path === "/karate/eventos/";
     }
     return path.startsWith(normalized);

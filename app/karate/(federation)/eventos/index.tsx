@@ -109,7 +109,7 @@ export default function EventosOverview() {
             label="Critérios"
             variant="secondary"
             size="sm"
-            onPress={() => router.push("/(karate)/eventos/criterios" as any)}
+            onPress={() => router.push("/karate/eventos/criterios" as any)}
           />
           <KarateButton
             label="+ Criar Exame"
@@ -136,7 +136,7 @@ export default function EventosOverview() {
           <TouchableOpacity
             key={exam.id}
             style={styles.card}
-            onPress={() => router.push(`/(karate)/eventos/exame/${exam.id}` as any)}
+            onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any)}
             accessibilityRole="button"
             accessibilityLabel={exam.title}
           >

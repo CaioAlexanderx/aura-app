@@ -73,7 +73,7 @@ function OverdueRow({ dojo }: { dojo: OverdueDojo }) {
   return (
     <TouchableOpacity
       style={styles.overdueRow}
-      onPress={() => router.push(`/(karate)/dojos/${dojo.dojo_id}` as any)}
+      onPress={() => router.push(`/karate/dojos/${dojo.dojo_id}` as any)}
       accessibilityLabel={`${dojo.name}, ${formatCurrency(dojo.amount)}, ${dojo.days_overdue} dias em atraso`}
     >
       <View style={{ flex: 1 }}>

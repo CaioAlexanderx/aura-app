@@ -104,7 +104,7 @@ export default function PraticantesScreen() {
           renderItem={({ item }) => (
             <PractitionerRow
               item={item}
-              onPress={() => router.push(`/(karate)/praticantes/${item.id}` as any)}
+              onPress={() => router.push(`/karate/praticantes/${item.id}` as any)}
             />
           )}
         />
@@ -113,7 +113,7 @@ export default function PraticantesScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push("/(karate)/praticantes/novo" as any)}
+        onPress={() => router.push("/karate/praticantes/novo" as any)}
         accessibilityRole="button"
         accessibilityLabel="Cadastrar novo praticante"
       >

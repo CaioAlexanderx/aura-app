@@ -106,7 +106,7 @@ export default function DojosScreen() {
           renderItem={({ item }) => (
             <DojoCard
               dojo={item}
-              onPress={() => router.push(`/(karate)/dojos/${item.id}` as any)}
+              onPress={() => router.push(`/karate/dojos/${item.id}` as any)}
             />
           )}
         />
@@ -115,7 +115,7 @@ export default function DojosScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push("/(karate)/dojos/novo" as any)}
+        onPress={() => router.push("/karate/dojos/novo" as any)}
         accessibilityRole="button"
         accessibilityLabel="Cadastrar novo dojô"
       >
