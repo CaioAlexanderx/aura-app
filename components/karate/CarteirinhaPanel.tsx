@@ -13,9 +13,9 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
-import { EmptyState } from "@/components/karate/EmptyState";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { CarteirinhaCard } from "@/components/karate/CarteirinhaCard";
@@ -87,7 +87,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   if (!card) {
     return (
       <View style={styles.tab}>
-        <EmptyState
+        <KarateEmptyState
           icon="card-outline"
           title="Nenhuma carteirinha emitida"
           subtitle="Emita a carteirinha digital do praticante. Os dados (faixa, dojô, registro) são capturados no momento da emissão."
