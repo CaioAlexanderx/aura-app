@@ -5,6 +5,7 @@
 // Wired: GET /federation/{id}/practitioners/{practitionerId}
 // Track C (Fase 2): aba "Certif./Exames" mostra a nova faixa após aprovacão
 //   e o status/URL do certificado com botão "Solicitar emissão".
+// Track D (Fase 3): aba "Carteirinha" emite/renova + renderiza o cartão.
 // DECISÃO FPKT #3: certificado sob demanda via karateApi.issueCertificate.
 // ============================================================
 import React, { useEffect, useState } from "react";
@@ -18,8 +19,9 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import { Skeleton } from "@/components/karate/Skeleton";
-import { EmptyState } from "@/components/karate/EmptyState";
+import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
+import { CarteirinhaPanel } from "@/components/karate/CarteirinhaPanel";
 import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
@@ -282,7 +284,7 @@ export default function FichaPraticanteScreen() {
         {activeTab === "Cadastro"       && <CadastroTab p={data} />}
         {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} />}
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
-        {activeTab === "Carteirinha"    && <PlaceholderTab label="Carteirinha" />}
+        {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Documentos"     && <PlaceholderTab label="Documentos" />}
       </ScrollView>
     </View>
