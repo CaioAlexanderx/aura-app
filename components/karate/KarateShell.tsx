@@ -26,12 +26,12 @@ import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateThem
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const NAV_ITEMS = [
-  { label: "Dashboard",  icon: "grid-outline",        route: "/(karate)/" },
-  { label: "Dojôs",      icon: "home-outline",         route: "/(karate)/dojos" },
-  { label: "Praticantes",icon: "people-outline",       route: "/(karate)/praticantes" },
-  { label: "Financeiro", icon: "card-outline",         route: "/(karate)/financeiro" },
-  { label: "Eventos",    icon: "calendar-outline",     route: "/(karate)/eventos" },
-  { label: "Importar",   icon: "cloud-upload-outline", route: "/(karate)/importacao" },
+  { label: "Dashboard",  icon: "grid-outline",        route: "/karate/" },
+  { label: "Dojôs",      icon: "home-outline",         route: "/karate/dojos" },
+  { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes" },
+  { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro" },
+  { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos" },
+  { label: "Importar",   icon: "cloud-upload-outline", route: "/karate/importacao" },
 ] as const;
 
 const BREAKPOINT_SIDEBAR = 768;
@@ -56,7 +56,7 @@ function SidebarNav() {
 
       {/* Navigation */}
       {NAV_ITEMS.map((item) => {
-        const active = path.startsWith(item.route.replace("/(karate)", "/karate"));
+        const active = path.startsWith(item.route.replace("/karate", "/karate"));
         return (
           <TouchableOpacity
             key={item.route}
@@ -91,7 +91,7 @@ function BottomTabNav() {
   return (
     <View style={styles.bottomBar}>
       {MOBILE_TABS.map((item) => {
-        const active = path.startsWith(item.route.replace("/(karate)", "/karate"));
+        const active = path.startsWith(item.route.replace("/karate", "/karate"));
         return (
           <TouchableOpacity
             key={item.route}

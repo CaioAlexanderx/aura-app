@@ -84,6 +84,8 @@ function AuthGuard() {
     const isOdonto = (company as any)?.vertical_active === "odonto";
     const isFood   = (company as any)?.vertical_active === "food";
     const isStudio = (company as any)?.vertical_active === "studio";
+    const isKarate = ["karate_federation", "karate_dojo"]
+  .includes(((company as any)?.vertical_active ?? (company as any)?.vertical) as string);
 
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
@@ -127,6 +129,11 @@ function AuthGuard() {
     // 2026-05-25 (hotfix Sheid Mania): mesma lógica para Studio.
     if (token && (emailVerified || isDemo || isInternalAura) && isStudio && inTabs && !onCheckout) {
       router.replace("/studio/(estudio)");
+      return;
+    }
+
+    if (token && (emailVerified || isDemo || isInternalAura) && isKarate && inTabs && !onCheckout) {
+      router.replace("/karate");
       return;
     }
 
