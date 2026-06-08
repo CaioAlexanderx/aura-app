@@ -226,14 +226,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var noEan13 = items.filter(function(item) { return !isValidEAN13(item.barcode); });
     if (noEan13.length > 0) {
       // 08/06/2026: gera EAN-13 deterministico e PERSISTE no cadastro (ver
-      // handleConfirmEan13). Seed:
-      //   - VARIANTE: o proprio id da variante -> codigo UNICO por variante
-      //     (P/M/G nao colidem mais no mesmo EAN).
-      //   - produto simples/pai: codigo atual (barcode||name = SKU) -> mesma
-      //     formula de sempre, codigo reproduzivel (etiqueta ja impressa de
-      //     produto simples continua valida assim que o codigo for gravado).
-      // O codigo gerado vai SEMPRE para a coluna barcode (scanner); o SKU/
-      // sku_suffix (identificador) nunca e alterado. Dedup por identidade.
+      // handleConfirmEan13). Seed = codigo atual (barcode||name = SKU), a MESMA
+      // formula de sempre. Isso e proposital: produtos ANTIGOS geram exatamente
+      // o mesmo codigo que ja foi impresso -> etiquetas ja coladas continuam
+      // validas assim que o codigo for gravado; NADA muda para o cliente, sem
+      // necessidade de reimprimir. A unica novidade e a gravacao no cadastro.
+      // O codigo vai SEMPRE para a coluna barcode (scanner); o SKU nunca muda.
+      // Dedup por identidade (produto/variante) so para gravar no item certo.
       var seen = new Set<string>();
       var genList: EAN13Entry[] = [];
       noEan13.forEach(function(item) {
@@ -243,7 +242,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         genList.push({
           name: buildLabelName(item.name, item.size, item.color),
           originalCode: item.barcode,
-          generated: generateEAN13(item.variantId || item.barcode || item.name),
+          generated: generateEAN13(item.barcode || item.name),
           productId: item.productId,
           variantId: item.variantId,
         });
@@ -530,7 +529,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             </Pressable>
           </View>
           <Text style={s.ean13Hint}>
-            Um EAN-13 interno sera gerado automaticamente (prefixo 200 — uso interno GS1, sem registro). Cada produto/variante gera o seu proprio codigo, sempre o mesmo. O codigo gerado sera salvo no cadastro (campo de codigo de barras); o SKU nao muda.
+            Um EAN-13 interno sera gerado automaticamente (prefixo 200 — uso interno GS1, sem registro). O mesmo produto sempre gera o mesmo codigo. O codigo gerado sera salvo no cadastro (campo de codigo de barras); o SKU nao muda.
           </Text>
           <ScrollView style={s.ean13List} nestedScrollEnabled>
             {ean13GenList.map(function(entry, idx) {
