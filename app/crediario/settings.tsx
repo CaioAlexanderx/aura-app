@@ -355,12 +355,6 @@ export default function CrediarioSettingsScreen() {
             <ToggleRow label="Juros de financiamento" sub="aplicado ao parcelar uma venda" suffix="% mês"
               on={interestOn} setOn={(v) => { setInterestOn(v); touch(); }}
               value={interestPct} setValue={(v) => { setInterestPct(v); touch(); }} />
-            <ToggleRow label="Multa por atraso (parcelado)" sub="cobrada uma vez na parcela vencida" suffix="% dia"
-              on={lateFeeOn} setOn={(v) => { setLateFeeOn(v); touch(); }}
-              value={lateFee} setValue={(v) => { setLateFee(v); touch(); }} />
-            <ToggleRow label="Juros de mora ao dia (parcelado)" sub="acumula por dia de atraso" suffix="% dia"
-              on={moraOn} setOn={(v) => { setMoraOn(v); touch(); }}
-              value={mora} setValue={(v) => { setMora(v); touch(); }} />
             <Text style={st.hint}>Tudo opcional. Deixe desligado para não cobrar juros — você decide.</Text>
           </View>
 
