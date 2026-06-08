@@ -10,10 +10,12 @@ import { toast } from "@/components/Toast";
 
 // ============================================================
 // Configurações do Crediário (Hub F1, 05/06/2026)
-// Expõe as regras padrão do fiado: parcelamento, periodicidade,
-// juros/encargos (sempre opt-in), score mínimo, chave Pix e a
-// régua de cobrança. O disparo da régua segue MANUAL (wa.me) —
-// o envio automático chega numa onda futura (WhatsApp Cloud).
+// Fase 1 FE (07/06/2026):
+//   - Exibe period_unit/period_count (periodicidade)
+//   - Novo campo score_warn_min ("avisar quando score < X");
+//     nota explícita: só aviso, nunca bloqueia.
+//   - require_score_min removido da UI (campo deprecado; enviamos
+//     score_warn_min no PUT e omitimos require_score_min).
 // ============================================================
 
 type Rule = { id: string; name: string; days_relative: number; template: string; channel: string; enabled: boolean };
@@ -22,7 +24,7 @@ const DEFAULT_RULES: Rule[] = [
   { id: "lembrete",   name: "Lembrete",          days_relative: -3, channel: "whatsapp", enabled: true,
     template: "Oi {nome}! Passando pra lembrar que sua parcela de {valor} vence em {vencimento}. Pix: {pix}" },
   { id: "vencimento", name: "No vencimento",     days_relative: 0,  channel: "whatsapp", enabled: true,
-    template: "Olá {nome}, sua parcela de {valor} vence hoje. Pague pelo Pix {pix} 🙂" },
+    template: "Olá {nome}, sua parcela de {valor} vence hoje. Pague pelo Pix {pix} :)" },
   { id: "atraso_1",   name: "Atraso leve",       days_relative: 1,  channel: "whatsapp", enabled: true,
     template: "{nome}, a parcela de {valor} venceu em {vencimento}. Consegue regularizar?" },
   { id: "atraso_2",   name: "Atraso 2",          days_relative: 7,  channel: "whatsapp", enabled: false,
@@ -61,14 +63,14 @@ export default function CrediarioSettingsScreen() {
   const [customDays, setCustomDays] = useState("20");
   // Juros & encargos (opt-in)
   const [interestOn, setInterestOn] = useState(false);
-  const [interestPct, setInterestPct] = useState("2,5");   // exibido em %/mês; salvo como decimal
+  const [interestPct, setInterestPct] = useState("2,5");
   const [lateFeeOn, setLateFeeOn] = useState(false);
-  const [lateFee, setLateFee] = useState("2");             // %
+  const [lateFee, setLateFee] = useState("2");
   const [moraOn, setMoraOn] = useState(false);
-  const [mora, setMora] = useState("0,033");               // %/dia
-  // Política de venda
-  const [scoreOn, setScoreOn] = useState(false);
-  const [scoreMin, setScoreMin] = useState("300");
+  const [mora, setMora] = useState("0,033");
+  // Fase 1: score_warn_min (só aviso, nunca bloqueia)
+  const [scoreWarnOn, setScoreWarnOn] = useState(false);
+  const [scoreWarnMin, setScoreWarnMin] = useState("300");
   // Cobrança
   const [pixKey, setPixKey] = useState("");
   const [rules, setRules] = useState<Rule[]>(DEFAULT_RULES);
@@ -90,18 +92,25 @@ export default function CrediarioSettingsScreen() {
     if (!c) return;
     if (c.max_installments != null) setMaxInst(String(c.max_installments));
     if (c.min_installment_value != null) setMinInst(pctToStr(c.min_installment_value));
+
     const u = (c.period_unit as PeriodUnit) || "month";
     const cnt = c.period_count != null ? c.period_count : 1;
     setPeriodUnit(u); setPeriodCount(cnt);
     if (u === "day") setCustomDays(String(cnt));
+    else if (u === "week" && cnt !== 1 && cnt !== 2) setCustomDays(String(cnt));
+
     const ir = Number(c.interest_rate || 0);
     setInterestOn(ir > 0); if (ir > 0) setInterestPct(pctToStr(+(ir * 100).toFixed(4)));
     const lf = Number(c.late_fee_rate || 0);
     setLateFeeOn(lf > 0); if (lf > 0) setLateFee(pctToStr(lf));
     const md = Number(c.late_interest_daily || 0);
     setMoraOn(md > 0); if (md > 0) setMora(pctToStr(md));
-    const sm = Number(c.require_score_min || 0);
-    setScoreOn(sm > 0); if (sm > 0) setScoreMin(String(sm));
+
+    // Fase 1: score_warn_min (preferência) ou require_score_min (legado) como fallback
+    const swm = c.score_warn_min != null ? c.score_warn_min
+      : (c.require_score_min ?? 0);
+    setScoreWarnOn(swm > 0);
+    if (swm > 0) setScoreWarnMin(String(swm));
   }, [cfgQ.data]);
 
   // Hidrata Pix + régua
@@ -138,7 +147,8 @@ export default function CrediarioSettingsScreen() {
         interest_rate: interestOn ? +(num(interestPct) / 100).toFixed(4) : 0,
         late_fee_rate: lateFeeOn ? num(lateFee) : 0,
         late_interest_daily: moraOn ? num(mora) : 0,
-        require_score_min: scoreOn ? Math.max(0, parseInt(scoreMin, 10) || 0) : 0,
+        // Fase 1: envia score_warn_min; omite require_score_min (deprecado)
+        score_warn_min: scoreWarnOn ? Math.max(0, parseInt(scoreWarnMin, 10) || 0) : null,
         period_unit: finalUnit,
         period_count: finalCount,
       } as any);
@@ -221,7 +231,13 @@ export default function CrediarioSettingsScreen() {
               <View style={st.customRow}>
                 <Text style={st.customLbl}>A cada</Text>
                 <TextInput style={st.customNum} value={customDays} keyboardType="numeric"
-                  onChangeText={(v) => { const d = v.replace(/\D/g, "").slice(0, 3); setCustomDays(d); setPeriodUnit("day"); setPeriodCount(parseInt(d, 10) || 1); touch(); }} />
+                  onChangeText={(v) => {
+                    const d = v.replace(/\D/g, "").slice(0, 3);
+                    setCustomDays(d);
+                    setPeriodUnit("day");
+                    setPeriodCount(parseInt(d, 10) || 1);
+                    touch();
+                  }} />
                 <Text style={st.customLbl}>dias</Text>
               </View>
             )}
@@ -243,12 +259,25 @@ export default function CrediarioSettingsScreen() {
             <Text style={st.hint}>Tudo opcional. Deixe desligado para não cobrar juros — você decide.</Text>
           </View>
 
-          {/* POLÍTICA DE VENDA */}
+          {/* POLÍTICA DE VENDA — Fase 1: score_warn_min */}
           <Text style={st.sectionTitle}>Política de venda</Text>
           <View style={st.card}>
-            <ToggleRow label="Score mínimo para vender a prazo" sub="bloqueia clientes abaixo do score" suffix="pts"
-              on={scoreOn} setOn={(v) => { setScoreOn(v); touch(); }}
-              value={scoreMin} setValue={(v) => { setScoreMin(v.replace(/\D/g, "")); touch(); }} intOnly />
+            <ToggleRow
+              label="Avisar quando score estiver baixo"
+              sub="exibe alerta na tela do cliente — nunca bloqueia a venda"
+              suffix="pts"
+              on={scoreWarnOn}
+              setOn={(v) => { setScoreWarnOn(v); touch(); }}
+              value={scoreWarnMin}
+              setValue={(v) => { setScoreWarnMin(v.replace(/\D/g, "")); touch(); }}
+              intOnly
+            />
+            <View style={st.warnNote}>
+              <Icon name="alert_triangle" size={13} color={Colors.amber} />
+              <Text style={st.warnNoteTxt}>
+                Score baixo <Text style={{ fontWeight: "700" }}>nunca bloqueia</Text> uma venda — apenas exibe um aviso no painel do cliente para que você decida conscientemente.
+              </Text>
+            </View>
           </View>
 
           {/* COBRANÇA */}
@@ -263,7 +292,7 @@ export default function CrediarioSettingsScreen() {
             </View>
 
             <Text style={[st.lbl, { marginTop: 18 }]}>Régua de cobrança</Text>
-            <Text style={st.reguaSub}>Mensagens por etapa. Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em “Cobrar”. Variáveis: {"{nome}"}, {"{valor}"}, {"{vencimento}"}, {"{pix}"}, {"{dias}"}.</Text>
+            <Text style={st.reguaSub}>Mensagens por etapa. Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em “Cobrar”. Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.  </Text>
 
             {rules.map((r, i) => (
               <View key={r.id} style={[st.stage, !r.enabled && st.stageOff]}>
@@ -278,7 +307,7 @@ export default function CrediarioSettingsScreen() {
                     </View>
                   </View>
                   <Switch value={r.enabled} onValueChange={(v) => updateRule(i, { enabled: v })}
-                    trackColor={{ false: Colors.bg4, true: Colors.violet }} thumbColor="#fff" />
+                    trackColor={{ false: Colors.bg4 as any, true: Colors.violet }} thumbColor="#fff" />
                 </View>
                 <TextInput style={st.template} value={r.template} multiline
                   onChangeText={(v) => updateRule(i, { template: v })}
@@ -315,7 +344,7 @@ function ToggleRow(props: {
           <Text style={st.miniSuffix}>{suffix}</Text>
         </View>
       )}
-      <Switch value={on} onValueChange={setOn} trackColor={{ false: Colors.bg4, true: Colors.violet }} thumbColor="#fff" />
+      <Switch value={on} onValueChange={setOn} trackColor={{ false: Colors.bg4 as any, true: Colors.violet }} thumbColor="#fff" />
     </View>
   );
 }
@@ -359,6 +388,10 @@ const st = StyleSheet.create({
   miniInpWrap: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingHorizontal: 9 },
   miniInp: { width: 52, paddingVertical: 7, fontSize: 13, fontWeight: "700", color: Colors.ink, textAlign: "right" },
   miniSuffix: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
+
+  // Nota de aviso score
+  warnNote: { flexDirection: "row", alignItems: "flex-start", gap: 7, backgroundColor: Colors.amber + "14", borderRadius: 9, padding: 10, marginTop: 10, borderWidth: 1, borderColor: Colors.amber + "33" },
+  warnNoteTxt: { flex: 1, fontSize: 11, color: Colors.amber, lineHeight: 16 },
 
   pixCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg2, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 11, borderWidth: 1, borderColor: Colors.border2 },
   pixInput: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600", paddingVertical: 0 },
