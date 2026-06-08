@@ -37,7 +37,7 @@ const pb = StyleSheet.create({
 export function LockIcon({ plan }: { plan: PlanLevel }) {
   return (
     <View style={li.wrap}>
-      <Text style={li.lock}>\u{1F512}</Text>
+      <Text style={li.lock}>🔒</Text>
       <View style={[li.badge, { backgroundColor: PLAN_COLORS[plan] + "22" }]}>
         <Text style={[li.badgeText, { color: PLAN_COLORS[plan] }]}>{PLAN_LABELS[plan]}</Text>
       </View>
@@ -59,7 +59,7 @@ export function UpgradeModal({ visible, requiredPlan, onClose }: { visible: bool
     <View style={um.overlay}>
       <View style={um.modal}>
         <View style={um.iconWrap}>
-          <Text style={um.iconText}>\u{1F680}</Text>
+          <Text style={um.iconText}>🚀</Text>
         </View>
         <Text style={um.title}>Recurso do plano {PLAN_LABELS[requiredPlan]}</Text>
         <Text style={um.subtitle}>Faça upgrade para desbloquear essa e outras funcionalidades:</Text>

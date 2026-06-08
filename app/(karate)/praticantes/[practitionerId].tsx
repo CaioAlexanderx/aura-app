@@ -77,7 +77,7 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
       <View style={tabStyles.rolesRow}>
         {p.is_instructor && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Instrutor</Text></View>}
-        {p.is_arbiter    && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}Árbitro</Text></View>}
+        {p.is_arbiter    && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Árbitro</Text></View>}
         {p.is_examiner   && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Examinador</Text></View>}
       </View>
     </View>
