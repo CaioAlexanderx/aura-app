@@ -7,6 +7,9 @@
 //   score_warning em CreditProfile; account_id em CreditInstallment;
 //   period_unit/period_count/score_warn_min em CreditPlanConfig;
 //   helper printCarne (fetch + document.write, auth obrigatória).
+// Fase 2 FE (08/06/2026): late_charges_enabled/late_grace_days em
+//   CreditPlanConfig; charges_total/days_overdue/days_charged/total_due
+//   em CreditInstallment; charges_paid/charges_detail em ReceivePaymentResult.
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -108,6 +111,17 @@ export type CreditPlanConfig = {
   period_count?: number;
   /** Fase 1: aviso quando score < score_warn_min. Nunca bloqueia — só alerta. */
   score_warn_min?: number | null;
+  // ── Fase 2: encargos por atraso (opt-in, default OFF) ──────
+  /** Liga/desliga cobrança de mora+multa em parcelas vencidas. Default false. */
+  late_charges_enabled?: boolean;
+  /**
+   * Carência em dias após o vencimento antes de aplicar encargos.
+   * Default 3. Só relevante quando late_charges_enabled = true.
+   */
+  late_grace_days?: number;
+  // late_fee_rate e late_interest_daily já existiam acima.
+  // late_fee_rate  = multa única (decimal, ex.: 0.02 = 2%).
+  // late_interest_daily = mora ao dia (decimal, ex.: 0.000333... = 1%/mês).
 };
 
 export type CreditInstallment = {
@@ -123,6 +137,15 @@ export type CreditInstallment = {
   customer_name?: string; customer_phone?: string;
   // Fase 1 FE: account_id pode vir undefined em respostas antigas — tratar como null
   account_id?: string | null;
+  // ── Fase 2: encargos calculados pelo backend (undefined = capability OFF) ──
+  /** Total de encargos (multa + mora) sobre esta parcela. Undefined quando capability OFF. */
+  charges_total?: number;
+  /** Dias de atraso na data do cálculo. Undefined quando capability OFF. */
+  days_overdue?: number;
+  /** Dias efetivamente cobrados (após carência). Undefined quando capability OFF. */
+  days_charged?: number;
+  /** Principal restante + charges_total. Undefined quando capability OFF. */
+  total_due?: number;
 };
 
 export type CreditDashboard = {
@@ -234,6 +257,15 @@ export type ReceivePaymentResult = {
   }>;
   notes?: string | null;
   legacy_amount?: number;
+  // ── Fase 2: encargos quitados (undefined quando capability OFF) ──
+  /** Total de encargos (multa+mora) quitados neste recebimento. */
+  charges_paid?: number;
+  /** Detalhe por parcela. */
+  charges_detail?: Array<{
+    installment_id: string;
+    late_fee: number;
+    late_interest: number;
+  }>;
 };
 
 // ─── Novo carnê ───────────────────────────────────────────────
