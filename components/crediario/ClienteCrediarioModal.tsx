@@ -6,17 +6,25 @@
 //   - Banner âmbar (não-bloqueante) quando score_warning != null
 //   - FIX multi-carnê: parcelas agrupadas por account_id DENTRO
 //     de cada card de carnê (antes só apareciam sem carnê)
-//   - Parcelas com account_id==null vao em grupo “Sem carnê”
+//   - Parcelas com account_id==null vao em grupo "Sem carnê"
 //   - Bloqueio manual: toggle + campo motivo + PATCH .../block
 //   - Editor de termos (máx parcelas + juros) via PUT .../terms
-//     null limpa override; selo “override” quando há customização
-//   - Botão “Imprimir carnê” por carnê: usa printCarne() (fetch
+//     null limpa override; selo "override" quando há customização
+//   - Botão "Imprimir carnê" por carnê: usa printCarne() (fetch
 //     + document.write, nunca window.open direto)
+//
+// Fase 2 FE (08/06/2026):
+//   - Breakdown de encargos em parcelas vencidas com charges_total > 0:
+//     "Principal em aberto", "Multa", "Mora (N dias)" e "Total a pagar".
+//   - Parcelas sem encargos (capability OFF ou em dia) mantêm layout atual.
+//   - Após receivePayment: se charges_paid > 0, exibe no toast/feedback
+//     "Encargos quitados: R$X + Abatido do principal: R$Y".
+//   - Todos campos novos tratados como undefined → 0/ausente (defensivo).
 //
 // F3 (05/06/2026): reescrita multi-carnê.
 // F2 (05/06/2026): parcelas e saldo continuam funcionando igual.
 // 03/06/2026: modal padrão (X + backdrop).
-// 05/06/2026: campo “Data do recebimento” (default hoje, SP).
+// 05/06/2026: campo "Data do recebimento" (default hoje, SP).
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -134,6 +142,10 @@ export function ClienteCrediarioModal({
   const [termsDirty, setTermsDirty] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
 
+  // Fase 2: feedback após recebimento
+  const [lastChargesPaid, setLastChargesPaid] = useState<number | null>(null);
+  const [lastTotalPaid, setLastTotalPaid] = useState<number | null>(null);
+
   const profileQ = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
     queryFn: () => creditApi.getCustomerProfile(companyId, customerId!),
@@ -165,6 +177,8 @@ export function ClienteCrediarioModal({
       setTermsInterest("");
       setTermsDirty(false);
       setExpandedAccountId(undefined);
+      setLastChargesPaid(null);
+      setLastTotalPaid(null);
     }
   }, [visible, customerId]);
 
@@ -295,7 +309,23 @@ export function ClienteCrediarioModal({
       });
     },
     onSuccess: (res) => {
-      toast.success("Recebimento registrado! Saldo: " + fmt(res.new_balance));
+      // Fase 2: capturar encargos quitados para exibir feedback
+      const chargesPaid = res.charges_paid ?? 0;
+      const totalPaid = amountNum;
+      if (chargesPaid > 0) {
+        setLastChargesPaid(chargesPaid);
+        setLastTotalPaid(totalPaid);
+        const principal = Math.max(0, totalPaid - chargesPaid);
+        toast.success(
+          `Recebimento registrado!\n` +
+          `Encargos quitados: ${fmt(chargesPaid)}\n` +
+          `Abatido do principal: ${fmt(principal)}`
+        );
+      } else {
+        toast.success("Recebimento registrado! Saldo: " + fmt(res.new_balance));
+        setLastChargesPaid(null);
+        setLastTotalPaid(null);
+      }
       setAmount("");
       setDistributions({});
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
@@ -566,18 +596,59 @@ export function ClienteCrediarioModal({
                                   {accInst.map((ins) => {
                                     const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
                                     const late = ins.status === "overdue";
+                                    const chargesTotal = ins.charges_total ?? 0;
+                                    const hasCharges = late && chargesTotal > 0;
                                     return (
                                       <View key={ins.id} style={m.parc}>
                                         <View style={{ flex: 1 }}>
-                                          <Text style={m.parcT}>Parcela {ins.installment_number}/{ins.total_installments} · {fmt(rem)}</Text>
+                                          <Text style={m.parcT}>
+                                            Parcela {ins.installment_number}/{ins.total_installments}
+                                            {hasCharges
+                                              ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
+                                              : " · " + fmt(rem)}
+                                          </Text>
                                           <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
+                                          {/* Fase 2: breakdown encargos */}
+                                          {hasCharges && (
+                                            <View style={m.chargesBreakdown}>
+                                              <View style={m.chargesRow}>
+                                                <Text style={m.chargesLbl}>Principal em aberto</Text>
+                                                <Text style={m.chargesVal}>{fmt(rem)}</Text>
+                                              </View>
+                                              {(ins.late_fee ?? 0) > 0 && (
+                                                <View style={m.chargesRow}>
+                                                  <Text style={m.chargesLbl}>Multa</Text>
+                                                  <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
+                                                </View>
+                                              )}
+                                              {(ins.late_interest ?? 0) > 0 && (
+                                                <View style={m.chargesRow}>
+                                                  <Text style={m.chargesLbl}>
+                                                    Mora
+                                                    {(ins.days_charged ?? 0) > 0 && (
+                                                      <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
+                                                    )}
+                                                  </Text>
+                                                  <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
+                                                </View>
+                                              )}
+                                              <View style={[m.chargesRow, m.chargesTotalRow]}>
+                                                <Text style={m.chargesTotalLbl}>Total a pagar</Text>
+                                                <Text style={m.chargesTotalVal}>
+                                                  {fmt(ins.total_due ?? (rem + chargesTotal))}
+                                                </Text>
+                                              </View>
+                                            </View>
+                                          )}
                                         </View>
-                                        <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                                          <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
+                                        <View style={{ alignItems: "flex-end", gap: 6 }}>
+                                          <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
+                                            <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
+                                          </View>
+                                          <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
+                                            <Text style={m.receberTxt}>Receber</Text>
+                                          </Pressable>
                                         </View>
-                                        <Pressable style={m.receberBtn} onPress={() => prefill(rem)}>
-                                          <Text style={m.receberTxt}>Receber</Text>
-                                        </Pressable>
                                       </View>
                                     );
                                   })}
@@ -627,18 +698,59 @@ export function ClienteCrediarioModal({
                               {orphan.map((ins) => {
                                 const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
                                 const late = ins.status === "overdue";
+                                const chargesTotal = ins.charges_total ?? 0;
+                                const hasCharges = late && chargesTotal > 0;
                                 return (
                                   <View key={ins.id} style={m.parc}>
                                     <View style={{ flex: 1 }}>
-                                      <Text style={m.parcT}>Parcela {ins.installment_number}/{ins.total_installments} · {fmt(rem)}</Text>
+                                      <Text style={m.parcT}>
+                                        Parcela {ins.installment_number}/{ins.total_installments}
+                                        {hasCharges
+                                          ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
+                                          : " · " + fmt(rem)}
+                                      </Text>
                                       <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
+                                      {/* Fase 2: breakdown encargos */}
+                                      {hasCharges && (
+                                        <View style={m.chargesBreakdown}>
+                                          <View style={m.chargesRow}>
+                                            <Text style={m.chargesLbl}>Principal em aberto</Text>
+                                            <Text style={m.chargesVal}>{fmt(rem)}</Text>
+                                          </View>
+                                          {(ins.late_fee ?? 0) > 0 && (
+                                            <View style={m.chargesRow}>
+                                              <Text style={m.chargesLbl}>Multa</Text>
+                                              <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
+                                            </View>
+                                          )}
+                                          {(ins.late_interest ?? 0) > 0 && (
+                                            <View style={m.chargesRow}>
+                                              <Text style={m.chargesLbl}>
+                                                Mora
+                                                {(ins.days_charged ?? 0) > 0 && (
+                                                  <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
+                                                )}
+                                              </Text>
+                                              <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
+                                            </View>
+                                          )}
+                                          <View style={[m.chargesRow, m.chargesTotalRow]}>
+                                            <Text style={m.chargesTotalLbl}>Total a pagar</Text>
+                                            <Text style={m.chargesTotalVal}>
+                                              {fmt(ins.total_due ?? (rem + chargesTotal))}
+                                            </Text>
+                                          </View>
+                                        </View>
+                                      )}
                                     </View>
-                                    <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                                      <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
+                                    <View style={{ alignItems: "flex-end", gap: 6 }}>
+                                      <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
+                                        <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
+                                      </View>
+                                      <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
+                                        <Text style={m.receberTxt}>Receber</Text>
+                                      </Pressable>
                                     </View>
-                                    <Pressable style={m.receberBtn} onPress={() => prefill(rem)}>
-                                      <Text style={m.receberTxt}>Receber</Text>
-                                    </Pressable>
                                   </View>
                                 );
                               })}
@@ -664,18 +776,59 @@ export function ClienteCrediarioModal({
                         {openInst.map((ins) => {
                           const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
                           const late = ins.status === "overdue";
+                          const chargesTotal = ins.charges_total ?? 0;
+                          const hasCharges = late && chargesTotal > 0;
                           return (
                             <View key={ins.id} style={m.parc}>
                               <View style={{ flex: 1 }}>
-                                <Text style={m.parcT}>Parcela {ins.installment_number}/{ins.total_installments} · {fmt(rem)}</Text>
+                                <Text style={m.parcT}>
+                                  Parcela {ins.installment_number}/{ins.total_installments}
+                                  {hasCharges
+                                    ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
+                                    : " · " + fmt(rem)}
+                                </Text>
                                 <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
+                                {/* Fase 2: breakdown encargos */}
+                                {hasCharges && (
+                                  <View style={m.chargesBreakdown}>
+                                    <View style={m.chargesRow}>
+                                      <Text style={m.chargesLbl}>Principal em aberto</Text>
+                                      <Text style={m.chargesVal}>{fmt(rem)}</Text>
+                                    </View>
+                                    {(ins.late_fee ?? 0) > 0 && (
+                                      <View style={m.chargesRow}>
+                                        <Text style={m.chargesLbl}>Multa</Text>
+                                        <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
+                                      </View>
+                                    )}
+                                    {(ins.late_interest ?? 0) > 0 && (
+                                      <View style={m.chargesRow}>
+                                        <Text style={m.chargesLbl}>
+                                          Mora
+                                          {(ins.days_charged ?? 0) > 0 && (
+                                            <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
+                                          )}
+                                        </Text>
+                                        <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
+                                      </View>
+                                    )}
+                                    <View style={[m.chargesRow, m.chargesTotalRow]}>
+                                      <Text style={m.chargesTotalLbl}>Total a pagar</Text>
+                                      <Text style={m.chargesTotalVal}>
+                                        {fmt(ins.total_due ?? (rem + chargesTotal))}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                )}
                               </View>
-                              <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                                <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Em atraso" : "No prazo"}</Text>
+                              <View style={{ alignItems: "flex-end", gap: 6 }}>
+                                <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
+                                  <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Em atraso" : "No prazo"}</Text>
+                                </View>
+                                <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
+                                  <Text style={m.receberTxt}>Receber</Text>
+                                </Pressable>
                               </View>
-                              <Pressable style={m.receberBtn} onPress={() => prefill(rem)}>
-                                <Text style={m.receberTxt}>Receber</Text>
-                              </Pressable>
                             </View>
                           );
                         })}
@@ -804,6 +957,20 @@ export function ClienteCrediarioModal({
                         <View style={m.after}>
                           <Text style={m.afterK}>Saldo após recebimento</Text>
                           <Text style={m.afterV}>{fmt(afterBalance)}</Text>
+                        </View>
+                      )}
+
+                      {/* Fase 2: resumo de encargos quitados (exibido após recebimento) */}
+                      {lastChargesPaid != null && lastChargesPaid > 0 && lastTotalPaid != null && (
+                        <View style={m.chargesSummary}>
+                          <View style={m.chargesSummaryRow}>
+                            <Text style={m.chargesSummaryLbl}>Encargos quitados</Text>
+                            <Text style={[m.chargesSummaryVal, { color: Colors.red }]}>{fmt(lastChargesPaid)}</Text>
+                          </View>
+                          <View style={m.chargesSummaryRow}>
+                            <Text style={m.chargesSummaryLbl}>Abatido do principal</Text>
+                            <Text style={m.chargesSummaryVal}>{fmt(Math.max(0, lastTotalPaid - lastChargesPaid))}</Text>
+                          </View>
                         </View>
                       )}
                     </View>
@@ -1043,13 +1210,29 @@ const m = StyleSheet.create({
   accActionTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
   accInstList: { marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
 
-  parc: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: Colors.border },
+  parc: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: Colors.border },
   parcT: { fontSize: 13, fontWeight: "700", color: Colors.ink },
   parcS: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   badgeTxt: { fontSize: 10, fontWeight: "700" },
   receberBtn: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
   receberTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+
+  // Fase 2: breakdown encargos
+  chargesBreakdown: { marginTop: 7, backgroundColor: Colors.bg2, borderRadius: 9, padding: 9, borderWidth: 1, borderColor: Colors.border2 },
+  chargesRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  chargesLbl: { fontSize: 11, color: Colors.ink3, flex: 1 },
+  chargesVal: { fontSize: 11, fontWeight: "700", color: Colors.ink },
+  chargesDaysChip: { fontSize: 10, color: Colors.amber, fontWeight: "700" },
+  chargesTotalRow: { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 5, marginTop: 2, marginBottom: 0 },
+  chargesTotalLbl: { fontSize: 12, fontWeight: "700", color: Colors.ink, flex: 1 },
+  chargesTotalVal: { fontSize: 13, fontWeight: "800", color: Colors.red },
+
+  // Fase 2: resumo encargos após recebimento
+  chargesSummary: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  chargesSummaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 },
+  chargesSummaryLbl: { fontSize: 12, color: Colors.ink3 },
+  chargesSummaryVal: { fontSize: 13, fontWeight: "800", color: Colors.ink },
 
   freeBox: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 14, marginBottom: 13 },
   freeTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 10 },
