@@ -25,6 +25,9 @@
 // F2 (05/06/2026): parcelas e saldo continuam funcionando igual.
 // 03/06/2026: modal padrão (X + backdrop).
 // 05/06/2026: campo "Data do recebimento" (default hoje, SP).
+// fix (08/06/2026): Entrega 4 — botão calendário em cada parcela em aberto
+//   (igual ao de cliente/[id].tsx): abre editor de data inline + chama
+//   editInstallmentDueDate; ao sucesso, invalida credit-profile/credit-customer.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -36,7 +39,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import {
   creditApi, printCarne,
-  type CreditAccount, type PaymentAllocation, type CustomerTermsOverrides,
+  type CreditAccount, type CreditInstallment, type PaymentAllocation, type CustomerTermsOverrides,
 } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
@@ -142,6 +145,11 @@ export function ClienteCrediarioModal({
   const [termsDirty, setTermsDirty] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
 
+  // Entrega 4: editor de vencimento inline
+  const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
+  const [editDueDateInput, setEditDueDateInput] = useState("");
+  const [editDueDateError, setEditDueDateError] = useState("");
+
   // Fase 2: feedback após recebimento
   const [lastChargesPaid, setLastChargesPaid] = useState<number | null>(null);
   const [lastTotalPaid, setLastTotalPaid] = useState<number | null>(null);
@@ -179,6 +187,9 @@ export function ClienteCrediarioModal({
       setExpandedAccountId(undefined);
       setLastChargesPaid(null);
       setLastTotalPaid(null);
+      setEditingDueDateInst(null);
+      setEditDueDateInput("");
+      setEditDueDateError("");
     }
   }, [visible, customerId]);
 
@@ -365,6 +376,34 @@ export function ClienteCrediarioModal({
     } finally {
       setCreatingAccount(false);
     }
+  }
+
+  // Entrega 4: mutation para editar vencimento de parcela dentro do modal
+  const editDueDateMut = useMutation({
+    mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
+      creditApi.editInstallmentDueDate(companyId, id, dueDate),
+    onSuccess: () => {
+      setEditingDueDateInst(null);
+      setEditDueDateInput("");
+      setEditDueDateError("");
+      toast.success("Vencimento atualizado!");
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao alterar vencimento"),
+  });
+
+  function handleEditDueDateOpen(inst: CreditInstallment) {
+    setEditingDueDateInst(inst);
+    setEditDueDateInput(formatIsoToBr(inst.due_date));
+    setEditDueDateError("");
+  }
+
+  function handleEditDueDateConfirm() {
+    const iso = parseBrDate(editDueDateInput);
+    if (!iso) { setEditDueDateError("Data inválida"); return; }
+    if (!editingDueDateInst) return;
+    editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
   const name = detail?.customer?.name || customerName || "Cliente";
@@ -645,6 +684,12 @@ export function ClienteCrediarioModal({
                                           <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
                                             <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
                                           </View>
+                                          <Pressable
+                                            style={m.calBtn}
+                                            onPress={() => handleEditDueDateOpen(ins)}
+                                          >
+                                            <Icon name="Calendar" size={13} color={Colors.violet} />
+                                          </Pressable>
                                           <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
                                             <Text style={m.receberTxt}>Receber</Text>
                                           </Pressable>
@@ -747,6 +792,12 @@ export function ClienteCrediarioModal({
                                       <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
                                         <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
                                       </View>
+                                      <Pressable
+                                        style={m.calBtn}
+                                        onPress={() => handleEditDueDateOpen(ins)}
+                                      >
+                                        <Icon name="Calendar" size={13} color={Colors.violet} />
+                                      </Pressable>
                                       <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
                                         <Text style={m.receberTxt}>Receber</Text>
                                       </Pressable>
@@ -825,6 +876,12 @@ export function ClienteCrediarioModal({
                                 <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
                                   <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Em atraso" : "No prazo"}</Text>
                                 </View>
+                                <Pressable
+                                  style={m.calBtn}
+                                  onPress={() => handleEditDueDateOpen(ins)}
+                                >
+                                  <Icon name="Calendar" size={13} color={Colors.violet} />
+                                </Pressable>
                                 <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
                                   <Text style={m.receberTxt}>Receber</Text>
                                 </Pressable>
@@ -1125,6 +1182,48 @@ export function ClienteCrediarioModal({
             )}
           </ScrollView>
 
+          {/* Entrega 4: editor inline de vencimento de parcela */}
+          {editingDueDateInst && (
+            <View style={m.editDueDateSheet}>
+              <View style={m.editDueDateHeader}>
+                <Text style={m.editDueDateTitle}>Alterar Vencimento</Text>
+                <Pressable onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }} style={m.xBtn}>
+                  <Icon name="x" size={13} color={Colors.ink3} />
+                </Pressable>
+              </View>
+              <Text style={m.editDueDateSub}>
+                Parcela {editingDueDateInst.installment_number}/{editingDueDateInst.total_installments} · parcelas seguintes serão recalculadas.
+              </Text>
+              <Text style={[m.fieldLabel, { marginBottom: 6, marginTop: 4 }]}>NOVA DATA (DD/MM/AAAA)</Text>
+              <DateInput
+                value={editDueDateInput}
+                onChangeText={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
+                placeholder="15/07/2026"
+                forceShowError={!!editDueDateError}
+              />
+              {!!editDueDateError && (
+                <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{editDueDateError}</Text>
+              )}
+              <View style={{ flexDirection: "row", gap: 9, marginTop: 14 }}>
+                <Pressable
+                  style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                  onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }}
+                >
+                  <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={[m.cta, { flex: 2 }, editDueDateMut.isPending && { opacity: 0.5 }]}
+                  onPress={handleEditDueDateConfirm}
+                  disabled={editDueDateMut.isPending}
+                >
+                  {editDueDateMut.isPending
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={m.ctaTxt}>Confirmar</Text>}
+                </Pressable>
+              </View>
+            </View>
+          )}
+
           {/* Footer */}
           {tab === "resumo" && (
             <View style={m.footer}>
@@ -1296,6 +1395,23 @@ const m = StyleSheet.create({
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: Colors.border },
   cta: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   ctaTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
+
+  // Entrega 4: botão calendário em parcelas + sheet de edição
+  calBtn: {
+    backgroundColor: Colors.violetD, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6,
+    minWidth: 30, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.violet + "44",
+  },
+  editDueDateSheet: {
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    padding: 16, backgroundColor: Colors.bg3,
+  },
+  editDueDateHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6,
+  },
+  editDueDateTitle: { fontSize: 14, fontWeight: "800", color: Colors.ink },
+  editDueDateSub: { fontSize: 11, color: Colors.ink3, marginBottom: 10, lineHeight: 16 },
 
 } as any);
 
