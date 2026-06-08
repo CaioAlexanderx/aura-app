@@ -80,13 +80,15 @@ function AuthGuard() {
     //   /karate/[slug]/praticante        → praticante (portal OTP)
     //   /karate/[slug]/p/[publicToken]   → p (perfil público reduzido)
     //   /karate/[slug]/inscricao/[id]    → inscricao
+    //   /karate/[slug]/ranking           → ranking (embed público — Track E)
     // As rotas do shell (dojos, eventos, financeiro, importacao, praticantes…)
     // nunca batem nesses marcadores.
     const onKaratePublic = segments[0] === "karate" && (
       segments[1] === "verify" ||
       segments[2] === "praticante" ||
       segments[2] === "p" ||
-      segments[2] === "inscricao"
+      segments[2] === "inscricao" ||
+      segments[2] === "ranking"
     );
     if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
 
