@@ -225,9 +225,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     // 2. Verificacao EAN-13: produtos sem EAN-13 valido recebem codigo gerado
     var noEan13 = items.filter(function(item) { return !isValidEAN13(item.barcode); });
     if (noEan13.length > 0) {
-      // 08/06/2026: gera EAN-13 deterministico por PRODUTO/VARIANTE (nao por
-      // codigo). Seed = id da variante (ou do produto) -> codigo unico e estavel
-      // e que pode ser gravado de volta no cadastro (ver handleConfirmEan13).
+      // 08/06/2026: gera EAN-13 deterministico e PERSISTE no cadastro (ver
+      // handleConfirmEan13). Seed = codigo atual (barcode||name), MESMA formula
+      // de sempre -> o codigo e reproduzivel: etiquetas ja impressas continuam
+      // validas assim que o codigo for gravado, e um backfill no banco consegue
+      // reproduzir exatamente o que ja foi impresso. Dedup por identidade
+      // (produto/variante) para gravar no item certo.
       var seen = new Set<string>();
       var genList: EAN13Entry[] = [];
       noEan13.forEach(function(item) {
@@ -237,7 +240,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         genList.push({
           name: buildLabelName(item.name, item.size, item.color),
           originalCode: item.barcode,
-          generated: generateEAN13(identity),
+          generated: generateEAN13(item.barcode || item.name),
           productId: item.productId,
           variantId: item.variantId,
         });
