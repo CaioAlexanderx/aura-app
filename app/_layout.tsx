@@ -73,10 +73,22 @@ function AuthGuard() {
     // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
     // (link enviado via wa.me pro cliente — não exige login).
     const onPublicApproval = segments[0] === "aprovacao";
-    // Track D Karatê: verificação pública da carteirinha em /karate/verify/[token]
-    // (aberta via QR, sem login). Fica FORA do grupo autenticado (federation).
-    const onKarateVerify = segments[0] === "karate" && segments[1] === "verify";
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKarateVerify) return;
+    // Track D Karatê: páginas PÚBLICAS sob /karate (sem login). Ficam FORA do
+    // grupo autenticado (federation) — que é transparente, então também tem
+    // segments[0]==="karate". Distinguimos pelos marcadores públicos:
+    //   /karate/verify/[token]           → verify
+    //   /karate/[slug]/praticante        → praticante (portal OTP)
+    //   /karate/[slug]/p/[publicToken]   → p (perfil público reduzido)
+    //   /karate/[slug]/inscricao/[id]    → inscricao
+    // As rotas do shell (dojos, eventos, financeiro, importacao, praticantes…)
+    // nunca batem nesses marcadores.
+    const onKaratePublic = segments[0] === "karate" && (
+      segments[1] === "verify" ||
+      segments[2] === "praticante" ||
+      segments[2] === "p" ||
+      segments[2] === "inscricao"
+    );
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
