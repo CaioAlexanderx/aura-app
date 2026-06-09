@@ -8,6 +8,7 @@
 // Track B: adicionado item Financeiro à navegação.
 // Track C: adicionado item Eventos à navegação.
 // Track E: adicionado item Competições à navegação.
+// Fase 5: adicionado item Conexões (lado federação; só na sidebar).
 // ============================================================
 import React from "react";
 import {
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { label: "Dashboard",  icon: "grid-outline",        route: "/karate/" },
   { label: "Dojôs",      icon: "home-outline",         route: "/karate/dojos" },
   { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes" },
+  { label: "Conexões",   icon: "link-outline",         route: "/karate/conexoes" },
   { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro" },
   { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos" },
   { label: "Competições",icon: "trophy-outline",       route: "/karate/competicoes" },
@@ -87,8 +89,9 @@ function BottomTabNav() {
   const router = useRouter();
   const path   = usePathname();
 
-  // On mobile, hide Importar to keep the bottom bar tidy.
-  const MOBILE_TABS = NAV_ITEMS.filter((i) => i.label !== "Importar");
+  // No mobile, escondemos Importar e Conexões (tarefas web da federação)
+  // para manter a barra inferior enxuta.
+  const MOBILE_TABS = NAV_ITEMS.filter((i) => i.label !== "Importar" && i.label !== "Conexões");
 
   return (
     <View style={styles.bottomBar}>
