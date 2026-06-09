@@ -69,7 +69,9 @@ function fmt(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso: string) {
-  try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
+  const d = new Date(iso);
+  if (!iso || isNaN(d.getTime())) return "";
+  try { return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
   catch { return ""; }
 }
 function todayBrSp(): string {
@@ -88,6 +90,7 @@ function productsFromNotes(notes?: string | null): string {
 }
 function periodLabel(acc: CreditAccount): string {
   const { period_unit, period_count } = acc;
+  if (!period_unit || period_count == null) return "";
   if (period_unit === "month" && period_count === 1) return "Mensal";
   if (period_unit === "week" && period_count === 1) return "Semanal";
   if (period_unit === "week" && period_count === 2) return "Quinzenal";
@@ -606,9 +609,11 @@ export function ClienteCrediarioModal({
                                 >
                                   <Text style={m.accName}>{acc.name}</Text>
                                   <View style={m.accMeta}>
-                                    <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
-                                      <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
-                                    </View>
+                                    {periodLabel(acc) ? (
+                                      <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
+                                        <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
+                                      </View>
+                                    ) : null}
                                     <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
                                       <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
                                     </View>
@@ -623,8 +628,8 @@ export function ClienteCrediarioModal({
                                   <Text style={[m.accBalance, { color: acc.balance > 0 ? Colors.red : Colors.ink3 }]}>
                                     {fmt(acc.balance)}
                                   </Text>
-                                  {acc.next_due_date && (
-                                    <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date)}</Text>
+                                  {!!fmtDate(acc.next_due_date || "") && (
+                                    <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date!)}</Text>
                                   )}
                                 </View>
                               </View>
@@ -905,7 +910,7 @@ export function ClienteCrediarioModal({
                               onPress={() => setReceiveMode(mode)}
                             >
                               <Text style={[m.modeChipTxt, receiveMode === mode && m.modeChipTxtOn]}>
-                                {mode === "fifo" ? "Em um carnê (FIFO)" : "Distribuir entre carnês"}
+                                {mode === "fifo" ? "Em um carnê" : "Distribuir entre carnês"}
                               </Text>
                             </Pressable>
                           ))}
@@ -920,7 +925,7 @@ export function ClienteCrediarioModal({
                               style={[m.chip, fifoAccountId === undefined && m.chipOn]}
                               onPress={() => setFifoAccountId(undefined)}
                             >
-                              <Text style={[m.chipTxt, fifoAccountId === undefined && m.chipTxtOn]}>Todos (FIFO)</Text>
+                              <Text style={[m.chipTxt, fifoAccountId === undefined && m.chipTxtOn]}>Todos os carnês</Text>
                             </Pressable>
                             {accounts.map(acc => (
                               <Pressable
