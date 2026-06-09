@@ -10,6 +10,8 @@
 // Fase 2 FE (08/06/2026): late_charges_enabled/late_grace_days em
 //   CreditPlanConfig; charges_total/days_overdue/days_charged/total_due
 //   em CreditInstallment; charges_paid/charges_detail em ReceivePaymentResult.
+// fix (08/06/2026): editInstallmentDueDate — URL corrigida para base(companyId),
+//   body corrigido (não mais double-stringificado); valorAPagarParcela exportada.
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -318,6 +320,17 @@ export async function printCarne(companyId: string, customerId: string): Promise
   }
 }
 
+// ─── Entrega 2: fonte ÚNICA de "valor a pagar" de uma parcela ────────────────
+/**
+ * Valor canônico "a pagar" de uma parcela: principal em aberto + encargos (se houver).
+ * total_due já = (amount_due - covered_amount) + mora/multa; cai no principal quando encargos OFF.
+ * NUNCA usar amount_due cheio (ignora pagamento parcial).
+ */
+export function valorAPagarParcela(inst: CreditInstallment): number {
+  const rem = inst.remaining ?? (Number(inst.amount_due || 0) - Number(inst.covered_amount || 0));
+  return Number(inst.total_due ?? rem);
+}
+
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
 export const creditApi = {
@@ -425,10 +438,13 @@ export const creditApi = {
       `${base(companyId)}/installments/${installmentId}/cancel`, { method: "PATCH", body: {} }
     );
   },
+  // fix (08/06/2026): URL corrigida para base(companyId)/installments/...
+  // e body passado como objeto puro (request() já faz JSON.stringify internamente —
+  // passar JSON.stringify(...) causava double-stringify e due_date chegava undefined).
   editInstallmentDueDate(companyId: string, installmentId: string, dueDate: string) {
     return request<{ success: boolean; updated_count: number }>(
-      `/credit/installments/${installmentId}/due-date`,
-      { method: "PATCH", body: JSON.stringify({ due_date: dueDate }), companyId } as any
+      `${base(companyId)}/installments/${installmentId}/due-date`,
+      { method: "PATCH", body: { due_date: dueDate } }
     );
   },
 

@@ -2,18 +2,19 @@ import { useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   ActivityIndicator, RefreshControl, useWindowDimensions,
-  Linking, Platform,
+  Platform,
 } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
-import { creditApi } from "@/services/creditApi";
+import { creditApi, valorAPagarParcela } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import type { AgingRow } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
+import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 
 var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -41,6 +42,14 @@ const AGING_COLORS: Record<string, string> = {
 
 const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
 
+type CobrancaPreviewState = {
+  recipientName: string;
+  phone: string;
+  valorLabel?: string;
+  valorDesc?: string;
+  message: string;
+};
+
 export default function CrediarioScreen() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -48,6 +57,7 @@ export default function CrediarioScreen() {
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [showCriar, setShowCriar] = useState(false);
   const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
+  const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
 
   // F3-3B (29/05/2026): IS_WIDE/IS_NARROW calculados em tempo de execucao via
   // useWindowDimensions, nao mais como constante de modulo (que nao recalculava em resize).
@@ -96,8 +106,8 @@ export default function CrediarioScreen() {
     setRefreshing(false);
   }, [company?.id]);
 
-  // Cobrança unificada no WhatsApp (wa.me): mensagem rica com compra (dia + produtos),
-  // próxima parcela/valor + vencimento e a chave Pix da loja, pronta pra pagamento.
+  // Cobrança via preview modal: monta mensagem, abre preview.
+  // O envio real (wa.me) acontece apenas no botão do CobrancaPreviewModal.
   const handleCobrar = useCallback(async (customerId: string, customerName: string, phone: string | null) => {
     if (!phone) { toast.error("Cliente sem telefone cadastrado"); return; }
     setTriggeringId(customerId);
@@ -112,17 +122,36 @@ export default function CrediarioScreen() {
       const open = (detail.open_installments || []).slice()
         .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
       const nextDue = open[0];
+
       const lines: string[] = [
         `Olá, ${customerName}! Tudo bem? Passando pra lembrar do seu crediário aqui na ${store}.`,
       ];
       if (debit) lines.push(`Referente à compra do dia ${buyDate}${products ? ` (${products})` : ""}.`);
-      if (nextDue) lines.push(`A parcela ${nextDue.installment_number}/${nextDue.total_installments} de ${fmt(nextDue.remaining ?? nextDue.amount_due)} vence em ${fmtDate(nextDue.due_date)}.`);
-      else lines.push(`Seu saldo em aberto é de ${fmt(detail.balance)}.`);
+
+      let valorLabel: string | undefined;
+      let valorDesc: string | undefined;
+
+      if (nextDue) {
+        // Entrega 2: usa valorAPagarParcela — nunca amount_due cheio
+        const valor = valorAPagarParcela(nextDue);
+        valorLabel = fmt(valor);
+        valorDesc = `Parcela ${nextDue.installment_number}/${nextDue.total_installments} · vence ${fmtDate(nextDue.due_date)}`;
+        lines.push(`A parcela ${nextDue.installment_number}/${nextDue.total_installments} de ${fmt(valor)} vence em ${fmtDate(nextDue.due_date)}.`);
+      } else {
+        valorLabel = fmt(detail.balance);
+        lines.push(`Seu saldo em aberto é de ${fmt(detail.balance)}.`);
+      }
       if (pixKey) lines.push(`Chave Pix para pagamento: ${pixKey}`);
       lines.push(`— ${store}`);
-      const clean = phone.replace(/\D/g, "");
-      const num   = clean.startsWith("55") ? clean : `55${clean}`;
-      await Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(lines.join("\n\n"))}`);
+
+      // Entrega 3: abre preview em vez de Linking.openURL direto
+      setCobrancaPreview({
+        recipientName: customerName,
+        phone,
+        valorLabel,
+        valorDesc,
+        message: lines.join("\n\n"),
+      });
     } catch {
       toast.error("Erro ao montar a cobrança");
     } finally {
@@ -387,6 +416,19 @@ export default function CrediarioScreen() {
         }}
         onClose={() => setModalCust(null)}
       />
+
+      {/* Entrega 3: preview de cobrança antes de abrir WA */}
+      {cobrancaPreview && (
+        <CobrancaPreviewModal
+          visible={!!cobrancaPreview}
+          recipientName={cobrancaPreview.recipientName}
+          phone={cobrancaPreview.phone}
+          valorLabel={cobrancaPreview.valorLabel}
+          valorDesc={cobrancaPreview.valorDesc}
+          initialMessage={cobrancaPreview.message}
+          onClose={() => setCobrancaPreview(null)}
+        />
+      )}
     </ScrollView>
   );
 }

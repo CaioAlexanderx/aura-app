@@ -2,17 +2,18 @@ import { useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   ActivityIndicator, Modal, TextInput, RefreshControl,
-  Platform, Dimensions, Linking,
+  Platform, Dimensions,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
-import { creditApi } from "@/services/creditApi";
+import { creditApi, valorAPagarParcela } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import type { CreditInstallment, CustomerTermsOverrides } from "@/services/creditApi";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
 
@@ -335,6 +336,11 @@ export default function ClienteCrediarioScreen() {
   const [showHistory, setShowHistory]     = useState(false);
   const [showAllInst, setShowAllInst]     = useState(false);
   const [editingDueDate, setEditingDueDate] = useState<CreditInstallment | null>(null);
+  // Entrega 3: preview de cobrança WA
+  const [cobrancaPreview, setCobrancaPreview] = useState<{
+    recipientName: string; phone: string;
+    valorLabel?: string; valorDesc?: string; message: string;
+  } | null>(null);
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
@@ -563,17 +569,23 @@ export default function ClienteCrediarioScreen() {
                           >
                             <Icon name="Calendar" size={13} color={Colors.violet} />
                           </Pressable>
-                          {/* botão WA — só se overdue */}
-                          {isOverdue && (
+                          {/* botão WA — só se overdue; Entrega 2+3: usa valorAPagarParcela + preview */}
+                          {isOverdue && profile.phone && (
                             <Pressable
                               style={s.waBtn}
                               onPress={() => {
-                                const phone = profile.phone ? phoneToWa(profile.phone) : null;
-                                if (!phone) return toast.error("Cliente sem telefone cadastrado.");
-                                const msg = encodeURIComponent(
-                                  `Olá! Sua parcela ${inst.installment_number}/${inst.total_installments} de ${fmt(remaining)} está ${late}d em atraso. Regularize o quanto antes.`
-                                );
-                                Linking.openURL(`https://wa.me/${phone}?text=${msg}`);
+                                if (!profile.phone) return toast.error("Cliente sem telefone cadastrado.");
+                                // Entrega 2: valor canônico inclui encargos
+                                const valor = valorAPagarParcela(inst);
+                                const msg = `Olá! Sua parcela ${inst.installment_number}/${inst.total_installments} de ${fmt(valor)} está ${late}d em atraso. Regularize o quanto antes.`;
+                                // Entrega 3: abre preview em vez de wa.me direto
+                                setCobrancaPreview({
+                                  recipientName: profile.customer_name || "Cliente",
+                                  phone: phoneToWa(profile.phone),
+                                  valorLabel: fmt(valor),
+                                  valorDesc: `Parcela ${inst.installment_number}/${inst.total_installments} · vence ${fmtDate(inst.due_date)}`,
+                                  message: msg,
+                                });
                               }}
                             >
                               <Text style={s.waBtnText}>WA</Text>
@@ -652,6 +664,18 @@ export default function ClienteCrediarioScreen() {
           onClose={() => setEditingDueDate(null)}
           onConfirm={(id, dueDate) => editDueDateMut.mutate({ id, dueDate })}
           isPending={editDueDateMut.isPending}
+        />
+      )}
+      {/* Entrega 3: preview de cobrança WA */}
+      {cobrancaPreview && (
+        <CobrancaPreviewModal
+          visible={!!cobrancaPreview}
+          recipientName={cobrancaPreview.recipientName}
+          phone={cobrancaPreview.phone}
+          valorLabel={cobrancaPreview.valorLabel}
+          valorDesc={cobrancaPreview.valorDesc}
+          initialMessage={cobrancaPreview.message}
+          onClose={() => setCobrancaPreview(null)}
         />
       )}
     </View>
