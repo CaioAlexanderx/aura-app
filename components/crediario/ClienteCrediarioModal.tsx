@@ -28,6 +28,13 @@
 // fix (08/06/2026): Entrega 4 — botão calendário em cada parcela em aberto
 //   (igual ao de cliente/[id].tsx): abre editor de data inline + chama
 //   editInstallmentDueDate; ao sucesso, invalida credit-profile/credit-customer.
+//
+// Saldo amigável (09/06/2026):
+//   - Card "Resumo" substituído por hero "EM ABERTO" centralizado.
+//   - realCarnes = accounts.filter(a => a && a.id != null)
+//   - useCarneLayout = realCarnes.length > 0
+//   - Seção carnês renderizada só quando useCarneLayout; caso contrário,
+//     lista plana de parcelas (sem "Conta geral"/"Sem carnê"/duplo total).
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -237,6 +244,18 @@ export function ClienteCrediarioModal({
 
   const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => i.status === "overdue");
   const openSum = openInst.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
+
+  // Saldo amigável: carnês NOMEADOS (id != null) determinam o layout
+  const realCarnes = accounts.filter(a => a && a.id != null);
+  const useCarneLayout = realCarnes.length > 0;
+
+  // Próximo vencimento (hero)
+  const nextDueDate = openInst.length > 0
+    ? openInst.reduce((best, i) => {
+        const d = new Date(i.due_date).getTime();
+        return (!best || d < new Date(best).getTime()) ? i.due_date : best;
+      }, "" as string)
+    : "";
 
   const distributionTotal = useMemo(
     () => Object.values(distributions).reduce((s, v) => s + parseAmount(v), 0),
@@ -535,30 +554,22 @@ export function ClienteCrediarioModal({
                       </View>
                     )}
 
-                    {/* Resumo consolidado */}
-                    <View style={m.card}>
-                      <Text style={m.cardTitle}>Resumo</Text>
-                      <View style={m.row}>
-                        <View>
-                          <Text style={m.rowK}>Saldo devedor total</Text>
-                          <Text style={m.rowKsub}>
-                            {hasAccounts
-                              ? `${accounts.length} carnê${accounts.length !== 1 ? "s" : ""}${overdueAccounts.length > 0 ? ` · ${overdueAccounts.length} em atraso` : ""}`
-                              : "Ledger acumulado"}
-                          </Text>
-                        </View>
-                        <Text style={[m.rowV, { color: Colors.red }]}>{fmt(totalBalance)}</Text>
-                      </View>
-                      {openInst.length > 0 && (
-                        <View style={m.row}>
-                          <View><Text style={m.rowK}>Parcelas abertas</Text><Text style={m.rowKsub}>{openInst.length} parcela{openInst.length !== 1 ? "s" : ""}</Text></View>
-                          <Text style={[m.rowV, { color: Colors.amber }]}>{fmt(openSum)}</Text>
-                        </View>
-                      )}
+                    {/* Hero: Em aberto */}
+                    <View style={m.heroCard}>
+                      <Text style={m.heroLabel}>EM ABERTO</Text>
+                      <Text style={[m.heroValue, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+                        {fmt(totalBalance)}
+                      </Text>
+                      <Text style={m.heroSub}>
+                        {openInst.length} parcela{openInst.length !== 1 ? "s" : ""}
+                        {openInst.length > 0 && fmtDate(nextDueDate)
+                          ? ` · próximo venc. ${fmtDate(nextDueDate)}`
+                          : ""}
+                      </Text>
                     </View>
 
-                    {/* Seção de Carnês (F3) — com parcelas agrupadas (Fase 1 FIX) */}
-                    {hasAccounts && (
+                    {/* Seção de Carnês (F3) — agrupa só quando há carnê NOMEADO */}
+                    {useCarneLayout && (
                       <View style={m.card}>
                         <View style={m.cardTitleRow}>
                           <Text style={m.cardTitle}>Carnês / contas</Text>
@@ -816,8 +827,8 @@ export function ClienteCrediarioModal({
                       </View>
                     )}
 
-                    {/* Parcelas em aberto (sem carnês) */}
-                    {!hasAccounts && openInst.length > 0 && (
+                    {/* Parcelas em aberto — lista plana quando sem carnê nomeado */}
+                    {!useCarneLayout && openInst.length > 0 && (
                       <View style={m.card}>
                         <View style={m.cardTitleRow}>
                           <Text style={m.cardTitle}>Parcelas em aberto</Text>
@@ -1286,6 +1297,13 @@ const m = StyleSheet.create({
   waTxt: { fontSize: 12, fontWeight: "700", color: Colors.green },
 
   card: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 13 },
+
+  // Hero "Em aberto"
+  heroCard: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 16, padding: 18, marginBottom: 13, alignItems: "center" },
+  heroLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5, color: Colors.violet3, textTransform: "uppercase", marginBottom: 6 },
+  heroValue: { fontSize: 34, fontWeight: "800", marginBottom: 4 },
+  heroSub: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
+
   cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   cardTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 11 },
