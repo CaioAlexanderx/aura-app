@@ -7,6 +7,7 @@
 //
 // Track B: adicionado item Financeiro à navegação.
 // Track C: adicionado item Eventos à navegação.
+// Track E: adicionado item Competições à navegação.
 // ============================================================
 import React from "react";
 import {
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes" },
   { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro" },
   { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos" },
+  { label: "Competições",icon: "trophy-outline",       route: "/karate/competicoes" },
   { label: "Importar",   icon: "cloud-upload-outline", route: "/karate/importacao" },
 ] as const;
 
@@ -85,7 +87,7 @@ function BottomTabNav() {
   const router = useRouter();
   const path   = usePathname();
 
-  // On mobile, show 5 tabs max; hide Importar to keep it tidy
+  // On mobile, hide Importar to keep the bottom bar tidy.
   const MOBILE_TABS = NAV_ITEMS.filter((i) => i.label !== "Importar");
 
   return (
