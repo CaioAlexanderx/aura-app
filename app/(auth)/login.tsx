@@ -129,12 +129,14 @@ function Particles({ count = 24 }: { count?: number }) {
 }
 
 export default function LoginScreen() {
-  const { invite_token } = useLocalSearchParams<{ invite_token?: string }>();
+  // `email`/`from`: handoff do checkout do site (/comecar) — pré-preenche o
+  // e-mail da conta recém-criada (T3.2, fallback v1 sem SSO cross-origin).
+  const { invite_token, email: emailParam } = useLocalSearchParams<{ invite_token?: string; email?: string }>();
   const isInviteFlow = !!invite_token;
   const { width } = useWindowDimensions();
   const isDesktop = isWeb && width >= 960;
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(typeof emailParam === "string" ? emailParam : "");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [karateIntro, setKarateIntro] = useState(false);
