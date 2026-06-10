@@ -15,11 +15,36 @@
 //
 // Padrao seguindo Icon.tsx / AuraStudioMark.tsx — span + innerHTML
 // no web (Expo SDK 52 + react-native-web), fallback nativo simples.
+//
+// ── Onda 0 (0.6): desacoplamento de tema ──────────────────────────
+// Este componente é compartilhado entre o painel Studio (que tem o
+// StudioThemeProvider) e o storefront público (que NÃO tem provider).
+// Antes, chamava useStudioTokens() direto: no storefront o context caía
+// no default DARK e vazava cores escuras do painel pra loja pública (light).
+//
+// Agora a lógica de render vive em PersonalizationPreviewBase, que recebe
+// a paleta via prop `t` (PreviewPalette). O wrapper PersonalizationPreview
+// preserva a assinatura/comportamento pros callers internos (lê o hook e
+// delega). O storefront usa o Base diretamente com a própria paleta
+// (ver LivePreview.tsx) — sem nunca tocar no context interno.
 // ============================================================
 import { View, Text, Platform } from "react-native";
-import { type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { CustomizationConfig, CustomizationField } from "@/services/studioApi";
+
+/**
+ * Subconjunto de tokens que o preview realmente consome. Tipos `string`
+ * (não literais) de propósito: permite tanto o StudioPalette do painel
+ * quanto a paleta própria do storefront satisfazerem o contrato.
+ */
+export type PreviewPalette = {
+  bgSoft: string;
+  ink: string;
+  ink3: string;
+  ink4: string;
+  ink5: string;
+  primary: string;
+};
 
 type Props = {
   config: CustomizationConfig | null | undefined;
@@ -43,14 +68,19 @@ function findField(fields: CustomizationField[], type: string): CustomizationFie
   return fields.find((f) => f.type === type);
 }
 
-export function PersonalizationPreview({
+/**
+ * PersonalizationPreviewBase — renderer puro. NÃO chama hooks de tema.
+ * Recebe a paleta (`t`) de quem o usa: o painel passa os tokens do tema
+ * ativo; o storefront passa a paleta da própria loja.
+ */
+export function PersonalizationPreviewBase({
   config,
   values,
   size = 280,
   productName,
   showLabel = true,
-}: Props) {
-  const t = useStudioTokens();
+  t,
+}: Props & { t: PreviewPalette }) {
   // Estado vazio: sem config, mostra placeholder neutro
   if (!config) {
     return (
@@ -175,6 +205,16 @@ export function PersonalizationPreview({
       ) : null}
     </View>
   );
+}
+
+/**
+ * PersonalizationPreview — wrapper temático pros callers internos (painel).
+ * Lê os tokens do tema ativo via hook e delega ao Base. Assinatura e
+ * comportamento idênticos ao componente original — nada muda no painel.
+ */
+export function PersonalizationPreview(props: Props) {
+  const t = useStudioTokens();
+  return <PersonalizationPreviewBase {...props} t={t} />;
 }
 
 export default PersonalizationPreview;
