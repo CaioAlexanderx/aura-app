@@ -151,6 +151,7 @@ export function useStorefront(slug: string) {
   const [editingAddBack, setEditingAddBack] = useState<boolean>(false);
 
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [cartHydrated, setCartHydrated] = useState(false);
 
   // Upload
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
@@ -194,6 +195,33 @@ export function useStorefront(slug: string) {
       .catch((e) => setError(e?.message || "Erro ao carregar loja"))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  // Hidrata o carrinho do localStorage (web) por slug -- refresh nao perde nada.
+  // Segue o padrao aura-food-storefront-<slug> do Food.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !slug || typeof window === "undefined") {
+      setCartHydrated(true);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem("aura-studio-storefront-" + slug);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setCart(parsed as CartLine[]);
+      }
+    } catch {}
+    setCartHydrated(true);
+  }, [slug]);
+
+  // Persiste o carrinho a cada mudanca (so depois de hidratar, pra nao
+  // sobrescrever o salvo com [] no primeiro render). submitOrder limpa o
+  // cart via setCart([]) -> este effect grava [] -> storage zera. OK.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !slug || !cartHydrated || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("aura-studio-storefront-" + slug, JSON.stringify(cart));
+    } catch {}
+  }, [cart, slug, cartHydrated]);
 
   const cartSubtotal = useMemo(
     () => cart.reduce((s, l) => s + lineTotal(l), 0),
