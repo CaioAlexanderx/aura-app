@@ -30,8 +30,18 @@ var fmt = function(n: number) {
 };
 
 var fmtDate = function(iso: string) {
-  try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }); }
-  catch { return ""; }
+  // A1-FE: date-only strings (YYYY-MM-DD) parsed as UTC midnight by new Date(),
+  // causing off-by-one in UTC-3 (Brazil). Split string instead to avoid the issue.
+  if (!iso) return "";
+  try {
+    const s = String(iso);
+    if (s.length === 10) {
+      // date-only — split to avoid UTC off-by-one
+      const [, m, d] = s.split("-");
+      return d + "/" + m;
+    }
+    return new Date(s).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
+  } catch { return ""; }
 };
 
 /** Hoje em America/Sao_Paulo no formato YYYY-MM-DD (tz-safe). */
