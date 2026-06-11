@@ -16,6 +16,18 @@ import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModa
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 
+// ============================================================
+// AURA. — Crediário (DESIGN-38 / Onda C — shell visual do mockup)
+// Repaginação: eyebrow + hero "EM ABERTO · TOTAL" + trio KPI
+// (Vencido / Recebido no mês / Inadimplência %), "Mapa de risco"
+// (barra de aging empilhada única + legenda), chips de filtro e
+// linha de cliente com avatar + status + maior atraso + ações.
+// Lógica preservada: busca debounce, A–Z, atraso-por-data
+// (isCustomerOverdue), cobrança WhatsApp, modais.
+// Follow-up backend: pílulas Risco/Bloqueado + chip "Bloqueados"
+// dependem de score/status por cliente no /balances (ainda não vem).
+// ============================================================
+
 var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
@@ -25,52 +37,51 @@ var fmtDate = function(iso: string) {
   catch { return ""; }
 };
 
-/**
- * Retorna a data de hoje no fuso America/Sao_Paulo no formato YYYY-MM-DD.
- * Usado para comparação de vencimento — evita bug de offset UTC.
- */
+/** Hoje em America/Sao_Paulo no formato YYYY-MM-DD (tz-safe). */
 function todaySP(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
+/** Dias de atraso a partir de next_due_date (0 se em dia / sem data). */
+function daysLate(nextDue?: string | null): number {
+  if (!nextDue) return 0;
+  const due = nextDue.slice(0, 10);
+  const today = todaySP();
+  if (due >= today) return 0;
+  const a = new Date(due + "T00:00:00Z").getTime();
+  const b = new Date(today + "T00:00:00Z").getTime();
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+/** Iniciais do cliente para o avatar. */
+function initials(name: string): string {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /**
- * Determina se um cliente está em atraso a partir de dados disponíveis.
- *
- * Estratégia (em ordem de confiabilidade):
- * 1. Se o item tiver campo `overdue` (boolean) vindo do backend — usa diretamente
- *    (o backend calcula por data, é a fonte mais confiável).
- * 2. Se tiver `next_due_date` (string YYYY-MM-DD) — compara com hoje em SP:
- *    atraso = next_due_date < hoje (vencimento HOJE não é atraso).
- * 3. Fallback: false (não marca como atrasado se não há dados suficientes).
- *
- * NÃO usa overdueIds derivado de topDefaulters — esse conjunto é limitado aos
- * "maiores inadimplentes" e causava falsos positivos/negativos na carteira.
+ * Atraso por DATA (fonte: backend /balances → overdue/next_due_date).
+ * (1) campo overdue explícito; (2) next_due_date < hoje (tz-safe); (3) false.
  */
 function isCustomerOverdue(cust: CreditBalanceItem & { overdue?: boolean; next_due_date?: string | null }): boolean {
-  // (1) campo overdue explícito do backend
   if (typeof cust.overdue === "boolean") return cust.overdue;
-  // (2) next_due_date: compara strings YYYY-MM-DD — tz-safe
   if (cust.next_due_date) {
-    const dueDateStr = cust.next_due_date.slice(0, 10); // garante só YYYY-MM-DD
-    return dueDateStr < todaySP();                       // atraso = venceu antes de hoje
+    const dueDateStr = cust.next_due_date.slice(0, 10);
+    return dueDateStr < todaySP();
   }
-  // (3) fallback conservador
   return false;
 }
 
-const SCORE_COLORS: Record<string, string> = {
-  premium: Colors.green, bom: "#34d399", regular: Colors.amber,
-  restrito: "#f97316", bloqueado: Colors.red,
-};
-
 const AGING_LABELS: Record<string, string> = {
-  a_vencer: "A vencer", "1_30_dias": "1-30 dias",
-  "31_60_dias": "31-60 dias", "61_90_dias": "61-90 dias", acima_90: "90+ dias",
+  a_vencer: "Em dia", "1_30_dias": "1–30 dias",
+  "31_60_dias": "31–60 dias", "61_90_dias": "61–90 dias", acima_90: "60+ dias",
 };
 
 const AGING_COLORS: Record<string, string> = {
-  a_vencer: Colors.violet3, "1_30_dias": Colors.amber,
-  "31_60_dias": "#f97316", "61_90_dias": Colors.red, acima_90: "#7f1d1d",
+  a_vencer: Colors.green, "1_30_dias": Colors.amber,
+  "31_60_dias": "#f97316", "61_90_dias": Colors.red, acima_90: "#ef4444",
 };
 
 const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
@@ -84,6 +95,7 @@ type CobrancaPreviewState = {
 };
 
 type SortOrder = "balance" | "az";
+type Filter = "saldo" | "atraso" | "dia";
 
 export default function CrediarioScreen() {
   const { company } = useAuthStore();
@@ -96,22 +108,18 @@ export default function CrediarioScreen() {
 
   // ── Busca (DESIGN-38) ──────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
-  const [searchQ, setSearchQ] = useState("");          // valor debounced — vai para a API
+  const [searchQ, setSearchQ] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setSearchQ(searchInput.trim());
-    }, 300);
+    debounceRef.current = setTimeout(() => { setSearchQ(searchInput.trim()); }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput]);
 
-  // ── Ordenação (DESIGN-38) ─────────────────────────────────────────
   const [sortOrder, setSortOrder] = useState<SortOrder>("balance");
+  const [filter, setFilter] = useState<Filter>("saldo");
 
-  // F3-3B (29/05/2026): IS_WIDE/IS_NARROW calculados em tempo de execucao via
-  // useWindowDimensions, nao mais como constante de modulo (que nao recalculava em resize).
   const { width } = useWindowDimensions();
   const isWide   = width > 720;
   const isNarrow = width < 500;
@@ -130,9 +138,6 @@ export default function CrediarioScreen() {
     staleTime: 60_000,
   });
 
-  // F3-3B (29/05/2026): Carteira completa -- todos os clientes com saldo > 0,
-  // adimplentes inclusos (gestao de carteira, nao so inadimplencia).
-  // DESIGN-38: queryKey inclui searchQ para refetch automático ao buscar.
   const carteiraQ = useQuery({
     queryKey: ["credit-balances", company?.id, searchQ],
     queryFn: () => creditApi.listBalances(company!.id, { onlyOpen: true, q: searchQ || undefined }),
@@ -140,7 +145,6 @@ export default function CrediarioScreen() {
     staleTime: 60_000,
   });
 
-  // Configurações (chave Pix p/ a mensagem de cobrança)
   const rulesQ = useQuery({
     queryKey: ["credit-rules", company?.id],
     queryFn: () => creditApi.getCollectionRules(company!.id),
@@ -158,8 +162,6 @@ export default function CrediarioScreen() {
     setRefreshing(false);
   }, [company?.id, searchQ]);
 
-  // Cobrança via preview modal: monta mensagem, abre preview.
-  // O envio real (wa.me) acontece apenas no botão do CobrancaPreviewModal.
   const handleCobrar = useCallback(async (customerId: string, customerName: string, phone: string | null) => {
     if (!phone) { toast.error("Cliente sem telefone cadastrado"); return; }
     setTriggeringId(customerId);
@@ -184,7 +186,6 @@ export default function CrediarioScreen() {
       let valorDesc: string | undefined;
 
       if (nextDue) {
-        // Entrega 2: usa valorAPagarParcela — nunca amount_due cheio
         const valor = valorAPagarParcela(nextDue);
         valorLabel = fmt(valor);
         valorDesc = `Parcela ${nextDue.installment_number}/${nextDue.total_installments} · vence ${fmtDate(nextDue.due_date)}`;
@@ -196,7 +197,6 @@ export default function CrediarioScreen() {
       if (pixKey) lines.push(`Chave Pix para pagamento: ${pixKey}`);
       lines.push(`— ${store}`);
 
-      // Entrega 3: abre preview em vez de Linking.openURL direto
       setCobrancaPreview({
         recipientName: customerName,
         phone,
@@ -212,46 +212,47 @@ export default function CrediarioScreen() {
   }, [company?.id, company?.name, rulesQ.data]);
 
   const kpis = dashQ.data?.kpis;
-  const topDefaulters = dashQ.data?.top_defaulters || [];
   const aging: AgingRow[] = agingQ.data || [];
   const agingMap = Object.fromEntries(aging.map(r => [r.faixa, r]));
   const agingTotal = aging.reduce((s, r) => s + Number(r.amount), 0) || 1;
 
-  // Carteira: clientes com saldo, ordenados conforme sortOrder.
-  // A flag de atraso é calculada por data (função isCustomerOverdue) — não mais
-  // pelo conjunto overdueIds de topDefaulters, que era restrito aos "maiores" e
-  // causava falsos positivos/negativos.
+  const totalOpen = carteiraQ.data?.total_open || kpis?.total_open_amount || 0;
+  const overdueAmount = kpis?.overdue_amount || 0;
+  const inadPct = totalOpen > 0 ? Math.round((overdueAmount / totalOpen) * 100) : 0;
+
+  // Carteira: filtros (chips) + ordenação.
   const carteiraRaw = carteiraQ.data?.customers || [];
-  const carteira = [...carteiraRaw].sort((a, b) => {
-    if (sortOrder === "az") {
-      return a.name.localeCompare(b.name, "pt-BR");
-    }
-    // default: saldo desc (backend já ordena assim; sort aqui é defensivo)
-    return Number(b.balance) - Number(a.balance);
-  });
+  const carteira = [...carteiraRaw]
+    .filter((c) => {
+      if (filter === "atraso") return isCustomerOverdue(c as any);
+      if (filter === "dia") return !isCustomerOverdue(c as any);
+      return true; // saldo (todos com saldo aberto)
+    })
+    .sort((a, b) => {
+      if (sortOrder === "az") return a.name.localeCompare(b.name, "pt-BR");
+      // padrão: maior atraso primeiro, depois saldo desc
+      const la = daysLate((a as any).next_due_date);
+      const lb = daysLate((b as any).next_due_date);
+      if (la !== lb) return lb - la;
+      return Number(b.balance) - Number(a.balance);
+    });
 
   const isLoading = dashQ.isLoading || agingQ.isLoading;
 
-  // Skeleton de loading (substitui ActivityIndicator simples)
+  const pad = isWide ? 32 : 16;
+
   if (isLoading) {
     return (
-      <ScrollView style={s.screen} contentContainerStyle={[s.content, { padding: isWide ? 32 : 16 }]}>
-        <View style={[s.headerRow, !isWide && s.headerRowMobile]}>
-          <View style={s.headerTitleGroup}>
-            <View style={s.headerIconBox}><Icon name="percent" size={18} color={Colors.violet3} /></View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.pageTitle}>Crediário</Text>
-              <Text style={s.pageSubtitle} numberOfLines={1}>Controle de inadimplência e cobranças</Text>
-            </View>
-          </View>
+      <ScrollView style={s.screen} contentContainerStyle={[s.content, { padding: pad }]}>
+        <View style={{ marginBottom: 20 }}>
+          <Text style={s.eyebrow}>Relacionamento · fiado</Text>
+          <Text style={s.pageTitle}>Crediário</Text>
         </View>
-        <View style={s.kpiGrid}>
-          {[0,1,2].map(i => (
-            <View key={i} style={[s.kpiCard, { opacity: 0.4, minWidth: isWide ? 180 : "45%" as any }]}>
-              <View style={{ width: 60, height: 9, borderRadius: 4, backgroundColor: Colors.border, marginBottom: 8 }} />
-              <View style={{ width: 100, height: 22, borderRadius: 6, backgroundColor: Colors.border }} />
-            </View>
-          ))}
+        <View style={[s.heroRow, !isWide && { flexDirection: "column" }]}>
+          <View style={[s.heroCard, { opacity: 0.5 }]}>
+            <View style={{ width: 90, height: 10, borderRadius: 5, backgroundColor: Colors.border, marginBottom: 12 }} />
+            <View style={{ width: 160, height: 36, borderRadius: 8, backgroundColor: Colors.border }} />
+          </View>
         </View>
       </ScrollView>
     );
@@ -260,236 +261,247 @@ export default function CrediarioScreen() {
   return (
     <ScrollView
       style={s.screen}
-      contentContainerStyle={[s.content, { padding: isWide ? 32 : 16 }]}
+      contentContainerStyle={[s.content, { padding: pad }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
     >
-      {/* Header */}
+      {/* ── Header: eyebrow + título + ação ── */}
       <View style={[s.headerRow, !isWide && s.headerRowMobile]}>
-        <View style={s.headerTitleGroup}>
-          <View style={s.headerIconBox}><Icon name="percent" size={18} color={Colors.violet3} /></View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.pageTitle}>Crediário</Text>
-            <Text style={s.pageSubtitle} numberOfLines={1}>Controle de inadimplência e cobranças</Text>
-          </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.eyebrow}>Relacionamento · fiado</Text>
+          <Text style={s.pageTitle}>Crediário</Text>
+          <Text style={s.pageSubtitle} numberOfLines={2}>
+            Ficha completa de cada cliente fiado — conta, parcelas e histórico num só lugar.
+          </Text>
         </View>
         <View style={[{ flexDirection: "row", gap: 8 }, !isWide && { width: "100%" }]}>
-          <Pressable onPress={() => setShowCriar(true)} style={[s.settingsBtn, !isWide && s.headerBtnMobile]}>
+          <Pressable onPress={() => setShowCriar(true)} style={[s.headerBtn, !isWide && s.headerBtnMobile]}>
             <Icon name="plus" size={15} color={Colors.violet3} />
-            <Text style={s.settingsBtnText}>Lançamento</Text>
+            <Text style={s.headerBtnText}>Novo lançamento</Text>
           </Pressable>
-          <Pressable onPress={() => router.push("/crediario/settings" as any)} style={[s.settingsBtn, !isWide && s.headerBtnMobile]}>
+          <Pressable onPress={() => router.push("/crediario/settings" as any)} style={[s.headerBtnIcon, !isWide && { paddingHorizontal: 14 }]}>
             <Icon name="settings" size={15} color={Colors.violet3} />
-            <Text style={s.settingsBtnText}>Configurações</Text>
           </Pressable>
         </View>
       </View>
 
-      {kpis && (
-        <>
-          {/* KPI Hero */}
+      {/* ── Hero: EM ABERTO · TOTAL + trio KPI ── */}
+      <View style={[s.heroRow, !isWide && { flexDirection: "column" }]}>
+        <View style={[s.heroCard, isWide && { flex: 1.4 }]}>
+          <Text style={s.heroLabel}>Em aberto · total</Text>
+          <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{fmt(totalOpen)}</Text>
+          <Text style={s.heroMeta}>
+            {(carteiraQ.data?.customers_open ?? carteiraRaw.length)} cliente(s) com saldo · visão consolidada multi-CNPJ
+          </Text>
+        </View>
+
+        <View style={[s.kpiCol, isWide ? { flex: 2 } : { width: "100%" }]}>
           <View style={s.kpiGrid}>
-            <View style={[s.kpiCard, s.kpiCardAccent, { minWidth: isWide ? 180 : "45%" as any }]}>
-              <Text style={s.kpiLabel}>A RECEBER</Text>
-              <Text style={[s.kpiValue, { color: Colors.violet3, fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.total_open_amount)}</Text>
-              <Text style={s.kpiMeta}>{kpis.total_open_count} parcelas abertas</Text>
-            </View>
-            <View style={[s.kpiCard, { borderColor: Colors.red + "44", minWidth: isWide ? 180 : "45%" as any }]}>
-              <Text style={s.kpiLabel}>EM ATRASO</Text>
-              <Text style={[s.kpiValue, { color: Colors.red, fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.overdue_amount)}</Text>
-              <Text style={s.kpiMeta}>{kpis.overdue_count} parcelas · {kpis.defaulting_customers} clientes</Text>
-            </View>
-            <View style={[s.kpiCard, { borderColor: Colors.green + "44", minWidth: isWide ? 180 : "45%" as any }]}>
-              <Text style={s.kpiLabel}>RECEBIDO NO MÊS</Text>
-              <Text style={[s.kpiValue, { color: Colors.green, fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.paid_this_month_amount)}</Text>
-              <Text style={s.kpiMeta}>{kpis.paid_this_month_count} pagamentos</Text>
-            </View>
-            {kpis.critical_amount > 0 && (
-              <View style={[s.kpiCard, { borderColor: "#7f1d1d", minWidth: isWide ? 180 : "45%" as any }]}>
-                <Text style={s.kpiLabel}>CRÍTICO (90+ dias)</Text>
-                <Text style={[s.kpiValue, { color: "#ef4444", fontSize: isNarrow ? 16 : 22 }]}>{fmt(kpis.critical_amount)}</Text>
-                <Text style={s.kpiMeta}>{kpis.critical_count} parcelas em risco</Text>
+            <View style={[s.kpiCard, { borderColor: Colors.red + "44" }]}>
+              <View style={s.kpiHead}>
+                <Text style={s.kpiLabel}>Vencido</Text>
+                <View style={[s.kpiIcon, { backgroundColor: Colors.redD, borderColor: Colors.red + "44" }]}>
+                  <Icon name="alert" size={13} color={Colors.red} />
+                </View>
               </View>
-            )}
+              <Text style={[s.kpiValue, { color: Colors.red, fontSize: isNarrow ? 17 : 22 }]}>{fmt(overdueAmount)}</Text>
+              <Text style={s.kpiMeta}>{kpis?.overdue_count || 0} parcelas em atraso</Text>
+            </View>
+
+            <View style={[s.kpiCard, { borderColor: Colors.green + "44" }]}>
+              <View style={s.kpiHead}>
+                <Text style={s.kpiLabel}>Recebido no mês</Text>
+                <View style={[s.kpiIcon, { backgroundColor: Colors.greenD, borderColor: Colors.green + "44" }]}>
+                  <Icon name="check" size={13} color={Colors.green} />
+                </View>
+              </View>
+              <Text style={[s.kpiValue, { color: Colors.green, fontSize: isNarrow ? 17 : 22 }]}>{fmt(kpis?.paid_this_month_amount || 0)}</Text>
+              <Text style={s.kpiMeta}>{kpis?.paid_this_month_count || 0} recebimentos</Text>
+            </View>
+
+            <View style={[s.kpiCard, { borderColor: Colors.amber + "44" }]}>
+              <View style={s.kpiHead}>
+                <Text style={s.kpiLabel}>Inadimplência</Text>
+                <View style={[s.kpiIcon, { backgroundColor: "rgba(251,191,36,0.12)", borderColor: Colors.amber + "44" }]}>
+                  <Icon name="percent" size={13} color={Colors.amber} />
+                </View>
+              </View>
+              <Text style={[s.kpiValue, { color: Colors.amber, fontSize: isNarrow ? 17 : 22 }]}>{inadPct}%</Text>
+              <Text style={s.kpiMeta}>do saldo em aberto</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Mapa de risco · aging do saldo (barra empilhada) ── */}
+      {aging.length > 0 && (
+        <View style={s.riskCard}>
+          <View style={s.riskHead}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={s.riskTick} />
+              <Text style={s.riskTitle}>Mapa de risco · aging do saldo</Text>
+            </View>
+            <Text style={s.riskMeta}>por maior atraso</Text>
           </View>
 
-          {/* Carteira -- primeira secao: todos os clientes com saldo */}
-          <View style={s.sectionCard}>
-            <View style={s.sectionHeaderRow}>
-              <Text style={s.sectionTitle}>Carteira</Text>
-              {carteira.length > 0 && (
-                <Text style={s.sectionHeaderMeta}>
-                  {carteira.length} cliente{carteira.length !== 1 ? "s" : ""} · {fmt(carteiraQ.data?.total_open || 0)}
-                </Text>
-              )}
-            </View>
-
-            {/* ── Busca + Ordenação (DESIGN-38) ── */}
-            <View style={s.searchSortRow}>
-              <View style={s.searchBox}>
-                <Icon name="search" size={14} color={Colors.ink3} />
-                <TextInput
-                  style={s.searchInput}
-                  placeholder="Buscar por nome, telefone ou CPF"
-                  placeholderTextColor={Colors.ink3}
-                  value={searchInput}
-                  onChangeText={setSearchInput}
-                  returnKeyType="search"
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  clearButtonMode="while-editing"
+          <View style={s.stackBar}>
+            {AGING_ORDER.map((faixa) => {
+              const row = agingMap[faixa];
+              const amt = row ? Number(row.amount) : 0;
+              if (amt <= 0) return null;
+              const pct = Math.max(2, Math.round((amt / agingTotal) * 100));
+              return (
+                <View
+                  key={faixa}
+                  style={{ width: (`${pct}%` as any), backgroundColor: AGING_COLORS[faixa] }}
                 />
-                {searchInput.length > 0 && Platform.OS !== "ios" && (
-                  <Pressable onPress={() => setSearchInput("")} hitSlop={8}>
-                    <Icon name="x" size={13} color={Colors.ink3} />
-                  </Pressable>
-                )}
-              </View>
-              <Pressable
-                style={[s.sortBtn, sortOrder === "az" && s.sortBtnActive]}
-                onPress={() => setSortOrder(prev => prev === "az" ? "balance" : "az")}
-              >
-                <Text style={[s.sortBtnText, sortOrder === "az" && s.sortBtnTextActive]}>A–Z</Text>
-              </Pressable>
-            </View>
-
-            {carteiraQ.isLoading ? (
-              <View style={{ paddingVertical: 16 }}>
-                {[0, 1, 2].map(i => (
-                  <View key={i} style={{ height: 14, borderRadius: 6, backgroundColor: Colors.border, opacity: 0.4, marginBottom: 10 }} />
-                ))}
-              </View>
-            ) : carteira.length === 0 ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <Text style={s.emptyText}>
-                  {searchQ ? `Nenhum cliente encontrado para "${searchQ}".` : "Nenhum cliente com saldo em aberto."}
-                </Text>
-              </View>
-            ) : (
-              carteira.map((cust) => {
-                // DESIGN-38 fix: flag de atraso determinada por data (função isCustomerOverdue),
-                // não mais pelo conjunto overdueIds limitado aos topDefaulters do dashboard.
-                const isOverdue = isCustomerOverdue(cust as any);
-                return (
-                  <Pressable
-                    key={cust.id}
-                    style={s.debtorRow}
-                    onPress={() => setModalCust({ id: cust.id, name: cust.name })}
-                  >
-                    <View style={s.debtorLeft}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                        <View style={[s.statusDot, { backgroundColor: isOverdue ? Colors.red : Colors.green }]} />
-                        <Text style={s.debtorName} numberOfLines={1}>{cust.name}</Text>
-                      </View>
-                      <Text style={s.debtorMetaText}>
-                        {isOverdue ? "Em atraso" : "Em dia"}
-                        {cust.last_activity_at ? ` · ult. mov. ${fmtDate(cust.last_activity_at)}` : ""}
-                      </Text>
-                    </View>
-                    <View style={s.carteiraRight}>
-                      <Pressable
-                        style={[s.waBtn, triggeringId === cust.id && { opacity: 0.4 }]}
-                        disabled={triggeringId === cust.id}
-                        onPress={() => handleCobrar(cust.id, cust.name, cust.phone)}
-                      >
-                        {triggeringId === cust.id
-                          ? <ActivityIndicator size="small" color={Colors.green} />
-                          : <Icon name="message_circle" size={14} color={Colors.green} />}
-                      </Pressable>
-                      <Text style={[s.debtorAmount, { color: isOverdue ? Colors.red : Colors.ink }]}>
-                        {fmt(cust.balance)}
-                      </Text>
-                      <Icon name="chevron_right" size={14} color={Colors.ink3} />
-                    </View>
-                  </Pressable>
-                );
-              })
-            )}
+              );
+            })}
           </View>
 
-          {/* Aging */}
-          {aging.length > 0 && (
-            <View style={s.sectionCard}>
-              <Text style={s.sectionTitle}>Distribuição por vencimento</Text>
-              {AGING_ORDER.map(faixa => {
-                const row = agingMap[faixa];
-                if (!row) return null;
-                const pct = Math.round((Number(row.amount) / agingTotal) * 100);
-                const color = AGING_COLORS[faixa];
-                return (
-                  <View key={faixa} style={s.agingRow}>
-                    <Text style={s.agingLabel}>{AGING_LABELS[faixa]}</Text>
-                    <View style={s.agingBarWrap}>
-                      <View style={[s.agingBar, { width: `${Math.max(pct, 2)}%` as any, backgroundColor: color }]} />
-                    </View>
-                    <Text style={[s.agingAmount, { color }]}>{fmt(row.amount)}</Text>
-                    <Text style={s.agingCount}>{row.count}x</Text>
+          <View style={s.legendGrid}>
+            {AGING_ORDER.map((faixa) => {
+              const row = agingMap[faixa];
+              if (!row) return null;
+              return (
+                <View key={faixa} style={s.legendItem}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                    <View style={[s.legendDot, { backgroundColor: AGING_COLORS[faixa] }]} />
+                    <Text style={s.legendLabel}>{AGING_LABELS[faixa]}</Text>
                   </View>
-                );
-              })}
-            </View>
-          )}
+                  <Text style={s.legendAmount}>{fmt(row.amount)}</Text>
+                  <Text style={s.legendCount}>{row.count} cliente(s)</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
-          {/* Top devedores */}
-          {topDefaulters.length > 0 && (
-            <View style={s.sectionCard}>
-              <Text style={s.sectionTitle}>Maiores inadimplências</Text>
-              {topDefaulters.map((d) => {
-                const isTrig = triggeringId === d.customer_id;
-                const daysLate = d.oldest_due_date
-                  ? Math.max(0, Math.floor((Date.now() - new Date(d.oldest_due_date).getTime()) / 86400000))
-                  : 0;
-                return (
+      {/* ── Busca + chips + A–Z ── */}
+      <View style={s.toolbar}>
+        <View style={s.searchBox}>
+          <Icon name="search" size={14} color={Colors.ink3} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Buscar cliente…"
+            placeholderTextColor={Colors.ink3}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+          />
+          {searchInput.length > 0 && Platform.OS !== "ios" && (
+            <Pressable onPress={() => setSearchInput("")} hitSlop={8}>
+              <Icon name="x" size={13} color={Colors.ink3} />
+            </Pressable>
+          )}
+        </View>
+
+        <View style={s.chipRow}>
+          <Pressable style={[s.chip, filter === "saldo" && s.chipActive]} onPress={() => setFilter("saldo")}>
+            <Text style={[s.chipText, filter === "saldo" && s.chipTextActive]}>Com saldo</Text>
+          </Pressable>
+          <Pressable style={[s.chip, filter === "atraso" && s.chipActive]} onPress={() => setFilter("atraso")}>
+            <Text style={[s.chipText, filter === "atraso" && s.chipTextActive]}>Em atraso</Text>
+          </Pressable>
+          <Pressable style={[s.chip, filter === "dia" && s.chipActive]} onPress={() => setFilter("dia")}>
+            <Text style={[s.chipText, filter === "dia" && s.chipTextActive]}>Em dia</Text>
+          </Pressable>
+          <Pressable style={[s.chip, sortOrder === "az" && s.chipActive]} onPress={() => setSortOrder(p => p === "az" ? "balance" : "az")}>
+            <Text style={[s.chipText, sortOrder === "az" && s.chipTextActive]}>A–Z</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* ── Carteira ── */}
+      <View style={s.tableCard}>
+        <View style={s.tableHeadRow}>
+          <Text style={[s.th, { flex: 1 }]}>Cliente</Text>
+          <Text style={[s.th, s.thRight, { width: 110 }]}>Saldo</Text>
+          {isWide && <Text style={[s.th, { width: 92 }]}>Maior atraso</Text>}
+          <Text style={[s.th, s.thRight, { width: isWide ? 96 : 64 }]}>Ações</Text>
+        </View>
+
+        {carteiraQ.isLoading ? (
+          <View style={{ padding: 16 }}>
+            {[0, 1, 2].map(i => (
+              <View key={i} style={{ height: 16, borderRadius: 6, backgroundColor: Colors.border, opacity: 0.4, marginBottom: 12 }} />
+            ))}
+          </View>
+        ) : carteira.length === 0 ? (
+          <View style={{ paddingVertical: 28, alignItems: "center" }}>
+            <Text style={s.emptyText}>
+              {searchQ ? `Nenhum cliente encontrado para "${searchQ}".`
+                : filter === "atraso" ? "Nenhum cliente em atraso. 🎉"
+                : "Nenhum cliente com saldo em aberto."}
+            </Text>
+          </View>
+        ) : (
+          carteira.map((cust) => {
+            const overdue = isCustomerOverdue(cust as any);
+            const dl = daysLate((cust as any).next_due_date);
+            return (
+              <Pressable key={cust.id} style={s.row} onPress={() => setModalCust({ id: cust.id, name: cust.name })}>
+                {/* Cliente: avatar + nome + status */}
+                <View style={s.rowClient}>
+                  <View style={[s.avatar, { backgroundColor: overdue ? Colors.red : Colors.violet3 }]}>
+                    <Text style={s.avatarText}>{initials(cust.name)}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.rowName} numberOfLines={1}>{cust.name}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                      <View style={[s.statusDot, { backgroundColor: overdue ? Colors.red : Colors.green }]} />
+                      <Text style={s.rowMeta} numberOfLines={1}>
+                        {overdue ? "Em atraso" : "Em dia"}
+                        {!isWide && dl > 0 ? ` · ${dl}d` : ""}
+                        {cust.phone ? ` · ${cust.phone}` : ""}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Saldo */}
+                <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : Colors.ink }]} numberOfLines={1}>
+                  {fmt(cust.balance)}
+                </Text>
+
+                {/* Maior atraso (desktop) */}
+                {isWide && (
+                  <View style={{ width: 92 }}>
+                    {dl > 0 ? (
+                      <Text style={[s.lateText, { color: dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber }]}>● {dl} dias</Text>
+                    ) : (
+                      <Text style={s.lateTextOk}>—</Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Ações */}
+                <View style={[s.rowActions, { width: isWide ? 96 : 64 }]}>
                   <Pressable
-                    key={d.customer_id}
-                    style={s.debtorRow}
-                    onPress={() => setModalCust({ id: d.customer_id, name: d.customer_name })}
+                    style={[s.actBtn, triggeringId === cust.id && { opacity: 0.4 }]}
+                    disabled={triggeringId === cust.id}
+                    onPress={() => handleCobrar(cust.id, cust.name, cust.phone)}
+                    hitSlop={6}
                   >
-                    <View style={s.debtorLeft}>
-                      <Text style={s.debtorName} numberOfLines={1}>{d.customer_name}</Text>
-                      <View style={s.debtorMeta}>
-                        <Text style={s.debtorMetaText}>
-                          {d.overdue_count} parcela{d.overdue_count !== 1 ? "s" : ""} · {daysLate}d de atraso
-                        </Text>
-                        {d.credit_score !== undefined && (
-                          <View style={[s.scorePill, { backgroundColor: (SCORE_COLORS[d.credit_status] || Colors.amber) + "22" }]}>
-                            <Text style={[s.scorePillText, { color: SCORE_COLORS[d.credit_status] || Colors.amber }]}>
-                              {d.credit_score}pts
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    <View style={s.debtorRight}>
-                      <Text style={s.debtorAmount}>{fmt(d.total_overdue)}</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        {/* Cobrança WhatsApp unificada (mensagem rica + chave Pix) */}
-                        <Pressable
-                          style={[s.triggerBtn, isTrig && { opacity: 0.4 }]}
-                          disabled={isTrig}
-                          onPress={() => handleCobrar(d.customer_id, d.customer_name, d.phone)}
-                        >
-                          {isTrig
-                            ? <ActivityIndicator size="small" color={Colors.violet3} />
-                            : <Icon name="message_circle" size={13} color={Colors.violet3} />
-                          }
-                        </Pressable>
-                        <Icon name="chevron_right" size={14} color={Colors.ink3} />
-                      </View>
-                    </View>
+                    {triggeringId === cust.id
+                      ? <ActivityIndicator size="small" color={Colors.green} />
+                      : <Icon name="message_circle" size={15} color={Colors.green} />}
                   </Pressable>
-                );
-              })}
-            </View>
-          )}
+                  <Icon name="chevron_right" size={15} color={Colors.ink3} />
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </View>
 
-          {topDefaulters.length === 0 && kpis.overdue_count === 0 && (
-            <View style={s.emptyState}>
-              <Icon name="check" size={32} color={Colors.green} />
-              <Text style={s.emptyTitle}>Tudo em dia!</Text>
-              <Text style={s.emptyText}>Nenhuma parcela em atraso. Continue assim.</Text>
-            </View>
-          )}
-        </>
+      {carteira.length > 0 && (
+        <Text style={s.footerCount}>
+          {carteira.length} cliente{carteira.length !== 1 ? "s" : ""} · {sortOrder === "az" ? "ordem alfabética" : "maior atraso primeiro"}
+        </Text>
       )}
 
       <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} />
@@ -510,7 +522,6 @@ export default function CrediarioScreen() {
         onClose={() => setModalCust(null)}
       />
 
-      {/* Entrega 3: preview de cobrança antes de abrir WA */}
       {cobrancaPreview && (
         <CobrancaPreviewModal
           visible={!!cobrancaPreview}
@@ -528,64 +539,81 @@ export default function CrediarioScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1 },
-  content: { paddingBottom: 48, maxWidth: 900, alignSelf: "center", width: "100%" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  headerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  content: { paddingBottom: 48, maxWidth: 1040, alignSelf: "center", width: "100%" },
+
+  // Header
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 20, marginBottom: 22 },
   headerRowMobile: { flexDirection: "column", alignItems: "stretch", gap: 14 },
+  eyebrow: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 6 },
+  pageTitle: { fontSize: 30, fontWeight: "800", color: Colors.ink, letterSpacing: -0.6, lineHeight: 32 },
+  pageSubtitle: { fontSize: 12.5, color: Colors.ink3, marginTop: 8, maxWidth: 460 },
+  headerBtn: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: Colors.violetD, borderRadius: 11, borderWidth: 1, borderColor: Colors.border2 },
   headerBtnMobile: { flex: 1, justifyContent: "center" },
-  headerIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
-  pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.4 },
-  pageSubtitle: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-  settingsBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
-  settingsBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  headerBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  headerBtnIcon: { alignItems: "center", justifyContent: "center", paddingHorizontal: 12, backgroundColor: Colors.violetD, borderRadius: 11, borderWidth: 1, borderColor: Colors.border2 },
 
-  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
-  kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  kpiCardAccent: { borderColor: Colors.violet + "55" },
-  kpiLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 8 },
-  kpiValue: { fontWeight: "800", letterSpacing: -0.5 },
-  kpiMeta: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
-
-  sectionCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
-  sectionTitle: { fontSize: 11, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 14 },
-  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  sectionHeaderMeta: { fontSize: 10.5, color: Colors.ink3, fontWeight: "600", marginBottom: 14 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-
-  // ── Busca + Ordenação (DESIGN-38) ────────────────────────────────
-  searchSortRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 10, paddingVertical: 8 },
-  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, outlineStyle: "none" as any },
-  sortBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
-  sortBtnActive: { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
-  sortBtnText: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
-  sortBtnTextActive: { color: Colors.violet3 },
-
-  agingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  agingLabel: { fontSize: 11, color: Colors.ink3, width: 72 },
-  agingBarWrap: { flex: 1, height: 6, backgroundColor: Colors.bg4, borderRadius: 3, overflow: "hidden" },
-  agingBar: { height: "100%" as any, borderRadius: 3 },
-  agingAmount: { fontSize: 11, fontWeight: "700", width: 90, textAlign: "right" },
-  agingCount: { fontSize: 10, color: Colors.ink3, width: 28, textAlign: "right" },
-
-  debtorRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border },
-  debtorLeft: { flex: 1, gap: 4 },
-  debtorName: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  debtorMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
-  debtorMetaText: { fontSize: 10.5, color: Colors.ink3 },
-  scorePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  scorePillText: { fontSize: 9.5, fontWeight: "700" },
-  debtorRight: { alignItems: "flex-end", gap: 6 },
-  carteiraRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  waBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)", alignItems: "center", justifyContent: "center" },
-  debtorAmount: { fontSize: 14, fontWeight: "800", color: Colors.red },
-  triggerBtn: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
-    alignItems: "center", justifyContent: "center",
+  // Hero
+  heroRow: { flexDirection: "row", gap: 12, marginBottom: 14 },
+  heroCard: {
+    padding: 22, borderRadius: 20, borderWidth: 1, borderColor: Colors.violet + "55",
+    backgroundColor: Colors.violetD, justifyContent: "center",
   },
+  heroLabel: { fontSize: 10, fontWeight: "800", color: Colors.violet3, letterSpacing: 1.4, textTransform: "uppercase" },
+  heroValue: { fontWeight: "800", color: Colors.ink, letterSpacing: -1, marginTop: 12, marginBottom: 10 },
+  heroMeta: { fontSize: 12, color: Colors.ink3 },
 
-  emptyState: { alignItems: "center", paddingVertical: 48, gap: 10 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink },
+  kpiCol: { justifyContent: "center" },
+  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  kpiCard: { flex: 1, minWidth: 150, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  kpiHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  kpiLabel: { fontSize: 9.5, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
+  kpiIcon: { width: 30, height: 30, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  kpiValue: { fontWeight: "800", letterSpacing: -0.5 },
+  kpiMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 6 },
+
+  // Risk map
+  riskCard: { backgroundColor: Colors.bg3, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
+  riskHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  riskTick: { width: 4, height: 14, borderRadius: 2, backgroundColor: Colors.violet3 },
+  riskTitle: { fontSize: 11.5, fontWeight: "800", color: Colors.ink2, letterSpacing: 0.3 },
+  riskMeta: { fontSize: 11, color: Colors.ink3 },
+  stackBar: { flexDirection: "row", height: 14, borderRadius: 999, overflow: "hidden", backgroundColor: Colors.bg4, gap: 2 },
+  legendGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, gap: 14 },
+  legendItem: { flex: 1, minWidth: 120, gap: 5, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: Colors.border },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendLabel: { fontSize: 11, fontWeight: "600", color: Colors.ink2 },
+  legendAmount: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  legendCount: { fontSize: 11, color: Colors.ink3 },
+
+  // Toolbar
+  toolbar: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 11, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, flex: 1, minWidth: 220, maxWidth: 360 },
+  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, outlineStyle: "none" as any },
+  chipRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 11, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  chipActive: { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
+  chipText: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
+  chipTextActive: { color: Colors.violet3 },
+
+  // Table
+  tableCard: { borderRadius: 18, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
+  tableHeadRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  th: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.8, textTransform: "uppercase" },
+  thRight: { textAlign: "right" },
+
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: Colors.border2 },
+  rowClient: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12, minWidth: 0 },
+  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  rowName: { fontSize: 14, fontWeight: "600", color: Colors.ink },
+  rowMeta: { fontSize: 11, color: Colors.ink3 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  rowBalance: { fontSize: 14, fontWeight: "800", textAlign: "right" },
+  lateText: { fontSize: 12, fontWeight: "700" },
+  lateTextOk: { fontSize: 12, color: Colors.ink3 },
+  rowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10 },
+  actBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)", alignItems: "center", justifyContent: "center" },
+
+  footerCount: { fontSize: 11, color: Colors.ink3, textAlign: "right", marginTop: 10 },
   emptyText: { fontSize: 13, color: Colors.ink3 },
 });
