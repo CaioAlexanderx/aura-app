@@ -12,6 +12,10 @@
 //   em CreditInstallment; charges_paid/charges_detail em ReceivePaymentResult.
 // fix (08/06/2026): editInstallmentDueDate — URL corrigida para base(companyId),
 //   body corrigido (não mais double-stringificado); valorAPagarParcela exportada.
+// DESIGN-38 FE (11/06/2026): timeline B1 (getHistoryTimeline), recebimento de
+//   valor livre B3 (previewPayment + receiveFreePayment, shape preview===aplicação),
+//   Pix EMV B2 (getInstallmentPix + getFreePix), devolução B4 (refundSale) e
+//   recibo B5 (printReceipt, mesmo padrão auth do printCarne).
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -22,7 +26,7 @@ export type CreditBalanceItem = {
   balance: number; total_debited: number; total_paid: number; last_activity_at: string | null;
 };
 export type CreditTransaction = {
-  id: string; sale_id: string | null; type: "debit" | "payment";
+  id: string; sale_id: string | null; type: "debit" | "payment" | "refund";
   amount: number; payment_method: string | null; notes: string | null; created_at: string;
   account_id?: string | null;
   account_name?: string | null;
@@ -215,6 +219,48 @@ export type FinancialReceivables = {
   };
 };
 
+// ─── B1 (DESIGN-38): Histórico unificado (timeline paginada) ──────────
+export type CreditHistoryEvent = {
+  id: string;
+  type: "purchase" | "manual_debit" | "payment" | "exchange_credit" | "refund";
+  occurred_at: string;
+  /** centavos/decimal; débito > 0, pagamento/crédito < 0 (convenção do ledger). */
+  amount: number;
+  sale_id: string | null;
+  account_id: string | null;
+  items?: Array<{ product_name: string; quantity: number; unit_price: number; total: number }> | null;
+  payment?: { method: string | null } | null;
+  meta?: Record<string, any>;
+};
+export type CreditHistoryPage = { events: CreditHistoryEvent[]; next_cursor: string | null };
+
+// ─── B3 (DESIGN-38): Recebimento de valor livre (preview === aplicação) ──
+export type PaymentPlanLine = {
+  installment_id: string; account_id: string | null; number: number | null;
+  charges_paid: number; principal_paid: number; status_after: string | null;
+};
+/** Shape canônico: o GET /payments/preview e o POST /payments retornam isto. */
+export type PaymentPlan = { applied: PaymentPlanLine[]; new_balance: number; credit_generated: number };
+
+// ─── B2 (DESIGN-38): Pix EMV por parcela / valor livre ───────────────
+export type CreditPix = {
+  emv: string; amount: number; key_type: string | null; merchant_name: string;
+  installment?: { id: string; number: number; due_date: string; account_id: string | null };
+};
+
+// ─── B4 (DESIGN-38): Devolução de venda no crediário ─────────────────
+export type RefundResult = {
+  devolucao_sale_id: string;
+  refund_value: number;
+  abated_installments: Array<{
+    installment_id: string; number: number;
+    action: "cancelled" | "reduced"; amount: number; new_amount_due?: number;
+  }>;
+  credit_generated: number;
+  new_balance: number;
+  stock_restored: Array<{ product_id: string; variant_id: string | null; quantity: number }>;
+};
+
 // ─── Lançamento manual ────────────────────────────────────────
 export type ManualEntryPayload = {
   customer_id?: string;
@@ -315,6 +361,41 @@ export async function printCarne(companyId: string, customerId: string): Promise
     if (win) {
       win.document.open();
       win.document.write("<html><body>Erro de conexão ao carregar carnê.</body></html>");
+      win.document.close();
+    }
+  }
+}
+
+// ─── B5 (DESIGN-38): Print recibo de pagamento (autenticado) ──────────
+// Mesmo padrão do printCarne: GET /print/credit/receipts/:txId exige Bearer.
+export async function printReceipt(companyId: string, transactionId: string): Promise<void> {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const token = useAuthStore.getState().token;
+  const url = BASE_URL + "/companies/" + companyId + "/print/credit/receipts/" + transactionId;
+  let win: Window | null = null;
+  try {
+    win = window.open("", "_blank");
+    if (!win) { alert("Permita pop-ups para imprimir o recibo."); return; }
+    win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Carregando recibo...</body></html>");
+
+    const resp = await fetch(url, {
+      headers: token ? { Authorization: "Bearer " + token } : {},
+    });
+    if (!resp.ok) {
+      win.document.write("<html><body>Erro ao carregar recibo (" + resp.status + ").</body></html>");
+      return;
+    }
+    const html = await resp.text();
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => {
+      try { win?.focus(); win?.print(); } catch {}
+    }, 400);
+  } catch (err) {
+    if (win) {
+      win.document.open();
+      win.document.write("<html><body>Erro de conexão ao carregar recibo.</body></html>");
       win.document.close();
     }
   }
@@ -477,5 +558,42 @@ export const creditApi = {
 
   createManualEntry(companyId: string, payload: ManualEntryPayload): Promise<ManualEntryResult> {
     return request(`${base(companyId)}/manual-entry`, { method: 'POST', body: payload });
+  },
+
+  // ── B1 (DESIGN-38): Histórico unificado (timeline paginada por cursor) ──
+  getHistoryTimeline(companyId: string, customerId: string, opts?: { limit?: number; cursor?: string; types?: string }) {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.cursor) qs.set("cursor", opts.cursor);
+    if (opts?.types) qs.set("types", opts.types);
+    const tail = qs.toString() ? `?${qs}` : "";
+    return request<CreditHistoryPage>(`${base(companyId)}/customers/${customerId}/history${tail}`);
+  },
+
+  // ── B3 (DESIGN-38): Recebimento de valor livre (preview + aplicação) ──
+  // previewPayment é READ-ONLY (dry-run). receiveFreePayment aplica.
+  // Mesmo shape (PaymentPlan) nos dois — garantia preview === aplicação.
+  previewPayment(companyId: string, customerId: string, opts: { amount: number; account_id?: string | null; paid_at?: string }) {
+    const qs = new URLSearchParams();
+    qs.set("amount", String(opts.amount));
+    if (opts.account_id) qs.set("account_id", opts.account_id);
+    if (opts.paid_at) qs.set("paid_at", opts.paid_at);
+    return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments/preview?${qs}`);
+  },
+  receiveFreePayment(companyId: string, customerId: string, body: { amount: number; account_id?: string | null; method?: string; paid_at?: string }) {
+    return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments`, { method: "POST", body });
+  },
+
+  // ── B2 (DESIGN-38): Pix EMV (copia-e-cola) — QR é gerado no front ──
+  getInstallmentPix(companyId: string, installmentId: string) {
+    return request<CreditPix>(`${base(companyId)}/installments/${installmentId}/pix`);
+  },
+  getFreePix(companyId: string, customerId: string, amount: number) {
+    return request<CreditPix>(`${base(companyId)}/customers/${customerId}/pix?amount=${encodeURIComponent(String(amount))}`);
+  },
+
+  // ── B4 (DESIGN-38): Devolução de venda no crediário ──
+  refundSale(companyId: string, saleId: string, body: { items: Array<{ sale_item_id: string; quantity: number }>; reason?: string }) {
+    return request<RefundResult>(`${base(companyId)}/sales/${saleId}/refund`, { method: "POST", body });
   },
 };
