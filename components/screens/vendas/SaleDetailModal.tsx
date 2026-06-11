@@ -5,9 +5,8 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
-import { employeesApi, request } from "@/services/api";
+import { employeesApi, request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
-import { printReceipt } from "@/services/creditApi";
 import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 
 // ============================================================
@@ -31,16 +30,18 @@ import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 // (2) marcar com badge "teste/homologacao" quando ambiente=homologacao (a
 // nota sai como 'autorizada' fake, sem valor fiscal real).
 //
-// DESIGN-38 B5 (11/06/2026) — Botao "Recibo" em actionsRow:
-// Aparece quando sale.payment_method === 'crediario' e há transaction_id.
-// Chama printReceipt(effectiveCompanyId, transaction_id) — mesmo padrão
-// auth do printCarne (fetch com Bearer → document.write em nova aba).
-// Só visível para vendas não canceladas.
+// DESIGN-38 B5 (11/06/2026) — Botao "Recibo" em actionsRow (venda crediário):
+// AUDITORIA C2-FE (11/06): imprime o CUPOM da compra via /print/receipt/:saleId
+// (comprovante da venda). Antes apontava pro recibo de PAGAMENTO (B5) com o
+// transaction_id do Financeiro → 404. O recibo de pagamento (B5) vive no fluxo
+// de recebimento na ficha do cliente, com o id do customer_credit_transactions.
 //
 // DESIGN-38 B4 (11/06/2026) — Botao "Devolver" em actionsRow:
 // Aparece para venda crediário não-troca, não cancelada, com itens. Abre a
-// DevolucaoModal (wizard 3 passos) passando sale.id + itens. O motor de
-// devolução (refundSale) abate as últimas parcelas e repõe estoque.
+// DevolucaoModal (wizard 3 passos) passando sale.id + itens.
+// AUDITORIA C1-FE (11/06): onDone NÃO fecha mais o modal — assim o passo 3
+// (resultado da devolução) fica visível. O fechamento é só pelo botão "Fechar"
+// do wizard (onClose).
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -234,18 +235,30 @@ export function SaleDetailModal({
     }
   }
 
-  // DESIGN-38 B5: imprimir recibo de pagamento crediário
+  // DESIGN-38 B5 / AUDITORIA C2-FE: imprime o CUPOM da venda crediário
+  // (comprovante da compra) via /print/receipt/:saleId/preview — fetch com
+  // Bearer + document.write (mesmo padrão auth das outras rotas /print/*).
   async function handlePrintReceipt() {
-    const txId = detail?.sale.transaction_id;
-    if (!txId || !effectiveCompanyId) {
-      toast.error("Recibo indisponível: venda sem transação vinculada");
+    if (!saleId || !effectiveCompanyId) {
+      toast.error("Recibo indisponível para esta venda");
       return;
     }
+    if (typeof window === "undefined" || typeof document === "undefined") return;
     setPrintingReceipt(true);
+    const token = useAuthStore.getState().token;
+    const url = BASE_URL + "/companies/" + effectiveCompanyId + "/print/receipt/" + saleId + "/preview";
+    let win: Window | null = null;
     try {
-      await printReceipt(effectiveCompanyId, txId);
+      win = window.open("", "_blank");
+      if (!win) { toast.error("Permita pop-ups para imprimir o recibo."); return; }
+      win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Carregando recibo...</body></html>");
+      const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+      if (!resp.ok) { win.document.write("<html><body>Erro ao carregar recibo (" + resp.status + ").</body></html>"); return; }
+      const html = await resp.text();
+      win.document.open(); win.document.write(html); win.document.close();
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao abrir recibo");
+      if (win) { win.document.open(); win.document.write("<html><body>Erro de conexão ao carregar recibo.</body></html>"); win.document.close(); }
+      toast.error("Erro ao abrir recibo");
     } finally {
       setPrintingReceipt(false);
     }
@@ -262,9 +275,9 @@ export function SaleDetailModal({
   const isTroca = (sale?.type as string) === "troca";
   const troca = detail?.troca || null;
 
-  // DESIGN-38 B5: botão Recibo — só para vendas crediário não canceladas com transaction_id
+  // DESIGN-38 B5: botão Recibo — venda crediário não cancelada (cupom usa saleId)
   const isCrediario = (sale?.payment_method || "").toLowerCase() === "crediario";
-  const showReceiptBtn = !isCancelled && isCrediario && !!sale?.transaction_id;
+  const showReceiptBtn = !isCancelled && isCrediario && !!saleId;
   // DESIGN-38 B4: botão Devolver — venda crediário, não-troca, não cancelada, com itens
   const showRefundBtn = !isCancelled && isCrediario && !isTroca && items.length > 0;
 
@@ -751,7 +764,7 @@ export function SaleDetailModal({
             }),
           }}
           onClose={function() { setShowDevolucao(false); }}
-          onDone={function() { setShowDevolucao(false); onClose(); }}
+          onDone={function() { /* C1-FE: NÃO fechar aqui — deixa o passo de resultado visível. As queries do crediário já são invalidadas dentro da modal. */ }}
         />
       )}
     </View>
