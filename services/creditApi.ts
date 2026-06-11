@@ -16,6 +16,7 @@
 //   valor livre B3 (previewPayment + receiveFreePayment, shape preview===aplicação),
 //   Pix EMV B2 (getInstallmentPix + getFreePix), devolução B4 (refundSale) e
 //   recibo B5 (printReceipt, mesmo padrão auth do printCarne).
+//   overdue/next_due_date em CreditBalanceItem (vêm de /balances, Aura-backend#187).
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -24,6 +25,10 @@ import { useAuthStore } from "@/stores/auth";
 export type CreditBalanceItem = {
   id: string; name: string; phone: string | null; cpf_cnpj: string | null;
   balance: number; total_debited: number; total_paid: number; last_activity_at: string | null;
+  // DESIGN-38: atraso calculado por data (SP tz) no backend /balances.
+  // Opcionais — respostas antigas podem não trazer.
+  overdue?: boolean;
+  next_due_date?: string | null;
 };
 export type CreditTransaction = {
   id: string; sale_id: string | null; type: "debit" | "payment" | "refund";
