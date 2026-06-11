@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
 import { employeesApi, request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { printReceipt } from "@/services/creditApi";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -28,6 +29,12 @@ import { useAuthStore } from "@/stores/auth";
 // Emitir quando a empresa nao tem NFC-e ativa, mostrando uma nota de config;
 // (2) marcar com badge "teste/homologacao" quando ambiente=homologacao (a
 // nota sai como 'autorizada' fake, sem valor fiscal real).
+//
+// DESIGN-38 B5 (11/06/2026) — Botao "Recibo" em actionsRow:
+// Aparece quando sale.payment_method === 'crediario' e há transaction_id.
+// Chama printReceipt(effectiveCompanyId, transaction_id) — mesmo padrão
+// auth do printCarne (fetch com Bearer → document.write em nova aba).
+// Só visível para vendas não canceladas.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -95,6 +102,8 @@ export function SaleDetailModal({
   const [cancelReason, setCancelReason] = useState("");
   const [editingSeller, setEditingSeller] = useState(false);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
+  // DESIGN-38 B5: estado de loading do botão Recibo
+  const [printingReceipt, setPrintingReceipt] = useState(false);
 
   const { data: empData, isLoading: isLoadingEmps } = useQuery({
     queryKey: ["employees", effectiveCompanyId],
@@ -217,6 +226,23 @@ export function SaleDetailModal({
     }
   }
 
+  // DESIGN-38 B5: imprimir recibo de pagamento crediário
+  async function handlePrintReceipt() {
+    const txId = detail?.sale.transaction_id;
+    if (!txId || !effectiveCompanyId) {
+      toast.error("Recibo indisponível: venda sem transação vinculada");
+      return;
+    }
+    setPrintingReceipt(true);
+    try {
+      await printReceipt(effectiveCompanyId, txId);
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao abrir recibo");
+    } finally {
+      setPrintingReceipt(false);
+    }
+  }
+
   const sale = detail?.sale;
   const isCancelled = sale?.status === "cancelled";
   const items = detail?.items || [];
@@ -227,6 +253,10 @@ export function SaleDetailModal({
   // 02/06/2026: troca segmentada
   const isTroca = (sale?.type as string) === "troca";
   const troca = detail?.troca || null;
+
+  // DESIGN-38 B5: botão Recibo — só para vendas crediário não canceladas com transaction_id
+  const isCrediario = (sale?.payment_method || "").toLowerCase() === "crediario";
+  const showReceiptBtn = !isCancelled && isCrediario && !!sale?.transaction_id;
 
   // 02/06/2026 (b): estado fiscal — emissao relevante por tipo de venda.
   const fiscalList = detail?.fiscal || [];
@@ -539,6 +569,23 @@ export function SaleDetailModal({
                   <Text style={s.actionEditText}>Editar lancamento</Text>
                 </Pressable>
               )}
+              {/* DESIGN-38 B5: botão Recibo para vendas crediário */}
+              {showReceiptBtn && (
+                <Pressable
+                  onPress={handlePrintReceipt}
+                  disabled={printingReceipt}
+                  style={[s.actionBtn, s.actionReceipt, printingReceipt && { opacity: 0.6 }]}
+                >
+                  {printingReceipt ? (
+                    <ActivityIndicator color={Colors.violet3} size="small" />
+                  ) : (
+                    <>
+                      <Icon name="info" size={13} color={Colors.violet3} />
+                      <Text style={s.actionReceiptText}>Recibo</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
               {!isCancelled && (
                 <Pressable
                   onPress={function() { setConfirmCancel(true); }}
@@ -776,10 +823,13 @@ const s = StyleSheet.create({
   cancelledHint: { flexDirection: "row", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: Colors.red + "33" },
   cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 15 },
 
-  actionsRow: { flexDirection: "row", gap: 8, marginTop: 8 },
-  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
+  actionsRow: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1, minWidth: 100 },
   actionEdit: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   actionEditText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  // DESIGN-38 B5: botão Recibo
+  actionReceipt: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  actionReceiptText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   actionCancel: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   actionCancelText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 
