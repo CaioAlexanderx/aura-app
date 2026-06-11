@@ -17,11 +17,12 @@
 //   Pix EMV B2 (getInstallmentPix + getFreePix), devolução B4 (refundSale) e
 //   recibo B5 (printReceipt, mesmo padrão auth do printCarne).
 //   overdue/next_due_date em CreditBalanceItem (vêm de /balances, Aura-backend#187).
+// fix (11/06/2026): A3-FE Idempotency-Key via header nos POST de dinheiro.
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
-// ─── Fiado (legado) ──────────────────────────────────────────
+// ─── Fiado (legado) ────────────────────────────────────────────────────────
 export type CreditBalanceItem = {
   id: string; name: string; phone: string | null; cpf_cnpj: string | null;
   balance: number; total_debited: number; total_paid: number; last_activity_at: string | null;
@@ -37,7 +38,7 @@ export type CreditTransaction = {
   account_name?: string | null;
 };
 
-// ─── F3: Carnê / conta ────────────────────────────────────────
+// ─── F3: Carnê / conta ────────────────────────────────────────────────────────
 export type CreditAccount = {
   id: string | null;           // null = conta geral legado
   name: string;
@@ -58,10 +59,10 @@ export type CreditCustomerDetail = {
   accounts?: CreditAccount[];
 };
 
-// ─── Parcelado ────────────────────────────────────────────────
+// ─── Parcelado ───────────────────────────────────────────────────────────────
 export type ScoreLabel = "premium" | "bom" | "regular" | "restrito" | "bloqueado";
 
-// ─── F2: Termos por cliente ───────────────────────────────────
+// ─── F2: Termos por cliente ───────────────────────────────────────────────
 export type CustomerTermsOverrides = {
   interest_rate: number | null;
   max_installments: number | null;
@@ -85,7 +86,7 @@ export type CustomerTerms = {
   effective: CustomerTermsEffective;
 };
 
-// ─── Fase 1: score_warning ────────────────────────────────────
+// ─── Fase 1: score_warning ───────────────────────────────────────────────────────
 export type ScoreWarning = {
   below_min: true;
   threshold: number;
@@ -224,7 +225,7 @@ export type FinancialReceivables = {
   };
 };
 
-// ─── B1 (DESIGN-38): Histórico unificado (timeline paginada) ──────────
+// ─── B1 (DESIGN-38): Histórico unificado (timeline paginada) ──────
 export type CreditHistoryEvent = {
   id: string;
   type: "purchase" | "manual_debit" | "payment" | "exchange_credit" | "refund";
@@ -247,13 +248,13 @@ export type PaymentPlanLine = {
 /** Shape canônico: o GET /payments/preview e o POST /payments retornam isto. */
 export type PaymentPlan = { applied: PaymentPlanLine[]; new_balance: number; credit_generated: number };
 
-// ─── B2 (DESIGN-38): Pix EMV por parcela / valor livre ───────────────
+// ─── B2 (DESIGN-38): Pix EMV por parcela / valor livre ───────────
 export type CreditPix = {
   emv: string; amount: number; key_type: string | null; merchant_name: string;
   installment?: { id: string; number: number; due_date: string; account_id: string | null };
 };
 
-// ─── B4 (DESIGN-38): Devolução de venda no crediário ─────────────────
+// ─── B4 (DESIGN-38): Devolução de venda no crediário ─────────────
 export type RefundResult = {
   devolucao_sale_id: string;
   refund_value: number;
@@ -266,7 +267,7 @@ export type RefundResult = {
   stock_restored: Array<{ product_id: string; variant_id: string | null; quantity: number }>;
 };
 
-// ─── Lançamento manual ────────────────────────────────────────
+// ─── Lançamento manual ──────────────────────────────────────────────────────
 export type ManualEntryPayload = {
   customer_id?: string;
   new_customer?: { name: string; phone: string };
@@ -290,7 +291,7 @@ export type ManualEntryResult = {
   account_id: string | null;
 };
 
-// ─── Recebimento (F3) ─────────────────────────────────────────
+// ─── Recebimento (F3) ───────────────────────────────────────────────────────
 export type PaymentAllocation = { account_id: string | null; amount: number };
 export type ReceivePaymentBody =
   | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null }
@@ -321,7 +322,7 @@ export type ReceivePaymentResult = {
   }>;
 };
 
-// ─── Novo carnê ───────────────────────────────────────────────
+// ─── Novo carnê ─────────────────────────────────────────────────────────
 export type CreateAccountBody = {
   name: string;
   interest_rate?: number;
@@ -371,7 +372,7 @@ export async function printCarne(companyId: string, customerId: string): Promise
   }
 }
 
-// ─── B5 (DESIGN-38): Print recibo de pagamento (autenticado) ──────────
+// ─── B5 (DESIGN-38): Print recibo de pagamento (autenticado) ──────
 // Mesmo padrão do printCarne: GET /print/credit/receipts/:txId exige Bearer.
 export async function printReceipt(companyId: string, transactionId: string): Promise<void> {
   if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -406,7 +407,7 @@ export async function printReceipt(companyId: string, transactionId: string): Pr
   }
 }
 
-// ─── Entrega 2: fonte ÚNICA de "valor a pagar" de uma parcela ────────────────
+// ─── Entrega 2: fonte Única de "valor a pagar" de uma parcela ────────────────
 /**
  * Valor canônico "a pagar" de uma parcela: principal em aberto + encargos (se houver).
  * total_due já = (amount_due - covered_amount) + mora/multa; cai no principal quando encargos OFF.
@@ -420,7 +421,7 @@ export function valorAPagarParcela(inst: CreditInstallment): number {
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
 export const creditApi = {
-  // ── Fiado (legado) ───────────────────────────────────────────────
+  // ── Fiado (legado) ────────────────────────────────────────────────────────────────
   listBalances(companyId: string, opts?: { onlyOpen?: boolean; q?: string }) {
     const qs = new URLSearchParams();
     if (opts?.onlyOpen === false) qs.set("only_open", "false");
@@ -434,8 +435,10 @@ export const creditApi = {
     return request<CreditCustomerDetail>(`${base(companyId)}/customer/${customerId}`);
   },
   receivePayment(companyId: string, customerId: string, body: ReceivePaymentBody) {
+    // A3-FE: Idempotency-Key via custom header to prevent double-debits on retry
+    const idempKey = "rp-" + companyId + "-" + customerId + "-" + Date.now();
     return request<ReceivePaymentResult>(
-      `${base(companyId)}/customer/${customerId}/payment`, { method: "POST", body }
+      `${base(companyId)}/customer/${customerId}/payment`, { method: "POST", body, headers: { "Idempotency-Key": idempKey } }
     );
   },
   undoTransaction(companyId: string, transactionId: string) {
@@ -444,7 +447,7 @@ export const creditApi = {
     );
   },
 
-  // ── Perfil parcelado ─────────────────────────────────────────────
+  // ── Perfil parcelado ────────────────────────────────────────────────────────────────
   getCustomerProfile(companyId: string, customerId: string) {
     return request<CreditProfile>(`${base(companyId)}/customers/${customerId}/profile`);
   },
@@ -459,7 +462,7 @@ export const creditApi = {
     });
   },
 
-  // ── F2: Termos por cliente ───────────────────────────────────────
+  // ── F2: Termos por cliente ─────────────────────────────────────────────────────────────
   updateCustomerTerms(companyId: string, customerId: string, body: Partial<CustomerTermsOverrides> | null) {
     return request<CreditProfile>(
       `${base(companyId)}/customers/${customerId}/terms`,
@@ -467,7 +470,7 @@ export const creditApi = {
     );
   },
 
-  // ── F3: Carnês ────────────────────────────────────────────────────
+  // ── F3: Carnês ───────────────────────────────────────────────────────────────────
   createAccount(companyId: string, customerId: string, body: CreateAccountBody) {
     return request<{ account: CreditAccount }>(
       `${base(companyId)}/customer/${customerId}/accounts`,
@@ -475,7 +478,7 @@ export const creditApi = {
     );
   },
 
-  // ── Preview / quick customer ─────────────────────────────────────
+  // ── Preview / quick customer ─────────────────────────────────────────────────────────────
   getCustomerPreview(companyId: string, customerId: string) {
     return request<CreditPreview>(`${base(companyId)}/customers/${customerId}/preview`);
   },
@@ -485,7 +488,7 @@ export const creditApi = {
     );
   },
 
-  // ── Plan config ──────────────────────────────────────────────────
+  // ── Plan config ───────────────────────────────────────────────────────────────────
   getPlanConfig(companyId: string) {
     return request<CreditPlanConfig>(`${base(companyId)}/plan-config`);
   },
@@ -493,7 +496,7 @@ export const creditApi = {
     return request<CreditPlanConfig>(`${base(companyId)}/plan-config`, { method: "PUT", body });
   },
 
-  // ── Installments ─────────────────────────────────────────────────
+  // ── Installments ─────────────────────────────────────────────────────────────────────
   createInstallments(companyId: string, body: {
     customer_id: string; sale_id?: string; total_amount: number;
     installments: number; first_due_date: string;
@@ -534,7 +537,7 @@ export const creditApi = {
     );
   },
 
-  // ── Dashboard / analytics ────────────────────────────────────────
+  // ── Dashboard / analytics ────────────────────────────────────────────────────────────────
   getDashboard(companyId: string) {
     return request<CreditDashboard>(`${base(companyId)}/dashboard`);
   },
@@ -586,7 +589,9 @@ export const creditApi = {
     return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments/preview?${qs}`);
   },
   receiveFreePayment(companyId: string, customerId: string, body: { amount: number; account_id?: string | null; method?: string; paid_at?: string }) {
-    return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments`, { method: "POST", body });
+    // A3-FE: Idempotency-Key via custom header to prevent double-debits on retry
+    const idempKey = "rfp-" + companyId + "-" + customerId + "-" + Date.now();
+    return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments`, { method: "POST", body, headers: { "Idempotency-Key": idempKey } });
   },
 
   // ── B2 (DESIGN-38): Pix EMV (copia-e-cola) — QR é gerado no front ──
