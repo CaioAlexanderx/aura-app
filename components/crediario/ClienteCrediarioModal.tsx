@@ -41,11 +41,6 @@
 //   - Barra de ações persistente (fichaActionBar) no rodapé: Receber + Valor Livre.
 //   - "Novo lançamento" omitido — sem handler na ficha (comentário C-2).
 //   - ScrollView agora flex:1 entre header fixo e action bar.
-//
-// fix (11/06/2026) auditoria ALTOS:
-//   - A1-FE: fmtDate usa split string para datas YYYY-MM-DD (evita UTC off-by-one)
-//   - A2-FE: triggerPreview passa paid_at; renomeado previewFifoPayment→previewPayment
-//   - A5-FE: parseAmount distingue vírgula-decimal (BR) de ponto-decimal
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
@@ -89,44 +84,18 @@ function fmt(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso: string) {
-  // A1-FE: date-only strings (YYYY-MM-DD) parsed as UTC midnight by new Date(),
-  // causing off-by-one in UTC-3 (Brazil). For date-only inputs use string split.
-  if (!iso) return "";
-  try {
-    const s = String(iso);
-    if (s.length === 10) {
-      // date-only — split to avoid UTC off-by-one
-      const [y, m, d] = s.split("-");
-      return d + "/" + m + "/" + y.slice(2);
-    }
-    const dt = new Date(s);
-    if (isNaN(dt.getTime())) return "";
-    return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" });
-  } catch { return ""; }
+  const d = new Date(iso);
+  if (!iso || isNaN(d.getTime())) return "";
+  try { return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
+  catch { return ""; }
 }
 function todayBrSp(): string {
   const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   return formatIsoToBr(iso);
 }
 function parseAmount(raw: string): number {
-  // A5-FE: distinguish BR decimal (comma) from dot decimal.
-  // "1.234,56" → 1234.56  "12,34" → 12.34  "12.34" → 12.34  "1234" → 1234
-  // Previous impl removed ALL dots first, so "12.34" became "1234" (R$1.234,00).
-  const s = String(raw || "").trim();
-  if (!s) return 0;
-  let normalized: string;
-  if (s.includes(",")) {
-    // BR format: dots are thousands separators, comma is decimal
-    normalized = s.replace(/\./g, "").replace(",", ".");
-  } else if (/^\d+\.\d{1,2}$/.test(s)) {
-    // Exactly one dot with 1-2 decimal digits → treat as decimal separator
-    normalized = s;
-  } else {
-    // Only digits (possibly with dots as thousands) — strip dots
-    normalized = s.replace(/\./g, "");
-  }
-  normalized = normalized.replace(/[^\d.]/g, "");
-  const n = parseFloat(normalized);
+  const s = raw.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, "");
+  const n = parseFloat(s);
   return isFinite(n) && n >= 0 ? n : 0;
 }
 function productsFromNotes(notes?: string | null): string {
@@ -331,88 +300,60 @@ export function ClienteCrediarioModal({
         toast.success("Recebimento registrado! Saldo: " + fmt(res.new_balance));
       }
       setAmount("");
+      setDistributions({});
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
       onChanged?.();
     },
+    onError: (err: any) => toast.error(err?.data?.error || "Erro ao registrar recebimento"),
+  });
+
+  const editDueDateMut = useMutation({
+    mutationFn: async ({ installmentId, newDate }: { installmentId: string; newDate: string }) =>
+      creditApi.editInstallmentDueDate(companyId, customerId!, installmentId, newDate),
+    onSuccess: () => {
+      toast.success("Vencimento atualizado!");
+      setEditingDueDateInst(null);
+      setEditDueDateError("");
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+    },
     onError: (err: any) => {
-      toast.error(err?.data?.error || "Erro ao registrar recebimento");
+      setEditDueDateError(err?.data?.error || "Erro ao atualizar vencimento");
     },
   });
 
-  // Reset on close
-  useEffect(() => {
-    if (!visible) {
-      setTab("parcelas");
-      setAmount("");
-      setFreeAmt("");
-      setFreePreview(null);
-      setPixInstId(null);
-      setPixData(null);
-      setHistItems([]);
-      setHistCursor(undefined);
-      setHistHasMore(false);
-    }
-  }, [visible]);
-
-  // Reset freeDateBr when modal opens
-  useEffect(() => {
-    if (visible) {
-      setDateBr(todayBrSp());
-      setFreeDateBr(todayBrSp());
-    }
-  }, [visible]);
-
-  // Editar vencimento
-  function openEditDueDate(inst: CreditInstallment) {
-    setEditingDueDateInst(inst);
-    setEditDueDateInput(formatIsoToBr(inst.due_date.slice(0, 10)));
-    setEditDueDateError("");
-  }
-
-  async function confirmEditDueDate() {
-    if (!editingDueDateInst || !customerId) return;
-    const parsed = parseBrDate(editDueDateInput);
-    if (!parsed) { setEditDueDateError("Data inválida"); return; }
-    const iso = parsed.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-    try {
-      await Promise.all([
-        creditApi.editInstallmentDueDate(companyId, customerId!, editingDueDateInst.id, iso),
-      ]);
-      toast.success("Vencimento atualizado!");
-      setEditingDueDateInst(null);
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-    } catch (err: any) {
-      setEditDueDateError(err?.data?.error || "Erro ao editar vencimento");
-    }
-  }
-
-  // Bloqueio
-  async function toggleBlock() {
-    if (!customerId) return;
-    const action = isBlocked ? "unblock" : "block";
-    setBlockingAction(action);
-    try {
-      await creditApi.setBlockStatus(companyId, customerId, blockingAction === "block", blockReason || undefined);
-      toast.success(action === "block" ? "Cliente bloqueado." : "Cliente desbloqueado.");
+  function handleBlockToggle() {
+    if (isBlocked) {
+      setBlockingAction("unblock");
+    } else {
+      setBlockingAction("block");
       setBlockReason("");
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-    } catch (err: any) {
-      toast.error(err?.data?.error || "Erro ao alterar bloqueio");
-    } finally {
-      setBlockingAction(null);
     }
   }
 
-  // Salvar termos
+  function confirmBlock() {
+    if (!blockingAction || !customerId) return;
+    creditApi.setBlockStatus(companyId, customerId, blockingAction === "block", blockReason || undefined)
+      .then(() => {
+        toast.success(isBlocked ? "Cliente desbloqueado" : "Cliente bloqueado");
+        qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+        qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+        setBlockingAction(null);
+        onChanged?.();
+      })
+      .catch((err: any) => toast.error(err?.data?.error || "Erro ao alterar bloqueio"));
+  }
+
   async function saveTerms() {
     if (!customerId) return;
     setSavingTerms(true);
     try {
-      const overrides: Partial<CustomerTermsOverrides> = {};
-      if (termsMaxInst) overrides.max_installments = parseInt(termsMaxInst) || null as any;
-      if (termsInterest) overrides.interest_rate = parseFloat(termsInterest.replace(",", ".")) / 100 || null as any;
+      const overrides: CustomerTermsOverrides = {};
+      const mi = parseInt(termsMaxInst);
+      if (!isNaN(mi) && mi > 0) overrides.max_installments = mi;
+      const ir = parseFloat(termsInterest.replace(",", "."));
+      if (!isNaN(ir) && ir >= 0) overrides.interest_rate = ir;
       await creditApi.saveTermsOverride(companyId, customerId, Object.keys(overrides).length ? overrides : null);
       toast.success("Termos salvos!");
       setTermsDirty(false);
@@ -424,15 +365,64 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // Criar novo carnê inline
-  async function createAccount() {
-    if (!customerId || !newAccountName.trim()) return;
+  useEffect(() => {
+    if (!visible) {
+      setTab("parcelas");
+      setAmount("");
+      setMethod("dinheiro");
+      setDateBr(todayBrSp());
+      setReceiveMode("fifo");
+      setFifoAccountId(undefined);
+      setDistributions({});
+      setExpandedAccountId(undefined);
+      setShowNewAccount(false);
+      setNewAccountName("");
+      setBlockReason("");
+      setBlockingAction(null);
+      setTermsMaxInst("");
+      setTermsInterest("");
+      setTermsDirty(false);
+      setFreeAmt("");
+      setFreeMethod("dinheiro");
+      setFreeDateBr(todayBrSp());
+      setFreeAccountId(undefined);
+      setFreePreview(null);
+      setLastChargesPaid(null);
+      setLastTotalPaid(null);
+      setHistCursor(undefined);
+      setHistItems([]);
+      setHistHasMore(false);
+      setPixInstId(null);
+      setPixData(null);
+      setEditingDueDateInst(null);
+      setEditDueDateInput("");
+      setEditDueDateError("");
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (profile?.terms) {
+      const ov = profile.terms.overrides;
+      setTermsMaxInst(ov?.max_installments != null ? String(ov.max_installments) : "");
+      setTermsInterest(ov?.interest_rate != null ? String(ov.interest_rate) : "");
+      setTermsDirty(false);
+    }
+  }, [profile?.terms]);
+
+  function confirmReceive() {
+    if (amountNum <= 0 || dateInvalid) return;
+    payMut.mutate();
+  }
+  function prefill(v: number) { setAmount(v.toFixed(2).replace(".", ",")); }
+
+  async function handleCreateAccount() {
+    if (!newAccountName.trim() || !customerId) return;
     setCreatingAccount(true);
     try {
       await creditApi.createAccount(companyId, customerId, newAccountName.trim());
       toast.success("Carnê criado!");
-      setNewAccountName("");
       setShowNewAccount(false);
+      setNewAccountName("");
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
     } catch (err: any) {
       toast.error(err?.data?.error || "Erro ao criar carnê");
@@ -441,19 +431,32 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // Histórico
-  async function loadHistory(cursor: string | null | undefined) {
-    if (!customerId) return;
+  function handleEditDueDateOpen(inst: CreditInstallment) {
+    setEditingDueDateInst(inst);
+    setEditDueDateInput(inst.due_date ? formatIsoToBr(inst.due_date) : "");
+    setEditDueDateError("");
+  }
+
+  function handleEditDueDateConfirm() {
+    if (!editingDueDateInst) return;
+    const parsed = parseBrDate(editDueDateInput);
+    if (!parsed) { setEditDueDateError("Data inválida"); return; }
+    const newIso = parsed.toISOString().split("T")[0];
+    editDueDateMut.mutate({ installmentId: editingDueDateInst.id, newDate: newIso });
+  }
+
+  async function loadHistory(cursor?: string | null) {
+    if (!customerId || histLoading) return;
     setHistLoading(true);
     try {
       const res = await creditApi.getHistory(companyId, customerId, cursor || undefined);
       if (cursor) {
-        setHistItems(prev => [...prev, ...(res.events || [])]);
+        setHistItems(prev => [...prev, ...res.items]);
       } else {
-        setHistItems(res.events || []);
+        setHistItems(res.items);
       }
-      setHistCursor(res.next_cursor);
       setHistHasMore(!!res.next_cursor);
+      setHistCursor(res.next_cursor);
     } catch (err: any) {
       toast.error(err?.data?.error || "Erro ao carregar histórico");
     } finally {
@@ -468,8 +471,6 @@ export function ClienteCrediarioModal({
   }, [tab, visible, customerId]);
 
   // Preview FIFO debounced
-  // A2-FE: preview must use same paid_at as the apply, so freeDateBr is in deps
-  //        and passed to previewPayment. Renamed previewFifoPayment→previewPayment.
   const triggerPreview = useCallback((amt: string, accId: string | null | undefined) => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     const n = parseAmount(amt);
@@ -477,12 +478,7 @@ export function ClienteCrediarioModal({
     previewTimerRef.current = setTimeout(async () => {
       setFreePreviewLoading(true);
       try {
-        const paidAt = parseBrDate(freeDateBr)?.toISOString();
-        const res = await creditApi.previewPayment(companyId, customerId!, {
-          amount: n,
-          account_id: accId ?? null,
-          paid_at: paidAt,
-        });
+        const res = await creditApi.previewFifoPayment(companyId, customerId!, n, accId ?? null);
         setFreePreview(res);
       } catch {
         setFreePreview(null);
@@ -490,7 +486,7 @@ export function ClienteCrediarioModal({
         setFreePreviewLoading(false);
       }
     }, 450);
-  }, [companyId, customerId, freeDateBr]);
+  }, [companyId, customerId]);
 
   async function confirmFreePayment() {
     const n = parseAmount(freeAmt);
@@ -518,765 +514,1345 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // Pix por parcela
-  async function loadPix(installmentId: string) {
-    if (pixInstId === installmentId) { setPixInstId(null); setPixData(null); return; }
+  async function openInstallmentPix(installmentId: string) {
+    if (!customerId) return;
     setPixInstId(installmentId);
+    setPixData(null);
     setPixLoading(true);
     try {
       const res = await creditApi.getInstallmentPix(companyId, customerId, installmentId);
       setPixData(res);
     } catch (err: any) {
-      toast.error(err?.data?.error || "Erro ao gerar Pix");
+      toast.error(err?.data?.error || "Erro ao gerar Pix da parcela");
       setPixInstId(null);
     } finally {
       setPixLoading(false);
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  if (!visible || !customerId) return null;
+  const name = detail?.customer?.name || customerName || "Cliente";
+  const phone = detail?.customer?.phone || null;
+  const initial = (name.trim()[0] || "?").toUpperCase();
 
-  const loading = detailQ.isLoading || profileQ.isLoading;
-  const score = profile?.credit_score ?? 0;
-  const scoreLabel = profile?.score_label ?? profile?.label;
-  const availLimit = profile?.available_limit ?? Math.max(0, (profile?.credit_limit ?? 0) - (profile?.credit_used ?? 0));
-  const scoreWarn = profile?.score_warning;
+  // Aviso de score (Fase 1 — nunca bloqueante)
+  const scoreWarning = profile?.score_warning ?? null;
+  const availableLimit = profile?.available_limit ?? (profile ? (profile.credit_limit - profile.credit_used) : undefined);
+  const scoreLabel = profile?.score_label ?? profile?.label ?? null;
 
-  const name = detail?.customer?.name || customerName || "";
-  const phone = detail?.customer?.phone || "";
+  // Termos: tem override?
+  const hasTermsOverride = !!(    profile?.terms?.overrides?.max_installments != null ||
+    profile?.terms?.overrides?.interest_rate != null
+  );
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={m.backdrop} onPress={onClose} />
-      <View style={m.sheet}>
-
-        {/* ── Header fixo: nome + score + saldo ── */}
-        <View style={m.fichaHeaderFixed}>
-          <View style={m.fichaHeaderRow}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={m.fichaName} numberOfLines={1}>{name || "..."}</Text>
-              {phone ? <Text style={m.fichaPhone}>{phone}</Text> : null}
-            </View>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Icon name="x" size={20} color={Colors.ink2} />
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={m.backdrop} onPress={onClose}>
+        <Pressable style={m.sheet} onPress={() => {}}>
+          {/* Header */}
+          <View style={m.head}>
+            <Pressable onPress={onClose} style={m.crumb}>
+              <Icon name="chevron_right" size={15} color={Colors.violet3} style={{ transform: [{ rotate: "180deg" }] } as any} />
+              <Text style={m.crumbTxt}>Crediário</Text>
+            </Pressable>
+            <Pressable onPress={onClose} style={m.xBtn}>
+              <Icon name="x" size={15} color={Colors.ink3} />
             </Pressable>
           </View>
 
-          {/* Score + limite */}
-          {profile && (
-            <View style={m.fichaScoreRow}>
-              {scoreLabel && (
-                <View style={[m.scoreBadge, { borderColor: scoreColor(scoreLabel) + "55", backgroundColor: scoreColor(scoreLabel) + "18" }]}>
-                  <Text style={[m.scoreBadgeTxt, { color: scoreColor(scoreLabel) }]}>{scoreLabelPt(scoreLabel)}</Text>
+          {/* C-2: Header fixo — fora do ScrollView */}
+          <View style={m.fichaHeaderFixed}>
+            <View style={m.fichaHeaderTop}>
+              <View style={m.custL}>
+                <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
+                <View>
+                  <Text style={m.custName}>{name}</Text>
+                  <View style={m.custSub}>
+                    <View style={[m.dot, { backgroundColor: hasOverdue ? Colors.red : Colors.green }]} />
+                    <View style={[m.pill, { backgroundColor: (hasOverdue ? Colors.red : Colors.green) + "22" }]}>
+                      <Text style={[m.pillTxt, { color: hasOverdue ? Colors.red : Colors.green }]}>
+                        {hasOverdue ? "Em atraso" : "Em dia"}
+                      </Text>
+                    </View>
+                    {isBlocked && (
+                      <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
+                        <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+              {!!phone && !!onCobrar && (
+                <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)}>
+                  <Icon name="message_circle" size={14} color={Colors.green} />
+                  <Text style={m.waTxt}>Cobrar</Text>
+                </Pressable>
+              )}
+            </View>
+            {/* Score / limite / saldo em aberto */}
+            <View style={m.fichaHeaderMeta}>
+              {!!scoreLabel && (
+                <View style={[m.fichaMetaChip, { backgroundColor: scoreColor(scoreLabel) + "22", borderColor: scoreColor(scoreLabel) + "55" }]}>
+                  <Text style={[m.fichaMetaChipTxt, { color: scoreColor(scoreLabel) }]}>{scoreLabelPt(scoreLabel)}</Text>
                 </View>
               )}
-              <Text style={m.fichaLimitTxt}>Limite: {fmt(profile.credit_limit ?? 0)} · Disponível: {fmt(availLimit)}</Text>
+              {availableLimit !== undefined && (
+                <View style={m.fichaMetaItem}>
+                  <Text style={m.fichaMetaLbl}>Disponível</Text>
+                  <Text style={[m.fichaMetaVal, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>{fmt(availableLimit)}</Text>
+                </View>
+              )}
+              <View style={m.fichaMetaItem}>
+                <Text style={m.fichaMetaLbl}>Em aberto</Text>
+                <Text style={[m.fichaMetaVal, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>{fmt(totalBalance)}</Text>
+              </View>
             </View>
-          )}
-
-          {/* Saldo em aberto hero */}
-          <View style={m.fichaHero}>
-            <Text style={m.fichaHeroLabel}>EM ABERTO</Text>
-            <Text style={[m.fichaHeroValue, hasOverdue && { color: Colors.red }]}>{fmt(totalBalance)}</Text>
-            {nextDueDate
-              ? <Text style={m.fichaHeroMeta}>{openInst.length > 0 && fmtDate(nextDueDate)
-                  ? ` · próximo venc. ${fmtDate(nextDueDate)}`
-                  : ""}</Text>
-              : null}
+            {/* Banner aviso score — fica no header fixo */}
+            {!!scoreWarning && (
+              <View style={[m.scoreBanner, { marginBottom: 0, marginTop: 8 }]}>
+                <Icon name="alert_triangle" size={15} color={Colors.amber} />
+                <Text style={m.scoreBannerTxt}>
+                  Score abaixo do mínimo de aviso ({scoreWarning.threshold} pts). Score atual:{" "}
+                  <Text style={{ fontWeight: "800" }}>{scoreWarning.actual} pts</Text>.
+                  {" "}Você pode lançar normalmente — isto é apenas um alerta.
+                </Text>
+              </View>
+            )}
           </View>
 
-          {/* Banner âmbar score_warning */}
-          {scoreWarn && (
-            <View style={m.warnBanner}>
-              <Icon name="alert" size={13} color={Colors.amber} />
-              <Text style={m.warnText}>
-                Score {scoreWarn.actual} abaixo do mínimo ({scoreWarn.threshold}) — venda sob aprovação
-              </Text>
+          <ScrollView style={[m.body, { flex: 1 }]} contentContainerStyle={{ padding: 18 }} showsVerticalScrollIndicator={false}>
+            {/* Tabs principais: Parcelas / Histórico / Conta */}
+            <View style={m.tabs}>
+              {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
+                <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
+                  <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
+                    {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : "Conta"}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-          )}
-
-          {/* Tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={m.tabBar} contentContainerStyle={{ gap: 4 }}>
-            {(["parcelas", "historico", "conta", "termos", "bloqueio"] as Tab[]).map(t => (
-              <Pressable key={t} style={[m.tabBtn, tab === t && m.tabBtnActive]} onPress={() => setTab(t)}>
-                <Text style={[m.tabTxt, tab === t && m.tabTxtActive]}>
-                  {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : t === "conta" ? "Conta" : t === "termos" ? "Termos" : "Bloqueio"}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* ── Body scrollável ── */}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 32 }}>
-
-          {loading ? (
-            <View style={{ padding: 24, alignItems: "center" }}>
-              <ActivityIndicator color={Colors.violet3} />
-              <Text style={{ marginTop: 12, color: Colors.ink3 }}>Carregando...</Text>
+            {/* Sub-abas: Termos / Bloqueio */}
+            <View style={[m.tabs, { marginTop: -4, marginBottom: 8 }]}>
+              {(["termos", "bloqueio"] as Tab[]).map(t => (
+                <Pressable key={t} style={[m.tab, m.tabSm, tab === t && m.tabOn]} onPress={() => setTab(t)}>
+                  <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
+                    {t === "termos" ? `Termos${hasTermsOverride ? " •" : ""}` : "Bloqueio"}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-          ) : tab === "parcelas" ? (
-            <View>
-              {useCarneLayout ? (
-                /* Layout carnês */
-                realCarnes.map(acc => {
-                  const accInst = instByAccount.get(acc.id) || [];
-                  const openAccInst = accInst.filter(i => i.status === "open" || i.status === "overdue");
-                  const isExpanded = expandedAccountId === acc.id;
-                  const accBalance = acc.balance ?? 0;
-                  const accOverdue = acc.overdue;
 
-                  return (
-                    <View key={acc.id || "general"} style={m.accCard}>
-                      <Pressable style={m.accHead} onPress={() => setExpandedAccountId(isExpanded ? undefined : acc.id)}>
-                        <View style={{ flex: 1 }}>
+            {detailQ.isLoading || profileQ.isLoading ? (
+              <View style={{ paddingVertical: 36, alignItems: "center" }}>
+                <ActivityIndicator color={Colors.violet3} />
+              </View>
+            ) : (
+              <>
+                {/* ===== TAB PARCELAS ===== */}
+                {tab === "parcelas" && (
+                  <>
+                    {/* Painel de crédito (Fase 1) */}
+                    {!!profile && (
+                      <View style={m.card}>
+                        <Text style={m.cardTitle}>Crédito</Text>
+                        <View style={m.row}>
+                          <Text style={m.rowK}>Score</Text>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <Text style={m.accName}>{acc.name}</Text>
-                            <View style={[m.accBadge, accOverdue && { backgroundColor: Colors.red + "22", borderColor: Colors.red + "44" }]}>
-                              <Text style={[m.accBadgeTxt, accOverdue && { color: Colors.red }]}>
-                                {accOverdue ? "Atrasado" : "Em dia"}
-                              </Text>
-                            </View>
-                            <Text style={m.accPeriod}>{periodLabel(acc)}</Text>
-                          </View>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 4 }}>
-                            <Text style={[m.accBalance, accOverdue && { color: Colors.red }]}>{fmt(accBalance)}</Text>
-                            {!!fmtDate(acc.next_due_date || "") && (
-                              <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date!)}</Text>
+                            <Text style={[m.rowV, { color: scoreColor(scoreLabel), fontSize: 15 }]}>
+                              {profile.credit_score}
+                            </Text>
+                            {!!scoreLabel && (
+                              <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
+                                <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
+                                  {scoreLabelPt(scoreLabel)}
+                                </Text>
+                              </View>
                             )}
                           </View>
                         </View>
-                        <Icon name={isExpanded ? "chevron_up" : "chevron_down"} size={16} color={Colors.ink3} />
-                      </Pressable>
+                        <View style={m.row}>
+                          <Text style={m.rowK}>Limite total</Text>
+                          <Text style={m.rowV}>{fmt(profile.credit_limit)}</Text>
+                        </View>
+                        {availableLimit !== undefined && (
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Disponível</Text>
+                            <Text style={[m.rowV, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>
+                              {fmt(availableLimit)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
 
-                      {isExpanded && (
-                        <View style={m.accBody}>
-                          {openAccInst.length === 0 ? (
-                            <Text style={m.emptyInstText}>Nenhuma parcela em aberto neste carnê.</Text>
-                          ) : (
-                            openAccInst.map(ins => {
-                              const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-                              const hasCharges = (ins.charges_total ?? 0) > 0;
-                              const isEditingThis = editingDueDateInst?.id === ins.id;
+                    {/* Hero: Em aberto */}
+                    <View style={m.heroCard}>
+                      <Text style={m.heroLabel}>EM ABERTO</Text>
+                      <Text style={[m.heroValue, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+                        {fmt(totalBalance)}
+                      </Text>
+                      <Text style={m.heroSub}>
+                        {openInst.length} parcela{openInst.length !== 1 ? "s" : ""}
+                        {openInst.length > 0 && fmtDate(nextDueDate)
+                          ? ` · próximo venc. ${fmtDate(nextDueDate)}`
+                          : ""}
+                      </Text>
+                    </View>
 
-                              return (
-                                <View key={ins.id} style={m.parcRow}>
-                                  <View style={{ flex: 1 }}>
-                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                                      <Text style={[m.parcNum, ins.status === "overdue" && { color: Colors.red }]}>
-                                        Parcela {ins.installment_number}/{ins.total_installments}
-                                      </Text>
-                                      {ins.status === "overdue" && <Text style={m.overduePill}>Atrasada</Text>}
+                    {/* Seção de Carnês (F3) — agrupa só quando há carnê NOMEADO */}
+                    {useCarneLayout && (
+                      <View style={m.card}>
+                        <View style={m.cardTitleRow}>
+                          <Text style={m.cardTitle}>Carnês / contas</Text>
+                          <Pressable
+                            style={m.newAccBtn}
+                            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
+                          >
+                            <Icon name="plus" size={12} color={Colors.violet3} />
+                            <Text style={m.newAccTxt}>Novo carnê</Text>
+                          </Pressable>
+                        </View>
+
+                        {showNewAccount && (
+                          <View style={m.newAccRow}>
+                            <TextInput
+                              style={m.newAccInput}
+                              placeholder="Nome do carnê"
+                              placeholderTextColor={Colors.ink3}
+                              value={newAccountName}
+                              onChangeText={setNewAccountName}
+                              autoFocus
+                            />
+                            <Pressable
+                              style={[m.newAccConfirm, creatingAccount && { opacity: 0.5 }]}
+                              onPress={handleCreateAccount}
+                              disabled={creatingAccount}
+                            >
+                              {creatingAccount
+                                ? <ActivityIndicator size="small" color="#fff" />
+                                : <Text style={m.newAccConfirmTxt}>Criar</Text>}
+                            </Pressable>
+                          </View>
+                        )}
+
+                        {accounts.map((acc) => {
+                          const isOverdueAcc = acc.overdue;
+                          const statusColor = isOverdueAcc ? Colors.red : Colors.green;
+                          const accKey = acc.id ?? "general";
+                          const isExpanded = expandedAccountId === acc.id;
+                          // Parcelas deste carnê
+                          const accInst = instByAccount.get(acc.id) || [];
+                          return (
+                            <View key={accKey} style={m.accCard}>
+                              <View style={m.accTop}>
+                                <Pressable
+                                  style={{ flex: 1 }}
+                                  onPress={() => setExpandedAccountId(isExpanded ? undefined : acc.id)}
+                                >
+                                  <Text style={m.accName}>{acc.name}</Text>
+                                  <View style={m.accMeta}>
+                                    {periodLabel(acc) ? (
+                                      <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
+                                        <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
+                                      </View>
+                                    ) : null}
+                                    <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
+                                      <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
                                     </View>
-                                    <Text style={m.parcS}>Venc. {fmtDate(ins.due_date)} · {fmt(rem)}</Text>
-
-                                    {hasCharges && (
-                                      <View style={m.chargesBox}>
-                                        <Text style={m.chargesRow}>Principal: {fmt(rem - (ins.charges_total ?? 0))}</Text>
-                                        <Text style={m.chargesRow}>Multa: {fmt(ins.late_fee ?? 0)}</Text>
-                                        <Text style={m.chargesRow}>Mora ({ins.days_charged ?? 0}d): {fmt(ins.late_interest ?? 0)}</Text>
-                                        <Text style={[m.chargesRow, { fontWeight: "700" }]}>Total: {fmt(ins.total_due ?? rem)}</Text>
+                                    {accInst.length > 0 && (
+                                      <View style={[m.accBadge, { backgroundColor: Colors.amber + "18", borderColor: Colors.amber + "33" }]}>
+                                        <Text style={[m.accBadgeTxt, { color: Colors.amber }]}>{accInst.length} parcela{accInst.length !== 1 ? "s" : ""}</Text>
                                       </View>
                                     )}
+                                  </View>
+                                </Pressable>
+                                <View style={{ alignItems: "flex-end" }}>
+                                  <Text style={[m.accBalance, { color: acc.balance > 0 ? Colors.red : Colors.ink3 }]}>
+                                    {fmt(acc.balance)}
+                                  </Text>
+                                  {!!fmtDate(acc.next_due_date || "") && (
+                                    <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date!)}</Text>
+                                  )}
+                                </View>
+                              </View>
 
-                                    {isEditingThis && (
-                                      <View style={m.dueDateEditor}>
-                                        <DateInput
-                                          value={editDueDateInput}
-                                          onChangeText={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
-                                          placeholder="dd/mm/aaaa"
-                                          style={m.dueDateInput}
-                                        />
-                                        {editDueDateError ? <Text style={m.dueDateError}>{editDueDateError}</Text> : null}
-                                        <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-                                          <Pressable style={m.dueDateSave} onPress={confirmEditDueDate}>
-                                            <Text style={m.dueDateSaveTxt}>Salvar</Text>
+                              {/* Parcelas expandidas deste carnê */}
+                              {isExpanded && accInst.length > 0 && (
+                                <View style={m.accInstList}>
+                                  {accInst.map((ins) => {
+                                    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+                                    const late = ins.status === "overdue";
+                                    const chargesTotal = ins.charges_total ?? 0;
+                                    const hasCharges = late && chargesTotal > 0;
+                                    return (
+                                      <View key={ins.id} style={m.parc}>
+                                        <View style={{ flex: 1 }}>
+                                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                            <Text style={m.parcT}>Parcela {ins.installment_number}/{ins.total_installments}</Text>
+                                            <View style={[m.badge, { backgroundColor: late ? Colors.red + "22" : Colors.green + "22", borderColor: late ? Colors.red + "44" : Colors.green + "44" }]}>
+                                              <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>
+                                                {late ? "Vencida" : "Em aberto"}
+                                              </Text>
+                                            </View>
+                                          </View>
+                                          <Text style={m.parcS}>Venc. {fmtDate(ins.due_date)} · {fmt(rem)}</Text>
+                                          {hasCharges && (
+                                            <View style={m.chargesBreakdown}>
+                                              <View style={m.chargesRow}>
+                                                <Text style={m.chargesLbl}>Principal em aberto</Text>
+                                                <Text style={m.chargesVal}>{fmt(ins.principal_due ?? rem)}</Text>
+                                              </View>
+                                              {(ins.fine_amount ?? 0) > 0 && (
+                                                <View style={m.chargesRow}>
+                                                  <Text style={m.chargesLbl}>Multa</Text>
+                                                  <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.fine_amount!)}</Text>
+                                                </View>
+                                              )}
+                                              {(ins.interest_amount ?? 0) > 0 && (
+                                                <View style={m.chargesRow}>
+                                                  <Text style={m.chargesLbl}>
+                                                    Mora
+                                                    {ins.overdue_days != null && (
+                                                      <Text style={m.chargesDaysChip}> ({ins.overdue_days}d)</Text>
+                                                    )}
+                                                  </Text>
+                                                  <Text style={[m.chargesVal, { color: Colors.amber }]}>{fmt(ins.interest_amount!)}</Text>
+                                                </View>
+                                              )}
+                                              <View style={[m.chargesRow, m.chargesTotalRow]}>
+                                                <Text style={m.chargesTotalLbl}>Total a pagar</Text>
+                                                <Text style={m.chargesTotalVal}>{fmt(ins.total_due ?? (rem + chargesTotal))}</Text>
+                                              </View>
+                                            </View>
+                                          )}
+                                        </View>
+                                        <View style={{ gap: 6 }}>
+                                          <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
+                                            <Icon name="calendar" size={14} color={Colors.violet3} />
                                           </Pressable>
-                                          <Pressable onPress={() => setEditingDueDateInst(null)}>
-                                            <Text style={{ color: Colors.ink3, fontSize: 12, paddingVertical: 6 }}>Cancelar</Text>
+                                          <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
+                                            <Text style={m.pixBtnTxt}>Pix</Text>
+                                          </Pressable>
+                                          <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
+                                            <Text style={m.receberTxt}>Receber</Text>
                                           </Pressable>
                                         </View>
                                       </View>
-                                    )}
-                                  </View>
+                                    );
+                                  })}
+                                </View>
+                              )}
 
-                                  <View style={{ flexDirection: "row", gap: 6 }}>
-                                    {/* Pix */}
-                                    <Pressable
-                                      style={m.iconBtn}
-                                      onPress={() => loadPix(ins.id)}
-                                    >
-                                      {pixLoading && pixInstId === ins.id
-                                        ? <ActivityIndicator size="small" color={Colors.violet3} />
-                                        : <Icon name="qr_code" size={16} color={pixInstId === ins.id ? Colors.violet3 : Colors.ink2} />}
-                                    </Pressable>
-                                    {/* Editar vencimento */}
-                                    <Pressable style={m.iconBtn} onPress={() => isEditingThis ? setEditingDueDateInst(null) : openEditDueDate(ins)}>
-                                      <Icon name="calendar" size={16} color={isEditingThis ? Colors.violet3 : Colors.ink2} />
-                                    </Pressable>
+                              {/* Ações do carnê */}
+                              <View style={m.accActions}>
+                                {!!phone && !!onCobrar && (
+                                  <Pressable
+                                    style={[m.accActionBtn, m.accActionWa]}
+                                    onPress={() => onCobrar(customerId!, name, phone)}
+                                  >
+                                    <Text style={[m.accActionTxt, { color: Colors.green }]}>Cobrar</Text>
+                                  </Pressable>
+                                )}
+                                <Pressable
+                                  style={m.accActionBtn}
+                                  onPress={() => prefill(acc.balance > 0 ? acc.balance : 0)}
+                                >
+                                  <Text style={m.accActionTxt}>Receber</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={[m.accActionBtn, { backgroundColor: Colors.ink3 + "22", borderWidth: 1, borderColor: Colors.ink3 + "44" }]}
+                                  onPress={() => printCarne(companyId, customerId!, acc.id)}
+                                >
+                                  <Text style={[m.accActionTxt, { color: Colors.ink2 }]}>Imprimir</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* Parcelas planas (sem carnê nomeado) */}
+                    {!useCarneLayout && openInst.length > 0 && (
+                      <View style={m.card}>
+                        <Text style={m.cardTitle}>Parcelas em aberto</Text>
+                        {openInst.map((ins) => {
+                          const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+                          const late = ins.status === "overdue";
+                          const chargesTotal = ins.charges_total ?? 0;
+                          const hasCharges = late && chargesTotal > 0;
+                          return (
+                            <View key={ins.id} style={m.parc}>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                  <Text style={m.parcT}>Parcela {ins.installment_number}/{ins.total_installments}</Text>
+                                  <View style={[m.badge, { backgroundColor: late ? Colors.red + "22" : Colors.green + "22", borderColor: late ? Colors.red + "44" : Colors.green + "44" }]}>
+                                    <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>
+                                      {late ? "Vencida" : "Em aberto"}
+                                    </Text>
                                   </View>
                                 </View>
-                              );
-                            })
-                          )}
-
-                          {/* Pix inline */}
-                          {pixInstId && pixData && openAccInst.find(i => i.id === pixInstId) && (
-                            <View style={m.pixCard}>
-                              <View style={{ alignItems: "center", marginBottom: 12 }}>
-                                <QRCode value={pixData.emv} size={160} />
+                                <Text style={m.parcS}>Venc. {fmtDate(ins.due_date)} · {fmt(rem)}</Text>
+                                {hasCharges && (
+                                  <View style={m.chargesBreakdown}>
+                                    <View style={m.chargesRow}>
+                                      <Text style={m.chargesLbl}>Principal em aberto</Text>
+                                      <Text style={m.chargesVal}>{fmt(ins.principal_due ?? rem)}</Text>
+                                    </View>
+                                    {(ins.fine_amount ?? 0) > 0 && (
+                                      <View style={m.chargesRow}>
+                                        <Text style={m.chargesLbl}>Multa</Text>
+                                        <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.fine_amount!)}</Text>
+                                      </View>
+                                    )}
+                                    {(ins.interest_amount ?? 0) > 0 && (
+                                      <View style={m.chargesRow}>
+                                        <Text style={m.chargesLbl}>
+                                          Mora
+                                          {ins.overdue_days != null && (
+                                            <Text style={m.chargesDaysChip}> ({ins.overdue_days}d)</Text>
+                                          )}
+                                        </Text>
+                                        <Text style={[m.chargesVal, { color: Colors.amber }]}>{fmt(ins.interest_amount!)}</Text>
+                                      </View>
+                                    )}
+                                    <View style={[m.chargesRow, m.chargesTotalRow]}>
+                                      <Text style={m.chargesTotalLbl}>Total a pagar</Text>
+                                      <Text style={m.chargesTotalVal}>{fmt(ins.total_due ?? (rem + chargesTotal))}</Text>
+                                    </View>
+                                  </View>
+                                )}
                               </View>
-                              <Text style={m.pixLabel}>Pix copia-e-cola</Text>
-                              <Pressable onPress={() => {
-                                Clipboard.setString(pixData.emv);
-                                toast.success("Copiado!");
-                              }} style={m.pixCopy}>
-                                <Icon name="copy" size={14} color={Colors.violet3} />
-                                <Text style={m.pixCopyTxt} numberOfLines={2}>{pixData.emv}</Text>
+                              <View style={{ gap: 6 }}>
+                                <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
+                                  <Icon name="calendar" size={14} color={Colors.violet3} />
+                                </Pressable>
+                                <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
+                                  <Text style={m.pixBtnTxt}>Pix</Text>
+                                </Pressable>
+                                <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
+                                  <Text style={m.receberTxt}>Receber</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* Registrar recebimento */}
+                    <View style={m.freeBox}>
+                      <Text style={m.freeTitle}>Receber valor livre</Text>
+
+                      {hasAccounts && (
+                        <View style={m.modeRow}>
+                          {(["fifo", "distribute"] as ReceiveMode[]).map(mode => (
+                            <Pressable
+                              key={mode}
+                              style={[m.modeChip, receiveMode === mode && m.modeChipOn]}
+                              onPress={() => setReceiveMode(mode)}
+                            >
+                              <Text style={[m.modeChipTxt, receiveMode === mode && m.modeChipTxtOn]}>
+                                {mode === "fifo" ? "Em um carnê" : "Distribuir entre carnês"}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+
+                      {hasAccounts && receiveMode === "fifo" && (
+                        <View style={[m.fieldBlock, { marginTop: 10 }]}>
+                          <Text style={m.fieldLabel}>Carnê</Text>
+                          <View style={m.chipRow}>
+                            <Pressable
+                              style={[m.chip, fifoAccountId === undefined && m.chipOn]}
+                              onPress={() => setFifoAccountId(undefined)}
+                            >
+                              <Text style={[m.chipTxt, fifoAccountId === undefined && m.chipTxtOn]}>Todos os carnês</Text>
+                            </Pressable>
+                            {accounts.map(acc => (
+                              <Pressable
+                                key={acc.id ?? "general"}
+                                style={[m.chip, fifoAccountId === acc.id && m.chipOn]}
+                                onPress={() => setFifoAccountId(acc.id)}
+                              >
+                                <Text style={[m.chipTxt, fifoAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
                               </Pressable>
-                              <Text style={m.pixAmt}>{fmt(pixData.amount)}</Text>
-                              {pixData.installment && (
-                                <Text style={m.pixMeta}>
-                                  Parcela {pixData.installment.number} · venc. {fmtDate(pixData.installment.due_date)}
-                                </Text>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      {hasAccounts && receiveMode === "distribute" && (
+                        <View style={m.fieldBlock}>
+                          {accounts.map(acc => {
+                            const key = acc.id ?? "general";
+                            return (
+                              <View key={key} style={m.distRow}>
+                                <Text style={m.distLabel} numberOfLines={1}>{acc.name}</Text>
+                                <View style={m.distInput}>
+                                  <Text style={m.amountPrefix}>R$</Text>
+                                  <TextInput
+                                    style={m.distField}
+                                    value={distributions[key] || ""}
+                                    onChangeText={v => setDistributions(prev => ({ ...prev, [key]: v.replace(/[^\d,.]/g, "") }))}
+                                    placeholder="0,00"
+                                    placeholderTextColor={Colors.ink3}
+                                    keyboardType="decimal-pad"
+                                  />
+                                </View>
+                              </View>
+                            );
+                          })}
+                          <View style={m.distTotal}>
+                            <Text style={m.distTotalLbl}>Total</Text>
+                            <Text style={m.distTotalVal}>{fmt(distributionTotal)}</Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {(!hasAccounts || receiveMode === "fifo") && (
+                        <>
+                          <Text style={m.fieldLabel}>Valor recebido</Text>
+                          <View style={m.amountIn}>
+                            <Text style={m.amountPrefix}>R$</Text>
+                            <TextInput
+                              style={m.amountInput}
+                              value={amount}
+                              onChangeText={(v) => setAmount(v.replace(/[^\d,.]/g, ""))}
+                              placeholder="0,00"
+                              placeholderTextColor={Colors.ink3}
+                              keyboardType="decimal-pad"
+                            />
+                          </View>
+                          <View style={m.quickRow}>
+                            {[50, 100, 200].map(v => (
+                              <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
+                                <Text style={m.qChipTxt}>{fmt(v)}</Text>
+                              </Pressable>
+                            ))}
+                            {totalBalance > 0 && (
+                              <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
+                                <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        </>
+                      )}
+
+                      <Text style={[m.fieldLabel, { marginTop: 14 }]}>Data do recebimento</Text>
+                      <DateInput
+                        value={dateBr}
+                        onChangeText={setDateBr}
+                        placeholder="dd/mm/aaaa"
+                        style={m.dateInput}
+                      />
+                      <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
+
+                      <Text style={[m.fieldLabel, { marginTop: 14 }]}>Forma</Text>
+                      <View style={m.methods}>
+                        {PAYMENT_METHODS.map(pm => (
+                          <Pressable key={pm.key} style={[m.method, method === pm.key && m.methodActive]} onPress={() => setMethod(pm.key)}>
+                            <Text style={[m.methodTxt, method === pm.key && { color: "#fff" }]}>{pm.label}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+
+                      {amountNum > 0 && (
+                        <View style={m.after}>
+                          <Text style={m.afterK}>Saldo após recebimento</Text>
+                          <Text style={m.afterV}>{fmt(afterBalance)}</Text>
+                        </View>
+                      )}
+
+                      {/* Fase 2: resumo de encargos quitados (exibido após recebimento) */}
+                      {lastChargesPaid != null && lastChargesPaid > 0 && lastTotalPaid != null && (
+                        <View style={m.chargesSummary}>
+                          <View style={m.chargesSummaryRow}>
+                            <Text style={m.chargesSummaryLbl}>Encargos quitados</Text>
+                            <Text style={[m.chargesSummaryVal, { color: Colors.red }]}>{fmt(lastChargesPaid)}</Text>
+                          </View>
+                          <View style={m.chargesSummaryRow}>
+                            <Text style={m.chargesSummaryLbl}>Abatido do principal</Text>
+                            <Text style={m.chargesSummaryVal}>{fmt(Math.max(0, lastTotalPaid - lastChargesPaid))}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Recebimento Valor Livre com Preview FIFO (DESIGN-38 B3) */}
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Valor Livre · Preview FIFO</Text>
+                      <Text style={[m.termsHint, { marginBottom: 10 }]}>
+                        Digite um valor para ver como será distribuído entre as parcelas (FIFO). Depois confirme para aplicar.
+                      </Text>
+
+                      {/* Seletor de carnê — visível quando há mais de 1 carnê nomeado */}
+                      {realCarnes.length > 1 && (
+                        <View style={{ marginBottom: 12 }}>
+                          <Text style={m.fieldLabel}>Carnê</Text>
+                          <View style={m.chipRow}>
+                            <Pressable
+                              style={[m.chip, freeAccountId === undefined && m.chipOn]}
+                              onPress={() => { setFreeAccountId(undefined); triggerPreview(freeAmt, undefined); }}
+                            >
+                              <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
+                            </Pressable>
+                            {realCarnes.map(acc => (
+                              <Pressable
+                                key={acc.id!}
+                                style={[m.chip, freeAccountId === acc.id && m.chipOn]}
+                                onPress={() => { setFreeAccountId(acc.id); triggerPreview(freeAmt, acc.id); }}
+                              >
+                                <Text style={[m.chipTxt, freeAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      <Text style={m.fieldLabel}>Valor recebido</Text>
+                      <View style={m.amountIn}>
+                        <Text style={m.amountPrefix}>R$</Text>
+                        <TextInput
+                          style={m.amountInput}
+                          value={freeAmt}
+                          onChangeText={(v) => {
+                            const clean = v.replace(/[^\d,.]/g, "");
+                            setFreeAmt(clean);
+                            triggerPreview(clean, freeAccountId);
+                          }}
+                          placeholder="0,00"
+                          placeholderTextColor={Colors.ink3}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+
+                      <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
+                      <DateInput
+                        value={freeDateBr}
+                        onChangeText={setFreeDateBr}
+                        placeholder="dd/mm/aaaa"
+                        style={m.dateInput}
+                      />
+
+                      <Text style={[m.fieldLabel, { marginTop: 12 }]}>Forma</Text>
+                      <View style={m.methods}>
+                        {PAYMENT_METHODS.map(pm => (
+                          <Pressable
+                            key={pm.key}
+                            style={[m.method, freeMethod === pm.key && m.methodActive]}
+                            onPress={() => setFreeMethod(pm.key)}
+                          >
+                            <Text style={[m.methodTxt, freeMethod === pm.key && { color: "#fff" }]}>{pm.label}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+
+                      {/* Preview FIFO */}
+                      {freePreviewLoading && (
+                        <View style={{ alignItems: "center", marginTop: 14 }}>
+                          <ActivityIndicator size="small" color={Colors.violet3} />
+                          <Text style={[m.termsHint, { textAlign: "center", marginTop: 4 }]}>Calculando distribuição...</Text>
+                        </View>
+                      )}
+                      {!freePreviewLoading && freePreview && (
+                        <View style={m.previewBox}>
+                          <Text style={m.previewTitle}>Distribuição FIFO</Text>
+                          {freePreview.applied.map((line, i) => (
+                            <View key={line.installment_id + i} style={m.previewRow}>
+                              <Text style={m.previewLbl}>
+                                Parcela {line.number ?? "?"}{line.account_id ? "" : ""}
+                              </Text>
+                              <View style={{ alignItems: "flex-end" }}>
+                                {line.charges_paid > 0 && (
+                                  <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
+                                    Encargos: {fmt(line.charges_paid)}
+                                  </Text>
+                                )}
+                                <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
+                                <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>{line.status_after}</Text>
+                              </View>
+                            </View>
+                          ))}
+                          <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
+                            <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
+                            <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
+                              {fmt(freePreview.new_balance)}
+                            </Text>
+                          </View>
+                          {freePreview.credit_generated > 0 && (
+                            <View style={m.previewRow}>
+                              <Text style={m.previewLbl}>Crédito gerado</Text>
+                              <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      <Pressable
+                        style={[m.cta, { marginTop: 14 }, (parseAmount(freeAmt) <= 0 || freeSubmitting) && { opacity: 0.45 }]}
+                        disabled={parseAmount(freeAmt) <= 0 || freeSubmitting}
+                        onPress={confirmFreePayment}
+                      >
+                        {freeSubmitting
+                          ? <ActivityIndicator color="#fff" />
+                          : <Text style={m.ctaTxt}>
+                              {parseAmount(freeAmt) > 0 ? `Confirmar ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
+                            </Text>}
+                      </Pressable>
+                    </View>
+
+                    {/* Histórico de pagamentos */}
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Histórico de pagamentos</Text>
+                      {(detail?.transactions || []).length === 0 ? (
+                        <Text style={m.emptyTxt}>Sem movimentações ainda.</Text>
+                      ) : (
+                        (detail?.transactions || []).map((t) => {
+                          const isPay = t.type === "payment";
+                          const prods = productsFromNotes(t.notes);
+                          return (
+                            <View key={t.id} style={m.tlItem}>
+                              <View style={[m.tlDot, { backgroundColor: isPay ? Colors.green : Colors.violet3 }]} />
+                              <View style={{ flex: 1 }}>
+                                <View style={m.tlLine}>
+                                  <Text style={m.tlMain}>{isPay ? `Recebimento${t.payment_method ? " · " + t.payment_method : ""}` : "Lançamento"}</Text>
+                                  <Text style={[m.tlAmt, { color: isPay ? Colors.green : Colors.violet3 }]}>
+                                    {isPay ? "+" : ""}{fmt(t.amount)}
+                                  </Text>
+                                </View>
+                                {!!prods && <Text style={m.tlSub}>{prods}</Text>}
+                                <Text style={m.tlSub}>{fmtDate(t.created_at)}</Text>
+                                {!!t.account_name && (
+                                  <View style={m.tlAccTag}><Text style={m.tlAccTagTxt}>{t.account_name}</Text></View>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+                  </>
+                )}
+
+                {/* ===== TAB HISTÓRICO ===== */}
+                {tab === "historico" && (
+                  <View>
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Histórico de eventos</Text>
+                      {histLoading && histItems.length === 0 ? (
+                        <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                          <ActivityIndicator color={Colors.violet3} />
+                        </View>
+                      ) : histItems.length === 0 ? (
+                        <View style={{ paddingVertical: 12 }}>
+                          <Text style={m.emptyTxt}>Sem eventos ainda.</Text>
+                          <Pressable
+                            style={[m.cta, { marginTop: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 }]}
+                            onPress={() => loadHistory(null)}
+                          >
+                            <Text style={[m.ctaTxt, { color: Colors.violet3 }]}>Carregar histórico</Text>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        histItems.map((ev) => {
+                          const typeLabels: Record<string, string> = {
+                            payment: "Recebimento",
+                            charge: "Lançamento",
+                            block: "Bloqueio",
+                            unblock: "Desbloqueio",
+                            terms_override: "Termos alterados",
+                            manual_debit: "Débito manual",
+                            installment_edit: "Parcela editada",
+                          };
+                          return (
+                            <View key={ev.id} style={m.tlItem}>
+                              <View style={[m.tlDot, { backgroundColor: ev.event_type === "payment" ? Colors.green : Colors.ink3 }]} />
+                              <View style={{ flex: 1 }}>
+                                <View style={m.tlLine}>
+                                  <Text style={m.tlMain}>{typeLabels[ev.event_type] ?? ev.event_type}</Text>
+                                  {ev.amount != null && (
+                                    <Text style={[m.tlAmt, { color: ev.event_type === "payment" ? Colors.green : Colors.ink }]}>
+                                      {ev.event_type === "payment" ? "+" : ""}{fmt(ev.amount)}
+                                    </Text>
+                                  )}
+                                </View>
+                                <Text style={m.tlSub}>{fmtDate(ev.created_at)}</Text>
+                                {!!ev.notes && <Text style={m.tlSub}>{ev.notes}</Text>}
+                                {!!ev.account_name && (
+                                  <View style={m.tlAccTag}><Text style={m.tlAccTagTxt}>{ev.account_name}</Text></View>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+                      {histHasMore && (
+                        <Pressable
+                          style={[m.cta, { marginTop: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                          onPress={() => loadHistory(histCursor)}
+                          disabled={histLoading}
+                        >
+                          {histLoading
+                            ? <ActivityIndicator size="small" color={Colors.violet3} />
+                            : <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Carregar mais</Text>}
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* ===== TAB CONTA ===== */}
+                {tab === "conta" && (
+                  <View>
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Status do crediário</Text>
+                      <View style={m.row}>
+                        <Text style={m.rowK}>Status</Text>
+                        <View style={[m.pill, { backgroundColor: (isBlocked ? Colors.red : Colors.green) + "22" }]}>
+                          <Text style={[m.pillTxt, { color: isBlocked ? Colors.red : Colors.green }]}>
+                            {isBlocked ? "Bloqueado" : "Ativo"}
+                          </Text>
+                        </View>
+                      </View>
+                      {isBlocked && !!profile?.blocked_reason && (
+                        <View style={m.row}>
+                          <Text style={m.rowK}>Motivo</Text>
+                          <Text style={[m.rowV, { fontSize: 13 }]}>{profile.blocked_reason}</Text>
+                        </View>
+                      )}
+                      {!!profile && (
+                        <>
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Score</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                              <Text style={[m.rowV, { color: scoreColor(scoreLabel), fontSize: 15 }]}>
+                                {profile.credit_score}
+                              </Text>
+                              {!!scoreLabel && (
+                                <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
+                                  <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
+                                    {scoreLabelPt(scoreLabel)}
+                                  </Text>
+                                </View>
                               )}
                             </View>
-                          )}
-
-                          {/* Ações do carnê */}
-                          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-                            <Pressable
-                              style={[m.carneBtn]}
-                              onPress={() => printCarne(companyId, acc.id!)}
-                            >
-                              <Icon name="printer" size={14} color={Colors.violet3} />
-                              <Text style={m.carneBtnTxt}>Imprimir carnê</Text>
-                            </Pressable>
                           </View>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })
-              ) : (
-                /* Layout plano (sem carnês) */
-                <View>
-                  {openInst.length === 0 ? (
-                    <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                      <Text style={m.emptyInstText}>Nenhuma parcela em aberto.</Text>
-                    </View>
-                  ) : (
-                    openInst.map(ins => {
-                      const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-                      const hasCharges = (ins.charges_total ?? 0) > 0;
-                      const isEditingThis = editingDueDateInst?.id === ins.id;
-
-                      return (
-                        <View key={ins.id} style={m.parcRow}>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                              <Text style={[m.parcNum, ins.status === "overdue" && { color: Colors.red }]}>
-                                Parcela {ins.installment_number}/{ins.total_installments}
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Limite total</Text>
+                            <Text style={m.rowV}>{fmt(profile.credit_limit)}</Text>
+                          </View>
+                          {availableLimit !== undefined && (
+                            <View style={m.row}>
+                              <Text style={m.rowK}>Disponível</Text>
+                              <Text style={[m.rowV, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>
+                                {fmt(availableLimit)}
                               </Text>
-                              {ins.status === "overdue" && <Text style={m.overduePill}>Atrasada</Text>}
                             </View>
-                            <Text style={m.parcS}>Venc. {fmtDate(ins.due_date)} · {fmt(rem)}</Text>
-
-                            {hasCharges && (
-                              <View style={m.chargesBox}>
-                                <Text style={m.chargesRow}>Principal: {fmt(rem - (ins.charges_total ?? 0))}</Text>
-                                <Text style={m.chargesRow}>Multa: {fmt(ins.late_fee ?? 0)}</Text>
-                                <Text style={m.chargesRow}>Mora ({ins.days_charged ?? 0}d): {fmt(ins.late_interest ?? 0)}</Text>
-                                <Text style={[m.chargesRow, { fontWeight: "700" }]}>Total: {fmt(ins.total_due ?? rem)}</Text>
-                              </View>
-                            )}
-
-                            {isEditingThis && (
-                              <View style={m.dueDateEditor}>
-                                <DateInput
-                                  value={editDueDateInput}
-                                  onChangeText={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
-                                  placeholder="dd/mm/aaaa"
-                                  style={m.dueDateInput}
-                                />
-                                {editDueDateError ? <Text style={m.dueDateError}>{editDueDateError}</Text> : null}
-                                <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-                                  <Pressable style={m.dueDateSave} onPress={confirmEditDueDate}>
-                                    <Text style={m.dueDateSaveTxt}>Salvar</Text>
-                                  </Pressable>
-                                  <Pressable onPress={() => setEditingDueDateInst(null)}>
-                                    <Text style={{ color: Colors.ink3, fontSize: 12, paddingVertical: 6 }}>Cancelar</Text>
-                                  </Pressable>
-                                </View>
-                              </View>
-                            )}
+                          )}
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Em aberto</Text>
+                            <Text style={[m.rowV, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+                              {fmt(totalBalance)}
+                            </Text>
                           </View>
-
-                          <View style={{ flexDirection: "row", gap: 6 }}>
-                            <Pressable style={m.iconBtn} onPress={() => loadPix(ins.id)}>
-                              {pixLoading && pixInstId === ins.id
-                                ? <ActivityIndicator size="small" color={Colors.violet3} />
-                                : <Icon name="qr_code" size={16} color={pixInstId === ins.id ? Colors.violet3 : Colors.ink2} />}
-                            </Pressable>
-                            <Pressable style={m.iconBtn} onPress={() => isEditingThis ? setEditingDueDateInst(null) : openEditDueDate(ins)}>
-                              <Icon name="calendar" size={16} color={isEditingThis ? Colors.violet3 : Colors.ink2} />
-                            </Pressable>
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Parcelas abertas</Text>
+                            <Text style={m.rowV}>{openInst.length}</Text>
                           </View>
-                        </View>
-                      );
-                    })
-                  )}
-
-                  {/* Pix inline (layout plano) */}
-                  {pixInstId && pixData && openInst.find(i => i.id === pixInstId) && (
-                    <View style={m.pixCard}>
-                      <View style={{ alignItems: "center", marginBottom: 12 }}>
-                        <QRCode value={pixData.emv} size={160} />
-                      </View>
-                      <Text style={m.pixLabel}>Pix copia-e-cola</Text>
-                      <Pressable onPress={() => {
-                        Clipboard.setString(pixData!.emv);
-                        toast.success("Copiado!");
-                      }} style={m.pixCopy}>
-                        <Icon name="copy" size={14} color={Colors.violet3} />
-                        <Text style={m.pixCopyTxt} numberOfLines={2}>{pixData.emv}</Text>
-                      </Pressable>
-                      <Text style={m.pixAmt}>{fmt(pixData.amount)}</Text>
-                      {pixData.installment && (
-                        <Text style={m.pixMeta}>
-                          Parcela {pixData.installment.number} · venc. {fmtDate(pixData.installment.due_date)}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-
-          ) : tab === "historico" ? (
-            <View>
-              {histLoading && histItems.length === 0 ? (
-                <ActivityIndicator color={Colors.violet3} style={{ marginTop: 16 }} />
-              ) : histItems.length === 0 ? (
-                <Text style={m.emptyInstText}>Nenhum evento encontrado.</Text>
-              ) : (
-                histItems.map((ev, i) => (
-                  <View key={ev.id || i} style={m.tlRow}>
-                    <View style={m.tlDot} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={m.tlTitle}>
-                        {ev.type === "purchase" ? "Compra" :
-                          ev.type === "manual_debit" ? "Débito manual" :
-                          ev.type === "payment" ? "Pagamento" :
-                          ev.type === "exchange_credit" ? "Crédito (troca)" :
-                          "Devolução"}
-                        {" "}{ev.amount > 0 ? "+" : ""}{fmt(ev.amount)}
-                      </Text>
-                      <Text style={m.tlSub}>{fmtDate(ev.created_at)}</Text>
-                      {ev.items && ev.items.length > 0 && (
-                        <Text style={m.tlDetail} numberOfLines={2}>
-                          {ev.items.map(it => `${it.product_name} ×${it.quantity}`).join(", ")}
-                        </Text>
+                        </>
                       )}
                     </View>
                   </View>
-                ))
-              )}
-              {histHasMore && (
-                <Pressable style={m.loadMoreBtn} onPress={() => loadHistory(histCursor)} disabled={histLoading}>
-                  {histLoading ? <ActivityIndicator size="small" color={Colors.violet3} /> : <Text style={m.loadMoreTxt}>Carregar mais</Text>}
-                </Pressable>
-              )}
-            </View>
+                )}
 
-          ) : tab === "conta" ? (
-            <View>
-              {/* Saldo geral */}
-              <View style={m.summaryRow}>
-                <Text style={m.summaryLabel}>Saldo total em aberto</Text>
-                <Text style={[m.summaryValue, { color: totalBalance > 0 ? Colors.red : Colors.green }]}>{fmt(totalBalance)}</Text>
-              </View>
-
-              {/* Carnês */}
-              {hasAccounts && (
-                <View style={{ marginTop: 16 }}>
-                  <Text style={m.sectionTitle}>Carnês ({accounts.length})</Text>
-                  {accounts.map(acc => (
-                    <View key={acc.id || "general"} style={m.accSummaryRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={m.accSummaryName}>{acc.name}</Text>
-                        <Text style={m.accSummaryMeta}>{acc.open_count} parcelas · {acc.status === "open" ? "Ativo" : "Fechado"}</Text>
+                {/* ===== TAB TERMOS ===== */}
+                {tab === "termos" && (
+                  <View style={m.card}>
+                    <Text style={m.cardTitle}>Termos do cliente{hasTermsOverride ? " (personalizado)" : ""}</Text>
+                    <Text style={m.termsHint}>
+                      Deixe em branco para usar os termos padrão da empresa. Ao salvar com valores, esses termos se aplicam só a este cliente.
+                    </Text>
+                    {!!profile?.terms && (
+                      <View style={[m.termsEffRow, { marginBottom: 12 }]}>
+                        <Text style={m.termsEffLbl}>Termos efetivos</Text>
+                        <Text style={m.termsEffVal}>
+                          Máx {profile.terms.effective.max_installments}x · {profile.terms.effective.interest_rate}% a.m.
+                        </Text>
                       </View>
-                      <Text style={[m.accSummaryBal, acc.overdue && { color: Colors.red }]}>{fmt(acc.balance)}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Criar carnê */}
-              {!showNewAccount ? (
-                <Pressable style={m.addAccountBtn} onPress={() => setShowNewAccount(true)}>
-                  <Icon name="plus" size={14} color={Colors.violet3} />
-                  <Text style={m.addAccountTxt}>Novo carnê</Text>
-                </Pressable>
-              ) : (
-                <View style={m.newAccountForm}>
-                  <TextInput
-                    style={m.newAccountInput}
-                    placeholder="Nome do carnê (ex: Mensal Janeiro)"
-                    placeholderTextColor={Colors.ink3}
-                    value={newAccountName}
-                    onChangeText={setNewAccountName}
-                    autoFocus
-                  />
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                    )}
+                    <Text style={m.fieldLabel}>Máximo de parcelas</Text>
+                    <TextInput
+                      style={[m.termsInput, { marginBottom: 12 }]}
+                      value={termsMaxInst}
+                      onChangeText={v => { setTermsMaxInst(v.replace(/[^\d]/g, "")); setTermsDirty(true); }}
+                      placeholder="Padrão da empresa"
+                      placeholderTextColor={Colors.ink3}
+                      keyboardType="number-pad"
+                    />
+                    <Text style={m.fieldLabel}>Juros ao mês (%)</Text>
+                    <TextInput
+                      style={[m.termsInput, { marginBottom: 14 }]}
+                      value={termsInterest}
+                      onChangeText={v => { setTermsInterest(v.replace(/[^\d,.]/g, "")); setTermsDirty(true); }}
+                      placeholder="Padrão da empresa"
+                      placeholderTextColor={Colors.ink3}
+                      keyboardType="decimal-pad"
+                    />
                     <Pressable
-                      style={[m.cta, { flex: 1 }, (creatingAccount || !newAccountName.trim()) && { opacity: 0.45 }]}
-                      disabled={creatingAccount || !newAccountName.trim()}
-                      onPress={createAccount}
+                      style={[m.cta, (!termsDirty || savingTerms) && { opacity: 0.45 }]}
+                      onPress={saveTerms}
+                      disabled={!termsDirty || savingTerms}
                     >
-                      {creatingAccount ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.ctaTxt}>Criar</Text>}
-                    </Pressable>
-                    <Pressable onPress={() => { setShowNewAccount(false); setNewAccountName(""); }} style={{ justifyContent: "center", paddingHorizontal: 12 }}>
-                      <Text style={{ color: Colors.ink3 }}>Cancelar</Text>
+                      {savingTerms
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={m.ctaTxt}>Salvar termos</Text>}
                     </Pressable>
                   </View>
-                </View>
-              )}
-            </View>
+                )}
 
-          ) : tab === "termos" ? (
-            <View>
-              <Text style={m.sectionTitle}>Termos personalizados</Text>
-              <Text style={m.termsDesc}>Sobrescreve o plano geral só para este cliente. Deixe em branco para usar o padrão.</Text>
+                {/* ===== TAB BLOQUEIO ===== */}
+                {tab === "bloqueio" && (
+                  <View>
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Bloqueio manual</Text>
+                      <Text style={m.termsHint}>
+                        Bloquear impede novos lançamentos para este cliente. O saldo existente continua visível e pode ser recebido.
+                      </Text>
+                      <View style={m.blockRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={m.blockLabel}>{isBlocked ? "Cliente bloqueado" : "Cliente ativo"}</Text>
+                          {isBlocked && !!profile?.blocked_reason && (
+                            <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
+                          )}
+                        </View>
+                        <Switch
+                          value={isBlocked}
+                          onValueChange={handleBlockToggle}
+                          trackColor={{ false: Colors.border2, true: Colors.red + "88" }}
+                          thumbColor={isBlocked ? Colors.red : Colors.ink3}
+                        />
+                      </View>
+                    </View>
 
-              {profile?.terms?.overrides && Object.values(profile.terms.overrides).some(v => v !== null) && (
-                <View style={m.overrideBadge}>
-                  <Text style={m.overrideBadgeTxt}>Termos customizados ativos</Text>
-                </View>
-              )}
+                    {!!blockingAction && (
+                      <>
+                        {blockingAction === "block" && (
+                          <View style={m.card}>
+                            <Text style={m.fieldLabel}>Motivo do bloqueio (opcional)</Text>
+                            <TextInput
+                              style={[m.termsInput, { marginBottom: 12 }]}
+                              value={blockReason}
+                              onChangeText={setBlockReason}
+                              placeholder="Ex: inadimplente, limite excedido..."
+                              placeholderTextColor={Colors.ink3}
+                              multiline
+                            />
+                          </View>
+                        )}
+                        <Pressable
+                          style={[m.cta, { marginBottom: 8 }]}
+                          onPress={confirmBlock}
+                        >
+                          <Text style={m.ctaTxt}>{blockingAction === "block" ? "Confirmar bloqueio" : "Confirmar desbloqueio"}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[m.cta, { marginTop: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                          onPress={() => setBlockingAction(null)}
+                        >
+                          <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Cancelar</Text>
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
 
-              <View style={m.fieldGroup}>
-                <Text style={m.fieldLabel}>Máx. parcelas</Text>
-                <TextInput
-                  style={m.fieldInput}
-                  value={termsMaxInst}
-                  onChangeText={v => { setTermsMaxInst(v.replace(/\D/g, "")); setTermsDirty(true); }}
-                  placeholder={String(profile?.terms?.effective?.max_installments ?? profile?.config?.max_installments ?? "")}
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={m.fieldGroup}>
-                <Text style={m.fieldLabel}>Juros mensais (%)</Text>
-                <TextInput
-                  style={m.fieldInput}
-                  value={termsInterest}
-                  onChangeText={v => { setTermsInterest(v.replace(/[^\d,]/g, "")); setTermsDirty(true); }}
-                  placeholder={profile?.terms?.effective?.interest_rate != null ? String((profile.terms.effective.interest_rate * 100).toFixed(2)) : ""}
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <Pressable
-                style={[m.cta, (!termsDirty || savingTerms) && { opacity: 0.45 }]}
-                disabled={!termsDirty || savingTerms}
-                onPress={saveTerms}
-              >
-                {savingTerms ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.ctaTxt}>Salvar termos</Text>}
-              </Pressable>
-
-              {(termsMaxInst || termsInterest) && (
-                <Pressable style={m.clearBtn} onPress={() => {
-                  setTermsMaxInst(""); setTermsInterest(""); setTermsDirty(true);
-                  toast.info?.("Limpar e salvar para remover customização");
-                }}>
-                  <Text style={m.clearBtnTxt}>Limpar customização</Text>
+          {/* DESIGN-38 B2: Modal Pix da parcela */}
+          {!!pixInstId && (
+            <View style={m.pixOverlay}>
+              <View style={m.pixOverlayHeader}>
+                <Text style={m.editDueDateTitle}>Pix da Parcela</Text>
+                <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.xBtn}>
+                  <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
-              )}
-            </View>
-
-          ) : /* bloqueio */ (
-            <View>
-              <Text style={m.sectionTitle}>Gestão de acesso ao crediário</Text>
-
-              <View style={m.blockRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={m.blockLabel}>{isBlocked ? "Cliente bloqueado" : "Cliente ativo"}</Text>
-                  <Text style={m.blockMeta}>{isBlocked ? (profile?.blocked_reason || "Sem motivo registrado") : "Compras liberadas no crediário"}</Text>
-                </View>
-                <Switch
-                  value={isBlocked}
-                  onValueChange={toggleBlock}
-                  disabled={!!blockingAction}
-                  trackColor={{ false: Colors.green + "66", true: Colors.red + "66" }}
-                  thumbColor={isBlocked ? Colors.red : Colors.green}
-                />
               </View>
-
-              {!isBlocked && (
-                <View style={m.fieldGroup}>
-                  <Text style={m.fieldLabel}>Motivo do bloqueio (opcional)</Text>
-                  <TextInput
-                    style={[m.fieldInput, { minHeight: 60 }]}
-                    value={blockReason}
-                    onChangeText={setBlockReason}
-                    placeholder="Ex.: inadimplência recorrente"
-                    placeholderTextColor={Colors.ink3}
-                    multiline
-                  />
+              {pixLoading && (
+                <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                  <ActivityIndicator color={Colors.violet3} />
+                  <Text style={[m.termsHint, { marginTop: 6, textAlign: "center" }]}>Gerando código Pix...</Text>
                 </View>
               )}
-
-              {!!blockingAction && <ActivityIndicator style={{ marginTop: 12 }} color={Colors.violet3} />}
-
-              {/* Cobrar via WhatsApp */}
-              {onCobrar && phone && (
-                <Pressable
-                  style={[m.cta, { marginTop: 20, backgroundColor: Colors.green }]}
-                  onPress={() => { onClose(); onCobrar(customerId!, name, phone); }}
-                >
-                  <Icon name="message_circle" size={16} color="#fff" />
-                  <Text style={m.ctaTxt}>Enviar cobrança via WhatsApp</Text>
-                </Pressable>
+              {!pixLoading && pixData && (
+                <>
+                  <View style={{ alignItems: "center", marginVertical: 14 }}>
+                    <QRCode
+                      value={pixData.emv}
+                      size={180}
+                      color="#000"
+                      backgroundColor="#fff"
+                    />
+                  </View>
+                  <Text style={m.pixAmtLabel}>{fmt(pixData.amount)}</Text>
+                  {!!pixData.installment && (
+                    <Text style={m.pixInstLabel}>
+                      Parcela {pixData.installment.number} · venc. {fmtDate(pixData.installment.due_date)}
+                    </Text>
+                  )}
+                  <Text style={m.fieldLabel}>Código copia e cola</Text>
+                  <View style={m.pixEmvBox}>
+                    <Text style={m.pixEmvTxt} selectable numberOfLines={3}>{pixData.emv}</Text>
+                  </View>
+                  <Pressable
+                    style={[m.cta, { marginTop: 10 }]}
+                    onPress={() => {
+                      Clipboard.setString(pixData.emv);
+                      toast.success("Código Pix copiado!");
+                    }}
+                  >
+                    <Text style={m.ctaTxt}>Copiar código</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           )}
 
-        </ScrollView>
-
-        {/* ── Barra de ações persistente (fichaActionBar) ── */}
-        <View style={m.fichaActionBar}>
-          {/* Receber (FIFO normal) */}
-          <View style={{ flex: 1 }}>
-            <View style={m.amountIn}>
-              <Text style={m.amountPrefix}>R$</Text>
-              <TextInput
-                style={m.amountInput}
-                value={amount}
-                onChangeText={v => setAmount(v.replace(/[^\d,.]/g, ""))}
-                placeholder="0,00"
-                placeholderTextColor={Colors.ink3}
-                keyboardType="decimal-pad"
-              />
-            </View>
-          </View>
-          <Pressable
-            style={[m.fichaActionBtn, (amountNum <= 0 || payMut.isPending || dateInvalid) && { opacity: 0.45 }]}
-            disabled={amountNum <= 0 || payMut.isPending || dateInvalid}
-            onPress={() => payMut.mutate()}
-          >
-            {payMut.isPending
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={m.fichaActionBtnTxt}>Receber {amountNum > 0 ? fmt(amountNum) : ""}</Text>}
-          </Pressable>
-
-          {/* Valor Livre */}
-          <Pressable
-            style={[m.fichaActionBtn, m.fichaActionBtnSecondary, (parseAmount(freeAmt) <= 0 || freeSubmitting) && { opacity: 0.45 }]}
-            disabled={parseAmount(freeAmt) <= 0 || freeSubmitting}
-            onPress={confirmFreePayment}
-          >
-            {freeSubmitting
-              ? <ActivityIndicator size="small" color={Colors.violet3} />
-              : <Text style={[m.fichaActionBtnTxt, { color: Colors.violet3 }]}>
-                  {parseAmount(freeAmt) > 0 ? `Confirmar ${fmt(parseAmount(freeAmt))}` : "Valor livre"}
-                </Text>}
-          </Pressable>
-        </View>
-
-        {/* ── Preview de distribuição (valor livre) ── */}
-        {(freePreviewLoading || freePreview) && (
-          <View style={m.previewBox}>
-            {freePreviewLoading ? (
-              <ActivityIndicator size="small" color={Colors.violet3} />
-            ) : freePreview ? (
-              <View>
-                <Text style={m.previewTitle}>Preview de distribuição</Text>
-                {freePreview.applied.map((line, i) => (
-                  <View key={i} style={m.previewRow}>
-                    <Text style={m.previewLabel}>Parcela {line.number ?? "?"}</Text>
-                    <Text style={m.previewVal}>{fmt(line.principal_paid + line.charges_paid)}</Text>
-                  </View>
-                ))}
-                <View style={[m.previewRow, { marginTop: 4, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 6 }]}>
-                  <Text style={m.previewLabel}>Saldo após</Text>
-                  <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
-                    {fmt(freePreview.new_balance)}
-                  </Text>
-                </View>
-                {freePreview.credit_generated > 0 && (
-                  <View style={m.previewRow}>
-                    <Text style={m.previewLabel}>Crédito gerado</Text>
-                    <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
-                  </View>
-                )}
+          {/* Entrega 4: editor inline de vencimento de parcela */}
+          {editingDueDateInst && (
+            <View style={m.editDueDateSheet}>
+              <View style={m.editDueDateHeader}>
+                <Text style={m.editDueDateTitle}>Alterar Vencimento</Text>
+                <Pressable onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }} style={m.xBtn}>
+                  <Icon name="x" size={13} color={Colors.ink3} />
+                </Pressable>
               </View>
-            ) : null}
-          </View>
-        )}
+              <Text style={m.editDueDateSub}>
+                Parcela {editingDueDateInst.installment_number}/{editingDueDateInst.total_installments} · parcelas seguintes serão recalculadas.
+              </Text>
+              <Text style={[m.fieldLabel, { marginBottom: 6, marginTop: 4 }]}>NOVA DATA (DD/MM/AAAA)</Text>
+              <DateInput
+                value={editDueDateInput}
+                onChangeText={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
+                placeholder="15/07/2026"
+                forceShowError={!!editDueDateError}
+              />
+              {!!editDueDateError && (
+                <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{editDueDateError}</Text>
+              )}
+              <View style={{ flexDirection: "row", gap: 9, marginTop: 14 }}>
+                <Pressable
+                  style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                  onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }}
+                >
+                  <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={[m.cta, { flex: 2 }, editDueDateMut.isPending && { opacity: 0.5 }]}
+                  onPress={handleEditDueDateConfirm}
+                  disabled={editDueDateMut.isPending}
+                >
+                  {editDueDateMut.isPending
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={m.ctaTxt}>Confirmar</Text>}
+                </Pressable>
+              </View>
+            </View>
+          )}
 
-      </View>
+          {/* C-2: Barra de ações persistente — fora do ScrollView */}
+          <View style={m.fichaActionBar}>
+            {/* Confirmar recebimento (handler: confirmReceive — ativo na aba parcelas com valor preenchido) */}
+            <Pressable
+              style={[m.fichaActionBtn, m.fichaActionBtnPrimary, (amountNum <= 0 || dateInvalid || payMut.isPending) && { opacity: 0.45 }]}
+              disabled={amountNum <= 0 || dateInvalid || payMut.isPending}
+              onPress={confirmReceive}
+            >
+              {payMut.isPending
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={m.fichaActionBtnTxt}>{amountNum > 0 ? `Receber ${fmt(amountNum)}` : "Receber"}</Text>}
+            </Pressable>
+            {/* Confirmar valor livre (handler: confirmFreePayment) */}
+            <Pressable
+              style={[m.fichaActionBtn, m.fichaActionBtnSecondary, (parseAmount(freeAmt) <= 0 || freeSubmitting) && { opacity: 0.45 }]}
+              disabled={parseAmount(freeAmt) <= 0 || freeSubmitting}
+              onPress={confirmFreePayment}
+            >
+              {freeSubmitting
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={m.fichaActionBtnTxt}>Valor Livre</Text>}
+            </Pressable>
+            {/* C-2: Novo lançamento sem handler na ficha — fora de escopo */}
+          </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
 
 const m = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  sheet: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: "92%",
-    backgroundColor: Colors.bg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: "hidden",
-  },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 16 },
+  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "90%", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
 
-  // Fixed header
-  fichaHeaderFixed: {
-    backgroundColor: Colors.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 0,
-  },
-  fichaHeaderRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
-  fichaName: { fontSize: 20, fontWeight: "800", color: Colors.ink },
-  fichaPhone: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  crumb: { flexDirection: "row", alignItems: "center", gap: 5 },
+  crumbTxt: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  xBtn: { width: 30, height: 30, borderRadius: 9, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
 
-  fichaScoreRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" },
-  scoreBadge: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
-  scoreBadgeTxt: { fontSize: 11, fontWeight: "700" },
-  fichaLimitTxt: { fontSize: 11, color: Colors.ink3 },
+  body: { flexGrow: 0 },
 
-  fichaHero: { alignItems: "center", paddingVertical: 14 },
-  fichaHeroLabel: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 },
-  fichaHeroValue: { fontSize: 36, fontWeight: "900", color: Colors.ink, letterSpacing: -1 },
-  fichaHeroMeta: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
+  // Tabs
+  tabs: { flexDirection: "row", gap: 6, marginBottom: 14 },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  tabOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  tabTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
+  tabTxtOn: { color: "#fff" },
 
-  warnBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.amber + "18", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
-  warnText: { fontSize: 12, color: Colors.amber, flex: 1 },
+  // Score banner
+  scoreBanner: { flexDirection: "row", alignItems: "flex-start", gap: 9, backgroundColor: Colors.amber + "18", borderWidth: 1, borderColor: Colors.amber + "44", borderRadius: 11, padding: 12, marginBottom: 13 },
+  scoreBannerTxt: { flex: 1, fontSize: 12, color: Colors.amber, lineHeight: 17 },
+  scorePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  scorePillTxt: { fontSize: 10, fontWeight: "700" },
 
-  tabBar: { marginTop: 4, marginBottom: 0 },
-  tabBtn: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  tabBtnActive: { borderBottomColor: Colors.violet3 },
-  tabTxt: { fontSize: 13, fontWeight: "600", color: Colors.ink3 },
-  tabTxtActive: { color: Colors.violet3 },
+  cust: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 },
+  custL: { flexDirection: "row", alignItems: "center", gap: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  avatarTxt: { fontSize: 18, fontWeight: "700", color: Colors.violet3 },
+  custName: { fontSize: 18, fontWeight: "700", color: Colors.ink },
+  custSub: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  pill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  pillTxt: { fontSize: 10, fontWeight: "700" },
+  waBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.4)", borderRadius: 11, paddingHorizontal: 12, paddingVertical: 9 },
+  waTxt: { fontSize: 12, fontWeight: "700", color: Colors.green },
 
-  // Carnê cards
-  accCard: { backgroundColor: Colors.bg3, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10, overflow: "hidden" },
-  accHead: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
-  accName: { fontSize: 14, fontWeight: "700", color: Colors.ink },
-  accBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderColor: Colors.green + "44", backgroundColor: Colors.green + "18" },
-  accBadgeTxt: { fontSize: 10, fontWeight: "700", color: Colors.green },
-  accPeriod: { fontSize: 11, color: Colors.ink3 },
-  accBalance: { fontSize: 16, fontWeight: "800", color: Colors.ink },
-  accNextDue: { fontSize: 11, color: Colors.ink3 },
-  accBody: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: 1, borderTopColor: Colors.border },
+  card: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 13 },
 
-  // Parcelas
-  parcRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border2 },
-  parcNum: { fontSize: 13, fontWeight: "700", color: Colors.ink },
-  parcS: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-  overduePill: { fontSize: 10, fontWeight: "700", color: Colors.red, backgroundColor: Colors.red + "18", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
-  emptyInstText: { fontSize: 13, color: Colors.ink3, paddingVertical: 12 },
+  // Hero "Em aberto"
+  heroCard: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 16, padding: 18, marginBottom: 13, alignItems: "center" },
+  heroLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5, color: Colors.violet3, textTransform: "uppercase", marginBottom: 6 },
+  heroValue: { fontSize: 34, fontWeight: "800", marginBottom: 4 },
+  heroSub: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
 
-  chargesBox: { marginTop: 6, backgroundColor: Colors.amber + "12", borderRadius: 8, padding: 8, gap: 2 },
-  chargesRow: { fontSize: 11, color: Colors.ink2 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  cardTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 11 },
+  rowK: { fontSize: 13, fontWeight: "600", color: Colors.ink },
+  rowKsub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  rowV: { fontSize: 17, fontWeight: "800" },
 
-  dueDateEditor: { marginTop: 8 },
-  dueDateInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg3 },
-  dueDateError: { fontSize: 11, color: Colors.red, marginTop: 4 },
-  dueDateSave: { backgroundColor: Colors.violet3, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 },
-  dueDateSaveTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  newAccBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
+  newAccTxt: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
+  newAccRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  newAccInput: { flex: 1, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, color: Colors.ink, fontSize: 13, backgroundColor: Colors.bg2 },
+  newAccConfirm: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8, alignItems: "center", justifyContent: "center" },
+  newAccConfirmTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
-  // Pix card
-  pixCard: { marginTop: 12, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  pixLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, marginBottom: 6 },
-  pixCopy: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.bg4, borderRadius: 8, padding: 10 },
-  pixCopyTxt: { flex: 1, fontSize: 11, color: Colors.ink2, fontFamily: Platform.OS === "web" ? "monospace" : undefined },
-  pixAmt: { fontSize: 18, fontWeight: "800", color: Colors.ink, marginTop: 10, textAlign: "center" },
-  pixMeta: { fontSize: 11, color: Colors.ink3, marginTop: 4, textAlign: "center" },
+  accCard: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12, marginTop: 4, paddingBottom: 4 },
+  accTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  accName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  accMeta: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 5 },
+  accBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, borderWidth: 1 },
+  accBadgeTxt: { fontSize: 10, fontWeight: "700" },
+  accBalance: { fontSize: 16, fontWeight: "800" },
+  accNextDue: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  accActions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
+  accActionBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 13, paddingVertical: 7 },
+  accActionWa: { backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)" },
+  accActionTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  accInstList: { marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
 
-  iconBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg3 },
+  parc: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: Colors.border },
+  parcT: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  parcS: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  badgeTxt: { fontSize: 10, fontWeight: "700" },
+  receberBtn: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
+  receberTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
-  carneBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: Colors.violet3 + "55", backgroundColor: Colors.violetD },
-  carneBtnTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  // Fase 2: breakdown encargos
+  chargesBreakdown: { marginTop: 7, backgroundColor: Colors.bg2, borderRadius: 9, padding: 9, borderWidth: 1, borderColor: Colors.border2 },
+  chargesRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  chargesLbl: { fontSize: 11, color: Colors.ink3, flex: 1 },
+  chargesVal: { fontSize: 11, fontWeight: "700", color: Colors.ink },
+  chargesDaysChip: { fontSize: 10, color: Colors.amber, fontWeight: "700" },
+  chargesTotalRow: { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 5, marginTop: 2, marginBottom: 0 },
+  chargesTotalLbl: { fontSize: 12, fontWeight: "700", color: Colors.ink, flex: 1 },
+  chargesTotalVal: { fontSize: 13, fontWeight: "800", color: Colors.red },
 
-  // Histórico
-  tlRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border2 },
-  tlDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.violet3, marginTop: 5 },
-  tlTitle: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  tlSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  tlDetail: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  loadMoreBtn: { paddingVertical: 12, alignItems: "center" },
-  loadMoreTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  // Fase 2: resumo encargos após recebimento
+  chargesSummary: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  chargesSummaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 },
+  chargesSummaryLbl: { fontSize: 12, color: Colors.ink3 },
+  chargesSummaryVal: { fontSize: 13, fontWeight: "800", color: Colors.ink },
 
-  // Conta / summary
-  summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border2 },
-  summaryLabel: { fontSize: 13, color: Colors.ink2 },
-  summaryValue: { fontSize: 16, fontWeight: "800" },
-  sectionTitle: { fontSize: 12, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 12 },
-  accSummaryRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border2 },
-  accSummaryName: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  accSummaryMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  accSummaryBal: { fontSize: 14, fontWeight: "800", color: Colors.ink },
-  addAccountBtn: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.violet3 + "55", backgroundColor: Colors.violetD },
-  addAccountTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-  newAccountForm: { marginTop: 12 },
-  newAccountInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg3 },
+  freeBox: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 14, marginBottom: 13 },
+  freeTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 10 },
+  modeRow: { flexDirection: "row", gap: 7, marginBottom: 10 },
+  modeChip: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 8 },
+  modeChipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  modeChipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2, textAlign: "center" },
+  modeChipTxtOn: { color: "#fff" },
+  fieldBlock: { marginTop: 4 },
+  fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 10 },
+  chip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
+  chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  chipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
+  chipTxtOn: { color: "#fff" },
+  distRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  distLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.ink },
+  distInput: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
+  distField: { width: 80, color: Colors.ink, fontSize: 13, fontWeight: "700", paddingVertical: 0 },
+  distTotal: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  distTotalLbl: { fontSize: 12, color: Colors.ink3 },
+  distTotalVal: { fontSize: 14, fontWeight: "800", color: Colors.amber },
+  amountIn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg2, borderWidth: 1.5, borderColor: Colors.violet2, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11 },
+  amountPrefix: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
+  amountInput: { flex: 1, color: Colors.ink, fontSize: 20, fontWeight: "800", paddingVertical: 0 },
+  quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
+  qChip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
+  qChipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
+  dateInput: { backgroundColor: Colors.bg2, borderColor: Colors.violet2, borderWidth: 1.5, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: Colors.ink },
+  dateHint: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
+  methods: { flexDirection: "row", gap: 7 },
+  method: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 9 },
+  methodActive: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  methodTxt: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
+  after: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  afterK: { fontSize: 12, color: Colors.ink3 },
+  afterV: { fontSize: 14, fontWeight: "800", color: Colors.amber },
+
+  tlItem: { flexDirection: "row", gap: 11, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
+  tlDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  tlLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
+  tlMain: { fontSize: 13, fontWeight: "600", color: Colors.ink },
+  tlAmt: { fontSize: 13, fontWeight: "800" },
+  tlSub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  tlAccTag: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
+  tlAccTagTxt: { fontSize: 10, fontWeight: "700", color: Colors.violet3 },
+  emptyTxt: { fontSize: 12, color: Colors.ink3, paddingVertical: 6 },
 
   // Termos
-  termsDesc: { fontSize: 12, color: Colors.ink3, marginBottom: 16 },
-  overrideBadge: { backgroundColor: Colors.violet3 + "18", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 14, borderWidth: 1, borderColor: Colors.violet3 + "44" },
-  overrideBadgeTxt: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
-  fieldGroup: { marginBottom: 14 },
-  fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" },
-  fieldInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: Colors.ink, backgroundColor: Colors.bg3 },
-  clearBtn: { marginTop: 10, alignItems: "center" },
-  clearBtnTxt: { fontSize: 12, color: Colors.red },
+  termsHint: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 10 },
+  termsEffRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.bg2, borderRadius: 9, padding: 10, borderWidth: 1, borderColor: Colors.border2 },
+  termsEffLbl: { fontSize: 12, color: Colors.ink3 },
+  termsEffVal: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  termsInput: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: Colors.ink, backgroundColor: Colors.bg2 },
 
   // Bloqueio
-  blockRow: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
+  blockRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border },
   blockLabel: { fontSize: 14, fontWeight: "700", color: Colors.ink },
-  blockMeta: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  blockReason: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
 
-  // CTA buttons
-  cta: { backgroundColor: Colors.violet3, borderRadius: 12, paddingVertical: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, marginTop: 8 },
-  ctaTxt: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  footer: { padding: 16, borderTopWidth: 1, borderTopColor: Colors.border },
+  cta: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  ctaTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
 
-  // Action bar
-  fichaActionBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    backgroundColor: Colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  // Entrega 4: botão calendário em parcelas + sheet de edição
+  calBtn: {
+    backgroundColor: Colors.violetD, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6,
+    minWidth: 30, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.violet + "44",
   },
-  fichaActionBtn: {
+  editDueDateSheet: {
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    padding: 16, backgroundColor: Colors.bg3,
+  },
+  editDueDateHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6,
+  },
+  editDueDateTitle: { fontSize: 14, fontWeight: "800", color: Colors.ink },
+  editDueDateSub: { fontSize: 11, color: Colors.ink3, marginBottom: 10, lineHeight: 16 },
+
+  // DESIGN-38: sub-tab menor
+  tabSm: { paddingVertical: 5 },
+
+  // DESIGN-38: botão Pix em parcelas
+  pixBtn: { backgroundColor: Colors.green + "22", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: Colors.green + "44" },
+  pixBtnTxt: { fontSize: 11, fontWeight: "700", color: Colors.green },
+
+  // DESIGN-38: overlay Pix
+  pixOverlay: { borderTopWidth: 1, borderTopColor: Colors.border, padding: 16, backgroundColor: Colors.bg2 },
+  pixOverlayHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  pixAmtLabel: { fontSize: 24, fontWeight: "800", color: Colors.ink, textAlign: "center", marginBottom: 2 },
+  pixInstLabel: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginBottom: 12 },
+  pixEmvBox: { backgroundColor: Colors.bg3, borderRadius: 9, padding: 10, borderWidth: 1, borderColor: Colors.border2, marginTop: 4 },
+  pixEmvTxt: { fontSize: 11, color: Colors.ink3, fontFamily: Platform.OS === "web" ? "monospace" : undefined },
+
+  // DESIGN-38: preview FIFO
+  previewBox: { backgroundColor: Colors.bg2, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2, marginTop: 14 },
+  previewTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 8 },
+  previewRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 },
+  previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
+  previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
+
+  // C-2: Header fixo da ficha
+  fichaHeaderFixed: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.violet3,
+    backgroundColor: Colors.bg2,
+  },
+  fichaHeaderTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 10,
+  },
+  fichaHeaderMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  fichaMetaChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+  fichaMetaChipTxt: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  fichaMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  fichaMetaLbl: {
+    fontSize: 11,
+    color: Colors.ink3,
+    fontWeight: "600",
+  },
+  fichaMetaVal: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  // C-2: Barra de ações persistente (rodapé)
+  fichaActionBar: {
+    flexDirection: "row",
+    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.bg2,
+  },
+  fichaActionBtn: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 11,
+    paddingVertical: 12,
+  },
+  fichaActionBtnPrimary: {
+    backgroundColor: Colors.violet,
   },
   fichaActionBtnSecondary: {
     backgroundColor: Colors.violetD,
@@ -1288,28 +1864,6 @@ const m = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
   },
-
-  // Amount input (action bar)
-  amountIn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 10, paddingVertical: 8 },
-  amountPrefix: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
-  amountInput: { flex: 1, fontSize: 15, fontWeight: "700", color: Colors.ink, outlineStyle: "none" as any },
-
-  // Methods
-  methods: { flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" },
-  method: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
-  methodActive: { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
-  methodTxt: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  methodTxtActive: { color: Colors.violet3 },
-
-  // Date input
-  dateInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: Colors.ink, backgroundColor: Colors.bg3 },
-
-  // Preview distribuição (valor livre)
-  previewBox: { backgroundColor: Colors.bg3, borderTopWidth: 1, borderTopColor: Colors.border, padding: 14 },
-  previewTitle: { fontSize: 11, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
-  previewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 3 },
-  previewLabel: { fontSize: 12, color: Colors.ink3 },
-  previewVal: { fontSize: 13, fontWeight: "700", color: Colors.ink },
 
 } as any);
 
