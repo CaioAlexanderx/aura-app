@@ -36,10 +36,10 @@
 //   - Seção carnês renderizada só quando useCarneLayout; caso contrário,
 //     lista plana de parcelas (sem "Conta geral"/"Sem carnê"/duplo total).
 // ============================================================
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, Modal, Pressable, ScrollView,
-  TextInput, ActivityIndicator, Switch,
+  TextInput, ActivityIndicator, Switch, Clipboard, Platform,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -47,7 +47,9 @@ import { Icon } from "@/components/Icon";
 import {
   creditApi, printCarne,
   type CreditAccount, type CreditInstallment, type PaymentAllocation, type CustomerTermsOverrides,
+  type CreditHistoryEvent, type PaymentPlan, type CreditPix,
 } from "@/services/creditApi";
+import QRCode from "react-native-qrcode-svg";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
@@ -70,7 +72,7 @@ const PAYMENT_METHODS = [
 ];
 
 type ReceiveMode = "fifo" | "distribute";
-type Tab = "resumo" | "termos" | "bloqueio";
+type Tab = "parcelas" | "historico" | "conta" | "termos" | "bloqueio";
 
 function fmt(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -127,7 +129,7 @@ export function ClienteCrediarioModal({
   const qc = useQueryClient();
 
   // Tab principal
-  const [tab, setTab] = useState<Tab>("resumo");
+  const [tab, setTab] = useState<Tab>("parcelas");
 
   // Recebimento estado
   const [amount, setAmount] = useState("");
@@ -164,6 +166,27 @@ export function ClienteCrediarioModal({
   const [lastChargesPaid, setLastChargesPaid] = useState<number | null>(null);
   const [lastTotalPaid, setLastTotalPaid] = useState<number | null>(null);
 
+  // ── DESIGN-38: Histórico (B1) ──────────────────────────────────────────
+  const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
+  const [histCursor, setHistCursor] = useState<string | null>(null);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histLoaded, setHistLoaded] = useState(false);
+
+  // ── DESIGN-38: Valor livre / preview (B3) ──────────────────────────────
+  const [freeAmt, setFreeAmt] = useState("");
+  const [freeMethod, setFreeMethod] = useState("dinheiro");
+  const [freeDateBr, setFreeDateBr] = useState(todayBrSp());
+  const [freeAccountId, setFreeAccountId] = useState<string | null | undefined>(undefined);
+  const [freePreview, setFreePreview] = useState<PaymentPlan | null>(null);
+  const [freePreviewLoading, setFreePreviewLoading] = useState(false);
+  const [freeSubmitting, setFreeSubmitting] = useState(false);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── DESIGN-38: Pix por parcela (B2) ────────────────────────────────────
+  const [pixInstId, setPixInstId] = useState<string | null>(null);
+  const [pixData, setPixData] = useState<CreditPix | null>(null);
+  const [pixLoading, setPixLoading] = useState(false);
+
   const profileQ = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
     queryFn: () => creditApi.getCustomerProfile(companyId, customerId!),
@@ -188,7 +211,7 @@ export function ClienteCrediarioModal({
       setDistributions({});
       setShowNewAccount(false);
       setNewAccountName("");
-      setTab("resumo");
+      setTab("parcelas");
       setBlockReason("");
       setBlockingAction(null);
       setTermsMaxInst("");
@@ -200,6 +223,17 @@ export function ClienteCrediarioModal({
       setEditingDueDateInst(null);
       setEditDueDateInput("");
       setEditDueDateError("");
+      // DESIGN-38 resets
+      setHistEvents([]);
+      setHistCursor(null);
+      setHistLoaded(false);
+      setFreeAmt("");
+      setFreeMethod("dinheiro");
+      setFreeDateBr(todayBrSp());
+      setFreeAccountId(undefined);
+      setFreePreview(null);
+      setPixInstId(null);
+      setPixData(null);
     }
   }, [visible, customerId]);
 
@@ -428,6 +462,105 @@ export function ClienteCrediarioModal({
     editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
+  // ── DESIGN-38: Histórico loader ───────────────────────────────────────
+  async function loadHistory(cursor?: string | null) {
+    if (!companyId || !customerId) return;
+    setHistLoading(true);
+    try {
+      const res = await creditApi.getHistoryTimeline(companyId, customerId, {
+        limit: 20,
+        cursor: cursor ?? undefined,
+      });
+      if (cursor) {
+        setHistEvents(prev => [...prev, ...res.events]);
+      } else {
+        setHistEvents(res.events);
+      }
+      setHistCursor(res.next_cursor ?? null);
+      setHistLoaded(true);
+    } catch {
+      // silencioso — toast not to spam
+    } finally {
+      setHistLoading(false);
+    }
+  }
+
+  // Carrega histórico ao entrar na aba
+  useEffect(() => {
+    if (tab === "historico" && !histLoaded && visible && !!customerId) {
+      loadHistory();
+    }
+  }, [tab, histLoaded, visible, customerId]);
+
+  // ── DESIGN-38: Preview FIFO ao vivo (B3) ────────────────────────────────
+  const triggerPreview = useCallback((amtStr: string, accountId?: string | null) => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    const amt = parseAmount(amtStr);
+    if (amt <= 0) { setFreePreview(null); return; }
+    previewTimerRef.current = setTimeout(async () => {
+      setFreePreviewLoading(true);
+      try {
+        const plan = await creditApi.previewPayment(companyId, customerId!, {
+          amount: amt,
+          account_id: accountId,
+        });
+        setFreePreview(plan);
+      } catch {
+        setFreePreview(null);
+      } finally {
+        setFreePreviewLoading(false);
+      }
+    }, 500);
+  }, [companyId, customerId]);
+
+  async function confirmFreePayment() {
+    const amt = parseAmount(freeAmt);
+    if (amt <= 0) { toast.error("Informe um valor maior que zero"); return; }
+    const paidAt = parseBrDate(freeDateBr) || undefined;
+    setFreeSubmitting(true);
+    try {
+      const res = await creditApi.receiveFreePayment(companyId, customerId!, {
+        amount: amt,
+        account_id: freeAccountId,
+        method: freeMethod,
+        paid_at: paidAt,
+      });
+      toast.success(
+        res.credit_generated > 0
+          ? `Recebido! Crédito gerado: ${fmt(res.credit_generated)}`
+          : `Recebido! Novo saldo: ${fmt(res.new_balance)}`
+      );
+      setFreeAmt("");
+      setFreePreview(null);
+      setFreeDateBr(todayBrSp());
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
+      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
+      onChanged?.();
+    } catch (err: any) {
+      toast.error(err?.data?.error || "Erro ao registrar recebimento");
+    } finally {
+      setFreeSubmitting(false);
+    }
+  }
+
+  // ── DESIGN-38: Pix por parcela (B2) ─────────────────────────────────────
+  async function openInstallmentPix(installmentId: string) {
+    setPixInstId(installmentId);
+    setPixData(null);
+    setPixLoading(true);
+    try {
+      const res = await creditApi.getInstallmentPix(companyId, installmentId);
+      setPixData(res);
+    } catch (err: any) {
+      toast.error(err?.data?.error || "Erro ao gerar Pix da parcela");
+      setPixInstId(null);
+    } finally {
+      setPixLoading(false);
+    }
+  }
+
   const name = detail?.customer?.name || customerName || "Cliente";
   const phone = detail?.customer?.phone || null;
   const initial = (name.trim()[0] || "?").toUpperCase();
@@ -500,12 +633,22 @@ export function ClienteCrediarioModal({
               </View>
             )}
 
-            {/* Tabs */}
+            {/* Tabs principais: Parcelas / Histórico / Conta */}
             <View style={m.tabs}>
-              {(["resumo", "termos", "bloqueio"] as Tab[]).map(t => (
+              {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
                 <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
                   <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
-                    {t === "resumo" ? "Resumo" : t === "termos" ? `Termos${hasTermsOverride ? " •" : ""}` : "Bloqueio"}
+                    {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : "Conta"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {/* Sub-abas: Termos / Bloqueio */}
+            <View style={[m.tabs, { marginTop: -4, marginBottom: 8 }]}>
+              {(["termos", "bloqueio"] as Tab[]).map(t => (
+                <Pressable key={t} style={[m.tab, m.tabSm, tab === t && m.tabOn]} onPress={() => setTab(t)}>
+                  <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
+                    {t === "termos" ? `Termos${hasTermsOverride ? " •" : ""}` : "Bloqueio"}
                   </Text>
                 </Pressable>
               ))}
@@ -517,8 +660,8 @@ export function ClienteCrediarioModal({
               </View>
             ) : (
               <>
-                {/* ===== TAB RESUMO ===== */}
-                {tab === "resumo" && (
+                {/* ===== TAB PARCELAS ===== */}
+                {tab === "parcelas" && (
                   <>
                     {/* Painel de crédito (Fase 1) */}
                     {!!profile && (
@@ -706,6 +849,9 @@ export function ClienteCrediarioModal({
                                           >
                                             <Icon name="Calendar" size={13} color={Colors.violet} />
                                           </Pressable>
+                                          <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
+                                            <Text style={m.pixBtnTxt}>Pix</Text>
+                                          </Pressable>
                                           <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
                                             <Text style={m.receberTxt}>Receber</Text>
                                           </Pressable>
@@ -814,6 +960,9 @@ export function ClienteCrediarioModal({
                                       >
                                         <Icon name="Calendar" size={13} color={Colors.violet} />
                                       </Pressable>
+                                      <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
+                                        <Text style={m.pixBtnTxt}>Pix</Text>
+                                      </Pressable>
                                       <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
                                         <Text style={m.receberTxt}>Receber</Text>
                                       </Pressable>
@@ -898,6 +1047,9 @@ export function ClienteCrediarioModal({
                                 >
                                   <Icon name="Calendar" size={13} color={Colors.violet} />
                                 </Pressable>
+                                <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
+                                  <Text style={m.pixBtnTxt}>Pix</Text>
+                                </Pressable>
                                 <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
                                   <Text style={m.receberTxt}>Receber</Text>
                                 </Pressable>
@@ -910,7 +1062,7 @@ export function ClienteCrediarioModal({
 
                     {/* Registrar recebimento */}
                     <View style={m.freeBox}>
-                      <Text style={m.freeTitle}>Registrar recebimento</Text>
+                      <Text style={m.freeTitle}>Receber valor livre</Text>
 
                       {hasAccounts && (
                         <View style={m.modeRow}>
@@ -1048,6 +1200,129 @@ export function ClienteCrediarioModal({
                       )}
                     </View>
 
+                    {/* Recebimento Valor Livre com Preview FIFO (DESIGN-38 B3) */}
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Valor Livre · Preview FIFO</Text>
+                      <Text style={[m.termsHint, { marginBottom: 10 }]}>
+                        Digite um valor para ver como será distribuído entre as parcelas (FIFO). Depois confirme para aplicar.
+                      </Text>
+
+                      {/* Seletor de carnê — visível quando há mais de 1 carnê nomeado */}
+                      {realCarnes.length > 1 && (
+                        <View style={{ marginBottom: 12 }}>
+                          <Text style={m.fieldLabel}>Carnê</Text>
+                          <View style={m.chipRow}>
+                            <Pressable
+                              style={[m.chip, freeAccountId === undefined && m.chipOn]}
+                              onPress={() => { setFreeAccountId(undefined); triggerPreview(freeAmt, undefined); }}
+                            >
+                              <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
+                            </Pressable>
+                            {realCarnes.map(acc => (
+                              <Pressable
+                                key={acc.id!}
+                                style={[m.chip, freeAccountId === acc.id && m.chipOn]}
+                                onPress={() => { setFreeAccountId(acc.id); triggerPreview(freeAmt, acc.id); }}
+                              >
+                                <Text style={[m.chipTxt, freeAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      <Text style={m.fieldLabel}>Valor recebido</Text>
+                      <View style={m.amountIn}>
+                        <Text style={m.amountPrefix}>R$</Text>
+                        <TextInput
+                          style={m.amountInput}
+                          value={freeAmt}
+                          onChangeText={(v) => {
+                            const clean = v.replace(/[^\d,.]/g, "");
+                            setFreeAmt(clean);
+                            triggerPreview(clean, freeAccountId);
+                          }}
+                          placeholder="0,00"
+                          placeholderTextColor={Colors.ink3}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+
+                      <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
+                      <DateInput
+                        value={freeDateBr}
+                        onChangeText={setFreeDateBr}
+                        placeholder="dd/mm/aaaa"
+                        style={m.dateInput}
+                      />
+
+                      <Text style={[m.fieldLabel, { marginTop: 12 }]}>Forma</Text>
+                      <View style={m.methods}>
+                        {PAYMENT_METHODS.map(pm => (
+                          <Pressable
+                            key={pm.key}
+                            style={[m.method, freeMethod === pm.key && m.methodActive]}
+                            onPress={() => setFreeMethod(pm.key)}
+                          >
+                            <Text style={[m.methodTxt, freeMethod === pm.key && { color: "#fff" }]}>{pm.label}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+
+                      {/* Preview FIFO */}
+                      {freePreviewLoading && (
+                        <View style={{ alignItems: "center", marginTop: 14 }}>
+                          <ActivityIndicator size="small" color={Colors.violet3} />
+                          <Text style={[m.termsHint, { textAlign: "center", marginTop: 4 }]}>Calculando distribuição...</Text>
+                        </View>
+                      )}
+                      {!freePreviewLoading && freePreview && (
+                        <View style={m.previewBox}>
+                          <Text style={m.previewTitle}>Distribuição FIFO</Text>
+                          {freePreview.applied.map((line, i) => (
+                            <View key={line.installment_id + i} style={m.previewRow}>
+                              <Text style={m.previewLbl}>
+                                Parcela {line.number ?? "?"}{line.account_id ? "" : ""}
+                              </Text>
+                              <View style={{ alignItems: "flex-end" }}>
+                                {line.charges_paid > 0 && (
+                                  <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
+                                    Encargos: {fmt(line.charges_paid)}
+                                  </Text>
+                                )}
+                                <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
+                                <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>{line.status_after}</Text>
+                              </View>
+                            </View>
+                          ))}
+                          <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
+                            <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
+                            <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
+                              {fmt(freePreview.new_balance)}
+                            </Text>
+                          </View>
+                          {freePreview.credit_generated > 0 && (
+                            <View style={m.previewRow}>
+                              <Text style={m.previewLbl}>Crédito gerado</Text>
+                              <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      <Pressable
+                        style={[m.cta, { marginTop: 14 }, (parseAmount(freeAmt) <= 0 || freeSubmitting) && { opacity: 0.45 }]}
+                        disabled={parseAmount(freeAmt) <= 0 || freeSubmitting}
+                        onPress={confirmFreePayment}
+                      >
+                        {freeSubmitting
+                          ? <ActivityIndicator color="#fff" />
+                          : <Text style={m.ctaTxt}>
+                              {parseAmount(freeAmt) > 0 ? `Confirmar ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
+                            </Text>}
+                      </Pressable>
+                    </View>
+
                     {/* Histórico de pagamentos */}
                     <View style={m.card}>
                       <Text style={m.cardTitle}>Histórico de pagamentos</Text>
@@ -1080,6 +1355,204 @@ export function ClienteCrediarioModal({
                       )}
                     </View>
                   </>
+                )}
+
+                {/* ===== TAB HISTORICO ===== */}
+                {tab === "historico" && (
+                  <View>
+                    <View style={m.card}>
+                      <View style={m.cardTitleRow}>
+                        <Text style={m.cardTitle}>Linha do tempo</Text>
+                        <Pressable
+                          style={m.newAccBtn}
+                          onPress={() => { setHistLoaded(false); loadHistory(); }}
+                          disabled={histLoading}
+                        >
+                          <Icon name="refresh_cw" size={11} color={Colors.violet3} />
+                          <Text style={m.newAccTxt}>Atualizar</Text>
+                        </Pressable>
+                      </View>
+
+                      {histLoading && histEvents.length === 0 && (
+                        <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                          <ActivityIndicator color={Colors.violet3} />
+                        </View>
+                      )}
+
+                      {!histLoading && !histLoaded && (
+                        <Pressable
+                          style={[m.cta, { marginVertical: 10 }]}
+                          onPress={() => loadHistory()}
+                        >
+                          <Text style={m.ctaTxt}>Carregar histórico</Text>
+                        </Pressable>
+                      )}
+
+                      {histEvents.length === 0 && histLoaded && !histLoading && (
+                        <Text style={m.emptyTxt}>Sem eventos no histórico.</Text>
+                      )}
+
+                      {histEvents.map((ev) => {
+                        const isCredit = ev.amount < 0;
+                        const typeLabels: Record<string, string> = {
+                          purchase: "Compra",
+                          manual_debit: "Débito manual",
+                          payment: "Pagamento",
+                          exchange_credit: "Crédito de troca",
+                          refund: "Devolução",
+                        };
+                        const typeLabel = typeLabels[ev.type] ?? ev.type;
+                        const methodStr = ev.payment?.method ? ` · ${ev.payment.method}` : "";
+                        return (
+                          <View key={ev.id} style={m.tlItem}>
+                            <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
+                            <View style={{ flex: 1 }}>
+                              <View style={m.tlLine}>
+                                <Text style={m.tlMain}>{typeLabel}{methodStr}</Text>
+                                <Text style={[m.tlAmt, { color: isCredit ? Colors.green : Colors.red }]}>
+                                  {isCredit ? "" : "+"}{fmt(Math.abs(ev.amount))}
+                                </Text>
+                              </View>
+                              <Text style={m.tlSub}>{fmtDate(ev.occurred_at)}</Text>
+                              {ev.items && ev.items.length > 0 && (
+                                <Text style={[m.tlSub, { marginTop: 2 }]} numberOfLines={2}>
+                                  {ev.items.map(it => `${it.quantity}× ${it.product_name}`).join(", ")}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+
+                      {histCursor && !histLoading && (
+                        <Pressable
+                          style={[m.cta, { marginTop: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                          onPress={() => loadHistory(histCursor)}
+                        >
+                          <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Carregar mais</Text>
+                        </Pressable>
+                      )}
+                      {histLoading && histEvents.length > 0 && (
+                        <View style={{ paddingVertical: 12, alignItems: "center" }}>
+                          <ActivityIndicator size="small" color={Colors.violet3} />
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* ===== TAB CONTA ===== */}
+                {tab === "conta" && (
+                  <View>
+                    <View style={m.card}>
+                      <Text style={m.cardTitle}>Status do crediário</Text>
+                      <View style={m.row}>
+                        <Text style={m.rowK}>Status</Text>
+                        <View style={[m.pill, { backgroundColor: (isBlocked ? Colors.red : Colors.green) + "22" }]}>
+                          <Text style={[m.pillTxt, { color: isBlocked ? Colors.red : Colors.green }]}>
+                            {isBlocked ? "Bloqueado" : "Ativo"}
+                          </Text>
+                        </View>
+                      </View>
+                      {isBlocked && !!profile?.blocked_reason && (
+                        <View style={m.row}>
+                          <Text style={m.rowK}>Motivo</Text>
+                          <Text style={[m.rowV, { fontSize: 13 }]}>{profile.blocked_reason}</Text>
+                        </View>
+                      )}
+                      {!!profile && (
+                        <>
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Score</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                              <Text style={[m.rowV, { color: scoreColor(scoreLabel), fontSize: 15 }]}>
+                                {profile.credit_score}
+                              </Text>
+                              {!!scoreLabel && (
+                                <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
+                                  <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
+                                    {scoreLabelPt(scoreLabel)}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Limite total</Text>
+                            <Text style={m.rowV}>{fmt(profile.credit_limit)}</Text>
+                          </View>
+                          {availableLimit !== undefined && (
+                            <View style={m.row}>
+                              <Text style={m.rowK}>Disponível</Text>
+                              <Text style={[m.rowV, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>
+                                {fmt(availableLimit)}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Em aberto</Text>
+                            <Text style={[m.rowV, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+                              {fmt(totalBalance)}
+                            </Text>
+                          </View>
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Parcelas abertas</Text>
+                            <Text style={m.rowV}>{openInst.length}</Text>
+                          </View>
+                          {openInst.length > 0 && (
+                            <View style={m.row}>
+                              <Text style={m.rowK}>Próx. vencimento</Text>
+                              <Text style={m.rowV}>{fmtDate(nextDueDate)}</Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+
+                    {!!profile?.terms?.effective && (
+                      <View style={m.card}>
+                        <Text style={m.cardTitle}>Termos efetivos</Text>
+                        <View style={m.row}>
+                          <Text style={m.rowK}>Máx. parcelas</Text>
+                          <Text style={m.rowV}>{profile.terms.effective.max_installments}x</Text>
+                        </View>
+                        <View style={m.row}>
+                          <Text style={m.rowK}>Juros a.m.</Text>
+                          <Text style={m.rowV}>{(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}%</Text>
+                        </View>
+                        {profile.terms.effective.due_day != null && (
+                          <View style={m.row}>
+                            <Text style={m.rowK}>Dia de venc.</Text>
+                            <Text style={m.rowV}>{profile.terms.effective.due_day}</Text>
+                          </View>
+                        )}
+                        {hasTermsOverride && (
+                          <View style={[m.pill, { backgroundColor: Colors.violet3 + "22", alignSelf: "flex-start" }]}>
+                            <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Override ativo</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {realCarnes.length > 0 && (
+                      <View style={m.card}>
+                        <Text style={m.cardTitle}>Carnês</Text>
+                        {realCarnes.map(acc => (
+                          <View key={acc.id!} style={[m.row, { alignItems: "flex-start" }]}>
+                            <View>
+                              <Text style={m.rowK}>{acc.name}</Text>
+                              <Text style={[m.tlSub, { marginTop: 2 }]}>
+                                {acc.open_count} parcela{acc.open_count !== 1 ? "s" : ""} · {periodLabel(acc) || "—"}
+                              </Text>
+                            </View>
+                            <Text style={[m.rowV, { color: acc.balance > 0 ? Colors.red : Colors.ink3, fontSize: 15 }]}>
+                              {fmt(acc.balance)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 )}
 
                 {/* ===== TAB TERMOS ===== */}
@@ -1198,6 +1671,55 @@ export function ClienteCrediarioModal({
             )}
           </ScrollView>
 
+          {/* DESIGN-38 B2: Modal Pix da parcela */}
+          {!!pixInstId && (
+            <View style={m.pixOverlay}>
+              <View style={m.pixOverlayHeader}>
+                <Text style={m.editDueDateTitle}>Pix da Parcela</Text>
+                <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.xBtn}>
+                  <Icon name="x" size={13} color={Colors.ink3} />
+                </Pressable>
+              </View>
+              {pixLoading && (
+                <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                  <ActivityIndicator color={Colors.violet3} />
+                  <Text style={[m.termsHint, { marginTop: 6, textAlign: "center" }]}>Gerando código Pix...</Text>
+                </View>
+              )}
+              {!pixLoading && pixData && (
+                <>
+                  <View style={{ alignItems: "center", marginVertical: 14 }}>
+                    <QRCode
+                      value={pixData.emv}
+                      size={180}
+                      color="#000"
+                      backgroundColor="#fff"
+                    />
+                  </View>
+                  <Text style={m.pixAmtLabel}>{fmt(pixData.amount)}</Text>
+                  {!!pixData.installment && (
+                    <Text style={m.pixInstLabel}>
+                      Parcela {pixData.installment.number} · venc. {fmtDate(pixData.installment.due_date)}
+                    </Text>
+                  )}
+                  <Text style={m.fieldLabel}>Código copia e cola</Text>
+                  <View style={m.pixEmvBox}>
+                    <Text style={m.pixEmvTxt} selectable numberOfLines={3}>{pixData.emv}</Text>
+                  </View>
+                  <Pressable
+                    style={[m.cta, { marginTop: 10 }]}
+                    onPress={() => {
+                      Clipboard.setString(pixData.emv);
+                      toast.success("Código Pix copiado!");
+                    }}
+                  >
+                    <Text style={m.ctaTxt}>Copiar código</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
+
           {/* Entrega 4: editor inline de vencimento de parcela */}
           {editingDueDateInst && (
             <View style={m.editDueDateSheet}>
@@ -1241,7 +1763,7 @@ export function ClienteCrediarioModal({
           )}
 
           {/* Footer */}
-          {tab === "resumo" && (
+          {tab === "parcelas" && (
             <View style={m.footer}>
               <Pressable
                 style={[m.cta, (amountNum <= 0 || dateInvalid || payMut.isPending) && { opacity: 0.45 }]}
@@ -1435,6 +1957,28 @@ const m = StyleSheet.create({
   },
   editDueDateTitle: { fontSize: 14, fontWeight: "800", color: Colors.ink },
   editDueDateSub: { fontSize: 11, color: Colors.ink3, marginBottom: 10, lineHeight: 16 },
+
+  // DESIGN-38: sub-tab menor
+  tabSm: { paddingVertical: 5 },
+
+  // DESIGN-38: botão Pix em parcelas
+  pixBtn: { backgroundColor: Colors.green + "22", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: Colors.green + "44" },
+  pixBtnTxt: { fontSize: 11, fontWeight: "700", color: Colors.green },
+
+  // DESIGN-38: overlay Pix
+  pixOverlay: { borderTopWidth: 1, borderTopColor: Colors.border, padding: 16, backgroundColor: Colors.bg2 },
+  pixOverlayHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  pixAmtLabel: { fontSize: 24, fontWeight: "800", color: Colors.ink, textAlign: "center", marginBottom: 2 },
+  pixInstLabel: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginBottom: 12 },
+  pixEmvBox: { backgroundColor: Colors.bg3, borderRadius: 9, padding: 10, borderWidth: 1, borderColor: Colors.border2, marginTop: 4 },
+  pixEmvTxt: { fontSize: 11, color: Colors.ink3, fontFamily: Platform.OS === "web" ? "monospace" : undefined },
+
+  // DESIGN-38: preview FIFO
+  previewBox: { backgroundColor: Colors.bg2, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2, marginTop: 14 },
+  previewTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 8 },
+  previewRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 },
+  previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
+  previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
 
 } as any);
 
