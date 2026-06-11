@@ -8,6 +8,7 @@ import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReem
 import { employeesApi, request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { printReceipt } from "@/services/creditApi";
+import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -35,6 +36,11 @@ import { printReceipt } from "@/services/creditApi";
 // Chama printReceipt(effectiveCompanyId, transaction_id) — mesmo padrão
 // auth do printCarne (fetch com Bearer → document.write em nova aba).
 // Só visível para vendas não canceladas.
+//
+// DESIGN-38 B4 (11/06/2026) — Botao "Devolver" em actionsRow:
+// Aparece para venda crediário não-troca, não cancelada, com itens. Abre a
+// DevolucaoModal (wizard 3 passos) passando sale.id + itens. O motor de
+// devolução (refundSale) abate as últimas parcelas e repõe estoque.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -104,6 +110,8 @@ export function SaleDetailModal({
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   // DESIGN-38 B5: estado de loading do botão Recibo
   const [printingReceipt, setPrintingReceipt] = useState(false);
+  // DESIGN-38 B4: controla o wizard de devolução
+  const [showDevolucao, setShowDevolucao] = useState(false);
 
   const { data: empData, isLoading: isLoadingEmps } = useQuery({
     queryKey: ["employees", effectiveCompanyId],
@@ -257,6 +265,8 @@ export function SaleDetailModal({
   // DESIGN-38 B5: botão Recibo — só para vendas crediário não canceladas com transaction_id
   const isCrediario = (sale?.payment_method || "").toLowerCase() === "crediario";
   const showReceiptBtn = !isCancelled && isCrediario && !!sale?.transaction_id;
+  // DESIGN-38 B4: botão Devolver — venda crediário, não-troca, não cancelada, com itens
+  const showRefundBtn = !isCancelled && isCrediario && !isTroca && items.length > 0;
 
   // 02/06/2026 (b): estado fiscal — emissao relevante por tipo de venda.
   const fiscalList = detail?.fiscal || [];
@@ -586,6 +596,16 @@ export function SaleDetailModal({
                   )}
                 </Pressable>
               )}
+              {/* DESIGN-38 B4: botão Devolver para vendas crediário */}
+              {showRefundBtn && (
+                <Pressable
+                  onPress={function() { setShowDevolucao(true); }}
+                  style={[s.actionBtn, s.actionRefund]}
+                >
+                  <Icon name="repeat" size={13} color={TROCA_ORANGE} />
+                  <Text style={s.actionRefundText}>Devolver</Text>
+                </Pressable>
+              )}
               {!isCancelled && (
                 <Pressable
                   onPress={function() { setConfirmCancel(true); }}
@@ -712,6 +732,28 @@ export function SaleDetailModal({
           </View>
         </View>
       )}
+
+      {/* DESIGN-38 B4: wizard de devolução de venda crediário */}
+      {showDevolucao && saleId && (
+        <DevolucaoModal
+          visible={showDevolucao}
+          companyId={effectiveCompanyId || ""}
+          sale={{
+            id: saleId,
+            items: items.map(function(it) {
+              return {
+                id: it.id,
+                product_name: it.product_name,
+                quantity: it.quantity,
+                unit_price: it.unit_price,
+                total_price: it.total_price,
+              };
+            }),
+          }}
+          onClose={function() { setShowDevolucao(false); }}
+          onDone={function() { setShowDevolucao(false); onClose(); }}
+        />
+      )}
     </View>
   );
 }
@@ -830,6 +872,9 @@ const s = StyleSheet.create({
   // DESIGN-38 B5: botão Recibo
   actionReceipt: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   actionReceiptText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  // DESIGN-38 B4: botão Devolver
+  actionRefund: { backgroundColor: "rgba(251,146,60,0.12)", borderColor: "rgba(251,146,60,0.4)" },
+  actionRefundText: { fontSize: 12, color: TROCA_ORANGE, fontWeight: "600" },
   actionCancel: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   actionCancelText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
 
