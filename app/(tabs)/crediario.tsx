@@ -1,8 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   ActivityIndicator, RefreshControl, useWindowDimensions,
-  Platform,
+  TextInput, Platform,
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, valorAPagarParcela } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
-import type { AgingRow } from "@/services/creditApi";
+import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
@@ -24,6 +24,39 @@ var fmtDate = function(iso: string) {
   try { return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }); }
   catch { return ""; }
 };
+
+/**
+ * Retorna a data de hoje no fuso America/Sao_Paulo no formato YYYY-MM-DD.
+ * Usado para comparação de vencimento — evita bug de offset UTC.
+ */
+function todaySP(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+/**
+ * Determina se um cliente está em atraso a partir de dados disponíveis.
+ *
+ * Estratégia (em ordem de confiabilidade):
+ * 1. Se o item tiver campo `overdue` (boolean) vindo do backend — usa diretamente
+ *    (o backend calcula por data, é a fonte mais confiável).
+ * 2. Se tiver `next_due_date` (string YYYY-MM-DD) — compara com hoje em SP:
+ *    atraso = next_due_date < hoje (vencimento HOJE não é atraso).
+ * 3. Fallback: false (não marca como atrasado se não há dados suficientes).
+ *
+ * NÃO usa overdueIds derivado de topDefaulters — esse conjunto é limitado aos
+ * "maiores inadimplentes" e causava falsos positivos/negativos na carteira.
+ */
+function isCustomerOverdue(cust: CreditBalanceItem & { overdue?: boolean; next_due_date?: string | null }): boolean {
+  // (1) campo overdue explícito do backend
+  if (typeof cust.overdue === "boolean") return cust.overdue;
+  // (2) next_due_date: compara strings YYYY-MM-DD — tz-safe
+  if (cust.next_due_date) {
+    const dueDateStr = cust.next_due_date.slice(0, 10); // garante só YYYY-MM-DD
+    return dueDateStr < todaySP();                       // atraso = venceu antes de hoje
+  }
+  // (3) fallback conservador
+  return false;
+}
 
 const SCORE_COLORS: Record<string, string> = {
   premium: Colors.green, bom: "#34d399", regular: Colors.amber,
@@ -50,6 +83,8 @@ type CobrancaPreviewState = {
   message: string;
 };
 
+type SortOrder = "balance" | "az";
+
 export default function CrediarioScreen() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -58,6 +93,22 @@ export default function CrediarioScreen() {
   const [showCriar, setShowCriar] = useState(false);
   const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
   const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
+
+  // ── Busca (DESIGN-38) ──────────────────────────────────────────────
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQ, setSearchQ] = useState("");          // valor debounced — vai para a API
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearchQ(searchInput.trim());
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchInput]);
+
+  // ── Ordenação (DESIGN-38) ─────────────────────────────────────────
+  const [sortOrder, setSortOrder] = useState<SortOrder>("balance");
 
   // F3-3B (29/05/2026): IS_WIDE/IS_NARROW calculados em tempo de execucao via
   // useWindowDimensions, nao mais como constante de modulo (que nao recalculava em resize).
@@ -81,9 +132,10 @@ export default function CrediarioScreen() {
 
   // F3-3B (29/05/2026): Carteira completa -- todos os clientes com saldo > 0,
   // adimplentes inclusos (gestao de carteira, nao so inadimplencia).
+  // DESIGN-38: queryKey inclui searchQ para refetch automático ao buscar.
   const carteiraQ = useQuery({
-    queryKey: ["credit-balances", company?.id],
-    queryFn: () => creditApi.listBalances(company!.id, { onlyOpen: true }),
+    queryKey: ["credit-balances", company?.id, searchQ],
+    queryFn: () => creditApi.listBalances(company!.id, { onlyOpen: true, q: searchQ || undefined }),
     enabled: !!company?.id,
     staleTime: 60_000,
   });
@@ -101,10 +153,10 @@ export default function CrediarioScreen() {
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] }),
       qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] }),
-      qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] }),
+      qc.invalidateQueries({ queryKey: ["credit-balances", company?.id, searchQ] }),
     ]);
     setRefreshing(false);
-  }, [company?.id]);
+  }, [company?.id, searchQ]);
 
   // Cobrança via preview modal: monta mensagem, abre preview.
   // O envio real (wa.me) acontece apenas no botão do CobrancaPreviewModal.
@@ -165,10 +217,18 @@ export default function CrediarioScreen() {
   const agingMap = Object.fromEntries(aging.map(r => [r.faixa, r]));
   const agingTotal = aging.reduce((s, r) => s + Number(r.amount), 0) || 1;
 
-  // Carteira: clientes com saldo, ordenados por valor (backend ja ordena desc).
-  // Set de quem esta em atraso, para marcar visualmente sem separar em blocos.
-  const carteira = carteiraQ.data?.customers || [];
-  const overdueIds = new Set(topDefaulters.map(d => d.customer_id));
+  // Carteira: clientes com saldo, ordenados conforme sortOrder.
+  // A flag de atraso é calculada por data (função isCustomerOverdue) — não mais
+  // pelo conjunto overdueIds de topDefaulters, que era restrito aos "maiores" e
+  // causava falsos positivos/negativos.
+  const carteiraRaw = carteiraQ.data?.customers || [];
+  const carteira = [...carteiraRaw].sort((a, b) => {
+    if (sortOrder === "az") {
+      return a.name.localeCompare(b.name, "pt-BR");
+    }
+    // default: saldo desc (backend já ordena assim; sort aqui é defensivo)
+    return Number(b.balance) - Number(a.balance);
+  });
 
   const isLoading = dashQ.isLoading || agingQ.isLoading;
 
@@ -263,6 +323,35 @@ export default function CrediarioScreen() {
               )}
             </View>
 
+            {/* ── Busca + Ordenação (DESIGN-38) ── */}
+            <View style={s.searchSortRow}>
+              <View style={s.searchBox}>
+                <Icon name="search" size={14} color={Colors.ink3} />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Buscar por nome, telefone ou CPF"
+                  placeholderTextColor={Colors.ink3}
+                  value={searchInput}
+                  onChangeText={setSearchInput}
+                  returnKeyType="search"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  clearButtonMode="while-editing"
+                />
+                {searchInput.length > 0 && Platform.OS !== "ios" && (
+                  <Pressable onPress={() => setSearchInput("")} hitSlop={8}>
+                    <Icon name="x" size={13} color={Colors.ink3} />
+                  </Pressable>
+                )}
+              </View>
+              <Pressable
+                style={[s.sortBtn, sortOrder === "az" && s.sortBtnActive]}
+                onPress={() => setSortOrder(prev => prev === "az" ? "balance" : "az")}
+              >
+                <Text style={[s.sortBtnText, sortOrder === "az" && s.sortBtnTextActive]}>A–Z</Text>
+              </Pressable>
+            </View>
+
             {carteiraQ.isLoading ? (
               <View style={{ paddingVertical: 16 }}>
                 {[0, 1, 2].map(i => (
@@ -271,11 +360,15 @@ export default function CrediarioScreen() {
               </View>
             ) : carteira.length === 0 ? (
               <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <Text style={s.emptyText}>Nenhum cliente com saldo em aberto.</Text>
+                <Text style={s.emptyText}>
+                  {searchQ ? `Nenhum cliente encontrado para "${searchQ}".` : "Nenhum cliente com saldo em aberto."}
+                </Text>
               </View>
             ) : (
               carteira.map((cust) => {
-                const isOverdue = overdueIds.has(cust.id);
+                // DESIGN-38 fix: flag de atraso determinada por data (função isCustomerOverdue),
+                // não mais pelo conjunto overdueIds limitado aos topDefaulters do dashboard.
+                const isOverdue = isCustomerOverdue(cust as any);
                 return (
                   <Pressable
                     key={cust.id}
@@ -458,6 +551,15 @@ const s = StyleSheet.create({
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sectionHeaderMeta: { fontSize: 10.5, color: Colors.ink3, fontWeight: "600", marginBottom: 14 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
+
+  // ── Busca + Ordenação (DESIGN-38) ────────────────────────────────
+  searchSortRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 10, paddingVertical: 8 },
+  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, outlineStyle: "none" as any },
+  sortBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+  sortBtnActive: { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
+  sortBtnText: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
+  sortBtnTextActive: { color: Colors.violet3 },
 
   agingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   agingLabel: { fontSize: 11, color: Colors.ink3, width: 72 },
