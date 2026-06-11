@@ -18,12 +18,9 @@ import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModa
 
 // ============================================================
 // AURA. — Crediário (DESIGN-38 / Onda C — shell visual do mockup)
-// Repaginação: eyebrow + hero "EM ABERTO · TOTAL" + trio KPI
-// (Vencido / Recebido no mês / Inadimplência %), "Mapa de risco"
-// (barra de aging empilhada única + legenda), chips de filtro e
-// linha de cliente com avatar + status + maior atraso + ações.
-// Lógica preservada: busca debounce, A–Z, atraso-por-data
-// (isCustomerOverdue), cobrança WhatsApp, modais.
+// C-1: hero + trio KPI + mapa de risco + chips + linha com avatar.
+// C-3: mapa de risco CLICÁVEL — clicar numa faixa filtra a carteira.
+// Lógica preservada: busca debounce, A–Z, atraso-por-data, cobrança, modais.
 // Follow-up backend: pílulas Risco/Bloqueado + chip "Bloqueados"
 // dependem de score/status por cliente no /balances (ainda não vem).
 // ============================================================
@@ -51,6 +48,15 @@ function daysLate(nextDue?: string | null): number {
   const a = new Date(due + "T00:00:00Z").getTime();
   const b = new Date(today + "T00:00:00Z").getTime();
   return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+/** Faixa de aging do cliente a partir dos dias de atraso (casa com AGING_ORDER). */
+function agingBucket(dl: number): string {
+  if (dl <= 0) return "a_vencer";
+  if (dl <= 30) return "1_30_dias";
+  if (dl <= 60) return "31_60_dias";
+  if (dl <= 90) return "61_90_dias";
+  return "acima_90";
 }
 
 /** Iniciais do cliente para o avatar. */
@@ -119,6 +125,8 @@ export default function CrediarioScreen() {
 
   const [sortOrder, setSortOrder] = useState<SortOrder>("balance");
   const [filter, setFilter] = useState<Filter>("saldo");
+  // C-3: faixa do mapa de risco selecionada (clique no aging filtra a carteira).
+  const [agingFilter, setAgingFilter] = useState<string | null>(null);
 
   const { width } = useWindowDimensions();
   const isWide   = width > 720;
@@ -220,10 +228,12 @@ export default function CrediarioScreen() {
   const overdueAmount = kpis?.overdue_amount || 0;
   const inadPct = totalOpen > 0 ? Math.round((overdueAmount / totalOpen) * 100) : 0;
 
-  // Carteira: filtros (chips) + ordenação.
+  // Carteira: filtros (chips/faixa) + ordenação.
   const carteiraRaw = carteiraQ.data?.customers || [];
   const carteira = [...carteiraRaw]
     .filter((c) => {
+      // C-3: faixa de aging tem prioridade (vinda do clique no mapa de risco).
+      if (agingFilter) return agingBucket(daysLate((c as any).next_due_date)) === agingFilter;
       if (filter === "atraso") return isCustomerOverdue(c as any);
       if (filter === "dia") return !isCustomerOverdue(c as any);
       return true; // saldo (todos com saldo aberto)
@@ -332,7 +342,7 @@ export default function CrediarioScreen() {
         </View>
       </View>
 
-      {/* ── Mapa de risco · aging do saldo (barra empilhada) ── */}
+      {/* ── Mapa de risco · aging do saldo (barra empilhada CLICÁVEL) ── */}
       {aging.length > 0 && (
         <View style={s.riskCard}>
           <View style={s.riskHead}>
@@ -340,7 +350,7 @@ export default function CrediarioScreen() {
               <View style={s.riskTick} />
               <Text style={s.riskTitle}>Mapa de risco · aging do saldo</Text>
             </View>
-            <Text style={s.riskMeta}>por maior atraso</Text>
+            <Text style={s.riskMeta}>{agingFilter ? "toque p/ limpar" : "toque numa faixa p/ filtrar"}</Text>
           </View>
 
           <View style={s.stackBar}>
@@ -350,9 +360,10 @@ export default function CrediarioScreen() {
               if (amt <= 0) return null;
               const pct = Math.max(2, Math.round((amt / agingTotal) * 100));
               return (
-                <View
+                <Pressable
                   key={faixa}
-                  style={{ width: (`${pct}%` as any), backgroundColor: AGING_COLORS[faixa] }}
+                  onPress={() => { setAgingFilter(prev => prev === faixa ? null : faixa); setFilter("saldo"); }}
+                  style={{ width: (`${pct}%` as any), backgroundColor: AGING_COLORS[faixa], opacity: agingFilter && agingFilter !== faixa ? 0.35 : 1 }}
                 />
               );
             })}
@@ -363,14 +374,18 @@ export default function CrediarioScreen() {
               const row = agingMap[faixa];
               if (!row) return null;
               return (
-                <View key={faixa} style={s.legendItem}>
+                <Pressable
+                  key={faixa}
+                  onPress={() => { setAgingFilter(prev => prev === faixa ? null : faixa); setFilter("saldo"); }}
+                  style={[s.legendItem, agingFilter === faixa && s.legendItemActive]}
+                >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
                     <View style={[s.legendDot, { backgroundColor: AGING_COLORS[faixa] }]} />
-                    <Text style={s.legendLabel}>{AGING_LABELS[faixa]}</Text>
+                    <Text style={[s.legendLabel, agingFilter === faixa && { color: Colors.violet3 }]}>{AGING_LABELS[faixa]}</Text>
                   </View>
                   <Text style={s.legendAmount}>{fmt(row.amount)}</Text>
                   <Text style={s.legendCount}>{row.count} cliente(s)</Text>
-                </View>
+                </Pressable>
               );
             })}
           </View>
@@ -400,14 +415,14 @@ export default function CrediarioScreen() {
         </View>
 
         <View style={s.chipRow}>
-          <Pressable style={[s.chip, filter === "saldo" && s.chipActive]} onPress={() => setFilter("saldo")}>
-            <Text style={[s.chipText, filter === "saldo" && s.chipTextActive]}>Com saldo</Text>
+          <Pressable style={[s.chip, !agingFilter && filter === "saldo" && s.chipActive]} onPress={() => { setFilter("saldo"); setAgingFilter(null); }}>
+            <Text style={[s.chipText, !agingFilter && filter === "saldo" && s.chipTextActive]}>Com saldo</Text>
           </Pressable>
-          <Pressable style={[s.chip, filter === "atraso" && s.chipActive]} onPress={() => setFilter("atraso")}>
-            <Text style={[s.chipText, filter === "atraso" && s.chipTextActive]}>Em atraso</Text>
+          <Pressable style={[s.chip, !agingFilter && filter === "atraso" && s.chipActive]} onPress={() => { setFilter("atraso"); setAgingFilter(null); }}>
+            <Text style={[s.chipText, !agingFilter && filter === "atraso" && s.chipTextActive]}>Em atraso</Text>
           </Pressable>
-          <Pressable style={[s.chip, filter === "dia" && s.chipActive]} onPress={() => setFilter("dia")}>
-            <Text style={[s.chipText, filter === "dia" && s.chipTextActive]}>Em dia</Text>
+          <Pressable style={[s.chip, !agingFilter && filter === "dia" && s.chipActive]} onPress={() => { setFilter("dia"); setAgingFilter(null); }}>
+            <Text style={[s.chipText, !agingFilter && filter === "dia" && s.chipTextActive]}>Em dia</Text>
           </Pressable>
           <Pressable style={[s.chip, sortOrder === "az" && s.chipActive]} onPress={() => setSortOrder(p => p === "az" ? "balance" : "az")}>
             <Text style={[s.chipText, sortOrder === "az" && s.chipTextActive]}>A–Z</Text>
@@ -434,6 +449,7 @@ export default function CrediarioScreen() {
           <View style={{ paddingVertical: 28, alignItems: "center" }}>
             <Text style={s.emptyText}>
               {searchQ ? `Nenhum cliente encontrado para "${searchQ}".`
+                : agingFilter ? `Nenhum cliente na faixa ${AGING_LABELS[agingFilter]}.`
                 : filter === "atraso" ? "Nenhum cliente em atraso. 🎉"
                 : "Nenhum cliente com saldo em aberto."}
             </Text>
@@ -500,7 +516,7 @@ export default function CrediarioScreen() {
 
       {carteira.length > 0 && (
         <Text style={s.footerCount}>
-          {carteira.length} cliente{carteira.length !== 1 ? "s" : ""} · {sortOrder === "az" ? "ordem alfabética" : "maior atraso primeiro"}
+          {carteira.length} cliente{carteira.length !== 1 ? "s" : ""} · {agingFilter ? `faixa ${AGING_LABELS[agingFilter]} (toque na faixa p/ limpar)` : sortOrder === "az" ? "ordem alfabética" : "maior atraso primeiro"}
         </Text>
       )}
 
@@ -579,7 +595,8 @@ const s = StyleSheet.create({
   riskMeta: { fontSize: 11, color: Colors.ink3 },
   stackBar: { flexDirection: "row", height: 14, borderRadius: 999, overflow: "hidden", backgroundColor: Colors.bg4, gap: 2 },
   legendGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, gap: 14 },
-  legendItem: { flex: 1, minWidth: 120, gap: 5, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: Colors.border },
+  legendItem: { flex: 1, minWidth: 120, gap: 5, paddingLeft: 12, paddingRight: 8, paddingVertical: 6, borderLeftWidth: 1, borderLeftColor: Colors.border, borderRadius: 8 },
+  legendItemActive: { backgroundColor: Colors.violetD, borderLeftColor: Colors.violet3 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendLabel: { fontSize: 11, fontWeight: "600", color: Colors.ink2 },
   legendAmount: { fontSize: 15, fontWeight: "700", color: Colors.ink },
