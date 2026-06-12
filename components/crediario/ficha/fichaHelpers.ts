@@ -24,8 +24,28 @@ export function todayBrSp(): string {
   const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   return formatIsoToBr(iso);
 }
+// A5-FE: parser robusto de moeda BR. Antes removia TODOS os pontos -> "10.50"
+// (ponto decimal) virava 1050. Agora:
+//  - tem vírgula  -> vírgula é decimal, pontos são milhar  ("1.234,56" -> 1234.56)
+//  - só ponto(s)  -> 1 ponto com 1–2 casas finais = decimal ("10.50" -> 10.50);
+//                    múltiplos pontos OU 1 ponto com 3 casas finais = milhar
+//                    ("1.234" -> 1234, "1.234.567" -> 1234567)
+//  - só dígitos   -> inteiro ("1234" -> 1234)
 export function parseAmount(raw: string): number {
-  const s = raw.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, "");
+  if (!raw) return 0;
+  let s = String(raw).replace(/[^\d.,]/g, "");
+  if (!s) return 0;
+  if (s.includes(",")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(".")) {
+    const parts = s.split(".");
+    const last = parts[parts.length - 1];
+    if (parts.length > 2 || last.length === 3) {
+      // milhar: 1.234 / 1.234.567
+      s = parts.join("");
+    }
+    // senão: ponto decimal (10.5 / 10.50) — mantém s como está
+  }
   const n = parseFloat(s);
   return isFinite(n) && n >= 0 ? n : 0;
 }
