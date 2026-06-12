@@ -1,40 +1,14 @@
 // ============================================================
 // AURA. — Crediário · Modal de detalhe do cliente
 //
-// Fase 1 FE (07/06/2026):
-//   - Exibe score_label + available_limit
-//   - Banner âmbar (não-bloqueante) quando score_warning != null
-//   - FIX multi-carnê: parcelas agrupadas por account_id DENTRO
-//     de cada card de carnê (antes só apareciam sem carnê)
-//   - Parcelas com account_id==null vao em grupo "Sem carnê"
-//   - Bloqueio manual: toggle + campo motivo + PATCH .../block
-//   - Editor de termos (máx parcelas + juros) via PUT .../terms
-//     null limpa override; selo "override" quando há customização
-//   - Botão "Imprimir carnê" por carnê: usa printCarne() (fetch
-//     + document.write, nunca window.open direto)
+// (decomposto em ficha/* em 11/06; este é o shell que mantém estado/queries
+//  e compõe TabParcelas/TabHistorico/TabConta.)
 //
-// Fase 2 FE (08/06/2026):
-//   - Breakdown de encargos em parcelas vencidas com charges_total > 0:
-//     "Principal em aberto", "Multa", "Mora (N dias)" e "Total a pagar".
-//   - Parcelas sem encargos (capability OFF ou em dia) mantêm layout atual.
-//   - Após receivePayment: se charges_paid > 0, exibe no toast/feedback
-//     "Encargos quitados: R$X + Abatido do principal: R$Y".
-//   - Todos campos novos tratados como undefined → 0/ausente (defensivo).
-//
-// F3 (05/06/2026): reescrita multi-carnê.
-// F2 (05/06/2026): parcelas e saldo continuam funcionando igual.
-// 03/06/2026: modal padrão (X + backdrop).
-// 05/06/2026: campo "Data do recebimento" (default hoje, SP).
-// fix (08/06/2026): Entrega 4 — botão calendário em cada parcela em aberto
-//   (igual ao de cliente/[id].tsx): abre editor de data inline + chama
-//   editInstallmentDueDate; ao sucesso, invalida credit-profile/credit-customer.
-//
-// Saldo amigável (09/06/2026):
-//   - Card "Resumo" substituído por hero "EM ABERTO" centralizado.
-//   - realCarnes = accounts.filter(a => a && a.id != null)
-//   - useCarneLayout = realCarnes.length > 0
-//   - Seção carnês renderizada só quando useCarneLayout; caso contrário,
-//     lista plana de parcelas (sem "Conta geral"/"Sem carnê"/duplo total).
+// C-2 (12/06): header do cliente + banner + abas ficam FIXOS (fora do
+//   ScrollView); só o conteúdo da aba rola. Footer "Confirmar recebimento"
+//   segue como barra de ação persistente.
+// A2-FE (12/06): triggerPreview envia paid_at (alinha preview↔aplicação no
+//   recebimento retroativo com encargos).
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
@@ -79,10 +53,8 @@ export function ClienteCrediarioModal({
 }: Props) {
   const qc = useQueryClient();
 
-  // Tab principal
   const [tab, setTab] = useState<Tab>("parcelas");
 
-  // Recebimento estado
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("dinheiro");
   const [dateBr, setDateBr] = useState(todayBrSp());
@@ -90,40 +62,32 @@ export function ClienteCrediarioModal({
   const [fifoAccountId, setFifoAccountId] = useState<string | null | undefined>(undefined);
   const [distributions, setDistributions] = useState<Record<string, string>>({});
 
-  // Carnê expandido
   const [expandedAccountId, setExpandedAccountId] = useState<string | null | undefined>(undefined);
 
-  // Novo carnê inline
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
 
-  // Bloqueio manual
   const [blockReason, setBlockReason] = useState("");
   const [blockingAction, setBlockingAction] = useState<"block" | "unblock" | null>(null);
 
-  // Termos
   const [termsMaxInst, setTermsMaxInst] = useState("");
   const [termsInterest, setTermsInterest] = useState("");
   const [termsDirty, setTermsDirty] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
 
-  // Entrega 4: editor de vencimento inline
   const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
 
-  // Fase 2: feedback após recebimento
   const [lastChargesPaid, setLastChargesPaid] = useState<number | null>(null);
   const [lastTotalPaid, setLastTotalPaid] = useState<number | null>(null);
 
-  // ── DESIGN-38: Histórico (B1) ──────────────────────────────────────────
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
   const [histLoading, setHistLoading] = useState(false);
   const [histLoaded, setHistLoaded] = useState(false);
 
-  // ── DESIGN-38: Valor livre / preview (B3) ──────────────────────────────
   const [freeAmt, setFreeAmt] = useState("");
   const [freeMethod, setFreeMethod] = useState("dinheiro");
   const [freeDateBr, setFreeDateBr] = useState(todayBrSp());
@@ -133,7 +97,6 @@ export function ClienteCrediarioModal({
   const [freeSubmitting, setFreeSubmitting] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── DESIGN-38: Pix por parcela (B2) ────────────────────────────────────
   const [pixInstId, setPixInstId] = useState<string | null>(null);
   const [pixData, setPixData] = useState<CreditPix | null>(null);
   const [pixLoading, setPixLoading] = useState(false);
@@ -174,7 +137,6 @@ export function ClienteCrediarioModal({
       setEditingDueDateInst(null);
       setEditDueDateInput("");
       setEditDueDateError("");
-      // DESIGN-38 resets
       setHistEvents([]);
       setHistCursor(null);
       setHistLoaded(false);
@@ -188,7 +150,6 @@ export function ClienteCrediarioModal({
     }
   }, [visible, customerId]);
 
-  // Hidrata termos quando perfil carrega
   useEffect(() => {
     const p = profileQ.data;
     if (!p) return;
@@ -216,7 +177,6 @@ export function ClienteCrediarioModal({
     [detail, profile],
   );
 
-  // Agrupa parcelas por account_id (Fase 1 FIX)
   const instByAccount = useMemo(() => {
     const map = new Map<string | null, typeof openInst>();
     for (const inst of openInst) {
@@ -230,11 +190,9 @@ export function ClienteCrediarioModal({
   const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => i.status === "overdue");
   const openSum = openInst.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
 
-  // Saldo amigável: carnês NOMEADOS (id != null) determinam o layout
   const realCarnes = accounts.filter(a => a && a.id != null);
   const useCarneLayout = realCarnes.length > 0;
 
-  // Próximo vencimento (hero)
   const nextDueDate = openInst.length > 0
     ? openInst.reduce((best, i) => {
         const d = new Date(i.due_date).getTime();
@@ -247,7 +205,6 @@ export function ClienteCrediarioModal({
     [distributions],
   );
 
-  // Bloqueio
   const isBlocked = profile?.status === "blocked";
 
   const blockMut = useMutation({
@@ -276,7 +233,6 @@ export function ClienteCrediarioModal({
     blockMut.mutate({ action: "block", reason: blockReason.trim() || undefined });
   }
 
-  // Termos
   async function saveTerms() {
     setSavingTerms(true);
     try {
@@ -303,7 +259,6 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // Mutação: receber pagamento
   const payMut = useMutation({
     mutationFn: () => {
       const paidAt = parseBrDate(dateBr) || undefined;
@@ -426,7 +381,6 @@ export function ClienteCrediarioModal({
       setHistCursor(res.next_cursor ?? null);
       setHistLoaded(true);
     } catch {
-      // silencioso
     } finally {
       setHistLoading(false);
     }
@@ -448,6 +402,7 @@ export function ClienteCrediarioModal({
         const plan = await creditApi.previewPayment(companyId, customerId!, {
           amount: amt,
           account_id: accountId,
+          paid_at: parseBrDate(freeDateBr) || undefined,
         });
         setFreePreview(plan);
       } catch {
@@ -456,7 +411,12 @@ export function ClienteCrediarioModal({
         setFreePreviewLoading(false);
       }
     }, 500);
-  }, [companyId, customerId]);
+  }, [companyId, customerId, freeDateBr]);
+
+  useEffect(() => {
+    if (parseAmount(freeAmt) > 0) triggerPreview(freeAmt, freeAccountId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freeDateBr]);
 
   async function confirmFreePayment() {
     const amt = parseAmount(freeAmt);
@@ -522,7 +482,6 @@ export function ClienteCrediarioModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={m.backdrop} onPress={onClose}>
         <Pressable style={m.sheet} onPress={() => {}}>
-          {/* Header */}
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
               <Icon name="chevron_right" size={15} color={Colors.violet3} style={{ transform: [{ rotate: "180deg" }] } as any} />
@@ -533,8 +492,7 @@ export function ClienteCrediarioModal({
             </Pressable>
           </View>
 
-          <ScrollView style={m.body} contentContainerStyle={{ padding: 18 }} showsVerticalScrollIndicator={false}>
-            {/* Cliente */}
+          <View style={m.fixedHeader}>
             <View style={m.cust}>
               <View style={m.custL}>
                 <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
@@ -562,6 +520,25 @@ export function ClienteCrediarioModal({
                 </Pressable>
               )}
             </View>
+
+            {!!profile && (
+              <View style={m.fixedMeta}>
+                <View style={m.fixedMetaItem}>
+                  <Text style={m.fixedMetaLbl}>SCORE</Text>
+                  <Text style={[m.fixedMetaVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
+                </View>
+                {availableLimit !== undefined && (
+                  <View style={m.fixedMetaItem}>
+                    <Text style={m.fixedMetaLbl}>DISPONÍVEL</Text>
+                    <Text style={[m.fixedMetaVal, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>{fmt(availableLimit)}</Text>
+                  </View>
+                )}
+                <View style={m.fixedMetaItem}>
+                  <Text style={m.fixedMetaLbl}>EM ABERTO</Text>
+                  <Text style={[m.fixedMetaVal, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>{fmt(totalBalance)}</Text>
+                </View>
+              </View>
+            )}
 
             {!!scoreWarning && (
               <View style={m.scoreBanner}>
@@ -592,7 +569,9 @@ export function ClienteCrediarioModal({
                 </Pressable>
               ))}
             </View>
+          </View>
 
+          <ScrollView style={m.body} contentContainerStyle={{ padding: 18, paddingTop: 6 }} showsVerticalScrollIndicator={false}>
             {detailQ.isLoading || profileQ.isLoading ? (
               <View style={{ paddingVertical: 36, alignItems: "center" }}>
                 <ActivityIndicator color={Colors.violet3} />
@@ -601,92 +580,44 @@ export function ClienteCrediarioModal({
               <>
                 {tab === "parcelas" && (
                   <TabParcelas
-                    profile={profile}
-                    detail={detail}
-                    accounts={accounts}
-                    openInst={openInst}
-                    instByAccount={instByAccount}
-                    useCarneLayout={useCarneLayout}
-                    realCarnes={realCarnes}
-                    totalBalance={totalBalance}
-                    nextDueDate={nextDueDate}
-                    scoreLabel={scoreLabel}
-                    availableLimit={availableLimit}
-                    isBlocked={isBlocked}
-                    hasOverdue={hasOverdue}
-                    amount={amount}
-                    setAmount={setAmount}
-                    method={method}
-                    setMethod={setMethod}
-                    dateBr={dateBr}
-                    setDateBr={setDateBr}
-                    dateInvalid={dateInvalid}
-                    receiveMode={receiveMode}
-                    setReceiveMode={setReceiveMode}
-                    fifoAccountId={fifoAccountId}
-                    setFifoAccountId={setFifoAccountId}
-                    distributions={distributions}
-                    setDistributions={setDistributions}
-                    distributionTotal={distributionTotal}
-                    amountNum={amountNum}
-                    afterBalance={afterBalance}
-                    payMut={payMut}
-                    handleCreateAccount={handleCreateAccount}
-                    showNewAccount={showNewAccount}
-                    setShowNewAccount={setShowNewAccount}
-                    newAccountName={newAccountName}
-                    setNewAccountName={setNewAccountName}
-                    creatingAccount={creatingAccount}
-                    expandedAccountId={expandedAccountId}
-                    setExpandedAccountId={setExpandedAccountId}
-                    handleEditDueDateOpen={handleEditDueDateOpen}
-                    openInstallmentPix={openInstallmentPix}
-                    lastChargesPaid={lastChargesPaid}
-                    lastTotalPaid={lastTotalPaid}
-                    freeAmt={freeAmt}
-                    setFreeAmt={setFreeAmt}
-                    freeMethod={freeMethod}
-                    setFreeMethod={setFreeMethod}
-                    freeDateBr={freeDateBr}
-                    setFreeDateBr={setFreeDateBr}
-                    freeAccountId={freeAccountId}
-                    setFreeAccountId={setFreeAccountId}
-                    freePreview={freePreview}
-                    freePreviewLoading={freePreviewLoading}
-                    confirmFreePayment={confirmFreePayment}
-                    freeSubmitting={freeSubmitting}
-                    prefill={prefill}
-                    triggerPreview={triggerPreview}
-                    companyId={companyId}
-                    customerId={customerId!}
-                    phone={phone}
-                    onCobrar={onCobrar}
-                    name={name}
+                    profile={profile} detail={detail} accounts={accounts} openInst={openInst}
+                    instByAccount={instByAccount} useCarneLayout={useCarneLayout} realCarnes={realCarnes}
+                    totalBalance={totalBalance} nextDueDate={nextDueDate} scoreLabel={scoreLabel}
+                    availableLimit={availableLimit} isBlocked={isBlocked} hasOverdue={hasOverdue}
+                    amount={amount} setAmount={setAmount} method={method} setMethod={setMethod}
+                    dateBr={dateBr} setDateBr={setDateBr} dateInvalid={dateInvalid}
+                    receiveMode={receiveMode} setReceiveMode={setReceiveMode}
+                    fifoAccountId={fifoAccountId} setFifoAccountId={setFifoAccountId}
+                    distributions={distributions} setDistributions={setDistributions} distributionTotal={distributionTotal}
+                    amountNum={amountNum} afterBalance={afterBalance} payMut={payMut}
+                    handleCreateAccount={handleCreateAccount} showNewAccount={showNewAccount}
+                    setShowNewAccount={setShowNewAccount} newAccountName={newAccountName}
+                    setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
+                    expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
+                    handleEditDueDateOpen={handleEditDueDateOpen} openInstallmentPix={openInstallmentPix}
+                    lastChargesPaid={lastChargesPaid} lastTotalPaid={lastTotalPaid}
+                    freeAmt={freeAmt} setFreeAmt={setFreeAmt} freeMethod={freeMethod} setFreeMethod={setFreeMethod}
+                    freeDateBr={freeDateBr} setFreeDateBr={setFreeDateBr}
+                    freeAccountId={freeAccountId} setFreeAccountId={setFreeAccountId}
+                    freePreview={freePreview} freePreviewLoading={freePreviewLoading}
+                    confirmFreePayment={confirmFreePayment} freeSubmitting={freeSubmitting}
+                    prefill={prefill} triggerPreview={triggerPreview}
+                    companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
                   />
                 )}
 
                 {tab === "historico" && (
                   <TabHistorico
-                    histEvents={histEvents}
-                    histCursor={histCursor}
-                    histLoading={histLoading}
-                    histLoaded={histLoaded}
-                    loadHistory={loadHistory}
-                    setHistLoaded={setHistLoaded}
+                    histEvents={histEvents} histCursor={histCursor} histLoading={histLoading}
+                    histLoaded={histLoaded} loadHistory={loadHistory} setHistLoaded={setHistLoaded}
                   />
                 )}
 
                 {tab === "conta" && (
                   <TabConta
-                    profile={profile}
-                    isBlocked={isBlocked}
-                    scoreLabel={scoreLabel}
-                    availableLimit={availableLimit}
-                    totalBalance={totalBalance}
-                    openInst={openInst}
-                    nextDueDate={nextDueDate}
-                    hasTermsOverride={hasTermsOverride}
-                    realCarnes={realCarnes}
+                    profile={profile} isBlocked={isBlocked} scoreLabel={scoreLabel}
+                    availableLimit={availableLimit} totalBalance={totalBalance} openInst={openInst}
+                    nextDueDate={nextDueDate} hasTermsOverride={hasTermsOverride} realCarnes={realCarnes}
                   />
                 )}
 
@@ -822,12 +753,7 @@ export function ClienteCrediarioModal({
               {!pixLoading && pixData && (
                 <>
                   <View style={{ alignItems: "center", marginVertical: 14 }}>
-                    <QRCode
-                      value={pixData.emv}
-                      size={180}
-                      color="#000"
-                      backgroundColor="#fff"
-                    />
+                    <QRCode value={pixData.emv} size={180} color="#000" backgroundColor="#fff" />
                   </View>
                   <Text style={m.pixAmtLabel}>{fmt(pixData.amount)}</Text>
                   {!!pixData.installment && (

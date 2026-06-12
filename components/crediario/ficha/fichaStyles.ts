@@ -12,6 +12,12 @@ export const m = StyleSheet.create({
 
   body: { flexGrow: 0 },
 
+  fixedHeader: { paddingHorizontal: 18, paddingTop: 12, backgroundColor: Colors.bg2, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  fixedMeta: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  fixedMetaItem: { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  fixedMetaLbl: { fontSize: 8.5, fontWeight: "800", letterSpacing: 0.6, color: Colors.ink3 },
+  fixedMetaVal: { fontSize: 14, fontWeight: "800", color: Colors.ink, marginTop: 3 },
+
   tabs: { flexDirection: "row", gap: 6, marginBottom: 14 },
   tab: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
@@ -186,7 +192,5 @@ export const m = StyleSheet.create({
   previewRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 },
   previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
   previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
-
-  distTotalLbl: { fontSize: 12, color: Colors.ink3 },
 
 } as any);
