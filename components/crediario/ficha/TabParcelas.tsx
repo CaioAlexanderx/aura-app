@@ -7,7 +7,7 @@ import {
 } from "@/services/creditApi";
 import { DateInput } from "@/components/inputs/DateInput";
 import {
-  fmt, fmtDate, parseAmount, periodLabel, scoreColor, scoreLabelPt,
+  fmt, fmtDate, parseAmount, periodLabel,
   PAYMENT_METHODS, type ReceiveMode, productsFromNotes,
 } from "./fichaHelpers";
 import { m } from "./fichaStyles";
@@ -95,52 +95,6 @@ export function TabParcelas({
   const hasAccounts = accounts.length > 0;
   return (
 <>
-  {!!profile && (
-    <View style={m.card}>
-      <Text style={m.cardTitle}>Crédito</Text>
-      <View style={m.row}>
-        <Text style={m.rowK}>Score</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={[m.rowV, { color: scoreColor(scoreLabel), fontSize: 15 }]}>
-            {profile.credit_score}
-          </Text>
-          {!!scoreLabel && (
-            <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
-              <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
-                {scoreLabelPt(scoreLabel)}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-      <View style={m.row}>
-        <Text style={m.rowK}>Limite total</Text>
-        <Text style={m.rowV}>{fmt(profile.credit_limit)}</Text>
-      </View>
-      {availableLimit !== undefined && (
-        <View style={m.row}>
-          <Text style={m.rowK}>Disponível</Text>
-          <Text style={[m.rowV, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>
-            {fmt(availableLimit)}
-          </Text>
-        </View>
-      )}
-    </View>
-  )}
-
-  <View style={m.heroCard}>
-    <Text style={m.heroLabel}>EM ABERTO</Text>
-    <Text style={[m.heroValue, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
-      {fmt(totalBalance)}
-    </Text>
-    <Text style={m.heroSub}>
-      {openInst.length} parcela{openInst.length !== 1 ? "s" : ""}
-      {openInst.length > 0 && fmtDate(nextDueDate)
-        ? ` · próximo venc. ${fmtDate(nextDueDate)}`
-        : ""}
-    </Text>
-  </View>
-
   {useCarneLayout && (
     <View style={m.card}>
       <View style={m.cardTitleRow}>
