@@ -52,6 +52,14 @@ import {
 import QRCode from "react-native-qrcode-svg";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import {
+  fmt, fmtDate, todayBrSp, parseAmount, periodLabel, scoreColor, scoreLabelPt,
+  PAYMENT_METHODS, type ReceiveMode, type Tab,
+} from "./ficha/fichaHelpers";
+import { m } from "./ficha/fichaStyles";
+import { TabParcelas } from "./ficha/TabParcelas";
+import { TabHistorico } from "./ficha/TabHistorico";
+import { TabConta } from "./ficha/TabConta";
 
 type Props = {
   visible: boolean;
@@ -64,63 +72,6 @@ type Props = {
   onCobrar?: (customerId: string, customerName: string, phone: string | null) => void;
   onChanged?: () => void;
 };
-
-const PAYMENT_METHODS = [
-  { key: "dinheiro", label: "Dinheiro" },
-  { key: "pix", label: "Pix" },
-  { key: "cartao", label: "Cartão" },
-];
-
-type ReceiveMode = "fifo" | "distribute";
-type Tab = "parcelas" | "historico" | "conta" | "termos" | "bloqueio";
-
-function fmt(n: number) {
-  return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  if (!iso || isNaN(d.getTime())) return "";
-  try { return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
-  catch { return ""; }
-}
-function todayBrSp(): string {
-  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-  return formatIsoToBr(iso);
-}
-function parseAmount(raw: string): number {
-  const s = raw.replace(/\./g, "").replace(",", ".").replace(/[^\d.]/g, "");
-  const n = parseFloat(s);
-  return isFinite(n) && n >= 0 ? n : 0;
-}
-function productsFromNotes(notes?: string | null): string {
-  if (!notes) return "";
-  const mt = notes.match(/\(([^)]+)\)/);
-  return mt ? mt[1] : "";
-}
-function periodLabel(acc: CreditAccount): string {
-  const { period_unit, period_count } = acc;
-  if (!period_unit || period_count == null) return "";
-  if (period_unit === "month" && period_count === 1) return "Mensal";
-  if (period_unit === "week" && period_count === 1) return "Semanal";
-  if (period_unit === "week" && period_count === 2) return "Quinzenal";
-  if (period_unit === "day") return `A cada ${period_count}d`;
-  return `${period_count}${period_unit === "week" ? "sem" : period_unit === "month" ? "mês" : "d"}`;
-}
-
-// Score label human-readable
-function scoreColor(label?: string | null): string {
-  if (!label) return Colors.ink3;
-  if (label === "premium" || label === "bom") return Colors.green;
-  if (label === "regular") return Colors.amber;
-  return Colors.red;
-}
-function scoreLabelPt(label?: string | null): string {
-  const map: Record<string, string> = {
-    premium: "Premium", bom: "Bom", regular: "Regular",
-    restrito: "Restrito", bloqueado: "Bloqueado",
-  };
-  return label ? (map[label] ?? label) : "";
-}
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
@@ -649,870 +600,94 @@ export function ClienteCrediarioModal({
             ) : (
               <>
                 {tab === "parcelas" && (
-                  <>
-                    {!!profile && (
-                      <View style={m.card}>
-                        <Text style={m.cardTitle}>Crédito</Text>
-                        <View style={m.row}>
-                          <Text style={m.rowK}>Score</Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <Text style={[m.rowV, { color: scoreColor(scoreLabel), fontSize: 15 }]}>
-                              {profile.credit_score}
-                            </Text>
-                            {!!scoreLabel && (
-                              <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
-                                <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
-                                  {scoreLabelPt(scoreLabel)}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                        <View style={m.row}>
-                          <Text style={m.rowK}>Limite total</Text>
-                          <Text style={m.rowV}>{fmt(profile.credit_limit)}</Text>
-                        </View>
-                        {availableLimit !== undefined && (
-                          <View style={m.row}>
-                            <Text style={m.rowK}>Disponível</Text>
-                            <Text style={[m.rowV, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>
-                              {fmt(availableLimit)}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    <View style={m.heroCard}>
-                      <Text style={m.heroLabel}>EM ABERTO</Text>
-                      <Text style={[m.heroValue, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
-                        {fmt(totalBalance)}
-                      </Text>
-                      <Text style={m.heroSub}>
-                        {openInst.length} parcela{openInst.length !== 1 ? "s" : ""}
-                        {openInst.length > 0 && fmtDate(nextDueDate)
-                          ? ` · próximo venc. ${fmtDate(nextDueDate)}`
-                          : ""}
-                      </Text>
-                    </View>
-
-                    {useCarneLayout && (
-                      <View style={m.card}>
-                        <View style={m.cardTitleRow}>
-                          <Text style={m.cardTitle}>Carnês / contas</Text>
-                          <Pressable
-                            style={m.newAccBtn}
-                            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
-                          >
-                            <Icon name="plus" size={12} color={Colors.violet3} />
-                            <Text style={m.newAccTxt}>Novo carnê</Text>
-                          </Pressable>
-                        </View>
-
-                        {showNewAccount && (
-                          <View style={m.newAccRow}>
-                            <TextInput
-                              style={m.newAccInput}
-                              placeholder="Nome do carnê"
-                              placeholderTextColor={Colors.ink3}
-                              value={newAccountName}
-                              onChangeText={setNewAccountName}
-                              autoFocus
-                            />
-                            <Pressable
-                              style={[m.newAccConfirm, creatingAccount && { opacity: 0.5 }]}
-                              onPress={handleCreateAccount}
-                              disabled={creatingAccount}
-                            >
-                              {creatingAccount
-                                ? <ActivityIndicator size="small" color="#fff" />
-                                : <Text style={m.newAccConfirmTxt}>Criar</Text>}
-                            </Pressable>
-                          </View>
-                        )}
-
-                        {accounts.map((acc) => {
-                          const isOverdueAcc = acc.overdue;
-                          const statusColor = isOverdueAcc ? Colors.red : Colors.green;
-                          const accKey = acc.id ?? "general";
-                          const isExpanded = expandedAccountId === acc.id;
-                          const accInst = instByAccount.get(acc.id) || [];
-                          return (
-                            <View key={accKey} style={m.accCard}>
-                              <View style={m.accTop}>
-                                <Pressable
-                                  style={{ flex: 1 }}
-                                  onPress={() => setExpandedAccountId(isExpanded ? undefined : acc.id)}
-                                >
-                                  <Text style={m.accName}>{acc.name}</Text>
-                                  <View style={m.accMeta}>
-                                    {periodLabel(acc) ? (
-                                      <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
-                                        <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
-                                      </View>
-                                    ) : null}
-                                    <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
-                                      <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
-                                    </View>
-                                    {accInst.length > 0 && (
-                                      <View style={[m.accBadge, { backgroundColor: Colors.amber + "18", borderColor: Colors.amber + "33" }]}>
-                                        <Text style={[m.accBadgeTxt, { color: Colors.amber }]}>{accInst.length} parcela{accInst.length !== 1 ? "s" : ""}</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                </Pressable>
-                                <View style={{ alignItems: "flex-end" }}>
-                                  <Text style={[m.accBalance, { color: acc.balance > 0 ? Colors.red : Colors.ink3 }]}>
-                                    {fmt(acc.balance)}
-                                  </Text>
-                                  {!!fmtDate(acc.next_due_date || "") && (
-                                    <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date!)}</Text>
-                                  )}
-                                </View>
-                              </View>
-
-                              {isExpanded && accInst.length > 0 && (
-                                <View style={m.accInstList}>
-                                  {accInst.map((ins) => {
-                                    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-                                    const late = ins.status === "overdue";
-                                    const chargesTotal = ins.charges_total ?? 0;
-                                    const hasCharges = late && chargesTotal > 0;
-                                    return (
-                                      <View key={ins.id} style={m.parc}>
-                                        <View style={{ flex: 1 }}>
-                                          <Text style={m.parcT}>
-                                            Parcela {ins.installment_number}/{ins.total_installments}
-                                            {hasCharges
-                                              ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
-                                              : " · " + fmt(rem)}
-                                          </Text>
-                                          <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
-                                          {hasCharges && (
-                                            <View style={m.chargesBreakdown}>
-                                              <View style={m.chargesRow}>
-                                                <Text style={m.chargesLbl}>Principal em aberto</Text>
-                                                <Text style={m.chargesVal}>{fmt(rem)}</Text>
-                                              </View>
-                                              {(ins.late_fee ?? 0) > 0 && (
-                                                <View style={m.chargesRow}>
-                                                  <Text style={m.chargesLbl}>Multa</Text>
-                                                  <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
-                                                </View>
-                                              )}
-                                              {(ins.late_interest ?? 0) > 0 && (
-                                                <View style={m.chargesRow}>
-                                                  <Text style={m.chargesLbl}>
-                                                    Mora
-                                                    {(ins.days_charged ?? 0) > 0 && (
-                                                      <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
-                                                    )}
-                                                  </Text>
-                                                  <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
-                                                </View>
-                                              )}
-                                              <View style={[m.chargesRow, m.chargesTotalRow]}>
-                                                <Text style={m.chargesTotalLbl}>Total a pagar</Text>
-                                                <Text style={m.chargesTotalVal}>
-                                                  {fmt(ins.total_due ?? (rem + chargesTotal))}
-                                                </Text>
-                                              </View>
-                                            </View>
-                                          )}
-                                        </View>
-                                        <View style={{ alignItems: "flex-end", gap: 6 }}>
-                                          <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                                            <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
-                                          </View>
-                                          <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                                            <Icon name="Calendar" size={13} color={Colors.violet} />
-                                          </Pressable>
-                                          <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
-                                            <Text style={m.pixBtnTxt}>Pix</Text>
-                                          </Pressable>
-                                          <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
-                                            <Text style={m.receberTxt}>Receber</Text>
-                                          </Pressable>
-                                        </View>
-                                      </View>
-                                    );
-                                  })}
-                                </View>
-                              )}
-                              {isExpanded && accInst.length === 0 && (
-                                <Text style={[m.emptyTxt, { marginTop: 8 }]}>Sem parcelas abertas neste carnê.</Text>
-                              )}
-
-                              <View style={m.accActions}>
-                                <Pressable
-                                  style={m.accActionBtn}
-                                  onPress={() => {
-                                    setReceiveMode("fifo");
-                                    setFifoAccountId(acc.id);
-                                    prefill(acc.balance);
-                                  }}
-                                >
-                                  <Text style={m.accActionTxt}>Receber</Text>
-                                </Pressable>
-                                <Pressable
-                                  style={[m.accActionBtn, { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 }]}
-                                  onPress={() => printCarne(companyId, customerId!)}
-                                >
-                                  <Text style={[m.accActionTxt, { color: Colors.violet3 }]}>Imprimir</Text>
-                                </Pressable>
-                                {!!phone && (
-                                  <Pressable
-                                    style={[m.accActionBtn, m.accActionWa]}
-                                    onPress={() => onCobrar?.(customerId!, name, phone)}
-                                  >
-                                    <Text style={[m.accActionTxt, { color: Colors.green }]}>Cobrar</Text>
-                                  </Pressable>
-                                )}
-                              </View>
-                            </View>
-                          );
-                        })}
-
-                        {(() => {
-                          const orphan = instByAccount.get(null) || [];
-                          if (!orphan.length) return null;
-                          return (
-                            <View style={[m.accCard, { borderTopColor: Colors.border }]}>
-                              <Text style={[m.accName, { color: Colors.ink3 }]}>Sem carnê</Text>
-                              {orphan.map((ins) => {
-                                const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-                                const late = ins.status === "overdue";
-                                const chargesTotal = ins.charges_total ?? 0;
-                                const hasCharges = late && chargesTotal > 0;
-                                return (
-                                  <View key={ins.id} style={m.parc}>
-                                    <View style={{ flex: 1 }}>
-                                      <Text style={m.parcT}>
-                                        Parcela {ins.installment_number}/{ins.total_installments}
-                                        {hasCharges
-                                          ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
-                                          : " · " + fmt(rem)}
-                                      </Text>
-                                      <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
-                                      {hasCharges && (
-                                        <View style={m.chargesBreakdown}>
-                                          <View style={m.chargesRow}>
-                                            <Text style={m.chargesLbl}>Principal em aberto</Text>
-                                            <Text style={m.chargesVal}>{fmt(rem)}</Text>
-                                          </View>
-                                          {(ins.late_fee ?? 0) > 0 && (
-                                            <View style={m.chargesRow}>
-                                              <Text style={m.chargesLbl}>Multa</Text>
-                                              <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
-                                            </View>
-                                          )}
-                                          {(ins.late_interest ?? 0) > 0 && (
-                                            <View style={m.chargesRow}>
-                                              <Text style={m.chargesLbl}>
-                                                Mora
-                                                {(ins.days_charged ?? 0) > 0 && (
-                                                  <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
-                                                )}
-                                              </Text>
-                                              <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
-                                            </View>
-                                          )}
-                                          <View style={[m.chargesRow, m.chargesTotalRow]}>
-                                            <Text style={m.chargesTotalLbl}>Total a pagar</Text>
-                                            <Text style={m.chargesTotalVal}>
-                                              {fmt(ins.total_due ?? (rem + chargesTotal))}
-                                            </Text>
-                                          </View>
-                                        </View>
-                                      )}
-                                    </View>
-                                    <View style={{ alignItems: "flex-end", gap: 6 }}>
-                                      <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                                        <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
-                                      </View>
-                                      <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                                        <Icon name="Calendar" size={13} color={Colors.violet} />
-                                      </Pressable>
-                                      <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
-                                        <Text style={m.pixBtnTxt}>Pix</Text>
-                                      </Pressable>
-                                      <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
-                                        <Text style={m.receberTxt}>Receber</Text>
-                                      </Pressable>
-                                    </View>
-                                  </View>
-                                );
-                              })}
-                            </View>
-                          );
-                        })()}
-                      </View>
-                    )}
-
-                    {!useCarneLayout && openInst.length > 0 && (
-                      <View style={m.card}>
-                        <View style={m.cardTitleRow}>
-                          <Text style={m.cardTitle}>Parcelas em aberto</Text>
-                          <Pressable
-                            style={[m.newAccBtn, { gap: 4 }]}
-                            onPress={() => printCarne(companyId, customerId!)}
-                          >
-                            <Icon name="printer" size={12} color={Colors.violet3} />
-                            <Text style={m.newAccTxt}>Imprimir carnê</Text>
-                          </Pressable>
-                        </View>
-                        {openInst.map((ins) => {
-                          const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-                          const late = ins.status === "overdue";
-                          const chargesTotal = ins.charges_total ?? 0;
-                          const hasCharges = late && chargesTotal > 0;
-                          return (
-                            <View key={ins.id} style={m.parc}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={m.parcT}>
-                                  Parcela {ins.installment_number}/{ins.total_installments}
-                                  {hasCharges
-                                    ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
-                                    : " · " + fmt(rem)}
-                                </Text>
-                                <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
-                                {hasCharges && (
-                                  <View style={m.chargesBreakdown}>
-                                    <View style={m.chargesRow}>
-                                      <Text style={m.chargesLbl}>Principal em aberto</Text>
-                                      <Text style={m.chargesVal}>{fmt(rem)}</Text>
-                                    </View>
-                                    {(ins.late_fee ?? 0) > 0 && (
-                                      <View style={m.chargesRow}>
-                                        <Text style={m.chargesLbl}>Multa</Text>
-                                        <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
-                                      </View>
-                                    )}
-                                    {(ins.late_interest ?? 0) > 0 && (
-                                      <View style={m.chargesRow}>
-                                        <Text style={m.chargesLbl}>
-                                          Mora
-                                          {(ins.days_charged ?? 0) > 0 && (
-                                            <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
-                                          )}
-                                        </Text>
-                                        <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
-                                      </View>
-                                    )}
-                                    <View style={[m.chargesRow, m.chargesTotalRow]}>
-                                      <Text style={m.chargesTotalLbl}>Total a pagar</Text>
-                                      <Text style={m.chargesTotalVal}>
-                                        {fmt(ins.total_due ?? (rem + chargesTotal))}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                )}
-                              </View>
-                              <View style={{ alignItems: "flex-end", gap: 6 }}>
-                                <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                                  <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Em atraso" : "No prazo"}</Text>
-                                </View>
-                                <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                                  <Icon name="Calendar" size={13} color={Colors.violet} />
-                                </Pressable>
-                                <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
-                                  <Text style={m.pixBtnTxt}>Pix</Text>
-                                </Pressable>
-                                <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
-                                  <Text style={m.receberTxt}>Receber</Text>
-                                </Pressable>
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-
-                    <View style={m.freeBox}>
-                      <Text style={m.freeTitle}>Receber valor livre</Text>
-
-                      {hasAccounts && (
-                        <View style={m.modeRow}>
-                          {(["fifo", "distribute"] as ReceiveMode[]).map(mode => (
-                            <Pressable
-                              key={mode}
-                              style={[m.modeChip, receiveMode === mode && m.modeChipOn]}
-                              onPress={() => setReceiveMode(mode)}
-                            >
-                              <Text style={[m.modeChipTxt, receiveMode === mode && m.modeChipTxtOn]}>
-                                {mode === "fifo" ? "Em um carnê" : "Distribuir entre carnês"}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                      )}
-
-                      {hasAccounts && receiveMode === "fifo" && (
-                        <View style={[m.fieldBlock, { marginTop: 10 }]}>
-                          <Text style={m.fieldLabel}>Carnê</Text>
-                          <View style={m.chipRow}>
-                            <Pressable
-                              style={[m.chip, fifoAccountId === undefined && m.chipOn]}
-                              onPress={() => setFifoAccountId(undefined)}
-                            >
-                              <Text style={[m.chipTxt, fifoAccountId === undefined && m.chipTxtOn]}>Todos os carnês</Text>
-                            </Pressable>
-                            {accounts.map(acc => (
-                              <Pressable
-                                key={acc.id ?? "general"}
-                                style={[m.chip, fifoAccountId === acc.id && m.chipOn]}
-                                onPress={() => setFifoAccountId(acc.id)}
-                              >
-                                <Text style={[m.chipTxt, fifoAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </View>
-                      )}
-
-                      {hasAccounts && receiveMode === "distribute" && (
-                        <View style={m.fieldBlock}>
-                          {accounts.map(acc => {
-                            const key = acc.id ?? "general";
-                            return (
-                              <View key={key} style={m.distRow}>
-                                <Text style={m.distLabel} numberOfLines={1}>{acc.name}</Text>
-                                <View style={m.distInput}>
-                                  <Text style={m.amountPrefix}>R$</Text>
-                                  <TextInput
-                                    style={m.distField}
-                                    value={distributions[key] || ""}
-                                    onChangeText={v => setDistributions(prev => ({ ...prev, [key]: v.replace(/[^\d,.]/g, "") }))}
-                                    placeholder="0,00"
-                                    placeholderTextColor={Colors.ink3}
-                                    keyboardType="decimal-pad"
-                                  />
-                                </View>
-                              </View>
-                            );
-                          })}
-                          <View style={m.distTotal}>
-                            <Text style={m.distTotalLbl}>Total</Text>
-                            <Text style={m.distTotalVal}>{fmt(distributionTotal)}</Text>
-                          </View>
-                        </View>
-                      )}
-
-                      {(!hasAccounts || receiveMode === "fifo") && (
-                        <>
-                          <Text style={m.fieldLabel}>Valor recebido</Text>
-                          <View style={m.amountIn}>
-                            <Text style={m.amountPrefix}>R$</Text>
-                            <TextInput
-                              style={m.amountInput}
-                              value={amount}
-                              onChangeText={(v) => setAmount(v.replace(/[^\d,.]/g, ""))}
-                              placeholder="0,00"
-                              placeholderTextColor={Colors.ink3}
-                              keyboardType="decimal-pad"
-                            />
-                          </View>
-                          <View style={m.quickRow}>
-                            {[50, 100, 200].map(v => (
-                              <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
-                                <Text style={m.qChipTxt}>{fmt(v)}</Text>
-                              </Pressable>
-                            ))}
-                            {totalBalance > 0 && (
-                              <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
-                                <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
-                              </Pressable>
-                            )}
-                          </View>
-                        </>
-                      )}
-
-                      <Text style={[m.fieldLabel, { marginTop: 14 }]}>Data do recebimento</Text>
-                      <DateInput
-                        value={dateBr}
-                        onChangeText={setDateBr}
-                        placeholder="dd/mm/aaaa"
-                        style={m.dateInput}
-                      />
-                      <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
-
-                      <Text style={[m.fieldLabel, { marginTop: 14 }]}>Forma</Text>
-                      <View style={m.methods}>
-                        {PAYMENT_METHODS.map(pm => (
-                          <Pressable key={pm.key} style={[m.method, method === pm.key && m.methodActive]} onPress={() => setMethod(pm.key)}>
-                            <Text style={[m.methodTxt, method === pm.key && { color: "#fff" }]}>{pm.label}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-
-                      {amountNum > 0 && (
-                        <View style={m.after}>
-                          <Text style={m.afterK}>Saldo após recebimento</Text>
-                          <Text style={m.afterV}>{fmt(afterBalance)}</Text>
-                        </View>
-                      )}
-
-                      {lastChargesPaid != null && lastChargesPaid > 0 && lastTotalPaid != null && (
-                        <View style={m.chargesSummary}>
-                          <View style={m.chargesSummaryRow}>
-                            <Text style={m.chargesSummaryLbl}>Encargos quitados</Text>
-                            <Text style={[m.chargesSummaryVal, { color: Colors.red }]}>{fmt(lastChargesPaid)}</Text>
-                          </View>
-                          <View style={m.chargesSummaryRow}>
-                            <Text style={m.chargesSummaryLbl}>Abatido do principal</Text>
-                            <Text style={m.chargesSummaryVal}>{fmt(Math.max(0, lastTotalPaid - lastChargesPaid))}</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={m.card}>
-                      <Text style={m.cardTitle}>Valor Livre · Preview FIFO</Text>
-                      <Text style={[m.termsHint, { marginBottom: 10 }]}>
-                        Digite um valor para ver como será distribuído entre as parcelas (FIFO). Depois confirme para aplicar.
-                      </Text>
-
-                      {realCarnes.length > 1 && (
-                        <View style={{ marginBottom: 12 }}>
-                          <Text style={m.fieldLabel}>Carnê</Text>
-                          <View style={m.chipRow}>
-                            <Pressable
-                              style={[m.chip, freeAccountId === undefined && m.chipOn]}
-                              onPress={() => { setFreeAccountId(undefined); triggerPreview(freeAmt, undefined); }}
-                            >
-                              <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
-                            </Pressable>
-                            {realCarnes.map(acc => (
-                              <Pressable
-                                key={acc.id!}
-                                style={[m.chip, freeAccountId === acc.id && m.chipOn]}
-                                onPress={() => { setFreeAccountId(acc.id); triggerPreview(freeAmt, acc.id); }}
-                              >
-                                <Text style={[m.chipTxt, freeAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </View>
-                      )}
-
-                      <Text style={m.fieldLabel}>Valor recebido</Text>
-                      <View style={m.amountIn}>
-                        <Text style={m.amountPrefix}>R$</Text>
-                        <TextInput
-                          style={m.amountInput}
-                          value={freeAmt}
-                          onChangeText={(v) => {
-                            const clean = v.replace(/[^\d,.]/g, "");
-                            setFreeAmt(clean);
-                            triggerPreview(clean, freeAccountId);
-                          }}
-                          placeholder="0,00"
-                          placeholderTextColor={Colors.ink3}
-                          keyboardType="decimal-pad"
-                        />
-                      </View>
-
-                      <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
-                      <DateInput
-                        value={freeDateBr}
-                        onChangeText={setFreeDateBr}
-                        placeholder="dd/mm/aaaa"
-                        style={m.dateInput}
-                      />
-
-                      <Text style={[m.fieldLabel, { marginTop: 12 }]}>Forma</Text>
-                      <View style={m.methods}>
-                        {PAYMENT_METHODS.map(pm => (
-                          <Pressable
-                            key={pm.key}
-                            style={[m.method, freeMethod === pm.key && m.methodActive]}
-                            onPress={() => setFreeMethod(pm.key)}
-                          >
-                            <Text style={[m.methodTxt, freeMethod === pm.key && { color: "#fff" }]}>{pm.label}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-
-                      {freePreviewLoading && (
-                        <View style={{ alignItems: "center", marginTop: 14 }}>
-                          <ActivityIndicator size="small" color={Colors.violet3} />
-                          <Text style={[m.termsHint, { textAlign: "center", marginTop: 4 }]}>Calculando distribuição...</Text>
-                        </View>
-                      )}
-                      {!freePreviewLoading && freePreview && (
-                        <View style={m.previewBox}>
-                          <Text style={m.previewTitle}>Distribuição FIFO</Text>
-                          {freePreview.applied.map((line, i) => (
-                            <View key={line.installment_id + i} style={m.previewRow}>
-                              <Text style={m.previewLbl}>
-                                Parcela {line.number ?? "?"}{line.account_id ? "" : ""}
-                              </Text>
-                              <View style={{ alignItems: "flex-end" }}>
-                                {line.charges_paid > 0 && (
-                                  <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
-                                    Encargos: {fmt(line.charges_paid)}
-                                  </Text>
-                                )}
-                                <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
-                                <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>{line.status_after}</Text>
-                              </View>
-                            </View>
-                          ))}
-                          <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
-                            <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
-                            <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
-                              {fmt(freePreview.new_balance)}
-                            </Text>
-                          </View>
-                          {freePreview.credit_generated > 0 && (
-                            <View style={m.previewRow}>
-                              <Text style={m.previewLbl}>Crédito gerado</Text>
-                              <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
-                            </View>
-                          )}
-                        </View>
-                      )}
-
-                      <Pressable
-                        style={[m.cta, { marginTop: 14 }, (parseAmount(freeAmt) <= 0 || freeSubmitting) && { opacity: 0.45 }]}
-                        disabled={parseAmount(freeAmt) <= 0 || freeSubmitting}
-                        onPress={confirmFreePayment}
-                      >
-                        {freeSubmitting
-                          ? <ActivityIndicator color="#fff" />
-                          : <Text style={m.ctaTxt}>
-                              {parseAmount(freeAmt) > 0 ? `Confirmar ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
-                            </Text>}
-                      </Pressable>
-                    </View>
-
-                    <View style={m.card}>
-                      <Text style={m.cardTitle}>Histórico de pagamentos</Text>
-                      {(detail?.transactions || []).length === 0 ? (
-                        <Text style={m.emptyTxt}>Sem movimentações ainda.</Text>
-                      ) : (
-                        (detail?.transactions || []).map((t) => {
-                          const isPay = t.type === "payment";
-                          const prods = productsFromNotes(t.notes);
-                          return (
-                            <View key={t.id} style={m.tlItem}>
-                              <View style={[m.tlDot, { backgroundColor: isPay ? Colors.green : Colors.violet3 }]} />
-                              <View style={{ flex: 1 }}>
-                                <View style={m.tlLine}>
-                                  <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                                    <Text style={m.tlMain}>{isPay ? `Recebimento${t.payment_method ? " · " + t.payment_method : ""}` : "Compra no crediário"}</Text>
-                                    {t.account_name && (
-                                      <View style={m.tlAccTag}>
-                                        <Text style={m.tlAccTagTxt}>{t.account_name}</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                  <Text style={[m.tlAmt, { color: isPay ? Colors.green : Colors.ink }]}>{isPay ? "+ " : ""}{fmt(t.amount)}</Text>
-                                </View>
-                                <Text style={m.tlSub}>{fmtDate(t.created_at)}{prods ? ` · ${prods}` : (t.notes && !isPay ? ` · ${t.notes}` : "")}</Text>
-                              </View>
-                            </View>
-                          );
-                        })
-                      )}
-                    </View>
-                  </>
+                  <TabParcelas
+                    profile={profile}
+                    detail={detail}
+                    accounts={accounts}
+                    openInst={openInst}
+                    instByAccount={instByAccount}
+                    useCarneLayout={useCarneLayout}
+                    realCarnes={realCarnes}
+                    totalBalance={totalBalance}
+                    nextDueDate={nextDueDate}
+                    scoreLabel={scoreLabel}
+                    availableLimit={availableLimit}
+                    isBlocked={isBlocked}
+                    hasOverdue={hasOverdue}
+                    amount={amount}
+                    setAmount={setAmount}
+                    method={method}
+                    setMethod={setMethod}
+                    dateBr={dateBr}
+                    setDateBr={setDateBr}
+                    dateInvalid={dateInvalid}
+                    receiveMode={receiveMode}
+                    setReceiveMode={setReceiveMode}
+                    fifoAccountId={fifoAccountId}
+                    setFifoAccountId={setFifoAccountId}
+                    distributions={distributions}
+                    setDistributions={setDistributions}
+                    distributionTotal={distributionTotal}
+                    amountNum={amountNum}
+                    afterBalance={afterBalance}
+                    payMut={payMut}
+                    handleCreateAccount={handleCreateAccount}
+                    showNewAccount={showNewAccount}
+                    setShowNewAccount={setShowNewAccount}
+                    newAccountName={newAccountName}
+                    setNewAccountName={setNewAccountName}
+                    creatingAccount={creatingAccount}
+                    expandedAccountId={expandedAccountId}
+                    setExpandedAccountId={setExpandedAccountId}
+                    handleEditDueDateOpen={handleEditDueDateOpen}
+                    openInstallmentPix={openInstallmentPix}
+                    lastChargesPaid={lastChargesPaid}
+                    lastTotalPaid={lastTotalPaid}
+                    freeAmt={freeAmt}
+                    setFreeAmt={setFreeAmt}
+                    freeMethod={freeMethod}
+                    setFreeMethod={setFreeMethod}
+                    freeDateBr={freeDateBr}
+                    setFreeDateBr={setFreeDateBr}
+                    freeAccountId={freeAccountId}
+                    setFreeAccountId={setFreeAccountId}
+                    freePreview={freePreview}
+                    freePreviewLoading={freePreviewLoading}
+                    confirmFreePayment={confirmFreePayment}
+                    freeSubmitting={freeSubmitting}
+                    prefill={prefill}
+                    triggerPreview={triggerPreview}
+                    companyId={companyId}
+                    customerId={customerId!}
+                    phone={phone}
+                    onCobrar={onCobrar}
+                    name={name}
+                  />
                 )}
 
                 {tab === "historico" && (
-                  <View>
-                    <View style={m.card}>
-                      <View style={m.cardTitleRow}>
-                        <Text style={m.cardTitle}>Linha do tempo</Text>
-                        <Pressable
-                          style={m.newAccBtn}
-                          onPress={() => { setHistLoaded(false); loadHistory(); }}
-                          disabled={histLoading}
-                        >
-                          <Icon name="refresh_cw" size={11} color={Colors.violet3} />
-                          <Text style={m.newAccTxt}>Atualizar</Text>
-                        </Pressable>
-                      </View>
-
-                      {histLoading && histEvents.length === 0 && (
-                        <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                          <ActivityIndicator color={Colors.violet3} />
-                        </View>
-                      )}
-
-                      {!histLoading && !histLoaded && (
-                        <Pressable
-                          style={[m.cta, { marginVertical: 10 }]}
-                          onPress={() => loadHistory()}
-                        >
-                          <Text style={m.ctaTxt}>Carregar histórico</Text>
-                        </Pressable>
-                      )}
-
-                      {histEvents.length === 0 && histLoaded && !histLoading && (
-                        <Text style={m.emptyTxt}>Sem eventos no histórico.</Text>
-                      )}
-
-                      {histEvents.map((ev) => {
-                        const isCredit = ev.amount < 0;
-                        const typeLabels: Record<string, string> = {
-                          purchase: "Compra",
-                          manual_debit: "Débito manual",
-                          payment: "Pagamento",
-                          exchange_credit: "Crédito de troca",
-                          refund: "Devolução",
-                        };
-                        const typeLabel = typeLabels[ev.type] ?? ev.type;
-                        const methodStr = ev.payment?.method ? ` · ${ev.payment.method}` : "";
-                        return (
-                          <View key={ev.id} style={m.tlItem}>
-                            <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
-                            <View style={{ flex: 1 }}>
-                              <View style={m.tlLine}>
-                                <Text style={m.tlMain}>{typeLabel}{methodStr}</Text>
-                                <Text style={[m.tlAmt, { color: isCredit ? Colors.green : Colors.red }]}>
-                                  {isCredit ? "" : "+"}{fmt(Math.abs(ev.amount))}
-                                </Text>
-                              </View>
-                              <Text style={m.tlSub}>{fmtDate(ev.occurred_at)}</Text>
-                              {ev.items && ev.items.length > 0 && (
-                                <Text style={[m.tlSub, { marginTop: 2 }]} numberOfLines={2}>
-                                  {ev.items.map(it => `${it.quantity}× ${it.product_name}`).join(", ")}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })}
-
-                      {histCursor && !histLoading && (
-                        <Pressable
-                          style={[m.cta, { marginTop: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
-                          onPress={() => loadHistory(histCursor)}
-                        >
-                          <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Carregar mais</Text>
-                        </Pressable>
-                      )}
-                      {histLoading && histEvents.length > 0 && (
-                        <View style={{ paddingVertical: 12, alignItems: "center" }}>
-                          <ActivityIndicator size="small" color={Colors.violet3} />
-                        </View>
-                      )}
-                    </View>
-                  </View>
+                  <TabHistorico
+                    histEvents={histEvents}
+                    histCursor={histCursor}
+                    histLoading={histLoading}
+                    histLoaded={histLoaded}
+                    loadHistory={loadHistory}
+                    setHistLoaded={setHistLoaded}
+                  />
                 )}
 
                 {tab === "conta" && (
-                  <View>
-                    <View style={m.card}>
-                      <Text style={m.cardTitle}>Status do crediário</Text>
-                      <View style={m.row}>
-                        <Text style={m.rowK}>Status</Text>
-                        <View style={[m.pill, { backgroundColor: (isBlocked ? Colors.red : Colors.green) + "22" }]}>
-                          <Text style={[m.pillTxt, { color: isBlocked ? Colors.red : Colors.green }]}>
-                            {isBlocked ? "Bloqueado" : "Ativo"}
-                          </Text>
-                        </View>
-                      </View>
-                      {isBlocked && !!profile?.blocked_reason && (
-                        <View style={m.row}>
-                          <Text style={m.rowK}>Motivo</Text>
-                          <Text style={[m.rowV, { fontSize: 13 }]}>{profile.blocked_reason}</Text>
-                        </View>
-                      )}
-                      {!!profile && (
-                        <>
-                          <View style={m.row}>
-                            <Text style={m.rowK}>Score</Text>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                              <Text style={[m.rowV, { color: scoreColor(scoreLabel), fontSize: 15 }]}>
-                                {profile.credit_score}
-                              </Text>
-                              {!!scoreLabel && (
-                                <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
-                                  <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
-                                    {scoreLabelPt(scoreLabel)}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                          <View style={m.row}>
-                            <Text style={m.rowK}>Limite total</Text>
-                            <Text style={m.rowV}>{fmt(profile.credit_limit)}</Text>
-                          </View>
-                          {availableLimit !== undefined && (
-                            <View style={m.row}>
-                              <Text style={m.rowK}>Disponível</Text>
-                              <Text style={[m.rowV, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>
-                                {fmt(availableLimit)}
-                              </Text>
-                            </View>
-                          )}
-                          <View style={m.row}>
-                            <Text style={m.rowK}>Em aberto</Text>
-                            <Text style={[m.rowV, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
-                              {fmt(totalBalance)}
-                            </Text>
-                          </View>
-                          <View style={m.row}>
-                            <Text style={m.rowK}>Parcelas abertas</Text>
-                            <Text style={m.rowV}>{openInst.length}</Text>
-                          </View>
-                          {openInst.length > 0 && (
-                            <View style={m.row}>
-                              <Text style={m.rowK}>Próx. vencimento</Text>
-                              <Text style={m.rowV}>{fmtDate(nextDueDate)}</Text>
-                            </View>
-                          )}
-                        </>
-                      )}
-                    </View>
-
-                    {!!profile?.terms?.effective && (
-                      <View style={m.card}>
-                        <Text style={m.cardTitle}>Termos efetivos</Text>
-                        <View style={m.row}>
-                          <Text style={m.rowK}>Máx. parcelas</Text>
-                          <Text style={m.rowV}>{profile.terms.effective.max_installments}x</Text>
-                        </View>
-                        <View style={m.row}>
-                          <Text style={m.rowK}>Juros a.m.</Text>
-                          <Text style={m.rowV}>{(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}%</Text>
-                        </View>
-                        {profile.terms.effective.due_day != null && (
-                          <View style={m.row}>
-                            <Text style={m.rowK}>Dia de venc.</Text>
-                            <Text style={m.rowV}>{profile.terms.effective.due_day}</Text>
-                          </View>
-                        )}
-                        {hasTermsOverride && (
-                          <View style={[m.pill, { backgroundColor: Colors.violet3 + "22", alignSelf: "flex-start" }]}>
-                            <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Override ativo</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {realCarnes.length > 0 && (
-                      <View style={m.card}>
-                        <Text style={m.cardTitle}>Carnês</Text>
-                        {realCarnes.map(acc => (
-                          <View key={acc.id!} style={[m.row, { alignItems: "flex-start" }]}>
-                            <View>
-                              <Text style={m.rowK}>{acc.name}</Text>
-                              <Text style={[m.tlSub, { marginTop: 2 }]}>
-                                {acc.open_count} parcela{acc.open_count !== 1 ? "s" : ""} · {periodLabel(acc) || "—"}
-                              </Text>
-                            </View>
-                            <Text style={[m.rowV, { color: acc.balance > 0 ? Colors.red : Colors.ink3, fontSize: 15 }]}>
-                              {fmt(acc.balance)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
+                  <TabConta
+                    profile={profile}
+                    isBlocked={isBlocked}
+                    scoreLabel={scoreLabel}
+                    availableLimit={availableLimit}
+                    totalBalance={totalBalance}
+                    openInst={openInst}
+                    nextDueDate={nextDueDate}
+                    hasTermsOverride={hasTermsOverride}
+                    realCarnes={realCarnes}
+                  />
                 )}
 
                 {tab === "termos" && (
@@ -1625,6 +800,7 @@ export function ClienteCrediarioModal({
                     )}
                   </View>
                 )}
+
               </>
             )}
           </ScrollView>
@@ -1736,195 +912,5 @@ export function ClienteCrediarioModal({
     </Modal>
   );
 }
-
-const m = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 16 },
-  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "90%", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
-
-  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  crumb: { flexDirection: "row", alignItems: "center", gap: 5 },
-  crumbTxt: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
-  xBtn: { width: 30, height: 30, borderRadius: 9, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
-
-  body: { flexGrow: 0 },
-
-  tabs: { flexDirection: "row", gap: 6, marginBottom: 14 },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
-  tabTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
-  tabTxtOn: { color: "#fff" },
-
-  scoreBanner: { flexDirection: "row", alignItems: "flex-start", gap: 9, backgroundColor: Colors.amber + "18", borderWidth: 1, borderColor: Colors.amber + "44", borderRadius: 11, padding: 12, marginBottom: 13 },
-  scoreBannerTxt: { flex: 1, fontSize: 12, color: Colors.amber, lineHeight: 17 },
-  scorePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  scorePillTxt: { fontSize: 10, fontWeight: "700" },
-
-  cust: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 },
-  custL: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
-  avatarTxt: { fontSize: 18, fontWeight: "700", color: Colors.violet3 },
-  custName: { fontSize: 18, fontWeight: "700", color: Colors.ink },
-  custSub: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  pill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  pillTxt: { fontSize: 10, fontWeight: "700" },
-  waBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.4)", borderRadius: 11, paddingHorizontal: 12, paddingVertical: 9 },
-  waTxt: { fontSize: 12, fontWeight: "700", color: Colors.green },
-
-  card: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 13 },
-
-  heroCard: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 16, padding: 18, marginBottom: 13, alignItems: "center" },
-  heroLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5, color: Colors.violet3, textTransform: "uppercase", marginBottom: 6 },
-  heroValue: { fontSize: 34, fontWeight: "800", marginBottom: 4 },
-  heroSub: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
-
-  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  cardTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 11 },
-  rowK: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  rowKsub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  rowV: { fontSize: 17, fontWeight: "800" },
-
-  newAccBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
-  newAccTxt: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
-  newAccRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  newAccInput: { flex: 1, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, color: Colors.ink, fontSize: 13, backgroundColor: Colors.bg2 },
-  newAccConfirm: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8, alignItems: "center", justifyContent: "center" },
-  newAccConfirmTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
-
-  accCard: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12, marginTop: 4, paddingBottom: 4 },
-  accTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  accName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
-  accMeta: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 5 },
-  accBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, borderWidth: 1 },
-  accBadgeTxt: { fontSize: 10, fontWeight: "700" },
-  accBalance: { fontSize: 16, fontWeight: "800" },
-  accNextDue: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
-  accActions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
-  accActionBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 13, paddingVertical: 7 },
-  accActionWa: { backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)" },
-  accActionTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  accInstList: { marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
-
-  parc: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: Colors.border },
-  parcT: { fontSize: 13, fontWeight: "700", color: Colors.ink },
-  parcS: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
-  badgeTxt: { fontSize: 10, fontWeight: "700" },
-  receberBtn: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
-  receberTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
-
-  chargesBreakdown: { marginTop: 7, backgroundColor: Colors.bg2, borderRadius: 9, padding: 9, borderWidth: 1, borderColor: Colors.border2 },
-  chargesRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  chargesLbl: { fontSize: 11, color: Colors.ink3, flex: 1 },
-  chargesVal: { fontSize: 11, fontWeight: "700", color: Colors.ink },
-  chargesDaysChip: { fontSize: 10, color: Colors.amber, fontWeight: "700" },
-  chargesTotalRow: { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 5, marginTop: 2, marginBottom: 0 },
-  chargesTotalLbl: { fontSize: 12, fontWeight: "700", color: Colors.ink, flex: 1 },
-  chargesTotalVal: { fontSize: 13, fontWeight: "800", color: Colors.red },
-
-  chargesSummary: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: Colors.border2 },
-  chargesSummaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 },
-  chargesSummaryLbl: { fontSize: 12, color: Colors.ink3 },
-  chargesSummaryVal: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-
-  freeBox: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 14, marginBottom: 13 },
-  freeTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 10 },
-  modeRow: { flexDirection: "row", gap: 7, marginBottom: 10 },
-  modeChip: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 8 },
-  modeChipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
-  modeChipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2, textAlign: "center" },
-  modeChipTxtOn: { color: "#fff" },
-  fieldBlock: { marginTop: 4 },
-  fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 10 },
-  chip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
-  chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
-  chipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
-  chipTxtOn: { color: "#fff" },
-  distRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
-  distLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.ink },
-  distInput: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
-  distField: { width: 80, color: Colors.ink, fontSize: 13, fontWeight: "700", paddingVertical: 0 },
-  distTotal: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border2 },
-  distTotalLbl: { fontSize: 12, color: Colors.ink3 },
-  distTotalVal: { fontSize: 14, fontWeight: "800", color: Colors.amber },
-  amountIn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg2, borderWidth: 1.5, borderColor: Colors.violet2, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11 },
-  amountPrefix: { fontSize: 14, color: Colors.ink3, fontWeight: "600" },
-  amountInput: { flex: 1, color: Colors.ink, fontSize: 20, fontWeight: "800", paddingVertical: 0 },
-  quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
-  qChip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
-  qChipTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink2 },
-  dateInput: { backgroundColor: Colors.bg2, borderColor: Colors.violet2, borderWidth: 1.5, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: Colors.ink },
-  dateHint: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
-  methods: { flexDirection: "row", gap: 7 },
-  method: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 9 },
-  methodActive: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
-  methodTxt: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
-  after: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: Colors.border2 },
-  afterK: { fontSize: 12, color: Colors.ink3 },
-  afterV: { fontSize: 14, fontWeight: "800", color: Colors.amber },
-
-  tlItem: { flexDirection: "row", gap: 11, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
-  tlDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
-  tlLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
-  tlMain: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  tlAmt: { fontSize: 13, fontWeight: "800" },
-  tlSub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  tlAccTag: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
-  tlAccTagTxt: { fontSize: 10, fontWeight: "700", color: Colors.violet3 },
-  emptyTxt: { fontSize: 12, color: Colors.ink3, paddingVertical: 6 },
-
-  termsHint: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 10 },
-  termsEffRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.bg2, borderRadius: 9, padding: 10, borderWidth: 1, borderColor: Colors.border2 },
-  termsEffLbl: { fontSize: 12, color: Colors.ink3 },
-  termsEffVal: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
-  termsInput: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: Colors.ink, backgroundColor: Colors.bg2 },
-
-  blockRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border },
-  blockLabel: { fontSize: 14, fontWeight: "700", color: Colors.ink },
-  blockReason: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
-
-  footer: { padding: 16, borderTopWidth: 1, borderTopColor: Colors.border },
-  cta: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-  ctaTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
-
-  calBtn: {
-    backgroundColor: Colors.violetD, borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 6,
-    minWidth: 30, alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: Colors.violet + "44",
-  },
-  editDueDateSheet: {
-    borderTopWidth: 1, borderTopColor: Colors.border,
-    padding: 16, backgroundColor: Colors.bg3,
-  },
-  editDueDateHeader: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6,
-  },
-  editDueDateTitle: { fontSize: 14, fontWeight: "800", color: Colors.ink },
-  editDueDateSub: { fontSize: 11, color: Colors.ink3, marginBottom: 10, lineHeight: 16 },
-
-  tabSm: { paddingVertical: 5 },
-
-  pixBtn: { backgroundColor: Colors.green + "22", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: Colors.green + "44" },
-  pixBtnTxt: { fontSize: 11, fontWeight: "700", color: Colors.green },
-
-  pixOverlay: { borderTopWidth: 1, borderTopColor: Colors.border, padding: 16, backgroundColor: Colors.bg2 },
-  pixOverlayHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  pixAmtLabel: { fontSize: 24, fontWeight: "800", color: Colors.ink, textAlign: "center", marginBottom: 2 },
-  pixInstLabel: { fontSize: 12, color: Colors.ink3, textAlign: "center", marginBottom: 12 },
-  pixEmvBox: { backgroundColor: Colors.bg3, borderRadius: 9, padding: 10, borderWidth: 1, borderColor: Colors.border2, marginTop: 4 },
-  pixEmvTxt: { fontSize: 11, color: Colors.ink3, fontFamily: Platform.OS === "web" ? "monospace" : undefined },
-
-  previewBox: { backgroundColor: Colors.bg2, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border2, marginTop: 14 },
-  previewTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.violet3, textTransform: "uppercase", marginBottom: 8 },
-  previewRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 },
-  previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
-  previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
-
-  distTotalLbl: { fontSize: 12, color: Colors.ink3 },
-
-} as any);
 
 export default ClienteCrediarioModal;
