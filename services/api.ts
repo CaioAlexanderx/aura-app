@@ -20,7 +20,10 @@ var _onUnauthorized: (() => void) | null = null;
 export function setOnUnauthorized(fn: () => void) { _onUnauthorized = fn; }
 
 type RefreshResult = { status: "ok"; token: string } | { status: "invalid" } | { status: "network_error" };
-type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number };
+// A3-FE: headers?: Record<string, string> added so callers can pass Idempotency-Key
+// without touching the Authorization flow. Spread happens BEFORE the token assignment
+// so Authorization always wins (a caller cannot accidentally clobber Bearer).
+type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number; headers?: Record<string, string> };
 
 // ─── Refresh JWT singleton (race-safe) ───────────────────────────────────────
 // Múltiplas requisições paralelas que recebem 401 devem compartilhar a MESMA
@@ -77,7 +80,8 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
     // devolve o token fresco (refreshAccessToken atualiza useAuthStore.setState).
     // Sem isso, o retry usaria o token antigo do closure e geraria 401 de novo.
     if (!explicitToken) token = _getToken?.() || null;
-    var headers: HeadersInit = { "Content-Type": "application/json" };
+    // A3-FE: spread custom headers first so Authorization always overrides them.
+    var headers: HeadersInit = { "Content-Type": "application/json", ...(opts.headers || {}) };
     if (token) headers["Authorization"] = "Bearer " + token;
 
     try {
