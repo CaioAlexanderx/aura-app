@@ -45,6 +45,8 @@ export type TabParcelasProps = {
   setExpandedAccountId: (v: string | null | undefined) => void;
   handleEditDueDateOpen: (inst: CreditInstallment) => void;
   openInstallmentPix: (id: string) => void;
+  /** Pix para o recebimento de valor livre (B3). Passa o valor em reais. */
+  openFreePix: (amount: number) => void;
   freeAmt: string;
   setFreeAmt: (v: string) => void;
   freeMethod: string;
@@ -71,13 +73,14 @@ export function TabParcelas({
   totalBalance, nextDueDate, scoreLabel, availableLimit, isBlocked, hasOverdue,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, openInstallmentPix,
+  handleEditDueDateOpen, openInstallmentPix, openFreePix,
   freeAmt, setFreeAmt, freeMethod, setFreeMethod, freeDateBr, setFreeDateBr,
   freeAccountId, setFreeAccountId, freePreview, freePreviewLoading,
   confirmFreePayment, freeSubmitting, prefill, triggerPreview,
   companyId, customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   const hasAccounts = accounts.length > 0;
+  const freeAmtValue = parseAmount(freeAmt);
   return (
 <>
   {useCarneLayout && (
@@ -530,17 +533,32 @@ export function TabParcelas({
       </View>
     )}
 
-    <Pressable
-      style={[m.cta, { marginTop: 14 }, (parseAmount(freeAmt) <= 0 || freeSubmitting) && { opacity: 0.45 }]}
-      disabled={parseAmount(freeAmt) <= 0 || freeSubmitting}
-      onPress={confirmFreePayment}
-    >
-      {freeSubmitting
-        ? <ActivityIndicator color="#fff" />
-        : <Text style={m.ctaTxt}>
-            {parseAmount(freeAmt) > 0 ? `Confirmar recebimento de ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
-          </Text>}
-    </Pressable>
+    {/* ── Botões de ação: Gerar Pix (B3) + Confirmar recebimento ── */}
+    <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+      <Pressable
+        style={[
+          m.pixBtn,
+          { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
+          freeAmtValue <= 0 && { opacity: 0.4 },
+        ]}
+        disabled={freeAmtValue <= 0}
+        onPress={() => openFreePix(freeAmtValue)}
+      >
+        <Text style={m.pixBtnTxt}>Gerar Pix</Text>
+      </Pressable>
+
+      <Pressable
+        style={[m.cta, { flex: 2 }, (freeAmtValue <= 0 || freeSubmitting) && { opacity: 0.45 }]}
+        disabled={freeAmtValue <= 0 || freeSubmitting}
+        onPress={confirmFreePayment}
+      >
+        {freeSubmitting
+          ? <ActivityIndicator color="#fff" />
+          : <Text style={m.ctaTxt}>
+              {freeAmtValue > 0 ? `Confirmar recebimento de ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
+            </Text>}
+      </Pressable>
+    </View>
   </View>
 </>
   );
