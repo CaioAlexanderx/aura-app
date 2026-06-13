@@ -34,12 +34,16 @@
 //   - Subtítulo de 1 linha exibido quando sidebar expandida
 //   - Labels e subtítulos derivados de STUDIO_NAV via types.ts (sem strings duplicadas)
 //
-// 13/06/2026 (fix scroll v1): root recebe flex:1 + miolo do nav vira
-//   ScrollView — mas flex:1 dentro de flexDirection:"row" expandia a
-//   sidebar horizontalmente. Fix v2: alignSelf:"stretch" dá altura 100%
-//   sem afetar a largura (controlada por width: railW).
+// 13/06/2026 fix scroll:
+//   - v1: root flex:1 + ScrollView → expandia horizontalmente no row
+//   - v2: alignSelf:"stretch" → corrigiu largura mas sem overflow:"hidden"
+//         o container crescia junto com o conteúdo, ScrollView nunca acionava
+//   - v3 (atual): overflow:"hidden" no root View limita o container à altura
+//         do alignSelf:"stretch", forçando o ScrollView a scrollar de verdade.
+//         showsVerticalScrollIndicator visível no web para o usuário perceber
+//         que há mais conteúdo.
 // ============================================================
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, Platform, AccessibilityInfo } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
@@ -115,10 +119,12 @@ export function Sidebar({
     <View
       style={[
         {
-          // alignSelf:"stretch" ocupa 100% da altura do container pai (row)
-          // sem expandir horizontalmente como faria flex:1 num row container.
-          // A largura é controlada exclusivamente por width:railW.
+          // alignSelf:"stretch" = ocupa 100% da altura do row container sem
+          // expandir horizontalmente (largura só via width:railW).
+          // overflow:"hidden" é ESSENCIAL no web: sem ele o View cresce junto
+          // com o conteúdo e o ScrollView interno nunca precisa scrollar.
           alignSelf: "stretch",
+          overflow: "hidden",
           width: railW,
           backgroundColor: t.paperCard,
           borderRightWidth: 1,
@@ -167,7 +173,7 @@ export function Sidebar({
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ gap: 4, paddingBottom: 8 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={Platform.OS === "web"}
       >
         {/* ─── Início ─── */}
         <NavItem
