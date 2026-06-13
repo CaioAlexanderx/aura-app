@@ -33,9 +33,12 @@
 //   - Porta primária Caixa/PDV recebe destaque visual (left-bar navy + bg tinted)
 //   - Subtítulo de 1 linha exibido quando sidebar expandida
 //   - Labels e subtítulos derivados de STUDIO_NAV via types.ts (sem strings duplicadas)
+//
+// 13/06/2026 (fix scroll): root recebe flex:1 + miolo do nav vira
+//   ScrollView — em monitores pequenos o conteúdo rolava pra fora da tela.
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
-import { View, Text, Pressable, Platform, AccessibilityInfo } from "react-native";
+import { View, Text, Pressable, ScrollView, Platform, AccessibilityInfo } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AuraStudioMark } from "@/components/studio/AuraStudioMark";
 import { Icon } from "@/components/Icon";
@@ -110,6 +113,9 @@ export function Sidebar({
     <View
       style={[
         {
+          // flex:1 garante que a sidebar ocupa toda a altura disponível
+          // sem isso o conteúdo não tem referência de altura e nunca rola
+          flex: 1,
           width: railW,
           backgroundColor: t.paperCard,
           borderRightWidth: 1,
@@ -118,14 +124,13 @@ export function Sidebar({
           paddingBottom: 14,
           paddingHorizontal: expanded ? 12 : 10,
           flexDirection: "column",
-          gap: 4,
         },
         Platform.OS === "web" && ({ transition: "width 0.18s ease, padding 0.18s ease" } as any),
       ]}
       accessibilityRole={Platform.OS === "web" ? ("navigation" as any) : undefined}
       accessibilityLabel="Navegação do Studio"
     >
-      {/* ─── Brand ─── */}
+      {/* ─── Brand (fixo no topo) ─── */}
       <Pressable
         onPress={() => navigate("/studio")}
         accessibilityLabel="Ir para início do Aura Studio"
@@ -138,6 +143,7 @@ export function Sidebar({
           paddingHorizontal: 6,
           marginBottom: 8,
           minHeight: 44,
+          flexShrink: 0,
         }}
       >
         <AuraStudioMark size={36} />
@@ -154,36 +160,40 @@ export function Sidebar({
         )}
       </Pressable>
 
-      {/* ─── Início ─── */}
-      <NavItem
-        t={t}
-        icon="grid"
-        label="Início"
-        active={isHome}
-        expanded={expanded}
-        enterDelay={0}
-        reduced={reduced}
-        onPress={() => navigate("/studio")}
-      />
-
-      {/* ─── Grupos ─── */}
-      {GROUPS.map((g, gi) => (
-        <GroupSection
-          key={g.id}
+      {/* ─── Nav scrollável — ocupa o espaço restante ─── */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ gap: 4, paddingBottom: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ─── Início ─── */}
+        <NavItem
           t={t}
-          group={g}
-          pathname={pathname}
+          icon="grid"
+          label="Início"
+          active={isHome}
           expanded={expanded}
-          enterDelay={(gi + 1) * 70}
+          enterDelay={0}
           reduced={reduced}
-          navigate={navigate}
+          onPress={() => navigate("/studio")}
         />
-      ))}
 
-      {/* spacer */}
-      <View style={{ flex: 1, minHeight: 12 }} />
+        {/* ─── Grupos ─── */}
+        {GROUPS.map((g, gi) => (
+          <GroupSection
+            key={g.id}
+            t={t}
+            group={g}
+            pathname={pathname}
+            expanded={expanded}
+            enterDelay={(gi + 1) * 70}
+            reduced={reduced}
+            navigate={navigate}
+          />
+        ))}
+      </ScrollView>
 
-      {/* ─── Configurações ─── */}
+      {/* ─── Configurações (fixo) ─── */}
       <NavItem
         t={t}
         icon="settings"
@@ -302,14 +312,9 @@ function NavItem({
   reduced?: boolean;
   onPress: () => void;
 }) {
-  // Magenta-soft active state per plano "estado ativo magenta-soft":
-  // background accent 10% + accent text + barra accent à esquerda.
   const activeBg = "rgba(236,72,153,0.10)";
-  // Porta primária (Caixa/PDV): usa tint navy suave ao invés do magenta genérico
   const primaryBg = "rgba(30,58,138,0.08)";
   const web = Platform.OS === "web";
-  // Wrapper externo = animação de entrada (não conflita com o transform de
-  // hover/press do Pressable interno).
   return (
     <View style={web ? enterStyle(enterDelay, reduced) : undefined}>
       <Pressable
@@ -330,13 +335,10 @@ function NavItem({
             justifyContent: expanded ? "flex-start" : "center",
           },
           web && ({ cursor: "pointer", transition: "background-color .15s ease, box-shadow .15s ease, transform .12s ease" } as any),
-          // hover: "acende" em magenta suave + glow
           hovered && !active && { backgroundColor: t.accentSoft },
           hovered && !active && web && ({ boxShadow: `0 2px 12px ${t.accent}26` } as any),
           active && { backgroundColor: activeBg },
-          // porta primária inativa recebe tint navy sutil
           !active && primary && { backgroundColor: primaryBg },
-          // clique: expande levemente o magenta (pop)
           web && pressed && !reduced && ({ transform: "scale(1.03)", backgroundColor: activeBg } as any),
         ]}
       >
@@ -357,7 +359,6 @@ function NavItem({
                 pointerEvents="none"
               />
             )}
-            {/* Porta primária inativa: barra navy sutil */}
             {!active && primary && (
               <View
                 style={{
@@ -391,7 +392,6 @@ function NavItem({
                   <Text
                     style={{
                       fontSize: 11,
-                      // ink3 garante ≥4.5:1 sobre paperCard (5.1:1 light, 5.7:1 dark)
                       color: t.ink3,
                       fontWeight: "400",
                       marginTop: 1,
@@ -411,8 +411,6 @@ function NavItem({
 }
 
 // ─── GroupSection ───────────────────────────────────────────
-// Expanded: header + children indentados.
-// Collapsed: ícone do grupo só; hover abre popover à direita.
 function GroupSection({
   t,
   group,
@@ -455,8 +453,6 @@ function GroupSection({
           style={{
             fontSize: 9,
             fontWeight: "800",
-            // AA fix Fase 5: ink4 (2.4:1 light / 3.1:1 dark sobre paperCard)
-            // → ink3 (5.1:1 light / 5.7:1 dark) pra section label visível.
             color: t.ink3,
             letterSpacing: 1.2,
             textTransform: "uppercase",
@@ -567,7 +563,6 @@ function GroupSection({
             style={{
               fontSize: 9,
               fontWeight: "800",
-              // AA fix Fase 5: ink4 → ink3 (same rationale do header expanded)
               color: t.ink3,
               letterSpacing: 1.2,
               textTransform: "uppercase",
