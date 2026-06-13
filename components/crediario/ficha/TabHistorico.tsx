@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import type { CreditHistoryEvent } from "@/services/creditApi";
+import { printReceipt, type CreditHistoryEvent } from "@/services/creditApi";
+import { toast } from "@/components/Toast";
 import { fmt, fmtDate } from "./fichaHelpers";
 import { m } from "./fichaStyles";
 
@@ -12,11 +14,30 @@ export type TabHistoricoProps = {
   histLoaded: boolean;
   loadHistory: (cursor?: string | null) => void;
   setHistLoaded: (v: boolean) => void;
+  // contexto passado pelo shell (ClienteCrediarioModal)
+  companyId: string;
+  customerId: string;
+  onRefresh: () => void;
 };
 
 export function TabHistorico({
   histEvents, histCursor, histLoading, histLoaded, loadHistory, setHistLoaded,
+  companyId,
 }: TabHistoricoProps) {
+  const [printingId, setPrintingId] = useState<string | null>(null);
+
+  async function handlePrintReceipt(transactionId: string) {
+    setPrintingId(transactionId);
+    try {
+      await printReceipt(companyId, transactionId);
+    } catch (err) {
+      console.error("[crediário] printReceipt error:", err);
+      toast.error("Não foi possível abrir o recibo. Tente novamente.");
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
   return (
 <View>
   <View style={m.card}>
@@ -62,6 +83,7 @@ export function TabHistorico({
       };
       const typeLabel = typeLabels[ev.type] ?? ev.type;
       const methodStr = ev.payment?.method ? ` · ${ev.payment.method}` : "";
+      const isPrinting = printingId === ev.id;
       return (
         <View key={ev.id} style={m.tlItem}>
           <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
@@ -82,6 +104,22 @@ export function TabHistorico({
                     <Text style={lc.itemTotal}>{fmt(it.total / 100)}</Text>
                   </View>
                 ))}
+              </View>
+            )}
+            {/* Recibo: só em eventos de pagamento (B5) */}
+            {ev.type === "payment" && (
+              <View style={lc.actionRow}>
+                <Pressable
+                  style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
+                  onPress={() => handlePrintReceipt(ev.id)}
+                  disabled={isPrinting}
+                  hitSlop={6}
+                >
+                  {isPrinting
+                    ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 11, height: 11 }} />
+                    : <Icon name="printer" size={11} color={Colors.violet3} />}
+                  <Text style={lc.actionBtnTxt}>Recibo</Text>
+                </Pressable>
               </View>
             )}
           </View>
@@ -132,5 +170,27 @@ const lc = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: Colors.ink,
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 6,
+    gap: 8,
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    backgroundColor: Colors.bg2,
+  },
+  actionBtnTxt: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.violet3,
   },
 });
