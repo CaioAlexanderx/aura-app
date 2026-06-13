@@ -15,6 +15,7 @@ import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
+import { NotificationBell } from "@/components/NotificationBell";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
@@ -716,8 +717,13 @@ export default function TabsLayout() {
     ? `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.12) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.08) 0%,transparent 45%),radial-gradient(ellipse at 50% 50%,rgba(91,140,255,0.05) 0%,transparent 60%),${C.bg}`
     : `radial-gradient(ellipse at 20% 0%,rgba(109,40,217,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(139,92,246,0.04) 0%,transparent 45%),${C.bg}`;
 
+  // ── Web narrow (mobile) ──────────────────────────────────────
   if (w && isNarrow) return (
     <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative", overflow: "hidden" } as any}>
+      {/* Topbar sininho */}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "8px 16px", flexShrink: 0 } as any}>
+        <NotificationBell />
+      </div>
       <ToastContainer />
       <div style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0, minWidth: 0 } as any}>
         <PageTransition><Slot /></PageTransition>
@@ -727,10 +733,15 @@ export default function TabsLayout() {
     </div>
   );
 
+  // ── Web wide (desktop) ───────────────────────────────────────
   if (w) return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", width: "100%", background: C.bg, position: "relative" } as any}>
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative", minWidth: 0 } as any}>
+      <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative", minWidth: 0, display: "flex", flexDirection: "column" } as any}>
+        {/* Topbar sininho */}
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "10px 24px 0", flexShrink: 0 } as any}>
+          <NotificationBell />
+        </div>
         <ToastContainer />
         <PageTransition><Slot /></PageTransition>
       </div>
@@ -738,9 +749,14 @@ export default function TabsLayout() {
     </div>
   );
 
+  // ── Native ───────────────────────────────────────────────────
   return (
     <ErrorBoundary>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
+        {/* Topbar sininho nativo */}
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", padding: 8 }}>
+          <NotificationBell />
+        </View>
         <View key={themeKey} style={{ flex: 1 }}>
           <ToastContainer />
           <PageTransition><Slot /></PageTransition>
