@@ -92,7 +92,7 @@ function isCustomerOverdue(cust: CreditBalanceItem & { overdue?: boolean; next_d
 
 const AGING_LABELS: Record<string, string> = {
   a_vencer: "Em dia", "1_30_dias": "1–30 dias",
-  "31_60_dias": "31–60 dias", "61_90_dias": "61–90 dias", acima_90: "60+ dias",
+  "31_60_dias": "31–60 dias", "61_90_dias": "61–90 dias", acima_90: "90+ dias",
 };
 
 const AGING_COLORS: Record<string, string> = {
@@ -234,9 +234,10 @@ export default function CrediarioScreen() {
   const agingMap = Object.fromEntries(aging.map(r => [r.faixa, r]));
   const agingTotal = aging.reduce((s, r) => s + Number(r.amount), 0) || 1;
 
-  const totalOpen = carteiraQ.data?.total_open || kpis?.total_open_amount || 0;
+  // Prefere portfolio_open_amount (carteira real: parcelado + à vista + avulsos).
+  // Fallbacks para total_open de /balances e total_open_amount do dashboard.
+  const totalOpen = kpis?.portfolio_open_amount ?? carteiraQ.data?.total_open ?? kpis?.total_open_amount ?? 0;
   const overdueAmount = kpis?.overdue_amount || 0;
-  const inadPct = totalOpen > 0 ? Math.round((overdueAmount / totalOpen) * 100) : 0;
 
   // Carteira: filtros (chips/faixa) + ordenação.
   const carteiraRaw = carteiraQ.data?.customers || [];
@@ -310,7 +311,7 @@ export default function CrediarioScreen() {
           <Text style={s.heroLabel}>Em aberto · total</Text>
           <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{fmt(totalOpen)}</Text>
           <Text style={s.heroMeta}>
-            {(carteiraQ.data?.customers_open ?? carteiraRaw.length)} cliente(s) com saldo · visão consolidada multi-CNPJ
+            {(kpis?.customers_with_balance ?? carteiraQ.data?.customers_open ?? carteiraRaw.length)} cliente(s) com saldo em aberto
           </Text>
         </View>
 
@@ -340,25 +341,25 @@ export default function CrediarioScreen() {
 
             <View style={[s.kpiCard, { borderColor: Colors.amber + "44" }]}>
               <View style={s.kpiHead}>
-                <Text style={s.kpiLabel}>Inadimplência</Text>
+                <Text style={s.kpiLabel}>Clientes em atraso</Text>
                 <View style={[s.kpiIcon, { backgroundColor: "rgba(251,191,36,0.12)", borderColor: Colors.amber + "44" }]}>
                   <Icon name="percent" size={13} color={Colors.amber} />
                 </View>
               </View>
-              <Text style={[s.kpiValue, { color: Colors.amber, fontSize: isNarrow ? 17 : 22 }]}>{inadPct}%</Text>
-              <Text style={s.kpiMeta}>do saldo em aberto</Text>
+              <Text style={[s.kpiValue, { color: Colors.amber, fontSize: isNarrow ? 17 : 22 }]}>{kpis?.defaulting_customers ?? 0}</Text>
+              <Text style={s.kpiMeta}>com parcela vencida</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* ── Mapa de risco · aging do saldo (barra empilhada CLICÁVEL) ── */}
+      {/* ── Mapa de risco · há quanto tempo está vencido (barra empilhada CLICÁVEL) ── */}
       {aging.length > 0 && (
         <View style={s.riskCard}>
           <View style={s.riskHead}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <View style={s.riskTick} />
-              <Text style={s.riskTitle}>Mapa de risco · aging do saldo</Text>
+              <Text style={s.riskTitle}>Mapa de risco · há quanto tempo está vencido</Text>
             </View>
             <Text style={s.riskMeta}>{agingFilter ? "toque p/ limpar" : "toque numa faixa p/ filtrar"}</Text>
           </View>
