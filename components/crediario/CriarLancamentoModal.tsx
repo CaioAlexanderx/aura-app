@@ -8,6 +8,15 @@
 //   - escolher carnê existente — envia account_id
 //   - "Novo carnê" — campo de nome, envia new_account_name
 //
+// feat(unify) (13/06/2026): quando accountMode=="existing" e o carnê
+// escolhido tiver parcelas abertas, aparece um toggle "Unificar parcelas".
+// Quando ligado:
+//   - Exibe nº de parcelas + 1ª data para o cronograma unificado.
+//   - Mostra preview (previewUnify) antes de confirmar.
+//   - No submit: createManualEntry com installments=1 (só débito),
+//     em seguida applyUnify com o cronograma escolhido.
+//   - O caminho SEM unify permanece INTACTO.
+//
 // Os carnês são buscados do backend após a seleção do cliente
 // (via creditApi.getCustomerHistory), não dependem de prop.
 // ============================================================
@@ -28,7 +37,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
-import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount } from "@/services/creditApi";
+import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
@@ -90,6 +99,19 @@ function periodToPayload(kind: PeriodKind, customDays: string): { period_unit: P
   return { period_unit: "month", period_count: 1 };
 }
 
+function fmtCur(n: number) {
+  return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDateSafe(input: string | null | undefined): string {
+  if (!input) return "—";
+  try {
+    const d = new Date(input);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  } catch { return "—"; }
+}
+
 export function CriarLancamentoModal({ visible, onClose }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -119,12 +141,22 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [periodDays, setPeriodDays]     = useState("20");
   const [description, setDescription]   = useState("");
 
-  // F3: seletor de carnê — buscados do backend após seleção do cliente
+  // F3: seletor de carnê
   const [accountMode, setAccountMode]             = useState<AccountMode>("general");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [newAccountName, setNewAccountName]       = useState("");
   const [fetchedAccounts, setFetchedAccounts]     = useState<CreditAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts]     = useState(false);
+
+  // feat(unify): toggle de unificação (só disponível em accountMode=existing com saldo)
+  const [unifyEnabled, setUnifyEnabled]           = useState(false);
+  const [unifyInstallments, setUnifyInstallments] = useState("2");
+  const [unifyFirstDue, setUnifyFirstDue]         = useState(defaultDueDate());
+  const [unifyPreview, setUnifyPreview]           = useState<UnifyPlan | null>(null);
+  const [unifyPreviewLoading, setUnifyPreviewLoading] = useState(false);
+  const [unifyPreviewError, setUnifyPreviewError]     = useState<string | null>(null);
+
+  const unifyFirstDueIso = parseBrDate(unifyFirstDue);
 
   const reset = useCallback(() => {
     setStep("customer");
@@ -146,6 +178,11 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setSelectedAccountId(null);
     setNewAccountName("");
     setFetchedAccounts([]);
+    setUnifyEnabled(false);
+    setUnifyInstallments("2");
+    setUnifyFirstDue(defaultDueDate());
+    setUnifyPreview(null);
+    setUnifyPreviewError(null);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -176,7 +213,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     [company]
   );
 
-  // Após selecionar cliente, busca os carnês dele no backend
   const fetchAccountsForCustomer = useCallback(async (customerId: string) => {
     if (!company?.id) return;
     setLoadingAccounts(true);
@@ -199,18 +235,56 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const handleConfirmNewCustomer = () => {
     if (!newName.trim())  { toast.error("Nome obrigatório"); return; }
     if (!newPhone.trim()) { toast.error("Telefone obrigatório"); return; }
-    // Novo cliente não tem carnês ainda
     setFetchedAccounts([]);
     setStep("details");
   };
+
+  // Carnê selecionado (para unify)
+  const selectableAccounts = fetchedAccounts.filter(a => a.id !== null && a.status === "open");
+  const selectedAccount = selectableAccounts.find(a => a.id === selectedAccountId) || null;
+  const canUnify = accountMode === "existing" && !!selectedAccount && (selectedAccount.open_count || 0) > 0;
+
+  // Carregar preview de unify quando os parâmetros mudam
+  useEffect(() => {
+    if (!unifyEnabled || !canUnify || !selectedAccountId || !unifyFirstDueIso) {
+      setUnifyPreview(null);
+      return;
+    }
+    const amountNum = parseCurrencyInput(amountRaw);
+    const n = parseInt(unifyInstallments, 10) || 1;
+    if (amountNum <= 0 || n < 1) { setUnifyPreview(null); return; }
+    if (!company?.id || !selectedCustomer?.id) return;
+
+    let cancelled = false;
+    setUnifyPreviewLoading(true);
+    setUnifyPreviewError(null);
+    creditApi.previewUnify(company.id, selectedCustomer.id, selectedAccountId, {
+      amount: amountNum,
+      installments: n,
+      first_due_date: unifyFirstDueIso,
+    }).then(plan => {
+      if (!cancelled) { setUnifyPreview(plan); setUnifyPreviewLoading(false); }
+    }).catch((err: any) => {
+      if (!cancelled) {
+        setUnifyPreviewError(err?.message || "Erro ao calcular unificação");
+        setUnifyPreview(null);
+        setUnifyPreviewLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unifyEnabled, selectedAccountId, unifyInstallments, unifyFirstDueIso, amountRaw, company?.id, selectedCustomer?.id, canUnify]);
+
+  // Desliga unify se trocar de modo
+  useEffect(() => {
+    if (accountMode !== "existing") setUnifyEnabled(false);
+  }, [accountMode]);
 
   const handleSubmit = async () => {
     const amountNum = parseCurrencyInput(amountRaw);
     if (!amountNum || amountNum <= 0) { toast.error("Valor inválido"); return; }
 
-    const n = parseInt(installments, 10) || 1;
-    if (n < 1 || n > 36) { toast.error("Parcelas: 1 a 36"); return; }
-
+    const period = periodToPayload(periodKind, periodDays);
     const firstDue = parseBrDate(firstDueDate) || undefined;
     if (firstDueDate && !firstDue) { toast.error("Data inválida — use dd/mm/aaaa"); return; }
 
@@ -220,7 +294,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       return;
     }
 
-    // F3: validar campo novo carnê
     if (accountMode === "new" && !newAccountName.trim()) {
       toast.error("Informe o nome do novo carnê");
       return;
@@ -230,13 +303,25 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       return;
     }
 
+    // Valida unify
+    if (unifyEnabled) {
+      if (!unifyFirstDueIso) { toast.error("Informe a data da 1ª parcela unificada"); return; }
+      const uN = parseInt(unifyInstallments, 10) || 0;
+      if (uN < 1) { toast.error("Número de parcelas inválido"); return; }
+      if (!unifyPreview) { toast.error("Aguarde o cálculo do preview"); return; }
+    }
+
     let rate: number | undefined;
     if (interestRate.trim()) {
       rate = parseFloat(interestRate.replace(",", ".")) / 100;
       if (isNaN(rate) || rate < 0) { toast.error("Taxa de juros inválida"); return; }
     }
 
-    const period = periodToPayload(periodKind, periodDays);
+    // Quando unify ativo: lança com installments=1 (débito puro)
+    const nInstallments = unifyEnabled ? 1 : (parseInt(installments, 10) || 1);
+    if (!unifyEnabled && (nInstallments < 1 || nInstallments > 36)) {
+      toast.error("Parcelas: 1 a 36"); return;
+    }
 
     const payload: ManualEntryPayload = {
       customer_id:   selectedCustomer?.id,
@@ -244,22 +329,44 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
         ? { name: newName.trim(), phone: newPhone.replace(/\D/g, "") }
         : undefined,
       amount:        amountNum,
-      installments:  n,
+      installments:  nInstallments,
       interest_rate: rate,
       first_due_date: firstDue,
       entry_date:    entryIso,
       period_unit:   period.period_unit,
       period_count:  period.period_count,
       description:   description.trim() || undefined,
-      // F3: carnê
       account_id:       accountMode === "existing" ? selectedAccountId : undefined,
       new_account_name: accountMode === "new" ? newAccountName.trim() : undefined,
     };
 
     setLoading(true);
     try {
-      await creditApi.createManualEntry(company!.id, payload);
-      toast.success("Lançamento criado com sucesso!");
+      const result = await creditApi.createManualEntry(company!.id, payload);
+
+      // feat(unify): se unify ativo, aplicar o cronograma unificado
+      if (unifyEnabled && selectedAccountId && unifyFirstDueIso && selectedCustomer?.id) {
+        const uN = parseInt(unifyInstallments, 10) || 1;
+        try {
+          await creditApi.applyUnify(company!.id, selectedCustomer.id, selectedAccountId, {
+            amount: amountNum,
+            installments: uN,
+            first_due_date: unifyFirstDueIso,
+            // sale_id não disponível no lançamento manual (ManualEntryResult não exposes sale_id)
+          });
+          toast.success("Lançamento criado e carnê unificado!");
+        } catch (unifyErr: any) {
+          // O débito já foi criado — informamos o erro do unify separadamente.
+          toast.error(
+            "Lançamento criado, mas a unificação falhou: " +
+            (unifyErr?.message || "erro desconhecido") +
+            ". Unifique manualmente na ficha do cliente."
+          );
+        }
+      } else {
+        toast.success("Lançamento criado com sucesso!");
+      }
+
       qc.invalidateQueries({ queryKey: ["credit-balances",   company!.id] });
       qc.invalidateQueries({ queryKey: ["credit-dashboard",  company!.id] });
       qc.invalidateQueries({ queryKey: ["credit-aging",      company!.id] });
@@ -294,9 +401,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const PERIOD_CHIPS: Array<[PeriodKind, string]> = [
     ["semanal", "Semanal"], ["quinzenal", "Quinzenal"], ["mensal", "Mensal"], ["custom", "Personalizado"],
   ];
-
-  // Carnês disponíveis para seleção (filtra conta geral id=null e fechados)
-  const selectableAccounts = fetchedAccounts.filter(a => a.id !== null && a.status === "open");
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
@@ -473,58 +577,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   Quando a compra foi feita. Use uma data anterior para lançar retroativo.
                 </Text>
 
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.label}>Parcelas</Text>
-                    <TextInput
-                      style={s.input}
-                      placeholder="1"
-                      placeholderTextColor={Colors.ink3}
-                      value={installments}
-                      onChangeText={(v) => {
-                        const n = v.replace(/\D/g, "").slice(0, 2);
-                        setInstallments(n);
-                      }}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.label}>1º vencimento</Text>
-                    <DateInput
-                      style={s.input}
-                      value={firstDueDate}
-                      onChangeText={setFirstDueDate}
-                      placeholder="dd/mm/aaaa"
-                    />
-                  </View>
-                </View>
-
-                {/* Periodicidade */}
-                <Text style={s.label}>Periodicidade</Text>
-                <View style={s.periodChips}>
-                  {PERIOD_CHIPS.map(([k, lbl]) => (
-                    <Pressable
-                      key={k}
-                      onPress={() => setPeriodKind(k)}
-                      style={[s.periodChip, periodKind === k && s.periodChipOn]}
-                    >
-                      <Text style={[s.periodChipTxt, periodKind === k && s.periodChipTxtOn]}>{lbl}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {periodKind === "custom" && (
-                  <View style={s.customDaysRow}>
-                    <Text style={s.customDaysLbl}>A cada</Text>
-                    <TextInput
-                      style={s.customDaysNum}
-                      value={periodDays}
-                      keyboardType="numeric"
-                      onChangeText={(v) => setPeriodDays(v.replace(/\D/g, "").slice(0, 3))}
-                    />
-                    <Text style={s.customDaysLbl}>dias</Text>
-                  </View>
-                )}
-
                 {/* F3: Seletor de carnê */}
                 <Text style={s.label}>Carnê / conta</Text>
                 {loadingAccounts ? (
@@ -578,6 +630,93 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                       )
                     )}
 
+                    {/* feat(unify): toggle Unificar parcelas */}
+                    {canUnify && (
+                      <View style={s.unifyCard}>
+                        <View style={s.unifyToggleRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.unifyToggleTitle}>Unificar parcelas</Text>
+                            <Text style={s.unifyToggleSub}>
+                              Soma o saldo aberto + este lançamento e redivide em um novo cronograma
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => setUnifyEnabled(v => !v)}
+                            style={[s.toggleSwitch, unifyEnabled && s.toggleSwitchOn]}
+                          >
+                            <View style={[s.toggleThumb, unifyEnabled && s.toggleThumbOn]} />
+                          </Pressable>
+                        </View>
+
+                        {unifyEnabled && (
+                          <>
+                            <Text style={[s.label, { marginTop: 10 }]}>Nº de parcelas unificadas</Text>
+                            <TextInput
+                              style={s.input}
+                              placeholder="2"
+                              placeholderTextColor={Colors.ink3}
+                              value={unifyInstallments}
+                              onChangeText={(v) => setUnifyInstallments(v.replace(/\D/g, "").slice(0, 2))}
+                              keyboardType="numeric"
+                            />
+
+                            <Text style={[s.label, { marginTop: 10 }]}>1ª parcela unificada</Text>
+                            <DateInput
+                              style={s.input}
+                              value={unifyFirstDue}
+                              onChangeText={setUnifyFirstDue}
+                              placeholder="dd/mm/aaaa"
+                            />
+
+                            {/* Preview */}
+                            {unifyPreviewLoading && (
+                              <ActivityIndicator size="small" color={Colors.violet3} style={{ marginTop: 10 }} />
+                            )}
+                            {unifyPreviewError && (
+                              <Text style={[s.dateHint, { color: Colors.red, marginTop: 6 }]}>
+                                {unifyPreviewError}
+                              </Text>
+                            )}
+                            {unifyPreview && !unifyPreviewLoading && (
+                              <View style={s.unifyPreviewBox}>
+                                <Text style={s.unifyPreviewTitle}>PRÉVIA DO CRONOGRAMA UNIFICADO</Text>
+                                <View style={s.unifyPreviewRow}>
+                                  <Text style={s.unifyPreviewLabel}>Saldo em aberto</Text>
+                                  <Text style={s.unifyPreviewValue}>{fmtCur(unifyPreview.open_remaining)}</Text>
+                                </View>
+                                <View style={s.unifyPreviewRow}>
+                                  <Text style={s.unifyPreviewLabel}>Novo lançamento</Text>
+                                  <Text style={s.unifyPreviewValue}>{fmtCur(unifyPreview.new_amount)}</Text>
+                                </View>
+                                {unifyPreview.interest_added > 0 && (
+                                  <View style={s.unifyPreviewRow}>
+                                    <Text style={s.unifyPreviewLabel}>Juros</Text>
+                                    <Text style={[s.unifyPreviewValue, { color: Colors.amber }]}>
+                                      {fmtCur(unifyPreview.interest_added)}
+                                    </Text>
+                                  </View>
+                                )}
+                                <View style={[s.unifyPreviewRow, s.unifyPreviewTotal]}>
+                                  <Text style={[s.unifyPreviewLabel, { fontWeight: "800" }]}>Total</Text>
+                                  <Text style={[s.unifyPreviewValue, { color: Colors.green }]}>
+                                    {fmtCur(unifyPreview.total)}
+                                  </Text>
+                                </View>
+                                {unifyPreview.schedule.map(sl => (
+                                  <View key={sl.number} style={s.unifyPreviewRow}>
+                                    <Text style={s.unifyPreviewLabel}>{sl.number}ª parcela</Text>
+                                    <Text style={s.unifyPreviewValue}>
+                                      {fmtCur(sl.amount_due)} · {fmtDateSafe(sl.due_date)}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    )}
+
                     {accountMode === "new" && (
                       <>
                         <TextInput
@@ -589,6 +728,63 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                         />
                         <Text style={s.dateHint}>Um novo carnê será criado com este lançamento.</Text>
                       </>
+                    )}
+                  </>
+                )}
+
+                {/* Parcelas e periodicidade (só quando não está unificando) */}
+                {!unifyEnabled && (
+                  <>
+                    <View style={[s.row2, { marginTop: 14 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.label}>Parcelas</Text>
+                        <TextInput
+                          style={s.input}
+                          placeholder="1"
+                          placeholderTextColor={Colors.ink3}
+                          value={installments}
+                          onChangeText={(v) => {
+                            const n = v.replace(/\D/g, "").slice(0, 2);
+                            setInstallments(n);
+                          }}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.label}>1º vencimento</Text>
+                        <DateInput
+                          style={s.input}
+                          value={firstDueDate}
+                          onChangeText={setFirstDueDate}
+                          placeholder="dd/mm/aaaa"
+                        />
+                      </View>
+                    </View>
+
+                    {/* Periodicidade */}
+                    <Text style={s.label}>Periodicidade</Text>
+                    <View style={s.periodChips}>
+                      {PERIOD_CHIPS.map(([k, lbl]) => (
+                        <Pressable
+                          key={k}
+                          onPress={() => setPeriodKind(k)}
+                          style={[s.periodChip, periodKind === k && s.periodChipOn]}
+                        >
+                          <Text style={[s.periodChipTxt, periodKind === k && s.periodChipTxtOn]}>{lbl}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {periodKind === "custom" && (
+                      <View style={s.customDaysRow}>
+                        <Text style={s.customDaysLbl}>A cada</Text>
+                        <TextInput
+                          style={s.customDaysNum}
+                          value={periodDays}
+                          keyboardType="numeric"
+                          onChangeText={(v) => setPeriodDays(v.replace(/\D/g, "").slice(0, 3))}
+                        />
+                        <Text style={s.customDaysLbl}>dias</Text>
+                      </View>
                     )}
                   </>
                 )}
@@ -619,8 +815,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   multiline
                 />
 
-                {/* Preview de parcelas */}
-                {amountNum > 0 && (
+                {/* Preview de parcelas (modo normal) */}
+                {amountNum > 0 && !unifyEnabled && (
                   <View style={s.previewBox}>
                     <Text style={s.previewTitle}>Resumo</Text>
                     <View style={s.previewRow}>
@@ -659,7 +855,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   ) : (
                     <>
                       <Icon name="check" size={16} color="#fff" />
-                      <Text style={s.submitBtnText}>Criar lançamento</Text>
+                      <Text style={s.submitBtnText}>
+                        {unifyEnabled ? "Criar e unificar" : "Criar lançamento"}
+                      </Text>
                     </>
                   )}
                 </Pressable>
@@ -851,6 +1049,22 @@ const s = StyleSheet.create({
   accountRowOn: { backgroundColor: Colors.violetD },
   accountRowName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
   accountRowSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  // feat(unify)
+  unifyCard: { marginTop: 12, backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.violet + "33", gap: 4 },
+  unifyToggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  unifyToggleTitle: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  unifyToggleSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  toggleSwitch: { width: 44, height: 24, borderRadius: 12, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, justifyContent: "center", paddingHorizontal: 2 },
+  toggleSwitchOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.ink3 },
+  toggleThumbOn: { backgroundColor: "#fff", alignSelf: "flex-end" },
+  unifyPreviewBox: { marginTop: 12, backgroundColor: Colors.bg3, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border2, gap: 6 },
+  unifyPreviewTitle: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 4 },
+  unifyPreviewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  unifyPreviewTotal: { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 },
+  unifyPreviewLabel: { fontSize: 12, color: Colors.ink2 },
+  unifyPreviewValue: { fontSize: 12, fontWeight: "700", color: Colors.ink },
+  // comum
   customerChip: {
     flexDirection: "row",
     alignItems: "center",
