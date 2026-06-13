@@ -13,6 +13,20 @@
 // recebe { installments, first_due_date } do modal e repassa
 // para finalizeSale(), que inclui os campos no POST /pdv/sale.
 // O backend cria as credit_installments inline (best-effort).
+//
+// 13/06/2026 (unify): handleCrediarioConfirm detecta payload.unify.
+// Quando presente:
+//   1. Chama finalizeSale() com installments=1 (só débito, sem cronograma próprio).
+//      A venda é registrada normalmente no crediário.
+//   2. Após obter o sale_id no callback onSuccess do saleMutation,
+//      o hook chama creditApi.applyUnify() para montar o cronograma unificado.
+//      DECISÃO: o fluxo atual de finalizeSale() não exposes o sale_id diretamente
+//      ao caller (ele seta lastSale internamente). Para obter o sale_id:
+//        - guardamos o payload de unify em pendingUnifyRef (useRef)
+//        - um useEffect monitora lastSale e, quando a venda muda + há pendingUnify,
+//          chama applyUnify com sale_id = lastSale.id.
+//      Esta abordagem é segura: lastSale só muda no onSuccess de finalizeSale,
+//      e o ref é limpo imediatamente após o dispatch.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +43,7 @@ import { useCaixa } from "@/hooks/useCaixa";
 
 import { couponsApi, employeesApi, pdvApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
+import { creditApi } from "@/services/creditApi";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -73,7 +88,7 @@ export function usePdvState() {
   const { customers } = useCustomers();
   const { settings: pdvSettings } = usePdvSettings();
 
-  // ── Plano / módulos ─────────────────────────────────────────
+  // ── Plano / módulos ─────────────────────────────────────────────────────────
   const plan = (company?.plan || "essencial").toLowerCase();
   const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
   const moduleOverrides = ((company as any)?.module_overrides ?? {}) as Record<string, boolean>;
@@ -83,27 +98,36 @@ export function usePdvState() {
     : planDefault;
   const clientesEnabled = isModuleEnabled("clientes", isNegocioPlus);
 
-  // ── Toggles PDV settings ────────────────────────────────────
+  // ── Toggles PDV settings ───────────────────────────────────────────────────────
   const caixaEnabled      = !!(pdvSettings as any)?.caixa_enabled;
   const cashTenderEnabled = (pdvSettings as any)?.cash_tender_modal_enabled !== false;
   const crediarioEnabled  = !!(pdvSettings as any)?.crediario_enabled;
 
-  // ── Caixa ───────────────────────────────────────────────
+  // ── Caixa ──────────────────────────────────────────────────────────────
   const { sessaoAtiva, isAberto, isLoading: caixaLoading, invalidate: invalidateCaixa } = useCaixa();
   const [showCaixaModal, setShowCaixaModal] = useState(false);
 
-  // ── Modal de troco ───────────────────────────────────────
+  // ── Modal de troco ────────────────────────────────────────────────────────
   const [showChangeModal,  setShowChangeModal]  = useState(false);
   const [cashModalAmount,  setCashModalAmount]  = useState(0);
   const [cashModalIsSplit, setCashModalIsSplit] = useState(false);
 
-  // ── Crediário parcelado ────────────────────────────────────
+  // ── Crediário parcelado ──────────────────────────────────────────────────
   const [showCrediario, setShowCrediario] = useState(false);
 
-  // ── Scanner ───────────────────────────────────────────
+  // Ref para o payload de unify pendente (ver comentário no topo do arquivo).
+  // Tipo inline para evitar import circular.
+  const pendingUnifyRef = useRef<{
+    account_id: string;
+    installments: number;
+    first_due_date: string;
+    amount: number;
+  } | null>(null);
+
+  // ── Scanner ───────────────────────────────────────────────────────────
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
-  // ── Employees ─────────────────────────────────────────
+  // ── Employees ───────────────────────────────────────────────────────────
   const { data: empData } = useQuery({
     queryKey:  ["employees", company?.id],
     queryFn:   () => employeesApi.list(company!.id),
@@ -117,7 +141,7 @@ export function usePdvState() {
     [empData],
   );
 
-  // ── NFC-e config ─────────────────────────────────────────
+  // ── NFC-e config ─────────────────────────────────────────────────────────
   const { data: nfceConfigData } = useQuery({
     queryKey:  ["nfce-config", company?.id],
     queryFn:   () => nfceApi.getConfig(company!.id),
@@ -127,7 +151,7 @@ export function usePdvState() {
   const autoEmitNfce =
     !!nfceConfigData?.config?.auto_emit_nfce && nfceConfigData?.config?.is_active;
 
-  // ── Cart ───────────────────────────────────────────────
+  // ── Cart ──────────────────────────────────────────────────────────────
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
@@ -143,26 +167,26 @@ export function usePdvState() {
     splitRemaining, splitIsBalanced,
   } = useCart();
 
-  // ── Viewport ───────────────────────────────────────────
+  // ── Viewport ──────────────────────────────────────────────────────────────
   const vp         = useViewport();
   const wide        = vp.wide;
   const productCols = productColumnsFor(vp);
   const cartWidth   = cartWidthFor(vp);
 
-  // ── Ref do CartPanel (flyToCart) ─────────────────────────────────
+  // ── Ref do CartPanel (flyToCart) ────────────────────────────────────────────────
   const cartHeadRef = useRef<any>(null);
 
-  // ── Filtros / busca ───────────────────────────────────────
+  // ── Filtros / busca ──────────────────────────────────────────────────────────
   const [query,          setQuery]          = useState("");
   const [cat,            setCat]            = useState<string>("all");
   const [showOutOfStock, setShowOutOfStock] = useState(false);
 
-  // ── Estados de modais ──────────────────────────────────────
+  // ── Estados de modais ────────────────────────────────────────────────────────
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [pendingProduct,  setPendingProduct]  = useState<Product | null>(null);
   const [showTroca,       setShowTroca]       = useState(false);
 
-  // ── Categorias ───────────────────────────────────────────
+  // ── Categorias ───────────────────────────────────────────────────────────────
   const categories = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of products) {
@@ -180,7 +204,7 @@ export function usePdvState() {
     [products],
   );
 
-  // ── Índice de busca ────────────────────────────────────────
+  // ── Índice de busca ────────────────────────────────────────────────────────────
   const productIndex = useMemo(() => {
     const idx = new Map<string, string>();
     for (const p of products) idx.set((p as any).id, buildProductHaystack(p));
@@ -211,7 +235,7 @@ export function usePdvState() {
     return m;
   }, [cart]);
 
-  // ── Handlers ───────────────────────────────────────────
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   function pickCustomerWithPhone(v: { id: string; name: string } | null) {
     if (!v) { selectCustomer(null, null, null); return; }
@@ -316,8 +340,6 @@ export function usePdvState() {
     }
 
     // Crediário Parcelado — intercepta antes do modal de troco.
-    // Abre CreditInstallmentModal; finalizeSale é chamado em
-    // handleCrediarioConfirm após a confirmação das parcelas.
     if (payment === "crediario" && !splitMode) {
       if (!selectedCustomerId) {
         toast.error("Selecione um cliente para usar o crediário parcelado");
@@ -327,8 +349,7 @@ export function usePdvState() {
       return;
     }
 
-    // Split com uma parcela no crediário — abre o modal de parcelas já
-    // escopado ao valor do crediário (as outras formas NÃO entram no a receber).
+    // Split com uma parcela no crediário
     const splitHasCrediario = splitMode &&
       splitPayments.some(p => p.method === "crediario" && (Number(p.value) || 0) > 0);
     if (splitHasCrediario) {
@@ -346,7 +367,6 @@ export function usePdvState() {
       return;
     }
 
-    // Modal de troco — single ou split com parcelas em dinheiro
     const splitOk    = !splitMode || splitIsBalanced;
     const cashAmount = splitMode
       ? splitPayments
@@ -367,16 +387,69 @@ export function usePdvState() {
     finalizeSale();
   }
 
+  // ── Unify: useEffect monitora lastSale e despacha applyUnify quando pendente ──
+  // Quando o lojista confirma com unify ativo, handleCrediarioConfirm:
+  //   1. Grava o payload em pendingUnifyRef
+  //   2. Chama finalizeSale() com installments=1 (débito puro)
+  // Quando finalizeSale() resolve, lastSale muda → este effect dispara.
+  const lastSaleIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!lastSale) return;
+    if (lastSale.id === lastSaleIdRef.current) return; // já processou esta venda
+    lastSaleIdRef.current = lastSale.id;
+
+    const pu = pendingUnifyRef.current;
+    if (!pu || !company?.id || !selectedCustomerId) {
+      pendingUnifyRef.current = null;
+      return;
+    }
+    // Limpamos imediatamente para não re-disparar
+    pendingUnifyRef.current = null;
+
+    const { account_id, installments, first_due_date, amount } = pu;
+    const saleId = lastSale.id;
+    const compId = company.id;
+    const custId = selectedCustomerId;
+
+    creditApi.applyUnify(compId, custId, account_id, {
+      amount,
+      installments,
+      first_due_date,
+      sale_id: saleId,
+    }).then(() => {
+      toast.success("Carnê unificado com sucesso!");
+    }).catch((err: any) => {
+      // A venda já foi registrada; o unify é best-effort.
+      // Informamos o lojista para que possa corrigir manualmente na ficha.
+      toast.error(
+        "Venda registrada, mas a unificação falhou: " +
+        (err?.message || "erro desconhecido") +
+        ". Unifique manualmente na ficha do cliente."
+      );
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSale]);
+
   // Parcelas configuradas no modal — fecha e conclui a venda com os parâmetros.
-  // 26/05/2026 (fase 1): recebe payload do CreditInstallmentModal e passa
-  // para finalizeSale, que os inclui no body do POST /pdv/sale.
   function handleCrediarioConfirm(payload: CrediarioConfirmPayload) {
     setShowCrediario(false);
-    finalizeSale(undefined, payload);
+
+    if (payload.unify) {
+      // Fluxo de unify: a venda vai com installments=1 (só débito).
+      // O applyUnify será feito pelo useEffect acima após lastSale atualizar.
+      pendingUnifyRef.current = {
+        account_id:    payload.unify.account_id,
+        installments:  payload.unify.installments,
+        first_due_date: payload.unify.first_due_date,
+        amount:        totalAfterCoupon, // valor da nova compra
+      };
+      finalizeSale(undefined, { installments: 1, first_due_date: payload.first_due_date });
+    } else {
+      // Fluxo normal — inalterado
+      finalizeSale(undefined, payload);
+    }
   }
 
-  // Atalho direto do botão ActCrediario (F6) — não passa por handleFinalize.
-  // Valida pré-condições, seta payment='crediario' e abre a modal.
   function handleOpenCrediario() {
     if (cart.length === 0) {
       toast.info("Adicione produtos ao carrinho antes de usar o crediário");
@@ -430,7 +503,7 @@ export function usePdvState() {
     toast.success("Orçamento gerado");
   }
 
-  // ── Scanner gate ──────────────────────────────────────────
+  // ── Scanner gate ──────────────────────────────────────────────────────────
   const scannerListening =
     !lastSale &&
     !pendingProduct &&
@@ -441,7 +514,7 @@ export function usePdvState() {
     !showCrediario;
   useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
 
-  // ── Dados derivados para renderização ────────────────────────────────
+  // ── Dados derivados para renderização ────────────────────────────────────────────
   const displayItems: CartDisplayItem[] = cart.map(it => {
     const base = it.productId.split("__")[0];
     return { productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice };
@@ -452,8 +525,6 @@ export function usePdvState() {
   const discountAmount = couponDiscount + (manualDiscountAmount || 0);
   const totalFinal     = totalAfterCoupon;
 
-  // Valor destinado ao crediário (passado ao CreditInstallmentModal):
-  // split → soma só as entradas "crediario"; single "crediario" → total da venda.
   const crediarioSplitAmount = Math.round(
     splitPayments.filter(p => p.method === "crediario")
       .reduce((s, p) => s + (Number(p.value) || 0), 0) * 100
