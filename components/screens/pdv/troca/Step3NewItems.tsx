@@ -25,6 +25,13 @@
 //       tamanho certo direto (com variant_id + preço efetivo).
 //     • A NewEntry agora carrega variant_id, então a troca baixa o estoque
 //       da variante correta. Espelha hooks/usePdvState + useCart do PDV.
+//
+// 13/06/2026 — Passo opcional explícito.
+//   • Banner no topo do passo "Levar outro produto" deja claro que é
+//     opcional.
+//   • Botão "Só devolver — pular este passo" (outline laranja) aparece
+//     abaixo do banner, permitindo avançar sem adicionar itens novos.
+//   • onSkip prop chamada pelo botão (TrocaModal passa next() diretamente).
 // ============================================================
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -53,6 +60,8 @@ type Props = {
   returnedValue: number;
   newValue: number;
   netAmount: number;
+  /** Chamado pelo botão "Só devolver" para pular o passo de itens novos. */
+  onSkip?: () => void;
 };
 
 type Dest = "outro" | "credito" | "dinheiro";
@@ -60,6 +69,7 @@ type Dest = "outro" | "credito" | "dinheiro";
 export function Step3NewItems({
   products, newEntries, onChangeEntries,
   returnedValue, newValue, netAmount,
+  onSkip,
 }: Props) {
   const { company } = useAuthStore();
   const [dest, setDest] = useState<Dest>("outro");
@@ -251,6 +261,22 @@ export function Step3NewItems({
       <View style={isWide ? { flex: 1, minWidth: 0 } : undefined}>
         <Text style={s.question}>O que o cliente vai fazer com o crédito?</Text>
 
+        {/* Banner opcional — aparece sempre que o destino é "outro produto" */}
+        {dest === "outro" && (
+          <View style={s.optionalBanner}>
+            <Icon name="info" size={14} color="#93c5fd" />
+            <Text style={s.optionalBannerTxt}>
+              Este passo é <Text style={{ fontWeight: "700" }}>opcional.</Text>{" "}
+              Se o cliente só quer devolver, pule direto.
+            </Text>
+            {onSkip && (
+              <Pressable onPress={onSkip} style={s.skipBtn}>
+                <Text style={s.skipBtnTxt}>Só devolver →</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         <View style={s.destGrid}>
           <DestCard
             icon="shopping-bag"
@@ -369,6 +395,7 @@ export function Step3NewItems({
                 <View style={s.emptyCart}>
                   <Icon name="shopping-bag" size={24} color={Colors.ink3} />
                   <Text style={s.emptyCartTxt}>Bipe ou escolha um produto pra começar</Text>
+                  <Text style={s.emptyCartSub}>Ou use "Só devolver" acima para pular este passo</Text>
                 </View>
               )}
 
@@ -507,6 +534,21 @@ const s = StyleSheet.create({
   gridWide: { flexDirection: "row", gap: 18, alignItems: "flex-start" },
   sideRail: { width: 280, flexShrink: 0 },
   question: { fontSize: 13, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 },
+  // Banner opcional
+  optionalBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap",
+    backgroundColor: "rgba(37,99,235,0.10)",
+    borderWidth: 1, borderColor: "rgba(147,197,253,0.25)",
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 12,
+  },
+  optionalBannerTxt: { color: "#93c5fd", fontSize: 12.5, flex: 1, minWidth: 0 },
+  skipBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1.5, borderColor: "#f97316",
+    backgroundColor: "rgba(249,115,22,0.10)",
+  },
+  skipBtnTxt: { color: "#fb923c", fontSize: 12, fontWeight: "700" },
   destGrid: { flexDirection: "row", gap: 10, marginBottom: 18 },
   destCard: {
     flex: 1,
@@ -583,12 +625,13 @@ const s = StyleSheet.create({
   },
   cartCount: { fontSize: 11.5, color: Colors.ink3, fontWeight: "600" },
   emptyCart: {
-    alignItems: "center", paddingVertical: 22, gap: 8,
+    alignItems: "center", paddingVertical: 22, gap: 6,
     backgroundColor: "rgba(255,255,255,0.02)",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
     borderRadius: 10, borderStyle: Platform.OS === "web" ? ("dashed" as any) : "solid",
   },
   emptyCartTxt: { color: Colors.ink3, fontSize: 12.5 },
+  emptyCartSub: { color: Colors.ink3, fontSize: 11, opacity: 0.7 },
   cartRow: {
     flexDirection: "row", alignItems: "center", gap: 10,
     paddingVertical: 10,
