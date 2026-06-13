@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { CreditHistoryEvent } from "@/services/creditApi";
@@ -74,9 +74,15 @@ export function TabHistorico({
             </View>
             <Text style={m.tlSub}>{fmtDate(ev.occurred_at)}</Text>
             {ev.items && ev.items.length > 0 && (
-              <Text style={[m.tlSub, { marginTop: 2 }]} numberOfLines={2}>
-                {ev.items.map(it => `${it.quantity}× ${it.product_name}`).join(", ")}
-              </Text>
+              <View style={lc.itemList}>
+                {ev.items.map((it, idx) => (
+                  <View key={idx} style={lc.itemRow}>
+                    <Text style={lc.itemQty}>{it.quantity}×</Text>
+                    <Text style={lc.itemName} numberOfLines={1}>{it.product_name}</Text>
+                    <Text style={lc.itemTotal}>{fmt(it.total / 100)}</Text>
+                  </View>
+                ))}
+              </View>
             )}
           </View>
         </View>
@@ -100,3 +106,31 @@ export function TabHistorico({
 </View>
   );
 }
+
+const lc = StyleSheet.create({
+  itemList: {
+    marginTop: 5,
+    gap: 3,
+  },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  itemQty: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.violet3,
+    minWidth: 20,
+  },
+  itemName: {
+    flex: 1,
+    fontSize: 11,
+    color: Colors.ink2,
+  },
+  itemTotal: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.ink,
+  },
+});
