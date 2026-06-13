@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import type { CreditHistoryEvent } from "@/services/creditApi";
+import { printReceipt, type CreditHistoryEvent } from "@/services/creditApi";
+import { toast } from "@/components/Toast";
 import { fmt, fmtDate } from "./fichaHelpers";
 import { m } from "./fichaStyles";
+import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
 
 export type TabHistoricoProps = {
   histEvents: CreditHistoryEvent[];
@@ -12,11 +15,44 @@ export type TabHistoricoProps = {
   histLoaded: boolean;
   loadHistory: (cursor?: string | null) => void;
   setHistLoaded: (v: boolean) => void;
+  // contexto passado pelo shell (ClienteCrediarioModal)
+  companyId: string;
+  customerId: string;
+  onRefresh: () => void;
 };
 
 export function TabHistorico({
   histEvents, histCursor, histLoading, histLoaded, loadHistory, setHistLoaded,
+  companyId, customerId, onRefresh,
 }: TabHistoricoProps) {
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const [refundSale, setRefundSale] = useState<DevolucaoSale | null>(null);
+
+  async function handlePrintReceipt(transactionId: string) {
+    setPrintingId(transactionId);
+    try {
+      await printReceipt(companyId, transactionId);
+    } catch (err) {
+      console.error("[crediário] printReceipt error:", err);
+      toast.error("Não foi possível abrir o recibo. Tente novamente.");
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
+  function handleOpenRefund(ev: CreditHistoryEvent) {
+    if (!ev.sale_id) return;
+    // Mapeia ev.items → DevolucaoSaleItem (campos compatíveis)
+    const items = (ev.items || []).map((it) => ({
+      id: it.product_name + "_" + it.unit_price, // fallback: sem sale_item_id na timeline
+      product_name: it.product_name,
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      total_price: it.total,
+    }));
+    setRefundSale({ id: ev.sale_id, items });
+  }
+
   return (
 <View>
   <View style={m.card}>
@@ -62,6 +98,7 @@ export function TabHistorico({
       };
       const typeLabel = typeLabels[ev.type] ?? ev.type;
       const methodStr = ev.payment?.method ? ` · ${ev.payment.method}` : "";
+      const isPrinting = printingId === ev.id;
       return (
         <View key={ev.id} style={m.tlItem}>
           <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
@@ -84,6 +121,32 @@ export function TabHistorico({
                 ))}
               </View>
             )}
+            {/* ── Ações por tipo de evento ── */}
+            <View style={lc.actionRow}>
+              {ev.type === "payment" && (
+                <Pressable
+                  style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
+                  onPress={() => handlePrintReceipt(ev.id)}
+                  disabled={isPrinting}
+                  hitSlop={6}
+                >
+                  {isPrinting
+                    ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 11, height: 11 }} />
+                    : <Icon name="printer" size={11} color={Colors.violet3} />}
+                  <Text style={lc.actionBtnTxt}>Recibo</Text>
+                </Pressable>
+              )}
+              {ev.type === "purchase" && !!ev.sale_id && (
+                <Pressable
+                  style={lc.actionBtn}
+                  onPress={() => handleOpenRefund(ev)}
+                  hitSlop={6}
+                >
+                  <Icon name="repeat" size={11} color={Colors.amber} />
+                  <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         </View>
       );
@@ -103,6 +166,22 @@ export function TabHistorico({
       </View>
     )}
   </View>
+
+  {/* ── Modal de devolução ── */}
+  {!!refundSale && (
+    <DevolucaoModal
+      visible={!!refundSale}
+      companyId={companyId}
+      sale={refundSale}
+      onClose={() => setRefundSale(null)}
+      onDone={() => {
+        setRefundSale(null);
+        onRefresh();
+        setHistLoaded(false);
+        loadHistory();
+      }}
+    />
+  )}
 </View>
   );
 }
@@ -132,5 +211,27 @@ const lc = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: Colors.ink,
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 6,
+    gap: 8,
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    backgroundColor: Colors.bg2,
+  },
+  actionBtnTxt: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.violet3,
   },
 });
