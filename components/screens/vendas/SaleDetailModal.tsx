@@ -42,6 +42,11 @@ import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 // AUDITORIA C1-FE (11/06): onDone NÃO fecha mais o modal — assim o passo 3
 // (resultado da devolução) fica visível. O fechamento é só pelo botão "Fechar"
 // do wizard (onClose).
+//
+// 13/06/2026 — Visualizar = 2ª via térmica (DANFE 80mm) da NFC-e autorizada:
+// botão "2ª via" busca /nfce/:id/danfe-termica com Bearer + document.write
+// (window.open(url) direto daria "Token não fornecido"). Troca (NF-e 55 de
+// devolução) mantém o link oficial (pdf_url/consulta).
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -113,6 +118,8 @@ export function SaleDetailModal({
   const [printingReceipt, setPrintingReceipt] = useState(false);
   // DESIGN-38 B4: controla o wizard de devolução
   const [showDevolucao, setShowDevolucao] = useState(false);
+  // 2ª via (DANFE térmica) da NFC-e autorizada desta venda
+  const [print2via, setPrint2via] = useState(false);
 
   const { data: empData, isLoading: isLoadingEmps } = useQuery({
     queryKey: ["employees", effectiveCompanyId],
@@ -261,6 +268,32 @@ export function SaleDetailModal({
       toast.error("Erro ao abrir recibo");
     } finally {
       setPrintingReceipt(false);
+    }
+  }
+
+  // Visualizar = 2ª via térmica (DANFE 80mm) da NFC-e autorizada. Mesma rota
+  // auth dos /print/*: fetch com Bearer + document.write (window.open(url)
+  // direto daria "Token não fornecido").
+  async function handlePrint2Via(nfceId: string) {
+    if (!effectiveCompanyId || !nfceId) { toast.error("Nota indisponível"); return; }
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    setPrint2via(true);
+    const token = useAuthStore.getState().token;
+    const url = BASE_URL + "/companies/" + effectiveCompanyId + "/nfce/" + nfceId + "/danfe-termica";
+    let win: Window | null = null;
+    try {
+      win = window.open("", "_blank");
+      if (!win) { toast.error("Permita pop-ups para imprimir a 2ª via."); return; }
+      win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Gerando 2ª via...</body></html>");
+      const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+      if (!resp.ok) { win.document.open(); win.document.write("<html><body>Não foi possível gerar a 2ª via (" + resp.status + ").</body></html>"); win.document.close(); return; }
+      const html = await resp.text();
+      win.document.open(); win.document.write(html); win.document.close();
+    } catch (err: any) {
+      if (win) { win.document.open(); win.document.write("<html><body>Erro de conexão ao gerar a 2ª via.</body></html>"); win.document.close(); }
+      toast.error("Erro ao abrir 2ª via");
+    } finally {
+      setPrint2via(false);
     }
   }
 
@@ -522,10 +555,23 @@ export function SaleDetailModal({
                         {fiscalDocLabel}{authorizedEmission.numero ? (" no " + authorizedEmission.numero) : ""} autorizada
                       </Text>
                     </View>
-                    {(authorizedEmission.pdf_url || authorizedEmission.url_consulta) && (
-                      <Pressable onPress={function() { openFiscalLink(authorizedEmission); }} style={s.fiscalLinkBtn}>
-                        <Icon name="info" size={12} color={Colors.violet3} />
-                        <Text style={s.fiscalLinkText}>{authorizedEmission.pdf_url ? "Ver DANFE" : "Consultar SEFAZ"}</Text>
+                    {isTroca ? (
+                      (authorizedEmission.pdf_url || authorizedEmission.url_consulta) ? (
+                        <Pressable onPress={function() { openFiscalLink(authorizedEmission); }} style={s.fiscalLinkBtn}>
+                          <Icon name="info" size={12} color={Colors.violet3} />
+                          <Text style={s.fiscalLinkText}>{authorizedEmission.pdf_url ? "Ver DANFE" : "Consultar SEFAZ"}</Text>
+                        </Pressable>
+                      ) : null
+                    ) : (
+                      <Pressable onPress={function() { handlePrint2Via(authorizedEmission.id); }} disabled={print2via} style={[s.fiscalLinkBtn, print2via && { opacity: 0.6 }]}>
+                        {print2via ? (
+                          <ActivityIndicator color={Colors.violet3} size="small" />
+                        ) : (
+                          <>
+                            <Icon name="info" size={12} color={Colors.violet3} />
+                            <Text style={s.fiscalLinkText}>2ª via</Text>
+                          </>
+                        )}
                       </Pressable>
                     )}
                   </View>
