@@ -6,7 +6,7 @@
 //
 // C-2 (12/06): header do cliente + banner + abas ficam FIXOS (fora do
 //   ScrollView); só o conteúdo da aba rola. Footer "Confirmar recebimento"
-//   segue como barra de ação persistente.
+//   removido em consolidação (13/06): CTA vive dentro do card B3 com preview.
 // A2-FE (12/06): triggerPreview envia paid_at (alinha preview↔aplicação no
 //   recebimento retroativo com encargos).
 // ============================================================
@@ -55,13 +55,6 @@ export function ClienteCrediarioModal({
 
   const [tab, setTab] = useState<Tab>("parcelas");
 
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("dinheiro");
-  const [dateBr, setDateBr] = useState(todayBrSp());
-  const [receiveMode, setReceiveMode] = useState<ReceiveMode>("fifo");
-  const [fifoAccountId, setFifoAccountId] = useState<string | null | undefined>(undefined);
-  const [distributions, setDistributions] = useState<Record<string, string>>({});
-
   const [expandedAccountId, setExpandedAccountId] = useState<string | null | undefined>(undefined);
 
   const [showNewAccount, setShowNewAccount] = useState(false);
@@ -80,14 +73,12 @@ export function ClienteCrediarioModal({
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
 
-  const [lastChargesPaid, setLastChargesPaid] = useState<number | null>(null);
-  const [lastTotalPaid, setLastTotalPaid] = useState<number | null>(null);
-
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
   const [histLoading, setHistLoading] = useState(false);
   const [histLoaded, setHistLoaded] = useState(false);
 
+  // ── B3: único fluxo de recebimento de valor livre ─────────────────────
   const [freeAmt, setFreeAmt] = useState("");
   const [freeMethod, setFreeMethod] = useState("dinheiro");
   const [freeDateBr, setFreeDateBr] = useState(todayBrSp());
@@ -117,12 +108,6 @@ export function ClienteCrediarioModal({
 
   useEffect(() => {
     if (visible) {
-      setAmount("");
-      setMethod("dinheiro");
-      setDateBr(todayBrSp());
-      setReceiveMode("fifo");
-      setFifoAccountId(undefined);
-      setDistributions({});
       setShowNewAccount(false);
       setNewAccountName("");
       setTab("parcelas");
@@ -132,8 +117,6 @@ export function ClienteCrediarioModal({
       setTermsInterest("");
       setTermsDirty(false);
       setExpandedAccountId(undefined);
-      setLastChargesPaid(null);
-      setLastTotalPaid(null);
       setEditingDueDateInst(null);
       setEditDueDateInput("");
       setEditDueDateError("");
@@ -200,11 +183,6 @@ export function ClienteCrediarioModal({
       }, "" as string)
     : "";
 
-  const distributionTotal = useMemo(
-    () => Object.values(distributions).reduce((s, v) => s + parseAmount(v), 0),
-    [distributions],
-  );
-
   const isBlocked = profile?.status === "blocked";
 
   const blockMut = useMutation({
@@ -259,67 +237,11 @@ export function ClienteCrediarioModal({
     }
   }
 
-  const payMut = useMutation({
-    mutationFn: () => {
-      const paidAt = parseBrDate(dateBr) || undefined;
-      if (receiveMode === "distribute" && hasAccounts) {
-        const allocations: PaymentAllocation[] = Object.entries(distributions)
-          .map(([key, val]) => ({ account_id: key === "general" ? null : key, amount: parseAmount(val) }))
-          .filter(a => a.amount > 0);
-        return creditApi.receivePayment(companyId, customerId!, {
-          payment_method: method,
-          paid_at: paidAt,
-          allocations,
-        });
-      }
-      const amt = parseAmount(amount);
-      return creditApi.receivePayment(companyId, customerId!, {
-        amount: amt,
-        payment_method: method,
-        paid_at: paidAt,
-        account_id: fifoAccountId,
-      });
-    },
-    onSuccess: (res) => {
-      const chargesPaid = res.charges_paid ?? 0;
-      const totalPaid = amountNum;
-      if (chargesPaid > 0) {
-        setLastChargesPaid(chargesPaid);
-        setLastTotalPaid(totalPaid);
-        const principal = Math.max(0, totalPaid - chargesPaid);
-        toast.success(
-          `Recebimento registrado!\n` +
-          `Encargos quitados: ${fmt(chargesPaid)}\n` +
-          `Abatido do principal: ${fmt(principal)}`
-        );
-      } else {
-        toast.success("Recebimento registrado! Saldo: " + fmt(res.new_balance));
-        setLastChargesPaid(null);
-        setLastTotalPaid(null);
-      }
-      setAmount("");
-      setDistributions({});
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-      onChanged?.();
-    },
-    onError: (err: any) => toast.error(err?.data?.error || "Erro ao registrar recebimento"),
-  });
-
-  const amountNum = receiveMode === "distribute" ? distributionTotal : parseAmount(amount);
-  const afterBalance = Math.max(0, Math.round((totalBalance - amountNum) * 100) / 100);
-  const dateInvalid = dateBr.length === 10 && parseBrDate(dateBr) === null;
-
-  function confirmReceive() {
-    if (amountNum <= 0) { toast.error("Informe um valor maior que zero"); return; }
-    if (dateInvalid) { toast.error("Data inválida — use dd/mm/aaaa"); return; }
-    payMut.mutate();
-  }
+  // prefill: alimenta o fluxo B3 (único) e dispara preview
   function prefill(v: number) {
-    setAmount(v.toFixed(2).replace(".", ","));
+    const str = v.toFixed(2).replace(".", ",");
+    setFreeAmt(str);
+    triggerPreview(str, freeAccountId);
   }
 
   async function handleCreateAccount() {
@@ -442,9 +364,11 @@ export function ClienteCrediarioModal({
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
       qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
+      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
       onChanged?.();
     } catch (err: any) {
-      toast.error(err?.data?.error || "Erro ao registrar recebimento");
+      console.error("[crediário] confirmFreePayment error:", err);
+      toast.error("Não foi possível registrar o recebimento. Confira os dados e tente de novo.");
     } finally {
       setFreeSubmitting(false);
     }
@@ -584,18 +508,11 @@ export function ClienteCrediarioModal({
                     instByAccount={instByAccount} useCarneLayout={useCarneLayout} realCarnes={realCarnes}
                     totalBalance={totalBalance} nextDueDate={nextDueDate} scoreLabel={scoreLabel}
                     availableLimit={availableLimit} isBlocked={isBlocked} hasOverdue={hasOverdue}
-                    amount={amount} setAmount={setAmount} method={method} setMethod={setMethod}
-                    dateBr={dateBr} setDateBr={setDateBr} dateInvalid={dateInvalid}
-                    receiveMode={receiveMode} setReceiveMode={setReceiveMode}
-                    fifoAccountId={fifoAccountId} setFifoAccountId={setFifoAccountId}
-                    distributions={distributions} setDistributions={setDistributions} distributionTotal={distributionTotal}
-                    amountNum={amountNum} afterBalance={afterBalance} payMut={payMut}
                     handleCreateAccount={handleCreateAccount} showNewAccount={showNewAccount}
                     setShowNewAccount={setShowNewAccount} newAccountName={newAccountName}
                     setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
                     handleEditDueDateOpen={handleEditDueDateOpen} openInstallmentPix={openInstallmentPix}
-                    lastChargesPaid={lastChargesPaid} lastTotalPaid={lastTotalPaid}
                     freeAmt={freeAmt} setFreeAmt={setFreeAmt} freeMethod={freeMethod} setFreeMethod={setFreeMethod}
                     freeDateBr={freeDateBr} setFreeDateBr={setFreeDateBr}
                     freeAccountId={freeAccountId} setFreeAccountId={setFreeAccountId}
@@ -820,19 +737,6 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
-          {tab === "parcelas" && (
-            <View style={m.footer}>
-              <Pressable
-                style={[m.cta, (amountNum <= 0 || dateInvalid || payMut.isPending) && { opacity: 0.45 }]}
-                disabled={amountNum <= 0 || dateInvalid || payMut.isPending}
-                onPress={confirmReceive}
-              >
-                {payMut.isPending
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={m.ctaTxt}>{amountNum > 0 ? `Confirmar recebimento de ${fmt(amountNum)}` : "Registrar recebimento"}</Text>}
-              </Pressable>
-            </View>
-          )}
         </Pressable>
       </Pressable>
     </Modal>
