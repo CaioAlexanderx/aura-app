@@ -68,9 +68,9 @@ export function TabConta({
           </View>
         )}
         <View style={m.row}>
-          <Text style={m.rowK}>Em aberto</Text>
-          <Text style={[m.rowV, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
-            {fmt(totalBalance)}
+          <Text style={m.rowK}>{totalBalance < 0 ? "Crédito a favor" : "Em aberto"}</Text>
+          <Text style={[m.rowV, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+            {fmt(Math.abs(totalBalance))}
           </Text>
         </View>
         <View style={m.row}>
@@ -89,7 +89,7 @@ export function TabConta({
 
   {!!profile?.terms?.effective && (
     <View style={m.card}>
-      <Text style={m.cardTitle}>Termos efetivos</Text>
+      <Text style={m.cardTitle}>Condições de crédito vigentes</Text>
       <View style={m.row}>
         <Text style={m.rowK}>Máx. parcelas</Text>
         <Text style={m.rowV}>{profile.terms.effective.max_installments}x</Text>
@@ -106,7 +106,7 @@ export function TabConta({
       )}
       {hasTermsOverride && (
         <View style={[m.pill, { backgroundColor: Colors.violet3 + "22", alignSelf: "flex-start" }]}>
-          <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Override ativo</Text>
+          <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Condições personalizadas</Text>
         </View>
       )}
     </View>

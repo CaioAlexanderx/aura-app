@@ -458,8 +458,10 @@ export function ClienteCrediarioModal({
                   </View>
                 )}
                 <View style={m.fixedMetaItem}>
-                  <Text style={m.fixedMetaLbl}>EM ABERTO</Text>
-                  <Text style={[m.fixedMetaVal, { color: totalBalance > 0 ? Colors.red : Colors.ink3 }]}>{fmt(totalBalance)}</Text>
+                  <Text style={m.fixedMetaLbl}>{totalBalance < 0 ? "CRÉDITO A FAVOR" : "EM ABERTO"}</Text>
+                  <Text style={[m.fixedMetaVal, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+                    {fmt(Math.abs(totalBalance))}
+                  </Text>
                 </View>
               </View>
             )}
@@ -544,7 +546,7 @@ export function ClienteCrediarioModal({
                       <Text style={m.cardTitle}>Termos deste cliente</Text>
                       {hasTermsOverride && (
                         <View style={[m.pill, { backgroundColor: Colors.violet3 + "22" }]}>
-                          <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Override ativo</Text>
+                          <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Condições personalizadas</Text>
                         </View>
                       )}
                     </View>
