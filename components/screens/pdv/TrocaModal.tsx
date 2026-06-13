@@ -23,6 +23,14 @@
 //   - canConfirm via useMemo — semantica explicita + reatividade correta.
 //   - Desabilita quando netAmount > 0 e nenhum split de pagamento
 //     preenchido (evita clique-que-falha sem travar troca par-a-par).
+//
+// 13/06/2026 (Trocar/Devolver):
+//   - Textos visíveis "Trocar" → "Trocar / Devolver" (botão, título,
+//     cabeçalho e texto de confirmação).
+//   - Fix de valoração: unit_price dos itens devolvidos agora usa
+//     effectiveUnit = total_price / quantity em vez de unit_price bruto
+//     (que ignorava descontos por item). Fallback: se quantity ≤ 0,
+//     cai em unit_price.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -76,6 +84,15 @@ function genIdempotencyKey(): string {
   }
 }
 
+// Calcula o preço unitário efetivo de um item devolvido.
+// Usa total_price / quantity para capturar descontos por item.
+// Fallback para unit_price quando quantity é inválido.
+function effectiveUnitPrice(item: { unit_price: number; total_price: number; quantity: number }): number {
+  const qty = Number(item.quantity);
+  if (!qty || qty <= 0) return Number(item.unit_price);
+  return Number(item.total_price) / qty;
+}
+
 export function TrocaModal({
   visible, companyId, products, onClose, onSuccess,
 }: Props) {
@@ -95,7 +112,7 @@ export function TrocaModal({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const returnedValue = useMemo(
-    () => returnEntries.reduce((s, e) => s + e.returnQty * Number(e.item.unit_price), 0),
+    () => returnEntries.reduce((s, e) => s + e.returnQty * effectiveUnitPrice(e.item), 0),
     [returnEntries]
   );
   const newValue = useMemo(
@@ -214,7 +231,11 @@ export function TrocaModal({
             product_id: e.item.product_id,
             variant_id: (e.item as any).variant_id || null,
             quantity: e.returnQty,
-            unit_price: Number(e.item.unit_price),
+            // Fix 13/06/2026: usa preço efetivo líquido (total_price / quantity)
+            // em vez de unit_price bruto, que ignorava descontos por item.
+            // Antes: Number(e.item.unit_price)
+            // Depois: effectiveUnitPrice({ unit_price, total_price, quantity })
+            unit_price: effectiveUnitPrice(e.item),
             product_name_snapshot: (e.item as any).product_name || e.item.product_name_snapshot,
           })),
           new_items: newEntries.map((n) => ({
@@ -245,7 +266,11 @@ export function TrocaModal({
             product_id: e.item.product_id,
             variant_id: (e.item as any).variant_id,
             quantity: e.returnQty,
-            unit_price: Number(e.item.unit_price),
+            // Fix 13/06/2026: usa preço efetivo líquido (total_price / quantity)
+            // em vez de unit_price bruto, que ignorava descontos por item.
+            // Antes: Number(e.item.unit_price)
+            // Depois: effectiveUnitPrice({ unit_price, total_price, quantity })
+            unit_price: effectiveUnitPrice(e.item),
             product_name_snapshot: (e.item as any).product_name || e.item.product_name_snapshot,
           })),
           new_items: newEntries.map((n) => ({
@@ -269,7 +294,7 @@ export function TrocaModal({
       setStep(5);
       onSuccess?.(result);
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao registrar troca");
+      toast.error(e?.message || "Erro ao registrar troca / devolucao");
     } finally {
       setSubmitting(false);
     }
@@ -325,12 +350,12 @@ export function TrocaModal({
             </View>
             <View>
               <Text style={s.headerTitle}>
-                {step === 5 ? "Troca concluida" : "Troca ou Devolucao"}
+                {step === 5 ? "Concluido" : "Trocar / Devolver"}
               </Text>
               <Text style={s.headerSub}>
                 {step === 1 && "Encontre a venda original — em qualquer filial do grupo"}
                 {step === 2 && "Marque o que o cliente esta devolvendo"}
-                {step === 3 && "Defina o destino do credito"}
+                {step === 3 && "Adicione itens novos ou pule para fazer so a devolucao"}
                 {step === 4 && "NF-e e estoque cuidados automaticamente"}
                 {step === 5 && "NF-e emitida · Estoque atualizado · Caixa registrado"}
               </Text>
@@ -360,7 +385,7 @@ export function TrocaModal({
                     ]}
                     numberOfLines={1}
                   >
-                    {STEP_LABELS_V3[n]}
+                    {n === 3 ? "Levar (opcional)" : STEP_LABELS_V3[n]}
                   </Text>
                   {idx < 3 && <View style={[s.stepSep, done && { backgroundColor: "rgba(124,58,237,0.4)" }]} />}
                 </View>
@@ -396,6 +421,7 @@ export function TrocaModal({
               returnedValue={returnedValue}
               newValue={newValue}
               netAmount={netAmount}
+              onSkip={next}
             />
           )}
           {step === 4 && (
@@ -467,7 +493,9 @@ export function TrocaModal({
                     : (
                       <>
                         <Icon name="check" size={14} color="#fff" />
-                        <Text style={s.btnPriTxt}>Confirmar troca</Text>
+                        <Text style={s.btnPriTxt}>
+                          {newEntries.length === 0 ? "Confirmar devolucao" : "Confirmar troca"}
+                        </Text>
                       </>
                     )}
                 </Pressable>
@@ -481,14 +509,14 @@ export function TrocaModal({
       {showExitConfirm && (
         <View style={s.exitOverlay}>
           <View style={s.exitCard}>
-            <Text style={s.exitTitle}>Descartar esta troca?</Text>
+            <Text style={s.exitTitle}>Descartar esta operacao?</Text>
             <Text style={s.exitMsg}>
-              Voce tem uma troca em andamento. Se sair agora, os itens
+              Voce tem uma troca / devolucao em andamento. Se sair agora, os itens
               selecionados serao perdidos.
             </Text>
             <View style={s.exitActions}>
               <Pressable style={s.exitStay} onPress={() => setShowExitConfirm(false)}>
-                <Text style={s.exitStayTxt}>Continuar troca</Text>
+                <Text style={s.exitStayTxt}>Continuar</Text>
               </Pressable>
               <Pressable
                 style={s.exitLeave}
