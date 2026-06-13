@@ -18,6 +18,8 @@
 //   recibo B5 (printReceipt, mesmo padrão auth do printCarne).
 //   overdue/next_due_date em CreditBalanceItem (vêm de /balances, Aura-backend#187).
 // fix (11/06/2026): A3-FE Idempotency-Key via header nos POST de dinheiro.
+// DESIGN-38 indicadores (13/06/2026): portfolio_open_amount + customers_with_balance
+//   adicionados ao tipo CreditDashboard (aditivo, backend já entrega).
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -167,6 +169,17 @@ export type CreditDashboard = {
     critical_count: number; critical_amount: number;
     defaulting_customers: number;
     paid_this_month_count: number; paid_this_month_amount: number;
+    /**
+     * Saldo REAL da carteira (parcelado + à vista + débito avulso).
+     * Mais completo que total_open_amount que conta só parcelado.
+     * Opcional — respostas de backends antigos podem não trazer.
+     */
+    portfolio_open_amount?: number;
+    /**
+     * Número de clientes com saldo em aberto (qualquer modalidade).
+     * Opcional — respostas de backends antigos podem não trazer.
+     */
+    customers_with_balance?: number;
   };
   top_defaulters: Array<{
     customer_id: string; customer_name: string; phone: string;
