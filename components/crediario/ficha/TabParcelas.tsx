@@ -8,9 +8,15 @@ import {
 import { DateInput } from "@/components/inputs/DateInput";
 import {
   fmt, fmtDate, parseAmount, periodLabel,
-  PAYMENT_METHODS, type ReceiveMode, productsFromNotes,
+  PAYMENT_METHODS, productsFromNotes,
 } from "./fichaHelpers";
 import { m } from "./fichaStyles";
+
+function translateStatus(status: string): string {
+  if (status === "paid") return "Quitada";
+  if (status === "partial") return "Parcial";
+  return status;
+}
 
 export type TabParcelasProps = {
   profile: any;
@@ -26,23 +32,6 @@ export type TabParcelasProps = {
   availableLimit: number | undefined;
   isBlocked: boolean;
   hasOverdue: boolean;
-  amount: string;
-  setAmount: (v: string) => void;
-  method: string;
-  setMethod: (v: string) => void;
-  dateBr: string;
-  setDateBr: (v: string) => void;
-  dateInvalid: boolean;
-  receiveMode: ReceiveMode;
-  setReceiveMode: (v: ReceiveMode) => void;
-  fifoAccountId: string | null | undefined;
-  setFifoAccountId: (v: string | null | undefined) => void;
-  distributions: Record<string, string>;
-  setDistributions: (fn: (prev: Record<string, string>) => Record<string, string>) => void;
-  distributionTotal: number;
-  amountNum: number;
-  afterBalance: number;
-  payMut: { isPending: boolean };
   handleCreateAccount: () => void;
   showNewAccount: boolean;
   setShowNewAccount: (fn: (v: boolean) => boolean) => void;
@@ -53,8 +42,6 @@ export type TabParcelasProps = {
   setExpandedAccountId: (v: string | null | undefined) => void;
   handleEditDueDateOpen: (inst: CreditInstallment) => void;
   openInstallmentPix: (id: string) => void;
-  lastChargesPaid: number | null;
-  lastTotalPaid: number | null;
   freeAmt: string;
   setFreeAmt: (v: string) => void;
   freeMethod: string;
@@ -79,14 +66,9 @@ export type TabParcelasProps = {
 export function TabParcelas({
   profile, detail, accounts, openInst, instByAccount, useCarneLayout, realCarnes,
   totalBalance, nextDueDate, scoreLabel, availableLimit, isBlocked, hasOverdue,
-  amount, setAmount, method, setMethod, dateBr, setDateBr, dateInvalid,
-  receiveMode, setReceiveMode, fifoAccountId, setFifoAccountId,
-  distributions, setDistributions, distributionTotal,
-  amountNum, afterBalance, payMut,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
   handleEditDueDateOpen, openInstallmentPix,
-  lastChargesPaid, lastTotalPaid,
   freeAmt, setFreeAmt, freeMethod, setFreeMethod, freeDateBr, setFreeDateBr,
   freeAccountId, setFreeAccountId, freePreview, freePreviewLoading,
   confirmFreePayment, freeSubmitting, prefill, triggerPreview,
@@ -245,11 +227,7 @@ export function TabParcelas({
             <View style={m.accActions}>
               <Pressable
                 style={m.accActionBtn}
-                onPress={() => {
-                  setReceiveMode("fifo");
-                  setFifoAccountId(acc.id);
-                  prefill(acc.balance);
-                }}
+                onPress={() => prefill(acc.balance)}
               >
                 <Text style={m.accActionTxt}>Receber</Text>
               </Pressable>
@@ -427,148 +405,10 @@ export function TabParcelas({
     </View>
   )}
 
-  <View style={m.freeBox}>
-    <Text style={m.freeTitle}>Receber valor livre</Text>
-
-    {hasAccounts && (
-      <View style={m.modeRow}>
-        {(["fifo", "distribute"] as ReceiveMode[]).map(mode => (
-          <Pressable
-            key={mode}
-            style={[m.modeChip, receiveMode === mode && m.modeChipOn]}
-            onPress={() => setReceiveMode(mode)}
-          >
-            <Text style={[m.modeChipTxt, receiveMode === mode && m.modeChipTxtOn]}>
-              {mode === "fifo" ? "Em um carnê" : "Distribuir entre carnês"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    )}
-
-    {hasAccounts && receiveMode === "fifo" && (
-      <View style={[m.fieldBlock, { marginTop: 10 }]}>
-        <Text style={m.fieldLabel}>Carnê</Text>
-        <View style={m.chipRow}>
-          <Pressable
-            style={[m.chip, fifoAccountId === undefined && m.chipOn]}
-            onPress={() => setFifoAccountId(undefined)}
-          >
-            <Text style={[m.chipTxt, fifoAccountId === undefined && m.chipTxtOn]}>Todos os carnês</Text>
-          </Pressable>
-          {accounts.map(acc => (
-            <Pressable
-              key={acc.id ?? "general"}
-              style={[m.chip, fifoAccountId === acc.id && m.chipOn]}
-              onPress={() => setFifoAccountId(acc.id)}
-            >
-              <Text style={[m.chipTxt, fifoAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    )}
-
-    {hasAccounts && receiveMode === "distribute" && (
-      <View style={m.fieldBlock}>
-        {accounts.map(acc => {
-          const key = acc.id ?? "general";
-          return (
-            <View key={key} style={m.distRow}>
-              <Text style={m.distLabel} numberOfLines={1}>{acc.name}</Text>
-              <View style={m.distInput}>
-                <Text style={m.amountPrefix}>R$</Text>
-                <TextInput
-                  style={m.distField}
-                  value={distributions[key] || ""}
-                  onChangeText={v => setDistributions(prev => ({ ...prev, [key]: v.replace(/[^\d,.]/g, "") }))}
-                  placeholder="0,00"
-                  placeholderTextColor={Colors.ink3}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-          );
-        })}
-        <View style={m.distTotal}>
-          <Text style={m.distTotalLbl}>Total</Text>
-          <Text style={m.distTotalVal}>{fmt(distributionTotal)}</Text>
-        </View>
-      </View>
-    )}
-
-    {(!hasAccounts || receiveMode === "fifo") && (
-      <>
-        <Text style={m.fieldLabel}>Valor recebido</Text>
-        <View style={m.amountIn}>
-          <Text style={m.amountPrefix}>R$</Text>
-          <TextInput
-            style={m.amountInput}
-            value={amount}
-            onChangeText={(v) => setAmount(v.replace(/[^\d,.]/g, ""))}
-            placeholder="0,00"
-            placeholderTextColor={Colors.ink3}
-            keyboardType="decimal-pad"
-          />
-        </View>
-        <View style={m.quickRow}>
-          {[50, 100, 200].map(v => (
-            <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
-              <Text style={m.qChipTxt}>{fmt(v)}</Text>
-            </Pressable>
-          ))}
-          {totalBalance > 0 && (
-            <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
-              <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
-            </Pressable>
-          )}
-        </View>
-      </>
-    )}
-
-    <Text style={[m.fieldLabel, { marginTop: 14 }]}>Data do recebimento</Text>
-    <DateInput
-      value={dateBr}
-      onChangeText={setDateBr}
-      placeholder="dd/mm/aaaa"
-      style={m.dateInput}
-    />
-    <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
-
-    <Text style={[m.fieldLabel, { marginTop: 14 }]}>Forma</Text>
-    <View style={m.methods}>
-      {PAYMENT_METHODS.map(pm => (
-        <Pressable key={pm.key} style={[m.method, method === pm.key && m.methodActive]} onPress={() => setMethod(pm.key)}>
-          <Text style={[m.methodTxt, method === pm.key && { color: "#fff" }]}>{pm.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-
-    {amountNum > 0 && (
-      <View style={m.after}>
-        <Text style={m.afterK}>Saldo após recebimento</Text>
-        <Text style={m.afterV}>{fmt(afterBalance)}</Text>
-      </View>
-    )}
-
-    {lastChargesPaid != null && lastChargesPaid > 0 && lastTotalPaid != null && (
-      <View style={m.chargesSummary}>
-        <View style={m.chargesSummaryRow}>
-          <Text style={m.chargesSummaryLbl}>Encargos quitados</Text>
-          <Text style={[m.chargesSummaryVal, { color: Colors.red }]}>{fmt(lastChargesPaid)}</Text>
-        </View>
-        <View style={m.chargesSummaryRow}>
-          <Text style={m.chargesSummaryLbl}>Abatido do principal</Text>
-          <Text style={m.chargesSummaryVal}>{fmt(Math.max(0, lastTotalPaid - lastChargesPaid))}</Text>
-        </View>
-      </View>
-    )}
-  </View>
-
   <View style={m.card}>
-    <Text style={m.cardTitle}>Valor Livre · Preview FIFO</Text>
+    <Text style={m.cardTitle}>Receber valor livre</Text>
     <Text style={[m.termsHint, { marginBottom: 10 }]}>
-      Digite um valor para ver como será distribuído entre as parcelas (FIFO). Depois confirme para aplicar.
+      Digite um valor e vamos simular como ele é aplicado nas parcelas antes de confirmar.
     </Text>
 
     {realCarnes.length > 1 && (
@@ -610,6 +450,18 @@ export function TabParcelas({
         keyboardType="decimal-pad"
       />
     </View>
+    <View style={m.quickRow}>
+      {[50, 100, 200].map(v => (
+        <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
+          <Text style={m.qChipTxt}>{fmt(v)}</Text>
+        </Pressable>
+      ))}
+      {totalBalance > 0 && (
+        <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
+          <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
+        </Pressable>
+      )}
+    </View>
 
     <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
     <DateInput
@@ -618,6 +470,7 @@ export function TabParcelas({
       placeholder="dd/mm/aaaa"
       style={m.dateInput}
     />
+    <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
 
     <Text style={[m.fieldLabel, { marginTop: 12 }]}>Forma</Text>
     <View style={m.methods}>
@@ -640,11 +493,11 @@ export function TabParcelas({
     )}
     {!freePreviewLoading && freePreview && (
       <View style={m.previewBox}>
-        <Text style={m.previewTitle}>Distribuição FIFO</Text>
+        <Text style={m.previewTitle}>Como o valor vai ser aplicado</Text>
         {freePreview.applied.map((line, i) => (
           <View key={line.installment_id + i} style={m.previewRow}>
             <Text style={m.previewLbl}>
-              Parcela {line.number ?? "?"}{line.account_id ? "" : ""}
+              Parcela {line.number ?? "?"}
             </Text>
             <View style={{ alignItems: "flex-end" }}>
               {line.charges_paid > 0 && (
@@ -653,7 +506,9 @@ export function TabParcelas({
                 </Text>
               )}
               <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
-              <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>{line.status_after}</Text>
+              <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                {translateStatus(line.status_after)}
+              </Text>
             </View>
           </View>
         ))}
@@ -680,7 +535,7 @@ export function TabParcelas({
       {freeSubmitting
         ? <ActivityIndicator color="#fff" />
         : <Text style={m.ctaTxt}>
-            {parseAmount(freeAmt) > 0 ? `Confirmar ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
+            {parseAmount(freeAmt) > 0 ? `Confirmar recebimento de ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
           </Text>}
     </Pressable>
   </View>
