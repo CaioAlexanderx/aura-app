@@ -6,6 +6,8 @@ import { printReceipt, type CreditHistoryEvent } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { fmt, fmtDate } from "./fichaHelpers";
 import { m } from "./fichaStyles";
+import { pdvApi } from "@/services/pdvApi";
+import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
 
 export type TabHistoricoProps = {
   histEvents: CreditHistoryEvent[];
@@ -22,9 +24,11 @@ export type TabHistoricoProps = {
 
 export function TabHistorico({
   histEvents, histCursor, histLoading, histLoaded, loadHistory, setHistLoaded,
-  companyId,
+  companyId, onRefresh,
 }: TabHistoricoProps) {
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [loadingRefundId, setLoadingRefundId] = useState<string | null>(null);
+  const [refundSale, setRefundSale] = useState<DevolucaoSale | null>(null);
 
   async function handlePrintReceipt(transactionId: string) {
     setPrintingId(transactionId);
@@ -35,6 +39,38 @@ export function TabHistorico({
       toast.error("Não foi possível abrir o recibo. Tente novamente.");
     } finally {
       setPrintingId(null);
+    }
+  }
+
+  async function openRefund(ev: CreditHistoryEvent) {
+    if (!ev.sale_id) return;
+    setLoadingRefundId(ev.id);
+    try {
+      const sale = await pdvApi.getSale(companyId, ev.sale_id);
+      // Mapeia itens: id real do sale_item; clamp quantity = vendida − já devolvida;
+      // pula itens sem quantidade disponível para devolver.
+      const items = (sale.items || []).flatMap((it) => {
+        const refunded = it.refunded_quantity ?? 0;
+        const available = it.quantity - refunded;
+        if (available <= 0) return [];
+        return [{
+          id: it.id,
+          product_name: it.product_name,
+          quantity: available,
+          unit_price: it.unit_price,
+          total_price: it.unit_price * available,
+        }];
+      });
+      if (items.length === 0) {
+        toast.error("Todos os itens desta venda já foram devolvidos.");
+        return;
+      }
+      setRefundSale({ id: sale.id, items });
+    } catch (err) {
+      console.error("[crediário] openRefund error:", err);
+      toast.error("Não foi possível carregar a venda. Tente novamente.");
+    } finally {
+      setLoadingRefundId(null);
     }
   }
 
@@ -84,6 +120,8 @@ export function TabHistorico({
       const typeLabel = typeLabels[ev.type] ?? ev.type;
       const methodStr = ev.payment?.method ? ` · ${ev.payment.method}` : "";
       const isPrinting = printingId === ev.id;
+      const isLoadingRefund = loadingRefundId === ev.id;
+      const canRefund = ev.type === "purchase" && !!ev.sale_id;
       return (
         <View key={ev.id} style={m.tlItem}>
           <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
@@ -106,20 +144,35 @@ export function TabHistorico({
                 ))}
               </View>
             )}
-            {/* Recibo: só em eventos de pagamento (B5) */}
-            {ev.type === "payment" && (
+            {/* Ações: Recibo (payments) e Devolver (purchases com sale_id) */}
+            {(ev.type === "payment" || canRefund) && (
               <View style={lc.actionRow}>
-                <Pressable
-                  style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
-                  onPress={() => handlePrintReceipt(ev.id)}
-                  disabled={isPrinting}
-                  hitSlop={6}
-                >
-                  {isPrinting
-                    ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 11, height: 11 }} />
-                    : <Icon name="printer" size={11} color={Colors.violet3} />}
-                  <Text style={lc.actionBtnTxt}>Recibo</Text>
-                </Pressable>
+                {ev.type === "payment" && (
+                  <Pressable
+                    style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
+                    onPress={() => handlePrintReceipt(ev.id)}
+                    disabled={isPrinting}
+                    hitSlop={6}
+                  >
+                    {isPrinting
+                      ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 11, height: 11 }} />
+                      : <Icon name="printer" size={11} color={Colors.violet3} />}
+                    <Text style={lc.actionBtnTxt}>Recibo</Text>
+                  </Pressable>
+                )}
+                {canRefund && (
+                  <Pressable
+                    style={[lc.actionBtn, lc.actionBtnAmber, isLoadingRefund && { opacity: 0.5 }]}
+                    onPress={() => openRefund(ev)}
+                    disabled={isLoadingRefund}
+                    hitSlop={6}
+                  >
+                    {isLoadingRefund
+                      ? <ActivityIndicator size="small" color={Colors.amber} style={{ width: 11, height: 11 }} />
+                      : <Icon name="repeat" size={11} color={Colors.amber} />}
+                    <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -141,6 +194,22 @@ export function TabHistorico({
       </View>
     )}
   </View>
+
+  {/* B4: DevolucaoModal — renderizada fora do map para evitar aninhamento */}
+  {refundSale && (
+    <DevolucaoModal
+      visible={!!refundSale}
+      companyId={companyId}
+      sale={refundSale}
+      onClose={() => setRefundSale(null)}
+      onDone={() => {
+        setRefundSale(null);
+        onRefresh();
+        setHistLoaded(false);
+        loadHistory();
+      }}
+    />
+  )}
 </View>
   );
 }
@@ -187,6 +256,10 @@ const lc = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border2,
     backgroundColor: Colors.bg2,
+  },
+  actionBtnAmber: {
+    borderColor: Colors.amber + "55",
+    backgroundColor: Colors.amberD ?? Colors.bg2,
   },
   actionBtnTxt: {
     fontSize: 11,
