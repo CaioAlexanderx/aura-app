@@ -11,6 +11,10 @@
 //   recebimento retroativo com encargos).
 // feat (13/06): TabHistorico recebe companyId/customerId/onRefresh para
 //   revelar botões Recibo (B5) e Devolver (B4) em cada evento.
+// feat (13/06): openFreePix — Pix EMV para recebimento de valor livre (B3).
+//   Reutiliza o mesmo overlay pixInstId/pixData/pixLoading; identificado
+//   por pixInstId === "free" quando originado do valor livre.
+//   Tratamento amigável de PIX_KEY_MISSING (422) em ambos os handlers.
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
@@ -90,9 +94,14 @@ export function ClienteCrediarioModal({
   const [freeSubmitting, setFreeSubmitting] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── B2: Pix overlay — compartilhado entre parcela e valor livre ────────
+  // pixInstId === "free" indica que o overlay foi aberto pelo valor livre (B3).
+  // pixInstId === <uuid> indica que veio de uma parcela específica.
   const [pixInstId, setPixInstId] = useState<string | null>(null);
   const [pixData, setPixData] = useState<CreditPix | null>(null);
   const [pixLoading, setPixLoading] = useState(false);
+  // Label dinâmico do overlay ("Parcela" ou "Valor Livre")
+  const pixOverlayTitle = pixInstId === "free" ? "Pix · Valor Livre" : "Pix da Parcela";
 
   const profileQ = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
@@ -376,6 +385,15 @@ export function ClienteCrediarioModal({
     }
   }
 
+  // ── Helper: detecta chave Pix ausente (422 PIX_KEY_MISSING) ───────────
+  function isPixKeyMissing(err: any): boolean {
+    return (
+      err?.status === 422 ||
+      err?.data?.code === "PIX_KEY_MISSING" ||
+      String(err?.data?.error || "").includes("PIX_KEY_MISSING")
+    );
+  }
+
   async function openInstallmentPix(installmentId: string) {
     setPixInstId(installmentId);
     setPixData(null);
@@ -384,8 +402,35 @@ export function ClienteCrediarioModal({
       const res = await creditApi.getInstallmentPix(companyId, installmentId);
       setPixData(res);
     } catch (err: any) {
-      toast.error(err?.data?.error || "Erro ao gerar Pix da parcela");
       setPixInstId(null);
+      if (isPixKeyMissing(err)) {
+        toast.error("Cadastre sua chave Pix em Configurações → PDV para gerar cobranças por Pix.");
+      } else {
+        console.error("[crediário] openInstallmentPix error:", err);
+        toast.error("Não foi possível gerar o Pix. Verifique sua conexão e tente novamente.");
+      }
+    } finally {
+      setPixLoading(false);
+    }
+  }
+
+  // ── B3: Pix para recebimento de valor livre ───────────────────────────
+  async function openFreePix(amount: number) {
+    if (!customerId) return;
+    setPixInstId("free");
+    setPixData(null);
+    setPixLoading(true);
+    try {
+      const res = await creditApi.getFreePix(companyId, customerId, amount);
+      setPixData(res);
+    } catch (err: any) {
+      setPixInstId(null);
+      if (isPixKeyMissing(err)) {
+        toast.error("Cadastre sua chave Pix em Configurações → PDV para gerar cobranças por Pix.");
+      } else {
+        console.error("[crediário] openFreePix error:", err);
+        toast.error("Não foi possível gerar o Pix. Verifique sua conexão e tente novamente.");
+      }
     } finally {
       setPixLoading(false);
     }
@@ -527,6 +572,7 @@ export function ClienteCrediarioModal({
                     setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
                     handleEditDueDateOpen={handleEditDueDateOpen} openInstallmentPix={openInstallmentPix}
+                    openFreePix={openFreePix}
                     freeAmt={freeAmt} setFreeAmt={setFreeAmt} freeMethod={freeMethod} setFreeMethod={setFreeMethod}
                     freeDateBr={freeDateBr} setFreeDateBr={setFreeDateBr}
                     freeAccountId={freeAccountId} setFreeAccountId={setFreeAccountId}
@@ -673,7 +719,7 @@ export function ClienteCrediarioModal({
           {!!pixInstId && (
             <View style={m.pixOverlay}>
               <View style={m.pixOverlayHeader}>
-                <Text style={m.editDueDateTitle}>Pix da Parcela</Text>
+                <Text style={m.editDueDateTitle}>{pixOverlayTitle}</Text>
                 <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>

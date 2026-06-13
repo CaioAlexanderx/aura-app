@@ -23,6 +23,9 @@ import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModa
 // Lógica preservada: busca debounce, A–Z, atraso-por-data, cobrança, modais.
 // Follow-up backend: pílulas Risco/Bloqueado + chip "Bloqueados"
 // dependem de score/status por cliente no /balances (ainda não vem).
+// feat (13/06): refetch de plano no mount via refreshMe() para combater
+// armadilha_plano_stale_jwt (plan/module_overrides podem ter mudado desde
+// que o JWT foi emitido).
 // ============================================================
 
 var fmt = function(n: number) {
@@ -114,13 +117,20 @@ type SortOrder = "balance" | "az";
 type Filter = "saldo" | "atraso" | "dia";
 
 export default function CrediarioScreen() {
-  const { company } = useAuthStore();
+  const { company, refreshMe } = useAuthStore();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [showCriar, setShowCriar] = useState(false);
   const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
   const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
+
+  // ── Refetch de plano no mount (combate armadilha_plano_stale_jwt) ──────
+  useEffect(() => {
+    let cancelled = false;
+    refreshMe().catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Busca (DESIGN-38) ──────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
