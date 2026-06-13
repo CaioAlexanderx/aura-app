@@ -14,6 +14,7 @@
 //          médios (480-960px) o grid `auto-fit, minmax(140px, 1fr)` no
 //          pdv.tsx quebra cards em 2 linhas automaticamente — não precisa
 //          mais colapsar pro modo compact. Caso Davi 13/14".
+// 13/06 · ActTroca: label "Trocar" → "Trocar / Devolver".
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
@@ -442,7 +443,7 @@ export function ActCoupon({
   );
 }
 
-// ═══════════ 4) Troca card ═══════════
+// ═══════════ 4) Troca / Devolver card ═══════════
 export function ActTroca({ onOpen }: { onOpen: () => void }) {
   const compact = useCompactMode();
   useEffect(() => {
@@ -459,7 +460,7 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
       <ActIco compact={compact}>
         <Icon name="repeat" size={compact ? 20 : 18} color={Colors.ink3} />
       </ActIco>
-      {!compact && <ActBody k="Troca" v="Iniciar troca" isEmpty />}
+      {!compact && <ActBody k="Trocar / Devolver" v="Iniciar troca ou devolucao" isEmpty />}
       <Shortcut k="F5" compact={compact} />
     </ActCard>
   );
