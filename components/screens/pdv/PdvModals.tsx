@@ -12,6 +12,10 @@
 //
 // 26/05/2026 (crediario fase 1): onCrediarioConfirm agora recebe
 // { installments, first_due_date } para repassar ao POST /pdv/sale.
+//
+// 13/06/2026 (unify): CrediarioConfirmPayload ampliado com campo `unify?`
+// opcional. usePdvState.handleCrediarioConfirm detecta o campo e, após
+// a venda ser registrada com installments=1, chama creditApi.applyUnify.
 // ============================================================
 import { QuickCustomerModal } from "@/components/QuickCustomerModal";
 import { VariantPickerModal } from "@/components/VariantPickerModal";
@@ -21,10 +25,8 @@ import { CashChangeModal } from "@/components/screens/pdv/CashChangeModal";
 import { CreditInstallmentModal } from "@/components/screens/pdv/CreditInstallmentModal";
 import type { Product } from "@/components/screens/estoque/types";
 
-export type CrediarioConfirmPayload = {
-  installments: number;
-  first_due_date: string;
-};
+// Re-export do tipo do modal para uso em usePdvState
+export type { ConfirmPayload as CrediarioConfirmPayload } from "@/components/screens/pdv/CreditInstallmentModal";
 
 export interface PdvModalsProps {
   // ── Cliente rápido
@@ -53,12 +55,12 @@ export interface PdvModalsProps {
   cashModalIsSplit: boolean;
   onCancelChange:   () => void;
   onConfirmChange:  () => void;
-  // ── Crediário parcelado (14/05/2026 criado; 26/05/2026 fase 1 refatorado)
+  // ── Crediário parcelado (14/05/2026 criado; 26/05/2026 fase 1 refatorado; 13/06/2026 unify)
   showCrediario:      boolean;
   customerId:         string | null;
   customerName:       string | null;
   saleTotal:          number;
-  onCrediarioConfirm: (payload: CrediarioConfirmPayload) => void;
+  onCrediarioConfirm: (payload: import("@/components/screens/pdv/CreditInstallmentModal").ConfirmPayload) => void;
   onCrediarioClose:   () => void;
 }
 

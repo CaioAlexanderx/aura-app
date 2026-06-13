@@ -20,6 +20,8 @@
 // fix (11/06/2026): A3-FE Idempotency-Key via header nos POST de dinheiro.
 // DESIGN-38 indicadores (13/06/2026): portfolio_open_amount + customers_with_balance
 //   adicionados ao tipo CreditDashboard (aditivo, backend já entrega).
+// feat(unify) (13/06/2026): UnifyPlan + previewUnify + applyUnify para
+//   unificação de carnê existente + nova compra num cronograma único.
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -278,6 +280,31 @@ export type RefundResult = {
   credit_generated: number;
   new_balance: number;
   stock_restored: Array<{ product_id: string; variant_id: string | null; quantity: number }>;
+};
+
+// ─── Unify (13/06/2026): Unificação de carnê existente + nova compra ──────
+/**
+ * Plano retornado tanto pelo GET /unify/preview quanto pelo POST /unify.
+ * O shape é idêntico nos dois endpoints — garante preview === apply.
+ * Valores em REAIS.
+ */
+export type UnifyPlan = {
+  /** Saldo restante em aberto antes desta nova compra (parcelas abertas do carnê). */
+  open_remaining: number;
+  /** Valor da nova compra sendo adicionada. */
+  new_amount: number;
+  /** Juros adicionados pelo backend (0 quando interest_rate=0). */
+  interest_added: number;
+  /** Total unificado = open_remaining + new_amount + interest_added. */
+  total: number;
+  /** Número de parcelas do novo cronograma. */
+  installments_count: number;
+  /** Cronograma de parcelas resultante. */
+  schedule: Array<{ number: number; amount_due: number; due_date: string }>;
+  /** IDs das parcelas antigas que serão canceladas/substituídas. */
+  replaced_installment_ids: string[];
+  /** IDs das parcelas da nova compra que foram incorporadas (opcional — backend pode omitir). */
+  applied_installment_ids?: string[];
 };
 
 // ─── Lançamento manual ──────────────────────────────────────────────────────
@@ -618,5 +645,63 @@ export const creditApi = {
   // ── B4 (DESIGN-38): Devolução de venda no crediário ──
   refundSale(companyId: string, saleId: string, body: { items: Array<{ sale_item_id: string; quantity: number }>; reason?: string }) {
     return request<RefundResult>(`${base(companyId)}/sales/${saleId}/refund`, { method: "POST", body });
+  },
+
+  // ── Unify (13/06/2026): Unificação de carnê + nova compra ──────────────────
+  /**
+   * Pré-visualização do cronograma unificado (GET, read-only, sem efeitos).
+   * accountId=null ou "general" → usa a conta geral do cliente.
+   * Retorna UnifyPlan com o shape idêntico ao do POST /unify.
+   */
+  previewUnify(
+    companyId: string,
+    customerId: string,
+    accountId: string | null,
+    opts: {
+      amount: number;
+      installments: number;
+      first_due_date: string;
+      period_unit?: PeriodUnit;
+      period_count?: number;
+    },
+  ): Promise<UnifyPlan> {
+    const aid = accountId || "general";
+    const qs = new URLSearchParams();
+    qs.set("amount", String(opts.amount));
+    qs.set("installments", String(opts.installments));
+    qs.set("first_due_date", opts.first_due_date);
+    if (opts.period_unit) qs.set("period_unit", opts.period_unit);
+    if (opts.period_count) qs.set("period_count", String(opts.period_count));
+    return request<UnifyPlan>(
+      `${base(companyId)}/customers/${customerId}/accounts/${aid}/unify/preview?${qs}`
+    );
+  },
+
+  /**
+   * Aplica a unificação: cancela o cronograma antigo e grava o novo.
+   * Deve ser chamado APÓS o débito da nova compra já ter sido criado
+   * (seja via POST /pdv/sale com installments=1, seja via createManualEntry
+   * com installments=1). sale_id é opcional — passa quando disponível.
+   * Idempotency-Key gerado localmente para evitar double-apply em retry.
+   */
+  applyUnify(
+    companyId: string,
+    customerId: string,
+    accountId: string | null,
+    body: {
+      amount: number;
+      installments: number;
+      first_due_date: string;
+      sale_id?: string;
+      period_unit?: PeriodUnit;
+      period_count?: number;
+    },
+  ): Promise<UnifyPlan> {
+    const aid = accountId || "general";
+    const idempKey = "unify-" + companyId + "-" + customerId + "-" + aid + "-" + Date.now();
+    return request<UnifyPlan>(
+      `${base(companyId)}/customers/${customerId}/accounts/${aid}/unify`,
+      { method: "POST", body, headers: { "Idempotency-Key": idempKey } }
+    );
   },
 };

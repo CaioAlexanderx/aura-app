@@ -9,29 +9,22 @@
  * O step de "criação via API separada" foi removido — evita double-create.
  *
  * BUGFIX (05/06/2026): RangeError "Invalid time value" quando o usuário
- * digitava data parcial no input livre `firstDueDate`. Causa raiz:
- *   - input era TextInput puro, sem máscara, com placeholder "AAAA-MM-DD"
- *   - usuário apaga/edita → string vira algo como "2026-0" / "" / "abc"
- *   - useMemo de simInstallments faz `new Date(firstDueDate).toISOString()`
- *     dentro do Array.from → Invalid Date → toISOString joga RangeError
- *     → ErrorBoundary engole o modal inteiro (incluindo saldo em aberto)
- *
- * Fix:
- *   1. Input agora usa <DateInput/> com máscara dd/mm/aaaa (padrão BR)
- *   2. State interno guarda firstDueDateBr (dd/mm/aaaa) e firstDueDateIso
- *      (YYYY-MM-DD) derivado via parseBrDate — null se inválido/incompleto
- *   3. simInstallments retorna [] se ISO null (não tenta new Date)
- *   4. Camada extra defensiva: `safeIso(date)` checa `Number.isNaN` antes
- *      de chamar toISOString (cobre paste/autocomplete/outras fontes)
- *   5. Submit bloqueado se ISO null (botão Confirmar disabled + forceShow)
+ * digitava data parcial no input livre `firstDueDate`.
  *
  * BUGFIX (05/06/2026, Parte 2): saldo em aberto da cliente não aparecia.
- * Causa: modal só mostrava `profile.credit_used`, que (a) podia estar
- * stale, (b) virava 0 quando o profile não existia, (c) o modal nem
- * renderizava quando o crash de data acima estourava no useMemo.
- * Fix: agregar `profile.open_installments[].remaining` (campo que o
- * backend já devolve) em `openBalance` + `openCount` e exibir como
- * linha destacada "Saldo em aberto" — sempre visível, mesmo sem profile.
+ *
+ * feat(unify) (13/06/2026):
+ *   Quando a cliente já tem carnê(s) aberto(s), o Step 1 exibe um toggle
+ *   "Unificar com carnê existente". Quando ligado:
+ *     - O lojista escolhe o carnê + nº de parcelas + vencimento da 1ª.
+ *     - Um preview (previewUnify) é carregado mostrando saldo existente,
+ *       nova compra, juros e cronograma resultante.
+ *     - onConfirm devolve `unify: { account_id, installments, first_due_date }`
+ *       em vez de apenas { installments, first_due_date }.
+ *     - O PDV (usePdvState / PdvModals) deve:
+ *         1. Chamar finalizeSale() com installments=1 (só débito, sem cronograma).
+ *         2. Após obter o sale_id no onSuccess, chamar creditApi.applyUnify(...).
+ *   O caminho SEM unify permanece INTACTO.
  *
  * Props:
  *   visible        — controla visibilidade
@@ -39,7 +32,7 @@
  *   customerId     — cliente já selecionado no PDV (obrigatório)
  *   customerName   — nome do cliente (display)
  *   totalAmount    — valor total da venda (pre-preenche o campo)
- *   onConfirm({ installments, first_due_date }) — callback pós-seleção
+ *   onConfirm(payload) — callback pós-seleção
  *   onClose        — callback fechar sem confirmar
  */
 import { useState, useEffect, useMemo } from "react";
@@ -47,12 +40,19 @@ import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, Activi
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { creditApi } from "@/services/creditApi";
+import { creditApi, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
-type ConfirmPayload = {
+// ConfirmPayload ampliado: campo `unify` presente somente quando o toggle está ativo.
+export type ConfirmPayload = {
   installments: number;
   first_due_date: string;
+  /** Presente somente quando o lojista escolheu unificar. */
+  unify?: {
+    account_id: string;      // ID do carnê selecionado
+    installments: number;    // Nº de parcelas do cronograma unificado
+    first_due_date: string;  // YYYY-MM-DD da 1ª parcela
+  };
 };
 
 type Props = {
@@ -69,10 +69,6 @@ var fmtCur = function(n: number) {
   return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-/**
- * Formata uma data (Date ou ISO YYYY-MM-DD) como dd/mm/aa para preview.
- * Retorna "—" se a data for inválida (evita "Invalid Date" no preview).
- */
 function fmtDateSafe(input: Date | string | null | undefined): string {
   if (!input) return "—";
   try {
@@ -84,7 +80,6 @@ function fmtDateSafe(input: Date | string | null | undefined): string {
   }
 }
 
-/** Retorna ISO YYYY-MM-DD se a Date for válida, senão null. NUNCA joga. */
 function safeIsoDate(d: Date): string | null {
   if (!d || Number.isNaN(d.getTime())) return null;
   try {
@@ -102,11 +97,9 @@ const SCORE_COLOR: Record<string, string> = {
   premium: Colors.green, bom: "#34d399", regular: Colors.amber, restrito: "#f97316", bloqueado: Colors.red,
 };
 
-/** Próximo mês em dd/mm/aaaa — formato BR do nosso DateInput. */
 function nextMonthBrDate(): string {
   var d = new Date();
   d.setMonth(d.getMonth() + 1);
-  // safe: new Date() sempre válida
   var iso = safeIsoDate(d);
   return formatIsoToBr(iso) || "";
 }
@@ -114,13 +107,21 @@ function nextMonthBrDate(): string {
 export function CreditInstallmentModal({ visible, companyId, customerId, customerName, totalAmount, onConfirm, onClose }: Props) {
   const [step, setStep] = useState(1);
   const [numInstallments, setNumInstallments] = useState(2);
-  // BR-formatted (dd/mm/aaaa) — fonte de verdade do que o usuário digita.
   const [firstDueDateBr, setFirstDueDateBr] = useState(() => nextMonthBrDate());
   const [amount, setAmount] = useState(totalAmount?.toFixed(2) || "");
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  // ISO derivado da string BR — null se inválido/incompleto.
-  const firstDueDateIso = useMemo(() => parseBrDate(firstDueDateBr), [firstDueDateBr]);
+  // ── Unify state ──────────────────────────────────────────────
+  const [unifyEnabled, setUnifyEnabled] = useState(false);
+  const [unifyAccountId, setUnifyAccountId] = useState<string | null>(null);
+  const [unifyInstallments, setUnifyInstallments] = useState(2);
+  const [unifyFirstDueBr, setUnifyFirstDueBr] = useState(() => nextMonthBrDate());
+  const [unifyPreview, setUnifyPreview] = useState<UnifyPlan | null>(null);
+  const [unifyPreviewLoading, setUnifyPreviewLoading] = useState(false);
+  const [unifyPreviewError, setUnifyPreviewError] = useState<string | null>(null);
+
+  const unifyFirstDueIso = useMemo(() => parseBrDate(unifyFirstDueBr), [unifyFirstDueBr]);
+  const firstDueDateIso  = useMemo(() => parseBrDate(firstDueDateBr), [firstDueDateBr]);
 
   // Resetar quando abre
   useEffect(() => {
@@ -129,6 +130,12 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
       setNumInstallments(2);
       setFirstDueDateBr(nextMonthBrDate());
       setSubmitAttempted(false);
+      setUnifyEnabled(false);
+      setUnifyAccountId(null);
+      setUnifyInstallments(2);
+      setUnifyFirstDueBr(nextMonthBrDate());
+      setUnifyPreview(null);
+      setUnifyPreviewError(null);
       if (totalAmount !== undefined) setAmount(totalAmount.toFixed(2));
     }
   }, [visible, totalAmount]);
@@ -141,6 +148,19 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
     staleTime: 30_000,
   });
 
+  // Buscar histórico para obter a lista de carnês abertos
+  const historyQ = useQuery({
+    queryKey: ["credit-customer", companyId, customerId],
+    queryFn: () => creditApi.getCustomerHistory(companyId, customerId),
+    enabled: visible && !!companyId && !!customerId,
+    staleTime: 30_000,
+  });
+
+  const openAccounts: CreditAccount[] = useMemo(
+    () => (historyQ.data?.accounts || []).filter(a => a.id !== null && a.status === "open") as CreditAccount[],
+    [historyQ.data],
+  );
+
   const profile = profileQ.data;
   const config = profile?.config;
   const maxInstallments = Math.min(config?.max_installments || 12, 12);
@@ -148,9 +168,6 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
   const available = profile ? (Number(profile.credit_limit) - Number(profile.credit_used)) : 0;
   const isBlocked = profile?.status === "blocked";
 
-  // Saldo em aberto agregado das parcelas pendentes/overdue (fonte canônica).
-  // Backend já devolve `profile.open_installments[].remaining`. Não dependemos
-  // mais de `profile.credit_used` (que pode estar stale ou ausente sem profile).
   const { openBalance, openCount, openOverdueCount } = useMemo(() => {
     const list = profile?.open_installments || [];
     let sum = 0;
@@ -164,26 +181,55 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
     return { openBalance: sum, openCount: list.length, openOverdueCount: overdue };
   }, [profile]);
 
-  // Simular parcelas — defensivo: skip se ISO inválido (impede Invalid time value).
   const simInstallments = useMemo(() => {
     if (!totalNum || numInstallments < 1) return [];
-    if (!firstDueDateIso) return []; // <-- fix do crash: sem ISO válido, não simula
+    if (!firstDueDateIso) return [];
     var base = Math.floor(totalNum / numInstallments * 100) / 100;
     var remainder = Math.round((totalNum - base * numInstallments) * 100) / 100;
     var firstDate = new Date(firstDueDateIso);
-    if (Number.isNaN(firstDate.getTime())) return []; // dupla checagem
+    if (Number.isNaN(firstDate.getTime())) return [];
     return Array.from({ length: numInstallments }, (_, i) => {
       var amt = i === numInstallments - 1 ? base + remainder : base;
       var d = new Date(firstDate);
       d.setMonth(d.getMonth() + i);
-      var iso = safeIsoDate(d); // safe: nunca joga
+      var iso = safeIsoDate(d);
       return { num: i + 1, amount: amt, date: iso, dateBr: fmtDateSafe(d) };
     });
   }, [totalNum, numInstallments, firstDueDateIso]);
 
+  // Carregar preview do unify sempre que os parâmetros mudam
+  useEffect(() => {
+    if (!unifyEnabled || !unifyAccountId || !unifyFirstDueIso || totalNum <= 0 || unifyInstallments < 1) {
+      setUnifyPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setUnifyPreviewLoading(true);
+    setUnifyPreviewError(null);
+    creditApi.previewUnify(companyId, customerId, unifyAccountId, {
+      amount: totalNum,
+      installments: unifyInstallments,
+      first_due_date: unifyFirstDueIso,
+    }).then(plan => {
+      if (!cancelled) { setUnifyPreview(plan); setUnifyPreviewLoading(false); }
+    }).catch((err: any) => {
+      if (!cancelled) {
+        setUnifyPreviewError(err?.message || "Erro ao calcular unificação");
+        setUnifyPreview(null);
+        setUnifyPreviewLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [unifyEnabled, unifyAccountId, unifyInstallments, unifyFirstDueIso, totalNum, companyId, customerId]);
+
   function canProceed() {
     if (step === 1) return !profileQ.isLoading && !isBlocked;
-    if (step === 2) return totalNum > 0 && numInstallments >= 1 && !!firstDueDateIso;
+    if (step === 2) {
+      if (unifyEnabled) {
+        return !!unifyAccountId && unifyInstallments >= 1 && !!unifyFirstDueIso && !!unifyPreview && !unifyPreviewLoading;
+      }
+      return totalNum > 0 && numInstallments >= 1 && !!firstDueDateIso;
+    }
     return false;
   }
 
@@ -192,9 +238,23 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
       setStep(2);
     } else if (step === 2) {
       setSubmitAttempted(true);
-      if (!firstDueDateIso) return; // bloqueia submit com data inválida
-      // Apenas devolve os dados — o backend cria as parcelas no POST /pdv/sale
-      onConfirm({ installments: numInstallments, first_due_date: firstDueDateIso });
+      if (unifyEnabled) {
+        if (!unifyAccountId || !unifyFirstDueIso || !unifyPreview) return;
+        // Fluxo de unify: a venda irá com installments=1 (só débito).
+        // O applyUnify será chamado pelo PDV após obter o sale_id.
+        onConfirm({
+          installments: 1,           // sem cronograma próprio
+          first_due_date: unifyFirstDueIso,
+          unify: {
+            account_id: unifyAccountId,
+            installments: unifyInstallments,
+            first_due_date: unifyFirstDueIso,
+          },
+        });
+      } else {
+        if (!firstDueDateIso) return;
+        onConfirm({ installments: numInstallments, first_due_date: firstDueDateIso });
+      }
     }
   }
 
@@ -238,8 +298,6 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                   </View>
                 )}
 
-                {/* Saldo em aberto — SEMPRE visível quando há parcelas pendentes,
-                    independente do profile estar configurado ou não. */}
                 {!profileQ.isLoading && openCount > 0 && (
                   <View style={[m.openBalanceCard, openOverdueCount > 0 && m.openBalanceCardOverdue]}>
                     <View style={m.openBalanceHeader}>
@@ -279,7 +337,6 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                           <Text style={[m.profileValue, { color: Colors.green }]}>{fmtCur(available)}</Text>
                         </View>
                       )}
-                      {/* "Em uso" continua só por compatibilidade visual quando há limite */}
                       {Number(profile.credit_limit) > 0 && (
                         <View style={m.profileRow}>
                           <Text style={m.profileLabel}>Em uso</Text>
@@ -303,75 +360,218 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                     <Text style={[m.alertText, { color: Colors.violet3 }]}>Perfil sem limite configurado. O parcelamento será criado automaticamente.</Text>
                   </View>
                 )}
+
+                {/* Toggle de unificação — só aparece quando há carnê(s) aberto(s) */}
+                {!profileQ.isLoading && !historyQ.isLoading && openAccounts.length > 0 && (
+                  <View style={m.unifyToggleCard}>
+                    <View style={m.unifyToggleRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={m.unifyToggleTitle}>Unificar com carnê existente</Text>
+                        <Text style={m.unifyToggleSub}>
+                          Soma o saldo aberto + esta compra e redivide em novas parcelas
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          setUnifyEnabled(v => !v);
+                          if (!unifyAccountId && openAccounts.length === 1) {
+                            setUnifyAccountId(openAccounts[0].id as string);
+                          }
+                        }}
+                        style={[m.toggleSwitch, unifyEnabled && m.toggleSwitchOn]}
+                      >
+                        <View style={[m.toggleThumb, unifyEnabled && m.toggleThumbOn]} />
+                      </Pressable>
+                    </View>
+
+                    {unifyEnabled && (
+                      <View style={m.unifyAccountList}>
+                        {openAccounts.map(acc => (
+                          <Pressable
+                            key={acc.id}
+                            style={[m.unifyAccountRow, unifyAccountId === acc.id && m.unifyAccountRowOn]}
+                            onPress={() => setUnifyAccountId(acc.id as string)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[m.unifyAccountName, unifyAccountId === acc.id && { color: Colors.violet3 }]}>
+                                {acc.name}
+                              </Text>
+                              <Text style={m.unifyAccountSub}>
+                                Saldo: {fmtCur(acc.balance || 0)}
+                                {acc.overdue ? " · Em atraso" : ""}
+                              </Text>
+                            </View>
+                            {unifyAccountId === acc.id && <Icon name="check" size={14} color={Colors.violet3} />}
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             )}
 
             {/* STEP 2 — Configuração das parcelas */}
             {step === 2 && (
               <View style={m.stepContent}>
-                <Text style={m.stepTitle}>Configurar parcelas</Text>
+                <Text style={m.stepTitle}>
+                  {unifyEnabled ? "Unificar parcelas" : "Configurar parcelas"}
+                </Text>
 
                 {/* Valor total (somente leitura se veio do carrinho) */}
-                <View style={m.fieldWrap}>
-                  <Text style={m.fieldLabel}>Valor total (R$)</Text>
-                  <TextInput
-                    style={[m.fieldInput, totalAmount !== undefined && { opacity: 0.7 }]}
-                    value={amount}
-                    onChangeText={setAmount}
-                    keyboardType="decimal-pad"
-                    placeholder="0,00"
-                    placeholderTextColor={Colors.ink3}
-                    editable={totalAmount === undefined}
-                  />
-                </View>
-
-                {/* Seletor de parcelas */}
-                <Text style={m.fieldLabel}>Dividir em quantas vezes?</Text>
-                <View style={m.installChips}>
-                  {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
-                    <Pressable
-                      key={n}
-                      onPress={() => setNumInstallments(n)}
-                      style={[m.chip, numInstallments === n && m.chipActive]}
-                    >
-                      <Text style={[m.chipText, numInstallments === n && m.chipTextActive]}>{n}x</Text>
-                      {totalNum > 0 && (
-                        <Text style={[m.chipSub, numInstallments === n && { color: "rgba(255,255,255,0.75)" }]}>
-                          {fmtCur(Math.round(totalNum / n * 100) / 100)}
-                        </Text>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-
-                {/* Data da 1ª parcela */}
-                <View style={m.fieldWrap}>
-                  <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
-                  <DateInput
-                    value={firstDueDateBr}
-                    onChangeText={setFirstDueDateBr}
-                    placeholder="dd/mm/aaaa"
-                    forceShowError={submitAttempted && !firstDueDateIso}
-                    errorMessage="Informe uma data válida (dd/mm/aaaa)."
-                  />
-                </View>
-
-                {/* Preview compacto */}
-                {simInstallments.length > 0 && (
-                  <View style={m.simTable}>
-                    <Text style={m.simTitle}>SIMULAÇÃO</Text>
-                    {simInstallments.map(ins => (
-                      <View key={ins.num} style={m.simRow}>
-                        <Text style={m.simNum}>{ins.num}ª</Text>
-                        <Text style={m.simDate}>{ins.dateBr}</Text>
-                        <Text style={m.simAmt}>{fmtCur(ins.amount)}</Text>
-                      </View>
-                    ))}
-                    <View style={m.simTotalRow}>
-                      <Text style={m.simTotalLabel}>TOTAL</Text>
-                      <Text style={m.simTotalValue}>{fmtCur(totalNum)}</Text>
-                    </View>
+                {!unifyEnabled && (
+                  <View style={m.fieldWrap}>
+                    <Text style={m.fieldLabel}>Valor total (R$)</Text>
+                    <TextInput
+                      style={[m.fieldInput, totalAmount !== undefined && { opacity: 0.7 }]}
+                      value={amount}
+                      onChangeText={setAmount}
+                      keyboardType="decimal-pad"
+                      placeholder="0,00"
+                      placeholderTextColor={Colors.ink3}
+                      editable={totalAmount === undefined}
+                    />
                   </View>
+                )}
+
+                {/* Fluxo SEM unify: seletor de parcelas normal */}
+                {!unifyEnabled && (
+                  <>
+                    <Text style={m.fieldLabel}>Dividir em quantas vezes?</Text>
+                    <View style={m.installChips}>
+                      {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
+                        <Pressable
+                          key={n}
+                          onPress={() => setNumInstallments(n)}
+                          style={[m.chip, numInstallments === n && m.chipActive]}
+                        >
+                          <Text style={[m.chipText, numInstallments === n && m.chipTextActive]}>{n}x</Text>
+                          {totalNum > 0 && (
+                            <Text style={[m.chipSub, numInstallments === n && { color: "rgba(255,255,255,0.75)" }]}>
+                              {fmtCur(Math.round(totalNum / n * 100) / 100)}
+                            </Text>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <View style={m.fieldWrap}>
+                      <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
+                      <DateInput
+                        value={firstDueDateBr}
+                        onChangeText={setFirstDueDateBr}
+                        placeholder="dd/mm/aaaa"
+                        forceShowError={submitAttempted && !firstDueDateIso}
+                        errorMessage="Informe uma data válida (dd/mm/aaaa)."
+                      />
+                    </View>
+
+                    {simInstallments.length > 0 && (
+                      <View style={m.simTable}>
+                        <Text style={m.simTitle}>SIMULAÇÃO</Text>
+                        {simInstallments.map(ins => (
+                          <View key={ins.num} style={m.simRow}>
+                            <Text style={m.simNum}>{ins.num}ª</Text>
+                            <Text style={m.simDate}>{ins.dateBr}</Text>
+                            <Text style={m.simAmt}>{fmtCur(ins.amount)}</Text>
+                          </View>
+                        ))}
+                        <View style={m.simTotalRow}>
+                          <Text style={m.simTotalLabel}>TOTAL</Text>
+                          <Text style={m.simTotalValue}>{fmtCur(totalNum)}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {/* Fluxo COM unify: seletor do nº de parcelas unificadas + data */}
+                {unifyEnabled && (
+                  <>
+                    {/* Resumo do carnê selecionado */}
+                    {unifyAccountId && (() => {
+                      const acc = openAccounts.find(a => a.id === unifyAccountId);
+                      if (!acc) return null;
+                      return (
+                        <View style={m.unifySelectedCard}>
+                          <Text style={m.unifySelectedName}>{acc.name}</Text>
+                          <Text style={m.unifySelectedSub}>
+                            Saldo atual: {fmtCur(acc.balance || 0)}
+                            {" + "}
+                            Nova compra: {fmtCur(totalNum)}
+                          </Text>
+                        </View>
+                      );
+                    })()}
+
+                    <Text style={m.fieldLabel}>Novo nº de parcelas</Text>
+                    <View style={m.installChips}>
+                      {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
+                        <Pressable
+                          key={n}
+                          onPress={() => setUnifyInstallments(n)}
+                          style={[m.chip, unifyInstallments === n && m.chipActive]}
+                        >
+                          <Text style={[m.chipText, unifyInstallments === n && m.chipTextActive]}>{n}x</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <View style={m.fieldWrap}>
+                      <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
+                      <DateInput
+                        value={unifyFirstDueBr}
+                        onChangeText={setUnifyFirstDueBr}
+                        placeholder="dd/mm/aaaa"
+                        forceShowError={submitAttempted && !unifyFirstDueIso}
+                        errorMessage="Informe uma data válida (dd/mm/aaaa)."
+                      />
+                    </View>
+
+                    {/* Preview do unify */}
+                    {unifyPreviewLoading && (
+                      <View style={m.loadingBox}>
+                        <ActivityIndicator color={Colors.violet3} />
+                        <Text style={m.loadingText}>Calculando cronograma...</Text>
+                      </View>
+                    )}
+                    {unifyPreviewError && (
+                      <View style={m.alertBox}>
+                        <Icon name="alert" size={14} color={Colors.red} />
+                        <Text style={m.alertText}>{unifyPreviewError}</Text>
+                      </View>
+                    )}
+                    {unifyPreview && !unifyPreviewLoading && (
+                      <View style={m.simTable}>
+                        <Text style={m.simTitle}>CRONOGRAMA UNIFICADO</Text>
+                        <View style={m.simRow}>
+                          <Text style={[m.simDate, { flex: 1 }]}>Saldo em aberto</Text>
+                          <Text style={m.simAmt}>{fmtCur(unifyPreview.open_remaining)}</Text>
+                        </View>
+                        <View style={m.simRow}>
+                          <Text style={[m.simDate, { flex: 1 }]}>Nova compra</Text>
+                          <Text style={m.simAmt}>{fmtCur(unifyPreview.new_amount)}</Text>
+                        </View>
+                        {unifyPreview.interest_added > 0 && (
+                          <View style={m.simRow}>
+                            <Text style={[m.simDate, { flex: 1 }]}>Juros</Text>
+                            <Text style={[m.simAmt, { color: Colors.amber }]}>{fmtCur(unifyPreview.interest_added)}</Text>
+                          </View>
+                        )}
+                        <View style={[m.simTotalRow, { marginBottom: 8 }]}>
+                          <Text style={m.simTotalLabel}>TOTAL UNIFICADO</Text>
+                          <Text style={m.simTotalValue}>{fmtCur(unifyPreview.total)}</Text>
+                        </View>
+                        {unifyPreview.schedule.map(s => (
+                          <View key={s.number} style={m.simRow}>
+                            <Text style={m.simNum}>{s.number}ª</Text>
+                            <Text style={m.simDate}>{fmtDateSafe(s.due_date)}</Text>
+                            <Text style={m.simAmt}>{fmtCur(s.amount_due)}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
                 )}
               </View>
             )}
@@ -390,7 +590,12 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
               style={[m.nextBtn, !canProceed() && m.nextBtnDisabled]}
             >
               <Text style={m.nextBtnText}>
-                {step === 2 ? `Confirmar ${numInstallments}x de ${totalNum > 0 ? fmtCur(Math.round(totalNum / numInstallments * 100) / 100) : "--"}` : "Continuar"}
+                {step === 2
+                  ? unifyEnabled
+                    ? unifyPreview ? `Confirmar ${unifyInstallments}x de ${fmtCur(unifyPreview.total / unifyInstallments)}` : "Aguardando..."
+                    : `Confirmar ${numInstallments}x de ${totalNum > 0 ? fmtCur(Math.round(totalNum / numInstallments * 100) / 100) : "--"}`
+                  : "Continuar"
+                }
               </Text>
             </Pressable>
           </View>
@@ -414,7 +619,7 @@ const m = StyleSheet.create({
   stepDotCurrent: { borderColor: Colors.violet2, backgroundColor: Colors.violet },
   stepDotNum: { fontSize: 11, fontWeight: "700", color: Colors.ink3 },
 
-  body: { flexGrow: 1, maxHeight: 440 },
+  body: { flexGrow: 1, maxHeight: 460 },
   stepContent: { padding: 20, gap: 14 },
   stepTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 2 },
   stepSubtitle: { fontSize: 12, color: Colors.ink3 },
@@ -422,7 +627,6 @@ const m = StyleSheet.create({
   loadingBox: { paddingVertical: 32, alignItems: "center", gap: 10 },
   loadingText: { fontSize: 12, color: Colors.ink3 },
 
-  // Saldo em aberto — card destacado (laranja/âmbar quando só pendente, vermelho com overdue)
   openBalanceCard: {
     backgroundColor: Colors.amber + "10",
     borderRadius: 12,
@@ -449,6 +653,24 @@ const m = StyleSheet.create({
 
   alertBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.redD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.red + "33" },
   alertText: { flex: 1, fontSize: 11.5, color: Colors.red, lineHeight: 16 },
+
+  // ── Unify toggle ───────────────────────────────────────────────────────────────
+  unifyToggleCard: { backgroundColor: Colors.violetD, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.violet + "33", gap: 10 },
+  unifyToggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  unifyToggleTitle: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  unifyToggleSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  toggleSwitch: { width: 44, height: 24, borderRadius: 12, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, justifyContent: "center", paddingHorizontal: 2 },
+  toggleSwitchOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
+  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.ink3 },
+  toggleThumbOn: { backgroundColor: "#fff", alignSelf: "flex-end" },
+  unifyAccountList: { borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
+  unifyAccountRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.bg2 },
+  unifyAccountRowOn: { backgroundColor: Colors.violetD },
+  unifyAccountName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  unifyAccountSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  unifySelectedCard: { backgroundColor: Colors.bg3, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.violet + "33" },
+  unifySelectedName: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  unifySelectedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
 
   fieldWrap: { gap: 6 },
   fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase" },
