@@ -34,8 +34,10 @@
 //   - Subtítulo de 1 linha exibido quando sidebar expandida
 //   - Labels e subtítulos derivados de STUDIO_NAV via types.ts (sem strings duplicadas)
 //
-// 13/06/2026 (fix scroll): root recebe flex:1 + miolo do nav vira
-//   ScrollView — em monitores pequenos o conteúdo rolava pra fora da tela.
+// 13/06/2026 (fix scroll v1): root recebe flex:1 + miolo do nav vira
+//   ScrollView — mas flex:1 dentro de flexDirection:"row" expandia a
+//   sidebar horizontalmente. Fix v2: alignSelf:"stretch" dá altura 100%
+//   sem afetar a largura (controlada por width: railW).
 // ============================================================
 import { useMemo, useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, Platform, AccessibilityInfo } from "react-native";
@@ -113,9 +115,10 @@ export function Sidebar({
     <View
       style={[
         {
-          // flex:1 garante que a sidebar ocupa toda a altura disponível
-          // sem isso o conteúdo não tem referência de altura e nunca rola
-          flex: 1,
+          // alignSelf:"stretch" ocupa 100% da altura do container pai (row)
+          // sem expandir horizontalmente como faria flex:1 num row container.
+          // A largura é controlada exclusivamente por width:railW.
+          alignSelf: "stretch",
           width: railW,
           backgroundColor: t.paperCard,
           borderRightWidth: 1,
