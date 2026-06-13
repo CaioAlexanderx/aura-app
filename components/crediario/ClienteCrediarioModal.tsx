@@ -9,6 +9,8 @@
 //   removido em consolidação (13/06): CTA vive dentro do card B3 com preview.
 // A2-FE (12/06): triggerPreview envia paid_at (alinha preview↔aplicação no
 //   recebimento retroativo com encargos).
+// feat (13/06): TabHistorico recebe companyId/customerId/onRefresh para
+//   revelar botões Recibo (B5) e Devolver (B4) em cada evento.
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
@@ -389,6 +391,16 @@ export function ClienteCrediarioModal({
     }
   }
 
+  // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
+  function handleHistoricRefresh() {
+    qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+    qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+    qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
+    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
+    qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
+    onChanged?.();
+  }
+
   const name = detail?.customer?.name || customerName || "Cliente";
   const phone = detail?.customer?.phone || null;
   const initial = (name.trim()[0] || "?").toUpperCase();
@@ -529,6 +541,9 @@ export function ClienteCrediarioModal({
                   <TabHistorico
                     histEvents={histEvents} histCursor={histCursor} histLoading={histLoading}
                     histLoaded={histLoaded} loadHistory={loadHistory} setHistLoaded={setHistLoaded}
+                    companyId={companyId}
+                    customerId={customerId!}
+                    onRefresh={handleHistoricRefresh}
                   />
                 )}
 
