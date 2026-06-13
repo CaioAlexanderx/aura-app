@@ -2,6 +2,8 @@ import { View, Text, StyleSheet, Pressable, Platform, Linking } from "react-nati
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { Icon } from "@/components/Icon";
+import { BASE_URL } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
 import type { NfceEmission, NfceStatus } from "@/services/nfceApi";
 
 // Tipo legado mantido por componentes que ainda chamam nfeApi (a aba NFS-e vai
@@ -34,13 +36,20 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   error:       { label: "Erro",        color: Colors.red },
 };
 
+// Status terminais de FALHA — habilitam o botão "Reemitir". O backend reaproveita
+// o número reservado quando reemite (re-POST /nfce/emit com o mesmo sale_id).
+export function isFailedStatus(status: string): boolean {
+  return status === "rejeitada" || status === "erro" || status === "falha";
+}
+
 export function StatusBadge({ status }: { status: string }) {
   const st = STATUS_MAP[status] || STATUS_MAP.processando;
   return <View style={[ns.badge, { backgroundColor: st.color + "18" }]}><Text style={[ns.badgeText, { color: st.color }]}>{st.label}</Text></View>;
 }
 
 // ── EmissionRow: novo formato consumindo /nfce do backend ──────
-// onReemit é opcional — só usado quando status === 'rejeitada'.
+// onReemit é opcional — usado quando a nota está em status de falha.
+// onView abre a 2ª via (DANFE térmica) quando autorizada.
 // Mantemos o mesmo padrão visual de Ver/Cancelar (miniBtn) pra reduzir
 // peso visual e deixar claro que é uma ação no nível do card.
 export function EmissionRow({
@@ -57,6 +66,8 @@ export function EmissionRow({
   const typeLabel = emission.tipo === "nfe" ? "NF-e" : "NFC-e";
   const dateStr = emission.authorized_at || emission.created_at;
   const recipient = emission.customer_name || (emission.customer_cpf ? "CPF " + emission.customer_cpf : "Consumidor");
+  const isAuthorized = emission.status === "autorizada";
+  const viewLabel = isAuthorized ? "2ª via" : "Ver";
 
   return (
     <View style={ns.docRow}>
@@ -75,15 +86,15 @@ export function EmissionRow({
         <Text style={ns.docAmount}>{fmt(emission.total_nfce)}</Text>
         <StatusBadge status={emission.status} />
         <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <Pressable onPress={onView} style={ns.miniBtn}>
-            <Text style={ns.miniBtnText}>{emission.pdf_url ? "PDF" : "Ver"}</Text>
+          <Pressable onPress={onView} style={ns.miniBtn} accessibilityLabel={isAuthorized ? `2ª via da nota ${emission.numero}` : "Ver detalhe da nota"}>
+            <Text style={ns.miniBtnText}>{viewLabel}</Text>
           </Pressable>
-          {emission.status === "autorizada" && (
+          {isAuthorized && (
             <Pressable onPress={onCancel} style={[ns.miniBtn, { borderColor: Colors.red + "33" }]}>
               <Text style={[ns.miniBtnText, { color: Colors.red }]}>Cancelar</Text>
             </Pressable>
           )}
-          {emission.status === "rejeitada" && onReemit && (
+          {isFailedStatus(emission.status) && onReemit && (
             <Pressable
               onPress={onReemit}
               style={[ns.miniBtn, { borderColor: Colors.violet3 + "55", backgroundColor: Colors.violetD }]}
@@ -103,6 +114,41 @@ export function openDanfe(url: string | null) {
   if (!url) return;
   if (Platform.OS === "web" && typeof window !== "undefined") window.open(url, "_blank");
   else Linking.openURL(url);
+}
+
+// Helper: abre a 2ª via (DANFE térmica 80mm) de uma NFC-e autorizada.
+// A rota GET /nfce/:id/danfe-termica exige auth (Bearer) e devolve HTML — por
+// isso buscamos via fetch e escrevemos numa nova aba; window.open(url) direto
+// daria "Token não fornecido" (mesmo padrão dos /print/*). No mobile cai no
+// Linking como melhor esforço. Lança em falha pra o caller mostrar toast.
+export async function openDanfeTermica(companyId: string, nfceId: string): Promise<void> {
+  const url = `${BASE_URL}/companies/${companyId}/nfce/${nfceId}/danfe-termica`;
+  if (Platform.OS !== "web" || typeof window === "undefined" || typeof document === "undefined") {
+    try { await Linking.openURL(url); } catch (_) {}
+    return;
+  }
+  const token = useAuthStore.getState().token;
+  const win = window.open("", "_blank");
+  if (!win) throw new Error("Permita pop-ups para imprimir a 2ª via.");
+  win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Gerando 2ª via...</body></html>");
+  try {
+    const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+    if (!resp.ok) {
+      win.document.open();
+      win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Não foi possível gerar a 2ª via (" + resp.status + "). A nota precisa estar autorizada.</body></html>");
+      win.document.close();
+      throw new Error("Falha ao gerar 2ª via (" + resp.status + ")");
+    }
+    const html = await resp.text();
+    win.document.open(); win.document.write(html); win.document.close();
+  } catch (e) {
+    try {
+      win.document.open();
+      win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Erro de conexão ao gerar a 2ª via.</body></html>");
+      win.document.close();
+    } catch (_) {}
+    throw e;
+  }
 }
 
 // ── DocRow legado — usado pela aba NFS-e enquanto não migra ────
