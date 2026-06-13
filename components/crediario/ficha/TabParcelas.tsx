@@ -8,13 +8,16 @@ import {
 import { DateInput } from "@/components/inputs/DateInput";
 import {
   fmt, fmtDate, parseAmount, periodLabel,
-  PAYMENT_METHODS, productsFromNotes,
+  PAYMENT_METHODS,
 } from "./fichaHelpers";
 import { m } from "./fichaStyles";
 
 function translateStatus(status: string): string {
   if (status === "paid") return "Quitada";
   if (status === "partial") return "Parcial";
+  if (status === "overdue") return "Em atraso";
+  if (status === "pending") return "Em aberto";
+  if (status === "cancelled") return "Cancelada";
   return status;
 }
 
@@ -538,37 +541,6 @@ export function TabParcelas({
             {parseAmount(freeAmt) > 0 ? `Confirmar recebimento de ${fmt(parseAmount(freeAmt))}` : "Confirmar recebimento"}
           </Text>}
     </Pressable>
-  </View>
-
-  <View style={m.card}>
-    <Text style={m.cardTitle}>Histórico de pagamentos</Text>
-    {(detail?.transactions || []).length === 0 ? (
-      <Text style={m.emptyTxt}>Sem movimentações ainda.</Text>
-    ) : (
-      (detail?.transactions || []).map((t) => {
-        const isPay = t.type === "payment";
-        const prods = productsFromNotes(t.notes);
-        return (
-          <View key={t.id} style={m.tlItem}>
-            <View style={[m.tlDot, { backgroundColor: isPay ? Colors.green : Colors.violet3 }]} />
-            <View style={{ flex: 1 }}>
-              <View style={m.tlLine}>
-                <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                  <Text style={m.tlMain}>{isPay ? `Recebimento${t.payment_method ? " · " + t.payment_method : ""}` : "Compra no crediário"}</Text>
-                  {t.account_name && (
-                    <View style={m.tlAccTag}>
-                      <Text style={m.tlAccTagTxt}>{t.account_name}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[m.tlAmt, { color: isPay ? Colors.green : Colors.ink }]}>{isPay ? "+ " : ""}{fmt(t.amount)}</Text>
-              </View>
-              <Text style={m.tlSub}>{fmtDate(t.created_at)}{prods ? ` · ${prods}` : (t.notes && !isPay ? ` · ${t.notes}` : "")}</Text>
-            </View>
-          </View>
-        );
-      })
-    )}
   </View>
 </>
   );
