@@ -6,7 +6,6 @@ import { printReceipt, type CreditHistoryEvent } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { fmt, fmtDate } from "./fichaHelpers";
 import { m } from "./fichaStyles";
-import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
 
 export type TabHistoricoProps = {
   histEvents: CreditHistoryEvent[];
@@ -23,10 +22,9 @@ export type TabHistoricoProps = {
 
 export function TabHistorico({
   histEvents, histCursor, histLoading, histLoaded, loadHistory, setHistLoaded,
-  companyId, customerId, onRefresh,
+  companyId,
 }: TabHistoricoProps) {
   const [printingId, setPrintingId] = useState<string | null>(null);
-  const [refundSale, setRefundSale] = useState<DevolucaoSale | null>(null);
 
   async function handlePrintReceipt(transactionId: string) {
     setPrintingId(transactionId);
@@ -38,19 +36,6 @@ export function TabHistorico({
     } finally {
       setPrintingId(null);
     }
-  }
-
-  function handleOpenRefund(ev: CreditHistoryEvent) {
-    if (!ev.sale_id) return;
-    // Mapeia ev.items → DevolucaoSaleItem (campos compatíveis)
-    const items = (ev.items || []).map((it) => ({
-      id: it.product_name + "_" + it.unit_price, // fallback: sem sale_item_id na timeline
-      product_name: it.product_name,
-      quantity: it.quantity,
-      unit_price: it.unit_price,
-      total_price: it.total,
-    }));
-    setRefundSale({ id: ev.sale_id, items });
   }
 
   return (
@@ -121,9 +106,9 @@ export function TabHistorico({
                 ))}
               </View>
             )}
-            {/* ── Ações por tipo de evento ── */}
-            <View style={lc.actionRow}>
-              {ev.type === "payment" && (
+            {/* Recibo: só em eventos de pagamento (B5) */}
+            {ev.type === "payment" && (
+              <View style={lc.actionRow}>
                 <Pressable
                   style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
                   onPress={() => handlePrintReceipt(ev.id)}
@@ -135,18 +120,8 @@ export function TabHistorico({
                     : <Icon name="printer" size={11} color={Colors.violet3} />}
                   <Text style={lc.actionBtnTxt}>Recibo</Text>
                 </Pressable>
-              )}
-              {ev.type === "purchase" && !!ev.sale_id && (
-                <Pressable
-                  style={lc.actionBtn}
-                  onPress={() => handleOpenRefund(ev)}
-                  hitSlop={6}
-                >
-                  <Icon name="repeat" size={11} color={Colors.amber} />
-                  <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
-                </Pressable>
-              )}
-            </View>
+              </View>
+            )}
           </View>
         </View>
       );
@@ -166,22 +141,6 @@ export function TabHistorico({
       </View>
     )}
   </View>
-
-  {/* ── Modal de devolução ── */}
-  {!!refundSale && (
-    <DevolucaoModal
-      visible={!!refundSale}
-      companyId={companyId}
-      sale={refundSale}
-      onClose={() => setRefundSale(null)}
-      onDone={() => {
-        setRefundSale(null);
-        onRefresh();
-        setHistLoaded(false);
-        loadHistory();
-      }}
-    />
-  )}
 </View>
   );
 }
