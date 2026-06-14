@@ -9,6 +9,9 @@
 // Track C: adicionado item Eventos à navegação.
 // Track E: adicionado item Competições à navegação.
 // Fase 5: adicionado item Conexões (lado federação; só na sidebar).
+// Track G (acesso real): NAV_ITEMS filtrado por papel karatê
+//   (Financeiro=admin; Conexões/Importar=admin+staff; resto=todos).
+//   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
 // ============================================================
 import React from "react";
 import {
@@ -27,23 +30,36 @@ import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
+// roles=null → visível para todos os papéis da federação.
+// roles=[...] → visível só para os papéis listados.
 const NAV_ITEMS = [
-  { label: "Dashboard",  icon: "grid-outline",        route: "/karate/" },
-  { label: "Dojôs",      icon: "home-outline",         route: "/karate/dojos" },
-  { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes" },
-  { label: "Conexões",   icon: "link-outline",         route: "/karate/conexoes" },
-  { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro" },
-  { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos" },
-  { label: "Competições",icon: "trophy-outline",       route: "/karate/competicoes" },
-  { label: "Importar",   icon: "cloud-upload-outline", route: "/karate/importacao" },
+  { label: "Dashboard",  icon: "grid-outline",        route: "/karate/",            roles: null },
+  { label: "Dojôs",      icon: "home-outline",         route: "/karate/dojos",       roles: null },
+  { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes", roles: null },
+  { label: "Conexões",   icon: "link-outline",         route: "/karate/conexoes",    roles: ["federation_admin", "federation_staff"] },
+  { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro",  roles: ["federation_admin"] },
+  { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos",     roles: null },
+  { label: "Competições",icon: "trophy-outline",       route: "/karate/competicoes", roles: null },
+  { label: "Importar",   icon: "cloud-upload-outline", route: "/karate/importacao",  roles: ["federation_admin", "federation_staff"] },
 ] as const;
+
+type NavItem = (typeof NAV_ITEMS)[number];
+
+// Filtra a navegação pelo papel karatê. role null/desconhecido (mock/dev)
+// = mostra tudo, preservando o comportamento anterior ao Track G.
+function visibleNav(role: string | null): readonly NavItem[] {
+  return NAV_ITEMS.filter(
+    (i) => !i.roles || role == null || (i.roles as readonly string[]).includes(role)
+  );
+}
 
 const BREAKPOINT_SIDEBAR = 768;
 
 function SidebarNav() {
   const router = useRouter();
   const path   = usePathname();
-  const { federationName } = useKarateFederation();
+  const { federationName, karateRole } = useKarateFederation();
+  const items = visibleNav(karateRole);
 
   return (
     <View style={styles.sidebar}>
@@ -59,7 +75,7 @@ function SidebarNav() {
       </View>
 
       {/* Navigation */}
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const active = path.startsWith(item.route.replace("/karate", "/karate"));
         return (
           <TouchableOpacity
@@ -88,10 +104,13 @@ function SidebarNav() {
 function BottomTabNav() {
   const router = useRouter();
   const path   = usePathname();
+  const { karateRole } = useKarateFederation();
 
   // No mobile, escondemos Importar e Conexões (tarefas web da federação)
-  // para manter a barra inferior enxuta.
-  const MOBILE_TABS = NAV_ITEMS.filter((i) => i.label !== "Importar" && i.label !== "Conexões");
+  // para manter a barra inferior enxuta — além do filtro por papel.
+  const MOBILE_TABS = visibleNav(karateRole).filter(
+    (i) => i.label !== "Importar" && i.label !== "Conexões"
+  );
 
   return (
     <View style={styles.bottomBar}>

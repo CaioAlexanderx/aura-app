@@ -7,6 +7,8 @@ import { useAuthStore } from "@/stores/auth";
 import { KarateColors } from "@/constants/karateTheme";
 
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
+// Papéis de dojô: usam o shell light /karate/sensei (somente leitura).
+const DOJO_ROLES = ["sensei", "dojo_owner"];
 
 export default function KarateLayout() {
   const { isHydrated, company } = useAuthStore();
@@ -26,7 +28,14 @@ export default function KarateLayout() {
     return <Redirect href="/(tabs)" />;   // empresa não-karatê → home do Aura Negócio
   }
 
-  // 3) Empresa karatê: provê o contexto e renderiza o shell (que tem o <Slot/>)
+  // 2b) Track G: papéis de dojô (sensei/dono) vão pro shell light do sensei,
+  // não pro shell administrativo da federação.
+  const karateRole = (company as any)?.karate_role;
+  if (DOJO_ROLES.includes(karateRole as string)) {
+    return <Redirect href="/karate/sensei" />;
+  }
+
+  // 3) Empresa karatê (federação): provê o contexto e renderiza o shell (com <Slot/>)
   return (
     <KarateFederationProvider>
       <KarateShell />

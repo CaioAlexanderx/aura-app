@@ -3,17 +3,24 @@
 // Shell "light" separado do shell da federação: só leitura, linguagem
 // simples. Rota /karate/sensei (segmento próprio, fora do grupo
 // (federation), então não passa pelo shell/sidebar da FPKT).
+//
+// Track G (acesso real): gate por vertical karatê (espera hidratar). O
+// roteamento por papel (sensei/dojo_owner → aqui) é feito no layout da
+// federação. SENSEI_DOJO segue mock até os dados reais do dojô chegarem.
 // ============================================================
 import React from "react";
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  SafeAreaView, ViewStyle, TextStyle,
+  SafeAreaView, ActivityIndicator, ViewStyle, TextStyle,
 } from "react-native";
-import { Slot, usePathname, useRouter } from "expo-router";
+import { Slot, usePathname, useRouter, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "@/stores/auth";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
-// Dojô do sensei logado (mock até o login de sensei existir)
+const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
+
+// Dojô do sensei logado (mock até os dados reais do dojô existirem)
 export const SENSEI_DOJO = { name: "Dojô Mirim Santos", code: "FPKT-027", sensei: "Fernanda Lima", total: 63 };
 
 const TABS = [
@@ -25,6 +32,21 @@ const TABS = [
 export default function SenseiLayout() {
   const router = useRouter();
   const path = usePathname();
+  const { isHydrated, company } = useAuthStore();
+
+  // Track G: espera hidratar e exige vertical karatê.
+  if (!isHydrated) {
+    return (
+      <SafeAreaView style={[styles.root, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color={KarateColors.primary} />
+      </SafeAreaView>
+    );
+  }
+  const vertical = (company as any)?.vertical ?? (company as any)?.vertical_active;
+  if (!KARATE_VERTICALS.includes(vertical as string)) {
+    return <Redirect href="/(tabs)" />;
+  }
+
   const isActive = (route: string) =>
     route === "/karate/sensei" ? (path === "/karate/sensei" || path === "/karate/sensei/") : path.startsWith(route);
 

@@ -1,6 +1,6 @@
 import { request } from "./api";
 
-export type VerticalKey = "odonto" | "barber" | "food" | "studio" | "estetica" | "pet" | "academia";
+export type VerticalKey = "odonto" | "barber" | "food" | "studio" | "estetica" | "pet" | "academia" | "karate_federation" | "karate_dojo";
 
 export type LoginResponse = {
   token: string;
@@ -17,6 +17,10 @@ export type LoginResponse = {
     member_role?: string;
     billing_status?: string | null;
     access_code_used?: boolean;
+    // Track G (acesso real): federação resolvida + papel karatê. federation_id =
+    // company.id (federação) ou federation_id do pai (dojô); null fora de karatê.
+    federation_id?: string | null;
+    karate_role?: string | null;
   } | null;
   code_applied?: { type: string; plan: string; discount_pct: number; trial_days: number } | null;
 };
