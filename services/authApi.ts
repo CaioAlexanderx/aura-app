@@ -29,6 +29,7 @@ export type RegisterBody = {
   phone?: string;
   cnpj?: string;
   access_code?: string;
+  self_serve?: boolean;
   terms_accepted?: boolean;
   terms_version?: string;
 };

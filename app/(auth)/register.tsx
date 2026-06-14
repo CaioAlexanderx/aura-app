@@ -304,10 +304,11 @@ export default function RegisterScreen() {
     if (!contatoValid) { toast.error("Informe seu telefone para contato."); return; }
     if (!empresa) { toast.error("Preencha o nome da empresa"); return; }
     try {
-      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefoneContato.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, ""), access_code: codigo.trim() || undefined, terms_accepted: true, terms_version: TERMS_VERSION });
+      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefoneContato.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, ""), access_code: codigo.trim() || undefined, self_serve: true, terms_accepted: true, terms_version: TERMS_VERSION });
       toast.success("Conta criada com sucesso!");
-      const hasTrialCode = codigo.trim() && codeValid === true;
-      setTimeout(() => router.replace(hasTrialCode ? "/(tabs)/onboarding" : "/(tabs)/checkout"), 300);
+      // Self-service: todo cadastro nasce com trial (7d Negocio sem codigo, ou o plano do codigo).
+      // Pagamento fica pra depois do trial -> sempre vai pro onboarding.
+      setTimeout(() => router.replace("/(tabs)/onboarding"), 300);
     } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
   }
 
@@ -410,7 +411,7 @@ export default function RegisterScreen() {
               <Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} />
               <TextInput style={[s.input, inputOutline]} {...webInputProps} value={codigo} onChangeText={(v) => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} />
             </View>
-            <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo? Insira para ativar seu plano. Sem codigo? Voce escolhe o plano na proxima etapa.</Text>
+            <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo (parceiro ou indicacao)? Insira para ativar seu plano. Sem codigo, voce comeca com 7 dias gratis no plano Negocio.</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable style={s.backBtn} onPress={() => setStep(0)}><Text style={s.backBtnText}>Voltar</Text></Pressable>
