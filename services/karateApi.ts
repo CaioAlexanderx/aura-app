@@ -1,5 +1,5 @@
 // ============================================================
-// KARATE API — Aura Karatê
+// KARATE API — Aura Karâtê
 //
 // Wired against karate-fase0-openapi.yaml (Fase 0),
 // karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial),
@@ -8,9 +8,9 @@
 // ============================================================
 import { request } from "@/services/api";
 
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 // Fase 0 types
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended";
 export type AffiliationModel = "annual" | "biannual" | "quarterly";
 export type AffiliationStatus = "active" | "pending" | "inactive";
@@ -117,6 +117,27 @@ export interface PractitionerDetail extends Practitioner {
   belt_history: BeltHistoryEntry[];
 }
 
+// ── Track N — Transferência de praticante entre dojôs ──────────
+export interface TransferInput {
+  destination_dojo_id: string;
+  transferred_at?: string;   // 'YYYY-MM-DD' (retroativa opcional; default hoje)
+  reason?: string;
+}
+
+export interface TransferRecord {
+  id: string;
+  practitioner_id: string;
+  origin_dojo_id: string | null;
+  destination_dojo_id: string;
+  origin_dojo_name: string | null;
+  destination_dojo_name: string | null;
+  reason: string | null;
+  transferred_at: string;
+  initiated_by?: string | null;
+  initiated_by_name?: string | null;
+  created_at: string;
+}
+
 export interface BeltDistributionItem {
   belt_level: string;
   belt_name: string;
@@ -166,9 +187,9 @@ export interface ImportResult {
   errors: Array<{ row: number; field: string; message: string }>;
 }
 
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 // Fase 1 — Financial types (karate-fase1-openapi.yaml v0.2.0)
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 
 export type AnnuityStatus = "paid" | "due" | "overdue" | "defaulting" | "suspended";
 export type SizeTier = "up_to_40" | "41_90" | "91_150" | "over_150";
@@ -331,9 +352,9 @@ export interface FinancialOverview {
   projected_receivables: ProjectedReceivable[];
 }
 
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 // Fase 2 — Exames + Graduações types (karate-fase2-openapi.yaml v0.2.0)
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 
 export type ExamStatus = "draft" | "open" | "closed" | "cancelled";
 export type CandidateResult = "pending" | "approved" | "rejected";
@@ -480,9 +501,9 @@ export interface Certificate {
   pdf_url: string | null;
 }
 
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 // API calls — Fase 0
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -539,6 +560,24 @@ export const karateApi = {
   createPractitioner: (federationId: string, body: PractitionerInput): Promise<Practitioner> =>
     request(`/federation/${federationId}/practitioners`, { method: "POST", body }),
 
+  // ── Track N — Transferência de praticante entre dojôs ──────────
+  /** GET /federation/{id}/practitioners/{practitionerId}/transfers
+   *  Histórico imutável de transferências. */
+  listTransfers: (
+    federationId: string,
+    practitionerId: string
+  ): Promise<Paginated<TransferRecord> | { data: TransferRecord[] }> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/transfers`),
+
+  /** POST /federation/{id}/practitioners/{practitionerId}/transfer
+   *  Transfere o praticante para outro dojô. 409 se já estiver no destino. */
+  transferPractitioner: (
+    federationId: string,
+    practitionerId: string,
+    body: TransferInput
+  ): Promise<TransferRecord> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/transfer`, { method: "POST", body }),
+
   // Importação CSV
   importCSV: (
     federationId: string,
@@ -558,9 +597,9 @@ export const karateApi = {
     }).then((r) => r.json());
   },
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 1 — Financial endpoints
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   getFinancialOverview: (
     federationId: string,
@@ -700,9 +739,9 @@ export const karateApi = {
       body: body ?? {},
     }),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Belt Exams (karate-fase2-openapi.yaml v0.2.0)
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** GET /federation/{id}/belt-exams */
   listBeltExams: (
@@ -729,9 +768,9 @@ export const karateApi = {
   updateBeltExam: (federationId: string, examId: string, body: Partial<BeltExamInput>): Promise<BeltExam> =>
     request(`/federation/${federationId}/belt-exams/${examId}`, { method: "PATCH", body }),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Examiners (banca)
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** GET /federation/{id}/belt-exams/{examId}/examiners */
   listExaminers: (federationId: string, examId: string): Promise<Examiner[]> =>
@@ -741,11 +780,11 @@ export const karateApi = {
   addExaminer: (federationId: string, examId: string, body: ExaminerInput): Promise<Examiner> =>
     request(`/federation/${federationId}/belt-exams/${examId}/examiners`, { method: "POST", body }),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Candidates
   // DECISÃO FPKT #1: POST always returns 201 with eligibility.warnings;
   // never returns 422 for eligibility — inscription is never blocked.
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** POST /federation/{id}/belt-exams/{examId}/candidates
    *  Always 201 — eligibility is advisory only (never blocks). */
@@ -774,9 +813,9 @@ export const karateApi = {
   closeBeltExam: (federationId: string, examId: string): Promise<{ closed: true; approved_count: number }> =>
     request(`/federation/${federationId}/belt-exams/${examId}/close`, { method: "POST", body: {} }),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Eligibility (DECISÃO FPKT #1: informativo, nunca bloqueia)
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** GET /federation/{id}/practitioners/{practitionerId}/eligibility/{targetBelt} */
   checkEligibility: (
@@ -786,10 +825,10 @@ export const karateApi = {
   ): Promise<EligibilityResult> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/eligibility/${targetBelt}`),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Belt Requirements
   // DECISÃO FPKT #2: confirmed=false → provisório; UI shows banner.
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** GET /federation/{id}/belt-requirements */
   listBeltRequirements: (federationId: string): Promise<BeltRequirement[]> =>
@@ -802,9 +841,9 @@ export const karateApi = {
   ): Promise<BeltRequirement[]> =>
     request(`/federation/${federationId}/belt-requirements`, { method: "PUT", body }),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Courses / Events
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** GET /federation/{id}/courses */
   listCourses: (
@@ -830,11 +869,11 @@ export const karateApi = {
   ): Promise<{ enrolled: true }> =>
     request(`/federation/${federationId}/courses/${eventId}/enroll`, { method: "POST", body }),
 
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Fase 2 — Certificates
   // DECISÃO FPKT #3: emissão sob demanda; /issue é chamado pelo admin.
   // Fechar exame NÃO gera certificados automaticamente.
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────
 
   /** POST /federation/{id}/certificates/{candidateId}/issue
    *  Solicita emissão do certificado (sob demanda). */
