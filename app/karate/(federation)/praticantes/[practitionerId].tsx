@@ -1,14 +1,16 @@
 // ============================================================
-// Ficha do Praticante — Aura Karatê
+// Ficha do Praticante — Aura Karâtê
 //
-// Tabs: Cadastro | Trajetória | Certif./Exames | Carteirinha | Documentos
+// Tabs: Cadastro | Trajetória | Certif./Exames | Carteirinha | Transferência | Documentos
 // Wired: GET /federation/{id}/practitioners/{practitionerId}
 // Track C (Fase 2): aba "Certif./Exames" mostra a nova faixa após aprovacão
 //   e o status/URL do certificado com botão "Solicitar emissão".
 // Track D (Fase 3): aba "Carteirinha" emite/renova + renderiza o cartão.
+// Track N: aba "Transferência" mostra o histórico imutável + botão transferir
+//   (gated por papel: federation_admin / federation_staff).
 // DECISÃO FPKT #3: certificado sob demanda via karateApi.issueCertificate.
 // ============================================================
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   StyleSheet, ViewStyle, TextStyle, ActivityIndicator,
@@ -22,7 +24,8 @@ import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { CarteirinhaPanel } from "@/components/karate/CarteirinhaPanel";
-import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate } from "@/services/karateApi";
+import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
+import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate, TransferRecord } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
 // [MOCK]
@@ -54,7 +57,24 @@ const MOCK_CERTIFICATES: Array<Certificate & { exam_title?: string }> = [
   },
 ];
 
-const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Documentos"] as const;
+// [MOCK] histórico de transferências (Track N)
+const MOCK_TRANSFERS: TransferRecord[] = [
+  {
+    id: "tr1", practitioner_id: "p1",
+    origin_dojo_id: "d0", destination_dojo_id: "d1",
+    origin_dojo_name: "Dojô Iniciantes Zona Sul", destination_dojo_name: "Dojô Shotokan Centro",
+    reason: "Mudança de bairro", transferred_at: "2024-02-01",
+    initiated_by_name: "Secretaria FPKT", created_at: "2024-02-01T12:00:00Z",
+  },
+];
+
+// Papéis que podem transferir (federação admin/staff). karateRole null = mock/dev (libera).
+const TRANSFER_ROLES = ["federation_admin", "federation_staff"];
+function canTransfer(role: string | null): boolean {
+  return role == null || TRANSFER_ROLES.includes(role);
+}
+
+const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
 type Tab = typeof TABS[number];
 
 function CadastroTab({ p }: { p: PractitionerDetail }) {
@@ -120,6 +140,94 @@ function TrajetoriaTab({ history, currentBelt }: { history: BeltHistoryEntry[]; 
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+// Track N: aba de transferências — histórico imutável + ação de transferir
+function TransferenciaTab({
+  federationId,
+  practitioner,
+  karateRole,
+  onTransferred,
+}: {
+  federationId: string;
+  practitioner: PractitionerDetail;
+  karateRole: string | null;
+  onTransferred: () => void;
+}) {
+  const [transfers, setTransfers] = useState<TransferRecord[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    karateApi.listTransfers(federationId, practitioner.id)
+      .then((res: any) => setTransfers(Array.isArray(res?.data) ? res.data : (res?.data ?? [])))
+      .catch(() => setTransfers(MOCK_TRANSFERS))
+      .finally(() => setLoading(false));
+  }, [federationId, practitioner.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDone = () => { load(); onTransferred(); };
+
+  const allowed = canTransfer(karateRole);
+
+  return (
+    <View style={tabStyles.tab}>
+      {allowed && (
+        <KarateButton
+          label="Transferir para outro dojô"
+          variant="primary"
+          size="md"
+          onPress={() => setModalOpen(true)}
+        />
+      )}
+
+      {loading ? (
+        <ActivityIndicator style={{ marginVertical: 20 }} color={KarateColors.primary} />
+      ) : !transfers || transfers.length === 0 ? (
+        <EmptyState
+          icon="swap-horizontal-outline"
+          title="Sem transferências"
+          subtitle="Este praticante nunca foi transferido de dojô."
+          style={{ paddingVertical: 32 }}
+        />
+      ) : (
+        <View style={{ gap: 10, marginTop: 4 }}>
+          <Text style={tabStyles.transferHint}>
+            Histórico permanente de transferências (registro imutável).
+          </Text>
+          {transfers.map((t) => (
+            <View key={t.id} style={tabStyles.transferCard}>
+              <View style={tabStyles.transferRow}>
+                <Text style={tabStyles.transferDojo} numberOfLines={1}>{t.origin_dojo_name || "Sem dojô"}</Text>
+                <Ionicons name="arrow-forward" size={15} color={KarateColors.primary} />
+                <Text style={[tabStyles.transferDojo, { color: KarateColors.primary }]} numberOfLines={1}>
+                  {t.destination_dojo_name || "—"}
+                </Text>
+              </View>
+              <Text style={tabStyles.transferMeta}>
+                {new Date(t.transferred_at).toLocaleDateString("pt-BR")}
+                {t.initiated_by_name ? ` · por ${t.initiated_by_name}` : ""}
+              </Text>
+              {t.reason ? <Text style={tabStyles.transferReason}>{t.reason}</Text> : null}
+            </View>
+          ))}
+        </View>
+      )}
+
+      <TransferirPraticanteModal
+        visible={modalOpen}
+        onClose={() => setModalOpen(false)}
+        federationId={federationId}
+        practitionerId={practitioner.id}
+        practitionerName={practitioner.full_name}
+        originDojoId={practitioner.dojo_id ?? null}
+        originDojoName={transfers && transfers[0]?.destination_dojo_name ? transfers[0].destination_dojo_name : null}
+        onDone={handleDone}
+      />
     </View>
   );
 }
@@ -218,18 +326,20 @@ function PlaceholderTab({ label }: { label: string }) {
 
 export default function FichaPraticanteScreen() {
   const { practitionerId } = useLocalSearchParams<{ practitionerId: string }>();
-  const { federationId } = useKarateFederation();
+  const { federationId, karateRole } = useKarateFederation();
   const [data, setData] = useState<PractitionerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("Cadastro");
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!practitionerId) return;
     karateApi.getPractitioner(federationId, practitionerId)
       .then(setData)
       .catch(() => setData(MOCK_PRACTITIONER))
       .finally(() => setLoading(false));
   }, [federationId, practitionerId]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   if (loading) {
     return (
@@ -285,6 +395,7 @@ export default function FichaPraticanteScreen() {
         {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} />}
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
+        {activeTab === "Transferência"  && <TransferenciaTab federationId={federationId} practitioner={data} karateRole={karateRole} onTransferred={reload} />}
         {activeTab === "Documentos"     && <PlaceholderTab label="Documentos" />}
       </ScrollView>
     </View>
@@ -328,6 +439,13 @@ const tabStyles = StyleSheet.create({
   beltEntry:        { flexDirection: "row", gap: 12, alignItems: "flex-start", paddingVertical: 8 } as ViewStyle,
   beltLine:         { width: 3, borderRadius: 2, backgroundColor: KarateColors.border, alignSelf: "stretch", minHeight: 40 } as ViewStyle,
   beltDate:         { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  // Track N: transferências
+  transferHint:     { fontSize: 12, color: KarateColors.ink3, marginBottom: 2 } as TextStyle,
+  transferCard:     { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 6 } as ViewStyle,
+  transferRow:      { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  transferDojo:     { flex: 1, fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  transferMeta:     { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
+  transferReason:   { fontSize: 12, color: KarateColors.ink2, fontStyle: "italic" } as TextStyle,
   // Certificados (Track C)
   certHint:         { fontSize: 12, color: KarateColors.ink3, marginBottom: 4 } as TextStyle,
   certCard:         { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
