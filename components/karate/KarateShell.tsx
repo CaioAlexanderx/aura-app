@@ -14,6 +14,7 @@
 //   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
 // Track H: adicionado item Configurações (só federation_admin, só sidebar).
 // Track J: adicionado item Exames (todos os papéis, visível no mobile).
+// Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
 // ============================================================
 import React from "react";
 import {
@@ -36,18 +37,19 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 // roles=[...] → visível só para os papéis listados.
 // sidebarOnly=true → não aparece na bottom tab bar mobile.
 const NAV_ITEMS = [
-  { label: "Dashboard",     icon: "grid-outline",         route: "/karate/",              roles: null,          sidebarOnly: false },
-  { label: "Dojôs",         icon: "home-outline",          route: "/karate/dojos",         roles: null,          sidebarOnly: false },
-  { label: "Praticantes",   icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
-  { label: "Conexões",      icon: "link-outline",          route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Financeiro",    icon: "card-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
+  { label: "Dashboard",       icon: "grid-outline",          route: "/karate/",              roles: null,          sidebarOnly: false },
+  { label: "Saúde da Rede",   icon: "pulse-outline",         route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Dojôs",           icon: "home-outline",          route: "/karate/dojos",         roles: null,          sidebarOnly: false },
+  { label: "Praticantes",     icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
+  { label: "Conexões",        icon: "link-outline",          route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Financeiro",      icon: "card-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
   // Track J: Exames — visível para todos, aparece no mobile e na sidebar
-  { label: "Exames",        icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
-  { label: "Eventos",       icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
-  { label: "Competições",  icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
-  { label: "Importar",      icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Exames",          icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
+  { label: "Eventos",         icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
+  { label: "Competições",    icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
+  { label: "Importar",        icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   // Track H: Configurações — só federation_admin, posicionado no rodapé da sidebar
-  { label: "Configurações", icon: "settings-outline",      route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
+  { label: "Configurações",   icon: "settings-outline",      route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
 ] as const;
 
 type NavItem = (typeof NAV_ITEMS)[number];
@@ -128,8 +130,8 @@ function BottomTabNav() {
   const path   = usePathname();
   const { karateRole } = useKarateFederation();
 
-  // No mobile, excluímos Importar, Conexões e Configurações (tarefas web da federação)
-  // para manter a barra inferior enxuta — além do filtro por papel.
+  // No mobile, excluímos Importar, Conexões, Saúde da Rede e Configurações
+  // (tarefas web da federação) para manter a barra inferior enxuta.
   const MOBILE_TABS = visibleNav(karateRole).filter((i) => !i.sidebarOnly);
 
   return (
