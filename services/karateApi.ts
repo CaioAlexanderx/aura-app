@@ -5,7 +5,8 @@
 // karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial),
 // karate-fase2-openapi.yaml v0.2.0 (Fase 2 – Track C eventos/exames),
 // Track P (alerts, search, notifications),
-// Track H (configurações da federação: equipe, recursos, identidade, régua).
+// Track H (configurações da federação: equipe, recursos, identidade, régua),
+// Track J (certificado como fluxo de pedido: estados, lote, entrega, e-mail).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
 import { request } from "@/services/api";
@@ -627,7 +628,84 @@ export interface ReminderLogItem {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// API calls — Fase 0 + 1 + 2 + Track H
+// Track J — Certificado como fluxo de pedido
+// ─────────────────────────────────────────────────────────────────
+
+/** Estados do pedido de certificado físico */
+export type CertOrderStatus =
+  | "pending"       // aguardando pagamento / confirmação
+  | "paid"          // pago, aguardando produção
+  | "producing"     // em produção / impressão
+  | "dispatched"    // despachado para entrega
+  | "delivered"     // entregue ao destinatário
+  | "refused"       // recusado / devolvido
+  | "cancelled";    // cancelado
+
+/** Modalidade de entrega */
+export type DeliveryType = "pickup" | "mail" | "dojo_batch";
+
+/** Entrada no histórico de estado do pedido */
+export interface CertOrderHistoryEntry {
+  id: string;
+  order_id: string;
+  status: CertOrderStatus;
+  note: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+/** Pedido de certificado físico — karate_cert_orders */
+export interface CertOrder {
+  id: string;
+  federation_id: string;
+  candidate_id: string;
+  practitioner_id: string;
+  full_name: string;
+  belt_level: string;
+  belt_name: string;
+  exam_date: string;
+  delivery_type: DeliveryType;
+  delivery_address: string | null;
+  dojo_id: string | null;
+  dojo_name: string | null;
+  status: CertOrderStatus;
+  paid_at: string | null;
+  dispatched_at: string | null;
+  delivered_at: string | null;
+  tracking_code: string | null;
+  notes: string | null;
+  history: CertOrderHistoryEntry[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Payload para criar pedido de certificado */
+export interface CreateCertOrderInput {
+  candidate_id: string;
+  delivery_type: DeliveryType;
+  delivery_address?: string | null;
+  dojo_id?: string | null;
+  notes?: string | null;
+}
+
+/** Payload para avançar status de lote */
+export interface BatchStatusInput {
+  order_ids: string[];
+  status: CertOrderStatus;
+  note?: string | null;
+  tracking_code?: string | null;
+}
+
+/** Resultado da operação em lote */
+export interface BatchStatusResult {
+  updated: number;
+  skipped: number;
+  errors: Array<{ order_id: string; reason: string }>;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// API calls — Fase 0 + 1 + 2 + Track H + Track J
 // ─────────────────────────────────────────────────────────────────
 export const karateApi = {
   // Dashboard
@@ -1047,6 +1125,67 @@ export const karateApi = {
     body: Partial<FederationIdentity & { secretary_email?: string }>
   ): Promise<{ updated: boolean }> =>
     request(`/federation/${federationId}/settings/identity`, { method: "PUT", body }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Track J — Pedidos de certificado físico
+  // ─────────────────────────────────────────────────────────────────
+
+  /** Cria pedido de certificado físico para um candidato aprovado. */
+  createCertOrder: (
+    federationId: string,
+    body: CreateCertOrderInput
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/cert-orders`, { method: "POST", body }),
+
+  /** Lista pedidos de certificado do praticante logado (portal praticante). */
+  listMyCertOrders: (federationId: string): Promise<{ orders: CertOrder[] }> =>
+    request(`/federation/${federationId}/cert-orders/mine`),
+
+  /** Lista todos os pedidos de certificado da federação (visão admin). */
+  listCertOrders: (
+    federationId: string,
+    params?: { status?: CertOrderStatus; page?: number; pageSize?: number }
+  ): Promise<Paginated<CertOrder>> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/cert-orders${query}`);
+  },
+
+  /** Detalhe de um pedido de certificado. */
+  getCertOrder: (federationId: string, orderId: string): Promise<CertOrder> =>
+    request(`/federation/${federationId}/cert-orders/${orderId}`),
+
+  /** Avança o estado de um pedido individual. */
+  advanceCertOrderStatus: (
+    federationId: string,
+    orderId: string,
+    body: { status: CertOrderStatus; note?: string | null; tracking_code?: string | null }
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/cert-orders/${orderId}/status`, {
+      method: "PATCH",
+      body,
+    }),
+
+  /** Avança o estado de múltiplos pedidos em lote. */
+  batchCertOrderStatus: (
+    federationId: string,
+    body: BatchStatusInput
+  ): Promise<BatchStatusResult> =>
+    request(`/federation/${federationId}/cert-orders/batch-status`, { method: "POST", body }),
+
+  /** Recusa / cancela um pedido de certificado. */
+  refuseCertOrder: (
+    federationId: string,
+    orderId: string,
+    body?: { note?: string | null }
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/cert-orders/${orderId}/refuse`, {
+      method: "POST",
+      body: body ?? {},
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────
