@@ -12,6 +12,7 @@
 // Track G (acesso real): NAV_ITEMS filtrado por papel karatê
 //   (Financeiro=admin; Conexões/Importar=admin+staff; resto=todos).
 //   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
+// Track H: adicionado item Configurações (só federation_admin, só sidebar).
 // Track J: adicionado item Exames (bancas + certificados) à navegação.
 // ============================================================
 import React from "react";
@@ -33,16 +34,19 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
+// sidebarOnly=true → não aparece na bottom tab bar mobile.
 const NAV_ITEMS = [
-  { label: "Dashboard",  icon: "grid-outline",        route: "/karate/",            roles: null },
-  { label: "Dojôs",      icon: "home-outline",         route: "/karate/dojos",       roles: null },
-  { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes", roles: null },
-  { label: "Conexões",   icon: "link-outline",         route: "/karate/conexoes",    roles: ["federation_admin", "federation_staff"] },
-  { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro",  roles: ["federation_admin"] },
-  { label: "Exames",     icon: "ribbon-outline",       route: "/karate/exames",      roles: null },
-  { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos",     roles: null },
-  { label: "Competições",icon: "trophy-outline",       route: "/karate/competicoes", roles: null },
-  { label: "Importar",   icon: "cloud-upload-outline", route: "/karate/importacao",  roles: ["federation_admin", "federation_staff"] },
+  { label: "Dashboard",     icon: "grid-outline",         route: "/karate/",              roles: null,          sidebarOnly: false },
+  { label: "Dojôs",         icon: "home-outline",          route: "/karate/dojos",         roles: null,          sidebarOnly: false },
+  { label: "Praticantes",   icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
+  { label: "Conexões",      icon: "link-outline",          route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Financeiro",    icon: "card-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
+  { label: "Exames",        icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
+  { label: "Eventos",       icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
+  { label: "Competições",  icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
+  { label: "Importar",      icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  // Track H: Configurações — só federation_admin, posicionado no rodapé da sidebar
+  { label: "Configurações", icon: "settings-outline",      route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
 ] as const;
 
 type NavItem = (typeof NAV_ITEMS)[number];
@@ -63,6 +67,33 @@ function SidebarNav() {
   const { federationName, karateRole } = useKarateFederation();
   const items = visibleNav(karateRole);
 
+  // Separa os itens "normais" dos items de rodapé (Configurações)
+  const mainItems   = items.filter((i) => i.label !== "Configurações");
+  const footerItems = items.filter((i) => i.label === "Configurações");
+
+  const renderItem = (item: NavItem) => {
+    const active = path.startsWith(item.route.replace("/karate", "/karate"));
+    return (
+      <TouchableOpacity
+        key={item.route}
+        style={[styles.sidebarItem, active && styles.sidebarItemActive]}
+        onPress={() => router.push(item.route as any)}
+        accessibilityRole="link"
+        accessibilityLabel={item.label}
+        accessibilityState={{ selected: active }}
+      >
+        <Ionicons
+          name={item.icon as any}
+          size={18}
+          color={active ? KarateColors.primary : KarateColors.ink3}
+        />
+        <Text style={[styles.sidebarItemLabel, active && styles.sidebarItemLabelActive]}>
+          {item.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.sidebar}>
       {/* Logo / Brand */}
@@ -76,29 +107,17 @@ function SidebarNav() {
         </View>
       </View>
 
-      {/* Navigation */}
-      {items.map((item) => {
-        const active = path.startsWith(item.route.replace("/karate", "/karate"));
-        return (
-          <TouchableOpacity
-            key={item.route}
-            style={[styles.sidebarItem, active && styles.sidebarItemActive]}
-            onPress={() => router.push(item.route as any)}
-            accessibilityRole="link"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: active }}
-          >
-            <Ionicons
-              name={item.icon as any}
-              size={18}
-              color={active ? KarateColors.primary : KarateColors.ink3}
-            />
-            <Text style={[styles.sidebarItemLabel, active && styles.sidebarItemLabelActive]}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+      {/* Navigation principal */}
+      <View style={{ flex: 1 }}>
+        {mainItems.map(renderItem)}
+      </View>
+
+      {/* Rodapé: Configurações */}
+      {footerItems.length > 0 && (
+        <View style={styles.sidebarFooter}>
+          {footerItems.map(renderItem)}
+        </View>
+      )}
     </View>
   );
 }
@@ -108,11 +127,9 @@ function BottomTabNav() {
   const path   = usePathname();
   const { karateRole } = useKarateFederation();
 
-  // No mobile, escondemos Importar e Conexões (tarefas web da federação)
+  // No mobile, excluímos Importar, Conexões e Configurações (tarefas web da federação)
   // para manter a barra inferior enxuta — além do filtro por papel.
-  const MOBILE_TABS = visibleNav(karateRole).filter(
-    (i) => i.label !== "Importar" && i.label !== "Conexões"
-  );
+  const MOBILE_TABS = visibleNav(karateRole).filter((i) => !i.sidebarOnly);
 
   return (
     <View style={styles.bottomBar}>
@@ -194,7 +211,7 @@ const styles = StyleSheet.create({
     borderRightColor: KarateColors.border,
     paddingVertical: 16,
     paddingHorizontal: 12,
-    gap: 4,
+    flexDirection: "column",
   } as ViewStyle,
   sidebarHeader: {
     flexDirection: "row",
@@ -204,6 +221,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: KarateColors.border,
     marginBottom: 8,
+  } as ViewStyle,
+  sidebarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: KarateColors.border,
+    paddingTop: 8,
+    marginTop: 8,
   } as ViewStyle,
   logoMark: {
     width: 36, height: 36,
