@@ -23,6 +23,14 @@ import type { Customer } from "@/components/screens/clientes/types";
 // (1k/5k/ilimitado) controlado em customers.js. 403 do POST/PATCH agora
 // significa LIMITE ATINGIDO (com body.limit, body.current), nao bloqueio
 // de plano. Toasts contextualizados com upgrade path quando aplicavel.
+//
+// 15/06/2026 -- fix edicao (aura-app#256):
+// Bug A: birthday era mapeado sem ano ("DD/MM") -> parseBirthday corrompida
+// o ano para 2000 a cada edicao. Fix: usa birth_date direto com year:numeric
+// -> exibe "25/05/1990" -> parseBirthday round-tripa corretamente.
+// Bug B: campos opcionais usavam || undefined -> JSON omitia -> nao era
+// possivel limpar email/telefone/notas/instagram. Fix: usa null, que o
+// backend processa como SET field = NULL.
 
 // Processa deletes em lotes para nao sobrecarregar o servidor
 async function deleteBatched(
@@ -44,13 +52,25 @@ async function deleteBatched(
 }
 
 function mapApiCustomer(c: any): Customer {
+  // Bug A fix (15/06/2026): usa birth_date diretamente com ano, em vez de
+  // confiar no campo birthday do backend (que vem sem ano: "DD/MM").
+  // Append 'T12:00:00' (local noon) evita desvio de timezone: sem ele,
+  // new Date("1990-05-25") e interpretado como UTC midnight e em UTC-3
+  // vira "24/05" no toLocaleDateString. Com T12:00:00 (sem timezone =
+  // local), a data e preservada corretamente em qualquer fuso do Brasil.
+  // Resultado: exibe "25/05/1990" -> parseBirthday round-tripa "1990-05-25".
+  const birthdayDisplay = c.birth_date
+    ? new Date(String(c.birth_date).split('T')[0] + 'T12:00:00')
+        .toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : (c.birthday || "");
+
   return {
     id: c.id || c.customer_id || String(Math.random()),
     name: c.name || c.customer_name || "Cliente",
     email: c.email || "",
     phone: c.phone || "",
     instagram: c.instagram || c.instagram_handle || "",
-    birthday: c.birthday || (c.birth_date ? new Date(c.birth_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""),
+    birthday: birthdayDisplay,
     lastPurchase: c.last_purchase ? new Date(c.last_purchase).toLocaleDateString("pt-BR") : c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString("pt-BR") : "---",
     totalSpent: parseFloat(c.total_spent ?? c.totalSpent ?? c.ltv) || 0,
     visits: parseInt(c.visit_count ?? c.visits ?? c.total_purchases) || 0,
@@ -73,7 +93,7 @@ function parseBirthday(val: string): string | undefined {
   return undefined;
 }
 
-// Plano → mensagem de upgrade contextual para 403 com body.limit.
+// Plano -> mensagem de upgrade contextual para 403 com body.limit.
 // Como tirar o gate principal, 403 hoje so dispara quando atinge
 // o limite do plano (customers.js).
 function limitUpgradeMessage(plan: string, body: any): string {
@@ -82,9 +102,9 @@ function limitUpgradeMessage(plan: string, body: any): string {
   if (!limit) return body?.error || "Limite de clientes atingido.";
   switch ((plan || "").toLowerCase()) {
     case "essencial":
-      return `Voce atingiu ${current ?? limit} de ${limit} clientes do Essencial. Faça upgrade pro Negocio (5.000 clientes) ou Expansao (ilimitado).`;
+      return `Voce atingiu ${current ?? limit} de ${limit} clientes do Essencial. Faca upgrade pro Negocio (5.000 clientes) ou Expansao (ilimitado).`;
     case "negocio":
-      return `Voce atingiu ${current ?? limit} de ${limit} clientes do Negocio. Faça upgrade pro Expansao (ilimitado).`;
+      return `Voce atingiu ${current ?? limit} de ${limit} clientes do Negocio. Faca upgrade pro Expansao (ilimitado).`;
     default:
       return body?.error || `Limite de ${limit} clientes atingido.`;
   }
@@ -154,8 +174,9 @@ export function useCustomers() {
     onError: function (err: any) {
       // PLAN-01: 403 do POST agora indica LIMITE ATINGIDO (gate principal removido).
       // Backend retorna { error, limit, current } pra montar mensagem contextual.
+      // Fix: err.data (nao err.body, que nao existe em ApiError).
       if (err instanceof ApiError && err.status === 403) {
-        toast.error(limitUpgradeMessage(plan, err.body));
+        toast.error(limitUpgradeMessage(plan, err.data));
       } else {
         toast.error(err?.message || "Erro ao salvar cliente");
       }
@@ -220,11 +241,15 @@ export function useCustomers() {
       sourceCompanyId,
       body: {
         name: c.name,
-        email: c.email || undefined,
-        phone: c.phone || undefined,
-        instagram_handle: c.instagram || undefined,
-        birth_date: c.birthday ? parseBirthday(c.birthday) : undefined,
-        notes: c.notes || undefined,
+        // Bug B fix (15/06/2026): null em vez de undefined para que o backend
+        // processe como SET field = NULL, permitindo limpar campos opcionais.
+        // undefined e omitido pelo JSON.stringify; null e enviado e o backend
+        // atualiza para NULL (fieldMap cobre email/phone/notes/instagram_handle).
+        email: c.email || null,
+        phone: c.phone || null,
+        instagram_handle: c.instagram || null,
+        birth_date: c.birthday ? parseBirthday(c.birthday) : null,
+        notes: c.notes || null,
       },
     });
   }
