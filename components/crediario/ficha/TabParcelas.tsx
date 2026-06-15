@@ -554,8 +554,8 @@ export function TabParcelas({
       >
         {freeSubmitting
           ? <ActivityIndicator color="#fff" />
-          : <Text style={m.ctaTxt}>
-              {freeAmtValue > 0 ? `Confirmar recebimento de ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
+          : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
+              {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
             </Text>}
       </Pressable>
     </View>
