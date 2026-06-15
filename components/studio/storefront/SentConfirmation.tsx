@@ -3,16 +3,34 @@
 // Stage="sent": confirmação do pedido enviado com Pix,
 // policy de revisões e próximos passos.
 // ============================================================
-import { View, Text, Pressable, ScrollView, Platform } from "react-native";
+import { useState } from "react";
+import { View, Text, Pressable, ScrollView, Platform, Image } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { NextStep } from "./ui/NextStep";
+import { QrCode } from "@/components/QrCode";
 
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
+  const [copied, setCopied] = useState(false);
   if (!sf.sentOrder || !sf.store) return null;
   const { sentOrder, store } = sf;
   const rev = store.revisions;
   const slaDays = store.sla.total_estimate_days;
+
+  // Copia o payload Pix (copia-e-cola). Web-only — storefront roda no browser.
+  function copyPix() {
+    const code = sentOrder?.pix?.payload;
+    if (!code) return;
+    if (Platform.OS === "web" && typeof navigator !== "undefined" && (navigator as any).clipboard?.writeText) {
+      (navigator as any).clipboard
+        .writeText(code)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(() => {});
+    }
+  }
 
   return (
     <ScrollView
@@ -69,8 +87,30 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
       </View>
 
       {sentOrder.pix && (
-        <View style={{ marginTop: 16, maxWidth: 320, gap: 8 }}>
-          <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center" }}>Pix copia-e-cola</Text>
+        <View style={{ marginTop: 16, maxWidth: 320, width: "100%", gap: 10, alignItems: "center" }}>
+          <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: "700" }}>
+            Pague com Pix
+          </Text>
+
+          {/* QR: usa a imagem do gateway (base64) quando vier; senao gera do payload */}
+          <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: T.border }}>
+            {sentOrder.pix.qrcode ? (
+              <Image
+                source={{
+                  uri: sentOrder.pix.qrcode.startsWith("data:")
+                    ? sentOrder.pix.qrcode
+                    : `data:image/png;base64,${sentOrder.pix.qrcode}`,
+                }}
+                style={{ width: 180, height: 180 }}
+                resizeMode="contain"
+                accessibilityLabel="QR Code do Pix"
+              />
+            ) : (
+              <QrCode value={sentOrder.pix.payload} size={180} />
+            )}
+          </View>
+
+          <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center" }}>ou copie o codigo Pix</Text>
           <Text
             style={{
               fontSize: 11, color: T.ink,
@@ -82,6 +122,20 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           >
             {sentOrder.pix.payload}
           </Text>
+
+          <Pressable
+            onPress={copyPix}
+            accessibilityRole="button"
+            style={{
+              flexDirection: "row", alignItems: "center", gap: 6,
+              backgroundColor: copied ? T.green : T.primary,
+              paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10,
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
+              {copied ? "✓ Codigo copiado" : "Copiar codigo Pix"}
+            </Text>
+          </Pressable>
         </View>
       )}
 
