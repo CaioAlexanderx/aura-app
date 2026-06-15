@@ -13,7 +13,6 @@
 //   (Financeiro=admin; Conexões/Importar=admin+staff; resto=todos).
 //   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
 // Track H: adicionado item Configurações (só federation_admin, só sidebar).
-// Track J: adicionado item Exames (bancas + certificados) à navegação.
 // ============================================================
 import React from "react";
 import {
@@ -41,7 +40,6 @@ const NAV_ITEMS = [
   { label: "Praticantes",   icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
   { label: "Conexões",      icon: "link-outline",          route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   { label: "Financeiro",    icon: "card-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
-  { label: "Exames",        icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
   { label: "Eventos",       icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
   { label: "Competições",  icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
   { label: "Importar",      icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
