@@ -4,8 +4,8 @@
 // Wired against karate-fase0-openapi.yaml (Fase 0),
 // karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial),
 // karate-fase2-openapi.yaml v0.2.0 (Fase 2 – Track C eventos/exames),
-// and Track P (alerts, search, notifications).
-// Track J: certificate order workflow (append-only, no dup symbols).
+// Track P (alerts, search, notifications),
+// Track H (configurações da federação: equipe, recursos, identidade, régua).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
 import { request } from "@/services/api";
@@ -466,6 +466,7 @@ export interface EligibilityResult {
   practitioner_id: string;
   target_belt: string;
   eligible: boolean;          // informativo
+  // is_hard_block is ALWAYS false per FPKT decision — not included in shape
   checks: EligibilityCheck[];
   warnings: string[];         // mensagens de aviso para exibir na UI
 }
@@ -481,7 +482,7 @@ export interface ExamCandidate {
   target_belt: string;
   result: CandidateResult;
   notes: string | null;
-  eligibility: EligibilityResult | null;
+  eligibility: EligibilityResult | null;  // anexado na inscrição
   certificate_status: CertificateStatus | null;
   certificate_url: string | null;
 }
@@ -496,15 +497,16 @@ export interface UpdateCandidateResultInput {
   notes?: string | null;
 }
 
-/** Requisito de graduação — karate_belt_requirements */
+/** Requisito de graduação — karate_belt_requirements (DECISÃO FPKT #2: pode ser provisório) */
 export interface BeltRequirement {
   id: string;
   belt_level: string;
   belt_name: string;
   min_months_in_current: number;
-  kata_required: string[];
+  kata_required: string[];    // nomes dos katas obrigatórios
   course_required: boolean;
   notes: string | null;
+  /** DECISÃO FPKT #2: false = provisório; UI mostra banner de aviso */
   confirmed: boolean;
   updated_at: string;
 }
@@ -542,7 +544,7 @@ export interface CourseEnrollInput {
   practitioner_id: string;
 }
 
-/** Certificado — DECISÃO FPKT #3: emissão sob demanda via /issue (legado Track C) */
+/** Certificado — DECISÃO FPKT #3: emissão sob demanda via /issue */
 export interface Certificate {
   id: string;
   candidate_id: string;
@@ -553,6 +555,75 @@ export interface Certificate {
   status: CertificateStatus;
   issued_at: string | null;
   pdf_url: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Track H — Configurações da Federação types
+// ─────────────────────────────────────────────────────────────────
+
+export type KarateRole = "federation_admin" | "federation_staff" | "federation_examiner";
+export type RegimeTributario = "simples_nacional" | "lucro_presumido" | "imune_isenta";
+
+export interface FederationMember {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  role: KarateRole;
+  role_label: string;
+  status: "ativo" | "pendente";
+  is_pending: boolean;
+}
+
+export interface InviteMemberInput {
+  email: string;
+  role: KarateRole;
+}
+
+export interface InviteMemberResult extends FederationMember {
+  invite_url: string;
+}
+
+export interface KarateFlags {
+  competicoes: boolean;
+  carteirinha: boolean;
+  conexao: boolean;
+  portal: boolean;
+}
+
+export interface FederationIdentity {
+  name: string | null;
+  slug: string | null;
+  logo_url: string | null;
+  wa_phone_display: string | null;
+  secretary_email: string | null;
+  cnpj: string | null;
+  legal_name: string | null;
+  inscricao_municipal: string | null;
+  regime_tributario: RegimeTributario | null;
+  regime_label: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+export interface ReminderConfig {
+  enabled: boolean;
+  channel: "email" | "whatsapp";
+  offsets_days: number[];
+  updated_at?: string | null;
+}
+
+export interface ReminderLogItem {
+  id: string;
+  annuity_id: string | null;
+  dojo_id: string | null;
+  channel: string;
+  recipient: string | null;
+  rule_code: string | null;
+  status: string;
+  provider_id: string | null;
+  error: string | null;
+  created_at: string;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -638,7 +709,7 @@ export interface BatchStatusResult {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// API calls — Fase 0
+// API calls — Fase 0 + 1 + 2 + Track H
 // ─────────────────────────────────────────────────────────────────
 export const karateApi = {
   // Dashboard
@@ -886,7 +957,7 @@ export const karateApi = {
     }),
 
   // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Belt Exams (karate-fase2-openapi.yaml v0.2.0)
+  // Fase 2 — Belt Exams
   // ─────────────────────────────────────────────────────────────────
 
   listBeltExams: (
@@ -974,7 +1045,6 @@ export const karateApi = {
   ): Promise<{ enrolled: true }> =>
     request(`/federation/${federationId}/courses/${eventId}/enroll`, { method: "POST", body }),
 
-  // ── Legado Track C: emissão sob demanda (mantido para compatibilidade) ──
   issueCertificate: (
     federationId: string,
     candidateId: string
@@ -983,6 +1053,82 @@ export const karateApi = {
 
   getCertificate: (federationId: string, candidateId: string): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}`),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Track H — Configurações da Federação
+  // ─────────────────────────────────────────────────────────────────
+
+  // Régua de cobrança (Track I)
+  getReminderConfig: (federationId: string): Promise<{ config: ReminderConfig }> =>
+    request(`/federation/${federationId}/reminder-config`),
+
+  updateReminderConfig: (
+    federationId: string,
+    body: { enabled: boolean; channel?: "email" | "whatsapp"; offsets_days?: number[] }
+  ): Promise<{ config: ReminderConfig }> =>
+    request(`/federation/${federationId}/reminder-config`, { method: "PUT", body }),
+
+  getReminderLog: (
+    federationId: string,
+    limit?: number
+  ): Promise<{ items: ReminderLogItem[] }> => {
+    const qs = new URLSearchParams();
+    if (limit) qs.set("limit", String(limit));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/reminder-log${query}`);
+  },
+
+  runReminders: (
+    federationId: string,
+    body?: { today?: string }
+  ): Promise<{ result: unknown }> =>
+    request(`/federation/${federationId}/reminders/run`, { method: "POST", body: body ?? {} }),
+
+  // Equipe FPKT
+  listFederationMembers: (federationId: string): Promise<{ members: FederationMember[] }> =>
+    request(`/federation/${federationId}/settings/members`),
+
+  inviteFederationMember: (
+    federationId: string,
+    body: InviteMemberInput
+  ): Promise<InviteMemberResult> =>
+    request(`/federation/${federationId}/settings/members/invite`, { method: "POST", body }),
+
+  updateFederationMemberRole: (
+    federationId: string,
+    memberId: string,
+    role: KarateRole
+  ): Promise<{ id: string; role: string; role_label: string }> =>
+    request(`/federation/${federationId}/settings/members/${memberId}/role`, {
+      method: "PATCH",
+      body: { role },
+    }),
+
+  removeFederationMember: (
+    federationId: string,
+    memberId: string
+  ): Promise<{ removed: boolean }> =>
+    request(`/federation/${federationId}/settings/members/${memberId}`, { method: "DELETE" }),
+
+  // Feature flags
+  getFederationFlags: (federationId: string): Promise<{ flags: KarateFlags }> =>
+    request(`/federation/${federationId}/settings/flags`),
+
+  updateFederationFlags: (
+    federationId: string,
+    flags: Partial<KarateFlags>
+  ): Promise<{ flags: KarateFlags }> =>
+    request(`/federation/${federationId}/settings/flags`, { method: "PUT", body: { flags } }),
+
+  // Identidade + Fiscal
+  getFederationIdentity: (federationId: string): Promise<FederationIdentity> =>
+    request(`/federation/${federationId}/settings/identity`),
+
+  updateFederationIdentity: (
+    federationId: string,
+    body: Partial<FederationIdentity & { secretary_email?: string }>
+  ): Promise<{ updated: boolean }> =>
+    request(`/federation/${federationId}/settings/identity`, { method: "PUT", body }),
 
   // ─────────────────────────────────────────────────────────────────
   // Track J — Certificate Order Workflow (migration 182)
@@ -1063,4 +1209,66 @@ export const karateApi = {
       method: "POST",
       body: { reason },
     }),
+};
+
+// ─────────────────────────────────────────────────────────────────
+// karateSettingsApi — compat shim (Track H)
+//
+// configuracoes/index.tsx importa este objeto diretamente de karateApi.ts.
+// As assinaturas diferem ligeiramente (ex: inviteMember recebe email+role
+// como args separados em vez de objeto). Este shim adapta e delega.
+// ─────────────────────────────────────────────────────────────────
+export const karateSettingsApi = {
+  /** Lista membros da equipe da federação. */
+  listMembers: (federationId: string): Promise<{ members: FederationMember[] }> =>
+    karateApi.listFederationMembers(federationId),
+
+  /** Convida membro — assinatura (fedId, email, role) conforme configuracoes/index.tsx. */
+  inviteMember: (
+    federationId: string,
+    email: string,
+    role: KarateRole
+  ): Promise<InviteMemberResult> =>
+    karateApi.inviteFederationMember(federationId, { email, role }),
+
+  /** Edita papel do membro. */
+  updateMemberRole: (
+    federationId: string,
+    memberId: string,
+    role: string
+  ): Promise<{ id: string; role: string; role_label: string }> =>
+    karateApi.updateFederationMemberRole(federationId, memberId, role as KarateRole),
+
+  /** Remove ou suspende membro. */
+  removeMember: (
+    federationId: string,
+    memberId: string
+  ): Promise<{ removed: boolean }> =>
+    karateApi.removeFederationMember(federationId, memberId),
+
+  /** Lê feature flags. */
+  getFlags: (
+    federationId: string
+  ): Promise<{ flags: KarateFlags }> =>
+    karateApi.getFederationFlags(federationId),
+
+  /** Salva feature flags. */
+  updateFlags: (
+    federationId: string,
+    flags: Partial<KarateFlags>
+  ): Promise<{ flags: KarateFlags }> =>
+    karateApi.updateFederationFlags(federationId, flags),
+
+  /** Lê identidade, contato e dados fiscais. */
+  getIdentity: (
+    federationId: string
+  ): Promise<FederationIdentity> =>
+    karateApi.getFederationIdentity(federationId),
+
+  /** Salva identidade, contato e dados fiscais. */
+  updateIdentity: (
+    federationId: string,
+    body: Partial<FederationIdentity>
+  ): Promise<{ updated: boolean }> =>
+    karateApi.updateFederationIdentity(federationId, body),
 };
