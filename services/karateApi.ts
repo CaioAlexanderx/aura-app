@@ -627,88 +627,6 @@ export interface ReminderLogItem {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Track J — Certificate Order Workflow
-// Tabela: karate_certificate_orders (migration 182)
-// Substitui fluxo de emissão sob demanda por um workflow de pedido
-// com estados: requested → in_production → printed → shipped | refused
-// ─────────────────────────────────────────────────────────────────
-
-export type CertOrderStatus =
-  | "requested"
-  | "in_production"
-  | "printed"
-  | "shipped"
-  | "refused";
-
-export type DeliveryType = "pickup" | "mail";
-
-export interface CertOrderHistoryEntry {
-  id: string;
-  order_id: string;
-  from_status: CertOrderStatus | null;
-  to_status: CertOrderStatus;
-  who_id: string | null;
-  who_name: string | null;
-  org_name: string | null;
-  note: string | null;
-  created_at: string;
-}
-
-export interface CertOrder {
-  id: string;
-  federation_id: string;
-  dojo_id: string;
-  practitioner_id: string;
-  belt_level: string;
-  belt_name: string;
-  exam_date: string | null;
-  exam_ref: string | null;
-  nome_impresso: string;
-  delivery_type: DeliveryType;
-  addr_cep: string | null;
-  addr_logradouro: string | null;
-  addr_numero: string | null;
-  addr_complemento: string | null;
-  addr_cidade: string | null;
-  observacao: string | null;
-  status: CertOrderStatus;
-  refusal_reason: string | null;
-  created_by: string | null;
-  created_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-  /** Presente no getOrder (detalhe), ausente na listagem */
-  history?: CertOrderHistoryEntry[];
-}
-
-export interface CreateCertOrderInput {
-  dojo_id?: string;          // opcional se vem do contexto
-  practitioner_id: string;
-  belt_level: string;
-  belt_name: string;
-  exam_date?: string | null;
-  exam_ref?: string | null;
-  nome_impresso: string;
-  delivery_type?: DeliveryType;
-  addr_cep?: string | null;
-  addr_logradouro?: string | null;
-  addr_numero?: string | null;
-  addr_complemento?: string | null;
-  addr_cidade?: string | null;
-  observacao?: string | null;
-}
-
-export interface BatchStatusInput {
-  order_ids: string[];
-  status: CertOrderStatus;
-}
-
-export interface BatchStatusResult {
-  updated: CertOrder[];
-  errors: Array<{ orderId: string; error: string }>;
-}
-
-// ─────────────────────────────────────────────────────────────────
 // API calls — Fase 0 + 1 + 2 + Track H
 // ─────────────────────────────────────────────────────────────────
 export const karateApi = {
@@ -922,7 +840,7 @@ export const karateApi = {
   ): Promise<Paginated<NfseItem>> => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set("page", String(params.page));
-    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    if (params?.pageSize) qs.set(pageSize", String(params.pageSize));
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/financial/nfse${query}`);
   },
@@ -1129,86 +1047,6 @@ export const karateApi = {
     body: Partial<FederationIdentity & { secretary_email?: string }>
   ): Promise<{ updated: boolean }> =>
     request(`/federation/${federationId}/settings/identity`, { method: "PUT", body }),
-
-  // ─────────────────────────────────────────────────────────────────
-  // Track J — Certificate Order Workflow (migration 182)
-  // Dojô cria pedido; federação avança estados; e-mail best-effort a cada
-  // transição via karateMailer (Track I). Sem geração de PDF/imagem.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** POST /federation/{id}/certificate-orders — dojô solicita certificado */
-  createCertOrder: (
-    federationId: string,
-    body: CreateCertOrderInput
-  ): Promise<CertOrder> =>
-    request(`/federation/${federationId}/certificate-orders`, { method: "POST", body }),
-
-  /** GET /federation/{id}/certificate-orders/mine — dojô lista seus pedidos */
-  listMyCertOrders: (
-    federationId: string,
-    params?: { status?: CertOrderStatus; dojo_id?: string; page?: number; pageSize?: number }
-  ): Promise<{ data: CertOrder[]; total: number }> => {
-    const qs = new URLSearchParams();
-    if (params?.status)   qs.set("status",   params.status);
-    if (params?.dojo_id)  qs.set("dojo_id",  params.dojo_id);
-    if (params?.page)     qs.set("page",     String(params.page));
-    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
-    const query = qs.toString() ? `?${qs.toString()}` : "";
-    return request(`/federation/${federationId}/certificate-orders/mine${query}`);
-  },
-
-  /** GET /federation/{id}/certificate-orders — federação lista todos */
-  listCertOrders: (
-    federationId: string,
-    params?: { status?: CertOrderStatus; q?: string; page?: number; pageSize?: number }
-  ): Promise<{ data: CertOrder[]; total: number }> => {
-    const qs = new URLSearchParams();
-    if (params?.status)   qs.set("status",   params.status);
-    if (params?.q)        qs.set("q",        params.q);
-    if (params?.page)     qs.set("page",     String(params.page));
-    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
-    const query = qs.toString() ? `?${qs.toString()}` : "";
-    return request(`/federation/${federationId}/certificate-orders${query}`);
-  },
-
-  /** GET /federation/{id}/certificate-orders/{orderId} — detalhe + timeline */
-  getCertOrder: (
-    federationId: string,
-    orderId: string
-  ): Promise<CertOrder> =>
-    request(`/federation/${federationId}/certificate-orders/${orderId}`),
-
-  /** PATCH /federation/{id}/certificate-orders/{orderId}/status — avança estado */
-  advanceCertOrderStatus: (
-    federationId: string,
-    orderId: string,
-    status: CertOrderStatus
-  ): Promise<CertOrder> =>
-    request(`/federation/${federationId}/certificate-orders/${orderId}/status`, {
-      method: "PATCH",
-      body: { status },
-    }),
-
-  /** POST /federation/{id}/certificate-orders/batch-status — lote */
-  batchCertOrderStatus: (
-    federationId: string,
-    body: BatchStatusInput
-  ): Promise<BatchStatusResult> =>
-    request(`/federation/${federationId}/certificate-orders/batch-status`, {
-      method: "POST",
-      body,
-    }),
-
-  /** POST /federation/{id}/certificate-orders/{orderId}/refuse — recusa com motivo */
-  refuseCertOrder: (
-    federationId: string,
-    orderId: string,
-    reason: string
-  ): Promise<CertOrder> =>
-    request(`/federation/${federationId}/certificate-orders/${orderId}/refuse`, {
-      method: "POST",
-      body: { reason },
-    }),
 };
 
 // ─────────────────────────────────────────────────────────────────
