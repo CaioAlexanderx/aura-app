@@ -180,6 +180,13 @@ export default function ConfiguracoesScreen() {
   // (pago manualmente via Gestao Aura). Sem isso, Essencial+extra_seat caia no
   // fallback `plan !== "essencial"` (false) e mostrava gate apesar do pagamento.
   // Backend auth.js (mesmo dia) expoe extra_seats_granted no /auth/me.
+  //
+  // 15/06/2026 — Fix: o acesso extra pago (extraSeatsGranted) agora SEMPRE
+  // libera a Equipe, mesmo quando seats_included ja carregou. Antes, com
+  // seats_included != null o gate olhava SO seats_included e ignorava o seat
+  // extra — se a billing subcontasse/atrasasse, o cliente Essencial + acesso
+  // extra caia no gate (caso Encanto). Combinado com auth.js que passou a
+  // expor extra_seats_granted no /me e /login.
   // ============================================================
   const { data: billingData } = useQuery({
     queryKey: ["members-billing", company?.id],
@@ -194,9 +201,11 @@ export default function ConfiguracoesScreen() {
   const planDat = PLANS[plan] || PLANS.essencial;
   // 13/05/2026: fallback secundario via company.extra_seats_granted (caso Maria).
   const extraSeatsGranted = (((company as any)?.extra_seats_granted ?? 0) as number) > 0;
-  const hasTeamCapacity = seatsIncluded !== null
-    ? seatsIncluded > 1
-    : (plan !== "essencial" || extraSeatsGranted);
+  // 15/06/2026: acesso extra pago SEMPRE libera (independe de seats_included).
+  const hasTeamCapacity =
+    (seatsIncluded !== null && seatsIncluded > 1)
+    || plan !== "essencial"
+    || extraSeatsGranted;
   const totalCompanies = availableCompanies?.length || 1;
 
   function handleSwitchToCompany(companyId: string) {
@@ -357,7 +366,8 @@ export default function ConfiguracoesScreen() {
 
           {/* EQUIPE — per-company (members/permissoes sao por empresa)
               12/05/2026: gate por CAPACIDADE (seats_included > 1) em vez de plano hardcoded.
-              13/05/2026: fallback secundario via company.extra_seats_granted > 0 (caso Maria). */}
+              13/05/2026: fallback secundario via company.extra_seats_granted > 0 (caso Maria).
+              15/06/2026: acesso extra pago sempre libera (independe de seats_included). */}
           {!consolidatedView && (
             <>
               <SectionTitle title="Equipe" />
