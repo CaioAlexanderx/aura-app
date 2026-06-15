@@ -5,6 +5,7 @@
 // karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial),
 // karate-fase2-openapi.yaml v0.2.0 (Fase 2 – Track C eventos/exames),
 // and Track P (alerts, search, notifications).
+// Track J: certificate order workflow (append-only, no dup symbols).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
 import { request } from "@/services/api";
@@ -465,7 +466,6 @@ export interface EligibilityResult {
   practitioner_id: string;
   target_belt: string;
   eligible: boolean;          // informativo
-  // is_hard_block is ALWAYS false per FPKT decision — not included in shape
   checks: EligibilityCheck[];
   warnings: string[];         // mensagens de aviso para exibir na UI
 }
@@ -481,7 +481,7 @@ export interface ExamCandidate {
   target_belt: string;
   result: CandidateResult;
   notes: string | null;
-  eligibility: EligibilityResult | null;  // anexado na inscrição
+  eligibility: EligibilityResult | null;
   certificate_status: CertificateStatus | null;
   certificate_url: string | null;
 }
@@ -496,16 +496,15 @@ export interface UpdateCandidateResultInput {
   notes?: string | null;
 }
 
-/** Requisito de graduação — karate_belt_requirements (DECISÃO FPKT #2: pode ser provisório) */
+/** Requisito de graduação — karate_belt_requirements */
 export interface BeltRequirement {
   id: string;
   belt_level: string;
   belt_name: string;
   min_months_in_current: number;
-  kata_required: string[];    // nomes dos katas obrigatórios
+  kata_required: string[];
   course_required: boolean;
   notes: string | null;
-  /** DECISÃO FPKT #2: false = provisório; UI mostra banner de aviso */
   confirmed: boolean;
   updated_at: string;
 }
@@ -543,7 +542,7 @@ export interface CourseEnrollInput {
   practitioner_id: string;
 }
 
-/** Certificado — DECISÃO FPKT #3: emissão sob demanda via /issue */
+/** Certificado — DECISÃO FPKT #3: emissão sob demanda via /issue (legado Track C) */
 export interface Certificate {
   id: string;
   candidate_id: string;
@@ -554,6 +553,88 @@ export interface Certificate {
   status: CertificateStatus;
   issued_at: string | null;
   pdf_url: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Track J — Certificate Order Workflow
+// Tabela: karate_certificate_orders (migration 182)
+// Substitui fluxo de emissão sob demanda por um workflow de pedido
+// com estados: requested → in_production → printed → shipped | refused
+// ─────────────────────────────────────────────────────────────────
+
+export type CertOrderStatus =
+  | "requested"
+  | "in_production"
+  | "printed"
+  | "shipped"
+  | "refused";
+
+export type DeliveryType = "pickup" | "mail";
+
+export interface CertOrderHistoryEntry {
+  id: string;
+  order_id: string;
+  from_status: CertOrderStatus | null;
+  to_status: CertOrderStatus;
+  who_id: string | null;
+  who_name: string | null;
+  org_name: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface CertOrder {
+  id: string;
+  federation_id: string;
+  dojo_id: string;
+  practitioner_id: string;
+  belt_level: string;
+  belt_name: string;
+  exam_date: string | null;
+  exam_ref: string | null;
+  nome_impresso: string;
+  delivery_type: DeliveryType;
+  addr_cep: string | null;
+  addr_logradouro: string | null;
+  addr_numero: string | null;
+  addr_complemento: string | null;
+  addr_cidade: string | null;
+  observacao: string | null;
+  status: CertOrderStatus;
+  refusal_reason: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Presente no getOrder (detalhe), ausente na listagem */
+  history?: CertOrderHistoryEntry[];
+}
+
+export interface CreateCertOrderInput {
+  dojo_id?: string;          // opcional se vem do contexto
+  practitioner_id: string;
+  belt_level: string;
+  belt_name: string;
+  exam_date?: string | null;
+  exam_ref?: string | null;
+  nome_impresso: string;
+  delivery_type?: DeliveryType;
+  addr_cep?: string | null;
+  addr_logradouro?: string | null;
+  addr_numero?: string | null;
+  addr_complemento?: string | null;
+  addr_cidade?: string | null;
+  observacao?: string | null;
+}
+
+export interface BatchStatusInput {
+  order_ids: string[];
+  status: CertOrderStatus;
+}
+
+export interface BatchStatusResult {
+  updated: CertOrder[];
+  errors: Array<{ orderId: string; error: string }>;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -630,16 +711,12 @@ export const karateApi = {
     request(`/federation/${federationId}/practitioners`, { method: "POST", body }),
 
   // ── Track N — Transferência de praticante entre dojôs ──────────
-  /** GET /federation/{id}/practitioners/{practitionerId}/transfers
-   *  Histórico imutável de transferências. */
   listTransfers: (
     federationId: string,
     practitionerId: string
   ): Promise<Paginated<TransferRecord> | { data: TransferRecord[] }> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/transfers`),
 
-  /** POST /federation/{id}/practitioners/{practitionerId}/transfer
-   *  Transfere o praticante para outro dojô. 409 se já estiver no destino. */
   transferPractitioner: (
     federationId: string,
     practitionerId: string,
@@ -812,7 +889,6 @@ export const karateApi = {
   // Fase 2 — Belt Exams (karate-fase2-openapi.yaml v0.2.0)
   // ─────────────────────────────────────────────────────────────────
 
-  /** GET /federation/{id}/belt-exams */
   listBeltExams: (
     federationId: string,
     params?: { status?: ExamStatus; page?: number; pageSize?: number }
@@ -825,38 +901,21 @@ export const karateApi = {
     return request(`/federation/${federationId}/belt-exams${query}`);
   },
 
-  /** POST /federation/{id}/belt-exams */
   createBeltExam: (federationId: string, body: BeltExamInput): Promise<BeltExam> =>
     request(`/federation/${federationId}/belt-exams`, { method: "POST", body }),
 
-  /** GET /federation/{id}/belt-exams/{examId} */
   getBeltExam: (federationId: string, examId: string): Promise<BeltExam & { examiners: Examiner[]; candidates: ExamCandidate[] }> =>
     request(`/federation/${federationId}/belt-exams/${examId}`),
 
-  /** PATCH /federation/{id}/belt-exams/{examId} */
   updateBeltExam: (federationId: string, examId: string, body: Partial<BeltExamInput>): Promise<BeltExam> =>
     request(`/federation/${federationId}/belt-exams/${examId}`, { method: "PATCH", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Examiners (banca)
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/belt-exams/{examId}/examiners */
   listExaminers: (federationId: string, examId: string): Promise<Examiner[]> =>
     request(`/federation/${federationId}/belt-exams/${examId}/examiners`),
 
-  /** POST /federation/{id}/belt-exams/{examId}/examiners */
   addExaminer: (federationId: string, examId: string, body: ExaminerInput): Promise<Examiner> =>
     request(`/federation/${federationId}/belt-exams/${examId}/examiners`, { method: "POST", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Candidates
-  // DECISÃO FPKT #1: POST always returns 201 with eligibility.warnings;
-  // never returns 422 for eligibility — inscription is never blocked.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** POST /federation/{id}/belt-exams/{examId}/candidates
-   *  Always 201 — eligibility is advisory only (never blocks). */
   enrollCandidate: (
     federationId: string,
     examId: string,
@@ -864,8 +923,6 @@ export const karateApi = {
   ): Promise<ExamCandidate> =>
     request(`/federation/${federationId}/belt-exams/${examId}/candidates`, { method: "POST", body }),
 
-  /** PATCH /federation/{id}/belt-exams/{examId}/candidates/{candidateId}
-   *  Lança resultado. RBAC: examResults guard on backend. */
   updateCandidateResult: (
     federationId: string,
     examId: string,
@@ -877,16 +934,9 @@ export const karateApi = {
       body,
     }),
 
-  /** POST /federation/{id}/belt-exams/{examId}/close
-   *  Fecha exame. NÃO emite certificados (DECISÃO FPKT #3). */
   closeBeltExam: (federationId: string, examId: string): Promise<{ closed: true; approved_count: number }> =>
     request(`/federation/${federationId}/belt-exams/${examId}/close`, { method: "POST", body: {} }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Eligibility (DECISÃO FPKT #1: informativo, nunca bloqueia)
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/practitioners/{practitionerId}/eligibility/{targetBelt} */
   checkEligibility: (
     federationId: string,
     practitionerId: string,
@@ -894,27 +944,15 @@ export const karateApi = {
   ): Promise<EligibilityResult> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/eligibility/${targetBelt}`),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Belt Requirements
-  // DECISÃO FPKT #2: confirmed=false → provisório; UI shows banner.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/belt-requirements */
   listBeltRequirements: (federationId: string): Promise<BeltRequirement[]> =>
     request(`/federation/${federationId}/belt-requirements`),
 
-  /** PUT /federation/{id}/belt-requirements */
   updateBeltRequirements: (
     federationId: string,
     body: { requirements: Array<{ belt_level: string } & BeltRequirementInput> }
   ): Promise<BeltRequirement[]> =>
     request(`/federation/${federationId}/belt-requirements`, { method: "PUT", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Courses / Events
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/courses */
   listCourses: (
     federationId: string,
     params?: { page?: number; pageSize?: number }
@@ -926,11 +964,9 @@ export const karateApi = {
     return request(`/federation/${federationId}/courses${query}`);
   },
 
-  /** POST /federation/{id}/courses */
   createCourse: (federationId: string, body: CourseEventInput): Promise<CourseEvent> =>
     request(`/federation/${federationId}/courses`, { method: "POST", body }),
 
-  /** POST /federation/{id}/courses/{eventId}/enroll */
   enrollCourse: (
     federationId: string,
     eventId: string,
@@ -938,21 +974,93 @@ export const karateApi = {
   ): Promise<{ enrolled: true }> =>
     request(`/federation/${federationId}/courses/${eventId}/enroll`, { method: "POST", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Certificates
-  // DECISÃO FPKT #3: emissão sob demanda; /issue é chamado pelo admin.
-  // Fechar exame NÃO gera certificados automaticamente.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** POST /federation/{id}/certificates/{candidateId}/issue
-   *  Solicita emissão do certificado (sob demanda). */
+  // ── Legado Track C: emissão sob demanda (mantido para compatibilidade) ──
   issueCertificate: (
     federationId: string,
     candidateId: string
   ): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}/issue`, { method: "POST", body: {} }),
 
-  /** GET /federation/{id}/certificates/{candidateId} */
   getCertificate: (federationId: string, candidateId: string): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}`),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Track J — Certificate Order Workflow (migration 182)
+  // Dojô cria pedido; federação avança estados; e-mail best-effort a cada
+  // transição via karateMailer (Track I). Sem geração de PDF/imagem.
+  // ─────────────────────────────────────────────────────────────────
+
+  /** POST /federation/{id}/certificate-orders — dojô solicita certificado */
+  createCertOrder: (
+    federationId: string,
+    body: CreateCertOrderInput
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/certificate-orders`, { method: "POST", body }),
+
+  /** GET /federation/{id}/certificate-orders/mine — dojô lista seus pedidos */
+  listMyCertOrders: (
+    federationId: string,
+    params?: { status?: CertOrderStatus; dojo_id?: string; page?: number; pageSize?: number }
+  ): Promise<{ data: CertOrder[]; total: number }> => {
+    const qs = new URLSearchParams();
+    if (params?.status)   qs.set("status",   params.status);
+    if (params?.dojo_id)  qs.set("dojo_id",  params.dojo_id);
+    if (params?.page)     qs.set("page",     String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/certificate-orders/mine${query}`);
+  },
+
+  /** GET /federation/{id}/certificate-orders — federação lista todos */
+  listCertOrders: (
+    federationId: string,
+    params?: { status?: CertOrderStatus; q?: string; page?: number; pageSize?: number }
+  ): Promise<{ data: CertOrder[]; total: number }> => {
+    const qs = new URLSearchParams();
+    if (params?.status)   qs.set("status",   params.status);
+    if (params?.q)        qs.set("q",        params.q);
+    if (params?.page)     qs.set("page",     String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/certificate-orders${query}`);
+  },
+
+  /** GET /federation/{id}/certificate-orders/{orderId} — detalhe + timeline */
+  getCertOrder: (
+    federationId: string,
+    orderId: string
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/certificate-orders/${orderId}`),
+
+  /** PATCH /federation/{id}/certificate-orders/{orderId}/status — avança estado */
+  advanceCertOrderStatus: (
+    federationId: string,
+    orderId: string,
+    status: CertOrderStatus
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/certificate-orders/${orderId}/status`, {
+      method: "PATCH",
+      body: { status },
+    }),
+
+  /** POST /federation/{id}/certificate-orders/batch-status — lote */
+  batchCertOrderStatus: (
+    federationId: string,
+    body: BatchStatusInput
+  ): Promise<BatchStatusResult> =>
+    request(`/federation/${federationId}/certificate-orders/batch-status`, {
+      method: "POST",
+      body,
+    }),
+
+  /** POST /federation/{id}/certificate-orders/{orderId}/refuse — recusa com motivo */
+  refuseCertOrder: (
+    federationId: string,
+    orderId: string,
+    reason: string
+  ): Promise<CertOrder> =>
+    request(`/federation/${federationId}/certificate-orders/${orderId}/refuse`, {
+      method: "POST",
+      body: { reason },
+    }),
 };

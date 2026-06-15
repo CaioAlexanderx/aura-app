@@ -12,6 +12,7 @@
 // Track G (acesso real): NAV_ITEMS filtrado por papel karatê
 //   (Financeiro=admin; Conexões/Importar=admin+staff; resto=todos).
 //   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
+// Track J: adicionado item Exames (bancas + certificados) à navegação.
 // ============================================================
 import React from "react";
 import {
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
   { label: "Praticantes",icon: "people-outline",       route: "/karate/praticantes", roles: null },
   { label: "Conexões",   icon: "link-outline",         route: "/karate/conexoes",    roles: ["federation_admin", "federation_staff"] },
   { label: "Financeiro", icon: "card-outline",         route: "/karate/financeiro",  roles: ["federation_admin"] },
+  { label: "Exames",     icon: "ribbon-outline",       route: "/karate/exames",      roles: null },
   { label: "Eventos",    icon: "calendar-outline",     route: "/karate/eventos",     roles: null },
   { label: "Competições",icon: "trophy-outline",       route: "/karate/competicoes", roles: null },
   { label: "Importar",   icon: "cloud-upload-outline", route: "/karate/importacao",  roles: ["federation_admin", "federation_staff"] },
