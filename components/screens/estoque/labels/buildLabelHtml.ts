@@ -117,12 +117,21 @@ export function generateEAN13(seed: string): string {
 }
 // ----------------------------
 
+// Monta o texto da etiqueta no formato "nome - tamanho - cor".
+// ZONA LIVRE (so texto): separador e composicao podem mudar sem teste de pistola.
+// O nome e truncado em 16 chars para abrir espaco a tamanho/cor; o CSS .name
+// (nowrap + ellipsis + max-height:4mm) garante que excesso seja cortado SEM
+// redimensionar a etiqueta. A cor aceita hex (#RRGGBB -> nome PT via hexToName)
+// ou um valor ja nomeado (ex.: "Azul", "Vinho").
 export function buildLabelName(name: string, size: string, color: string): string {
   if (!size && !color) return name;
   const parts = [name.length > 16 ? name.substring(0, 16).trim() + "..." : name];
   if (size) parts.push(size);
-  if (color && /^#[0-9A-Fa-f]{6}$/.test(color)) parts.push(hexToName(color));
-  return parts.join(" | ");
+  if (color) {
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) parts.push(hexToName(color));
+    else parts.push(String(color).trim());
+  }
+  return parts.join(" - ");
 }
 
 function esc(s: string): string {
