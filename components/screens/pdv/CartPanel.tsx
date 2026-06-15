@@ -320,14 +320,20 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         </View>
 
         {/* CPF na nota (NFC-e) — input opcional, aparece só quando wirado.
-            Indicador visual de validação mod-11 ao lado direito quando 11 dígitos. */}
+            Indicador visual de validação mod-11 ao lado direito quando 11 dígitos.
+            FIX: paddingVertical movido do cpfRow pro cpfInput para que toda a
+            área visual do row seja clicável (antes o padding ficava no View e
+            clicks na borda não focavam o TextInput). */}
         {showCpfInput && (
           <>
             <View style={[s.cpfRow, { borderColor: cpfBorderColor }]}>
               <Icon name="file_text" size={14} color={Colors.ink3} />
               <Text style={s.cpfLabel}>CPF na nota</Text>
               <TextInput
-                style={s.cpfInput}
+                style={[
+                  s.cpfInput,
+                  IS_WEB && (webOnly({ cursor: "text" }) as any),
+                ]}
                 value={cpfNaNota || ""}
                 onChangeText={(v) => onCpfNaNotaChange?.(maskCpf(v))}
                 placeholder="(opcional)"
@@ -822,9 +828,12 @@ const s = StyleSheet.create({
   sumRowTotal: { paddingTop: 10, marginTop: 6, borderTopWidth: 1, borderTopColor: Glass.lineSoft },
   sumK: { fontSize: 12, color: Colors.ink2, fontWeight: "500" },
   sumV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", color: Colors.ink, fontWeight: "700", fontSize: 12 },
+  // FIX: paddingVertical removido do cpfRow e movido pro cpfInput.
+  // Antes: padding ficava no View → clicks na borda do row não focavam o input.
+  // Agora: input é o elemento que define a altura, toda a área visual é clicável.
   cpfRow: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 10, paddingVertical: 8,
+    paddingHorizontal: 10,
     backgroundColor: Glass.lineFaint, borderRadius: 8,
     marginTop: 10, borderWidth: 1,
   },
@@ -833,10 +842,10 @@ const s = StyleSheet.create({
     textTransform: "uppercase", letterSpacing: 0.5,
   },
   cpfInput: {
-    flex: 1, textAlign: "right",
+    flex: 1, alignSelf: "stretch", textAlign: "right",
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 12, color: Colors.ink, fontWeight: "600",
-    paddingVertical: 0,
+    paddingVertical: 8,
   },
   cpfBadge: {
     width: 20, height: 20, borderRadius: 10,
