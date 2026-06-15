@@ -27,11 +27,28 @@
 //   que falha silenciosamente no browser. Portanto este wrap detecta
 //   PDFs, remove o valor do campo antes de repassar ao PersonalizationPreview
 //   (mantendo o mockup limpo do produto), e exibe uma nota discreta abaixo.
+//
+// DESACOPLAMENTO DE TEMA (Onda 0 · 0.6):
+//   O storefront é público e NÃO monta o StudioThemeProvider. Por isso
+//   usamos PersonalizationPreviewBase com uma paleta derivada do T da
+//   própria loja (STOREFRONT_PALETTE) — em vez do PersonalizationPreview
+//   temático, que cairia no default DARK do context interno do painel.
 // ============================================================
 import { View, Text, Platform } from "react-native";
-import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
 import type { CustomizationConfig } from "./types";
 import { T } from "./types";
+
+// Paleta do storefront (light) derivada do T da loja — sem tocar no
+// tema interno do painel. Mantém o mockup coerente com a vitrine pública.
+const STOREFRONT_PALETTE: PreviewPalette = {
+  bgSoft: T.bg,
+  ink: T.ink,
+  ink3: T.ink3,
+  ink4: T.ink4,
+  ink5: T.border,
+  primary: T.primary,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,12 +115,13 @@ export function LivePreview({
 
   return (
     <View style={{ alignItems: "center", gap: 6 }}>
-      <PersonalizationPreview
+      <PersonalizationPreviewBase
         config={config}
         values={safeValues}
         size={size}
         productName={productName}
         showLabel={showLabel}
+        t={STOREFRONT_PALETTE}
       />
 
       {/* Nota discreta quando o cliente enviou um PDF */}
