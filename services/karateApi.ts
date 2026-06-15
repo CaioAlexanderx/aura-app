@@ -4,7 +4,8 @@
 // Wired against karate-fase0-openapi.yaml (Fase 0),
 // karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial),
 // karate-fase2-openapi.yaml v0.2.0 (Fase 2 – Track C eventos/exames),
-// and Track P (alerts, search, notifications).
+// Track P (alerts, search, notifications),
+// Track H (configurações da federação: equipe, recursos, identidade, régua).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
 import { request } from "@/services/api";
@@ -557,6 +558,75 @@ export interface Certificate {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Track H — Configurações da Federação types
+// ─────────────────────────────────────────────────────────────────
+
+export type KarateRole = "federation_admin" | "federation_staff" | "federation_examiner";
+export type RegimeTributario = "simples_nacional" | "lucro_presumido" | "imune_isenta";
+
+export interface FederationMember {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  role: KarateRole;
+  role_label: string;
+  status: "ativo" | "pendente";
+  is_pending: boolean;
+}
+
+export interface InviteMemberInput {
+  email: string;
+  role: KarateRole;
+}
+
+export interface InviteMemberResult extends FederationMember {
+  invite_url: string;
+}
+
+export interface KarateFlags {
+  competicoes: boolean;
+  carteirinha: boolean;
+  conexao: boolean;
+  portal: boolean;
+}
+
+export interface FederationIdentity {
+  name: string | null;
+  slug: string | null;
+  logo_url: string | null;
+  wa_phone_display: string | null;
+  secretary_email: string | null;
+  cnpj: string | null;
+  legal_name: string | null;
+  inscricao_municipal: string | null;
+  regime_tributario: RegimeTributario | null;
+  regime_label: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+export interface ReminderConfig {
+  enabled: boolean;
+  channel: "email" | "whatsapp";
+  offsets_days: number[];
+  updated_at?: string | null;
+}
+
+export interface ReminderLogItem {
+  id: string;
+  annuity_id: string | null;
+  dojo_id: string | null;
+  channel: string;
+  recipient: string | null;
+  rule_code: string | null;
+  status: string;
+  provider_id: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // API calls — Fase 0
 // ─────────────────────────────────────────────────────────────────
 export const karateApi = {
@@ -955,4 +1025,110 @@ export const karateApi = {
   /** GET /federation/{id}/certificates/{candidateId} */
   getCertificate: (federationId: string, candidateId: string): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}`),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Track H — Configurações da Federação
+  // ─────────────────────────────────────────────────────────────────
+
+  // Seção 1: Modelos de anuidade (reusa getAnnualFees / updateAnnualFees acima)
+
+  // Seção 2: Régua de cobrança (Track I — wired aqui para consumo em Configurações)
+
+  /** GET /federation/{id}/reminder-config
+   *  Lê configuração da régua (opt-in + offsets). Default se vazio. */
+  getReminderConfig: (federationId: string): Promise<{ config: ReminderConfig }> =>
+    request(`/federation/${federationId}/reminder-config`),
+
+  /** PUT /federation/{id}/reminder-config
+   *  Liga/desliga régua + define offsets_days (antes/depois do vencimento). */
+  updateReminderConfig: (
+    federationId: string,
+    body: { enabled: boolean; channel?: "email" | "whatsapp"; offsets_days?: number[] }
+  ): Promise<{ config: ReminderConfig }> =>
+    request(`/federation/${federationId}/reminder-config`, { method: "PUT", body }),
+
+  /** GET /federation/{id}/reminder-log
+   *  Histórico de envios de lembretes. */
+  getReminderLog: (
+    federationId: string,
+    limit?: number
+  ): Promise<{ items: ReminderLogItem[] }> => {
+    const qs = new URLSearchParams();
+    if (limit) qs.set("limit", String(limit));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/reminder-log${query}`);
+  },
+
+  /** POST /federation/{id}/reminders/run
+   *  Disparo manual da régua (test). Funciona mesmo com enabled=false. */
+  runReminders: (
+    federationId: string,
+    body?: { today?: string }
+  ): Promise<{ result: unknown }> =>
+    request(`/federation/${federationId}/reminders/run`, { method: "POST", body: body ?? {} }),
+
+  // Seção 3: Equipe FPKT
+
+  /** GET /federation/{id}/settings/members
+   *  Lista membros da federação com papéis karatê. */
+  listFederationMembers: (federationId: string): Promise<{ members: FederationMember[] }> =>
+    request(`/federation/${federationId}/settings/members`),
+
+  /** POST /federation/{id}/settings/members/invite
+   *  Convida membro com papel karatê. Envia email Aura padrão. */
+  inviteFederationMember: (
+    federationId: string,
+    body: InviteMemberInput
+  ): Promise<InviteMemberResult> =>
+    request(`/federation/${federationId}/settings/members/invite`, { method: "POST", body }),
+
+  /** PATCH /federation/{id}/settings/members/{mid}/role
+   *  Edita o papel de um membro da equipe. */
+  updateFederationMemberRole: (
+    federationId: string,
+    memberId: string,
+    role: KarateRole
+  ): Promise<{ id: string; role: string; role_label: string }> =>
+    request(`/federation/${federationId}/settings/members/${memberId}/role`, {
+      method: "PATCH",
+      body: { role },
+    }),
+
+  /** DELETE /federation/{id}/settings/members/{mid}
+   *  Remove ou suspende membro da equipe. */
+  removeFederationMember: (
+    federationId: string,
+    memberId: string
+  ): Promise<{ removed: boolean }> =>
+    request(`/federation/${federationId}/settings/members/${memberId}`, { method: "DELETE" }),
+
+  // Seção 4: Recursos (feature flags via module_overrides)
+
+  /** GET /federation/{id}/settings/flags
+   *  Lê feature flags karatê da federação. */
+  getFederationFlags: (federationId: string): Promise<{ flags: KarateFlags }> =>
+    request(`/federation/${federationId}/settings/flags`),
+
+  /** PUT /federation/{id}/settings/flags
+   *  Salva feature flags karatê (merge sobre module_overrides JSONB). */
+  updateFederationFlags: (
+    federationId: string,
+    flags: Partial<KarateFlags>
+  ): Promise<{ flags: KarateFlags }> =>
+    request(`/federation/${federationId}/settings/flags`, { method: "PUT", body: { flags } }),
+
+  // Seção 5: Identidade + Contato + Dados fiscais
+
+  /** GET /federation/{id}/settings/identity
+   *  Lê identidade, contato e dados fiscais da federação. */
+  getFederationIdentity: (federationId: string): Promise<FederationIdentity> =>
+    request(`/federation/${federationId}/settings/identity`),
+
+  /** PUT /federation/{id}/settings/identity
+   *  Salva identidade, contato e dados fiscais. */
+  updateFederationIdentity: (
+    federationId: string,
+    body: Partial<FederationIdentity & { secretary_email?: string }>
+  ): Promise<{ updated: boolean }> =>
+    request(`/federation/${federationId}/settings/identity`, { method: "PUT", body }),
 };
