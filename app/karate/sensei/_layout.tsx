@@ -7,6 +7,7 @@
 // Track G (acesso real): gate por vertical karatê (espera hidratar). O
 // roteamento por papel (sensei/dojo_owner → aqui) é feito no layout da
 // federação. SENSEI_DOJO segue mock até os dados reais do dojô chegarem.
+// Track J: adicionada aba Certificados → /karate/sensei/certificados
 // ============================================================
 import React from "react";
 import {
@@ -27,6 +28,7 @@ const TABS = [
   { label: "Praticantes", route: "/karate/sensei" },
   { label: "Eventos",     route: "/karate/sensei/eventos" },
   { label: "Anuidade",    route: "/karate/sensei/anuidade" },
+  { label: "Certificados",route: "/karate/sensei/certificados" },
 ] as const;
 
 export default function SenseiLayout() {
