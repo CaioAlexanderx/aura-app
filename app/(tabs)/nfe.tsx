@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { Icon } from "@/components/Icon";
-import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfe } from "@/components/screens/nfe/shared";
+import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm, type NfcePrefill } from "@/components/screens/nfe/EmitNfceForm";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
@@ -23,6 +23,8 @@ const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : fals
 // Mai/2026 reemissão: card rejeitado ganha ação "Reemitir" — busca detalhe
 // da nota (sale_id+items), hidrata EmitNfceForm via prop `prefill`, troca
 // pra aba "Emitir NFC-e". Backend mantém idempotência só pra autorizada/processando.
+// Jun/2026: "Visualizar" gera a 2ª via térmica (danfe-termica) quando autorizada;
+// "Reemitir" passa a cobrir qualquer status de falha (rejeitada/erro/falha).
 function NfeScreenInner() {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
@@ -93,9 +95,16 @@ function NfeScreenInner() {
     return true;
   });
 
-  function handleViewEmission(emission: NfceEmission) {
-    if (emission.pdf_url) {
-      openDanfe(emission.pdf_url);
+  // "Visualizar" = 2ª via térmica (DANFE 80mm) quando autorizada. Para notas
+  // não autorizadas, mostra o status/motivo (não há o que reimprimir ainda).
+  async function handleViewEmission(emission: NfceEmission) {
+    if (!company?.id) return;
+    if (emission.status === "autorizada") {
+      try {
+        await openDanfeTermica(company.id, emission.id);
+      } catch (e: any) {
+        toast.error(e?.message || "Não foi possível gerar a 2ª via");
+      }
       return;
     }
     if (emission.error_message) {
@@ -120,13 +129,13 @@ function NfeScreenInner() {
     toast.info("Atualizando...");
   }
 
-  // Reemitir: busca o detalhe da nota rejeitada (LIST não traz sale_id/items),
+  // Reemitir: busca o detalhe da nota com falha (LIST não traz sale_id/items),
   // monta o prefill e troca pra aba "Emitir NFC-e". O backend já entende que
-  // sale_id com nota anterior 'rejeitada' libera nova emissão.
+  // sale_id com nota anterior rejeitada/erro libera nova emissão (reusa número).
   async function handleReemit(emission: NfceEmission) {
     if (!company?.id) return;
-    if (emission.status !== "rejeitada") {
-      toast.error("Reemissão só é permitida para notas rejeitadas");
+    if (!isFailedStatus(emission.status)) {
+      toast.error("Reemissão só é permitida para notas com falha (rejeitada/erro)");
       return;
     }
     setReemitLoadingId(emission.id);
@@ -263,7 +272,7 @@ function NfeScreenInner() {
                     onCancel={() => { setCancelTarget(e); setCancelReason(""); }}
                     onView={() => handleViewEmission(e)}
                     onReemit={
-                      e.status === "rejeitada"
+                      isFailedStatus(e.status)
                         ? () => { if (reemitLoadingId !== e.id) handleReemit(e); }
                         : undefined
                     }
