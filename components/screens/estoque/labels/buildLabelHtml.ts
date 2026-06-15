@@ -136,6 +136,9 @@ export type LabelItem = {
   size: string;
   color: string;
   qty: number;
+  // 08/06/2026: ids para persistir o EAN-13 gerado no cadastro (produto/variante).
+  productId?: string;
+  variantId?: string;
 };
 
 type BuildOptions = {
