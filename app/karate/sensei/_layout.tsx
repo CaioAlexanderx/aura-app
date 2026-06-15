@@ -50,9 +50,7 @@ export default function SenseiLayout() {
   }
 
   const isActive = (route: string) =>
-    route === "/karate/sensei"
-      ? (path === "/karate/sensei" || path === "/karate/sensei/")
-      : path.startsWith(route);
+    route === "/karate/sensei" ? (path === "/karate/sensei" || path === "/karate/sensei/") : path.startsWith(route);
 
   return (
     <SafeAreaView style={styles.root}>
