@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator, Modal, KeyboardAvoidingView } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useCustomers } from "@/hooks/useCustomers";
@@ -117,6 +117,10 @@ export default function ClientesScreen() {
   // Essencial ve as tabs mas o conteudo vira UpgradeCard.
   const isEssencial = plan === "essencial";
 
+  // Modal de formulario: visivel quando adicionar ou editar
+  const formModalVisible = showAdd || !!editTarget;
+  function closeFormModal() { setShowAdd(false); setEditTarget(null); }
+
   const filtered = customers.filter(c => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -134,8 +138,8 @@ export default function ClientesScreen() {
   // (lista e a mesma owner-scoped, mostrar a origem ajuda a entender).
   const showCompanyBadge = (companyCount || 1) > 1;
 
-  function handleAdd(c: Customer) { addCustomer(c); setShowAdd(false); }
-  function handleEdit(c: Customer) { updateCustomer(c.id, c); setEditTarget(null); }
+  function handleAdd(c: Customer) { addCustomer(c); closeFormModal(); }
+  function handleEdit(c: Customer) { updateCustomer(c.id, c); closeFormModal(); }
   function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
   function handleExport() {
@@ -245,8 +249,34 @@ export default function ClientesScreen() {
       {/* RetentionCard so pra Negocio+ (chama endpoint /retention que e Negocio+). */}
       {tab === 0 && !planBlocked && !isDemo && !consolidatedView && !isEssencial && <RetentionCard />}
 
-      {showAdd && !editTarget && <AddCustomerForm onSave={handleAdd} onCancel={() => setShowAdd(false)} />}
-      {editTarget && <AddCustomerForm initialData={editTarget} onSave={handleEdit} onCancel={() => setEditTarget(null)} />}
+      {/* Modal de formulario (adicionar e editar) */}
+      <Modal
+        visible={formModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeFormModal}
+      >
+        <KeyboardAvoidingView
+          style={s.modalWrapper}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          {/* Overlay — toque fora fecha */}
+          <Pressable style={s.modalOverlay} onPress={closeFormModal} />
+          <View style={s.modalContent}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ padding: 0 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <AddCustomerForm
+                initialData={editTarget || undefined}
+                onSave={editTarget ? handleEdit : handleAdd}
+                onCancel={closeFormModal}
+              />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
         {TABS.map((t, i) => (
@@ -323,7 +353,7 @@ export default function ClientesScreen() {
                 c={c}
                 expanded={!bulkMode && expandedId === c.id}
                 onToggle={() => !bulkMode && setExpandedId(expandedId === c.id ? null : c.id)}
-                onEdit={!bulkMode ? (customer) => { setEditTarget(customer); setShowAdd(false); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); } : undefined}
+                onEdit={!bulkMode ? (customer) => { setEditTarget(customer); setShowAdd(false); } : undefined}
                 onDelete={!bulkMode ? (id) => setDeleteTarget(id) : undefined}
                 isSelected={bulkSelected.has(c.id)}
                 onSelect={bulkMode ? toggleBulkSelect : undefined}
@@ -453,4 +483,20 @@ const s = StyleSheet.create({
   },
   nearLimitTitle: { fontSize: 13, color: Colors.amber, fontWeight: "700" },
   nearLimitSub: { fontSize: 11, color: Colors.amber, opacity: 0.85, marginTop: 1 },
+  // Modal de formulario (adicionar/editar)
+  modalWrapper: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  modalContent: {
+    width: IS_WIDE ? 560 : "92%",
+    maxHeight: "88%",
+    borderRadius: 20,
+    overflow: "hidden",
+  },
 });
