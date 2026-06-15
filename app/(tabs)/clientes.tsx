@@ -25,8 +25,6 @@ import { Icon } from "@/components/Icon";
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const PAGE_SIZE = 20;
 
-// PLAN-01 (11/05/2026): UpgradeCard local pras tabs avancadas (Ranking,
-// Retencao, Avaliacoes) que sao Negocio+.
 function UpgradeCard({ title, description, features }: {
   title: string;
   description: string;
@@ -47,10 +45,7 @@ function UpgradeCard({ title, description, features }: {
           </View>
         ))}
       </View>
-      <Pressable
-        onPress={() => router.push("/(tabs)/planos")}
-        style={u.cta}
-      >
+      <Pressable onPress={() => router.push("/(tabs)/planos")} style={u.cta}>
         <Text style={u.ctaText}>Conhecer o plano Negocio</Text>
       </Pressable>
       <Text style={u.hint}>A partir de R$ 169/mes -- ative quando quiser</Text>
@@ -59,33 +54,14 @@ function UpgradeCard({ title, description, features }: {
 }
 
 const u = StyleSheet.create({
-  wrap: {
-    backgroundColor: Colors.bg3,
-    borderRadius: 20,
-    padding: 28,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginTop: 8,
-  },
-  iconWrap: {
-    width: 56, height: 56, borderRadius: 18,
-    backgroundColor: Colors.violetD,
-    borderWidth: 1, borderColor: Colors.border2,
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 14,
-  },
+  wrap: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 28, alignItems: "center", borderWidth: 1, borderColor: Colors.border, marginTop: 8 },
+  iconWrap: { width: 56, height: 56, borderRadius: 18, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginBottom: 6, textAlign: "center" },
   desc: { fontSize: 13, color: Colors.ink3, textAlign: "center", marginBottom: 20, lineHeight: 18, maxWidth: 380 },
   featuresList: { gap: 10, marginBottom: 20, alignSelf: "stretch", maxWidth: 380, marginHorizontal: "auto" },
   featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   featureText: { fontSize: 13, color: Colors.ink, flex: 1 },
-  cta: {
-    backgroundColor: Colors.violet,
-    borderRadius: 12,
-    paddingHorizontal: 22, paddingVertical: 12,
-    marginBottom: 10,
-  },
+  cta: { backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 22, paddingVertical: 12, marginBottom: 10 },
   ctaText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   hint: { fontSize: 11, color: Colors.ink3, textAlign: "center" },
 });
@@ -106,15 +82,11 @@ export default function ClientesScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Customer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
-  // PLAN-01: tabs avancadas (Ranking, Retencao, Avaliacoes) sao Negocio+.
   const isEssencial = plan === "essencial";
-
-  // Formulario de cliente (add e editar) — bottom sheet, mesmo padrao do estoque.
   const formOpen = showAdd || !!editTarget;
   function closeFormModal() { setShowAdd(false); setEditTarget(null); }
 
@@ -126,59 +98,34 @@ export default function ClientesScreen() {
 
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search);
   const totalLtv = customers.reduce((s, c) => s + c.totalSpent, 0);
-
-  const pageIds        = paginated.map(c => c.id);
+  const pageIds = paginated.map(c => c.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every(id => bulkSelected.has(id));
-
   const showCompanyBadge = (companyCount || 1) > 1;
 
   function handleAdd(c: Customer) { addCustomer(c); closeFormModal(); }
   function handleEdit(c: Customer) { updateCustomer(c.id, c); closeFormModal(); }
   function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
-
   function handleExport() {
     if (customers.length === 0) { toast.error("Nenhum cliente para exportar"); return; }
     downloadCSV(arrayToCSV(customers, CUSTOMER_COLUMNS), `aura_clientes_${new Date().toISOString().slice(0, 10)}.csv`);
   }
-
   function toggleBulkSelect(id: string) {
-    setBulkSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setBulkSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   }
-
   function handleSelectPage() {
     if (pageAllSelected) {
-      setBulkSelected(prev => {
-        const next = new Set(prev);
-        pageIds.forEach(id => next.delete(id));
-        return next;
-      });
+      setBulkSelected(prev => { const next = new Set(prev); pageIds.forEach(id => next.delete(id)); return next; });
     } else {
-      setBulkSelected(prev => {
-        const next = new Set(prev);
-        pageIds.forEach(id => next.add(id));
-        return next;
-      });
+      setBulkSelected(prev => { const next = new Set(prev); pageIds.forEach(id => next.add(id)); return next; });
     }
   }
-
   function exitBulkMode() { setBulkMode(false); setBulkSelected(new Set()); }
-
-  async function handleBulkDelete() {
-    await bulkDeleteCustomers(Array.from(bulkSelected));
-    exitBulkMode();
-  }
+  async function handleBulkDelete() { await bulkDeleteCustomers(Array.from(bulkSelected)); exitBulkMode(); }
 
   const bulkConfirmMessage = bulkSelected.size > 50
     ? `Voce selecionou ${bulkSelected.size} clientes. Esta acao nao pode ser desfeita e pode levar alguns segundos.`
     : "Esta acao nao pode ser desfeita. Os clientes selecionados serao removidos permanentemente.";
-
-  const customerCountLabel = planLimit && planLimit < 999999
-    ? `${customers.length} / ${planLimit.toLocaleString("pt-BR")}`
-    : String(customers.length);
+  const customerCountLabel = planLimit && planLimit < 999999 ? `${customers.length} / ${planLimit.toLocaleString("pt-BR")}` : String(customers.length);
   const nearLimit = planLimit && planLimit < 999999 && customers.length / planLimit >= 0.85;
 
   return (
@@ -196,9 +143,7 @@ export default function ClientesScreen() {
             <Icon name="users" size={14} color="#a78bfa" />
             <View style={{ flex: 1 }}>
               <Text style={s.consolidatedTitle}>
-                {consolidatedView
-                  ? `Lista unica · ${companyCount} empresas`
-                  : `Lista compartilhada entre suas ${companyCount} empresas`}
+                {consolidatedView ? `Lista unica · ${companyCount} empresas` : `Lista compartilhada entre suas ${companyCount} empresas`}
               </Text>
               <Text style={s.consolidatedSub}>
                 Os clientes sao do dono, nao da loja. Cada cliente aparece uma so vez, mesmo que compre em qualquer das suas empresas.
@@ -212,9 +157,7 @@ export default function ClientesScreen() {
             <Icon name="alert" size={14} color={Colors.amber} />
             <View style={{ flex: 1 }}>
               <Text style={s.nearLimitTitle}>
-                {customers.length >= planLimit
-                  ? `Limite do plano atingido (${planLimit.toLocaleString("pt-BR")} clientes)`
-                  : `Voce esta perto do limite (${customers.length} / ${planLimit.toLocaleString("pt-BR")})`}
+                {customers.length >= planLimit ? `Limite do plano atingido (${planLimit.toLocaleString("pt-BR")} clientes)` : `Voce esta perto do limite (${customers.length} / ${planLimit.toLocaleString("pt-BR")})`}
               </Text>
               <Text style={s.nearLimitSub}>Toque para ver opcoes de upgrade</Text>
             </View>
@@ -227,14 +170,8 @@ export default function ClientesScreen() {
         )}
 
         <View style={s.summaryRow}>
-          <View style={s.card}>
-            <Text style={s.cardLabel}>TOTAL CLIENTES</Text>
-            <Text style={s.cardValue}>{customerCountLabel}</Text>
-          </View>
-          <View style={s.card}>
-            <Text style={s.cardLabel}>FATURAMENTO TOTAL</Text>
-            <Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text>
-          </View>
+          <View style={s.card}><Text style={s.cardLabel}>TOTAL CLIENTES</Text><Text style={s.cardValue}>{customerCountLabel}</Text></View>
+          <View style={s.card}><Text style={s.cardLabel}>FATURAMENTO TOTAL</Text><Text style={[s.cardValue, { color: Colors.green }]}>{fmt(totalLtv)}</Text></View>
         </View>
 
         {tab === 0 && !planBlocked && !isDemo && !consolidatedView && !isEssencial && <RetentionCard />}
@@ -243,9 +180,7 @@ export default function ClientesScreen() {
           {TABS.map((t, i) => (
             <Pressable key={t} onPress={() => handleTabSelect(i)} style={[s.tab, tab === i && s.tabActive]}>
               <Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text>
-              {isEssencial && i > 0 && (
-                <Icon name="lock" size={10} color={tab === i ? "#fff" : Colors.ink3} />
-              )}
+              {isEssencial && i > 0 && <Icon name="lock" size={10} color={tab === i ? "#fff" : Colors.ink3} />}
             </Pressable>
           ))}
         </ScrollView>
@@ -253,47 +188,28 @@ export default function ClientesScreen() {
         {tab === 0 && !planBlocked && (
           <View style={s.importRow}>
             <ImportExportBar onExport={handleExport} itemCount={customers.length} />
-            {!consolidatedView && (
-              <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers"] })} />
-            )}
-            {!bulkMode ? (
-              <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}>
-                <Text style={s.bulkBtnText}>Selecionar</Text>
-              </Pressable>
-            ) : (
-              <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}>
-                <Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text>
-              </Pressable>
-            )}
+            {!consolidatedView && <ServerImport entity="customers" onComplete={() => qc.invalidateQueries({ queryKey: ["customers"] })} />}
+            {!bulkMode
+              ? <Pressable onPress={() => setBulkMode(true)} style={s.bulkBtn}><Text style={s.bulkBtnText}>Selecionar</Text></Pressable>
+              : <Pressable onPress={exitBulkMode} style={[s.bulkBtn, { backgroundColor: Colors.bg4 }]}><Text style={[s.bulkBtnText, { color: Colors.ink3 }]}>Cancelar</Text></Pressable>
+            }
           </View>
         )}
 
         {bulkMode && (
           <View style={s.bulkBar}>
             <Pressable onPress={handleSelectPage} style={s.bulkAction}>
-              <Text style={s.bulkActionText}>
-                {pageAllSelected ? "Desmarcar pagina" : "Pag. atual"}
-              </Text>
+              <Text style={s.bulkActionText}>{pageAllSelected ? "Desmarcar pagina" : "Pag. atual"}</Text>
             </Pressable>
-
             {bulkSelected.size > 0 ? (
               <>
                 <Text style={s.bulkCount}>{bulkSelected.size} selecionado{bulkSelected.size !== 1 ? "s" : ""}</Text>
-                <Pressable
-                  onPress={() => setShowBulkConfirm(true)}
-                  disabled={bulkDeleting}
-                  style={[s.bulkAction, s.bulkDeleteAction, bulkDeleting && { opacity: 0.5 }]}
-                >
-                  {bulkDeleting
-                    ? <ActivityIndicator size="small" color={Colors.red} />
-                    : <Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text>
-                  }
+                <Pressable onPress={() => setShowBulkConfirm(true)} disabled={bulkDeleting} style={[s.bulkAction, s.bulkDeleteAction, bulkDeleting && { opacity: 0.5 }]}>
+                  {bulkDeleting ? <ActivityIndicator size="small" color={Colors.red} /> : <Text style={[s.bulkActionText, { color: Colors.red }]}>Excluir {bulkSelected.size}</Text>}
                 </Pressable>
               </>
             ) : (
-              <Text style={[s.bulkCount, { color: Colors.ink3, fontWeight: "400" }]}>
-                Toque nos clientes para selecionar
-              </Text>
+              <Text style={[s.bulkCount, { color: Colors.ink3, fontWeight: "400" }]}>Toque nos clientes para selecionar</Text>
             )}
           </View>
         )}
@@ -326,73 +242,40 @@ export default function ClientesScreen() {
         )}
 
         {tab === 1 && (isEssencial ? (
-          <UpgradeCard
-            title="Ranking de clientes"
-            description="Veja seus clientes ordenados por faturamento, visitas e ticket medio. Identifique seus VIPs e quem precisa de atencao."
-            features={[
-              "Top clientes por LTV (faturamento total)",
-              "Top por frequencia (numero de visitas)",
-              "Ticket medio por cliente",
-              "Status automatico: VIP, Frequente, Novo, Inativo",
-            ]}
-          />
+          <UpgradeCard title="Ranking de clientes" description="Veja seus clientes ordenados por faturamento, visitas e ticket medio. Identifique seus VIPs e quem precisa de atencao."
+            features={["Top clientes por LTV (faturamento total)", "Top por frequencia (numero de visitas)", "Ticket medio por cliente", "Status automatico: VIP, Frequente, Novo, Inativo"]} />
         ) : <RankingTab customers={customers} />)}
 
         {tab === 2 && (isEssencial ? (
-          <UpgradeCard
-            title="Retencao e clientes em risco"
-            description="Saiba quem voltou e quem nao voltou. Reaja antes de perder um bom cliente."
-            features={[
-              "Taxa de retencao mensal",
-              "Clientes em risco (30-90 dias sem comprar)",
-              "Clientes perdidos (90+ dias)",
-              "Comparativo: novos vs voltando",
-            ]}
-          />
+          <UpgradeCard title="Retencao e clientes em risco" description="Saiba quem voltou e quem nao voltou. Reaja antes de perder um bom cliente."
+            features={["Taxa de retencao mensal", "Clientes em risco (30-90 dias sem comprar)", "Clientes perdidos (90+ dias)", "Comparativo: novos vs voltando"]} />
         ) : <RetentionTab />)}
 
         {tab === 3 && (isEssencial ? (
-          <UpgradeCard
-            title="Avaliacoes de clientes"
-            description="Receba avaliacoes apos cada compra e construa reputacao publica."
-            features={[
-              "Pedido automatico de avaliacao apos a venda",
-              "Resumo: estrelas medias + total de reviews",
-              "Comentarios publicos no Canal Digital",
-              "Notificacao quando voce recebe uma avaliacao",
-            ]}
-          />
+          <UpgradeCard title="Avaliacoes de clientes" description="Receba avaliacoes apos cada compra e construa reputacao publica."
+            features={["Pedido automatico de avaliacao apos a venda", "Resumo: estrelas medias + total de reviews", "Comentarios publicos no Canal Digital", "Notificacao quando voce recebe uma avaliacao"]} />
         ) : <ReviewsList />)}
 
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
 
-      {/* === Modais e overlays — fora do ScrollView, mesmo padrao do estoque === */}
+      {/* Modais — fora do ScrollView */}
       <ConfirmDialog visible={!!deleteTarget} title="Excluir cliente?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive
         onConfirm={() => { if (deleteTarget) { deleteCustomer(deleteTarget); setDeleteTarget(null); } }}
         onCancel={() => setDeleteTarget(null)} />
-
-      <ConfirmDialog
-        visible={showBulkConfirm}
-        title={`Excluir ${bulkSelected.size} cliente${bulkSelected.size !== 1 ? "s" : ""}`}
-        message={bulkConfirmMessage}
-        confirmLabel="Confirmar exclusao"
-        destructive
+      <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} cliente${bulkSelected.size !== 1 ? "s" : ""}`}
+        message={bulkConfirmMessage} confirmLabel="Confirmar exclusao" destructive
         onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }}
-        onCancel={() => setShowBulkConfirm(false)}
-      />
+        onCancel={() => setShowBulkConfirm(false)} />
 
-      {/* Bottom sheet de formulario (add e editar) — mesmo padrao de formOverlay/formSheet do estoque.tsx */}
+      {/* Bottom sheet — mesmo padrao do ConfirmDialog: position fixed (web) / absolute (native),
+          top/left/right/bottom = 0, zIndex 9999. Garante que cobre a viewport inteira
+          incluindo sidebar e tabs do navigator. */}
       {formOpen && (
         <Pressable style={s.formOverlay} onPress={closeFormModal}>
           <Pressable style={s.formSheet} onPress={() => {}}>
             <View style={s.formHandle} />
-            <ScrollView
-              bounces={false}
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 32 }}
-            >
+            <ScrollView bounces={false} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
               <AddCustomerForm
                 initialData={editTarget || undefined}
                 onSave={editTarget ? handleEdit : handleAdd}
@@ -436,42 +319,19 @@ const s = StyleSheet.create({
   listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
-  // MULTICNPJ Onda 2.3
-  consolidatedBanner: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-    backgroundColor: "rgba(124,58,237,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.28)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
+  consolidatedBanner: { flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: "rgba(124,58,237,0.10)", borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16 },
   consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
   consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
-  // PLAN-01: banner near-limit
-  nearLimitBanner: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    backgroundColor: Colors.amberD,
-    borderWidth: 1,
-    borderColor: Colors.amber + "44",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
+  nearLimitBanner: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber + "44", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16 },
   nearLimitTitle: { fontSize: 13, color: Colors.amber, fontWeight: "700" },
   nearLimitSub: { fontSize: 11, color: Colors.amber, opacity: 0.85, marginTop: 1 },
-  // Bottom sheet — mesmo padrao formOverlay/formSheet do estoque.tsx (08/05/2026)
+  // Bottom sheet overlay — zIndex 9999 + position fixed (web) = cobre viewport inteira,
+  // igual ao ConfirmDialog. Garante escurecimento total mesmo com sidebar e navigator.
   formOverlay: {
-    position: (Platform.OS === "web" ? "fixed" : "absolute") as any,
     top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 100,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    position: (Platform.OS === "web" ? "fixed" : "absolute") as any,
+    zIndex: 9999,
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",
     alignItems: "center",
   },
@@ -484,6 +344,7 @@ const s = StyleSheet.create({
     maxHeight: "88%",
     width: "100%",
     maxWidth: 640,
+    zIndex: 10000,
   },
   formHandle: {
     width: 40, height: 4,
