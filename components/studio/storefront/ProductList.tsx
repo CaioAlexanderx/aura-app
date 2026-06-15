@@ -2,7 +2,7 @@
 // components/studio/storefront/ProductList.tsx
 // Stage="list": hero da loja + grid de produtos + CartBar.
 // ============================================================
-import { View, Text, Pressable, ScrollView, Platform } from "react-native";
+import { View, Text, Pressable, ScrollView, Platform, Image } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { LivePreview } from "./LivePreview";
@@ -22,10 +22,31 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         style={[
           { padding: 24, paddingBottom: 28, backgroundColor: primary },
           Platform.OS === "web"
-            ? ({ background: "linear-gradient(135deg, " + primary + ", " + accent + ")" } as any)
+            ? (store.site.cover_url
+                ? ({
+                    // cover do lojista com overlay do gradiente da marca por cima
+                    // (legibilidade do texto branco). Visual final no DESIGN-32.
+                    backgroundImage:
+                      "linear-gradient(135deg, " + primary + "E6, " + accent + "CC), url(" +
+                      store.site.cover_url + ")",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  } as any)
+                : ({ background: "linear-gradient(135deg, " + primary + ", " + accent + ")" } as any))
             : {},
         ]}
       >
+        {store.site.logo_url ? (
+          <Image
+            source={{ uri: store.site.logo_url }}
+            style={{
+              width: 56, height: 56, borderRadius: 12, marginBottom: 10,
+              backgroundColor: "rgba(255,255,255,0.15)",
+            }}
+            resizeMode="contain"
+            accessibilityLabel={store.site.name}
+          />
+        ) : null}
         <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase" }}>
           Aura Studio · Personalizados
         </Text>
@@ -89,13 +110,22 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   : ({ elevation: 3 } as any),
               ]}
             >
-              <LivePreview
-                config={p.customization_config}
-                values={{}}
-                size={72}
-                productName={p.name}
-                showLabel={false}
-              />
+              {p.image_url ? (
+                <Image
+                  source={{ uri: p.image_url }}
+                  style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: T.bg }}
+                  resizeMode="cover"
+                  accessibilityLabel={p.name}
+                />
+              ) : (
+                <LivePreview
+                  config={p.customization_config}
+                  values={{}}
+                  size={72}
+                  productName={p.name}
+                  showLabel={false}
+                />
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{p.name}</Text>
                 {p.description ? (
