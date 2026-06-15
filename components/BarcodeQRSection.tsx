@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Image, Platform, TextInput, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { generateBarcodeSVG, generateQRSVGUrl, generateProductCode, generatePrintHTML } from "@/utils/codeGen";
+import { generateBarcodeSVG, generateQRSVGUrl, generatePrintHTML } from "@/utils/codeGen";
+import { generateEAN13 } from "@/components/screens/estoque/labels/buildLabelHtml";
 import { toast } from "@/components/Toast";
 
 type Props = {
@@ -47,7 +48,12 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
   }
 
   function handleGenerate() {
-    const newCode = generateProductCode();
+    // 15/06/2026: gera um EAN-13 interno REAL (prefixo 200, escaneavel) em vez
+    // do placeholder "AURA-..." que nao e lido pelo scanner. Assim o codigo
+    // GRAVADO no cadastro == o codigo IMPRESSO na etiqueta == lido no PDV/Estoque.
+    // Seed unico (nome + timestamp + random) garante codigo unico por clique.
+    const seed = (productName || 'produto') + '|' + Date.now() + '|' + Math.random().toString(36).slice(2);
+    const newCode = generateEAN13(seed);
     onCodeChange(newCode);
     setShowPreview(true);
     toast.success('Codigo gerado: ' + newCode);
