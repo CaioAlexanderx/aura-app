@@ -4,7 +4,8 @@
 // Wired against karate-fase0-openapi.yaml (Fase 0),
 // karate-fase1-openapi.yaml v0.2.0 (Fase 1 – Track B financial),
 // karate-fase2-openapi.yaml v0.2.0 (Fase 2 – Track C eventos/exames),
-// and Track P (alerts, search, notifications).
+// Track P (alerts, search, notifications),
+// Track H (configurações da federação: equipe, recursos, identidade, régua).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
 import { request } from "@/services/api";
@@ -557,7 +558,76 @@ export interface Certificate {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// API calls — Fase 0
+// Track H — Configurações da Federação types
+// ─────────────────────────────────────────────────────────────────
+
+export type KarateRole = "federation_admin" | "federation_staff" | "federation_examiner";
+export type RegimeTributario = "simples_nacional" | "lucro_presumido" | "imune_isenta";
+
+export interface FederationMember {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  role: KarateRole;
+  role_label: string;
+  status: "ativo" | "pendente";
+  is_pending: boolean;
+}
+
+export interface InviteMemberInput {
+  email: string;
+  role: KarateRole;
+}
+
+export interface InviteMemberResult extends FederationMember {
+  invite_url: string;
+}
+
+export interface KarateFlags {
+  competicoes: boolean;
+  carteirinha: boolean;
+  conexao: boolean;
+  portal: boolean;
+}
+
+export interface FederationIdentity {
+  name: string | null;
+  slug: string | null;
+  logo_url: string | null;
+  wa_phone_display: string | null;
+  secretary_email: string | null;
+  cnpj: string | null;
+  legal_name: string | null;
+  inscricao_municipal: string | null;
+  regime_tributario: RegimeTributario | null;
+  regime_label: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+export interface ReminderConfig {
+  enabled: boolean;
+  channel: "email" | "whatsapp";
+  offsets_days: number[];
+  updated_at?: string | null;
+}
+
+export interface ReminderLogItem {
+  id: string;
+  annuity_id: string | null;
+  dojo_id: string | null;
+  channel: string;
+  recipient: string | null;
+  rule_code: string | null;
+  status: string;
+  provider_id: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// API calls — Fase 0 + 1 + 2 + Track H
 // ─────────────────────────────────────────────────────────────────
 export const karateApi = {
   // Dashboard
@@ -630,16 +700,12 @@ export const karateApi = {
     request(`/federation/${federationId}/practitioners`, { method: "POST", body }),
 
   // ── Track N — Transferência de praticante entre dojôs ──────────
-  /** GET /federation/{id}/practitioners/{practitionerId}/transfers
-   *  Histórico imutável de transferências. */
   listTransfers: (
     federationId: string,
     practitionerId: string
   ): Promise<Paginated<TransferRecord> | { data: TransferRecord[] }> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/transfers`),
 
-  /** POST /federation/{id}/practitioners/{practitionerId}/transfer
-   *  Transfere o praticante para outro dojô. 409 se já estiver no destino. */
   transferPractitioner: (
     federationId: string,
     practitionerId: string,
@@ -809,10 +875,9 @@ export const karateApi = {
     }),
 
   // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Belt Exams (karate-fase2-openapi.yaml v0.2.0)
+  // Fase 2 — Belt Exams
   // ─────────────────────────────────────────────────────────────────
 
-  /** GET /federation/{id}/belt-exams */
   listBeltExams: (
     federationId: string,
     params?: { status?: ExamStatus; page?: number; pageSize?: number }
@@ -825,38 +890,21 @@ export const karateApi = {
     return request(`/federation/${federationId}/belt-exams${query}`);
   },
 
-  /** POST /federation/{id}/belt-exams */
   createBeltExam: (federationId: string, body: BeltExamInput): Promise<BeltExam> =>
     request(`/federation/${federationId}/belt-exams`, { method: "POST", body }),
 
-  /** GET /federation/{id}/belt-exams/{examId} */
   getBeltExam: (federationId: string, examId: string): Promise<BeltExam & { examiners: Examiner[]; candidates: ExamCandidate[] }> =>
     request(`/federation/${federationId}/belt-exams/${examId}`),
 
-  /** PATCH /federation/{id}/belt-exams/{examId} */
   updateBeltExam: (federationId: string, examId: string, body: Partial<BeltExamInput>): Promise<BeltExam> =>
     request(`/federation/${federationId}/belt-exams/${examId}`, { method: "PATCH", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Examiners (banca)
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/belt-exams/{examId}/examiners */
   listExaminers: (federationId: string, examId: string): Promise<Examiner[]> =>
     request(`/federation/${federationId}/belt-exams/${examId}/examiners`),
 
-  /** POST /federation/{id}/belt-exams/{examId}/examiners */
   addExaminer: (federationId: string, examId: string, body: ExaminerInput): Promise<Examiner> =>
     request(`/federation/${federationId}/belt-exams/${examId}/examiners`, { method: "POST", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Candidates
-  // DECISÃO FPKT #1: POST always returns 201 with eligibility.warnings;
-  // never returns 422 for eligibility — inscription is never blocked.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** POST /federation/{id}/belt-exams/{examId}/candidates
-   *  Always 201 — eligibility is advisory only (never blocks). */
   enrollCandidate: (
     federationId: string,
     examId: string,
@@ -864,8 +912,6 @@ export const karateApi = {
   ): Promise<ExamCandidate> =>
     request(`/federation/${federationId}/belt-exams/${examId}/candidates`, { method: "POST", body }),
 
-  /** PATCH /federation/{id}/belt-exams/{examId}/candidates/{candidateId}
-   *  Lança resultado. RBAC: examResults guard on backend. */
   updateCandidateResult: (
     federationId: string,
     examId: string,
@@ -877,16 +923,9 @@ export const karateApi = {
       body,
     }),
 
-  /** POST /federation/{id}/belt-exams/{examId}/close
-   *  Fecha exame. NÃO emite certificados (DECISÃO FPKT #3). */
   closeBeltExam: (federationId: string, examId: string): Promise<{ closed: true; approved_count: number }> =>
     request(`/federation/${federationId}/belt-exams/${examId}/close`, { method: "POST", body: {} }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Eligibility (DECISÃO FPKT #1: informativo, nunca bloqueia)
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/practitioners/{practitionerId}/eligibility/{targetBelt} */
   checkEligibility: (
     federationId: string,
     practitionerId: string,
@@ -894,27 +933,15 @@ export const karateApi = {
   ): Promise<EligibilityResult> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/eligibility/${targetBelt}`),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Belt Requirements
-  // DECISÃO FPKT #2: confirmed=false → provisório; UI shows banner.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/belt-requirements */
   listBeltRequirements: (federationId: string): Promise<BeltRequirement[]> =>
     request(`/federation/${federationId}/belt-requirements`),
 
-  /** PUT /federation/{id}/belt-requirements */
   updateBeltRequirements: (
     federationId: string,
     body: { requirements: Array<{ belt_level: string } & BeltRequirementInput> }
   ): Promise<BeltRequirement[]> =>
     request(`/federation/${federationId}/belt-requirements`, { method: "PUT", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Courses / Events
-  // ─────────────────────────────────────────────────────────────────
-
-  /** GET /federation/{id}/courses */
   listCourses: (
     federationId: string,
     params?: { page?: number; pageSize?: number }
@@ -926,11 +953,9 @@ export const karateApi = {
     return request(`/federation/${federationId}/courses${query}`);
   },
 
-  /** POST /federation/{id}/courses */
   createCourse: (federationId: string, body: CourseEventInput): Promise<CourseEvent> =>
     request(`/federation/${federationId}/courses`, { method: "POST", body }),
 
-  /** POST /federation/{id}/courses/{eventId}/enroll */
   enrollCourse: (
     federationId: string,
     eventId: string,
@@ -938,21 +963,150 @@ export const karateApi = {
   ): Promise<{ enrolled: true }> =>
     request(`/federation/${federationId}/courses/${eventId}/enroll`, { method: "POST", body }),
 
-  // ─────────────────────────────────────────────────────────────────
-  // Fase 2 — Certificates
-  // DECISÃO FPKT #3: emissão sob demanda; /issue é chamado pelo admin.
-  // Fechar exame NÃO gera certificados automaticamente.
-  // ─────────────────────────────────────────────────────────────────
-
-  /** POST /federation/{id}/certificates/{candidateId}/issue
-   *  Solicita emissão do certificado (sob demanda). */
   issueCertificate: (
     federationId: string,
     candidateId: string
   ): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}/issue`, { method: "POST", body: {} }),
 
-  /** GET /federation/{id}/certificates/{candidateId} */
   getCertificate: (federationId: string, candidateId: string): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}`),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Track H — Configurações da Federação
+  // ─────────────────────────────────────────────────────────────────
+
+  // Régua de cobrança (Track I)
+  getReminderConfig: (federationId: string): Promise<{ config: ReminderConfig }> =>
+    request(`/federation/${federationId}/reminder-config`),
+
+  updateReminderConfig: (
+    federationId: string,
+    body: { enabled: boolean; channel?: "email" | "whatsapp"; offsets_days?: number[] }
+  ): Promise<{ config: ReminderConfig }> =>
+    request(`/federation/${federationId}/reminder-config`, { method: "PUT", body }),
+
+  getReminderLog: (
+    federationId: string,
+    limit?: number
+  ): Promise<{ items: ReminderLogItem[] }> => {
+    const qs = new URLSearchParams();
+    if (limit) qs.set("limit", String(limit));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/reminder-log${query}`);
+  },
+
+  runReminders: (
+    federationId: string,
+    body?: { today?: string }
+  ): Promise<{ result: unknown }> =>
+    request(`/federation/${federationId}/reminders/run`, { method: "POST", body: body ?? {} }),
+
+  // Equipe FPKT
+  listFederationMembers: (federationId: string): Promise<{ members: FederationMember[] }> =>
+    request(`/federation/${federationId}/settings/members`),
+
+  inviteFederationMember: (
+    federationId: string,
+    body: InviteMemberInput
+  ): Promise<InviteMemberResult> =>
+    request(`/federation/${federationId}/settings/members/invite`, { method: "POST", body }),
+
+  updateFederationMemberRole: (
+    federationId: string,
+    memberId: string,
+    role: KarateRole
+  ): Promise<{ id: string; role: string; role_label: string }> =>
+    request(`/federation/${federationId}/settings/members/${memberId}/role`, {
+      method: "PATCH",
+      body: { role },
+    }),
+
+  removeFederationMember: (
+    federationId: string,
+    memberId: string
+  ): Promise<{ removed: boolean }> =>
+    request(`/federation/${federationId}/settings/members/${memberId}`, { method: "DELETE" }),
+
+  // Feature flags
+  getFederationFlags: (federationId: string): Promise<{ flags: KarateFlags }> =>
+    request(`/federation/${federationId}/settings/flags`),
+
+  updateFederationFlags: (
+    federationId: string,
+    flags: Partial<KarateFlags>
+  ): Promise<{ flags: KarateFlags }> =>
+    request(`/federation/${federationId}/settings/flags`, { method: "PUT", body: { flags } }),
+
+  // Identidade + Fiscal
+  getFederationIdentity: (federationId: string): Promise<FederationIdentity> =>
+    request(`/federation/${federationId}/settings/identity`),
+
+  updateFederationIdentity: (
+    federationId: string,
+    body: Partial<FederationIdentity & { secretary_email?: string }>
+  ): Promise<{ updated: boolean }> =>
+    request(`/federation/${federationId}/settings/identity`, { method: "PUT", body }),
+};
+
+// ─────────────────────────────────────────────────────────────────
+// karateSettingsApi — compat shim (Track H)
+//
+// configuracoes/index.tsx importa este objeto diretamente de karateApi.ts.
+// As assinaturas diferem ligeiramente (ex: inviteMember recebe email+role
+// como args separados em vez de objeto). Este shim adapta e delega.
+// ─────────────────────────────────────────────────────────────────
+export const karateSettingsApi = {
+  /** Lista membros da equipe da federação. */
+  listMembers: (federationId: string): Promise<{ members: FederationMember[] }> =>
+    karateApi.listFederationMembers(federationId),
+
+  /** Convida membro — assinatura (fedId, email, role) conforme configuracoes/index.tsx. */
+  inviteMember: (
+    federationId: string,
+    email: string,
+    role: KarateRole
+  ): Promise<InviteMemberResult> =>
+    karateApi.inviteFederationMember(federationId, { email, role }),
+
+  /** Edita papel do membro. */
+  updateMemberRole: (
+    federationId: string,
+    memberId: string,
+    role: string
+  ): Promise<{ id: string; role: string; role_label: string }> =>
+    karateApi.updateFederationMemberRole(federationId, memberId, role as KarateRole),
+
+  /** Remove ou suspende membro. */
+  removeMember: (
+    federationId: string,
+    memberId: string
+  ): Promise<{ removed: boolean }> =>
+    karateApi.removeFederationMember(federationId, memberId),
+
+  /** Lê feature flags. */
+  getFlags: (
+    federationId: string
+  ): Promise<{ flags: KarateFlags }> =>
+    karateApi.getFederationFlags(federationId),
+
+  /** Salva feature flags. */
+  updateFlags: (
+    federationId: string,
+    flags: Partial<KarateFlags>
+  ): Promise<{ flags: KarateFlags }> =>
+    karateApi.updateFederationFlags(federationId, flags),
+
+  /** Lê identidade, contato e dados fiscais. */
+  getIdentity: (
+    federationId: string
+  ): Promise<FederationIdentity> =>
+    karateApi.getFederationIdentity(federationId),
+
+  /** Salva identidade, contato e dados fiscais. */
+  updateIdentity: (
+    federationId: string,
+    body: Partial<FederationIdentity>
+  ): Promise<{ updated: boolean }> =>
+    karateApi.updateFederationIdentity(federationId, body),
 };
