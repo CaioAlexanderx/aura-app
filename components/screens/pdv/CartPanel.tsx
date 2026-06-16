@@ -55,6 +55,8 @@ type Props = {
   requiredHints?: string[];
   emptyCta?: string;
   headerSubtitle?: string | null;
+  /** Densidade reduzida (carrinho estreito): CTAs em 2 linhas. */
+  compact?: boolean;
   // CPF na nota (NFC-e). Opcional — se passado, mostra o input.
   cpfNaNota?: string;
   onCpfNaNotaChange?: (v: string) => void;
@@ -80,7 +82,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     orderNumber, items, subtotal, discountAmount, total, itemCount,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
-    showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle,
+    showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle, compact,
     cpfNaNota, onCpfNaNotaChange,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
@@ -366,61 +368,87 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           </View>
         )}
 
-        {/* CTA row */}
-        <View style={s.ctaRow}>
-          <Pressable onPress={onClear} style={[s.ctaSec]}>
-            <Text style={s.ctaSecTxt}>Limpar</Text>
-          </Pressable>
-          {showOrcamento && onGenerateQuote && (
+        {/* CTA row — em carrinho estreito (compact) o "Finalizar venda"
+            ganha a própria linha, largura cheia, e Limpar/Orçamento dividem
+            a linha de cima. Evita truncar/estourar fora da tela. */}
+        {(() => {
+          const clearBtn = (
+            <Pressable onPress={onClear} style={[s.ctaSec]}>
+              <Text style={s.ctaSecTxt} numberOfLines={1}>Limpar</Text>
+            </Pressable>
+          );
+          const quoteBtn = showOrcamento && onGenerateQuote ? (
             <Pressable onPress={onGenerateQuote} disabled={!!isProcessing} style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}>
               <Icon name="file_text" size={15} color={Colors.violet3} />
-              <Text style={s.ctaAltTxt}>Orçamento</Text>
+              <Text style={s.ctaAltTxt} numberOfLines={1}>Orçamento</Text>
             </Pressable>
-          )}
-          <Pressable
-            onPress={onFinalize}
-            disabled={finalizeDisabled}
-            style={[
-              s.ctaPri,
-              Platform.OS === "web"
-                ? ({
-                    background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
-                    boxShadow:
-                      "0 8px 20px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)",
-                    position: "relative",
-                    overflow: "hidden",
-                  } as any)
-                : { backgroundColor: Colors.violet },
-              finalizeDisabled && { opacity: 0.5 },
-            ]}
-          >
-            {IS_WEB && (
-              <span
-                aria-hidden
-                style={{
-                  content: '"',
-                  position: "absolute",
-                  top: 0,
-                  left: "-100%",
-                  width: "100%",
-                  height: "100%",
-                  background:
-                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
-                  animation: "caixaShine 3s ease-in-out infinite",
-                  pointerEvents: "none",
-                } as any}
-              />
-            )}
-            {isProcessing ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Icon name="check" size={16} color="#fff" />
-                <Text style={s.ctaPriTxt}>Finalizar venda</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
+          ) : null;
+          const finalizeBtn = (
+            <Pressable
+              onPress={onFinalize}
+              disabled={finalizeDisabled}
+              style={[
+                s.ctaPri,
+                compact && s.ctaPriFull,
+                Platform.OS === "web"
+                  ? ({
+                      background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
+                      boxShadow:
+                        "0 8px 20px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)",
+                      position: "relative",
+                      overflow: "hidden",
+                    } as any)
+                  : { backgroundColor: Colors.violet },
+                finalizeDisabled && { opacity: 0.5 },
+              ]}
+            >
+              {IS_WEB && (
+                <span
+                  aria-hidden
+                  style={{
+                    content: '"',
+                    position: "absolute",
+                    top: 0,
+                    left: "-100%",
+                    width: "100%",
+                    height: "100%",
+                    background:
+                      "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+                    animation: "caixaShine 3s ease-in-out infinite",
+                    pointerEvents: "none",
+                  } as any}
+                />
+              )}
+              {isProcessing ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Icon name="check" size={16} color="#fff" />
+                  <Text style={s.ctaPriTxt} numberOfLines={1}>Finalizar venda</Text>
+                </>
+              )}
+            </Pressable>
+          );
+
+          if (compact) {
+            return (
+              <View style={{ marginTop: 14, gap: 8 }}>
+                <View style={s.ctaRowTop}>
+                  {clearBtn}
+                  {quoteBtn}
+                </View>
+                {finalizeBtn}
+              </View>
+            );
+          }
+          return (
+            <View style={s.ctaRow}>
+              {clearBtn}
+              {quoteBtn}
+              {finalizeBtn}
+            </View>
+          );
+        })()}
       </View>
     </View>
   );
@@ -858,6 +886,8 @@ const s = StyleSheet.create({
   hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginTop: 8, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
   ctaRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  ctaRowTop: { flexDirection: "row", gap: 8 },
+  ctaPriFull: { flex: 0, alignSelf: "stretch" },
   ctaSec: { flex: 1, height: 46, borderRadius: 12, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard, alignItems: "center", justifyContent: "center" },
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   ctaAlt: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
