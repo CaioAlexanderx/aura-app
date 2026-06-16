@@ -389,7 +389,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               disabled={finalizeDisabled}
               style={[
                 s.ctaPri,
-                compact && s.ctaPriFull,
+                compact ? s.ctaPriFull : s.ctaPriRow,
                 Platform.OS === "web"
                   ? ({
                       background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
@@ -887,12 +887,13 @@ const s = StyleSheet.create({
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
   ctaRow: { flexDirection: "row", gap: 8, marginTop: 14 },
   ctaRowTop: { flexDirection: "row", gap: 8 },
-  ctaPriFull: { flex: 0, alignSelf: "stretch" },
+  ctaPriRow: { flex: 1.7 },
+  ctaPriFull: { alignSelf: "stretch", width: "100%" },
   ctaSec: { flex: 1, height: 46, borderRadius: 12, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard, alignItems: "center", justifyContent: "center" },
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   ctaAlt: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
   ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  ctaPri: { flex: 1.7, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  ctaPri: { height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   ctaPriTxt: { fontSize: 13, color: "#fff", fontWeight: "700", letterSpacing: 0.3 },
 });
 
