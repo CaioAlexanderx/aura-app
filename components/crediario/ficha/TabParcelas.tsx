@@ -21,6 +21,11 @@ function translateStatus(status: string): string {
   return status;
 }
 
+// Soma do restante (principal em aberto) de uma lista de parcelas.
+function sumRemaining(list: CreditInstallment[]): number {
+  return list.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
+}
+
 export type TabParcelasProps = {
   profile: any;
   detail: any;
@@ -44,6 +49,8 @@ export type TabParcelasProps = {
   expandedAccountId: string | null | undefined;
   setExpandedAccountId: (v: string | null | undefined) => void;
   handleEditDueDateOpen: (inst: CreditInstallment) => void;
+  /** Item 2 (16/06): abre o sheet de renegociacao para um escopo (carne ou geral). */
+  onRenegociar: (accountId: string | null | undefined, scopeLabel: string, openRemaining: number) => void;
   openInstallmentPix: (id: string) => void;
   /** Pix para o recebimento de valor livre (B3). Passa o valor em reais. */
   openFreePix: (amount: number) => void;
@@ -73,7 +80,7 @@ export function TabParcelas({
   totalBalance, nextDueDate, scoreLabel, availableLimit, isBlocked, hasOverdue,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, openInstallmentPix, openFreePix,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, openFreePix,
   freeAmt, setFreeAmt, freeMethod, setFreeMethod, freeDateBr, setFreeDateBr,
   freeAccountId, setFreeAccountId, freePreview, freePreviewLoading,
   confirmFreePayment, freeSubmitting, prefill, triggerPreview,
@@ -212,7 +219,7 @@ export function TabParcelas({
                           <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
                         </View>
                         <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                          <Icon name="Calendar" size={13} color={Colors.violet} />
+                          <Icon name="edit" size={13} color={Colors.violet} />
                         </Pressable>
                         <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
                           <Text style={m.pixBtnTxt}>Pix</Text>
@@ -237,6 +244,14 @@ export function TabParcelas({
               >
                 <Text style={m.accActionTxt}>Receber</Text>
               </Pressable>
+              {accInst.length > 0 && (
+                <Pressable
+                  style={[m.accActionBtn, m.renegActionBtn]}
+                  onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))}
+                >
+                  <Text style={[m.accActionTxt, m.renegActionTxt]}>Renegociar</Text>
+                </Pressable>
+              )}
               <Pressable
                 style={[m.accActionBtn, { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 }]}
                 onPress={() => printCarne(companyId, customerId!)}
@@ -314,7 +329,7 @@ export function TabParcelas({
                       <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
                     </View>
                     <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                      <Icon name="Calendar" size={13} color={Colors.violet} />
+                      <Icon name="edit" size={13} color={Colors.violet} />
                     </Pressable>
                     <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
                       <Text style={m.pixBtnTxt}>Pix</Text>
@@ -326,6 +341,14 @@ export function TabParcelas({
                 </View>
               );
             })}
+            <View style={m.accActions}>
+              <Pressable
+                style={[m.accActionBtn, m.renegActionBtn]}
+                onPress={() => onRenegociar(null, "Sem carnê", sumRemaining(orphan))}
+              >
+                <Text style={[m.accActionTxt, m.renegActionTxt]}>Renegociar</Text>
+              </Pressable>
+            </View>
           </View>
         );
       })()}
@@ -336,13 +359,22 @@ export function TabParcelas({
     <View style={m.card}>
       <View style={m.cardTitleRow}>
         <Text style={m.cardTitle}>Parcelas em aberto</Text>
-        <Pressable
-          style={[m.newAccBtn, { gap: 4 }]}
-          onPress={() => printCarne(companyId, customerId!)}
-        >
-          <Icon name="printer" size={12} color={Colors.violet3} />
-          <Text style={m.newAccTxt}>Imprimir carnê</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <Pressable
+            style={[m.newAccBtn, { gap: 4 }]}
+            onPress={() => onRenegociar(null, "Parcelas em aberto", sumRemaining(openInst))}
+          >
+            <Icon name="repeat" size={12} color={Colors.violet3} />
+            <Text style={m.newAccTxt}>Renegociar</Text>
+          </Pressable>
+          <Pressable
+            style={[m.newAccBtn, { gap: 4 }]}
+            onPress={() => printCarne(companyId, customerId!)}
+          >
+            <Icon name="printer" size={12} color={Colors.violet3} />
+            <Text style={m.newAccTxt}>Imprimir carnê</Text>
+          </Pressable>
+        </View>
       </View>
       {openInst.map((ins) => {
         const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
@@ -396,7 +428,7 @@ export function TabParcelas({
                 <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Em atraso" : "No prazo"}</Text>
               </View>
               <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                <Icon name="Calendar" size={13} color={Colors.violet} />
+                <Icon name="edit" size={13} color={Colors.violet} />
               </Pressable>
               <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
                 <Text style={m.pixBtnTxt}>Pix</Text>
