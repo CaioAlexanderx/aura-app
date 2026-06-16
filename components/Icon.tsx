@@ -79,6 +79,9 @@ const PATHS: Record<string, string> = {
   message:        "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
   // Balao circular com cantos arredondados (WhatsApp link na home Studio)
   message_circle: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z",
+  // WhatsApp — balao com cauda inferior-esquerda + fone dentro. Glifo proprio
+  // (stroke feather-style), usado no botao "Cobrar" do crediario (16/06).
+  whatsapp:       "M21 11.5a8.5 8.5 0 01-12.6 7.45L3.5 20l1.1-4.8A8.5 8.5 0 1121 11.5z M8.7 7.7c.2 0 .45.01.58.28.16.32.5 1.22.55 1.31.05.1.08.21.01.34-.07.13-.1.21-.2.32-.1.11-.21.25-.3.34-.1.1-.2.2-.09.4.11.19.5.83 1.08 1.34.74.66 1.37.86 1.56.96.19.1.3.08.41-.05.11-.13.47-.55.6-.74.13-.19.26-.16.43-.1.18.07 1.12.53 1.31.62.19.1.32.14.37.22.05.08.05.48-.12.94-.17.46-.99.88-1.37.91-.38.04-.74.18-2.5-.54-2.12-.86-3.46-3.05-3.56-3.19-.1-.14-.85-1.13-.85-2.15 0-1.02.53-1.52.72-1.73.19-.21.42-.26.56-.26z",
   headset:        "M3 18v-6a9 9 0 0118 0v6 M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z M3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z",
   // ── Content ─────────────────────────────────────────────────
   file_text:      "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8",
@@ -147,6 +150,9 @@ const ALIASES: Record<string, string> = {
   "create":          "edit",
   "add":             "plus",
   "layout-grid":     "grid",
+  // WhatsApp (16/06) — aceita variacoes comuns de nome.
+  "whats-app":       "whatsapp",
+  "whatsApp":        "whatsapp",
 };
 
 function resolveName(name: string): string {
@@ -204,6 +210,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     // Novos (25/05)
     shopping_bag: "B", shopping_cart: "C", credit_card: "$",
     message_circle: "M", alert_circle: "!", briefcase: "B", image: "I",
+    whatsapp: "W",
     // Novos (fix/studio-icons)
     arrow_right: ">", arrow_left: "<", external_link: "^", box: "B",
     truck: "T", resize: "R", location: "P",
