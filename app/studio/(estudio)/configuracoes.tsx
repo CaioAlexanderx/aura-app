@@ -79,7 +79,10 @@ export default function StudioConfiguracoes() {
   // busca /members/billing internamente quando montado).
   // ============================================================
   const plan = company?.plan || "essencial";
-  const hasTeamCapacity = plan !== "essencial";
+  // 16/06/2026: acesso extra pago tambem libera equipe no Essencial (espelha o
+  // fallback do varejo em (tabs)/configuracoes.tsx e o gate de Equipe #255).
+  const hasTeamCapacity =
+    plan !== "essencial" || (Number((company as any)?.extra_seats_granted) || 0) > 0;
 
   const load = useCallback(async () => {
     if (!company?.id) return;
