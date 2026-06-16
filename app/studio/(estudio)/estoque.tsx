@@ -46,7 +46,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, Image, Platform,
+  TextInput, Image, Platform, Switch,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -83,6 +83,7 @@ type StudioProduct = {
   template_count?: number;
   extra_images_count?: number;
   category?: string | null;
+  studio_storefront_visible?: boolean;
 };
 
 type SectionKey = "basico" | "personalizacao" | "ficha" | "templates";
@@ -221,6 +222,7 @@ export default function StudioEstoque() {
         template_count: Number(p.template_count) || 0,
         extra_images_count: Number(p.extra_images_count) || 0,
         category: p.category || null,
+        studio_storefront_visible: p.studio_storefront_visible !== false,
       })));
 
       // Categorias (#4)
@@ -291,6 +293,33 @@ export default function StudioEstoque() {
     }
   }, [cid, expandedId]);
 
+  // ── Visibilidade na Loja Virtual (toggle por item) ────
+  // 16/06/2026: o lojista escolhe quais itens aparecem na vitrine publica.
+  // Otimista + rollback; persiste via PATCH /products (studio_storefront_visible).
+  const toggleStorefrontVisible = useCallback(
+    async (productId: string, next: boolean) => {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, studio_storefront_visible: next } : p)),
+      );
+      try {
+        await request<any>(`/companies/${cid}/products/${productId}`, {
+          method: "PATCH",
+          body: { studio_storefront_visible: next },
+          retry: 0,
+          timeout: 10000,
+        });
+        toast.success(next ? "Item visível na Loja Virtual" : "Item oculto da Loja Virtual");
+      } catch (e: any) {
+        setProducts((prev) =>
+          prev.map((p) => (p.id === productId ? { ...p, studio_storefront_visible: !next } : p)),
+        );
+        const status = e?.status ? `[${e.status}] ` : "";
+        toast.error(`${status}${e?.data?.error || e?.message || "Erro ao atualizar visibilidade"}`);
+      }
+    },
+    [cid],
+  );
+
   // ── Header right slot ────────────────────────────────────
   const headerRight = expandedProduct ? null : (
     <Pressable onPress={() => setWizardOpen(true)} style={s.btnPri}>
@@ -315,6 +344,7 @@ export default function StudioEstoque() {
               setProducts((prev) => prev.map((x) => (x.id === expandedProduct.id ? { ...x, ...patch } : x)));
             }}
             onSubpanelChanged={refreshExpanded}
+            onToggleVisible={(next) => toggleStorefrontVisible(expandedProduct.id, next)}
           />
         ) : (
           <>
@@ -425,6 +455,7 @@ export default function StudioEstoque() {
                     t={t}
                     s={s}
                     onPress={() => setExpandedId(p.id)}
+                    onToggleVisible={(next) => toggleStorefrontVisible(p.id, next)}
                   />
                 ))}
               </View>
@@ -452,12 +483,13 @@ export default function StudioEstoque() {
 // ProductRow — linha de produto na lista
 // ───────────────────────────────────────────────────────────
 function ProductRow({
-  product, onPress, t, s,
+  product, onPress, t, s, onToggleVisible,
 }: {
   product: StudioProduct;
   onPress: () => void;
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
+  onToggleVisible?: (next: boolean) => void;
 }) {
   const priceStr = `R$ ${(product.price || 0).toLocaleString("pt-BR", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
@@ -497,6 +529,12 @@ function ProductRow({
 
         {/* Chips */}
         <View style={s.rowChipsRow}>
+          {product.studio_storefront_visible === false && (
+            <View style={[s.tinyChip, { backgroundColor: t.bgSoft }]}>
+              <Icon name="eye_off" size={10} color={t.ink3} />
+              <Text style={[s.tinyChipTxt, { color: t.ink3 }]}>Oculto na loja</Text>
+            </View>
+          )}
           {product.is_personalizable && (
             <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
               <Icon name="sparkles" size={10} color={t.primary} />
@@ -522,6 +560,17 @@ function ProductRow({
 
       {/* Score + chevron */}
       <View style={s.rowRight}>
+        <Pressable
+          onPress={() => onToggleVisible?.(product.studio_storefront_visible === false)}
+          hitSlop={8}
+          style={s.eyeBtn}
+        >
+          <Icon
+            name={product.studio_storefront_visible === false ? "eye_off" : "eye"}
+            size={16}
+            color={product.studio_storefront_visible === false ? t.ink4 : t.primary}
+          />
+        </Pressable>
         <ProductQualityScore product={product as any} badgeOnly />
         <Icon name="chevron-right" size={16} color={t.ink3} />
       </View>
@@ -535,7 +584,7 @@ function ProductRow({
 // ───────────────────────────────────────────────────────────
 function ProductExpanded({
   product, companyId, slug, t, s,
-  onBack, onProductPatched, onSubpanelChanged,
+  onBack, onProductPatched, onSubpanelChanged, onToggleVisible,
 }: {
   product: StudioProduct;
   companyId: string;
@@ -545,6 +594,7 @@ function ProductExpanded({
   onBack: () => void;
   onProductPatched: (patch: Partial<StudioProduct>) => void;
   onSubpanelChanged: () => void;
+  onToggleVisible: (next: boolean) => void;
 }) {
   // Seções: estado de expansão + status (ok/partial/empty)
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
@@ -681,6 +731,7 @@ function ProductExpanded({
           companyId={companyId}
           t={t}
           s={s}
+          onToggleVisible={onToggleVisible}
           onPatched={(patch) => {
             onProductPatched(patch);
             flashSaved("basico");
@@ -805,13 +856,14 @@ function SectionCard({
 // BasicoForm — form inline (PATCH /products/:pid)
 // ───────────────────────────────────────────────────────────
 function BasicoForm({
-  product, companyId, t, s, onPatched,
+  product, companyId, t, s, onPatched, onToggleVisible,
 }: {
   product: StudioProduct;
   companyId: string;
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
   onPatched: (patch: Partial<StudioProduct>) => void;
+  onToggleVisible: (next: boolean) => void;
 }) {
   const [name, setName] = useState(product.name);
   const [price, setPrice] = useState(String(product.price || ""));
@@ -987,6 +1039,24 @@ function BasicoForm({
           placeholder="Detalhes que ajudam o cliente a decidir"
           placeholderTextColor={t.ink4}
           multiline
+        />
+      </View>
+
+      {/* Visibilidade na Loja Virtual — toggle independente do Salvar */}
+      <View style={s.visRow}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={s.fieldLabel}>Mostrar na Loja Virtual</Text>
+          <Text style={s.visHint}>
+            {product.studio_storefront_visible === false
+              ? "Oculto: não aparece na vitrine pública."
+              : "Visível: aparece na vitrine pública pros clientes."}
+          </Text>
+        </View>
+        <Switch
+          value={product.studio_storefront_visible !== false}
+          onValueChange={(v) => onToggleVisible(v)}
+          trackColor={{ true: t.primary, false: t.ink5 }}
+          thumbColor="#fff"
         />
       </View>
 
@@ -1245,6 +1315,9 @@ function buildStyles(t: StudioPalette) {
       color: t.ink,
     },
     row2: { flexDirection: "row", gap: 10 },
+    visRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
+    visHint: { fontSize: 11, color: t.ink3, lineHeight: 15 },
+    eyeBtn: { padding: 6, borderRadius: 8 },
 
     // Upload de imagem
     imgUploadRow: { flexDirection: "row", alignItems: "center", gap: 12 },
