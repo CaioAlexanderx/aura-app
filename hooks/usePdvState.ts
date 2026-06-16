@@ -91,6 +91,13 @@ export function usePdvState() {
   // ── Plano / módulos ─────────────────────────────────────────────────────────
   const plan = (company?.plan || "essencial").toLowerCase();
   const isNegocioPlus = plan === "negocio" || plan === "expansao" || plan === "personalizado";
+  // 16/06/2026: equipe/vendedoras tambem disponivel no Essencial quando ha
+  // acesso extra pago (extra_seats_granted > 0). Espelha o hasTeamCapacity do
+  // gate de Equipe (#255). Sem isso, a lista de vendedoras so carregava no
+  // Negocio+ e sumia ao devolver o cliente pra Essencial + acesso extra (caso
+  // Encanto: 3 vendedoras cadastradas, picker vazio no PDV).
+  const extraSeatsGranted = Number((company as any)?.extra_seats_granted || 0);
+  const hasTeamCapacity = isNegocioPlus || extraSeatsGranted > 0;
   const moduleOverrides = ((company as any)?.module_overrides ?? {}) as Record<string, boolean>;
   const isModuleEnabled = (key: string, planDefault: boolean) =>
     moduleOverrides[key] === true ? true
@@ -131,7 +138,7 @@ export function usePdvState() {
   const { data: empData } = useQuery({
     queryKey:  ["employees", company?.id],
     queryFn:   () => employeesApi.list(company!.id),
-    enabled:   !!company?.id && isNegocioPlus,
+    enabled:   !!company?.id && hasTeamCapacity,
     staleTime: 60_000,
   });
   const employees = useMemo(
