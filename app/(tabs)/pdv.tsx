@@ -29,7 +29,7 @@ import { CaixaDesignStyle, IS_WEB } from "@/components/screens/pdv/types";
 import { SearchBox } from "@/components/screens/pdv/SearchBox";
 import { MerchantBanner } from "@/components/screens/pdv/MerchantBanner";
 import {
-  ActBarcode, ActPerson, ActCoupon, ActTroca, ActCrediario,
+  ActBarcode, ActPerson, ActCoupon, ActTroca,
 } from "@/components/screens/pdv/ActionToolbar";
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
@@ -38,6 +38,7 @@ import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
 import { PdvModals } from "@/components/screens/pdv/PdvModals";
 
 import { usePdvState } from "@/hooks/usePdvState";
+import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
 
 const PAGE_SIZE = 12;
@@ -54,8 +55,15 @@ function CaixaScreenInner() {
   const { couponApplied, setCouponApplied, clearCoupon } = st;
   const { activeSellerValue, activeCustomerValue, customerOptions, pickCustomerWithPhone } = st;
   const { handleScan, handleAddProduct, handleVariantSelected, handleValidateCoupon } = st;
-  const { handleOpenCrediario, selectEmployee, setSellerName } = st;
+  const { selectEmployee, setSellerName } = st;
   const { cartProps, cartHeadRef, orderSuffix } = st;
+
+  // 16/06/2026: grid de produtos fluido + crediário só como modalidade de
+  // pagamento (card removido da toolbar). Gateamos o chip por crediarioEnabled.
+  const productMinCard = productMinCardFor(vp);
+  const pdvPayMethods = crediarioEnabled
+    ? cartProps.payMethods
+    : cartProps.payMethods.filter((m: any) => m.key !== "crediario");
 
   const modals = (
     <PdvModals
@@ -118,7 +126,7 @@ function CaixaScreenInner() {
     );
   }
 
-  function ProductSection({ columns }: { columns: number }) {
+  function ProductSection({ columns, minCard }: { columns: number; minCard?: number }) {
     if (st.products.length === 0)
       return (
         <EmptyState icon="package" iconColor={Colors.amber}
@@ -143,6 +151,8 @@ function CaixaScreenInner() {
           qtyById={qtyById}
           onAdd={(p, e) => handleAddProduct(p as Product, e)}
           columns={columns}
+          minCard={minCard}
+          compact={vp.compact}
         />
         <Pagination page={page} totalPages={totalPages} total={filteredTotal}
           pageSize={PAGE_SIZE} onPage={goTo} />
@@ -240,12 +250,6 @@ function CaixaScreenInner() {
                   onValidate={handleValidateCoupon}
                 />
                 <ActTroca onOpen={st.openTroca} />
-                {crediarioEnabled && (
-                  <ActCrediario
-                    onOpen={handleOpenCrediario}
-                    hasCustomer={!!selectedCustomerId}
-                  />
-                )}
               </View>
 
               <View style={s.catRow}>
@@ -255,7 +259,7 @@ function CaixaScreenInner() {
                 <StockToggle />
               </View>
 
-              <ProductSection columns={st.productCols} />
+              <ProductSection columns={st.productCols} minCard={productMinCard} />
 
               {isDemo && (
                 <View style={s.demoBanner}>
@@ -270,7 +274,7 @@ function CaixaScreenInner() {
             { width: st.cartWidth },
             IS_WEB && ({ position: "sticky" as any, top: 0, height: "100vh" } as any),
           ]}>
-            <CartPanel ref={cartHeadRef} {...cartProps} />
+            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} />
           </View>
         </View>
 
@@ -351,12 +355,6 @@ function CaixaScreenInner() {
             onValidate={handleValidateCoupon}
           />
           <ActTroca onOpen={st.openTroca} />
-          {crediarioEnabled && (
-            <ActCrediario
-              onOpen={handleOpenCrediario}
-              hasCustomer={!!selectedCustomerId}
-            />
-          )}
         </View>
 
         <View style={s.catRow}>
@@ -369,7 +367,7 @@ function CaixaScreenInner() {
         <ProductSection columns={2} />
 
         <View style={{ marginTop: 20 }}>
-          <CartPanel ref={cartHeadRef} {...cartProps} />
+          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} />
         </View>
       </ScrollView>
 
