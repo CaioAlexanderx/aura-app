@@ -25,7 +25,7 @@ interface Props {
 
 function fmt(v?: number) {
   if (v == null) return '';
-  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function sourceLabel(s: string) {
@@ -150,7 +150,7 @@ function BannerCard({ b, onDismiss, C, router }: { b: AppBanner; onDismiss: () =
         <iframe
           srcDoc={b.html_content}
           sandbox="allow-scripts"
-          style={{ width: '100%', height: 230, border: 'none', display: 'block' } as any}
+          style={{ width: '100%', aspectRatio: '3 / 2', border: 'none', display: 'block' } as any}
           title={b.title}
         />
       ) : (
