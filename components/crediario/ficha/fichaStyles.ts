@@ -3,7 +3,9 @@ import { Colors } from "@/constants/colors";
 
 export const m = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 16 },
-  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "90%", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
+  // Item 3 (16/06): maxWidth 480 -> 700 para acomodar melhor o volume de info.
+  // width "100%" mantem mobile full-bleed; maxWidth so morde no desktop.
+  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 700, maxHeight: "90%", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
 
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   crumb: { flexDirection: "row", alignItems: "center", gap: 5 },
@@ -192,5 +194,20 @@ export const m = StyleSheet.create({
   previewRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 },
   previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
   previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
+
+  // ── Item 2 (16/06): renegociacao de parcelas ──────────────────────────
+  // Botao "Renegociar" (acao secundaria, estilo outline violeta).
+  renegActionBtn: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  renegActionTxt: { color: Colors.violet3 },
+  // Stepper de numero de parcelas (− valor +).
+  renegStepRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  renegStepBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  renegStepBtnDisabled: { opacity: 0.4 },
+  renegStepVal: { minWidth: 56, textAlign: "center", fontSize: 18, fontWeight: "800", color: Colors.ink },
+  renegHint: { fontSize: 11, color: Colors.ink3, marginTop: 6, lineHeight: 16 },
+  // Linha de delta (desconto/acrescimo) no resumo.
+  renegDeltaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  renegDeltaLbl: { fontSize: 12, color: Colors.ink3 },
+  renegDeltaVal: { fontSize: 14, fontWeight: "800" },
 
 } as any);
