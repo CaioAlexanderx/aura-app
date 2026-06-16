@@ -15,6 +15,9 @@
 //   Reutiliza o mesmo overlay pixInstId/pixData/pixLoading; identificado
 //   por pixInstId === "free" quando originado do valor livre.
 //   Tratamento amigável de PIX_KEY_MISSING (422) em ambos os handlers.
+// Item 2 (16/06): renegociação de parcelas — sheet "Renegociar parcelas" com
+//   edição livre (nº ↔ valor) e total editável; rescheduleApi.apply.
+// Item 4 (16/06): botão "Cobrar" do header usa ícone whatsapp.
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
@@ -29,6 +32,7 @@ import {
   type CreditAccount, type CreditInstallment, type PaymentAllocation, type CustomerTermsOverrides,
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
 } from "@/services/creditApi";
+import { rescheduleApi } from "@/services/creditReschedule";
 import QRCode from "react-native-qrcode-svg";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
@@ -78,6 +82,14 @@ export function ClienteCrediarioModal({
   const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
+
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
+  const [renegScope, setRenegScope] = useState<{ accountId: string | null | undefined; label: string; openRemaining: number } | null>(null);
+  const [renegTotal, setRenegTotal] = useState("");
+  const [renegCount, setRenegCount] = useState(1);
+  const [renegPerParcel, setRenegPerParcel] = useState("");
+  const [renegFirstDue, setRenegFirstDue] = useState("");
+  const [renegSubmitting, setRenegSubmitting] = useState(false);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -131,6 +143,8 @@ export function ClienteCrediarioModal({
       setEditingDueDateInst(null);
       setEditDueDateInput("");
       setEditDueDateError("");
+      setRenegScope(null);
+      setRenegSubmitting(false);
       setHistEvents([]);
       setHistCursor(null);
       setHistLoaded(false);
@@ -298,6 +312,84 @@ export function ClienteCrediarioModal({
     editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
+  // Abre o sheet com prefill do escopo (carne, "sem carne" ou geral). O total
+  // default = saldo aberto do escopo; o nº default = parcelas abertas do escopo.
+  function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
+    const scopeInst = (accountId === null || accountId === undefined)
+      ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
+      : (instByAccount.get(accountId) || []);
+    const count = Math.max(1, Math.min(36, scopeInst.length || 1));
+    setRenegScope({ accountId, label, openRemaining });
+    setRenegTotal(openRemaining > 0 ? openRemaining.toFixed(2).replace(".", ",") : "");
+    setRenegCount(count);
+    setRenegPerParcel((openRemaining / count).toFixed(2).replace(".", ","));
+    const firstIso = scopeInst.length
+      ? scopeInst.reduce((best, i) => (!best || new Date(i.due_date) < new Date(best) ? i.due_date : best), "" as string)
+      : "";
+    setRenegFirstDue(firstIso ? formatIsoToBr(firstIso) : todayBrSp());
+  }
+
+  // Edicao livre dos dois lados: mexer no nº recalcula o valor; mexer no valor
+  // recalcula o nº; mexer no total recalcula o valor mantendo o nº.
+  function setRenegCountSafe(n: number) {
+    const c = Math.max(1, Math.min(36, n));
+    setRenegCount(c);
+    const total = parseAmount(renegTotal);
+    setRenegPerParcel((total / c).toFixed(2).replace(".", ","));
+  }
+  function onRenegTotalChange(v: string) {
+    const clean = v.replace(/[^\d,.]/g, "");
+    setRenegTotal(clean);
+    const total = parseAmount(clean);
+    setRenegPerParcel((total / Math.max(1, renegCount)).toFixed(2).replace(".", ","));
+  }
+  function onRenegPerParcelChange(v: string) {
+    const clean = v.replace(/[^\d,.]/g, "");
+    setRenegPerParcel(clean);
+    const per = parseAmount(clean);
+    const total = parseAmount(renegTotal);
+    if (per > 0 && total > 0) {
+      setRenegCount(Math.max(1, Math.min(36, Math.round(total / per))));
+    }
+  }
+
+  async function confirmRenegociar() {
+    if (!renegScope || !customerId) return;
+    const total = parseAmount(renegTotal);
+    if (total <= 0) { toast.error("Informe um total maior que zero"); return; }
+    if (renegCount < 1) { toast.error("Número de parcelas inválido"); return; }
+    const iso = parseBrDate(renegFirstDue);
+    if (!iso) { toast.error("Data da 1ª parcela inválida"); return; }
+    setRenegSubmitting(true);
+    try {
+      const res = await rescheduleApi.apply(companyId, customerId, renegScope.accountId, {
+        total,
+        installments: renegCount,
+        first_due_date: iso,
+      });
+      const adj = res.adjustment;
+      toast.success(
+        adj?.type === "discount"
+          ? `Renegociado! Desconto de ${fmt(adj.amount)} no saldo.`
+          : adj?.type === "surcharge"
+            ? `Renegociado! Acréscimo de ${fmt(adj.amount)} no saldo.`
+            : `Parcelas renegociadas em ${res.installments_count}x.`
+      );
+      setRenegScope(null);
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
+      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
+      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
+      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
+      onChanged?.();
+    } catch (err: any) {
+      toast.error(err?.data?.error || "Não foi possível renegociar. Tente novamente.");
+    } finally {
+      setRenegSubmitting(false);
+    }
+  }
+
   async function loadHistory(cursor?: string | null) {
     if (!companyId || !customerId) return;
     setHistLoading(true);
@@ -459,6 +551,13 @@ export function ClienteCrediarioModal({
     profile?.terms?.overrides?.interest_rate != null
   );
 
+  // Derivados do sheet de renegociacao (distribuicao identica ao backend:
+  // floor por parcela, resto na ultima).
+  const renegTotalVal = parseAmount(renegTotal);
+  const renegBase = renegCount > 0 ? Math.floor((renegTotalVal / renegCount) * 100) / 100 : 0;
+  const renegLast = +(renegTotalVal - renegBase * (renegCount - 1)).toFixed(2);
+  const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={m.backdrop} onPress={onClose}>
@@ -496,7 +595,7 @@ export function ClienteCrediarioModal({
               </View>
               {!!phone && !!onCobrar && (
                 <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)}>
-                  <Icon name="message_circle" size={14} color={Colors.green} />
+                  <Icon name="whatsapp" size={14} color={Colors.green} />
                   <Text style={m.waTxt}>Cobrar</Text>
                 </Pressable>
               )}
@@ -571,7 +670,8 @@ export function ClienteCrediarioModal({
                     setShowNewAccount={setShowNewAccount} newAccountName={newAccountName}
                     setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
-                    handleEditDueDateOpen={handleEditDueDateOpen} openInstallmentPix={openInstallmentPix}
+                    handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
+                    openInstallmentPix={openInstallmentPix}
                     openFreePix={openFreePix}
                     freeAmt={freeAmt} setFreeAmt={setFreeAmt} freeMethod={freeMethod} setFreeMethod={setFreeMethod}
                     freeDateBr={freeDateBr} setFreeDateBr={setFreeDateBr}
@@ -756,6 +856,109 @@ export function ClienteCrediarioModal({
                   </Pressable>
                 </>
               )}
+            </View>
+          )}
+
+          {renegScope && (
+            <View style={m.editDueDateSheet}>
+              <View style={m.editDueDateHeader}>
+                <Text style={m.editDueDateTitle}>Renegociar parcelas</Text>
+                <Pressable onPress={() => setRenegScope(null)} style={m.xBtn}>
+                  <Icon name="x" size={13} color={Colors.ink3} />
+                </Pressable>
+              </View>
+              <Text style={m.editDueDateSub}>
+                {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão substituídas por este novo cronograma.
+              </Text>
+
+              <Text style={[m.fieldLabel, { marginTop: 4 }]}>Novo total</Text>
+              <View style={m.amountIn}>
+                <Text style={m.amountPrefix}>R$</Text>
+                <TextInput
+                  style={m.amountInput}
+                  value={renegTotal}
+                  onChangeText={onRenegTotalChange}
+                  placeholder="0,00"
+                  placeholderTextColor={Colors.ink3}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={m.fieldLabel}>Nº de parcelas</Text>
+                  <View style={m.renegStepRow}>
+                    <Pressable
+                      style={[m.renegStepBtn, renegCount <= 1 && m.renegStepBtnDisabled]}
+                      disabled={renegCount <= 1}
+                      onPress={() => setRenegCountSafe(renegCount - 1)}
+                    >
+                      <Icon name="minus" size={16} color={Colors.violet3} />
+                    </Pressable>
+                    <Text style={m.renegStepVal}>{renegCount}</Text>
+                    <Pressable
+                      style={[m.renegStepBtn, renegCount >= 36 && m.renegStepBtnDisabled]}
+                      disabled={renegCount >= 36}
+                      onPress={() => setRenegCountSafe(renegCount + 1)}
+                    >
+                      <Icon name="plus" size={16} color={Colors.violet3} />
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={m.fieldLabel}>Valor por parcela</Text>
+                  <View style={m.amountIn}>
+                    <Text style={m.amountPrefix}>R$</Text>
+                    <TextInput
+                      style={[m.amountInput, { fontSize: 16 }]}
+                      value={renegPerParcel}
+                      onChangeText={onRenegPerParcelChange}
+                      placeholder="0,00"
+                      placeholderTextColor={Colors.ink3}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+              </View>
+              <Text style={m.renegHint}>
+                Mexa no número de parcelas ou no valor — o outro se ajusta sozinho.{" "}
+                {renegCount}× de {fmt(renegBase)}{Math.abs(renegLast - renegBase) > 0.005 ? ` (última ${fmt(renegLast)})` : ""}.
+              </Text>
+
+              <Text style={[m.fieldLabel, { marginTop: 12 }]}>1ª parcela vence em</Text>
+              <DateInput
+                value={renegFirstDue}
+                onChangeText={setRenegFirstDue}
+                placeholder="dd/mm/aaaa"
+                style={m.dateInput}
+              />
+
+              {Math.abs(renegDelta) > 0.005 && (
+                <View style={m.renegDeltaRow}>
+                  <Text style={m.renegDeltaLbl}>{renegDelta < 0 ? "Desconto no saldo" : "Acréscimo no saldo"}</Text>
+                  <Text style={[m.renegDeltaVal, { color: renegDelta < 0 ? Colors.green : Colors.red }]}>
+                    {renegDelta < 0 ? "−" : "+"}{fmt(Math.abs(renegDelta))}
+                  </Text>
+                </View>
+              )}
+
+              <View style={{ flexDirection: "row", gap: 9, marginTop: 14 }}>
+                <Pressable
+                  style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                  onPress={() => setRenegScope(null)}
+                >
+                  <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={[m.cta, { flex: 2 }, (renegTotalVal <= 0 || renegSubmitting) && { opacity: 0.5 }]}
+                  onPress={confirmRenegociar}
+                  disabled={renegTotalVal <= 0 || renegSubmitting}
+                >
+                  {renegSubmitting
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={m.ctaTxt}>Confirmar renegociação</Text>}
+                </Pressable>
+              </View>
             </View>
           )}
 
