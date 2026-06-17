@@ -39,7 +39,12 @@ function WebTransition({ children }: Props) {
           animation: auraPageOut 0.15s ease-in forwards;
         }
       `}} />
-      <div key={key} className={animClass} style={{ flex: 1, minHeight: "100%" } as any}>
+      {/* 17/06/2026: minHeight 0 (era "100%"). O "100%" forçava a página a 100vh;
+          como o conteúdo fica abaixo da topbar do sininho (~46px), isso
+          transbordava e quebrava a altura do PDV (carrinho/Finalizar abaixo da
+          dobra, pior no zoom 100%). Com flex:1 + minHeight:0 a área ocupa
+          exatamente viewport − topbar; páginas curtas ainda preenchem via flex. */}
+      <div key={key} className={animClass} style={{ flex: 1, minHeight: 0 } as any}>
         {children}
       </div>
     </>
