@@ -19,6 +19,10 @@
 //   17/06 (tarde): bloco de checkout ancorado ao FUNDO do scroll (espaçador
 //   flex:1 + flexGrow no contentContainer) pra não deixar vazio enorme entre
 //   o checkout e o rodapé quando há pouco conteúdo.
+//   17/06 (noite): prop `fill` — o "esticar + ancorar no fundo" só vale quando
+//   o painel tem altura limitada (desktop). No mobile (sem fill) o carrinho
+//   fica em altura natural e a página rola — senão o espaçador estica e cria
+//   um vazio gigante (report Davi no zoom 100% / janela estreita).
 // ============================================================
 import { forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -67,6 +71,9 @@ type Props = {
   headerSubtitle?: string | null;
   /** Densidade reduzida (carrinho estreito): CTAs em 2 linhas. */
   compact?: boolean;
+  /** Painel com altura limitada (desktop): corpo rola e o checkout ancora no
+   *  fundo. No mobile (sem fill) o painel tem altura natural e a página rola. */
+  fill?: boolean;
   // CPF na nota (NFC-e). Opcional — se passado, mostra o input.
   cpfNaNota?: string;
   onCpfNaNotaChange?: (v: string) => void;
@@ -92,7 +99,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     orderNumber, items, subtotal, discountAmount, total, itemCount,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
-    showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle, compact,
+    showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
@@ -195,8 +202,9 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
       </View>
 
       {/* BODY — rola tudo que pode crescer: itens + pagamento + divisão +
-          resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível. */}
-      <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 16, flexGrow: 1 }}>
+          resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível.
+          Só ancora o checkout no fundo (espaçador) quando fill (desktop). */}
+      <ScrollView style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
             <View style={s.emptyIco}>
@@ -221,10 +229,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           ))
         )}
 
-        {/* Espaçador flexível: empurra o checkout pro fundo da área de rolagem
-            quando há pouco conteúdo (sem vazio entre checkout e rodapé). Com
-            muitos itens ele colapsa pra 0 e tudo rola normalmente. */}
-        <View style={{ flex: 1, minHeight: 14 }} />
+        {/* Espaçador flexível (só no modo fill/desktop): empurra o checkout pro
+            fundo da área de rolagem quando há pouco conteúdo (sem vazio entre
+            checkout e rodapé). Com muitos itens colapsa pra 0 e tudo rola. No
+            mobile (sem fill) NÃO entra — senão estica e cria vazio gigante. */}
+        {fill && <View style={{ flex: 1, minHeight: 14 }} />}
 
         {/* ── Pagamento / divisão / resumo / CPF (rolam junto) ─────────── */}
         <View style={s.checkoutBlock}>

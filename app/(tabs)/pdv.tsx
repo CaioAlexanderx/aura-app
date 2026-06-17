@@ -22,6 +22,8 @@
 // monitor. FIX: a área do PDV usa a altura REAL disponível
 // (calc(100vh - TOPBAR_H)) num único lugar (s.main no web) e os filhos
 // (catálogo + carrinho) usam height/maxHeight: 100%.
+// O carrinho desktop recebe `fill` (corpo rola + checkout ancora no fundo);
+// o mobile NÃO recebe fill → altura natural, a página rola (sem vazio).
 // ============================================================
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
@@ -290,7 +292,7 @@ function CaixaScreenInner() {
             { width: st.cartWidth },
             IS_WEB && ({ height: "100%" } as any),
           ]}>
-            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} />
+            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} fill />
           </View>
         </View>
 
