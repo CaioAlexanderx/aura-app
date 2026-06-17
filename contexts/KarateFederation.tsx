@@ -7,10 +7,9 @@
 // backend (auth.js / resolveKarateContext) já resolve ambos e entrega em
 // company.federation_id + company.karate_role.
 //
-// Fallback de DEV: se a company não trouxer federation_id (ex. ainda não
-// há federação criada no banco), usa EXPO_PUBLIC_KARATE_FEDERATION_ID ou um
-// placeholder, para as telas seguirem renderizando com o mock-fallback dos
-// Tracks A–F. karateRole fica null nesse caso (nav não restringe).
+// SEM MOCK: o federationId vem exclusivamente do JWT/company. O provider
+// só é montado pelo (federation)/_layout quando company.federation_id
+// existe (guard), então aqui federationId é sempre uma string real.
 // ============================================================
 import React, { createContext, useContext, ReactNode } from "react";
 import { useAuthStore } from "@/stores/auth";
@@ -21,26 +20,19 @@ export interface KarateFederationContextValue {
   karateRole: string | null;
 }
 
-// Fallback de desenvolvimento (sem federação real no banco ainda).
-const DEV_FALLBACK_FEDERATION_ID =
-  (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_KARATE_FEDERATION_ID) ||
-  "00000000-0000-0000-0000-000000000001";
-
-const DEFAULT_FEDERATION_NAME = "Federação Paulista de Karatê Tradicional";
-
 const KarateFederationContext = createContext<KarateFederationContextValue>({
-  federationId: DEV_FALLBACK_FEDERATION_ID,
-  federationName: DEFAULT_FEDERATION_NAME,
+  federationId: "",
+  federationName: "",
   karateRole: null,
 });
 
 export function KarateFederationProvider({ children }: { children: ReactNode }) {
   const company = useAuthStore((s) => s.company) as any;
 
-  const realFederationId: string | undefined = company?.federation_id || undefined;
   const value: KarateFederationContextValue = {
-    federationId: realFederationId || DEV_FALLBACK_FEDERATION_ID,
-    federationName: company?.name || DEFAULT_FEDERATION_NAME,
+    // Garantido pelo guard do (federation)/_layout (federation_id presente).
+    federationId: company?.federation_id ?? "",
+    federationName: company?.name || "Federação",
     karateRole: company?.karate_role ?? null,
   };
 

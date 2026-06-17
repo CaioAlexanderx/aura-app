@@ -17,6 +17,7 @@ import {
 import { Slot, usePathname, useRouter, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/stores/auth";
+import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
@@ -53,6 +54,7 @@ export default function SenseiLayout() {
     route === "/karate/sensei" ? (path === "/karate/sensei" || path === "/karate/sensei/") : path.startsWith(route);
 
   return (
+   <KarateFederationProvider>
     <SafeAreaView style={styles.root}>
       {/* Topbar light */}
       <View style={styles.topbar}>
@@ -85,6 +87,7 @@ export default function SenseiLayout() {
 
       <View style={{ flex: 1 }}><Slot /></View>
     </SafeAreaView>
+   </KarateFederationProvider>
   );
 }
 
