@@ -6,7 +6,10 @@
 //
 // Track G (acesso real): gate por vertical karatê (espera hidratar). O
 // roteamento por papel (sensei/dojo_owner → aqui) é feito no layout da
-// federação. SENSEI_DOJO segue mock até os dados reais do dojô chegarem.
+// federação. Dados do dojô vêm de company (JWT) — dojoId via contexto.
+//
+// Fase 0 Dojô (17/06/2026): usa company.name como nome do dojô em vez
+// do mock SENSEI_DOJO. Mantém SENSEI_DOJO apenas como fallback de display.
 // Track J: adicionada aba Certificados → /karate/sensei/certificados
 // ============================================================
 import React from "react";
@@ -17,13 +20,13 @@ import {
 import { Slot, usePathname, useRouter, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/stores/auth";
-import { KarateFederationProvider } from "@/contexts/KarateFederation";
+import { KarateFederationProvider, useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
 
-// Dojô do sensei logado (mock até os dados reais do dojô existirem)
-export const SENSEI_DOJO = { name: "Dojô Mirim Santos", code: "FPKT-027", sensei: "Fernanda Lima", total: 63 };
+// Fallback de display (só usado se company.name não vier)
+const SENSEI_DOJO_FALLBACK = { name: "Dojô", code: "—" };
 
 const TABS = [
   { label: "Praticantes", route: "/karate/sensei" },
@@ -32,36 +35,27 @@ const TABS = [
   { label: "Certificados",route: "/karate/sensei/certificados" },
 ] as const;
 
-export default function SenseiLayout() {
+function SenseiShell() {
   const router = useRouter();
   const path = usePathname();
-  const { isHydrated, company } = useAuthStore();
+  const { dojoId } = useKarateFederation();
+  const company = useAuthStore((s) => s.company) as any;
 
-  // Track G: espera hidratar e exige vertical karatê.
-  if (!isHydrated) {
-    return (
-      <SafeAreaView style={[styles.root, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color={KarateColors.primary} />
-      </SafeAreaView>
-    );
-  }
-  const vertical = (company as any)?.vertical ?? (company as any)?.vertical_active;
-  if (!KARATE_VERTICALS.includes(vertical as string)) {
-    return <Redirect href="/(tabs)" />;
-  }
+  const dojoName = company?.name || SENSEI_DOJO_FALLBACK.name;
 
   const isActive = (route: string) =>
     route === "/karate/sensei" ? (path === "/karate/sensei" || path === "/karate/sensei/") : path.startsWith(route);
 
   return (
-   <KarateFederationProvider>
     <SafeAreaView style={styles.root}>
       {/* Topbar light */}
       <View style={styles.topbar}>
         <View style={styles.logoMark}><Text style={styles.kanji}>空</Text></View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.dojo} numberOfLines={1}>{SENSEI_DOJO.name}</Text>
-          <Text style={styles.dojoSub}>{SENSEI_DOJO.code} · Sensei {SENSEI_DOJO.sensei}</Text>
+          <Text style={styles.dojo} numberOfLines={1}>{dojoName}</Text>
+          {dojoId && (
+            <Text style={styles.dojoSub} numberOfLines={1}>ID: {dojoId.slice(0, 8)}…</Text>
+          )}
         </View>
         <View style={styles.roPill}>
           <Ionicons name="eye-outline" size={12} color={KarateColors.ink3} />
@@ -87,7 +81,29 @@ export default function SenseiLayout() {
 
       <View style={{ flex: 1 }}><Slot /></View>
     </SafeAreaView>
-   </KarateFederationProvider>
+  );
+}
+
+export default function SenseiLayout() {
+  const { isHydrated, company } = useAuthStore();
+
+  // Track G: espera hidratar e exige vertical karatê.
+  if (!isHydrated) {
+    return (
+      <SafeAreaView style={[styles.root, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color={KarateColors.primary} />
+      </SafeAreaView>
+    );
+  }
+  const vertical = (company as any)?.vertical ?? (company as any)?.vertical_active;
+  if (!KARATE_VERTICALS.includes(vertical as string)) {
+    return <Redirect href="/(tabs)" />;
+  }
+
+  return (
+    <KarateFederationProvider>
+      <SenseiShell />
+    </KarateFederationProvider>
   );
 }
 

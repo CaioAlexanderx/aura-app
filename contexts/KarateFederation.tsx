@@ -7,9 +7,10 @@
 // backend (auth.js / resolveKarateContext) já resolve ambos e entrega em
 // company.federation_id + company.karate_role.
 //
-// SEM MOCK: o federationId vem exclusivamente do JWT/company. O provider
-// só é montado pelo (federation)/_layout quando company.federation_id
-// existe (guard), então aqui federationId é sempre uma string real.
+// Fase 0 Dojô (17/06/2026): adicionado dojoId.
+// company.dojo_id é populado pelo JWT quando o usuário logado é membro
+// de um karate_dojo (não é null para federação). Usado pelo shell do
+// sensei e pelos endpoints Canal A (/dojo/*).
 // ============================================================
 import React, { createContext, useContext, ReactNode } from "react";
 import { useAuthStore } from "@/stores/auth";
@@ -18,12 +19,14 @@ export interface KarateFederationContextValue {
   federationId: string;
   federationName: string;
   karateRole: string | null;
+  dojoId: string | null;
 }
 
 const KarateFederationContext = createContext<KarateFederationContextValue>({
   federationId: "",
   federationName: "",
   karateRole: null,
+  dojoId: null,
 });
 
 export function KarateFederationProvider({ children }: { children: ReactNode }) {
@@ -34,6 +37,8 @@ export function KarateFederationProvider({ children }: { children: ReactNode }) 
     federationId: company?.federation_id ?? "",
     federationName: company?.name || "Federação",
     karateRole: company?.karate_role ?? null,
+    // dojo_id: presente quando company é karate_dojo; null para federação ou não-karatê.
+    dojoId: company?.dojo_id ?? null,
   };
 
   return (
