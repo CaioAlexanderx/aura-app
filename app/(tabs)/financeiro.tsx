@@ -12,6 +12,7 @@ import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
+import { ExportDreModal } from "@/components/screens/financeiro/ExportDreModal";
 import { TABS, TAB_INDEX } from "@/components/screens/financeiro/types";
 import type { PeriodKey, Transaction } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
@@ -155,6 +156,7 @@ export default function FinanceiroScreen() {
   var [activeTab, setActiveTab] = useState(initialTab);
   var [period, setPeriod] = useState<PeriodKey>("month");
   var [showModal, setShowModal] = useState(false);
+  var [showExport, setShowExport] = useState(false);
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
@@ -224,6 +226,7 @@ export default function FinanceiroScreen() {
     else setShowCustomPeriod(false);
   }
 
+  // Exporta CSV dos lancamentos visiveis (usado na aba Lancamentos).
   function handleExport() {
     if (transactions.length === 0) { toast.error("Nenhum lancamento para exportar"); return; }
     downloadCSV(arrayToCSV(transactions, TRANSACTION_COLUMNS), "aura_lancamentos_" + new Date().toISOString().slice(0, 10) + ".csv");
@@ -291,6 +294,15 @@ export default function FinanceiroScreen() {
           editTransaction={editTx}
         />
       </WebPortal>
+      <WebPortal active={showExport}>
+        <ExportDreModal
+          visible={showExport}
+          onClose={function() { setShowExport(false); }}
+          consolidated={!!consolidatedView}
+          companyName={company?.name || ""}
+          companyCount={companyCount || 0}
+        />
+      </WebPortal>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={contentStyle}>
         <FinanceiroTopbar
           companyName={company?.name || ""}
@@ -298,7 +310,7 @@ export default function FinanceiroScreen() {
           companyCount={companyCount || 0}
           period={period}
           onPeriodChange={handlePeriodChange}
-          onExport={handleExport}
+          onExport={function() { setShowExport(true); }}
           onNew={consolidatedView ? undefined : handleNewTransaction}
         />
 
