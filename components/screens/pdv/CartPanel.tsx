@@ -16,6 +16,9 @@
 //   pra DENTRO do ScrollView. O rodapé fixo agora tem só o aviso de bloqueio
 //   + a barra de CTAs — então "Finalizar venda" fica SEMPRE visível,
 //   independente de altura de tela, zoom, split ou CPF.
+//   17/06 (tarde): bloco de checkout ancorado ao FUNDO do scroll (espaçador
+//   flex:1 + flexGrow no contentContainer) pra não deixar vazio enorme entre
+//   o checkout e o rodapé quando há pouco conteúdo.
 // ============================================================
 import { forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -193,7 +196,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 
       {/* BODY — rola tudo que pode crescer: itens + pagamento + divisão +
           resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível. */}
-      <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 16 }}>
+      <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 16, flexGrow: 1 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
             <View style={s.emptyIco}>
@@ -217,6 +220,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             />
           ))
         )}
+
+        {/* Espaçador flexível: empurra o checkout pro fundo da área de rolagem
+            quando há pouco conteúdo (sem vazio entre checkout e rodapé). Com
+            muitos itens ele colapsa pra 0 e tudo rola normalmente. */}
+        <View style={{ flex: 1, minHeight: 14 }} />
 
         {/* ── Pagamento / divisão / resumo / CPF (rolam junto) ─────────── */}
         <View style={s.checkoutBlock}>
