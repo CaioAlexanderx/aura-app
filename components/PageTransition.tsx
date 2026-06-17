@@ -39,12 +39,14 @@ function WebTransition({ children }: Props) {
           animation: auraPageOut 0.15s ease-in forwards;
         }
       `}} />
-      {/* 17/06/2026: minHeight 0 (era "100%"). O "100%" forçava a página a 100vh;
-          como o conteúdo fica abaixo da topbar do sininho (~46px), isso
-          transbordava e quebrava a altura do PDV (carrinho/Finalizar abaixo da
-          dobra, pior no zoom 100%). Com flex:1 + minHeight:0 a área ocupa
-          exatamente viewport − topbar; páginas curtas ainda preenchem via flex. */}
-      <div key={key} className={animClass} style={{ flex: 1, minHeight: 0 } as any}>
+      {/* 17/06/2026: wrapper precisa ser FLEX COLUMN (não block) + flex:1 +
+          minHeight:0. Validado no DOM ao vivo: como div block, o flex:1 do
+          filho (s.root do PDV) era ignorado e o PDV crescia até a altura do
+          catálogo (1354px numa viewport de 855) — "Finalizar" saía da tela.
+          Sendo flex column, o filho fica limitado a viewport − topbar e o PDV
+          (catálogo rola, carrinho fixo) cabe certinho em qualquer zoom.
+          Páginas curtas continuam preenchendo via flex:1. */}
+      <div key={key} className={animClass} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } as any}>
         {children}
       </div>
     </>
