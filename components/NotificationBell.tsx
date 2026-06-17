@@ -1,12 +1,30 @@
 // ============================================================
 // AURA. — Sininho de notificações
 // Criado: 13/06/2026
+//
+// 17/06/2026 — Alerta não invasivo:
+//   - Glow suave (pulsa de leve) só quando há item NÃO VISTO.
+//   - Abrir o sino marca como visto (persistido): o glow some e não
+//     volta em refresh/nova sessão. O banner continua acessível no drawer.
 // ============================================================
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Pressable, View, Text, Platform, StyleSheet } from 'react-native';
 import { useColors } from '@/constants/colors';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
+
+// Injeta o keyframe do glow uma única vez (web).
+function ensureGlowStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('aura-bell-glow')) return;
+  const el = document.createElement('style');
+  el.id = 'aura-bell-glow';
+  el.textContent =
+    '@keyframes auraBellGlow{' +
+    '0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0)}' +
+    '50%{box-shadow:0 0 0 4px rgba(124,58,237,0.16),0 0 12px 2px rgba(124,58,237,0.34)}}';
+  document.head.appendChild(el);
+}
 
 function BellSVG({ color, size = 18 }: { color: string; size?: number }) {
   if (Platform.OS !== 'web') return null;
@@ -32,12 +50,16 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const notifs = useNotifications();
   const count  = notifs.unreadCount;
+  const glow   = notifs.hasUnseen;
 
-  const handleOpen  = useCallback(() => setOpen(true), []);
-  const handleClose = useCallback(() => {
-    notifs.dismissOrders();
-    setOpen(false);
+  useEffect(() => { ensureGlowStyle(); }, []);
+
+  // Abrir o sino = visualizar => marca como visto (para de alertar, persistido).
+  const handleOpen  = useCallback(() => {
+    notifs.markSeen();
+    setOpen(true);
   }, [notifs]);
+  const handleClose = useCallback(() => setOpen(false), []);
 
   if (Platform.OS !== 'web') {
     return (
@@ -81,9 +103,10 @@ export function NotificationBell() {
           cursor:         'pointer',
           flexShrink:     0,
           transition:     'background 0.15s',
+          animation:      glow ? 'auraBellGlow 2.2s ease-in-out infinite' : undefined,
         } as any}
       >
-        <BellSVG color={C.ink3} size={18} />
+        <BellSVG color={glow ? '#7c3aed' : C.ink3} size={18} />
         {count > 0 && (
           <div style={{
             position:       'absolute',
