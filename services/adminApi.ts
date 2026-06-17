@@ -25,6 +25,36 @@ export type CreateAccessCodeBody = {
   expires_at?: string | null;
 };
 
+export type AdminBannerRow = {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  html_content: string | null;
+  cta_label: string | null;
+  cta_url: string | null;
+  cta_route: string | null;
+  target_company_id: string | null;
+  target_plan: string | null;
+  is_active: boolean;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  read_count?: number;
+};
+export type CreateBannerBody = {
+  title: string;
+  body?: string | null;
+  html_content?: string | null;
+  cta_label?: string | null;
+  cta_url?: string | null;
+  cta_route?: string | null;
+  target_company_id?: string | null;
+  target_plan?: string | null;
+  expires_at?: string | null;
+  is_active?: boolean;
+};
+
 // 12/05/2026 — Onda 1 Gestao Aura v2
 export type AdminNote = {
   id: number;
@@ -140,6 +170,20 @@ export var adminApi = {
     },
     toggle: function(id: string, is_active: boolean) {
       return request<{ code: AccessCodeRow }>("/admin/access-codes/" + id, { method: "PATCH", body: { is_active: is_active } });
+    },
+  },
+  notifications: {
+    list: function() {
+      return request<{ banners: AdminBannerRow[] }>("/admin/notifications/banners");
+    },
+    create: function(body: CreateBannerBody) {
+      return request<{ banner: AdminBannerRow }>("/admin/notifications/banners", { method: "POST", body: body, retry: 0 });
+    },
+    update: function(id: string, body: Partial<CreateBannerBody>) {
+      return request<{ banner: AdminBannerRow }>("/admin/notifications/banners/" + id, { method: "PATCH", body: body, retry: 0 });
+    },
+    remove: function(id: string) {
+      return request<{ deleted: boolean }>("/admin/notifications/banners/" + id, { method: "DELETE", retry: 0 });
     },
   },
 };
