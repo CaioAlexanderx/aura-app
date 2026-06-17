@@ -13,6 +13,15 @@
 // "Vendedora", "Cliente"). Agora usa `auto-fit, minmax(140px, 1fr)`:
 // cards quebram em 2/3 linhas automaticamente conforme a largura,
 // mantendo labels legíveis sempre.
+//
+// 17/06/2026 (Davi — "Finalizar" cortado em todos os monitores): o painel
+// do carrinho e o catálogo usavam height/maxHeight: 100vh, mas no layout
+// (app/(tabs)/_layout.tsx) o conteúdo fica ABAIXO da topbar do sininho
+// (~46px = 10px padding + 36px do sino). Então 100vh transbordava por baixo
+// exatamente a altura da topbar e cortava o rodapé do carrinho em qualquer
+// monitor. FIX: a área do PDV usa a altura REAL disponível
+// (calc(100vh - TOPBAR_H)) num único lugar (s.main no web) e os filhos
+// (catálogo + carrinho) usam height/maxHeight: 100%.
 // ============================================================
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
@@ -42,6 +51,13 @@ import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
 
 const PAGE_SIZE = 12;
+
+// Altura da topbar do sininho no layout desktop (app/(tabs)/_layout.tsx):
+// padding 10px (top) + NotificationBell 36px = 46px. A área útil do PDV é
+// a viewport menos essa barra — senão o painel do carrinho (100vh) transborda
+// por baixo e corta o "Finalizar venda" (report Davi 17/06, em todo monitor).
+const TOPBAR_H = 46;
+const CONTENT_H = `calc(100vh - ${TOPBAR_H}px)`;
 
 function CaixaScreenInner() {
   const st = usePdvState();
@@ -167,10 +183,10 @@ function CaixaScreenInner() {
         <CaixaDesignStyle />
         <CaixaBackdrop />
 
-        <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: `1fr ${st.cartWidth}px` } as any)]}>
+        <View style={[s.main, IS_WEB && ({ display: "grid", gridTemplateColumns: `1fr ${st.cartWidth}px`, height: CONTENT_H } as any)]}>
 
           <ScrollView
-            style={[s.catalog, IS_WEB && ({ maxHeight: "100vh", overflow: "auto" } as any)]}
+            style={[s.catalog, IS_WEB && ({ maxHeight: "100%", overflow: "auto" } as any)]}
             contentContainerStyle={{ padding: vp.sm ? 16 : 28, paddingBottom: 48 }}
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
@@ -272,7 +288,7 @@ function CaixaScreenInner() {
           <View style={[
             s.cartWrap,
             { width: st.cartWidth },
-            IS_WEB && ({ position: "sticky" as any, top: 0, height: "100vh" } as any),
+            IS_WEB && ({ height: "100%" } as any),
           ]}>
             <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} />
           </View>
