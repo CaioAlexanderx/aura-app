@@ -9,6 +9,13 @@
 //   · CartItem ganha lixeira (confirm 2-cliques) + edição inline do preço
 //   · CartItem em 2 linhas (1: avatar+nome+total+trash, 2: preço+qty)
 //     pra preço/qty/total não competirem por espaço em sidebar estreita
+//
+// 17/06/2026 (Davi 13-15"): rodapé crescia (pagamento+split+resumo+CPF+
+//   hint+CTAs 2 linhas) e empurrava o "Finalizar venda" pra fora da tela.
+//   FIX estrutural: tudo que pode crescer (chips, split, resumo, CPF) foi
+//   pra DENTRO do ScrollView. O rodapé fixo agora tem só o aviso de bloqueio
+//   + a barra de CTAs — então "Finalizar venda" fica SEMPRE visível,
+//   independente de altura de tela, zoom, split ou CPF.
 // ============================================================
 import { forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -184,7 +191,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         {headerSubtitle ? <Text style={s.subtitle}>{headerSubtitle}</Text> : null}
       </View>
 
-      {/* BODY */}
+      {/* BODY — rola tudo que pode crescer: itens + pagamento + divisão +
+          resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível. */}
       <ScrollView style={s.body} contentContainerStyle={{ padding: 14, paddingHorizontal: 16 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
@@ -209,9 +217,153 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             />
           ))
         )}
+
+        {/* ── Pagamento / divisão / resumo / CPF (rolam junto) ─────────── */}
+        <View style={s.checkoutBlock}>
+          {/* Payment chips — só quando NÃO está em modo split */}
+          {!splitOn && (
+            <View style={s.payGrid}>
+              {payMethods.map(m => {
+                const isActive = activePay === m.key;
+                const webChip = webOnly({
+                  background: isActive ? "rgba(124,58,237,0.22)" : Glass.lineFaint,
+                  border: isActive ? "1px solid rgba(124,58,237,0.5)" : "1px solid " + Glass.lineBorderCard,
+                  color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink2,
+                  transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
+                  cursor: "pointer",
+                  boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
+                });
+                return (
+                  <Pressable
+                    key={m.key}
+                    onPress={() => onPay(m.key)}
+                    style={[
+                      s.payChip,
+                      isActive && s.payChipActive,
+                      Platform.OS === "web" ? (webChip as any) : null,
+                    ] as any}
+                  >
+                    <Icon name={m.icon as any} size={15} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
+                    <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Toggle "Dividir pagamento" — só aparece quando o pai wireou. */}
+          {splitAvailable && (
+            <Pressable onPress={onToggleSplit} style={s.splitToggle}>
+              <Icon name={splitOn ? "x" : "wallet"} size={13} color={Colors.violet3} />
+              <Text style={s.splitToggleTxt}>
+                {splitOn ? "Cancelar divisão" : "Dividir pagamento"}
+              </Text>
+            </Pressable>
+          )}
+
+          {/* Lista de splits */}
+          {splitOn && (
+            <View style={s.splitPanel}>
+              {(splitPayments || []).map((entry, idx) => (
+                <SplitRow
+                  key={idx}
+                  entry={entry}
+                  methods={payMethods}
+                  onChangeMethod={(method) => onUpdateSplitPayment?.(idx, { method })}
+                  onChangeValue={(value) => onUpdateSplitPayment?.(idx, { value })}
+                  onRemove={() => onRemoveSplitPayment?.(idx)}
+                  canRemove={(splitPayments?.length || 0) > 1}
+                />
+              ))}
+              <Pressable onPress={onAddSplitPayment} style={s.splitAdd}>
+                <Icon name="plus" size={14} color={Colors.violet3} />
+                <Text style={s.splitAddTxt}>Adicionar pagamento</Text>
+              </Pressable>
+
+              {/* Status balance */}
+              <View style={[
+                s.splitStatus,
+                splitIsBalanced
+                  ? { backgroundColor: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.35)" }
+                  : { backgroundColor: "rgba(251,191,36,0.12)", borderColor: "rgba(251,191,36,0.35)" },
+              ]}>
+                <Icon
+                  name={splitIsBalanced ? "check" : "alert"}
+                  size={12}
+                  color={splitIsBalanced ? "#22c55e" : Colors.amber}
+                />
+                <Text style={[s.splitStatusTxt, { color: splitIsBalanced ? "#22c55e" : Colors.amber }]}>
+                  {splitIsBalanced
+                    ? "Pronto · soma fecha com o total"
+                    : (splitRemaining || 0) > 0
+                      ? `Faltam ${fmtCurrency(splitRemaining || 0)}`
+                      : `Sobrando ${fmtCurrency(Math.abs(splitRemaining || 0))}`}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Summary */}
+          <View style={s.sumRow}>
+            <Text style={s.sumK}>Subtotal</Text>
+            <Text style={s.sumV}>{fmtCurrency(subtotal)}</Text>
+          </View>
+          <View style={s.sumRow}>
+            <Text style={[s.sumK, discountAmount > 0 && { color: Colors.green }]}>
+              Desconto{discountLabel ? " · " + discountLabel : ""}
+            </Text>
+            <Text style={[s.sumV, discountAmount > 0 && { color: Colors.green }]}>
+              {discountAmount > 0 ? "− " + fmtCurrency(discountAmount) : "R$ 0,00"}
+            </Text>
+          </View>
+          <View style={[s.sumRow, s.sumRowTotal]}>
+            <Text style={{ fontSize: 13, color: Colors.ink2, fontWeight: "700" }}>Total</Text>
+            <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>
+          </View>
+
+          {/* CPF na nota (NFC-e) — input opcional, aparece só quando wirado.
+              Indicador visual de validação mod-11 ao lado direito quando 11 dígitos.
+              FIX: paddingVertical movido do cpfRow pro cpfInput para que toda a
+              área visual do row seja clicável (antes o padding ficava no View e
+              clicks na borda não focavam o TextInput). */}
+          {showCpfInput && (
+            <>
+              <View style={[s.cpfRow, { borderColor: cpfBorderColor }]}>
+                <Icon name="file_text" size={14} color={Colors.ink3} />
+                <Text style={s.cpfLabel}>CPF na nota</Text>
+                <TextInput
+                  style={[
+                    s.cpfInput,
+                    IS_WEB && (webOnly({ cursor: "text" }) as any),
+                  ]}
+                  value={cpfNaNota || ""}
+                  onChangeText={(v) => onCpfNaNotaChange?.(maskCpf(v))}
+                  placeholder="(opcional)"
+                  placeholderTextColor={Colors.ink3}
+                  keyboardType="number-pad"
+                  maxLength={14}
+                />
+                {cpfState === "valid" && (
+                  <View style={[s.cpfBadge, { backgroundColor: "rgba(34,197,94,0.18)" }]}>
+                    <Icon name="check" size={12} color="#22c55e" />
+                  </View>
+                )}
+                {cpfState === "invalid" && (
+                  <View style={[s.cpfBadge, { backgroundColor: "rgba(239,68,68,0.18)" }]}>
+                    <Icon name="x" size={12} color="#ef4444" />
+                  </View>
+                )}
+              </View>
+              {cpfState === "invalid" && (
+                <Text style={s.cpfErr}>CPF inválido — confira os dígitos</Text>
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
 
-      {/* FOOT */}
+      {/* FOOT — fixo, sempre visível: aviso de bloqueio + barra de CTAs.
+          (Finalizar nunca mais sai da tela, mesmo em telas baixas / zoom.) */}
       <View
         style={[
           s.foot,
@@ -220,147 +372,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             : { backgroundColor: Colors.bg, borderTopWidth: 1, borderTopColor: Colors.border },
         ]}
       >
-        {/* Payment chips — só quando NÃO está em modo split */}
-        {!splitOn && (
-          <View style={s.payGrid}>
-            {payMethods.map(m => {
-              const isActive = activePay === m.key;
-              const webChip = webOnly({
-                background: isActive ? "rgba(124,58,237,0.22)" : Glass.lineFaint,
-                border: isActive ? "1px solid rgba(124,58,237,0.5)" : "1px solid " + Glass.lineBorderCard,
-                color: isActive ? (IS_DARK_MODE ? "#fff" : Colors.ink) : Colors.ink2,
-                transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
-                cursor: "pointer",
-                boxShadow: isActive ? "0 4px 12px rgba(124,58,237,0.3)" : "none",
-              });
-              return (
-                <Pressable
-                  key={m.key}
-                  onPress={() => onPay(m.key)}
-                  style={[
-                    s.payChip,
-                    isActive && s.payChipActive,
-                    Platform.OS === "web" ? (webChip as any) : null,
-                  ] as any}
-                >
-                  <Icon name={m.icon as any} size={15} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
-                  <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Toggle "Dividir pagamento" — só aparece quando o pai wireou. */}
-        {splitAvailable && (
-          <Pressable onPress={onToggleSplit} style={s.splitToggle}>
-            <Icon name={splitOn ? "x" : "wallet"} size={13} color={Colors.violet3} />
-            <Text style={s.splitToggleTxt}>
-              {splitOn ? "Cancelar divisão" : "Dividir pagamento"}
-            </Text>
-          </Pressable>
-        )}
-
-        {/* Lista de splits */}
-        {splitOn && (
-          <View style={s.splitPanel}>
-            {(splitPayments || []).map((entry, idx) => (
-              <SplitRow
-                key={idx}
-                entry={entry}
-                methods={payMethods}
-                onChangeMethod={(method) => onUpdateSplitPayment?.(idx, { method })}
-                onChangeValue={(value) => onUpdateSplitPayment?.(idx, { value })}
-                onRemove={() => onRemoveSplitPayment?.(idx)}
-                canRemove={(splitPayments?.length || 0) > 1}
-              />
-            ))}
-            <Pressable onPress={onAddSplitPayment} style={s.splitAdd}>
-              <Icon name="plus" size={14} color={Colors.violet3} />
-              <Text style={s.splitAddTxt}>Adicionar pagamento</Text>
-            </Pressable>
-
-            {/* Status balance */}
-            <View style={[
-              s.splitStatus,
-              splitIsBalanced
-                ? { backgroundColor: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.35)" }
-                : { backgroundColor: "rgba(251,191,36,0.12)", borderColor: "rgba(251,191,36,0.35)" },
-            ]}>
-              <Icon
-                name={splitIsBalanced ? "check" : "alert"}
-                size={12}
-                color={splitIsBalanced ? "#22c55e" : Colors.amber}
-              />
-              <Text style={[s.splitStatusTxt, { color: splitIsBalanced ? "#22c55e" : Colors.amber }]}>
-                {splitIsBalanced
-                  ? "Pronto · soma fecha com o total"
-                  : (splitRemaining || 0) > 0
-                    ? `Faltam ${fmtCurrency(splitRemaining || 0)}`
-                    : `Sobrando ${fmtCurrency(Math.abs(splitRemaining || 0))}`}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Summary */}
-        <View style={s.sumRow}>
-          <Text style={s.sumK}>Subtotal</Text>
-          <Text style={s.sumV}>{fmtCurrency(subtotal)}</Text>
-        </View>
-        <View style={s.sumRow}>
-          <Text style={[s.sumK, discountAmount > 0 && { color: Colors.green }]}>
-            Desconto{discountLabel ? " · " + discountLabel : ""}
-          </Text>
-          <Text style={[s.sumV, discountAmount > 0 && { color: Colors.green }]}>
-            {discountAmount > 0 ? "− " + fmtCurrency(discountAmount) : "R$ 0,00"}
-          </Text>
-        </View>
-        <View style={[s.sumRow, s.sumRowTotal]}>
-          <Text style={{ fontSize: 13, color: Colors.ink2, fontWeight: "700" }}>Total</Text>
-          <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>
-        </View>
-
-        {/* CPF na nota (NFC-e) — input opcional, aparece só quando wirado.
-            Indicador visual de validação mod-11 ao lado direito quando 11 dígitos.
-            FIX: paddingVertical movido do cpfRow pro cpfInput para que toda a
-            área visual do row seja clicável (antes o padding ficava no View e
-            clicks na borda não focavam o TextInput). */}
-        {showCpfInput && (
-          <>
-            <View style={[s.cpfRow, { borderColor: cpfBorderColor }]}>
-              <Icon name="file_text" size={14} color={Colors.ink3} />
-              <Text style={s.cpfLabel}>CPF na nota</Text>
-              <TextInput
-                style={[
-                  s.cpfInput,
-                  IS_WEB && (webOnly({ cursor: "text" }) as any),
-                ]}
-                value={cpfNaNota || ""}
-                onChangeText={(v) => onCpfNaNotaChange?.(maskCpf(v))}
-                placeholder="(opcional)"
-                placeholderTextColor={Colors.ink3}
-                keyboardType="number-pad"
-                maxLength={14}
-              />
-              {cpfState === "valid" && (
-                <View style={[s.cpfBadge, { backgroundColor: "rgba(34,197,94,0.18)" }]}>
-                  <Icon name="check" size={12} color="#22c55e" />
-                </View>
-              )}
-              {cpfState === "invalid" && (
-                <View style={[s.cpfBadge, { backgroundColor: "rgba(239,68,68,0.18)" }]}>
-                  <Icon name="x" size={12} color="#ef4444" />
-                </View>
-              )}
-            </View>
-            {cpfState === "invalid" && (
-              <Text style={s.cpfErr}>CPF inválido — confira os dígitos</Text>
-            )}
-          </>
-        )}
-
-        {/* Required hints */}
+        {/* Required hints — fica no rodapé pra o motivo do bloqueio aparecer
+            ao lado do botão desabilitado (ex.: "Caixa fechado"). */}
         {requiredHints && requiredHints.length > 0 && (
           <View style={s.hintsBox}>
             <Icon name="alert" size={11} color={Colors.amber} />
@@ -432,7 +445,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 
           if (compact) {
             return (
-              <View style={{ marginTop: 14, gap: 8 }}>
+              <View style={{ marginTop: 12, gap: 8 }}>
                 <View style={s.ctaRowTop}>
                   {clearBtn}
                   {quoteBtn}
@@ -722,7 +735,7 @@ const ITEM_AVATAR_GAP = 8;
 
 const s = StyleSheet.create({
   cart: { flex: 1, flexDirection: "column", overflow: "hidden" },
-  head: { padding: 18, paddingHorizontal: 20, position: "relative", overflow: "hidden" },
+  head: { flexShrink: 0, padding: 18, paddingHorizontal: 20, position: "relative", overflow: "hidden" },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headLabel: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIM, letterSpacing: 1.5, textTransform: "uppercase" },
   headOrd: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", color: "#e9d5ff", fontSize: 10, letterSpacing: 0.6 },
@@ -734,10 +747,13 @@ const s = StyleSheet.create({
   metaK: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIMMER, letterSpacing: 1, textTransform: "uppercase" },
   metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
-  body: { flex: 1 },
+  body: { flex: 1, minHeight: 0 },
   empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
   emptyIco: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(124,58,237,0.1)", borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTxt: { color: Colors.ink2, fontSize: 12, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", letterSpacing: 0.6, textTransform: "uppercase", fontWeight: "700", textAlign: "center" },
+  // Bloco de checkout que agora rola junto com os itens (pagamento+resumo+CPF).
+  // Separador no topo pra destacar do fim da lista de itens.
+  checkoutBlock: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: Glass.lineSoft },
   // CartItem 2-linhas. Linha 1: avatar+nome+total+trash. Linha 2: preço+qty.
   item: {
     paddingVertical: 8,
@@ -788,7 +804,7 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.14)",
     borderWidth: 1, borderColor: "rgba(239,68,68,0.45)",
   },
-  foot: { padding: 12, paddingHorizontal: 16, paddingBottom: 16 },
+  foot: { flexShrink: 0, padding: 12, paddingHorizontal: 16, paddingBottom: 16 },
   // 5 chips em uma linha (gap menor + paddingHorizontal menor pra crediário caber).
   payGrid: { flexDirection: "row", gap: 4, marginBottom: 10, flexWrap: "wrap" },
   payChip: { flex: 1, alignItems: "center", gap: 4, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 9, minWidth: 56 },
@@ -883,9 +899,9 @@ const s = StyleSheet.create({
     fontSize: 10, color: "#ef4444", fontWeight: "600",
     marginTop: 4, marginLeft: 4,
   },
-  hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginTop: 8, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
+  hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
-  ctaRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  ctaRow: { flexDirection: "row", gap: 8 },
   ctaRowTop: { flexDirection: "row", gap: 8 },
   ctaPriRow: { flex: 1.7 },
   ctaPriFull: { alignSelf: "stretch", width: "100%" },
