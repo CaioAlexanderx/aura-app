@@ -8,6 +8,8 @@
 // 16/06/2026: banner escalonado (BannerFrame) — a peça 3:2 de tamanho fixo
 //   (1080x720) é renderizada no tamanho nativo e reduzida via transform:scale
 //   pra caber na largura do card, sem corte e sem altura fixa.
+// 17/06/2026: drawer web mais largo (440) pra o banner respirar; rótulo
+//   "NOVIDADES" (antes "ENDOMARKETING", termo interno). Nativo mantém 380.
 // ============================================================
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -294,7 +296,7 @@ function DrawerContent({ banners, orders, onClose, markBannerRead, markAllRead }
         {banners.length > 0 && (
           <>
             <div style={{ fontSize: 10, fontWeight: 800, color: '#7c3aed', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 10 } as any}>
-              ENDOMARKETING
+              NOVIDADES
             </div>
             {banners.map(b => (
               <BannerCard key={b.id} b={b} C={C} router={router} onDismiss={() => markBannerRead(b.id)} />
@@ -324,7 +326,8 @@ function DrawerContent({ banners, orders, onClose, markBannerRead, markAllRead }
 }
 
 // ---------- Web ----------
-const DRAWER_W = 380;
+const DRAWER_W = 380;       // nativo (phone) — largura segura
+const DRAWER_W_WEB = 440;   // web — mais largo pra o banner respirar (cap 95vw)
 
 function DrawerWeb(props: Props) {
   const C = useColors();
@@ -356,7 +359,7 @@ function DrawerWeb(props: Props) {
       <div style={{
         position:      'fixed',
         top:           0, right: 0, bottom: 0,
-        width:         DRAWER_W,
+        width:         DRAWER_W_WEB,
         maxWidth:      '95vw',
         zIndex:        1001,
         display:       'flex',
@@ -364,7 +367,7 @@ function DrawerWeb(props: Props) {
         background:    C.bg2,
         borderLeft:    `1px solid ${C.border}`,
         boxShadow:     '-12px 0 40px rgba(0,0,0,0.18)',
-        transform:     visible ? 'translateX(0)' : `translateX(${DRAWER_W}px)`,
+        transform:     visible ? 'translateX(0)' : `translateX(${DRAWER_W_WEB}px)`,
         transition:    'transform 0.26s cubic-bezier(0.4, 0, 0.2, 1)',
         willChange:    'transform',
       } as any}>
