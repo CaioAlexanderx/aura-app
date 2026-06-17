@@ -11,10 +11,12 @@ type Props = {
 };
 
 export function FinanceiroToolbar({ uncategorizedDescriptions = [], onCategorizeApply, from, to }: Props) {
+  // 17/06/2026: removido o ExportButton type="dre" (botão "DRE") — não fazia
+  // nada (rota /export/dre inexistente). A exportação de DRE agora é o botão
+  // "Exportar" da topbar, que abre o ExportDreModal (período → PDF DRE).
   return (
     <View style={s.toolbar}>
       <View style={s.exports}>
-        <ExportButton type="dre" label="DRE" from={from} to={to} />
         <ExportButton type="sales" label="Vendas" from={from} to={to} />
       </View>
       {uncategorizedDescriptions.length > 0 && (
