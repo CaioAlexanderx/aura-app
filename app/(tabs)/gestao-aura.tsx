@@ -90,6 +90,14 @@ var SECTIONS: Section[] = [
     route: "/gestao-aura-crescimento",
     color: "#10b981",
   },
+  {
+    key: "endomarketing",
+    icon: "sparkles",
+    title: "Endomarketing",
+    description: "Banners de notificação no app — publicar, segmentar por plano e acompanhar leitura.",
+    route: "/gestao-aura-endomarketing",
+    color: "#8b5cf6",
+  },
 ];
 
 // ── Componente ────────────────────────────────────────────────
