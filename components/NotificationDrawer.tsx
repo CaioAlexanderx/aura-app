@@ -5,6 +5,9 @@
 // Web:    position:fixed overlay + painel deslizante via CSS transition
 // Native: Modal com Animated.spring
 // Banners HTML renderizados via <iframe srcDoc> (web) — conteúdo admin = trusted
+// 16/06/2026: banner escalonado (BannerFrame) — a peça 3:2 de tamanho fixo
+//   (1080x720) é renderizada no tamanho nativo e reduzida via transform:scale
+//   pra caber na largura do card, sem corte e sem altura fixa.
 // ============================================================
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -25,7 +28,7 @@ interface Props {
 
 function fmt(v?: number) {
   if (v == null) return '';
-  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function sourceLabel(s: string) {
@@ -84,6 +87,57 @@ function OrderCard({ o, C }: { o: OrderNotification; C: any }) {
         <div style={{ fontSize: 11, color: C.ink3, marginTop: 1 } as any}>{fmt(o.total)} · {relTime(o.created_at)}</div>
       </div>
       {isNew && <div style={{ width: 8, height: 8, borderRadius: 4, background: '#7c3aed', flexShrink: 0 } as any} />}
+    </div>
+  );
+}
+
+// Largura nativa do canvas padrao das pecas de endomarketing (3:2 = 1080x720).
+// O HTML do banner vem com tamanho fixo (1080px); renderizamos no tamanho nativo
+// e escalamos via transform pra largura do card, mantendo nitidez e proporcao.
+const BANNER_BASE_W = 1080;
+
+// ---------- Frame escalonado do banner (web) ----------
+// O iframe srcDoc e isolado (sandbox), entao nao da pra medir/ajustar o conteudo
+// por dentro. Solucao: iframe no tamanho nativo (1080x720) + transform: scale()
+// pra caber na largura disponivel. ResizeObserver re-escala em desktop/mobile.
+function BannerFrame({ html, title }: { html: string; title: string }) {
+  const wrapRef = useRef<any>(null);
+  const [scale, setScale] = useState(0);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setScale(el.clientWidth / BANNER_BASE_W);
+    update();
+    let ro: any = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(update);
+      ro.observe(el);
+    } else if (typeof window !== 'undefined') {
+      window.addEventListener('resize', update);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+      else if (typeof window !== 'undefined') window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return (
+    <div ref={wrapRef} style={{ width: '100%', aspectRatio: '3 / 2', overflow: 'hidden', position: 'relative' } as any}>
+      <iframe
+        srcDoc={html}
+        sandbox="allow-scripts"
+        title={title}
+        scrolling="no"
+        style={{
+          width:           BANNER_BASE_W,
+          height:          BANNER_BASE_W * 2 / 3,
+          border:          'none',
+          display:         'block',
+          transformOrigin: 'top left',
+          transform:       `scale(${scale || 0.0001})`,
+        } as any}
+      />
     </div>
   );
 }
@@ -147,12 +201,7 @@ function BannerCard({ b, onDismiss, C, router }: { b: AppBanner; onDismiss: () =
       >×</button>
 
       {b.html_content ? (
-        <iframe
-          srcDoc={b.html_content}
-          sandbox="allow-scripts"
-          style={{ width: '100%', height: 230, border: 'none', display: 'block' } as any}
-          title={b.title}
-        />
+        <BannerFrame html={b.html_content} title={b.title} />
       ) : (
         <div style={{ padding: '16px 14px', background: C.bg3 } as any}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.ink } as any}>{b.title}</div>
