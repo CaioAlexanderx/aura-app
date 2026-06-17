@@ -1,5 +1,5 @@
 import React from "react";
-import { View, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { Redirect } from "expo-router";
 import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateShell } from "@/components/karate/KarateShell";
@@ -35,7 +35,24 @@ export default function KarateLayout() {
     return <Redirect href="/karate/sensei" />;
   }
 
-  // 3) Empresa karatê (federação): provê o contexto e renderiza o shell (com <Slot/>)
+  // 3) Sem mock: o federationId vem do JWT (company.federation_id). Se a
+  // conta karatê não estiver vinculada a uma federação, não montamos o
+  // provider com um id falso — mostramos um estado claro.
+  const federationId = (company as any)?.federation_id;
+  if (!federationId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: KarateColors.bg, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ color: KarateColors.ink, fontSize: 16, textAlign: "center", marginBottom: 8 }}>
+          Sua conta de karatê ainda não está vinculada a uma federação.
+        </Text>
+        <Text style={{ color: KarateColors.ink3, fontSize: 14, textAlign: "center" }}>
+          Fale com o suporte da Aura para concluir a ativação.
+        </Text>
+      </View>
+    );
+  }
+
+  // 4) Empresa karatê (federação): provê o contexto e renderiza o shell (com <Slot/>)
   return (
     <KarateFederationProvider>
       <KarateShell />
