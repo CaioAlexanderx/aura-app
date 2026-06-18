@@ -216,6 +216,30 @@ export default function CheckoutScreen() {
     toast.success("Codigo Pix copiado!");
   }
 
+  // 2026-06-18: gate para usuário multi-CNPJ em modo consolidado (company=null).
+  // Antes os botões "Gerar Pix" / "Assinar Agora" faziam `return` silencioso
+  // sem nenhum feedback — o usuário clicava e nada acontecia.
+  if (!company?.id) {
+    return (
+      <View style={[z.screen, { justifyContent: "center", alignItems: "center", padding: 32 }]}>
+        <Icon name="building" size={48} color={Colors.ink3} />
+        <Text style={[z.title, { marginTop: 20 }]}>Selecione uma empresa</Text>
+        <Text style={[z.subtitle, { marginBottom: 28 }]}>
+          Escolha qual empresa deseja assinar um plano para continuar.
+        </Text>
+        <Pressable
+          onPress={function () { router.push("/empresas" as any); }}
+          style={z.payBtn}
+        >
+          <Text style={z.payBtnText}>Escolher empresa</Text>
+        </Pressable>
+        <Pressable onPress={function () { router.back(); }} style={z.backLink}>
+          <Text style={z.backLinkText}>Voltar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (success) {
     return (
       <View style={[z.screen, { justifyContent: "center", alignItems: "center" }]}>
@@ -387,7 +411,7 @@ var z = StyleSheet.create({
   summaryLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   summaryValue: { fontSize: 16, color: Colors.green, fontWeight: "800" },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
-  payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
+  payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center", width: "100%" },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   pixCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: 20 },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16 },

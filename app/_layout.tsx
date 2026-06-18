@@ -160,7 +160,11 @@ function AuthGuard() {
     const isOwner          = memberRole === "owner";
     const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
 
-    if (token && needsCheckout && (inTabs || onDentalClinic || onFoodSalao || onStudio) && !onCheckout) {
+    // 2026-06-18: removida a condição de rota (inTabs || onDentalClinic || …).
+    // O redirect agora dispara de QUALQUER rota autenticada, incluindo /empresas.
+    // Antes, usuário com billing inativo que chegava em /empresas ficava preso
+    // sem nunca ser encaminhado ao checkout.
+    if (token && needsCheckout && !onCheckout) {
       router.replace("/(tabs)/checkout");
       return;
     }
