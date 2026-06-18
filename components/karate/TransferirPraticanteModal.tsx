@@ -7,7 +7,7 @@
 //   2. Detalhes — data efetiva (default hoje) + motivo opcional
 //   3. Resumo   — confirma origem → destino
 //   4. Pronto   — confirmação
-// Wired: karateApi.transferPractitioner. [MOCK] fallback até existir dado real.
+// Wired: karateApi.transferPractitioner + listDojos (dados reais).
 // Respeita visibilidade por papel (a tela host só mostra a ação p/ admin/staff).
 // ============================================================
 import React, { useState, useEffect, useCallback } from "react";
@@ -22,13 +22,6 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { karateApi, Dojo } from "@/services/karateApi";
 
 const STEPS = ["Destino", "Detalhes", "Resumo", "Pronto"];
-
-// [MOCK] usado quando a API de dojôs falha (mock-fallback friendly)
-const MOCK_DOJOS: Array<Pick<Dojo, "id" | "name" | "fpkt_affiliation_id">> = [
-  { id: "d2", name: "Dojô Shotokan Centro",    fpkt_affiliation_id: "FPKT-012" },
-  { id: "d3", name: "Wado-Ryu Osasco",          fpkt_affiliation_id: "FPKT-033" },
-  { id: "d4", name: "Shorin-Ryu Litoral",       fpkt_affiliation_id: "FPKT-041" },
-];
 
 function todayISO(): string {
   const d = new Date();
@@ -73,7 +66,7 @@ export function TransferirPraticanteModal({
       // Exclui o dojô de origem da lista de destinos possíveis
       setDojos(res.data.filter((d) => d.id !== originDojoId));
     } catch {
-      setDojos(MOCK_DOJOS.filter((d) => d.id !== originDojoId));
+      setDojos([]);
     } finally {
       setLoadingDojos(false);
     }

@@ -1,49 +1,36 @@
 // ============================================================
-// Competições — Detalhe do Torneio (Track E)
+// Competições — Detalhe do Torneio — Aura Karatê (federação)
 //
-// Mostra dados do torneio, categorias com inscritos e lançamento de
-// resultado (colocação + pontos). Wired com karateCompetitionsApi,
-// [MOCK] fallback enquanto federationId é placeholder.
+// Dados do torneio, categorias com inscritos e lançamento de
+// resultado (colocação + pontos). Dados reais via
+// karateCompetitionsApi. Sem mock: loading → spinner, falha →
+// ErrorState; lançamento falho avisa erro (não finge sucesso).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
-  StyleSheet, ViewStyle, TextStyle,
+  View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Alert,
+  ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
-import { EmptyState } from "@/components/karate/EmptyState";
+import { Badge } from "@/components/karate/Badge";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
-  karateCompetitionsApi, Category, Entry, CompetitionDetail, Modality,
+  karateCompetitionsApi, Entry, CompetitionDetail, Modality, CompetitionStatus,
 } from "@/services/karateCompetitionsApi";
 
 const MODALITY_LABEL: Record<Modality, string> = {
   kata: "Kata", kumite: "Kumite", kihon_ippon: "Kihon-Ippon", team_kata: "Kata Equipe", team_kumite: "Kumite Equipe",
 };
-
-// [MOCK] seed
-const MOCK_DETAIL: CompetitionDetail = {
-  id: "t-204", federation_id: "", name: "Copa Vale do Paraíba 2026 — 2ª Etapa", season: 2026,
-  event_date: "2026-07-18", location: "Ginásio Poliesportivo — Taubaté/SP", circuit_round: 2,
-  fee_amount: 70, status: "open", category_count: 2, entry_count: 5,
-  categories: [
-    { id: "cat-1", competition_id: "t-204", name: "Kata Adulto Faixa Preta Masc.", modality: "kata", min_age: 18, max_age: 34, belt_min: "1dan", belt_max: "8dan", sex: "M", weight_class: null, max_entries: 32, fee_amount: null, entry_count: 3 },
-    { id: "cat-2", competition_id: "t-204", name: "Kumite Adulto -84kg Masc.", modality: "kumite", min_age: 18, max_age: 34, belt_min: "6kyu", belt_max: "8dan", sex: "M", weight_class: "-84kg", max_entries: 16, fee_amount: 90, entry_count: 2 },
-  ],
+const STATUS_BADGE: Record<CompetitionStatus, "ok" | "warn" | "alert" | "neutral"> = {
+  draft: "neutral", open: "ok", closed: "warn", done: "neutral", cancelled: "alert",
 };
-const MOCK_ENTRIES: Record<string, Entry[]> = {
-  "cat-1": [
-    { id: "e1", category_id: "cat-1", student_id: "1", student_name: "Bruno Yukio Tanaka", karate_registration_number: "FPKT-A-00417", current_belt: "2dan", current_belt_name: "Preta", dojo_id: null, dojo_name: "Dojô Shotokan Jacareí", status: "registered", fee_paid: true, placement: 1, points_awarded: 100, result_notes: null },
-    { id: "e2", category_id: "cat-1", student_id: "2", student_name: "Ricardo Nakamura Alves", karate_registration_number: "FPKT-A-00231", current_belt: "3dan", current_belt_name: "Preta", dojo_id: null, dojo_name: "Dojô Central FPKT São Paulo", status: "registered", fee_paid: true, placement: 2, points_awarded: 70, result_notes: null },
-    { id: "e3", category_id: "cat-1", student_id: "3", student_name: "Eduardo Sato Pereira", karate_registration_number: "FPKT-A-00582", current_belt: "1dan", current_belt_name: "Preta", dojo_id: null, dojo_name: "Associação Shotokan Campinas", status: "registered", fee_paid: false, placement: null, points_awarded: 0, result_notes: null },
-  ],
-  "cat-2": [
-    { id: "e4", category_id: "cat-2", student_id: "4", student_name: "Leonardo Miyazaki Prado", karate_registration_number: "FPKT-A-00276", current_belt: "1dan", current_belt_name: "Preta", dojo_id: null, dojo_name: "Dojô Bushido Sorocaba", status: "registered", fee_paid: true, placement: null, points_awarded: 0, result_notes: null },
-    { id: "e5", category_id: "cat-2", student_id: "5", student_name: "Vinícius Kuroda Santos", karate_registration_number: "FPKT-A-00318", current_belt: "2dan", current_belt_name: "Preta", dojo_id: null, dojo_name: "Dojô Central FPKT São Paulo", status: "registered", fee_paid: true, placement: null, points_awarded: 0, result_notes: null },
-  ],
+const STATUS_LABEL: Record<CompetitionStatus, string> = {
+  draft: "Rascunho", open: "Inscrições abertas", closed: "Encerradas", done: "Concluído", cancelled: "Cancelado",
 };
 
 export default function TorneioDetalhe() {
@@ -52,24 +39,31 @@ export default function TorneioDetalhe() {
   const { federationId } = useKarateFederation();
   const cid = String(id || "");
 
-  const [comp, setComp] = useState<CompetitionDetail>(MOCK_DETAIL);
-  const [entriesByCat, setEntriesByCat] = useState<Record<string, Entry[]>>(MOCK_ENTRIES);
+  const [comp, setComp] = useState<CompetitionDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [entriesByCat, setEntriesByCat] = useState<Record<string, Entry[]>>({});
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [resultFor, setResultFor] = useState<Entry | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const detail = await karateCompetitionsApi.getCompetition(federationId, cid);
-      if (detail?.id) setComp(detail);
-    } catch { /* [MOCK fallback] */ }
+  const load = useCallback(() => {
+    if (!cid) return;
+    setLoading(true);
+    setError(false);
+    karateCompetitionsApi.getCompetition(federationId, cid)
+      .then(setComp)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
   }, [federationId, cid]);
   useEffect(() => { load(); }, [load]);
 
   const loadEntries = useCallback(async (categoryId: string) => {
     try {
       const rows = await karateCompetitionsApi.listEntries(federationId, cid, categoryId);
-      if (rows) setEntriesByCat((prev) => ({ ...prev, [categoryId]: rows }));
-    } catch { /* keep mock */ }
+      setEntriesByCat((prev) => ({ ...prev, [categoryId]: rows ?? [] }));
+    } catch {
+      setEntriesByCat((prev) => ({ ...prev, [categoryId]: [] }));
+    }
   }, [federationId, cid]);
 
   const toggleCat = (categoryId: string) => {
@@ -86,15 +80,26 @@ export default function TorneioDetalhe() {
     };
     try {
       await karateCompetitionsApi.patchEntry(federationId, cid, entry.id, body);
-    } catch { /* [MOCK fallback] aplica localmente */ }
-    setEntriesByCat((prev) => ({
-      ...prev,
-      [entry.category_id]: (prev[entry.category_id] || []).map((e) =>
-        e.id === entry.id ? { ...e, placement: body.placement, points_awarded: body.points_awarded, status: "done" } : e
-      ),
-    }));
-    setResultFor(null);
+      setEntriesByCat((prev) => ({
+        ...prev,
+        [entry.category_id]: (prev[entry.category_id] || []).map((e) =>
+          e.id === entry.id ? { ...e, placement: body.placement, points_awarded: body.points_awarded, status: "done" } : e
+        ),
+      }));
+      setResultFor(null);
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar", e?.message ?? "Tente novamente.");
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: KarateColors.bg, padding: 24, gap: 12 }}>
+        <ActivityIndicator size="large" color={KarateColors.primary} style={{ marginTop: 40 }} />
+      </View>
+    );
+  }
+  if (error || !comp) return <KarateErrorState onRetry={load} />;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -104,7 +109,10 @@ export default function TorneioDetalhe() {
       </TouchableOpacity>
 
       <View style={styles.headerCard}>
-        <Text style={styles.title}>{comp.name}</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>{comp.name}</Text>
+          <Badge status={STATUS_BADGE[comp.status]} label={STATUS_LABEL[comp.status]} />
+        </View>
         <Text style={styles.meta}>Temporada {comp.season}{comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}</Text>
         {!!comp.location && <Text style={styles.meta}>{comp.location}</Text>}
         <View style={styles.statsRow}>
@@ -115,7 +123,7 @@ export default function TorneioDetalhe() {
 
       <Text style={styles.sectionTitle}>Categorias</Text>
       {comp.categories.length === 0 ? (
-        <EmptyState icon="albums-outline" title="Sem categorias" subtitle="Adicione categorias ao criar ou editar o torneio." />
+        <KarateEmptyState icon="albums-outline" title="Sem categorias" subtitle="Adicione categorias ao criar ou editar o torneio." style={{ paddingVertical: 28 }} />
       ) : (
         comp.categories.map((cat) => {
           const open = openCat === cat.id;
@@ -142,11 +150,9 @@ export default function TorneioDetalhe() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.entryName}>{e.student_name}</Text>
-                          <Text style={styles.entryMeta}>{e.karate_registration_number} · {e.dojo_name}</Text>
+                          <Text style={styles.entryMeta}>{e.karate_registration_number ?? "—"} · {e.dojo_name ?? "—"}</Text>
                         </View>
-                        {e.points_awarded > 0 ? (
-                          <Text style={styles.entryPts}>{e.points_awarded} pts</Text>
-                        ) : null}
+                        {e.points_awarded > 0 ? <Text style={styles.entryPts}>{e.points_awarded} pts</Text> : null}
                         <TouchableOpacity onPress={() => setResultFor(e)} style={styles.resultBtn} accessibilityLabel={`Lançar resultado de ${e.student_name}`}>
                           <Ionicons name="create-outline" size={16} color={KarateColors.primary} />
                         </TouchableOpacity>
@@ -199,24 +205,25 @@ function ResultadoModal({ entry, onClose, onSave }: {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 12, paddingBottom: 40 } as ViewStyle,
+  content: { padding: 24, gap: 12, paddingBottom: 48, maxWidth: 900, width: "100%", alignSelf: "center" } as ViewStyle,
   back: { flexDirection: "row", alignItems: "center", gap: 2 } as ViewStyle,
   backText: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  headerCard: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 4 } as ViewStyle,
-  title: { fontSize: 20, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  headerCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 4 } as ViewStyle,
+  headerTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } as ViewStyle,
+  title: { flex: 1, fontSize: 20, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statsRow: { flexDirection: "row", gap: 18, marginTop: 6 } as ViewStyle,
   stat: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
   sectionTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, marginTop: 4 } as TextStyle,
-  catCard: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
+  catCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
   catHead: { flexDirection: "row", alignItems: "center", padding: 14, gap: 10 } as ViewStyle,
   catName: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   catMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   entries: { borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   emptyEntries: { fontSize: 12, color: KarateColors.ink3, padding: 14 } as TextStyle,
   entryRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
-  placeBadge: { width: 34, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.bg2 } as ViewStyle,
+  placeBadge: { width: 34, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.surface } as ViewStyle,
   placeText: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2, fontFamily: "monospace" } as TextStyle,
   entryName: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   entryMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,

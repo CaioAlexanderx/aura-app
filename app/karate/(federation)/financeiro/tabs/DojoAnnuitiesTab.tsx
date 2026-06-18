@@ -8,8 +8,7 @@
 // Wired: GET /financial/annuities/dojos
 //        POST /financial/annuities/dojos/{dojoId}/charge
 //        POST /financial/annuities/dojos/{dojoId}/pix
-//        GET /financial/fees  PUT /financial/fees
-// MOCK: dados gerados com shape fiel ao contrato v0.2.0.
+//        GET /financial/fees  PUT /financial/fees (dados reais).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -31,6 +30,7 @@ import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
 import {
   karateApi,
@@ -40,24 +40,6 @@ import {
   AnnualFeeInput,
   SizeTier,
 } from "@/services/karateApi";
-
-// ── MOCK ───────────────────────────────────────────────────
-// Shape matches contract DojoAnnuity schema (v0.2.0):
-// transaction_id + annuity_history_id present; no size_tier (not in contract).
-const MOCK_DOJO_ANNUITIES: DojoAnnuity[] = [
-  { dojo_id: "d1", dojo_name: "Dojô Shotokan ABC",      fpkt_affiliation_id: "FPKT-001", amount: 1200, reference_period: "2026", due_date: "2026-03-31", paid_at: null, status: "overdue",    days_overdue: 67, nfse_id: null, transaction_id: null, annuity_history_id: "ah-001" },
-  { dojo_id: "d2", dojo_name: "Dojô Karatê Esperança", fpkt_affiliation_id: "FPKT-002", amount: 600,  reference_period: "2026", due_date: "2026-04-30", paid_at: null, status: "due",       days_overdue: 0,  nfse_id: null, transaction_id: null, annuity_history_id: "ah-002" },
-  { dojo_id: "d3", dojo_name: "Academia Bushido",        fpkt_affiliation_id: "FPKT-003", amount: 2000, reference_period: "2026", due_date: "2026-01-31", paid_at: "2026-01-28", status: "paid",   days_overdue: 0,  nfse_id: "nf-001", transaction_id: "tx-003", annuity_history_id: "ah-003" },
-  { dojo_id: "d4", dojo_name: "Centro Karatê Zen",      fpkt_affiliation_id: "FPKT-004", amount: 3000, reference_period: "2026", due_date: "2026-02-28", paid_at: null, status: "defaulting", days_overdue: 100, nfse_id: null, transaction_id: null, annuity_history_id: "ah-004" },
-];
-
-const MOCK_FEES: AnnualFee[] = [
-  { id: "f1", fee_type: "dojo", size_tier: "up_to_40", amount: 600,  effective_from: "2026-01-01" },
-  { id: "f2", fee_type: "dojo", size_tier: "41_90",    amount: 1200, effective_from: "2026-01-01" },
-  { id: "f3", fee_type: "dojo", size_tier: "91_150",   amount: 2000, effective_from: "2026-01-01" },
-  { id: "f4", fee_type: "dojo", size_tier: "over_150", amount: 3000, effective_from: "2026-01-01" },
-  { id: "f5", fee_type: "cpf",  size_tier: undefined,  amount: 80,   effective_from: "2026-01-01" },
-];
 
 const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
   { key: "all",        label: "Todos" },
@@ -105,6 +87,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   const [annuities, setAnnuities] = useState<DojoAnnuity[]>([]);
   const [fees, setFees]           = useState<AnnualFee[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
   const [showFeeEditor, setShowFeeEditor] = useState(false);
@@ -114,20 +97,24 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
-      // TODO: remover fallback MOCK quando backend responder
       const [annRes, feeRes] = await Promise.all([
-        karateApi.listDojoAnnuities(federationId, { status: filter === "all" ? undefined : filter }).catch(() => ({ page: 1, page_size: 25, total: MOCK_DOJO_ANNUITIES.length, data: MOCK_DOJO_ANNUITIES })),
-        karateApi.getAnnualFees(federationId).catch(() => MOCK_FEES),
+        karateApi.listDojoAnnuities(federationId, { status: filter === "all" ? undefined : filter }),
+        karateApi.getAnnualFees(federationId),
       ]);
       setAnnuities(annRes.data);
       setFees(feeRes);
+    } catch {
+      setError(true);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
   }, [federationId, filter]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const filteredAnnuities = filter === "all"
     ? annuities
@@ -146,13 +133,12 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
         amount: parseFloat(feeEdits[f.id] ?? String(f.amount)) || f.amount,
       }));
       const today = new Date().toISOString().slice(0, 10);
-      // TODO: remover fallback MOCK quando backend responder
-      const result = await karateApi
-        .updateAnnualFees(federationId, { effective_from: today, fees: updatedFees })
-        .catch(() => fees);
+      const result = await karateApi.updateAnnualFees(federationId, { effective_from: today, fees: updatedFees });
       setFees(result);
       setFeeEdits({});
       setShowFeeEditor(false);
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar a tabela", e?.message ?? "Tente novamente.");
     } finally {
       setSavingFees(false);
     }
@@ -318,7 +304,7 @@ const st = StyleSheet.create({
   content:      { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
   sectionHeader:{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, marginBottom: 6 } as ViewStyle,
   sectionTitle: { fontSize: 11, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase" } as TextStyle,
-  card:         { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 10 } as ViewStyle,
+  card:         { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 10 } as ViewStyle,
 
   editBtn:      { flexDirection: "row", alignItems: "center", gap: 4, padding: 4 } as ViewStyle,
   editBtnLabel: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
@@ -333,7 +319,7 @@ const st = StyleSheet.create({
   filterChipLabel:   { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   filterChipLabelActive: { color: KarateColors.primary, fontWeight: "800" } as TextStyle,
 
-  annuityCard:  { flexDirection: "row", backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
+  annuityCard:  { flexDirection: "row", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
   annuityName:  { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   annuityMeta:  { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   annuityOverdue: { fontSize: 11, color: KarateColors.danger, fontWeight: "600" } as TextStyle,

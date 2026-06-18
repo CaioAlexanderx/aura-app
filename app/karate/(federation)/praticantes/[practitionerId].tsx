@@ -27,48 +27,9 @@ import { CarteirinhaPanel } from "@/components/karate/CarteirinhaPanel";
 import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
 import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate, TransferRecord } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 
-// [MOCK]
-const MOCK_PRACTITIONER: PractitionerDetail = {
-  id: "p1", full_name: "Carlos Eduardo Silva",
-  karate_registration_number: "FPKT-A-00001",
-  cpf: "123.456.789-00", rg: "12.345.678-9",
-  birth_date: "1990-03-15", email: "carlos@email.com",
-  phone: "11 9 9999-0001", dojo_id: "d1",
-  is_student: true, is_arbiter: false, is_instructor: true, is_examiner: false,
-  photo_url: null, parent_guardian_id: null,
-  affiliation_status: "active",
-  current_belt: { belt_level: "verde", belt_name: "Verde", current_since: "2026-03-15" },
-  belt_history: [
-    { id: "bh1", belt_level: "verde",  belt_name: "Verde",  belt_schema: "fpkt_shotokan", graduated_at: "2026-03-15", is_legacy: false, exam_id: "exam-h1" },
-    { id: "bh2", belt_level: "laranja", belt_name: "Laranja", belt_schema: "fpkt_shotokan", graduated_at: "2024-08-10", is_legacy: false, exam_id: "exam-h0" },
-    { id: "bh3", belt_level: "amarela", belt_name: "Amarela", belt_schema: "fpkt_shotokan", graduated_at: "2023-04-01", is_legacy: false, exam_id: null },
-    { id: "bh4", belt_level: "branca",  belt_name: "Branca",  belt_schema: "legacy",         graduated_at: "2022-01-10", is_legacy: true,  exam_id: null },
-  ],
-};
-
-// [MOCK] certificados do praticante ligados a exames aprovados
-const MOCK_CERTIFICATES: Array<Certificate & { exam_title?: string }> = [
-  {
-    id: "cert-1", candidate_id: "c1", practitioner_id: "p1",
-    full_name: "Carlos Eduardo Silva", belt_level: "verde",
-    exam_date: "2026-03-15", status: "pending", issued_at: null, pdf_url: null,
-    exam_title: "Exame Faixa Mar/2026",
-  },
-];
-
-// [MOCK] histórico de transferências (Track N)
-const MOCK_TRANSFERS: TransferRecord[] = [
-  {
-    id: "tr1", practitioner_id: "p1",
-    origin_dojo_id: "d0", destination_dojo_id: "d1",
-    origin_dojo_name: "Dojô Iniciantes Zona Sul", destination_dojo_name: "Dojô Shotokan Centro",
-    reason: "Mudança de bairro", transferred_at: "2024-02-01",
-    initiated_by_name: "Secretaria FPKT", created_at: "2024-02-01T12:00:00Z",
-  },
-];
-
-// Papéis que podem transferir (federação admin/staff). karateRole null = mock/dev (libera).
+// Papéis que podem transferir (federação admin/staff).
 const TRANSFER_ROLES = ["federation_admin", "federation_staff"];
 function canTransfer(role: string | null): boolean {
   return role == null || TRANSFER_ROLES.includes(role);
@@ -164,7 +125,7 @@ function TransferenciaTab({
     setLoading(true);
     karateApi.listTransfers(federationId, practitioner.id)
       .then((res: any) => setTransfers(Array.isArray(res?.data) ? res.data : (res?.data ?? [])))
-      .catch(() => setTransfers(MOCK_TRANSFERS))
+      .catch(() => setTransfers([]))
       .finally(() => setLoading(false));
   }, [federationId, practitioner.id]);
 
@@ -240,7 +201,7 @@ function CertificadosTab({
   federationId: string;
   practitionerId: string;
 }) {
-  const [certs, setCerts] = useState<Array<Certificate & { exam_title?: string }>>(MOCK_CERTIFICATES);
+  const [certs, setCerts] = useState<Array<Certificate & { exam_title?: string }>>([]);
   const [issuingId, setIssuingId] = useState<string | null>(null);
 
   const certStatusLabel: Record<string, string> = {
@@ -260,13 +221,8 @@ function CertificadosTab({
         : c
       ));
       Alert.alert("Solicitação enviada", `Status: ${updated.status}`);
-    } catch {
-      // [MOCK fallback]
-      setCerts(prev => prev.map(c => c.candidate_id === cert.candidate_id
-        ? { ...c, status: "pending" }
-        : c
-      ));
-      Alert.alert("Solicitação enviada [MOCK]", "Certif. enfileirado para emissão.");
+    } catch (e: any) {
+      Alert.alert("Não foi possível solicitar", e?.message ?? "Tente novamente.");
     } finally {
       setIssuingId(null);
     }
@@ -329,13 +285,15 @@ export default function FichaPraticanteScreen() {
   const { federationId, karateRole } = useKarateFederation();
   const [data, setData] = useState<PractitionerDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("Cadastro");
 
   const reload = useCallback(() => {
     if (!practitionerId) return;
+    setError(false);
     karateApi.getPractitioner(federationId, practitionerId)
       .then(setData)
-      .catch(() => setData(MOCK_PRACTITIONER))
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [federationId, practitionerId]);
 
@@ -349,7 +307,7 @@ export default function FichaPraticanteScreen() {
     );
   }
 
-  if (!data) return null;
+  if (error || !data) return <KarateErrorState onRetry={reload} />;
 
   return (
     <View style={styles.screen}>

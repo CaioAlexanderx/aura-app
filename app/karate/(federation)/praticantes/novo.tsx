@@ -128,7 +128,6 @@ function DojoSelector({
 // ── Main screen ────────────────────────────────────────────────
 export default function NovoPraticante() {
   const router = useRouter();
-  // TODO(fase-login): federationId vir do JWT
   const { federationId } = useKarateFederation();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<PractitionerInput>>({

@@ -6,9 +6,8 @@
 //   — SearchBar: busca debounced de dojôs + praticantes
 //   — NotificationsPanel: painel colapsável com events recentes
 //
-// Wired ao endpoint GET /federation/{id}/dashboard.
-// MOCK: dados estáticos enquanto o backend não estiver pronto
-// (shape fiel ao contrato karate-fase0-openapi.yaml).
+// Wired ao endpoint GET /federation/{id}/dashboard (dados reais).
+// Sem mock: falha → ErrorState.
 // ============================================================
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -31,6 +30,7 @@ import { KPIStrip, KPIData } from "@/components/karate/KPIStrip";
 import { Badge } from "@/components/karate/Badge";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   karateApi,
   DashboardPayload,
@@ -42,36 +42,6 @@ import {
   SearchPractitionerResult,
 } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-
-// — MOCK DATA (shape = contrato OpenAPI) —
-// TODO: remover quando backend estiver pronto
-const MOCK_DASHBOARD: DashboardPayload = {
-  kpis: {
-    dojo_count: 47,
-    practitioner_count: 1284,
-    revenue_ytd: 182400.0,
-    overdue_rate: 0.08,
-  },
-  upcoming_events: [
-    { title: "Campeonato Estadual", date: "2026-07-12", location: "Gynásio Central SP", registered_count: 312 },
-    { title: "Exame de Faixas FPKT", date: "2026-07-28", location: "Dojô Sede", registered_count: 84 },
-  ],
-  overdue_dojos: [
-    { dojo_id: "d1", name: "Dojô Shotokan ABC", amount: 1200, days_overdue: 45 },
-    { dojo_id: "d2", name: "Dojô Karatê Esperança", amount: 600, days_overdue: 12 },
-  ],
-  belt_distribution: [
-    { belt_level: "branca",      belt_name: "Branca",      count: 320 },
-    { belt_level: "amarela",     belt_name: "Amarela",     count: 210 },
-    { belt_level: "laranja",     belt_name: "Laranja",     count: 180 },
-    { belt_level: "verde",       belt_name: "Verde",       count: 145 },
-    { belt_level: "azul_claro",  belt_name: "Azul Claro",  count: 120 },
-    { belt_level: "azul_escuro", belt_name: "Azul Escuro", count: 98 },
-    { belt_level: "marrom",      belt_name: "Marrom",      count: 87 },
-    { belt_level: "preta",       belt_name: "Preta",       count: 124 },
-  ],
-  alerts: [],
-};
 
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -388,20 +358,25 @@ export default function KarateDashboard() {
   const { federationId } = useKarateFederation();
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
-      isRefresh ? setRefreshing(true) : setLoading(true);
-      // TODO: remover fallback MOCK quando backend estiver pronto
-      const result = await karateApi.getDashboard(federationId).catch(() => MOCK_DASHBOARD);
+      const result = await karateApi.getDashboard(federationId);
       setData(result);
+    } catch {
+      setError(true);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
   }, [federationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const kpis: KPIData[] = data ? [
     { label: "Dojôs",       value: data.kpis.dojo_count,        accent: "primary" },

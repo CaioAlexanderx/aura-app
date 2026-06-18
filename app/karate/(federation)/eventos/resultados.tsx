@@ -1,48 +1,82 @@
 // ============================================================
-// Eventos — Resultados  (Track C)
+// Eventos — Resultados — Aura Karatê (federação)
 //
-// Tabela de resultados dos exames encerrados por candidato.
-// [MOCK] aguarda backend Fase 2.
+// Não há endpoint de resultados em massa: os resultados são lançados
+// e consultados por exame. Esta tela lista os exames encerrados —
+// toque para ver/lançar resultados por candidato no detalhe.
+// Dados reais via karateApi.listBeltExams. Sem mock.
 // ============================================================
-import React from "react";
-import { View, Text, ScrollView, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  StyleSheet, RefreshControl, ViewStyle, TextStyle,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
-import { Badge } from "@/components/karate/Badge";
-import { EmptyState } from "@/components/karate/EmptyState";
-import { ExamCandidate } from "@/services/karateApi";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+import { karateApi, BeltExam } from "@/services/karateApi";
 
-// [MOCK]
-const MOCK_RESULTS: Array<ExamCandidate & { exam_title: string; exam_date: string }> = [
-  { id: "c1", exam_id: "exam-h1", practitioner_id: "p1", full_name: "Carlos Tanaka", karate_registration_number: "SP-0042", current_belt: "branca", target_belt: "amarela", result: "approved", notes: null, eligibility: null, certificate_status: "pending", certificate_url: null, exam_title: "Exame Faixa Mar/2026", exam_date: "2026-03-15" },
-  { id: "c2", exam_id: "exam-h1", practitioner_id: "p2", full_name: "Ana Ferreira", karate_registration_number: "SP-0043", current_belt: "branca", target_belt: "amarela", result: "rejected", notes: "Kata incompleto", eligibility: null, certificate_status: null, certificate_url: null, exam_title: "Exame Faixa Mar/2026", exam_date: "2026-03-15" },
-];
-
-const RESULT_BADGE: Record<string, "ok" | "alert" | "neutral"> = {
-  approved: "ok", rejected: "alert", pending: "neutral",
-};
-const RESULT_LABEL: Record<string, string> = {
-  approved: "Aprovado", rejected: "Reprovado", pending: "Pendente",
-};
+function fmtDate(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("pt-BR");
+}
 
 export default function EventosResultados() {
+  const router = useRouter();
+  const { federationId } = useKarateFederation();
+  const [exams, setExams] = useState<BeltExam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (isRefresh = false) => {
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
+    try {
+      const res = await karateApi.listBeltExams(federationId);
+      const done = (res.data ?? [])
+        .filter((e) => e.status === "closed" || e.status === "open")
+        .sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""));
+      setExams(done);
+    } catch {
+      setError(true);
+    } finally {
+      isRefresh ? setRefreshing(false) : setLoading(false);
+    }
+  }, [federationId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
+
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.pageHint}>Resultados consolidados por candidato e exame.</Text>
-      {MOCK_RESULTS.length === 0 ? (
-        <EmptyState icon="trophy-outline" title="Nenhum resultado ainda" />
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />}
+    >
+      <Text style={styles.pageHint}>Selecione um exame para ver ou lançar os resultados por candidato.</Text>
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 32 }} size="large" color={KarateColors.primary} />
+      ) : exams.length === 0 ? (
+        <KarateEmptyState icon="trophy-outline" title="Nenhum exame para resultados" subtitle="Exames abertos ou encerrados aparecem aqui." style={{ paddingVertical: 28 }} />
       ) : (
-        MOCK_RESULTS.map((c) => (
-          <View key={c.id} style={styles.card}>
-            <View style={styles.row}>
-              <View style={styles.info}>
-                <Text style={styles.name}>{c.full_name}</Text>
-                <Text style={styles.meta}>{c.karate_registration_number} · {c.exam_title}</Text>
-                <Text style={styles.meta}>{c.exam_date} · Faixa alvo: {c.target_belt}</Text>
-                {c.notes ? <Text style={styles.note}>Obs: {c.notes}</Text> : null}
-              </View>
-              <Badge status={RESULT_BADGE[c.result]} label={RESULT_LABEL[c.result]} />
+        exams.map((exam) => (
+          <TouchableOpacity key={exam.id} style={styles.card}
+            onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any)}
+            accessibilityRole="button" accessibilityLabel={`Resultados de ${exam.title}`}>
+            <View style={styles.info}>
+              <Text style={styles.name}>{exam.title}</Text>
+              <Text style={styles.meta}>{fmtDate(exam.exam_date)}{exam.location ? ` · ${exam.location}` : ""}</Text>
+              <Text style={styles.meta}>{exam.candidate_count} candidatos</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={18} color={KarateColors.ink4} />
+          </TouchableOpacity>
         ))
       )}
     </ScrollView>
@@ -51,12 +85,10 @@ export default function EventosResultados() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 10, paddingBottom: 32 } as ViewStyle,
+  content: { padding: 24, gap: 10, paddingBottom: 40, maxWidth: 900, width: "100%", alignSelf: "center" } as ViewStyle,
   pageHint: { fontSize: 12, color: KarateColors.ink3, marginBottom: 4 } as TextStyle,
-  card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
-  row: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 } as ViewStyle,
+  card: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   info: { flex: 1, gap: 3 } as ViewStyle,
   name: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
-  note: { fontSize: 12, color: KarateColors.warn, fontStyle: "italic" } as TextStyle,
 });

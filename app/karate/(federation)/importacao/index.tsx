@@ -28,17 +28,6 @@ const KNOWN_FIELDS = [
   "email", "phone", "dojo_id", "belt_level",
 ];
 
-// MOCK preview result
-const MOCK_PREVIEW: ImportResult = {
-  mode: "preview",
-  total_rows: 3,
-  valid_rows: 2,
-  committed: 0,
-  errors: [
-    { row: 3, field: "cpf", message: "CPF inválido" },
-  ],
-};
-
 type ColumnMap = Record<string, string>;
 
 function UploadStep({ onNext }: { onNext: (file: FormData, cols: string[]) => void }) {
@@ -189,8 +178,11 @@ export default function ImportacaoScreen() {
       const fd = new FormData();
       // re-append fields from original fd
       fd.append("column_map", JSON.stringify(map));
-      const result = await karateApi.importCSV(federationId, fd, "preview").catch(() => MOCK_PREVIEW);
+      const result = await karateApi.importCSV(federationId, fd, "preview");
       setPreviewResult(result);
+    } catch (e: any) {
+      Alert.alert("Não foi possível validar a planilha", e?.message ?? "Tente novamente.");
+      setStep(1);
     } finally {
       setLoading(false);
     }
@@ -202,9 +194,7 @@ export default function ImportacaoScreen() {
       if (!file) return;
       const fd = new FormData();
       fd.append("column_map", JSON.stringify(colMap));
-      const result = await karateApi.importCSV(federationId, fd, "commit").catch(() => ({
-        ...MOCK_PREVIEW, mode: "commit" as const, committed: MOCK_PREVIEW.valid_rows,
-      }));
+      const result = await karateApi.importCSV(federationId, fd, "commit");
       setCommitResult(result);
       setStep(3);
     } catch (e: any) {

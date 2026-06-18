@@ -6,13 +6,12 @@
 //   - RBAC: o guard examResults é aplicado no backend
 //   - Ao fechar o modal, resultados já estão salvos individualmente
 //
-// Wired contra karateApi.updateCandidateResult.
-// [MOCK] fallback se backend não responder.
+// Wired contra karateApi.updateCandidateResult. Em falha, erro honesto.
 // ============================================================
 import React, { useState } from "react";
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, ActivityIndicator, ViewStyle, TextStyle,
+  StyleSheet, ActivityIndicator, Alert, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
@@ -58,15 +57,8 @@ export function LancarResultadosModal({
         notes: state.notes || null,
       });
       onUpdateCandidate(updated);
-    } catch {
-      // [MOCK fallback]
-      const mockUpdated: ExamCandidate = {
-        ...candidate,
-        result: state.result,
-        notes: state.notes || null,
-        certificate_status: state.result === "approved" ? null : candidate.certificate_status,
-      };
-      onUpdateCandidate(mockUpdated);
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar o resultado", e?.message ?? "Tente novamente.");
     } finally {
       setResultState(prev => ({ ...prev, [candidate.id]: { ...prev[candidate.id], saving: false } }));
     }

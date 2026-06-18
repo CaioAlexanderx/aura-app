@@ -45,20 +45,6 @@ import {
   PaymentResult,
 } from "@/services/karateApi";
 
-// ── MOCK (shape fiel ao contrato v0.2.0) ────────────────────
-// TODO: remover quando endpoints PIX estiverem ativos no ambiente
-const MOCK_INTENT: PixIntent = {
-  intent_id: "mock-intent-001",
-  payment_intent_id: "mock-provider-001",
-  payload:
-    "00020126580014br.gov.bcb.pix0136aura-karate-mock-key@federacao.org.br5204000053039865802BR5915Federacao Karate6009Sao Paulo62140510mock000016304ABCD",
-  qr_image: null,
-  status: "pending",
-  expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-  provider: "static_brcode",
-  _warn: "PIX mock — backend não configurado",
-};
-
 type ModalState =
   | { phase: "creating" }
   | { phase: "waiting"; intent: PixIntent }
@@ -133,14 +119,7 @@ export function PixPaymentModal({
       pollRef.current = setInterval(async () => {
         try {
           // GET /financial/payments/{intentId}/status
-          // TODO: remover fallback MOCK quando backend PIX estiver ativo
-          let res: PixStatusResponse;
-          try {
-            res = await karateApi.getPixStatus(federationId, intent.intent_id);
-          } catch {
-            // MOCK fallback: mantém pending
-            return;
-          }
+          const res: PixStatusResponse = await karateApi.getPixStatus(federationId, intent.intent_id);
           if (res.status === "paid") {
             handlePaid(intent);
           } else if (res.status === "expired") {
@@ -148,7 +127,7 @@ export function PixPaymentModal({
             setState({ phase: "error", message: "PIX expirado. Tente novamente." });
           }
         } catch {
-          // rede: ignora e tenta novamente na próxima iteração
+          // erro transitório de rede: ignora e tenta de novo na próxima iteração
         }
       }, POLLING_INTERVAL_MS);
     },
@@ -159,22 +138,16 @@ export function PixPaymentModal({
     setState({ phase: "creating" });
     try {
       let intent: PixIntent;
-      // TODO: remover fallback MOCK quando endpoints PIX estiverem ativos
-      try {
-        if (target.dojoId) {
-          // POST /financial/annuities/dojos/{dojoId}/pix
-          intent = await karateApi.createDojoPixIntent(federationId, target.dojoId, {
-            annuity_history_id: target.annuityHistoryId,
-          });
-        } else {
-          // POST /financial/annuities/cpf/{practitionerId}/pix
-          intent = await karateApi.createCpfPixIntent(federationId, target.practitionerId, {
-            transaction_id: target.transactionId,
-          });
-        }
-      } catch {
-        // MOCK fallback
-        intent = { ...MOCK_INTENT };
+      if (target.dojoId) {
+        // POST /financial/annuities/dojos/{dojoId}/pix
+        intent = await karateApi.createDojoPixIntent(federationId, target.dojoId, {
+          annuity_history_id: target.annuityHistoryId,
+        });
+      } else {
+        // POST /financial/annuities/cpf/{practitionerId}/pix
+        intent = await karateApi.createCpfPixIntent(federationId, target.practitionerId, {
+          transaction_id: target.transactionId,
+        });
       }
       setState({ phase: "waiting", intent });
       startPolling(intent);
@@ -212,14 +185,7 @@ export function PixPaymentModal({
     setConfirming(true);
     try {
       // POST /financial/payments/{intentId}/confirm
-      // TODO: remover fallback MOCK quando endpoint confirm estiver ativo
-      try {
-        await karateApi.confirmPixManual(federationId, state.intent.intent_id, {
-          emit_nfse: true,
-        });
-      } catch {
-        // MOCK: aceita confirmar mesmo sem backend
-      }
+      await karateApi.confirmPixManual(federationId, state.intent.intent_id, { emit_nfse: true });
       handlePaid(state.intent);
     } catch (e: any) {
       setState({ phase: "error", message: e?.message ?? "Erro ao confirmar pagamento." });

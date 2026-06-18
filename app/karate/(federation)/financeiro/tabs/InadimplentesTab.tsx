@@ -5,8 +5,7 @@
 // badge de status e botão de cobrança (WhatsApp ou e-mail).
 //
 // Wired: GET /financial/overdue
-//        POST /financial/overdue/{targetId}/remind
-// MOCK: dados com shape fiel ao contrato.
+//        POST /financial/overdue/{targetId}/remind (dados reais).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -25,20 +24,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   karateApi,
   OverdueItem,
   ReminderChannel,
   OverdueTargetType,
 } from "@/services/karateApi";
-
-// ── MOCK ───────────────────────────────────────────────────
-const MOCK_OVERDUE: OverdueItem[] = [
-  { target_type: "dojo", target_id: "d1", name: "Dojô Shotokan ABC",       amount: 1200, days_overdue: 67,  status: "overdue",    last_reminder_at: null },
-  { target_type: "dojo", target_id: "d4", name: "Centro Karatê Zen",       amount: 3000, days_overdue: 100, status: "defaulting", last_reminder_at: "2026-04-01T09:00:00Z" },
-  { target_type: "cpf",  target_id: "p2", name: "Ana Paula Rocha",          amount: 80,   days_overdue: 67,  status: "overdue",    last_reminder_at: null },
-  { target_type: "cpf",  target_id: "p4", name: "Fernanda Costa",           amount: 80,   days_overdue: 130, status: "defaulting", last_reminder_at: "2026-03-15T08:00:00Z" },
-];
 
 const STATUS_MAP = {
   overdue:    { label: "Vencido",      icon: "warning",      color: ShojiPalette.alert,  bg: ShojiPalette.alertSoft },
@@ -60,17 +52,18 @@ interface Props { federationId: string; }
 export function InadimplentesTab({ federationId }: Props) {
   const [items, setItems]           = useState<OverdueItem[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [reminding, setReminding]   = useState<string | null>(null); // targetId being reminded
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
-      // TODO: remover fallback MOCK quando backend responder
-      const res = await karateApi
-        .listOverdue(federationId)
-        .catch(() => MOCK_OVERDUE);
+      const res = await karateApi.listOverdue(federationId);
       setItems(res);
+    } catch {
+      setError(true);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
@@ -81,26 +74,26 @@ export function InadimplentesTab({ federationId }: Props) {
   const handleRemind = useCallback(
     async (item: OverdueItem, channel: ReminderChannel) => {
       setReminding(item.target_id);
+      const channelLabel = channel === "whatsapp" ? "WhatsApp" : "e-mail";
       try {
-        // TODO: remover fallback MOCK quando backend responder
-        await karateApi
-          .remindOverdue(federationId, item.target_id, {
-            channel,
-            target_type: item.target_type as OverdueTargetType,
-          })
-          .catch(() => ({ queued: true }));
-        const channelLabel = channel === "whatsapp" ? "WhatsApp" : "e-mail";
-        if (Platform.OS === "web") {
-          alert(`Cobrança enviada via ${channelLabel} para ${item.name}.`);
-        } else {
-          Alert.alert("Cobrança enviada", `Notificação via ${channelLabel} para ${item.name}.`);
-        }
+        await karateApi.remindOverdue(federationId, item.target_id, {
+          channel,
+          target_type: item.target_type as OverdueTargetType,
+        });
+        const msg = `Notificação via ${channelLabel} para ${item.name}.`;
+        Platform.OS === "web" ? alert(`Cobrança enviada. ${msg}`) : Alert.alert("Cobrança enviada", msg);
+        load(true);
+      } catch (e: any) {
+        const msg = e?.message ?? "Tente novamente.";
+        Platform.OS === "web" ? alert(`Não foi possível enviar a cobrança. ${msg}`) : Alert.alert("Não foi possível enviar", msg);
       } finally {
         setReminding(null);
       }
     },
-    [federationId]
+    [federationId, load]
   );
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
 
@@ -226,7 +219,7 @@ const st = StyleSheet.create({
   summaryValue:  { fontSize: 20, fontWeight: "900", color: KarateColors.danger } as TextStyle,
   summaryLabel:  { fontSize: 11, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
 
-  card:          { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 } as ViewStyle,
+  card:          { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 } as ViewStyle,
   cardHeader:    { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   typeChip:      { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 2, paddingHorizontal: 6, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.bg2 } as ViewStyle,
   typeLabel:     { fontSize: 10, fontWeight: "700", color: KarateColors.ink3 } as TextStyle,
