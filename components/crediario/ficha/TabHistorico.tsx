@@ -29,6 +29,9 @@ export function TabHistorico({
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [loadingRefundId, setLoadingRefundId] = useState<string | null>(null);
   const [refundSale, setRefundSale] = useState<DevolucaoSale | null>(null);
+  // Gate de confirmação: armazena o id do evento que aguarda confirmação de devolução.
+  // O botão "Devolver" exige um segundo clique ("Sim") antes de abrir o DevolucaoModal.
+  const [confirmRefundId, setConfirmRefundId] = useState<string | null>(null);
 
   async function handlePrintReceipt(transactionId: string) {
     setPrintingId(transactionId);
@@ -122,6 +125,7 @@ export function TabHistorico({
       const isPrinting = printingId === ev.id;
       const isLoadingRefund = loadingRefundId === ev.id;
       const canRefund = ev.type === "purchase" && !!ev.sale_id;
+      const awaitingConfirm = confirmRefundId === ev.id;
       return (
         <View key={ev.id} style={m.tlItem}>
           <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
@@ -161,17 +165,37 @@ export function TabHistorico({
                   </Pressable>
                 )}
                 {canRefund && (
-                  <Pressable
-                    style={[lc.actionBtn, lc.actionBtnAmber, isLoadingRefund && { opacity: 0.5 }]}
-                    onPress={() => openRefund(ev)}
-                    disabled={isLoadingRefund}
-                    hitSlop={6}
-                  >
-                    {isLoadingRefund
-                      ? <ActivityIndicator size="small" color={Colors.amber} style={{ width: 11, height: 11 }} />
-                      : <Icon name="repeat" size={11} color={Colors.amber} />}
-                    <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
-                  </Pressable>
+                  awaitingConfirm ? (
+                    <View style={lc.confirmRow}>
+                      <Text style={lc.confirmTxt}>Confirmar devolução?</Text>
+                      <Pressable
+                        style={[lc.actionBtn, lc.actionBtnAmber]}
+                        onPress={() => { setConfirmRefundId(null); openRefund(ev); }}
+                        hitSlop={6}
+                      >
+                        <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Sim</Text>
+                      </Pressable>
+                      <Pressable
+                        style={lc.actionBtn}
+                        onPress={() => setConfirmRefundId(null)}
+                        hitSlop={6}
+                      >
+                        <Text style={lc.actionBtnTxt}>Não</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={[lc.actionBtn, lc.actionBtnAmber, isLoadingRefund && { opacity: 0.5 }]}
+                      onPress={() => setConfirmRefundId(ev.id)}
+                      disabled={isLoadingRefund}
+                      hitSlop={6}
+                    >
+                      {isLoadingRefund
+                        ? <ActivityIndicator size="small" color={Colors.amber} style={{ width: 11, height: 11 }} />
+                        : <Icon name="repeat" size={11} color={Colors.amber} />}
+                      <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
+                    </Pressable>
+                  )
                 )}
               </View>
             )}
@@ -265,5 +289,16 @@ const lc = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: Colors.violet3,
+  },
+  confirmRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  confirmTxt: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.ink2,
+    flex: 1,
   },
 });
