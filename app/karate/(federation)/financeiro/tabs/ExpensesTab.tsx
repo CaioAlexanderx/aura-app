@@ -4,8 +4,7 @@
 // Lista de despesas + formulário de lançamento.
 //
 // Wired: GET /financial/expenses
-//        POST /financial/expenses
-// MOCK: dados com shape fiel ao contrato.
+//        POST /financial/expenses (dados reais).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -27,15 +26,8 @@ import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateThem
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import { karateApi, Expense, ExpenseInput, ExpenseCategory } from "@/services/karateApi";
-
-// ── MOCK ───────────────────────────────────────────────────
-const MOCK_EXPENSES: Expense[] = [
-  { id: "e1", amount: 3200, category: "expense_award",       description: "Trofeus campeonato estadual", due_date: "2026-07-12", created_at: "2026-06-01T10:00:00Z" },
-  { id: "e2", amount: 1800, category: "expense_certificate", description: "Certificados exame faixas",  due_date: "2026-06-28", created_at: "2026-05-20T09:00:00Z" },
-  { id: "e3", amount: 6000, category: "expense_repasse",     description: "Repasse FPKT Q2 2026",        due_date: "2026-06-30", created_at: "2026-05-15T08:00:00Z" },
-  { id: "e4", amount: 1200, category: "expense_cost",        description: "Aluguel salão federativo",   due_date: "2026-06-05", created_at: "2026-06-01T11:00:00Z" },
-];
 
 const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   expense_cost:        "Custo geral",
@@ -80,6 +72,7 @@ interface Props { federationId: string; }
 export function ExpensesTab({ federationId }: Props) {
   const [expenses, setExpenses]     = useState<Expense[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showForm, setShowForm]     = useState(false);
   const [form, setForm]             = useState<NewExpenseForm>(EMPTY_FORM);
@@ -88,18 +81,20 @@ export function ExpensesTab({ federationId }: Props) {
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
-      // TODO: remover fallback MOCK quando backend responder
-      const res = await karateApi
-        .listExpenses(federationId)
-        .catch(() => ({ page: 1, page_size: 25, total: MOCK_EXPENSES.length, data: MOCK_EXPENSES }));
+      const res = await karateApi.listExpenses(federationId);
       setExpenses(res.data);
+    } catch {
+      setError(true);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
   }, [federationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const handleSave = async () => {
     const amt = parseFloat(form.amount.replace(",", "."));
@@ -114,15 +109,12 @@ export function ExpensesTab({ federationId }: Props) {
         description: form.description.trim(),
         due_date: form.due_date || undefined,
       };
-      // TODO: remover fallback MOCK quando backend responder
-      const saved = await karateApi.createExpense(federationId, body).catch(() => ({
-        ...body,
-        id: `mock-${Date.now()}`,
-        created_at: new Date().toISOString(),
-      } as Expense));
+      const saved = await karateApi.createExpense(federationId, body);
       setExpenses((prev) => [saved, ...prev]);
       setShowForm(false);
       setForm(EMPTY_FORM);
+    } catch (e: any) {
+      setFormError(e?.message ?? "Não foi possível salvar. Tente novamente.");
     } finally {
       setSaving(false);
     }
@@ -259,7 +251,7 @@ const st = StyleSheet.create({
   headerRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 } as ViewStyle,
   totalLabel:   { fontSize: 11, fontWeight: "600", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.8 } as TextStyle,
   totalValue:   { fontSize: 22, fontWeight: "900", color: KarateColors.danger, letterSpacing: -0.5 } as TextStyle,
-  card:         { flexDirection: "row", backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8, alignItems: "center" } as ViewStyle,
+  card:         { flexDirection: "row", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8, alignItems: "center" } as ViewStyle,
   expDesc:      { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   expMeta:      { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   expAmount:    { fontSize: 15, fontWeight: "900", color: KarateColors.danger } as TextStyle,

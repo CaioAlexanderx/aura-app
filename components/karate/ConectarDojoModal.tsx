@@ -4,11 +4,11 @@
 // 2 jeitos de conectar (linguagem simples, sem tecniquês):
 //   "O dojô usa o Aura Karatê" (native) → envia convite; liga sozinho
 //   "O dojô não usa sistema"  (manual)  → a federação cuida de tudo
-// Wired: karateConnectionsApi.createConnection. [MOCK] fallback.
+// Wired: karateConnectionsApi.createConnection. Dojôs vêm de karateApi.listDojos.
 // ============================================================
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Modal, View, Text, ScrollView, TouchableOpacity,
+  Modal, View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, Alert, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,15 +16,11 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateConnectionsApi, Via } from "@/services/karateConnectionsApi";
+import { karateApi } from "@/services/karateApi";
 
 const STEPS = ["Dojô", "Como conecta", "Pronto"];
 
-// [MOCK] dojôs ainda sem conexão
-const MOCK_UNLINKED = [
-  { id: "u1", name: "Wado-Ryu Osasco", code: "FPKT-033" },
-  { id: "u2", name: "Dojô Sankukai", code: "FPKT-029" },
-  { id: "u3", name: "Shorin-Ryu Litoral", code: "FPKT-041" },
-];
+type DojoOption = { id: string; name: string; code: string };
 
 interface Props {
   visible: boolean;
@@ -35,9 +31,26 @@ interface Props {
 
 export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Props) {
   const [step, setStep] = useState(0);
-  const [dojo, setDojo] = useState<{ id: string; name: string; code: string } | null>(null);
+  const [dojo, setDojo] = useState<DojoOption | null>(null);
   const [via, setVia] = useState<Via | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dojos, setDojos] = useState<DojoOption[]>([]);
+  const [loadingDojos, setLoadingDojos] = useState(false);
+
+  // Carrega os dojôs reais da federação quando o modal abre.
+  useEffect(() => {
+    if (!visible) return;
+    let alive = true;
+    setLoadingDojos(true);
+    karateApi.listDojos(federationId, { pageSize: 100 })
+      .then((res) => {
+        if (!alive) return;
+        setDojos((res.data ?? []).map((d) => ({ id: d.id, name: d.name, code: d.fpkt_affiliation_id })));
+      })
+      .catch(() => { if (alive) setDojos([]); })
+      .finally(() => { if (alive) setLoadingDojos(false); });
+    return () => { alive = false; };
+  }, [visible, federationId]);
 
   const reset = () => { setStep(0); setDojo(null); setVia(null); setLoading(false); onClose(); };
 
@@ -46,10 +59,13 @@ export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Pr
     setLoading(true);
     try {
       await karateConnectionsApi.createConnection(federationId, { dojo_id: dojo.id, via });
-    } catch { /* [MOCK fallback] */ }
-    setLoading(false);
-    setStep(2);
-    onDone?.();
+      setStep(2);
+      onDone?.();
+    } catch (e: any) {
+      Alert.alert("Não foi possível conectar", e?.message ?? "Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -66,18 +82,24 @@ export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Pr
           {step === 0 && (
             <View style={{ gap: 10 }}>
               <Text style={styles.hint}>Qual dojô você quer conectar?</Text>
-              {MOCK_UNLINKED.map((d) => (
-                <TouchableOpacity key={d.id} onPress={() => setDojo(d)}
-                  style={[styles.pickRow, dojo?.id === d.id && styles.pickRowSel]}
-                  accessibilityRole="radio" accessibilityState={{ checked: dojo?.id === d.id }}>
-                  <View style={styles.avatar}><Ionicons name="home" size={16} color={KarateColors.ink3} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.dojoName}>{d.name}</Text>
-                    <Text style={styles.dojoMeta}>{d.code}</Text>
-                  </View>
-                  {dojo?.id === d.id && <Ionicons name="checkmark-circle" size={20} color={KarateColors.primary} />}
-                </TouchableOpacity>
-              ))}
+              {loadingDojos ? (
+                <ActivityIndicator style={{ marginTop: 16 }} color={KarateColors.primary} />
+              ) : dojos.length === 0 ? (
+                <Text style={styles.hint}>Nenhum dojô disponível. Cadastre um dojô antes de conectar.</Text>
+              ) : (
+                dojos.map((d) => (
+                  <TouchableOpacity key={d.id} onPress={() => setDojo(d)}
+                    style={[styles.pickRow, dojo?.id === d.id && styles.pickRowSel]}
+                    accessibilityRole="radio" accessibilityState={{ checked: dojo?.id === d.id }}>
+                    <View style={styles.avatar}><Ionicons name="home" size={16} color={KarateColors.ink3} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dojoName}>{d.name}</Text>
+                      <Text style={styles.dojoMeta}>{d.code}</Text>
+                    </View>
+                    {dojo?.id === d.id && <Ionicons name="checkmark-circle" size={20} color={KarateColors.primary} />}
+                  </TouchableOpacity>
+                ))
+              )}
             </View>
           )}
 

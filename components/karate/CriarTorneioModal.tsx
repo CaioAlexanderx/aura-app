@@ -7,7 +7,7 @@
 //   Passo 3 — Revisão → cria competição + categorias
 //
 // Wired: karateCompetitionsApi.createCompetition + createCategory.
-// [MOCK fallback] simula sucesso enquanto o federationId real não vem do JWT.
+// Em falha, mostra erro honesto (sem simular sucesso).
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -130,10 +130,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
       Alert.alert("Torneio criado!", `"${name}" criado com ${categories.length} categoria(s).`,
         [{ text: "OK", onPress: () => { onCreated?.(); resetAndClose(); } }]);
     } catch (e: any) {
-      // [MOCK fallback] federationId ainda é placeholder até o login de federação
-      Alert.alert("Torneio criado (rascunho)",
-        `"${name}" com ${categories.length} categoria(s). Sincroniza quando o login de federação estiver ativo.`,
-        [{ text: "OK", onPress: () => { onCreated?.(); resetAndClose(); } }]);
+      Alert.alert("Não foi possível criar o torneio", e?.message ?? "Tente novamente.");
     } finally {
       setLoading(false);
     }

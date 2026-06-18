@@ -4,8 +4,7 @@
 // Lista de anuidades por CPF com status, filtro e cobrança PIX.
 //
 // Wired: GET /financial/annuities/cpf
-//        POST /financial/annuities/cpf/{practitionerId}/pix
-// MOCK: dados com shape fiel ao contrato v0.2.0.
+//        POST /financial/annuities/cpf/{practitionerId}/pix (dados reais).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -23,18 +22,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
 import { karateApi, CpfAnnuity, AnnuityStatus } from "@/services/karateApi";
-
-// ── MOCK ───────────────────────────────────────────────────
-// Shape matches contract CpfAnnuity schema (v0.2.0).
-// transaction_id is needed to call the /pix endpoint.
-const MOCK_CPF_ANNUITIES: (CpfAnnuity & { transaction_id: string | null })[] = [
-  { practitioner_id: "p1", full_name: "Takeshi Yamamoto",   karate_registration_number: "KR-0001", amount: 80, reference_period: "2026", due_date: "2026-03-31", paid_at: "2026-03-15", status: "paid",       transaction_id: "tx-p1" },
-  { practitioner_id: "p2", full_name: "Ana Paula Rocha",    karate_registration_number: "KR-0002", amount: 80, reference_period: "2026", due_date: "2026-03-31", paid_at: null,          status: "overdue",    transaction_id: "tx-p2" },
-  { practitioner_id: "p3", full_name: "Carlos Eduardo Lima",karate_registration_number: "KR-0003", amount: 80, reference_period: "2026", due_date: "2026-06-30", paid_at: null,          status: "due",        transaction_id: "tx-p3" },
-  { practitioner_id: "p4", full_name: "Fernanda Costa",     karate_registration_number: "KR-0004", amount: 80, reference_period: "2026", due_date: "2026-01-31", paid_at: null,          status: "defaulting", transaction_id: null },
-];
 
 const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
   { key: "all",        label: "Todos" },
@@ -67,6 +57,7 @@ interface Props { federationId: string; }
 export function CpfAnnuitiesTab({ federationId }: Props) {
   const [annuities, setAnnuities] = useState<CpfAnnuityWithTx[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
   const [search, setSearch]       = useState("");
@@ -74,18 +65,20 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
-      // TODO: remover fallback MOCK quando backend responder
-      const res = await karateApi
-        .listCpfAnnuities(federationId, { status: filter === "all" ? undefined : filter })
-        .catch(() => ({ page: 1, page_size: 25, total: MOCK_CPF_ANNUITIES.length, data: MOCK_CPF_ANNUITIES }));
+      const res = await karateApi.listCpfAnnuities(federationId, { status: filter === "all" ? undefined : filter });
       setAnnuities(res.data as CpfAnnuityWithTx[]);
+    } catch {
+      setError(true);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
   }, [federationId, filter]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const filtered = annuities.filter((a) =>
     search === "" ||
@@ -197,13 +190,13 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
 const st = StyleSheet.create({
   screen:            { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content:           { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
-  searchRow:         { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, marginBottom: 4 } as ViewStyle,
+  searchRow:         { flexDirection: "row", alignItems: "center", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, marginBottom: 4 } as ViewStyle,
   searchInput:       { flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: KarateColors.ink } as TextStyle,
   filterChip:        { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
   filterChipActive:  { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primaryLine } as ViewStyle,
   filterLabel:       { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   filterLabelActive: { color: KarateColors.primary, fontWeight: "800" } as TextStyle,
-  card:              { flexDirection: "row", backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
+  card:              { flexDirection: "row", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
   name:              { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   meta:              { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   amount:            { fontSize: 15, fontWeight: "900", color: KarateColors.ink } as TextStyle,

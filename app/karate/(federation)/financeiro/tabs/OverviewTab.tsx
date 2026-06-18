@@ -4,8 +4,7 @@
 // DRE (receitas, despesas, lucro líquido) + fluxo de caixa mensal
 // + recebíveis projetados.
 //
-// Wired: GET /federation/{id}/financial/overview
-// MOCK: dados gerados com shape fiel ao contrato.
+// Wired: GET /federation/{id}/financial/overview (dados reais).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -21,39 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { KPIStrip, KPIData } from "@/components/karate/KPIStrip";
 import { Skeleton } from "@/components/karate/Skeleton";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import { karateApi, FinancialOverview, CashflowMonth } from "@/services/karateApi";
-
-// ── MOCK ───────────────────────────────────────────────────
-const MOCK_OVERVIEW: FinancialOverview = {
-  period: { from: "2026-01-01", to: "2026-06-30" },
-  dre: {
-    revenue: [
-      { category: "Anuidades Dojô", amount: 145200 },
-      { category: "Anuidades CPF",  amount: 38400 },
-      { category: "Outros",          amount: 4800 },
-    ],
-    expenses: [
-      { category: "Repasses",         amount: 18000 },
-      { category: "Certificados",     amount: 6400 },
-      { category: "Prêmios/Trofeus",  amount: 3200 },
-      { category: "Custos gerais",    amount: 12000 },
-    ],
-    net: 148800,
-  },
-  cashflow: [
-    { month: "2026-01", inflow: 28000, outflow: 6000,  balance: 22000 },
-    { month: "2026-02", inflow: 32000, outflow: 7500,  balance: 46500 },
-    { month: "2026-03", inflow: 35000, outflow: 9200,  balance: 72300 },
-    { month: "2026-04", inflow: 29800, outflow: 6400,  balance: 95700 },
-    { month: "2026-05", inflow: 31200, outflow: 7800,  balance: 119100 },
-    { month: "2026-06", inflow: 27400, outflow: 5700,  balance: 140800 },
-  ],
-  projected_receivables: [
-    { due_date: "2026-07-10", amount: 18400 },
-    { due_date: "2026-07-31", amount: 12000 },
-    { due_date: "2026-08-15", amount: 9800 },
-  ],
-};
 
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -102,20 +70,25 @@ interface Props { federationId: string; }
 export function OverviewTab({ federationId }: Props) {
   const [data, setData] = useState<FinancialOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
-      // TODO: remover fallback MOCK quando backend responder
-      const result = await karateApi.getFinancialOverview(federationId).catch(() => MOCK_OVERVIEW);
+      const result = await karateApi.getFinancialOverview(federationId);
       setData(result);
+    } catch {
+      setError(true);
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
   }, [federationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const totalRevenue  = data?.dre.revenue.reduce((s, r) => s + r.amount, 0) ?? 0;
   const totalExpenses = data?.dre.expenses.reduce((s, e) => s + e.amount, 0) ?? 0;
@@ -204,7 +177,7 @@ const st = StyleSheet.create({
   screen:        { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content:       { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
   sectionTitle:  { fontSize: 11, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase", marginTop: 16, marginBottom: 6 } as TextStyle,
-  card:          { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
+  card:          { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
   dreRow:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
   dreLabel:      { fontSize: 13, color: KarateColors.ink2 } as TextStyle,
   dreAmount:     { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,

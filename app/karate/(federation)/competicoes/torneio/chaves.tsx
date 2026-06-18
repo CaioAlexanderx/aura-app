@@ -7,11 +7,12 @@
 //
 // Acesso: /karate/(federation)/competicoes/torneio/chaves?id=<cid>
 // Parâmetros: id (competition id), catId (category id), catName, modality
-// [MOCK] fallback quando federation ainda é placeholder.
+// Dados reais via karateBracketsApi; falhas mostram erro honesto.
 // ============================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -36,55 +37,6 @@ import {
   DrawMethod,
 } from "@/services/karateBracketsApi";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
-
-// ── Mock data ─────────────────────────────────────────────────────────
-const MOCK_ATHLETES = [
-  { entry_id: "e1", student_name: "Pedro Yamamoto", dojo_name: "Ren Bu Kan" },
-  { entry_id: "e2", student_name: "Rafael Lima", dojo_name: "Vila Mariana" },
-  { entry_id: "e3", student_name: "Caio Brandão", dojo_name: "Shotokan Centro" },
-  { entry_id: "e4", student_name: "Tiago Abe", dojo_name: "Shotokan Centro" },
-  { entry_id: "e5", student_name: "Lucas Mori", dojo_name: "Santo André" },
-  { entry_id: "e6", student_name: "Bruno Tan", dojo_name: "Vila Mariana" },
-];
-
-const MOCK_BRACKET: BracketState = {
-  bracket_id: "mock-bracket",
-  status: "locked",
-  modality: "kumite",
-  seed: "42",
-  options: { method: "ranking", separateSameDojo: true, thirdPlace: true },
-  athletes_count: 6,
-  bye_count: 2,
-  rounds: [
-    [
-      { id: "r0-0", round: 0, slot: 0, aka: MOCK_ATHLETES[0], shiro: MOCK_ATHLETES[1], winner_entry_id: null, is_bye: false },
-      { id: "r0-1", round: 0, slot: 1, aka: MOCK_ATHLETES[2], shiro: MOCK_ATHLETES[3], winner_entry_id: null, is_bye: false },
-      { id: "r0-2", round: 0, slot: 2, aka: MOCK_ATHLETES[4], shiro: "bye", winner_entry_id: MOCK_ATHLETES[4].entry_id, is_bye: true },
-      { id: "r0-3", round: 0, slot: 3, aka: MOCK_ATHLETES[5], shiro: "bye", winner_entry_id: MOCK_ATHLETES[5].entry_id, is_bye: true },
-    ],
-    [
-      { id: "r1-0", round: 1, slot: 0, aka: null, shiro: MOCK_ATHLETES[4], winner_entry_id: null, is_bye: false },
-      { id: "r1-1", round: 1, slot: 1, aka: null, shiro: MOCK_ATHLETES[5], winner_entry_id: null, is_bye: false },
-    ],
-    [
-      { id: "r2-0", round: 2, slot: 0, aka: null, shiro: null, winner_entry_id: null, is_bye: false },
-    ],
-  ],
-  third_place_match: { id: "third", round: 3, slot: 0, aka: null, shiro: null, winner_entry_id: null, is_bye: false },
-  champion: null,
-};
-
-const MOCK_KATA_SCORES: KataScore[] = [
-  { entry_id: "k1", student_name: "Ana Onishi", dojo_name: "Shotokan Centro", phase: "eliminatoria", nota: 26.2, presentation_order: 1, advances: true },
-  { entry_id: "k2", student_name: "Marina Souza", dojo_name: "Santo André", phase: "eliminatoria", nota: 25.8, presentation_order: 2, advances: true },
-  { entry_id: "k3", student_name: "Helena Dias", dojo_name: "Santo André", phase: "eliminatoria", nota: 25.6, presentation_order: 3, advances: true },
-  { entry_id: "k4", student_name: "Júlia Costa", dojo_name: "Shotokan Centro", phase: "eliminatoria", nota: 25.4, presentation_order: 4, advances: true },
-  { entry_id: "k5", student_name: "Fernanda Oka", dojo_name: "Vila Mariana", phase: "eliminatoria", nota: 25.2, presentation_order: 5, advances: false },
-  { entry_id: "k1", student_name: "Ana Onishi", dojo_name: "Shotokan Centro", phase: "final", nota: 26.6, presentation_order: 1, advances: null },
-  { entry_id: "k2", student_name: "Marina Souza", dojo_name: "Santo André", phase: "final", nota: 26.0, presentation_order: 2, advances: null },
-  { entry_id: "k3", student_name: "Helena Dias", dojo_name: "Santo André", phase: "final", nota: null, presentation_order: 3, advances: null },
-  { entry_id: "k4", student_name: "Júlia Costa", dojo_name: "Shotokan Centro", phase: "final", nota: null, presentation_order: 4, advances: null },
-];
 
 // ── Helpers ────────────────────────────────────────────────────────────
 function initials(name: string | null): string {
@@ -153,7 +105,7 @@ export default function ChavesScreen() {
         }
       }
     } catch {
-      // [MOCK] keep empty
+      // sem categorias: mantém vazio
     }
   }, [federationId, cid, selectedCatId]);
 
@@ -177,12 +129,9 @@ export default function ChavesScreen() {
         setBracket(null);
       }
     } catch {
-      // [MOCK] use mock data
-      if (selectedModality === "kata" || selectedModality === "team_kata") {
-        setKataScores(MOCK_KATA_SCORES);
-      } else {
-        setBracket(MOCK_BRACKET);
-      }
+      // sem dado real: não fabricar — mantém estado vazio
+      setBracket(null);
+      setKataScores([]);
     } finally {
       setLoading(false);
     }
@@ -194,7 +143,7 @@ export default function ChavesScreen() {
       const scores = await karateBracketsApi.getKataScores(federationId, cid || "", selectedCatId);
       if (scores) setKataScores(scores);
     } catch {
-      setKataScores(MOCK_KATA_SCORES);
+      setKataScores([]);
     }
   }, [federationId, cid, selectedCatId]);
 
@@ -214,8 +163,8 @@ export default function ChavesScreen() {
         method, separateSameDojo, thirdPlace,
       });
       await loadBracket();
-    } catch {
-      await loadBracket();
+    } catch (e: any) {
+      Alert.alert("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
     } finally {
       setGenerating(false);
     }
@@ -226,8 +175,8 @@ export default function ChavesScreen() {
     try {
       await karateBracketsApi.lockBracket(federationId, cid || "", selectedCatId);
       await loadBracket();
-    } catch {
-      setBracket((prev) => prev ? { ...prev, status: "locked" } : prev);
+    } catch (e: any) {
+      Alert.alert("Não foi possível travar a chave", e?.message ?? "Tente novamente.");
     } finally {
       setLocking(false);
     }
@@ -241,24 +190,14 @@ export default function ChavesScreen() {
     if (!bracket || bracket.status !== "locked") return;
     setAdvancingMatch(matchId);
     try {
-      const result = await karateBracketsApi.advanceWinner(
+      await karateBracketsApi.advanceWinner(
         federationId, cid || "", selectedCatId,
         { match_id: matchId, winner_entry_id: winnerId }
       );
-      // Optimistic: reload bracket
       await loadBracket();
-      if (result.champion_entry_id) {
-        // show champion (bracket will reflect it on reload)
-      }
-    } catch {
-      // Optimistic local update
-      setBracket((prev) => {
-        if (!prev) return prev;
-        const rounds = prev.rounds.map((r) =>
-          r.map((m) => m.id === matchId ? { ...m, winner_entry_id: winnerId } : m)
-        );
-        return { ...prev, rounds };
-      });
+    } catch (e: any) {
+      Alert.alert("Não foi possível lançar o resultado", e?.message ?? "Tente novamente.");
+      await loadBracket();
     } finally {
       setAdvancingMatch(null);
     }
@@ -279,18 +218,12 @@ export default function ChavesScreen() {
             ? { ...s, nota } : s
         )
       );
-    } catch {
-      // local update only
-      setKataScores((prev) =>
-        prev.map((s) =>
-          s.entry_id === editScore.entry_id && s.phase === editScore.phase
-            ? { ...s, nota } : s
-        )
-      );
-    } finally {
-      setSavingScore(false);
       setEditScore(null);
       setScoreInput("");
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar a nota", e?.message ?? "Tente novamente.");
+    } finally {
+      setSavingScore(false);
     }
   };
 

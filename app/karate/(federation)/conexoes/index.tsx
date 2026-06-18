@@ -3,36 +3,23 @@
 //
 // Como cada dojô se conecta à federação: ou usa o Aura Karatê (tudo
 // se atualiza sozinho), ou a federação cuida de tudo. Caixa de pedidos
-// + lista de dojôs + "Conectar dojô". Wired com [MOCK] fallback.
+// + lista de dojôs + "Conectar dojô". Dados reais; estados honestos.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, RefreshControl,
-  StyleSheet, ViewStyle, TextStyle,
+  ActivityIndicator, Alert, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
-import { EmptyState } from "@/components/karate/EmptyState";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { ConectarDojoModal } from "@/components/karate/ConectarDojoModal";
 import { karateConnectionsApi, Connection } from "@/services/karateConnectionsApi";
-
-// [MOCK] seed — pedidos esperando você aceitar
-const MOCK_REQUESTS: Connection[] = [
-  { id: "r1", federation_id: "", dojo_id: "d1", dojo_name: "Dojô Seishin", fpkt_affiliation_id: "FPKT-035", via: "native", status: "pending", sync_token_masked: null, token_rotated_at: null, connected_at: null, last_sync_at: null, last_sync_status: null, notes: "Sensei confirmou a conexão" },
-  { id: "r2", federation_id: "", dojo_id: "d2", dojo_name: "Dojô Renbukai", fpkt_affiliation_id: "FPKT-040", via: "native", status: "pending", sync_token_masked: null, token_rotated_at: null, connected_at: null, last_sync_at: null, last_sync_status: null, notes: "Esperando aprovação da federação" },
-];
-
-// [MOCK] seed — dojôs e seu estado de conexão
-const MOCK_CONNS: Connection[] = [
-  { id: "c1", federation_id: "", dojo_id: "d10", dojo_name: "Academia Musashi", fpkt_affiliation_id: "FPKT-001", via: "native", status: "connected", sync_token_masked: "••••", token_rotated_at: null, connected_at: "2026-05-01", last_sync_at: "2026-06-09T14:30:00Z", last_sync_status: "ok", notes: null },
-  { id: "c2", federation_id: "", dojo_id: "d11", dojo_name: "Bunkyo Karatê-Dô", fpkt_affiliation_id: "FPKT-002", via: "native", status: "connected", sync_token_masked: "••••", token_rotated_at: null, connected_at: "2026-04-20", last_sync_at: "2026-06-09T13:10:00Z", last_sync_status: "ok", notes: null },
-  { id: "c3", federation_id: "", dojo_id: "d12", dojo_name: "Dojô Yoshitaka", fpkt_affiliation_id: "FPKT-006", via: "native", status: "error", sync_token_masked: "••••", token_rotated_at: null, connected_at: "2026-03-15", last_sync_at: "2026-06-08T09:00:00Z", last_sync_status: "error", notes: null },
-  { id: "c4", federation_id: "", dojo_id: "d13", dojo_name: "Dojô Mirim Santos", fpkt_affiliation_id: "FPKT-027", via: "manual", status: "connected", sync_token_masked: null, token_rotated_at: null, connected_at: "2026-05-10", last_sync_at: null, last_sync_status: null, notes: null },
-];
 
 export function connView(c: Connection): { label: string; tone: "ok" | "warn" | "alert" | "neutral" } {
   if (c.status === "connected" && c.via === "native") return { label: "Conectado · atualiza sozinho", tone: "ok" };
@@ -45,40 +32,56 @@ export function connView(c: Connection): { label: string; tone: "ok" | "warn" | 
 export default function ConexoesIndex() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
-  const [requests, setRequests] = useState<Connection[]>(MOCK_REQUESTS);
-  const [conns, setConns] = useState<Connection[]>(MOCK_CONNS);
+  const [requests, setRequests] = useState<Connection[]>([]);
+  const [conns, setConns] = useState<Connection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
     try {
       const [list, reqs] = await Promise.all([
         karateConnectionsApi.listConnections(federationId),
         karateConnectionsApi.listRequests(federationId),
       ]);
-      if (list?.data) setConns(list.data.filter((c) => c.status !== "pending"));
-      if (reqs) setRequests(reqs);
-    } catch { /* [MOCK fallback] */ }
+      setConns((list?.data ?? []).filter((c) => c.status !== "pending"));
+      setRequests(reqs ?? []);
+    } catch {
+      setError(true);
+    } finally {
+      isRefresh ? setRefreshing(false) : setLoading(false);
+    }
   }, [federationId]);
   useEffect(() => { load(); }, [load]);
-  const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
 
   const accept = async (c: Connection) => {
-    try { await karateConnectionsApi.approve(federationId, c.id); } catch { /* mock */ }
-    setRequests((p) => p.filter((r) => r.id !== c.id));
-    setConns((p) => [{ ...c, status: "connected", connected_at: new Date().toISOString() }, ...p]);
+    try {
+      await karateConnectionsApi.approve(federationId, c.id);
+      load(true);
+    } catch (e: any) {
+      Alert.alert("Não foi possível aceitar", e?.message ?? "Tente novamente.");
+    }
   };
   const refuse = async (c: Connection) => {
-    try { await karateConnectionsApi.reject(federationId, c.id); } catch { /* mock */ }
-    setRequests((p) => p.filter((r) => r.id !== c.id));
+    try {
+      await karateConnectionsApi.reject(federationId, c.id);
+      setRequests((p) => p.filter((r) => r.id !== c.id));
+    } catch (e: any) {
+      Alert.alert("Não foi possível recusar", e?.message ?? "Tente novamente.");
+    }
   };
+
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   const connected = conns.filter((c) => c.status === "connected").length;
   const problems = conns.filter((c) => c.status === "error").length;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={KarateColors.primary} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>Dojôs da federação</Text>
@@ -125,8 +128,10 @@ export default function ConexoesIndex() {
 
       {/* Lista de dojôs conectados */}
       <Text style={styles.sectionTitle}>Dojôs conectados <Text style={styles.countMuted}>· {connected}</Text></Text>
-      {conns.length === 0 ? (
-        <EmptyState icon="link-outline" title="Nenhum dojô conectado ainda" subtitle="Use “Conectar dojô” para começar." />
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 24 }} size="large" color={KarateColors.primary} />
+      ) : conns.length === 0 ? (
+        <KarateEmptyState icon="link-outline" title="Nenhum dojô conectado ainda" subtitle="Use “Conectar dojô” para começar." style={{ paddingVertical: 28 }} />
       ) : (
         conns.map((c) => {
           const v = connView(c);
