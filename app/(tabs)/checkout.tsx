@@ -102,7 +102,8 @@ export default function CheckoutScreen() {
   var annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
   var annualMonthly = Math.round(annualTotal / 12 * 100) / 100;
   var annualSavings = plan.monthly * 12 - annualTotal;
-  var price = isAnnual ? annualTotal : plan.monthly;
+  // Sempre mostra mensalidade — o plano anual é cobrado mensalmente, não à vista.
+  var price = isAnnual ? annualMonthly : plan.monthly;
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
@@ -300,14 +301,17 @@ export default function CheckoutScreen() {
       <View style={z.summaryCard}>
         <View style={z.summaryRow}>
           <Text style={z.summaryLabel}>{plan.label} ({isAnnual ? "anual" : "mensal"})</Text>
-          <Text style={z.summaryValue}>{isAnnual ? fmt(price) : fmtMo(price)}</Text>
+          <Text style={z.summaryValue}>{fmtMo(price)}</Text>
         </View>
+        {isAnnual && (
+          <Text style={z.annualNote}>Cobrado mensalmente · economia de {fmt(annualSavings)}/ano</Text>
+        )}
       </View>
 
       {method === "pix" && !pixQr && (
         <View style={z.formCard}>
           <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && { opacity: 0.6 }]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmt(price)}</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmtMo(price)}</Text>}
           </Pressable>
         </View>
       )}
@@ -410,6 +414,7 @@ var z = StyleSheet.create({
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   summaryLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   summaryValue: { fontSize: 16, color: Colors.green, fontWeight: "800" },
+  annualNote: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center", width: "100%" },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
