@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -88,6 +89,14 @@ export function TabParcelas({
 }: TabParcelasProps) {
   const hasAccounts = accounts.length > 0;
   const freeAmtValue = parseAmount(freeAmt);
+
+  // ── Gate de confirmação de recebimento (2-step) ────────────────────────
+  // Step 0: botão normal "Confirmar R$ X"
+  // Step 1: banner de confirmação + "Sim, confirmar" / "Cancelar"
+  // Qualquer mudança em valor, método ou data reseta para step 0.
+  const [confirmStep, setConfirmStep] = useState<0 | 1>(0);
+  useEffect(() => { setConfirmStep(0); }, [freeAmt, freeMethod, freeDateBr]);
+
   return (
 <>
   {useCarneLayout && (
@@ -565,32 +574,62 @@ export function TabParcelas({
       </View>
     )}
 
-    {/* ── Botões de ação: Gerar Pix (B3) + Confirmar recebimento ── */}
-    <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-      <Pressable
-        style={[
-          m.pixBtn,
-          { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
-          freeAmtValue <= 0 && { opacity: 0.4 },
-        ]}
-        disabled={freeAmtValue <= 0}
-        onPress={() => openFreePix(freeAmtValue)}
-      >
-        <Text style={m.pixBtnTxt}>Gerar Pix</Text>
-      </Pressable>
-
-      <Pressable
-        style={[m.cta, { flex: 2 }, (freeAmtValue <= 0 || freeSubmitting) && { opacity: 0.45 }]}
-        disabled={freeAmtValue <= 0 || freeSubmitting}
-        onPress={confirmFreePayment}
-      >
-        {freeSubmitting
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
-              {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
-            </Text>}
-      </Pressable>
-    </View>
+    {/* ── Botões de ação: Gerar Pix (B3) + Confirmar recebimento (gate 2-step) ── */}
+    {confirmStep === 0 ? (
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+        <Pressable
+          style={[
+            m.pixBtn,
+            { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
+            freeAmtValue <= 0 && { opacity: 0.4 },
+          ]}
+          disabled={freeAmtValue <= 0}
+          onPress={() => openFreePix(freeAmtValue)}
+        >
+          <Text style={m.pixBtnTxt}>Gerar Pix</Text>
+        </Pressable>
+        <Pressable
+          style={[m.cta, { flex: 2 }, freeAmtValue <= 0 && { opacity: 0.45 }]}
+          disabled={freeAmtValue <= 0}
+          onPress={() => setConfirmStep(1)}
+        >
+          <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
+            {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
+          </Text>
+        </Pressable>
+      </View>
+    ) : (
+      <View style={{ marginTop: 14, gap: 8 }}>
+        <View style={{
+          flexDirection: "row", alignItems: "center", gap: 8,
+          backgroundColor: Colors.amber + "18", borderRadius: 8,
+          padding: 10, borderWidth: 1, borderColor: Colors.amber + "44",
+        }}>
+          <Icon name="alert_triangle" size={14} color={Colors.amber} />
+          <Text style={{ fontSize: 13, color: Colors.ink2, flex: 1 }}>
+            Confirmar recebimento de{" "}
+            <Text style={{ fontWeight: "700", color: Colors.ink }}>{fmt(freeAmtValue)}</Text>?
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", gap: 9 }}>
+          <Pressable
+            style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+            onPress={() => setConfirmStep(0)}
+          >
+            <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+          </Pressable>
+          <Pressable
+            style={[m.cta, { flex: 2 }, freeSubmitting && { opacity: 0.5 }]}
+            disabled={freeSubmitting}
+            onPress={() => { setConfirmStep(0); confirmFreePayment(); }}
+          >
+            {freeSubmitting
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={m.ctaTxt}>Sim, confirmar</Text>}
+          </Pressable>
+        </View>
+      </View>
+    )}
   </View>
 </>
   );
