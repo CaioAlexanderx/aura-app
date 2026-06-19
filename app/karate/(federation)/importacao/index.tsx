@@ -14,7 +14,7 @@ import {
   ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateApi, ImportResult } from "@/services/karateApi";

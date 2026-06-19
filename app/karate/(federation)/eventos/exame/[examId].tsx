@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13, color: KarateColors.primary, fontWeight: "600" } as TextStyle,
   examHeader: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 6 } as ViewStyle,
   examTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 } as ViewStyle,
-  examTitle: { flex: 1, fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  examTitle: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" } as ViewStyle,
   metaText: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   actions: { flexDirection: "row", gap: 8 } as ViewStyle,

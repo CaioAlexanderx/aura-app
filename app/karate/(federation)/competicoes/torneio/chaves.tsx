@@ -25,7 +25,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
@@ -797,7 +797,7 @@ const styles = StyleSheet.create({
   backRow: { flexDirection: "row", alignItems: "center", gap: 2 } as ViewStyle,
   backText: { fontSize: 13, fontWeight: "700", color: PRIMARY } as TextStyle,
   pageHead: { gap: 6 } as ViewStyle,
-  pageTitle: { fontSize: 28, fontWeight: "300", color: INK } as TextStyle,
+  pageTitle: { fontFamily: KarateFonts.heading, fontSize: 30, fontWeight: "400", color: INK } as TextStyle,
   pageSub: { fontSize: 12, color: INK3, lineHeight: 18 } as TextStyle,
   catScroll: { flexGrow: 0 } as ViewStyle,
   catChip: {
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: BORDER, padding: 16, gap: 10,
   } as ViewStyle,
   cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 } as ViewStyle,
-  cardTitle: { fontSize: 17, fontWeight: "700", color: INK } as TextStyle,
+  cardTitle: { fontFamily: KarateFonts.heading, fontSize: 18, fontWeight: "400", color: INK } as TextStyle,
   cardSub: { fontSize: 11, color: INK3, marginTop: 2 } as TextStyle,
   badge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 } as ViewStyle,
   badgeNeutral: { backgroundColor: "rgba(107,114,128,0.08)", borderWidth: 1, borderColor: BORDER } as ViewStyle,

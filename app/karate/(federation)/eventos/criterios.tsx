@@ -12,7 +12,7 @@ import {
   StyleSheet, RefreshControl, Switch, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FormField } from "@/components/karate/FormField";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { BeltBadge } from "@/components/karate/BeltBadge";
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   bannerTextCol: { flex: 1, gap: 2 } as ViewStyle,
   bannerTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.warn } as TextStyle,
   bannerDesc: { fontSize: 12, color: KarateColors.warn } as TextStyle,
-  pageTitle: { fontSize: 20, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  pageTitle: { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   pageHint: { fontSize: 12, color: KarateColors.ink3, marginTop: -4 } as TextStyle,
   reqCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 10 } as ViewStyle,
   reqCardUnconfirmed: { borderColor: KarateColors.warn } as ViewStyle,

@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { useKarateFederation } from "@/contexts/KarateFederation";
@@ -210,8 +210,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 14, paddingBottom: 40, maxWidth: 760, width: "100%", alignSelf: "center" } as ViewStyle,
   back: { flexDirection: "row", alignItems: "center", gap: 2 } as ViewStyle,
   backText: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
-  title: { fontSize: 22, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
+  title: { fontFamily: KarateFonts.heading, fontSize: 23, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
   alertCard: { backgroundColor: KarateColors.dangerSoft, borderRadius: KarateRadius.md, padding: 14 } as ViewStyle,
   alertHead: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
@@ -241,6 +241,6 @@ const styles = StyleSheet.create({
   techNote: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18, marginBottom: 4 } as TextStyle,
   techRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   techK: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
-  techV: { fontSize: 12, color: KarateColors.ink2, fontFamily: "monospace" } as TextStyle,
+  techV: { fontSize: 12, color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
   techActions: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" } as ViewStyle,
 });

@@ -27,7 +27,7 @@ import {
   TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateNetworkHealthApi,
@@ -602,11 +602,11 @@ function GraduacoesCard({
           <View style={st.legendRow}>
             <View style={st.legendItem}>
               <View style={[st.legendDot, { backgroundColor: KarateColors.ink2 }]} />
-              <Text style={st.legendLabel}>Kyu <Text style={{ fontFamily: "monospace", color: KarateColors.ink }}>{data.kyu}</Text></Text>
+              <Text style={st.legendLabel}>Kyu <Text style={{ fontFamily: KarateFonts.mono, color: KarateColors.ink }}>{data.kyu}</Text></Text>
             </View>
             <View style={st.legendItem}>
               <View style={[st.legendDot, { backgroundColor: KarateColors.ink }]} />
-              <Text style={st.legendLabel}>Dan <Text style={{ fontFamily: "monospace", color: KarateColors.ink }}>{data.dan}</Text></Text>
+              <Text style={st.legendLabel}>Dan <Text style={{ fontFamily: KarateFonts.mono, color: KarateColors.ink }}>{data.dan}</Text></Text>
             </View>
             <Text style={st.gradNote}>Registro · não é gestão de dojô</Text>
           </View>
@@ -1164,18 +1164,18 @@ const st = StyleSheet.create({
   // Page head
   pageHead:  { marginBottom: 4 } as ViewStyle,
   eyebrow:   { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, color: KarateColors.ink3, marginBottom: 4 } as TextStyle,
-  pageTitle: { fontSize: 26, fontWeight: "900", color: KarateColors.ink, letterSpacing: -0.3 } as TextStyle,
+  pageTitle: { fontFamily: KarateFonts.heading, fontSize: 30, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   pageSub:   { fontSize: 12, color: KarateColors.ink3, lineHeight: 18, marginTop: 6 } as TextStyle,
 
   // KPI strip
   kpiRow:   { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
-  kpiCard:  { flex: 1, minWidth: 100, backgroundColor: "#fff", borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, padding: 10 } as ViewStyle,
+  kpiCard:  { flex: 1, minWidth: 100, backgroundColor: KarateColors.glass, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, padding: 10 } as ViewStyle,
   kpiLabel: { fontSize: 10, color: KarateColors.ink3, fontWeight: "600", marginBottom: 4 } as TextStyle,
   kpiValue: { fontSize: 18, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   kpiUnit:  { fontSize: 11, fontWeight: "400", color: KarateColors.ink3 } as TextStyle,
 
   // Cards
-  card:    { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 10 } as ViewStyle,
+  card:    { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 10 } as ViewStyle,
   row2:    { flexDirection: Platform.OS === "web" ? "row" : "column", gap: 12 } as ViewStyle,
 
   // Section header
@@ -1258,7 +1258,7 @@ const st = StyleSheet.create({
   drawerSheet:   { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", paddingBottom: 24 } as ViewStyle,
   drawerHeader:  { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 20, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   drawerEyebrow: { fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: KarateColors.ink3, marginBottom: 6 } as TextStyle,
-  drawerTitle:   { fontSize: 22, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  drawerTitle:   { fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   drawerSub:     { fontSize: 12, color: KarateColors.ink3, marginTop: 4 } as TextStyle,
   drawerClose:   { padding: 6, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm } as ViewStyle,
   drawerToolbar: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
