@@ -14,6 +14,7 @@ import { TabComissoes } from "@/components/screens/folha/TabComissoes";
 import { TABS, fmt, FGTS_RATE } from "@/components/screens/folha/types";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { useConfirmModal } from "@/components/ConfirmModal";
 import { FolhaToolbar } from "@/components/FolhaToolbar";
 import type { Employee } from "@/components/screens/folha/types";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
@@ -147,7 +148,8 @@ function FolhaScreenInner() {
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const scrollRef = useRef<any>(null);
 
-  const { employees, active, totalBruto, totalFgts, totals, isLoading, isDemo, createEmployee, updateEmployee, deleteEmployee, plan, planLimit } = usePayroll();
+  const { employees, active, totalBruto, totalFgts, totals, isLoading, isDemo, createEmployee, updateEmployee, deleteEmployee, suspendEmployee, reactivateEmployee, plan, planLimit } = usePayroll();
+  const { confirm, modal } = useConfirmModal();
 
   // PLAN-02: Essencial ve form simples (so nome+cargo+contato) e nao tem
   // acesso ao calculo de folha. Tabs avancadas (Resumo, Historico, Ranking,
@@ -224,8 +226,30 @@ function FolhaScreenInner() {
     finally { setSaving(false); }
   }
 
+  // TEAM-RM 19/06: fluxo Suspender (reversivel) + Apagar (real, com confirmacao).
   async function handleDelete(emp: Employee) {
+    const ok = await confirm({
+      title: "Apagar funcionario",
+      message: `Apagar ${emp.name} permanentemente? Esta acao nao pode ser desfeita. Se ele tiver vendas ou folha vinculadas, use Suspender.`,
+      confirmLabel: "Apagar",
+      destructive: true,
+    });
+    if (!ok) return;
     try { await deleteEmployee(emp.id); } catch {}
+  }
+
+  async function handleSuspend(emp: Employee) {
+    const ok = await confirm({
+      title: "Suspender funcionario",
+      message: `Suspender ${emp.name}? Ele fica como Desligado e sai dos calculos da folha, mas o historico e mantido. Voce pode reativar a qualquer momento.`,
+      confirmLabel: "Suspender",
+    });
+    if (!ok) return;
+    try { await suspendEmployee(emp.id); } catch {}
+  }
+
+  async function handleReactivate(emp: Employee) {
+    try { await reactivateEmployee(emp.id); } catch {}
   }
 
   if (selectedEmp) {
@@ -419,6 +443,8 @@ function FolhaScreenInner() {
               emp={e}
               onCalc={isEssencial ? undefined : () => { setSelectedEmp(e); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
               onEdit={() => openEdit(e)}
+              onSuspend={() => handleSuspend(e)}
+              onReactivate={() => handleReactivate(e)}
               onDelete={() => handleDelete(e)}
             />
           ))}
@@ -487,6 +513,7 @@ function FolhaScreenInner() {
       ) : <TabComissoes />)}
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
+      {modal}
     </ScrollView>
   );
 }

@@ -7,6 +7,11 @@ import type { Employee } from "@/components/screens/folha/types";
 // 12/05/2026 -- PLAN-02: Hook agora expoe planLimit (vem do response BE).
 // 403 no POST = limite atingido (gate removido em private.js); mensagem
 // contextual de upgrade montada com body.limit / body.current.
+//
+// 19/06/2026 -- TEAM-RM: fluxo Suspender + Apagar (report Davi).
+//   - fetch agora traz desligados (include_inactive) pra permitir Reativar/Apagar.
+//   - suspendEmployee/reactivateEmployee via PATCH { status, is_active }.
+//   - deleteEmployee = remocao REAL; trata 409 (HAS_HISTORY) com aviso de suspender.
 export function useEmployees() {
   const { company, isDemo } = useAuthStore();
   const plan = company?.plan || 'essencial';
@@ -19,7 +24,8 @@ export function useEmployees() {
     if (!company?.id || isDemo) { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
-      const res = await employeesApi.list(company.id);
+      // TEAM-RM: inclui desligados pra UI poder Reativar/Apagar (badge "Desligado").
+      const res = await employeesApi.list(company.id, true);
       setEmployees((res.employees || []).map(mapEmployee));
       setPlanLimit(res.plan_limit ?? null);
     } catch (err: any) {
@@ -55,7 +61,7 @@ export function useEmployees() {
     } catch (err: any) {
       // PLAN-02: 403 com body.limit = limite do plano atingido
       if (err instanceof ApiError && err.status === 403) {
-        toast.error(limitUpgradeMessage(err.body));
+        toast.error(limitUpgradeMessage(err.data));
       } else {
         toast.error(err.message || "Erro ao cadastrar");
       }
@@ -77,14 +83,47 @@ export function useEmployees() {
     }
   }
 
+  // TEAM-RM: Suspender = soft (vira Desligado, reversivel). Mantem historico.
+  async function suspendEmployee(eid: string) {
+    if (!company?.id) return;
+    try {
+      const updated = await employeesApi.update(company.id, eid, { status: "dismissed", is_active: false } as any);
+      const mapped = mapEmployee(updated);
+      setEmployees(prev => prev.map(e => e.id === eid ? mapped : e));
+      toast.success("Funcionario suspenso");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao suspender");
+      throw err;
+    }
+  }
+
+  // TEAM-RM: Reativar = volta pra ativo.
+  async function reactivateEmployee(eid: string) {
+    if (!company?.id) return;
+    try {
+      const updated = await employeesApi.update(company.id, eid, { status: "active", is_active: true } as any);
+      const mapped = mapEmployee(updated);
+      setEmployees(prev => prev.map(e => e.id === eid ? mapped : e));
+      toast.success("Funcionario reativado");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao reativar");
+      throw err;
+    }
+  }
+
+  // TEAM-RM: Apagar = remocao REAL. 409 (HAS_HISTORY) => orienta suspender.
   async function deleteEmployee(eid: string) {
     if (!company?.id) return;
     try {
       await employeesApi.remove(company.id, eid);
       setEmployees(prev => prev.filter(e => e.id !== eid));
-      toast.success("Funcionario removido");
+      toast.success("Funcionario apagado");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao remover");
+      if (err instanceof ApiError && err.status === 409) {
+        toast.error(err.message || "Funcionario tem historico. Use Suspender.");
+      } else {
+        toast.error(err.message || "Erro ao apagar");
+      }
       throw err;
     }
   }
@@ -92,6 +131,7 @@ export function useEmployees() {
   return {
     employees, loading, error, refresh: fetch,
     createEmployee, updateEmployee, deleteEmployee,
+    suspendEmployee, reactivateEmployee,
     planLimit, plan,
   };
 }
