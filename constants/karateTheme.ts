@@ -140,9 +140,9 @@ export const KarateRadius = {
 // Corpo: Zen Kaku Gothic New. Dados/IDs/números: DM Mono (tabular).
 // ─────────────────────────────────────────────────────────────
 export const KarateFonts = {
-  heading: Platform.select({ web: "'Shippori Mincho', 'Times New Roman', serif", default: "serif" }) as string,
-  body:    Platform.select({ web: "'Zen Kaku Gothic New', system-ui, sans-serif", default: "System" }) as string,
-  mono:    Platform.select({ web: "'DM Mono', ui-monospace, monospace", default: "monospace" }) as string,
+  heading: Platform.select({ web: "'Shippori Mincho', 'Times New Roman', serif", default: "ShipporiMincho" }) as string,
+  body:    Platform.select({ web: "'Zen Kaku Gothic New', system-ui, sans-serif", default: "ZenKakuGothicNew" }) as string,
+  mono:    Platform.select({ web: "'DM Mono', ui-monospace, monospace", default: "DMMono" }) as string,
 } as const;
 
 // ─────────────────────────────────────────────────────────────

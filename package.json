@@ -13,6 +13,9 @@
     "test:components": "node node_modules/jest/bin/jest.js --testPathPatterns=__tests__/components"
   },
   "dependencies": {
+    "@expo-google-fonts/dm-mono": "^0.4.2",
+    "@expo-google-fonts/shippori-mincho": "^0.4.1",
+    "@expo-google-fonts/zen-kaku-gothic-new": "^0.4.1",
     "@hookform/resolvers": "^3.9.0",
     "@tanstack/react-query": "^5.62.0",
     "expo": "~52.0.0",

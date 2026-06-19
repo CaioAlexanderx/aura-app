@@ -14,6 +14,10 @@ import {
   ViewStyle, TextStyle, StyleProp,
 } from "react-native";
 import { TextInput } from "react-native";
+import { useFonts } from "expo-font";
+import { ShipporiMincho_400Regular } from "@expo-google-fonts/shippori-mincho";
+import { ZenKakuGothicNew_400Regular } from "@expo-google-fonts/zen-kaku-gothic-new";
+import { DMMono_400Regular } from "@expo-google-fonts/dm-mono";
 import { Ionicons } from "@expo/vector-icons";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R,
@@ -30,6 +34,12 @@ const GF_HREF =
   "https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap";
 
 export function useShojiFonts() {
+  // Nativo: carrega os .ttf via expo-font (no web usamos a folha do Google Fonts).
+  useFonts(Platform.OS === "web" ? {} : {
+    ShipporiMincho:   ShipporiMincho_400Regular,
+    ZenKakuGothicNew: ZenKakuGothicNew_400Regular,
+    DMMono:           DMMono_400Regular,
+  });
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
     if (document.getElementById("shoji-fonts")) return;
