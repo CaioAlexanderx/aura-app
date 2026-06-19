@@ -478,21 +478,24 @@ function MemberRow(props: {
   inviterName?: string;
   onUpdate: (perms: Record<string, boolean>, role: string, company_ids?: string[]) => void;
   onRemove: () => void;
+  onDelete: () => void;
   onResend: () => void;
   onEditEmail: (newEmail: string) => Promise<void>;
   onExtend: () => void;
   isUpdating: boolean;
   isRemoving: boolean;
+  isDeleting: boolean;
   isResending: boolean;
   isEditingEmail: boolean;
   isExtending: boolean;
 }) {
-  const { member, siblings, isOwner, companyName, inviterName, onUpdate, onRemove, onResend, onEditEmail, onExtend, isUpdating, isRemoving, isResending, isEditingEmail, isExtending } = props;
+  const { member, siblings, isOwner, companyName, inviterName, onUpdate, onRemove, onDelete, onResend, onEditEmail, onExtend, isUpdating, isRemoving, isDeleting, isResending, isEditingEmail, isExtending } = props;
   const [expanded, setExpanded] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>(member.permissions || {});
   const [role, setRole] = useState(member.role_label);
   const [cnpjIds, setCnpjIds] = useState<string[]>(member.companies.map(c => c.company_id));
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const isOwnerLabel = member.role_label === "owner";
@@ -502,7 +505,8 @@ function MemberRow(props: {
   const memberCnpjIds = member.companies.map(c => c.company_id);
   const canExpand = !isOwner && (
     (isPending && !!member.invite_url) ||
-    (!isPending && canEdit)
+    (!isPending && canEdit) ||
+    member.status === "suspended"
   );
   const expiry = isPending ? daysUntilExpiry(member.invited_at) : null;
 
@@ -605,6 +609,24 @@ function MemberRow(props: {
             <Pressable onPress={() => setConfirmRemove(true)} disabled={isRemoving} style={s.removeBtn}>
               <Text style={s.removeBtnText}>Suspender</Text>
             </Pressable>
+            <Pressable onPress={() => setConfirmDelete(true)} disabled={isDeleting} style={s.deleteMemberBtn}>
+              <Text style={s.deleteMemberBtnText}>Remover</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* TEAM-RM 19/06: membro suspenso pode ser removido de vez (hard delete). */}
+      {expanded && member.status === "suspended" && (
+        <View style={s.permEditor}>
+          <Text style={s.permSectionLabel}>Membro suspenso</Text>
+          <Text style={{ fontSize: 12, color: Colors.ink3, marginBottom: 12 }}>
+            Sem acesso ao sistema. Voce pode remove-lo definitivamente.
+          </Text>
+          <View style={s.permActions}>
+            <Pressable onPress={() => setConfirmDelete(true)} disabled={isDeleting} style={[s.deleteMemberBtn, { flex: 1 }]}>
+              <Text style={s.deleteMemberBtnText}>Remover</Text>
+            </Pressable>
           </View>
         </View>
       )}
@@ -628,6 +650,16 @@ function MemberRow(props: {
         destructive
         onConfirm={() => { setConfirmRemove(false); onRemove(); }}
         onCancel={() => setConfirmRemove(false)}
+      />
+
+      <ConfirmDialog
+        visible={confirmDelete}
+        title="Remover membro?"
+        message="O acesso e o cadastro deste membro serao apagados definitivamente. Esta acao nao pode ser desfeita."
+        confirmLabel="Remover"
+        destructive
+        onConfirm={() => { setConfirmDelete(false); onDelete(); }}
+        onCancel={() => setConfirmDelete(false)}
       />
     </View>
   );
@@ -942,6 +974,7 @@ export function MembersSection() {
     inviteMember, isInviting,
     updateMember, isUpdating,
     removeMember, isRemoving,
+    deleteMember, isDeleting,
     resendInviteEmail, isResending,
     updateInviteEmail, isUpdatingEmail,
     extendInvite, isExtending,
@@ -1033,11 +1066,16 @@ export function MembersSection() {
                 const allIds = m.companies.length > 0 ? m.companies.map(c => c.member_id) : [m.id];
                 removeMember(allIds);
               }}
+              onDelete={() => {
+                const allIds = m.companies.length > 0 ? m.companies.map(c => c.member_id) : [m.id];
+                deleteMember(allIds);
+              }}
               onResend={() => resendInviteEmail(m.id)}
               onEditEmail={(newEmail) => updateInviteEmail(m.id, newEmail)}
               onExtend={() => extendInvite(m.id)}
               isUpdating={isUpdating}
               isRemoving={isRemoving}
+              isDeleting={isDeleting}
               isResending={isResending}
               isEditingEmail={isUpdatingEmail}
               isExtending={isExtending}
@@ -1176,6 +1214,8 @@ const s = StyleSheet.create({
   savePermBtnText:  { fontSize: 12.5, color: "#fff", fontWeight: "700" },
   removeBtn:        { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: "transparent", alignItems: "center", borderWidth: 1, borderColor: Colors.red + "33" },
   removeBtnText:    { fontSize: 12, color: Colors.red, fontWeight: "600" },
+  deleteMemberBtn:     { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: Colors.red, alignItems: "center" },
+  deleteMemberBtnText: { fontSize: 12, color: "#fff", fontWeight: "700" },
 
   roleChip:       { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   roleChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
