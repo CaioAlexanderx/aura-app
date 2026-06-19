@@ -1,30 +1,27 @@
 // ============================================================
-// Eventos — Próximos — Aura Karatê (federação)
-//
-// Exames com status Rascunho/Aberto, ordenados por data.
-// Dados reais via karateApi.listBeltExams. Sem mock: loading →
-// spinner, falha → ErrorState, vazio → honesto.
+// Eventos — Próximos — Aura Karatê (federação) · Shoji
+// Exames Rascunho/Aberto ordenados por data. Dados reais.
 // ============================================================
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  StyleSheet, RefreshControl, ViewStyle, TextStyle,
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator,
+  StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
-import { Badge } from "@/components/karate/Badge";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
-import { useKarateFederation } from "@/contexts/KarateFederation";
+import { ShojiBackground, Card, ShojiBadge, Mono, Body } from "@/components/karate/shoji";
 import { karateApi, BeltExam } from "@/services/karateApi";
+import { useKarateFederation } from "@/contexts/KarateFederation";
 
-const EXAM_STATUS_BADGE: Record<string, "neutral" | "ok" | "warn" | "alert"> = {
-  draft: "neutral", open: "ok", closed: "warn", cancelled: "alert",
+const BADGE: Record<string, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
+  draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Aberto", badge: "ok" },
+  closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
-const EXAM_STATUS_LABEL: Record<string, string> = {
-  draft: "Rascunho", open: "Aberto", closed: "Encerrado", cancelled: "Cancelado",
-};
+const dd = (iso?: string | null) => (iso ?? "--").slice(8, 10) || "--";
+const mm = (iso?: string | null) => { const s = iso ?? ""; return `${s.slice(5, 7)}/${s.slice(0, 4)}`; };
 
 export default function EventosProximos() {
   const router = useRouter();
@@ -39,69 +36,50 @@ export default function EventosProximos() {
     setError(false);
     try {
       const res = await karateApi.listBeltExams(federationId);
-      const upcoming = (res.data ?? [])
-        .filter((e) => e.status === "draft" || e.status === "open")
-        .sort((a, b) => (a.exam_date ?? "").localeCompare(b.exam_date ?? ""));
-      setExams(upcoming);
-    } catch {
-      setError(true);
-    } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
-    }
+      setExams((res.data ?? []).filter((e) => e.status === "draft" || e.status === "open").sort((a, b) => (a.exam_date ?? "").localeCompare(b.exam_date ?? "")));
+    } catch { setError(true); }
+    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
-
   useEffect(() => { load(); }, [load]);
 
-  if (error) return <KarateErrorState onRetry={() => load()} />;
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />}
-    >
-      <Text style={styles.pageHint}>Exames com status Rascunho ou Aberto, ordenados por data.</Text>
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 32 }} size="large" color={KarateColors.primary} />
-      ) : exams.length === 0 ? (
-        <KarateEmptyState icon="calendar-outline" title="Nenhum exame próximo" style={{ paddingVertical: 28 }} />
-      ) : (
-        exams.map((exam) => (
-          <TouchableOpacity key={exam.id} style={styles.card}
-            onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any)}
-            accessibilityRole="button" accessibilityLabel={exam.title}>
-            <View style={styles.row}>
-              <View style={styles.dateBlock}>
-                <Text style={styles.dateDay}>{(exam.exam_date ?? "--").slice(8, 10) || "--"}</Text>
-                <Text style={styles.dateMon}>{(exam.exam_date ?? "").slice(5, 7)}/{(exam.exam_date ?? "").slice(0, 4)}</Text>
-              </View>
-              <View style={styles.info}>
-                <Text style={styles.cardTitle}>{exam.title}</Text>
-                {!!exam.location && (
-                  <View style={styles.metaRow}><Ionicons name="location-outline" size={12} color={KarateColors.ink3} /><Text style={styles.metaText}>{exam.location}</Text></View>
-                )}
-                <View style={styles.metaRow}><Ionicons name="people-outline" size={12} color={KarateColors.ink3} /><Text style={styles.metaText}>{exam.candidate_count} candidatos</Text></View>
-              </View>
-              <Badge status={EXAM_STATUS_BADGE[exam.status]} label={EXAM_STATUS_LABEL[exam.status] ?? exam.status} />
-            </View>
-          </TouchableOpacity>
-        ))
-      )}
-    </ScrollView>
+    <ShojiBackground>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
+        <Body muted style={{ marginBottom: 14 }}>Exames com status Rascunho ou Aberto, ordenados por data.</Body>
+        {loading ? <ActivityIndicator style={{ marginTop: 32 }} size="large" color={P.red} />
+          : exams.length === 0 ? <KarateEmptyState icon="calendar-outline" title="Nenhum exame próximo" style={{ paddingVertical: 28 }} />
+          : exams.map((exam) => (
+            <TouchableOpacity key={exam.id} onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any)} activeOpacity={0.85}>
+              <Card style={{ marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 14 }}>
+                <View style={styles.dateBox}>
+                  <Text style={styles.dd}>{dd(exam.exam_date)}</Text>
+                  <Mono style={{ fontSize: 10, color: C.ink3 }}>{mm(exam.exam_date)}</Mono>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.title}>{exam.title}</Text>
+                  {!!exam.location && <Meta icon="location-outline" text={exam.location} />}
+                  <Meta icon="people-outline" text={`${exam.candidate_count} candidatos`} />
+                </View>
+                <ShojiBadge status={BADGE[exam.status]?.badge ?? "neutral"} label={BADGE[exam.status]?.label ?? exam.status} />
+              </Card>
+            </TouchableOpacity>
+          ))}
+      </ScrollView>
+    </ShojiBackground>
   );
 }
 
+function Meta({ icon, text }: { icon: string; text: string }) {
+  return <View style={styles.metaItem}><Ionicons name={icon as any} size={12} color={C.ink3} /><Text style={styles.metaTxt}>{text}</Text></View>;
+}
+
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 24, gap: 10, paddingBottom: 40, maxWidth: 900, width: "100%", alignSelf: "center" } as ViewStyle,
-  pageHint: { fontSize: 12, color: KarateColors.ink3, marginBottom: 4 } as TextStyle,
-  card: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
-  row: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
-  dateBlock: { alignItems: "center", minWidth: 40 } as ViewStyle,
-  dateDay: { fontSize: 22, fontWeight: "800", color: KarateColors.primary } as TextStyle,
-  dateMon: { fontSize: 10, color: KarateColors.ink3, fontWeight: "600" } as TextStyle,
-  info: { flex: 1, gap: 3 } as ViewStyle,
-  cardTitle: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
-  metaText: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  content: { padding: 40, paddingTop: 32, paddingBottom: 72, maxWidth: 980, width: "100%", alignSelf: "center" } as ViewStyle,
+  dateBox: { width: 52, alignItems: "center" } as ViewStyle,
+  dd: { fontFamily: F.heading, fontSize: 24, color: P.red, lineHeight: 26 } as TextStyle,
+  title: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink, marginBottom: 3 } as TextStyle,
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 } as ViewStyle,
+  metaTxt: { fontFamily: F.body, fontSize: 12, color: C.ink3 } as TextStyle,
 });
