@@ -13,10 +13,13 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Platform,
   ViewStyle, TextStyle, StyleProp,
 } from "react-native";
+import { TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R,
   KarateFonts as F, KarateType as T, KarateShadows as SH, KarateSpacing as SP,
+  KarateStatus, KarateStatusKey, KarateDojoStatus, KarateAffiliationStatus,
+  DojoStatus, AffiliationStatus, KarateBelts, resolveBeltKey,
 } from "@/constants/karateTheme";
 
 // ── tracking helper (em → px no RN) ─────────────────────────
@@ -210,6 +213,86 @@ export function Pill({ label, accent, style }: { label: string; accent?: boolean
   );
 }
 
+// ── SearchField ──────────────────────────────────────────────
+export function SearchField({ value, onChangeText, placeholder, onSubmit, style }: {
+  value: string; onChangeText: (t: string) => void; placeholder?: string; onSubmit?: () => void; style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.search, style]}>
+      <Ionicons name="search-outline" size={16} color={C.ink3} />
+      <TextInput
+        style={styles.searchInput as any}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={C.ink4}
+        returnKeyType="search"
+        onSubmitEditing={onSubmit}
+      />
+    </View>
+  );
+}
+
+// ── Chip (filtro) ────────────────────────────────────────────
+export function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+  return (
+    <TouchableOpacity style={[styles.chip, active && styles.chipActive]} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: !!active }}>
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Badge de status (icon + texto, nunca cor isolada) ────────
+export function ShojiBadge({ status, dojoStatus, affiliationStatus, label }: {
+  status?: KarateStatusKey; dojoStatus?: DojoStatus; affiliationStatus?: AffiliationStatus; label?: string;
+}) {
+  let color: string, bg: string, icon: string, txt: string;
+  if (dojoStatus) { const s = KarateDojoStatus[dojoStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
+  else if (affiliationStatus) { const s = KarateAffiliationStatus[affiliationStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
+  else { const s = KarateStatus[status ?? "neutral"]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? (status ?? ""); }
+  return (
+    <View style={[styles.badge, { backgroundColor: bg }]} accessibilityLabel={txt}>
+      <Ionicons name={icon as any} size={11} color={color} />
+      <Text style={[styles.badgeText, { color }]}>{txt}</Text>
+    </View>
+  );
+}
+
+// ── BeltTag (faixa dessaturada) ──────────────────────────────
+export function BeltTag({ level, name }: { level: string; name?: string }) {
+  const key = resolveBeltKey(level);
+  const belt = key ? KarateBelts[key] : null;
+  return (
+    <View style={styles.beltCell}>
+      <View style={[styles.beltDot, { backgroundColor: belt?.color ?? C.ink4 }]} />
+      <Text style={styles.beltLabel}>{name ?? belt?.label ?? level}</Text>
+    </View>
+  );
+}
+
+// ── Avatar (iniciais) ────────────────────────────────────────
+export function Avatar({ name, size = 32, dark, accent }: { name: string; size?: number; dark?: boolean; accent?: boolean }) {
+  const parts = name.trim().split(/\s+/);
+  const initials = (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 },
+      dark && { backgroundColor: P.ink, borderColor: P.ink }, accent && { backgroundColor: P.red, borderColor: P.red2 }]}>
+      <Text style={[styles.avatarTxt, { fontSize: size * 0.4 }, (dark || accent) && { color: "#fdf8f2" }]}>{initials}</Text>
+    </View>
+  );
+}
+
+// ── KV (cadastro) ────────────────────────────────────────────
+export function KV({ k, v }: { k: string; v?: string | null }) {
+  if (!v) return null;
+  return (
+    <View style={styles.kvRow}>
+      <Text style={styles.kvKey}>{k}</Text>
+      <Text style={styles.kvVal}>{v}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   // typography
   eyebrow: { fontFamily: F.body, fontSize: T.xs, fontWeight: "500", color: C.ink3, textTransform: "uppercase" } as TextStyle,
@@ -261,4 +344,32 @@ const styles = StyleSheet.create({
   // pill
   pill: { alignSelf: "flex-start", paddingVertical: 4, paddingHorizontal: 10, borderRadius: R.pill, backgroundColor: P.glass2, borderWidth: 1, borderColor: C.line } as ViewStyle,
   pillText: { fontFamily: F.body, fontSize: T.xs, fontWeight: "500", color: C.ink2 } as TextStyle,
+
+  // search
+  search: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.glass2, borderWidth: 1, borderColor: C.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 10 } as ViewStyle,
+  searchInput: { flex: 1, fontFamily: F.body, fontSize: 12.5, color: C.ink, minHeight: 22, outlineStyle: "none" } as any,
+
+  // chip
+  chip: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: R.pill, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2 } as ViewStyle,
+  chipActive: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
+  chipText: { fontFamily: F.body, fontSize: T.sm, fontWeight: "500", color: C.ink3 } as TextStyle,
+  chipTextActive: { color: P.red, fontWeight: "700" } as TextStyle,
+
+  // badge
+  badge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingVertical: 3, paddingHorizontal: 10, borderRadius: R.pill } as ViewStyle,
+  badgeText: { fontFamily: F.body, fontSize: T.xs, fontWeight: "600" } as TextStyle,
+
+  // belt
+  beltCell: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  beltDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(43,38,32,0.15)" } as ViewStyle,
+  beltLabel: { fontFamily: F.body, fontSize: T.sm, color: C.ink2 } as TextStyle,
+
+  // avatar
+  avatar: { alignItems: "center", justifyContent: "center", backgroundColor: P.glass2, borderWidth: 1, borderColor: C.line2 } as ViewStyle,
+  avatarTxt: { fontFamily: F.body, fontWeight: "600", color: C.ink } as TextStyle,
+
+  // kv
+  kvRow: { flexDirection: "row", paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line, gap: 16 } as ViewStyle,
+  kvKey: { width: 140, fontFamily: F.body, fontSize: T.xs, color: C.ink3, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: "600" } as TextStyle,
+  kvVal: { flex: 1, fontFamily: F.body, fontSize: T.body, color: C.ink } as TextStyle,
 });

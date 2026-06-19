@@ -1,65 +1,36 @@
 // ============================================================
-// Dojôs — Lista — Aura Karatê (federação)
+// Dojôs — Lista — Aura Karatê (federação) · Shoji
 //
-// Gestão da rede filiada. Busca + filtros (região/status), tabela
-// responsiva (web) / cards (mobile). Ações: Importar + Novo dojô.
-// Dados reais via GET /federation/{id}/dojos. Sem mock:
-// loading → spinner, falha → ErrorState, vazio → honesto.
+// Fiel ao pane "dojos" do standalone v5. Dados reais via
+// GET /federation/{id}/dojos. Estados honestos.
 // ============================================================
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  View, Text, FlatList, TouchableOpacity,
-  StyleSheet, TextInput, RefreshControl, ScrollView,
-  useWindowDimensions, ViewStyle, TextStyle, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView,
+  useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
-import { Badge } from "@/components/karate/Badge";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
+import {
+  ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, Avatar, ShojiButton, Mono, Body,
+} from "@/components/karate/shoji";
 import { karateApi, Dojo, DojoStatus, AffiliationModel } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-const MODEL_LABEL: Record<AffiliationModel, string> = {
-  annual: "Anual", biannual: "Semestral", quarterly: "Trimestral",
-};
-
+const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const STATUS_FILTERS: { key: DojoStatus | "all"; label: string }[] = [
-  { key: "all", label: "Todos" },
-  { key: "active", label: "Ativo" },
-  { key: "expiring", label: "A vencer" },
-  { key: "overdue", label: "Vencido" },
-  { key: "defaulting", label: "Inadimplente" },
+  { key: "all", label: "Todos" }, { key: "active", label: "Ativo" }, { key: "expiring", label: "A vencer" },
+  { key: "overdue", label: "Vencido" }, { key: "defaulting", label: "Inadimplente" },
 ];
-
-function HeaderBtn({ icon, label, primary, onPress }: { icon: string; label: string; primary?: boolean; onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      style={[styles.hBtn, primary ? styles.hBtnPrimary : styles.hBtnGhost]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Ionicons name={icon as any} size={15} color={primary ? "#fff" : KarateColors.ink2} />
-      <Text style={[styles.hBtnLabel, primary && { color: "#fff" }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={[styles.chip, active && styles.chipActive]} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}>
-      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
 
 export default function DojosScreen() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const { width } = useWindowDimensions();
-  const wide = width >= 760;
+  const wide = width >= 860;
 
   const [dojos, setDojos] = useState<Dojo[]>([]);
   const [total, setTotal] = useState(0);
@@ -74,181 +45,121 @@ export default function DojosScreen() {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
-      const result = await karateApi.listDojos(federationId, {
-        q: q || undefined,
-        status: status === "all" ? undefined : status,
-        region: region === "all" ? undefined : region,
-        pageSize: 100,
+      const res = await karateApi.listDojos(federationId, {
+        q: q || undefined, status: status === "all" ? undefined : status,
+        region: region === "all" ? undefined : region, pageSize: 100,
       });
-      setDojos(result.data);
-      setTotal(result.total ?? result.data.length);
-    } catch {
-      setError(true);
-    } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
-    }
+      setDojos(res.data); setTotal(res.total ?? res.data.length);
+    } catch { setError(true); }
+    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId, q, status, region]);
 
   useEffect(() => { load(); }, [load]);
-
-  // Regiões distintas das telas carregadas, p/ filtro leve.
   const regions = useMemo(() => Array.from(new Set(dojos.map((d) => d.region).filter(Boolean))), [dojos]);
 
   const header = (
     <View>
-      {/* Page head */}
-      <View style={styles.pageHead}>
-        <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={styles.eyebrow}>{total} {total === 1 ? "dojô filiado" : "dojôs filiados"}</Text>
-          <Text style={styles.h1}>Dojôs filiados</Text>
-          <Text style={styles.sub}>Cadastro, anuidades e estado de cada afiliado.</Text>
-        </View>
-        <View style={styles.headActions}>
-          <HeaderBtn icon="add" label="Novo dojô" primary onPress={() => router.push("/karate/dojos/novo" as any)} />
-        </View>
-      </View>
-
-      {/* Toolbar */}
-      <View style={styles.searchBar}>
-        <Ionicons name="search-outline" size={16} color={KarateColors.ink3} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar por nome, código FPKT ou sensei..."
-          placeholderTextColor={KarateColors.ink4}
-          value={q}
-          onChangeText={setQ}
-          returnKeyType="search"
-          onSubmitEditing={() => load()}
-          accessibilityLabel="Buscar dojôs"
-        />
-      </View>
+      <PageHead
+        eyebrow={`${total} ${total === 1 ? "dojô filiado" : "dojôs filiados"} · ${regions.length || "—"} regiões`}
+        title="Dojôs filiados"
+        sub="Gestão da rede federativa. Cadastro, anuidades e estado de cada afiliado."
+        actions={<ShojiButton label="Novo dojô" icon="add" variant="sumi" onPress={() => router.push("/karate/dojos/novo" as any)} />}
+      />
+      <SearchField value={q} onChangeText={setQ} onSubmit={() => load()} placeholder="Buscar por nome, código FPKT ou sensei..." style={{ marginBottom: 14 }} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {STATUS_FILTERS.map((s) => (
-          <Chip key={s.key} label={s.label} active={status === s.key} onPress={() => setStatus(s.key)} />
-        ))}
-        {regions.length > 1 && (
-          <>
-            <View style={styles.chipDivider} />
-            <Chip label="Todas regiões" active={region === "all"} onPress={() => setRegion("all")} />
-            {regions.map((r) => (
-              <Chip key={r} label={r} active={region === r} onPress={() => setRegion(r)} />
-            ))}
-          </>
-        )}
+        {STATUS_FILTERS.map((s) => <Chip key={s.key} label={s.label} active={status === s.key} onPress={() => setStatus(s.key)} />)}
+        {regions.length > 1 && <>
+          <View style={styles.div} />
+          <Chip label="Todas regiões" active={region === "all"} onPress={() => setRegion("all")} />
+          {regions.map((r) => <Chip key={r} label={r} active={region === r} onPress={() => setRegion(r)} />)}
+        </>}
       </ScrollView>
-
-      {/* Cabeçalho da tabela (web) */}
       {wide && dojos.length > 0 && (
         <View style={[styles.tr, styles.thead]}>
           <Text style={[styles.th, { flex: 2 }]}>Dojô</Text>
           <Text style={[styles.th, { flex: 1.2 }]}>Região</Text>
           <Text style={[styles.th, { width: 100 }]}>Modelo</Text>
           <Text style={[styles.th, { width: 90, textAlign: "right" }]}>Pratic.</Text>
-          <Text style={[styles.th, { width: 120 }]}>Status</Text>
-          <View style={{ width: 20 }} />
+          <Text style={[styles.th, { width: 130 }]}>Status</Text>
+          <View style={{ width: 18 }} />
         </View>
       )}
     </View>
   );
 
-  function Row({ dojo }: { dojo: Dojo }) {
-    const onPress = () => router.push(`/karate/dojos/${dojo.id}` as any);
-    if (wide) {
-      return (
-        <TouchableOpacity style={styles.tr} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${dojo.name}, ${dojo.fpkt_affiliation_id}`}>
-          <View style={{ flex: 2, paddingRight: 8 }}>
-            <Text style={styles.dojoName} numberOfLines={1}>{dojo.name}</Text>
-            <Text style={styles.dojoId}>{dojo.fpkt_affiliation_id}</Text>
-          </View>
-          <Text style={[styles.cell, { flex: 1.2 }]} numberOfLines={1}>{dojo.region || "—"}</Text>
-          <Text style={[styles.cell, { width: 100 }]}>{MODEL_LABEL[dojo.affiliation_model] ?? "—"}</Text>
-          <Text style={[styles.cellMono, { width: 90, textAlign: "right" }]}>{dojo.practitioner_count}</Text>
-          <View style={{ width: 120 }}><Badge dojoStatus={dojo.status} /></View>
-          <Ionicons name="chevron-forward" size={16} color={KarateColors.ink4} style={{ width: 20 }} />
-        </TouchableOpacity>
-      );
-    }
-    return (
-      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`${dojo.name}, ${dojo.fpkt_affiliation_id}`}>
-        <View style={styles.cardHeader}>
+  function Row({ d }: { d: Dojo }) {
+    const onPress = () => router.push(`/karate/dojos/${d.id}` as any);
+    if (wide) return (
+      <TouchableOpacity style={styles.tr} onPress={onPress} activeOpacity={0.7}>
+        <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>
+          <Avatar name={d.name} size={34} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.dojoId}>{dojo.fpkt_affiliation_id}</Text>
-            <Text style={styles.dojoName}>{dojo.name}</Text>
+            <Text style={styles.name} numberOfLines={1}>{d.name}</Text>
+            <Mono style={{ fontSize: 10, color: P.red }}>{d.fpkt_affiliation_id}</Mono>
           </View>
-          <Badge dojoStatus={dojo.status} />
+        </View>
+        <Body muted style={[styles.cell, { flex: 1.2 }]} >{d.region || "—"}</Body>
+        <Body muted style={[styles.cell, { width: 100 }]}>{MODEL_LABEL[d.affiliation_model] ?? "—"}</Body>
+        <Mono style={[styles.cellNum, { width: 90, textAlign: "right" }]}>{d.practitioner_count}</Mono>
+        <View style={{ width: 130 }}><ShojiBadge dojoStatus={d.status} /></View>
+        <Ionicons name="chevron-forward" size={16} color={C.ink4} style={{ width: 18 }} />
+      </TouchableOpacity>
+    );
+    return (
+      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+        <View style={styles.cardTop}>
+          <Avatar name={d.name} size={38} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{d.name}</Text>
+            <Mono style={{ fontSize: 10, color: P.red, marginTop: 1 }}>{d.fpkt_affiliation_id}</Mono>
+          </View>
+          <ShojiBadge dojoStatus={d.status} />
         </View>
         <View style={styles.cardMeta}>
-          <View style={styles.metaItem}><Ionicons name="location-outline" size={12} color={KarateColors.ink3} /><Text style={styles.metaText}>{dojo.region || "—"}</Text></View>
-          <View style={styles.metaItem}><Ionicons name="people-outline" size={12} color={KarateColors.ink3} /><Text style={styles.metaText}>{dojo.practitioner_count} praticantes</Text></View>
-          <View style={styles.metaItem}><Ionicons name="ribbon-outline" size={12} color={KarateColors.ink3} /><Text style={styles.metaText}>{MODEL_LABEL[dojo.affiliation_model] ?? "—"}</Text></View>
+          <Meta icon="location-outline" text={d.region || "—"} />
+          <Meta icon="people-outline" text={`${d.practitioner_count} praticantes`} />
+          <Meta icon="ribbon-outline" text={MODEL_LABEL[d.affiliation_model] ?? "—"} />
         </View>
       </TouchableOpacity>
     );
   }
 
-  if (error) {
-    return <KarateErrorState onRetry={() => load()} />;
-  }
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
 
   return (
-    <View style={styles.screen}>
+    <ShojiBackground>
       {loading ? (
-        <>
-          {header}
-          <ActivityIndicator style={{ marginTop: 48 }} size="large" color={KarateColors.primary} />
-        </>
+        <View style={styles.content}>{header}<ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} /></View>
       ) : (
         <FlatList
-          data={dojos}
-          keyExtractor={(d) => d.id}
-          ListHeaderComponent={header}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />}
-          renderItem={({ item }) => <Row dojo={item} />}
-          ListEmptyComponent={
-            <KarateEmptyState icon="home-outline" title="Nenhum dojô encontrado" subtitle="Ajuste a busca/filtros ou cadastre um novo dojô." style={{ paddingVertical: 40 }} />
-          }
+          data={dojos} keyExtractor={(d) => d.id} ListHeaderComponent={header}
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+          renderItem={({ item }) => <Row d={item} />}
+          ListEmptyComponent={<KarateEmptyState icon="home-outline" title="Nenhum dojô encontrado" subtitle="Ajuste a busca/filtros ou cadastre um novo dojô." style={{ paddingVertical: 40 }} />}
         />
       )}
-    </View>
+    </ShojiBackground>
   );
 }
 
+function Meta({ icon, text }: { icon: string; text: string }) {
+  return <View style={styles.metaItem}><Ionicons name={icon as any} size={12} color={C.ink3} /><Text style={styles.metaTxt}>{text}</Text></View>;
+}
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  list:   { padding: 24, paddingBottom: 64, maxWidth: 1100, width: "100%", alignSelf: "center" } as ViewStyle,
-
-  pageHead: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", gap: 16, marginBottom: 20 } as ViewStyle,
-  eyebrow:  { fontSize: 11, fontWeight: "600", color: KarateColors.ink3, letterSpacing: 1, textTransform: "uppercase" } as TextStyle,
-  h1:       { fontSize: 30, fontWeight: "800", color: KarateColors.ink, marginTop: 6 } as TextStyle,
-  sub:      { fontSize: 13, color: KarateColors.ink2, marginTop: 6 } as TextStyle,
-  headActions: { flexDirection: "row", gap: 8 } as ViewStyle,
-  hBtn:        { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: KarateRadius.sm } as ViewStyle,
-  hBtnGhost:   { backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
-  hBtnPrimary: { backgroundColor: KarateColors.primary } as ViewStyle,
-  hBtnLabel:   { fontSize: 12.5, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
-
-  searchBar:   { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 } as ViewStyle,
-  searchInput: { flex: 1, fontSize: 14, color: KarateColors.ink, minHeight: 24, outlineStyle: "none" as any } as ViewStyle,
-
-  chips: { gap: 8, paddingBottom: 16, alignItems: "center" } as ViewStyle,
-  chip:  { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
-  chipActive: { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primaryLine } as ViewStyle,
-  chipLabel:  { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
-  chipLabelActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
-  chipDivider: { width: 1, height: 20, backgroundColor: KarateColors.border, marginHorizontal: 2 } as ViewStyle,
-
-  tr:    { flexDirection: "row", alignItems: "center", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: KarateColors.border, gap: 8 } as ViewStyle,
-  thead: { paddingVertical: 9 } as ViewStyle,
-  th:    { fontSize: 10, fontWeight: "700", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.6 } as TextStyle,
-  cell:    { fontSize: 12.5, color: KarateColors.ink2 } as TextStyle,
-  cellMono:{ fontSize: 12.5, fontWeight: "700", color: KarateColors.ink, fontVariant: ["tabular-nums"] } as TextStyle,
-
-  card:       { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 10, marginBottom: 10 } as ViewStyle,
-  cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
-  dojoId:     { fontSize: 10, fontWeight: "800", color: KarateColors.primary, letterSpacing: 0.6, fontFamily: "monospace", marginTop: 2 } as TextStyle,
-  dojoName:   { fontSize: 14.5, fontWeight: "700", color: KarateColors.ink } as TextStyle,
-  cardMeta:   { flexDirection: "row", flexWrap: "wrap", gap: 14 } as ViewStyle,
-  metaItem:   { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
-  metaText:   { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  chips: { gap: 8, paddingBottom: 18, alignItems: "center" } as ViewStyle,
+  div: { width: 1, height: 20, backgroundColor: C.line2, marginHorizontal: 2 } as ViewStyle,
+  tr: { flexDirection: "row", alignItems: "center", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.line, gap: 8 } as ViewStyle,
+  thead: { paddingVertical: 10 } as ViewStyle,
+  th: { fontFamily: F.body, fontSize: 10, fontWeight: "600", color: C.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
+  cell: { fontSize: 12.5 } as TextStyle,
+  cellNum: { fontSize: 12.5, color: C.ink } as TextStyle,
+  name: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
+  card: { backgroundColor: P.glass, borderWidth: 1, borderColor: C.line, borderRadius: R.lg, padding: 14, gap: 10, marginBottom: 10 } as ViewStyle,
+  cardTop: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
+  cardMeta: { flexDirection: "row", flexWrap: "wrap", gap: 14 } as ViewStyle,
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
+  metaTxt: { fontFamily: F.body, fontSize: 12, color: C.ink3 } as TextStyle,
 });
