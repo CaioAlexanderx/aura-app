@@ -22,7 +22,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
@@ -250,11 +250,11 @@ const st = StyleSheet.create({
   content:      { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
   headerRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 } as ViewStyle,
   totalLabel:   { fontSize: 11, fontWeight: "600", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.8 } as TextStyle,
-  totalValue:   { fontSize: 22, fontWeight: "900", color: KarateColors.danger, letterSpacing: -0.5 } as TextStyle,
-  card:         { flexDirection: "row", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8, alignItems: "center" } as ViewStyle,
+  totalValue:   { fontFamily: KarateFonts.mono, fontSize: 22, fontWeight: "700", color: KarateColors.danger } as TextStyle,
+  card:         { flexDirection: "row", backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8, alignItems: "center" } as ViewStyle,
   expDesc:      { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   expMeta:      { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
-  expAmount:    { fontSize: 15, fontWeight: "900", color: KarateColors.danger } as TextStyle,
+  expAmount:    { fontFamily: KarateFonts.mono, fontSize: 15, fontWeight: "700", color: KarateColors.danger } as TextStyle,
   overlay:      { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" } as ViewStyle,
   sheet:        { backgroundColor: KarateColors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%" as any } as ViewStyle,
   sheetHeader:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
