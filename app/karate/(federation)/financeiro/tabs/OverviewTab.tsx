@@ -1,73 +1,19 @@
 // ============================================================
-// OverviewTab — Visão Geral Financeira
-//
-// DRE (receitas, despesas, lucro líquido) + fluxo de caixa mensal
-// + recebíveis projetados.
-//
-// Wired: GET /federation/{id}/financial/overview (dados reais).
+// OverviewTab — Visão Geral Financeira · Shoji
+// DRE + fluxo de caixa + recebíveis. Dados reais.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  RefreshControl,
-  ViewStyle,
-  TextStyle,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
-import { KPIStrip, KPIData } from "@/components/karate/KPIStrip";
+import { ScrollView, View, Text, RefreshControl, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
+import { ShojiBackground, SectionHead, Card, KpiBand, Mono, Body } from "@/components/karate/shoji";
 import { karateApi, FinancialOverview, CashflowMonth } from "@/services/karateApi";
 
-function formatCurrency(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function formatMonth(m: string) {
-  const [y, mo] = m.split("-");
-  const months = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-  return `${months[parseInt(mo) - 1]}/${y.slice(2)}`;
-}
+const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const fmtMonth = (m: string) => { const [y, mo] = m.split("-"); const M = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]; return `${M[parseInt(mo) - 1]}/${y.slice(2)}`; };
 
-function SectionTitle({ children }: { children: string }) {
-  return <Text style={st.sectionTitle}>{children}</Text>;
-}
-
-function DRERow({ label, amount, isExpense }: { label: string; amount: number; isExpense?: boolean }) {
-  return (
-    <View style={st.dreRow} accessibilityLabel={`${label}: ${formatCurrency(amount)}`}>
-      <Text style={st.dreLabel}>{label}</Text>
-      <Text style={[st.dreAmount, isExpense && { color: KarateColors.danger }]}>
-        {isExpense ? `- ${formatCurrency(amount)}` : formatCurrency(amount)}
-      </Text>
-    </View>
-  );
-}
-
-function CashflowBar({ item, maxInflow }: { item: CashflowMonth; maxInflow: number }) {
-  const barWidth = maxInflow > 0 ? (item.inflow / maxInflow) * 100 : 0;
-  const outWidth = maxInflow > 0 ? (item.outflow / maxInflow) * 100 : 0;
-  return (
-    <View
-      style={st.cfRow}
-      accessibilityLabel={`${formatMonth(item.month)}: entrada ${formatCurrency(item.inflow)}, saída ${formatCurrency(item.outflow)}`}
-    >
-      <Text style={st.cfMonth}>{formatMonth(item.month)}</Text>
-      <View style={st.cfBars}>
-        <View style={[st.cfBar, st.cfBarIn,  { width: `${barWidth}%` as any }]} />
-        <View style={[st.cfBar, st.cfBarOut, { width: `${outWidth}%` as any }]} />
-      </View>
-      <Text style={st.cfBalance}>{formatCurrency(item.balance)}</Text>
-    </View>
-  );
-}
-
-interface Props { federationId: string; }
-
-export function OverviewTab({ federationId }: Props) {
+export function OverviewTab({ federationId }: { federationId: string }) {
   const [data, setData] = useState<FinancialOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -76,126 +22,103 @@ export function OverviewTab({ federationId }: Props) {
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
-    try {
-      const result = await karateApi.getFinancialOverview(federationId);
-      setData(result);
-    } catch {
-      setError(true);
-    } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
-    }
+    try { setData(await karateApi.getFinancialOverview(federationId)); } catch { setError(true); }
+    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
-
   useEffect(() => { load(); }, [load]);
 
-  if (error) return <KarateErrorState onRetry={() => load()} />;
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
 
-  const totalRevenue  = data?.dre.revenue.reduce((s, r) => s + r.amount, 0) ?? 0;
-  const totalExpenses = data?.dre.expenses.reduce((s, e) => s + e.amount, 0) ?? 0;
+  const totalRev = data?.dre.revenue.reduce((s, r) => s + r.amount, 0) ?? 0;
+  const totalExp = data?.dre.expenses.reduce((s, e) => s + e.amount, 0) ?? 0;
   const maxInflow = Math.max(...(data?.cashflow.map((c) => c.inflow) ?? [1]));
 
-  const kpis: KPIData[] = data ? [
-    { label: "Receita",   value: formatCurrency(totalRevenue),       accent: "ok" },
-    { label: "Despesas",  value: formatCurrency(totalExpenses),      accent: "warn" },
-    { label: "Líquido",   value: formatCurrency(data.dre.net),       accent: data.dre.net >= 0 ? "ok" : "danger" },
-  ] : [];
-
   return (
-    <ScrollView
-      style={st.screen}
-      contentContainerStyle={st.content}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />
-      }
-    >
-      {loading ? (
-        <>
-          <Skeleton height={80} style={{ marginBottom: 8 }} />
-          <Skeleton height={160} style={{ marginBottom: 8 }} />
-        </>
-      ) : (
-        <>
-          {/* KPIs DRE */}
-          <SectionTitle>Resultado do Período</SectionTitle>
-          <KPIStrip kpis={kpis} />
+    <ShojiBackground>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
+        {loading ? <><Skeleton height={100} style={{ marginBottom: 16, borderRadius: R.xl }} /><Skeleton height={180} style={{ borderRadius: R.xl }} /></> : <>
+          <KpiBand items={[
+            { label: "Receita", value: fmt(totalRev) },
+            { label: "Despesas", value: fmt(totalExp) },
+            { label: "Líquido", value: fmt(data!.dre.net), accent: data!.dre.net < 0 },
+          ]} />
 
-          {/* DRE Receitas */}
-          <SectionTitle>Receitas</SectionTitle>
-          <View style={st.card}>
-            {data?.dre.revenue.map((r) => <DRERow key={r.category} label={r.category} amount={r.amount} />)}
-            <View style={st.totalRow}>
-              <Text style={st.totalLabel}>Total Receitas</Text>
-              <Text style={[st.totalAmount, { color: ShojiPalette.ok }]}>{formatCurrency(totalRevenue)}</Text>
-            </View>
+          <View style={styles.section}>
+            <SectionHead title="Receitas" />
+            <Card>
+              {data?.dre.revenue.map((r) => <DRE key={r.category} label={r.category} amount={r.amount} />)}
+              <View style={styles.total}><Text style={styles.totalLbl}>Total receitas</Text><Mono style={{ color: C.ok, fontSize: 15 }}>{fmt(totalRev)}</Mono></View>
+            </Card>
           </View>
 
-          {/* DRE Despesas */}
-          <SectionTitle>Despesas</SectionTitle>
-          <View style={st.card}>
-            {data?.dre.expenses.map((e) => <DRERow key={e.category} label={e.category} amount={e.amount} isExpense />)}
-            <View style={st.totalRow}>
-              <Text style={st.totalLabel}>Total Despesas</Text>
-              <Text style={[st.totalAmount, { color: KarateColors.danger }]}>{formatCurrency(totalExpenses)}</Text>
-            </View>
+          <View style={styles.section}>
+            <SectionHead title="Despesas" />
+            <Card>
+              {data?.dre.expenses.map((e) => <DRE key={e.category} label={e.category} amount={e.amount} expense />)}
+              <View style={styles.total}><Text style={styles.totalLbl}>Total saídas</Text><Mono style={{ color: P.red, fontSize: 15 }}>− {fmt(totalExp)}</Mono></View>
+            </Card>
           </View>
 
-          {/* Fluxo de Caixa */}
-          <SectionTitle>Fluxo de Caixa</SectionTitle>
-          <View style={st.card}>
-            <View style={st.cfLegend}>
-              <View style={st.cfLegendItem}>
-                <View style={[st.cfLegendDot, { backgroundColor: ShojiPalette.ok }]} />
-                <Text style={st.cfLegendLabel}>Entrada</Text>
+          <View style={styles.section}>
+            <SectionHead title="Fluxo de caixa" />
+            <Card>
+              <View style={styles.legend}>
+                <Leg c={C.ok} l="Entrada" /><Leg c={P.red} l="Saída" />
               </View>
-              <View style={st.cfLegendItem}>
-                <View style={[st.cfLegendDot, { backgroundColor: KarateColors.danger }]} />
-                <Text style={st.cfLegendLabel}>Saída</Text>
-              </View>
-            </View>
-            {data?.cashflow.map((item) => (
-              <CashflowBar key={item.month} item={item} maxInflow={maxInflow} />
-            ))}
+              {data?.cashflow.map((m) => <CashRow key={m.month} m={m} max={maxInflow} />)}
+            </Card>
           </View>
 
-          {/* Recebíveis projetados */}
-          <SectionTitle>Recebíveis Projetados</SectionTitle>
-          <View style={st.card}>
-            {data?.projected_receivables.map((pr) => (
-              <View key={pr.due_date} style={st.prRow} accessibilityLabel={`Vencimento ${pr.due_date}: ${formatCurrency(pr.amount)}`}>
-                <Text style={st.prDate}>{new Date(pr.due_date).toLocaleDateString("pt-BR")}</Text>
-                <Text style={st.prAmount}>{formatCurrency(pr.amount)}</Text>
-              </View>
-            ))}
+          <View style={styles.section}>
+            <SectionHead title="Recebíveis projetados" />
+            <Card>
+              {(data?.projected_receivables ?? []).length === 0 ? <Body muted>Sem recebíveis projetados.</Body>
+                : data!.projected_receivables.map((pr, i) => (
+                  <View key={pr.due_date} style={[styles.prRow, i === data!.projected_receivables.length - 1 && { borderBottomWidth: 0 }]}>
+                    <Body muted>{new Date(pr.due_date).toLocaleDateString("pt-BR")}</Body>
+                    <Mono style={{ color: C.ink }}>{fmt(pr.amount)}</Mono>
+                  </View>
+                ))}
+            </Card>
           </View>
-        </>
-      )}
-    </ScrollView>
+        </>}
+      </ScrollView>
+    </ShojiBackground>
   );
 }
 
-const st = StyleSheet.create({
-  screen:        { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content:       { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
-  sectionTitle:  { fontSize: 11, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase", marginTop: 16, marginBottom: 6 } as TextStyle,
-  card:          { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
-  dreRow:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
-  dreLabel:      { fontSize: 13, color: KarateColors.ink2 } as TextStyle,
-  dreAmount:     { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
-  totalRow:      { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: KarateColors.border, paddingTop: 8, marginTop: 4 } as ViewStyle,
-  totalLabel:    { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  totalAmount:   { fontSize: 15, fontWeight: "900" } as TextStyle,
-  cfRow:         { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 } as ViewStyle,
-  cfMonth:       { width: 44, fontSize: 11, color: KarateColors.ink3, fontWeight: "600" } as TextStyle,
-  cfBars:        { flex: 1, gap: 2 } as ViewStyle,
-  cfBar:         { height: 6, borderRadius: 3 } as ViewStyle,
-  cfBarIn:       { backgroundColor: ShojiPalette.ok } as ViewStyle,
-  cfBarOut:      { backgroundColor: KarateColors.dangerSoft, borderWidth: 1, borderColor: KarateColors.danger } as ViewStyle,
-  cfBalance:     { width: 82, fontSize: 11, fontWeight: "700", color: KarateColors.ink, textAlign: "right" } as TextStyle,
-  cfLegend:      { flexDirection: "row", gap: 16, marginBottom: 4 } as ViewStyle,
-  cfLegendItem:  { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
-  cfLegendDot:   { width: 8, height: 8, borderRadius: 4 } as ViewStyle,
-  cfLegendLabel: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
-  prRow:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center" } as ViewStyle,
-  prDate:        { fontSize: 13, color: KarateColors.ink3 } as TextStyle,
-  prAmount:      { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+function DRE({ label, amount, expense }: { label: string; amount: number; expense?: boolean }) {
+  return <View style={styles.dre}><Body muted style={{ flex: 1 }}>{label}</Body><Mono style={{ color: expense ? P.red : C.ink }}>{expense ? "− " : ""}{fmt(amount)}</Mono></View>;
+}
+function Leg({ c, l }: { c: string; l: string }) {
+  return <View style={styles.legItem}><View style={[styles.legDot, { backgroundColor: c }]} /><Body muted style={{ fontSize: 11 }}>{l}</Body></View>;
+}
+function CashRow({ m, max }: { m: CashflowMonth; max: number }) {
+  const inW = max > 0 ? (m.inflow / max) * 100 : 0;
+  const outW = max > 0 ? (m.outflow / max) * 100 : 0;
+  return (
+    <View style={styles.cf}>
+      <Mono style={{ width: 48, fontSize: 11, color: C.ink3 }}>{fmtMonth(m.month)}</Mono>
+      <View style={{ flex: 1, gap: 3 }}>
+        <View style={styles.cfTrack}><View style={[styles.cfFill, { width: `${inW}%`, backgroundColor: C.ok }]} /></View>
+        <View style={styles.cfTrack}><View style={[styles.cfFill, { width: `${outW}%`, backgroundColor: P.red }]} /></View>
+      </View>
+      <Mono style={{ width: 84, textAlign: "right", fontSize: 11, color: C.ink }}>{fmt(m.balance)}</Mono>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { padding: 40, paddingTop: 32, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  section: { marginTop: SP[8] } as ViewStyle,
+  dre: { flexDirection: "row", alignItems: "center", paddingVertical: 7 } as ViewStyle,
+  total: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10, marginTop: 6 } as ViewStyle,
+  totalLbl: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: C.ink } as TextStyle,
+  legend: { flexDirection: "row", gap: 16, marginBottom: 8 } as ViewStyle,
+  legItem: { flexDirection: "row", alignItems: "center", gap: 5 } as ViewStyle,
+  legDot: { width: 8, height: 8, borderRadius: 4 } as ViewStyle,
+  cf: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 } as ViewStyle,
+  cfTrack: { height: 6, borderRadius: 3, backgroundColor: "rgba(43,38,32,0.06)", overflow: "hidden" } as ViewStyle,
+  cfFill: { height: "100%", borderRadius: 3 } as ViewStyle,
+  prRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
 });
