@@ -13,10 +13,10 @@ import {
   StyleSheet, ViewStyle, TextStyle, Linking,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { karateCompetitionsApi, RankingRow, PublicSeasons } from "@/services/karateCompetitionsApi";
 
-const medalColor = ["#D4A017", "#9CA3AF", "#B07A3C"];
+const medalColor = ["#b8463a", "#9b9180", "#7a4e30"]; // ouro(vermelhão)/prata/bronze — Shoji
 
 export default function PublicRankingScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -125,9 +125,9 @@ export default function PublicRankingScreen() {
                   <Text style={styles.athlete}>{r.student_name}</Text>
                   <Text style={styles.athleteMeta}>{r.karate_registration_number} · {r.dojo_name}</Text>
                   <View style={styles.medalsRow}>
-                    {r.gold > 0 && <Text style={styles.medal}>🥇 {r.gold}</Text>}
-                    {r.silver > 0 && <Text style={styles.medal}>🥈 {r.silver}</Text>}
-                    {r.bronze > 0 && <Text style={styles.medal}>🥉 {r.bronze}</Text>}
+                    {r.gold > 0 && <Medal c={medalColor[0]} n={r.gold} />}
+                    {r.silver > 0 && <Medal c={medalColor[1]} n={r.silver} />}
+                    {r.bronze > 0 && <Medal c={medalColor[2]} n={r.bronze} />}
                     <Text style={styles.medalMeta}>· {r.events_participated} etapas</Text>
                   </View>
                 </View>
@@ -153,22 +153,28 @@ export default function PublicRankingScreen() {
   );
 }
 
+function Medal({ c, n }: { c: string; n: number }) {
+  return <View style={styles.medalItem}><View style={[styles.medalDot, { backgroundColor: c }]} /><Text style={styles.medal}>{n}</Text></View>;
+}
+
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
+  medalItem: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
+  medalDot: { width: 9, height: 9, borderRadius: 5 } as ViewStyle,
   pageContent: { alignItems: "center", paddingHorizontal: 16, paddingVertical: 22, paddingBottom: 48 } as ViewStyle,
   container: { width: "100%", maxWidth: 560 } as ViewStyle,
   gov: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   govLogo: { width: 42, height: 42 } as any,
   seal: { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  sealKanji: { fontSize: 20, color: KarateColors.primary, fontWeight: "700" } as TextStyle,
-  govTitle: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  sealKanji: { fontFamily: KarateFonts.heading, fontSize: 22, color: KarateColors.primary } as TextStyle,
+  govTitle: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   govSub: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
-  govK: { fontSize: 9.5, letterSpacing: 1.4, color: KarateColors.ink4, fontFamily: "monospace" } as TextStyle,
-  govSeason: { fontSize: 15, color: KarateColors.ink2, fontFamily: "monospace", fontWeight: "700" } as TextStyle,
+  govK: { fontSize: 9.5, letterSpacing: 1.4, color: KarateColors.ink4, fontFamily: KarateFonts.mono } as TextStyle,
+  govSeason: { fontSize: 15, color: KarateColors.ink2, fontFamily: KarateFonts.mono, fontWeight: "700" } as TextStyle,
   filterRow: { flexDirection: "row", gap: 8, marginTop: 14 } as ViewStyle,
   seasonChip: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface } as ViewStyle,
   seasonChipActive: { backgroundColor: KarateColors.primary, borderColor: KarateColors.primary } as ViewStyle,
-  seasonChipText: { fontSize: 13, fontWeight: "700", color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  seasonChipText: { fontSize: 13, fontWeight: "700", color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   seasonChipTextActive: { color: "#fff" } as TextStyle,
   catScroll: { flexGrow: 0, marginTop: 10 } as ViewStyle,
   catChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface, maxWidth: 260 } as ViewStyle,
@@ -180,22 +186,22 @@ const styles = StyleSheet.create({
   emptyBox: { alignItems: "center", gap: 6, paddingVertical: 48 } as ViewStyle,
   emptyTitle: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   emptyTxt: { fontSize: 13, color: KarateColors.ink3, textAlign: "center", maxWidth: 320 } as TextStyle,
-  table: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden", marginTop: 14 } as ViewStyle,
+  table: { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden", marginTop: 14 } as ViewStyle,
   tr: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   trTop: { borderTopWidth: 0 } as ViewStyle,
   pos: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.bg2 } as ViewStyle,
-  posText: { fontSize: 13, fontWeight: "800", color: KarateColors.ink2, fontFamily: "monospace" } as TextStyle,
+  posText: { fontSize: 13, fontWeight: "800", color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
   athlete: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   athleteMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
   medalsRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" } as ViewStyle,
   medal: { fontSize: 12, color: KarateColors.ink2, fontWeight: "600" } as TextStyle,
   medalMeta: { fontSize: 11, color: KarateColors.ink4 } as TextStyle,
   ptsBox: { alignItems: "flex-end" } as ViewStyle,
-  pts: { fontSize: 18, fontWeight: "800", color: KarateColors.primary, fontFamily: "monospace" } as TextStyle,
+  pts: { fontSize: 18, fontWeight: "800", color: KarateColors.primary, fontFamily: KarateFonts.mono } as TextStyle,
   ptsLabel: { fontSize: 10, color: KarateColors.ink4 } as TextStyle,
   auraFooter: { flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center", marginTop: 24 } as ViewStyle,
   footSeal: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: KarateColors.border, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  footSealK: { fontSize: 14, color: KarateColors.ink3 } as TextStyle,
+  footSealK: { fontFamily: KarateFonts.heading, fontSize: 16, color: KarateColors.ink3 } as TextStyle,
   footWm: { fontSize: 13, fontWeight: "800", color: KarateColors.ink2 } as TextStyle,
   footSub: { fontSize: 11, color: KarateColors.ink4 } as TextStyle,
 });

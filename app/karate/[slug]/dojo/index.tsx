@@ -15,7 +15,7 @@ import {
   Platform, ScrollView, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { KarateColors } from "@/constants/karateTheme";
+import { KarateColors, KarateFonts } from "@/constants/karateTheme";
 import { useDojoPortal } from "./_layout";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -163,13 +163,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content: { padding: 24, gap: 24 } as ViewStyle,
   header: { alignItems: "center", gap: 8, paddingVertical: 24 } as ViewStyle,
-  kanji: { fontSize: 48, color: KarateColors.primary, fontWeight: "700" } as TextStyle,
-  title: { fontSize: 22, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  kanji: { fontFamily: KarateFonts.heading, fontSize: 48, color: KarateColors.primary } as TextStyle,
+  title: { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   subtitle: { fontSize: 14, color: KarateColors.ink3, textAlign: "center" } as TextStyle,
   card: { backgroundColor: KarateColors.bg2, borderRadius: 16, borderWidth: 1, borderColor: KarateColors.border, padding: 20, gap: 12 } as ViewStyle,
   label: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   input: { borderWidth: 1, borderColor: KarateColors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.bg } as TextStyle,
-  inputCode: { fontSize: 28, fontWeight: "800", textAlign: "center", letterSpacing: 8, fontFamily: "monospace" } as TextStyle,
+  inputCode: { fontSize: 28, fontWeight: "800", textAlign: "center", letterSpacing: 8, fontFamily: KarateFonts.mono } as TextStyle,
   btn: { backgroundColor: KarateColors.primary, borderRadius: 10, paddingVertical: 14, alignItems: "center" } as ViewStyle,
   btnDisabled: { opacity: 0.6 } as ViewStyle,
   btnText: { color: "#fff", fontWeight: "800", fontSize: 15 } as TextStyle,

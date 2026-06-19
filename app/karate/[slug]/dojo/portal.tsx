@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors } from "@/constants/karateTheme";
+import { KarateColors, KarateFonts } from "@/constants/karateTheme";
 import { useDojoPortal } from "./_layout";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -123,8 +123,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   topbar: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
   logoMark: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  kanji: { fontSize: 18, color: KarateColors.primary, fontWeight: "700" } as TextStyle,
-  dojoName: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  kanji: { fontFamily: KarateFonts.heading, fontSize: 19, color: KarateColors.primary } as TextStyle,
+  dojoName: { fontFamily: KarateFonts.heading, fontSize: 16, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   dojoSub: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
   logoutBtn: { padding: 8 } as ViewStyle,
   content: { padding: 16, gap: 16 } as ViewStyle,
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 14, color: KarateColors.ink3, flex: 1 } as TextStyle,
   rowValue: { fontSize: 14, fontWeight: "700", color: KarateColors.ink, flex: 2, textAlign: "right" } as TextStyle,
   placeholderCard: { backgroundColor: KarateColors.bg2, borderRadius: 14, borderWidth: 1, borderColor: KarateColors.border, padding: 24, alignItems: "center", gap: 8 } as ViewStyle,
-  placeholderTitle: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  placeholderTitle: { fontFamily: KarateFonts.heading, fontSize: 16, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   placeholderText: { fontSize: 13, color: KarateColors.ink3, textAlign: "center", lineHeight: 20 } as TextStyle,
   errorBox: { padding: 24, alignItems: "center" } as ViewStyle,
   errorText: { color: "#ef4444", fontSize: 14, textAlign: "center" } as TextStyle,
