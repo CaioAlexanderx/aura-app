@@ -32,6 +32,7 @@ import { Slot, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { useShojiFonts } from "@/components/karate/shoji";
 
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
@@ -163,6 +164,7 @@ function BottomTabNav() {
 }
 
 export function KarateShell() {
+  useShojiFonts();   // carrega as fontes Shoji (web) em todo o shell
   const { width } = useWindowDimensions();
   const isWide    = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
 
