@@ -18,6 +18,7 @@ import { useFonts } from "expo-font";
 import { ShipporiMincho_400Regular } from "@expo-google-fonts/shippori-mincho";
 import { ZenKakuGothicNew_400Regular } from "@expo-google-fonts/zen-kaku-gothic-new";
 import { DMMono_400Regular } from "@expo-google-fonts/dm-mono";
+import { InstrumentSerif_400Regular } from "@expo-google-fonts/instrument-serif";
 import { Ionicons } from "@expo/vector-icons";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R,
@@ -31,7 +32,7 @@ const track = (em: number, fontSize: number) => em * fontSize;
 
 // ── Fonts (web): injeta o stylesheet do Google Fonts uma vez ──
 const GF_HREF =
-  "https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap";
+  "https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap";
 
 export function useShojiFonts() {
   // Nativo: carrega os .ttf via expo-font (no web usamos a folha do Google Fonts).
@@ -39,6 +40,7 @@ export function useShojiFonts() {
     ShipporiMincho:   ShipporiMincho_400Regular,
     ZenKakuGothicNew: ZenKakuGothicNew_400Regular,
     DMMono:           DMMono_400Regular,
+    InstrumentSerif:  InstrumentSerif_400Regular,
   });
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;

@@ -16,6 +16,7 @@ import React, { useState } from "react";
 import { View, Text, Image, LayoutChangeEvent, ViewStyle } from "react-native";
 import { PixQRCode } from "@/components/karate/PixQRCode";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { KarateFonts } from "@/constants/karateTheme";
 import { MembershipCard } from "@/services/karateCardApi";
 
 const CARD_W = 1012;
@@ -114,7 +115,7 @@ function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number;
           <Text style={{ fontSize: f(29), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>
         </View>
         <View style={{ alignItems: "flex-end", paddingLeft: f(18), borderLeftWidth: 1, borderLeftColor: "rgba(17,17,17,0.10)" }}>
-          <Text style={{ fontSize: f(22), color: "#161616" }}>Carteira</Text>
+          <Text style={{ fontFamily: KarateFonts.serif, fontSize: f(24), color: "#161616" }}>Carteira</Text>
           <Text style={{ fontSize: f(11), fontWeight: "700", letterSpacing: f(2), color: "#9a9a9a", textTransform: "uppercase", marginTop: f(3) }}>do Atleta</Text>
         </View>
       </View>
@@ -184,7 +185,7 @@ function Back({ card, f, H, verifyUrl }: { card: MembershipCard; f: (n: number) 
         {/* left — Dojo Kun */}
         <View style={{ flex: 1, paddingVertical: f(26), paddingLeft: f(40), paddingRight: f(30), borderRightWidth: 1, borderRightColor: "rgba(17,17,17,0.10)" }}>
           <Text style={{ fontSize: f(12), fontWeight: "700", letterSpacing: f(2.2), color: ACCENT, textTransform: "uppercase" }}>Lema do Karatê</Text>
-          <Text style={{ fontSize: f(20), color: "#141414", marginTop: f(2) }}>Dojo Kun · os cinco princípios</Text>
+          <Text style={{ fontFamily: KarateFonts.serif, fontSize: f(22), color: "#141414", marginTop: f(2) }}>Dojo Kun · os cinco princípios</Text>
           <View style={{ flex: 1, justifyContent: "center", marginTop: f(14) }}>
             {DOJO_KUN.map((line, i) => (
               <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: f(13), paddingBottom: f(10), borderBottomWidth: i < DOJO_KUN.length - 1 ? 1 : 0, borderBottomColor: "rgba(17,17,17,0.07)" }}>
@@ -198,7 +199,7 @@ function Back({ card, f, H, verifyUrl }: { card: MembershipCard; f: (n: number) 
         {/* right — QR + emissão */}
         <View style={{ flex: 1, paddingVertical: f(26), paddingHorizontal: f(36), alignItems: "center" }}>
           <Text style={{ fontSize: f(12), fontWeight: "700", letterSpacing: f(2.2), color: "#9a9a9a", textTransform: "uppercase" }}>Identificação</Text>
-          <Text style={{ fontSize: f(20), color: "#141414", marginTop: f(2) }}>Validação do atleta</Text>
+          <Text style={{ fontFamily: KarateFonts.serif, fontSize: f(22), color: "#141414", marginTop: f(2) }}>Validação do atleta</Text>
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
             <PixQRCode payload={verifyUrl} size={Math.max(64, Math.round(f(176)))} />
             <Text style={{ fontSize: f(16), color: "#161616", fontFamily: "monospace", marginTop: f(12) }}>{card.card_number || "—"}</Text>

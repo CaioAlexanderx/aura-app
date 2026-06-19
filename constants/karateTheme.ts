@@ -143,6 +143,8 @@ export const KarateFonts = {
   heading: Platform.select({ web: "'Shippori Mincho', 'Times New Roman', serif", default: "ShipporiMincho" }) as string,
   body:    Platform.select({ web: "'Zen Kaku Gothic New', system-ui, sans-serif", default: "ZenKakuGothicNew" }) as string,
   mono:    Platform.select({ web: "'DM Mono', ui-monospace, monospace", default: "DMMono" }) as string,
+  // Serifa do DOCUMENTO oficial (carteirinha FPKT, DESIGN-14) — NÃO é o Shoji.
+  serif:   Platform.select({ web: "'Instrument Serif', Georgia, serif", default: "InstrumentSerif" }) as string,
 } as const;
 
 // ─────────────────────────────────────────────────────────────
