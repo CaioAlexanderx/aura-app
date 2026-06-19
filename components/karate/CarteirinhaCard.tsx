@@ -15,6 +15,7 @@
 import React, { useState } from "react";
 import { View, Text, Image, LayoutChangeEvent, ViewStyle } from "react-native";
 import { PixQRCode } from "@/components/karate/PixQRCode";
+import { FpktLogo } from "@/components/karate/FpktLogo";
 import { MembershipCard } from "@/services/karateCardApi";
 
 const CARD_W = 1012;
@@ -76,11 +77,11 @@ export function CarteirinhaCard({ card, face, maxWidth = 520 }: CarteirinhaCardP
   );
 }
 
-// ── Seal (substitui o logo bitmap do mock — arte data-only) ──
-function Seal({ size }: { size: number }) {
+// ── Watermark — pirâmide FPKT esmaecida (segurança/identidade) ──
+function Watermark({ f, size, x, y, opacity }: { f: (n: number) => number; size: number; x: number; y: number; opacity: number }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: Math.max(1, size * 0.025), borderColor: ACCENT, backgroundColor: "#fff5f5", alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ fontSize: size * 0.5, color: ACCENT, fontWeight: "800" }}>空</Text>
+    <View pointerEvents="none" style={{ position: "absolute", left: f(x), top: f(y), opacity }}>
+      <FpktLogo size={f(size)} style={{ tintColor: "#111" }} />
     </View>
   );
 }
@@ -104,9 +105,10 @@ function Field({ label, value, f, mono, big, accent }: { label: string; value?: 
 function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number; H: number }) {
   return (
     <View style={{ flex: 1 }}>
+      <Watermark f={f} size={560} x={470} y={140} opacity={0.045} />
       {/* header */}
       <View style={{ height: f(124), paddingHorizontal: f(40), flexDirection: "row", alignItems: "center", gap: f(22), borderBottomWidth: f(5), borderBottomColor: ACCENT, backgroundColor: "#fff" }}>
-        <Seal size={f(80)} />
+        <FpktLogo size={f(88)} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: f(13.5), fontWeight: "700", letterSpacing: f(2.4), color: ACCENT, textTransform: "uppercase" }}>Federação Paulista de</Text>
           <Text style={{ fontSize: f(29), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>
@@ -166,9 +168,10 @@ function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number;
 function Back({ card, f, H, verifyUrl }: { card: MembershipCard; f: (n: number) => number; H: number; verifyUrl: string }) {
   return (
     <View style={{ flex: 1 }}>
+      <Watermark f={f} size={520} x={150} y={250} opacity={0.035} />
       {/* header */}
       <View style={{ height: f(104), paddingHorizontal: f(40), flexDirection: "row", alignItems: "center", gap: f(18), borderBottomWidth: f(5), borderBottomColor: ACCENT, backgroundColor: "#fff" }}>
-        <Seal size={f(60)} />
+        <FpktLogo size={f(66)} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: f(11.5), fontWeight: "700", letterSpacing: f(2.2), color: ACCENT, textTransform: "uppercase" }}>Federação Paulista de</Text>
           <Text style={{ fontSize: f(21), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>

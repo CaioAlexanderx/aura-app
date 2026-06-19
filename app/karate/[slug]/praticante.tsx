@@ -21,6 +21,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { FpktLogo } from "@/components/karate/FpktLogo";
 import { beltHex } from "@/constants/karateBelts";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -151,7 +152,7 @@ export default function PortalPraticanteScreen() {
       <ScrollView style={styles.page} contentContainerStyle={styles.authWrap}>
         <View style={styles.authCard}>
           <View style={styles.brand}>
-            <View style={styles.seal}><Text style={styles.sealK}>空</Text></View>
+            <FpktLogo size={44} />
             <Text style={styles.brandOrg}>Portal do praticante</Text>
             <Text style={styles.brandSub}>FPKT · Federação de Karatê Tradicional</Text>
           </View>
@@ -216,7 +217,7 @@ export default function PortalPraticanteScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 56 }}>
       <View style={styles.topbar}>
-        <View style={styles.seal}><Text style={styles.sealK}>空</Text></View>
+        <FpktLogo size={28} />
         <Text style={styles.topCtx}>Portal do praticante · FPKT</Text>
         <View style={{ flex: 1 }} />
         <Text style={styles.topName}>{(p?.name || "").split(" ")[0]}</Text>

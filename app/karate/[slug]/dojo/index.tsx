@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
+import { FpktLogo } from "@/components/karate/FpktLogo";
 import { useDojoPortal } from "./_layout";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -87,7 +88,7 @@ export default function DojoPortalLogin() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.kanji}>空</Text>
+            <FpktLogo size={56} />
             <Text style={styles.title}>Portal do Dojô</Text>
             <Text style={styles.subtitle}>Acesse as informações do seu dojô na federação.</Text>
           </View>

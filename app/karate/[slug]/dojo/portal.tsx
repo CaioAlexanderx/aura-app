@@ -16,6 +16,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
+import { FpktLogo } from "@/components/karate/FpktLogo";
 import { useDojoPortal } from "./_layout";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -63,7 +64,7 @@ export default function DojoPortal() {
     <SafeAreaView style={styles.root}>
       {/* Topbar */}
       <View style={styles.topbar}>
-        <View style={styles.logoMark}><Text style={styles.kanji}>空</Text></View>
+        <FpktLogo size={36} />
         <View style={{ flex: 1 }}>
           <Text style={styles.dojoName} numberOfLines={1}>
             {dojo?.name ?? "Carregando…"}

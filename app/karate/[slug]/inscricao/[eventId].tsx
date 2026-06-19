@@ -17,6 +17,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { FpktLogo } from "@/components/karate/FpktLogo";
 import { beltHex } from "@/constants/karateBelts";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
@@ -320,7 +321,7 @@ function Card({ fed, children }: { fed: string; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <View style={styles.seal}><Text style={styles.sealK}>空</Text></View>
+        <FpktLogo size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.headT}>Inscrição</Text>
           <Text style={styles.headS}>{fed}</Text>

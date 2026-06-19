@@ -97,7 +97,10 @@ export function Mono({ children, style }: { children: React.ReactNode; style?: S
   return <Text style={[styles.mono, style]}>{children}</Text>;
 }
 
-// ── Selo 空 (única marca) ────────────────────────────────────
+// ── Logo oficial da FPKT (marca dos headers) ─────────────────
+export { FpktLogo } from "@/components/karate/FpktLogo";
+
+// ── Selo 空 (flourish decorativo Shoji) ──────────────────────
 export function Seal({ size = 42, style }: { size?: number; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{

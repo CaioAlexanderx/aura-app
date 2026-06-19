@@ -30,9 +30,9 @@ import {
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { useShojiFonts } from "@/components/karate/shoji";
+import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
@@ -102,9 +102,7 @@ function SidebarNav() {
     <View style={styles.sidebar}>
       {/* Logo / Brand */}
       <View style={styles.sidebarHeader}>
-        <View style={styles.logoMark}>
-          <Text style={styles.logoText}>FK</Text>
-        </View>
+        <FpktLogo size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.brandTitle}>Aura Karatê</Text>
           <Text style={styles.brandSub} numberOfLines={1}>{federationName}</Text>
@@ -183,6 +181,7 @@ export function KarateShell() {
     <SafeAreaView style={styles.mobileContainer}>
       {/* Topbar */}
       <View style={styles.topbar}>
+        <FpktLogo size={26} style={{ marginRight: 9 }} />
         <Text style={styles.topbarTitle}>Aura Karatê</Text>
       </View>
       <View style={styles.content}>
@@ -257,16 +256,18 @@ const styles = StyleSheet.create({
 
   // Topbar mobile
   topbar: {
-    height: 52,
-    backgroundColor: KarateColors.primary,
+    height: 54,
+    backgroundColor: KarateColors.glass,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: KarateColors.border,
   } as ViewStyle,
   topbarTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#fff",
+    fontFamily: KarateFonts.heading,
+    fontSize: 18,
+    color: KarateColors.ink,
     letterSpacing: 0.3,
   } as TextStyle,
 

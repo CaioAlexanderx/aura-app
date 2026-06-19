@@ -22,7 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karateCardApi, CardVerification, VerifyStatus } from "@/services/karateCardApi";
-import { useShojiFonts } from "@/components/karate/shoji";
+import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 // ── helpers ──────────────────────────────────────────────
 function fmtDate(iso?: string | null): string {
@@ -119,7 +119,7 @@ export default function VerifyCardScreen() {
           {data?.federation_logo ? (
             <Image source={{ uri: data.federation_logo }} style={styles.govLogo} resizeMode="contain" />
           ) : (
-            <View style={styles.seal}><Text style={styles.sealKanji}>空</Text></View>
+            <FpktLogo size={42} />
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.govTitle}>{data?.federation_name || "FPKT"}</Text>

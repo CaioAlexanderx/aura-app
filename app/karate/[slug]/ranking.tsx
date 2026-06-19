@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { FpktLogo } from "@/components/karate/FpktLogo";
 import { karateCompetitionsApi, RankingRow, PublicSeasons } from "@/services/karateCompetitionsApi";
 
 const medalColor = ["#b8463a", "#9b9180", "#7a4e30"]; // ouro(vermelhão)/prata/bronze — Shoji
@@ -69,7 +70,7 @@ export default function PublicRankingScreen() {
           {fed.logo ? (
             <Image source={{ uri: fed.logo }} style={styles.govLogo} resizeMode="contain" />
           ) : (
-            <View style={styles.seal}><Text style={styles.sealKanji}>空</Text></View>
+            <FpktLogo size={42} />
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.govTitle}>{fed.name}</Text>
