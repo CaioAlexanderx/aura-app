@@ -37,7 +37,7 @@ import {
   TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateApi,
@@ -1052,7 +1052,7 @@ const st = StyleSheet.create({
   // Page head
   pageHead:  { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 } as ViewStyle,
   eyebrow:   { fontSize: 10, fontWeight: "700", color: KarateColors.ink4, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 4 } as TextStyle,
-  pageTitle: { fontSize: 28, fontWeight: "300", color: KarateColors.ink, letterSpacing: -0.5 } as TextStyle,
+  pageTitle: { fontFamily: KarateFonts.heading, fontSize: 32, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   pageSub:   { fontSize: 13, color: KarateColors.ink3, marginTop: 6, lineHeight: 18 } as TextStyle,
 
   // Tab bar
@@ -1069,18 +1069,18 @@ const st = StyleSheet.create({
 
   // Section header
   sectionHead:  { flexDirection: "row", alignItems: "flex-start", marginBottom: 12 } as ViewStyle,
-  sectionTitle: { fontSize: 20, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  sectionTitle: { fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   sectionSub:   { fontSize: 12, color: KarateColors.ink3, marginTop: 3 } as TextStyle,
 
   // Card
-  card:      { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16 } as ViewStyle,
-  cardFlush: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
+  card:      { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 16 } as ViewStyle,
+  cardFlush: { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
 
   // Fee cards
   feeGrid:      { gap: 12 } as ViewStyle,
   feeCard:      { gap: 4 } as ViewStyle,
   feeCardHead:  { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
-  feeCardTitle: { fontSize: 18, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  feeCardTitle: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   feeCardSub:   { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   feeRow:       { flexDirection: "row", alignItems: "baseline", gap: 6, marginVertical: 12 } as ViewStyle,
   feeCurrency:  { fontSize: 22, color: KarateColors.ink3, fontWeight: "300" } as TextStyle,
@@ -1127,7 +1127,7 @@ const st = StyleSheet.create({
 
   // Section divider
   sectionDivider:     { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingVertical: 16, marginVertical: 8, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-  sectionDividerTitle: { fontSize: 22, fontWeight: "300", color: KarateColors.ink } as TextStyle,
+  sectionDividerTitle: { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   sectionDividerLine:  { height: 2, width: 34, backgroundColor: KarateColors.primary, opacity: 0.7, marginTop: 10 } as ViewStyle,
   sectionDividerSub:   { fontSize: 11, color: KarateColors.ink4, marginTop: 6 } as TextStyle,
   rowGap:              { flexDirection: "row", gap: 8, alignItems: "center" } as ViewStyle,
@@ -1138,7 +1138,7 @@ const st = StyleSheet.create({
   tableRow:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   tableCell:      { fontSize: 13, color: KarateColors.ink2 } as TextStyle,
   tableCellBold:  { fontWeight: "600", color: KarateColors.ink } as TextStyle,
-  tableCellMono:  { fontFamily: "monospace" } as TextStyle,
+  tableCellMono:  { fontFamily: KarateFonts.mono } as TextStyle,
   personCell:     { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   personName:     { fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   personEmail:    { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
@@ -1165,13 +1165,13 @@ const st = StyleSheet.create({
   drawerPanel: { position: "absolute", top: 0, right: 0, bottom: 0, width: 420, maxWidth: "94%", backgroundColor: KarateColors.bg2, borderLeftWidth: 1, borderLeftColor: KarateColors.border, padding: 28 } as ViewStyle,
   drawerHead:  { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 } as ViewStyle,
   drawerEyebrow: { fontSize: 10, fontWeight: "600", color: KarateColors.ink3, letterSpacing: 1.4, textTransform: "uppercase" } as TextStyle,
-  drawerTitle:   { fontSize: 22, fontWeight: "300", color: KarateColors.ink, marginTop: 6 } as TextStyle,
+  drawerTitle:   { fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink, marginTop: 6 } as TextStyle,
   historyRow:    { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   historyRowHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } as ViewStyle,
-  historyFrom:   { fontSize: 12, color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  historyFrom:   { fontSize: 12, color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   historyVals:   { flexDirection: "row", gap: 20 } as ViewStyle,
   historyValLabel: { fontSize: 9, fontWeight: "700", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
-  historyValAmt:   { fontSize: 13, color: KarateColors.ink, fontFamily: "monospace", marginTop: 4 } as TextStyle,
+  historyValAmt:   { fontSize: 13, color: KarateColors.ink, fontFamily: KarateFonts.mono, marginTop: 4 } as TextStyle,
 
   // Invite modal
   roleOpt:        { paddingVertical: 10, paddingHorizontal: 14, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, marginTop: 6 } as ViewStyle,
@@ -1202,7 +1202,7 @@ const st = StyleSheet.create({
   logoSub:      { fontSize: 11, color: KarateColors.ink3, marginTop: 3 } as TextStyle,
   slugRow:      { flexDirection: "row", borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, overflow: "hidden", marginTop: 4 } as ViewStyle,
   slugPrefix:   { backgroundColor: KarateColors.bg2, borderRightWidth: 1, borderRightColor: KarateColors.border, paddingHorizontal: 10, paddingVertical: 9, justifyContent: "center" } as ViewStyle,
-  slugPrefixText: { fontSize: 12, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  slugPrefixText: { fontSize: 12, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
 
   // Regime
   regimeRow:          { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 } as ViewStyle,
