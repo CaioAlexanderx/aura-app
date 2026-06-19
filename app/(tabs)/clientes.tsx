@@ -111,6 +111,9 @@ export default function ClientesScreen() {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
+  // feat(dup-prevention, 19/06/2026): estado para cadastro duplicado detectado
+  const [dupPending, setDupPending] = useState<{ newCustomer: Customer; existing: Customer } | null>(null);
+
   // PLAN-01: tabs avancadas (Ranking, Retencao, Avaliacoes) sao Negocio+.
   const isEssencial = plan === "essencial";
 
@@ -132,7 +135,36 @@ export default function ClientesScreen() {
 
   const showCompanyBadge = (companyCount || 1) > 1;
 
-  function handleAdd(c: Customer) { addCustomer(c); closeFormModal(); }
+  /**
+   * Detecta duplicata por telefone (forte) ou nome exato (fraca) na lista
+   * local de clientes já carregada. Retorna o cliente existente ou null.
+   */
+  function findDuplicate(c: Customer): Customer | null {
+    const cleanPhone = (c.phone || '').replace(/\D/g, '');
+    const normName   = (c.name || '').trim().toLowerCase();
+
+    if (cleanPhone.length >= 10) {
+      const byPhone = customers.find(x => (x.phone || '').replace(/\D/g, '') === cleanPhone);
+      if (byPhone) return byPhone;
+    }
+    if (normName.length >= 2) {
+      const byName = customers.find(x => (x.name || '').trim().toLowerCase() === normName);
+      if (byName) return byName;
+    }
+    return null;
+  }
+
+  function handleAdd(c: Customer) {
+    const dup = findDuplicate(c);
+    if (dup) {
+      // Não fecha o form — aguarda decisão do usuário no ConfirmDialog
+      setDupPending({ newCustomer: c, existing: dup });
+      return;
+    }
+    addCustomer(c);
+    closeFormModal();
+  }
+
   function handleEdit(c: Customer) { updateCustomer(c.id, c); closeFormModal(); }
   function handleTabSelect(i: number) { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
 
@@ -180,6 +212,19 @@ export default function ClientesScreen() {
     ? `${customers.length} / ${planLimit.toLocaleString("pt-BR")}`
     : String(customers.length);
   const nearLimit = planLimit && planLimit < 999999 && customers.length / planLimit >= 0.85;
+
+  // Mensagem do ConfirmDialog de duplicata
+  const dupMessage = dupPending
+    ? (() => {
+        const existing = dupPending.existing;
+        const newC     = dupPending.newCustomer;
+        const samePhone =
+          (existing.phone || '').replace(/\D/g, '').length >= 10 &&
+          (existing.phone || '').replace(/\D/g, '') === (newC.phone || '').replace(/\D/g, '');
+        const field = samePhone ? 'telefone' : 'nome';
+        return `Ja existe um cliente com este ${field}: "${existing.name}"${existing.phone ? ` (${existing.phone})` : ''}. Deseja criar um novo cadastro mesmo assim?`;
+      })()
+    : '';
 
   return (
     <View style={s.wrapper}>
@@ -382,6 +427,19 @@ export default function ClientesScreen() {
         onCancel={() => setShowBulkConfirm(false)}
       />
 
+      {/* ConfirmDialog de duplicata — aparece por cima do form (formOpen mantido) */}
+      <ConfirmDialog
+        visible={!!dupPending}
+        title="Cliente ja cadastrado"
+        message={dupMessage}
+        confirmLabel="Criar mesmo assim"
+        onConfirm={() => {
+          if (dupPending) { addCustomer(dupPending.newCustomer); closeFormModal(); }
+          setDupPending(null);
+        }}
+        onCancel={() => setDupPending(null)}
+      />
+
       {/* Bottom sheet de formulario (add e editar) — mesmo padrao de formOverlay/formSheet do estoque.tsx */}
       {formOpen && (
         <Pressable style={s.formOverlay} onPress={closeFormModal}>
@@ -435,7 +493,7 @@ const s = StyleSheet.create({
   searchInput:      { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 16 },
   listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
-  demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
+  demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   // MULTICNPJ Onda 2.3
   consolidatedBanner: {
     flexDirection: "row",
