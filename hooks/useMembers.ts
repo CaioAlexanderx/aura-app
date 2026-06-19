@@ -117,6 +117,17 @@ export function useMembers() {
     onError: (err: any) => toast.error(err?.message || "Erro ao suspender"),
   });
 
+  // TEAM-RM 19/06: remocao REAL do membro (hard delete), alem do Suspender.
+  const deleteMutation = useMutation({
+    mutationFn: (memberIds: string[]) =>
+      Promise.all(memberIds.map(mid => companiesApi.removeMember(cid!, mid, true))),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["members-unified", cid] });
+      toast.success("Membro removido");
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao remover"),
+  });
+
   const resendEmailMutation = useMutation({
     mutationFn: (mid: string) =>
       request<{ message: string; invite_email: string; invite_url: string }>(
@@ -196,6 +207,8 @@ export function useMembers() {
     isUpdating:    updateMutation.isPending,
     removeMember:  removeMutation.mutateAsync,
     isRemoving:    removeMutation.isPending,
+    deleteMember:  deleteMutation.mutateAsync,
+    isDeleting:    deleteMutation.isPending,
     resendInviteEmail:  resendEmailMutation.mutateAsync,
     isResending:        resendEmailMutation.isPending,
     updateInviteEmail:  (mid: string, email: string) => updateInviteEmailMutation.mutateAsync({ mid, email }),
