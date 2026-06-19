@@ -6,7 +6,7 @@ import { calcPayroll, FGTS_RATE } from "@/components/screens/folha/types";
 
 export function usePayroll() {
   const { isDemo } = useAuthStore();
-  const { employees: rawEmployees, loading, error, refresh, createEmployee, updateEmployee, deleteEmployee, planLimit, plan } = useEmployees();
+  const { employees: rawEmployees, loading, error, refresh, createEmployee, updateEmployee, deleteEmployee, suspendEmployee, reactivateEmployee, planLimit, plan } = useEmployees();
 
   const result = useMemo(() => {
     const employees: Employee[] = rawEmployees.length > 0 ? rawEmployees : [];
@@ -25,6 +25,7 @@ export function usePayroll() {
     ...result,
     isLoading: loading,
     error, refresh, createEmployee, updateEmployee, deleteEmployee,
+    suspendEmployee, reactivateEmployee,
     planLimit, plan,
   };
 }
