@@ -11,6 +11,8 @@ import {
   InviteMemberResult,
   KarateFlags,
   FederationIdentity,
+  FederationPayments,
+  PixKeyType,
   KarateRole,
 } from "@/services/karateApi";
 
@@ -65,4 +67,16 @@ export const karateSettingsApi = {
     body: Partial<FederationIdentity>
   ): Promise<{ updated: boolean }> =>
     karateApi.updateFederationIdentity(federationId, body),
+
+  // Recebimento — chave PIX da federação
+  getPayments: (
+    federationId: string
+  ): Promise<FederationPayments> =>
+    karateApi.getFederationPayments(federationId),
+
+  updatePayments: (
+    federationId: string,
+    body: { pix_key: string; pix_key_type?: PixKeyType | null; pix_holder_name: string; pix_holder_city?: string | null }
+  ): Promise<{ updated: boolean; configured: boolean }> =>
+    karateApi.updateFederationPayments(federationId, body),
 };

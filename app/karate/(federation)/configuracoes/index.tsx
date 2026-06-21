@@ -48,6 +48,8 @@ import {
   FederationMember,
   KarateFlags,
   FederationIdentity,
+  FederationPayments,
+  PixKeyType,
 } from "@/services/karateApi";
 
 // ── Constantes ──────────────────────────────────────────────────
@@ -338,6 +340,8 @@ function AnuidadeTab({ federationId }: { federationId: string }) {
       </Card>
       <SaveToast visible={toast} />
 
+      <PixSection federationId={federationId} />
+
       {/* Modal Histórico */}
       <Modal visible={historyOpen} transparent animationType="fade" onRequestClose={() => setHistoryOpen(false)}>
         <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setHistoryOpen(false)}>
@@ -382,6 +386,168 @@ function AnuidadeTab({ federationId }: { federationId: string }) {
     </ScrollView>
   );
 }
+
+// ── Chave PIX de recebimento (usada nas anuidades/filiação) ────
+
+const PIX_TYPES: { key: PixKeyType; label: string }[] = [
+  { key: "CPF", label: "CPF" },
+  { key: "CNPJ", label: "CNPJ" },
+  { key: "EMAIL", label: "E-mail" },
+  { key: "PHONE", label: "Telefone" },
+  { key: "RANDOM", label: "Aleatória" },
+];
+
+function PixSection({ federationId }: { federationId: string }) {
+  const [pix, setPix] = useState<FederationPayments | null>(null);
+  const [keyType, setKeyType] = useState<PixKeyType | null>(null);
+  const [pixKey, setPixKey] = useState("");
+  const [holder, setHolder] = useState("");
+  const [city, setCity] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    karateSettingsApi.getPayments(federationId)
+      .then((p) => {
+        if (!alive) return;
+        setPix(p);
+        setPixKey(p.pix_key || "");
+        setKeyType(p.pix_key_type ?? null);
+        setHolder(p.pix_holder_name || "");
+        setCity(p.pix_holder_city || "");
+      })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [federationId]);
+
+  const save = async () => {
+    setErr(null);
+    if (!pixKey.trim()) { setErr("Informe a chave PIX."); return; }
+    if (!holder.trim()) { setErr("Informe o nome do recebedor."); return; }
+    setSaving(true);
+    try {
+      const r = await karateSettingsApi.updatePayments(federationId, {
+        pix_key: pixKey.trim(),
+        pix_key_type: keyType,
+        pix_holder_name: holder.trim(),
+        pix_holder_city: city.trim() || null,
+      });
+      setPix((prev) => ({
+        pix_key: pixKey.trim(),
+        pix_key_type: keyType,
+        pix_holder_name: holder.trim(),
+        pix_holder_city: city.trim() || null,
+        configured: r.configured,
+        ...(prev ? {} : {}),
+      }));
+      setToast(true);
+      setTimeout(() => setToast(false), 3000);
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao salvar a chave PIX.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={{ marginTop: 28 }}>
+      <SectionHeader
+        title="Chave PIX de recebimento"
+        sub="Para onde caem as anuidades de dojô e a 1ª anuidade de filiação"
+        right={
+          <View style={[st.badge, pix?.configured ? st.badgeOk : st.badgeWarn]}>
+            <View style={st.badgeDot} />
+            <Text style={st.badgeText}>{pix?.configured ? "Configurada" : "Pendente"}</Text>
+          </View>
+        }
+      />
+      <Card style={{ gap: 14 }}>
+        {loading ? (
+          <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 16 }} />
+        ) : (
+          <>
+            <View>
+              <Text style={pixSt.label}>Tipo da chave</Text>
+              <View style={pixSt.chipRow}>
+                {PIX_TYPES.map((t) => {
+                  const active = keyType === t.key;
+                  return (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[st.monthChip, active && st.monthChipActive]}
+                      onPress={() => setKeyType(active ? null : t.key)}
+                      accessibilityLabel={`Tipo ${t.label}`}
+                    >
+                      <Text style={[st.monthChipText, active && st.monthChipTextActive]}>{t.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View>
+              <Text style={pixSt.label}>Chave PIX</Text>
+              <TextInput
+                style={pixSt.input}
+                value={pixKey}
+                onChangeText={setPixKey}
+                placeholder={keyType === "EMAIL" ? "tesouraria@federacao.com" : keyType === "PHONE" ? "+5511999990000" : "Chave de recebimento"}
+                placeholderTextColor={KarateColors.ink4}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={pixSt.row2}>
+              <View style={{ flex: 2 }}>
+                <Text style={pixSt.label}>Nome do recebedor</Text>
+                <TextInput
+                  style={pixSt.input}
+                  value={holder}
+                  onChangeText={setHolder}
+                  placeholder="Federação Paulista de Karatê-Dô"
+                  placeholderTextColor={KarateColors.ink4}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={pixSt.label}>Cidade</Text>
+                <TextInput
+                  style={pixSt.input}
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="São Paulo"
+                  placeholderTextColor={KarateColors.ink4}
+                />
+              </View>
+            </View>
+
+            {err ? <Text style={pixSt.err}>{err}</Text> : null}
+
+            <View style={pixSt.actions}>
+              <TouchableOpacity style={[st.btn, st.btnPrimary]} onPress={save} disabled={saving}>
+                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.btnPrimaryText}>Salvar chave PIX</Text>}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </Card>
+      <SaveToast visible={toast} />
+    </View>
+  );
+}
+
+const pixSt = StyleSheet.create({
+  label: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2, marginBottom: 6 } as TextStyle,
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  input: { borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, paddingVertical: 11, paddingHorizontal: 13, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.glass, fontFamily: KarateFonts.mono } as TextStyle,
+  row2: { flexDirection: "row", gap: 12 } as ViewStyle,
+  actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: 2 } as ViewStyle,
+  err: { fontSize: 13, color: KarateColors.danger } as TextStyle,
+});
 
 // ── Seção 2: Régua de cobrança ────────────────────────────────
 

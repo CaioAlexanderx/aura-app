@@ -607,6 +607,16 @@ export interface FederationIdentity {
   state: string | null;
 }
 
+export type PixKeyType = "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM";
+
+export interface FederationPayments {
+  pix_key: string | null;
+  pix_key_type: PixKeyType | null;
+  pix_holder_name: string | null;
+  pix_holder_city: string | null;
+  configured: boolean;
+}
+
 export interface ReminderConfig {
   enabled: boolean;
   channel: "email" | "whatsapp";
@@ -1126,6 +1136,16 @@ export const karateApi = {
   ): Promise<{ updated: boolean }> =>
     request(`/federation/${federationId}/settings/identity`, { method: "PUT", body }),
 
+  // Recebimento — chave PIX da federação (anuidades de dojô / filiação)
+  getFederationPayments: (federationId: string): Promise<FederationPayments> =>
+    request(`/federation/${federationId}/settings/payments`),
+
+  updateFederationPayments: (
+    federationId: string,
+    body: { pix_key: string; pix_key_type?: PixKeyType | null; pix_holder_name: string; pix_holder_city?: string | null }
+  ): Promise<{ updated: boolean; configured: boolean }> =>
+    request(`/federation/${federationId}/settings/payments`, { method: "PUT", body }),
+
   // ─────────────────────────────────────────────────────────────────
   // Track J — Pedidos de certificado físico
   // ─────────────────────────────────────────────────────────────────
@@ -1248,4 +1268,17 @@ export const karateSettingsApi = {
     body: Partial<FederationIdentity>
   ): Promise<{ updated: boolean }> =>
     karateApi.updateFederationIdentity(federationId, body),
+
+  /** Lê a chave PIX de recebimento da federação. */
+  getPayments: (
+    federationId: string
+  ): Promise<FederationPayments> =>
+    karateApi.getFederationPayments(federationId),
+
+  /** Define/atualiza a chave PIX de recebimento. */
+  updatePayments: (
+    federationId: string,
+    body: { pix_key: string; pix_key_type?: PixKeyType | null; pix_holder_name: string; pix_holder_city?: string | null }
+  ): Promise<{ updated: boolean; configured: boolean }> =>
+    karateApi.updateFederationPayments(federationId, body),
 };
