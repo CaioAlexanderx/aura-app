@@ -1,273 +1,310 @@
 // ============================================================
-// Importação CSV — Aura Karatê
+// Importação FPKT — Aura Karatê (federação) · Shoji
 //
-// Stepper 4 passos: Upload → Mapeamento → Preview → Confirmar
-// Wired ao POST /federation/{id}/practitioners/import
-// com mode=preview (passo 3) e mode=commit (passo 4).
-// Upload de arquivo: usa platform-aware picker (web input,
-// mobile react-native-document-picker — TODO: instalar dep).
+// Fluxo da planilha consolidada FPKT (abas Academias + Alunos):
+//   1 Upload  — escolhe o .xlsx e lê as abas (SheetJS, já no app)
+//   2 Prévia  — quantos dojôs/alunos, quantos serão pulados (sem Número FPKT)
+//   3 Importar— sobe em lotes pro POST .../practitioners/import/batch-fpkt
+//   4 Resumo  — criados/atualizados/pulados
+//
+// Filosofia: a base legada tem buracos legítimos. Dado AUSENTE é neutro
+// (não é erro/pendência); só sinalizamos linhas sem o Número FPKT (a chave),
+// que não dá pra importar. Upsert "completar o que falta" no backend.
+// Faixa NÃO entra no v1 (a aba Alunos não tem data de graduação).
 // ============================================================
 import React, { useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform, Alert, ActivityIndicator,
-  ViewStyle, TextStyle,
+  View, Text, ScrollView, TouchableOpacity, Platform, Alert,
+  ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import * as XLSX from "xlsx";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
-import { KarateButton } from "@/components/karate/KarateButton";
-import { karateApi, ImportResult } from "@/services/karateApi";
+import { ShojiBackground, PageHead, Card, ShojiButton, Body, Mono } from "@/components/karate/shoji";
+import { request } from "@/services/api";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-const STEPS = ["Upload", "Mapeamento", "Preview", "Confirmar"];
+const STEPS = ["Upload", "Prévia", "Importar", "Resumo"];
+const STUDENT_BATCH = 500;
 
-// Colunas aceitas pelo backend
-const KNOWN_FIELDS = [
-  "full_name", "cpf", "rg", "birth_date",
-  "email", "phone", "dojo_id", "belt_level",
-];
+// ── Normalização (a base legada tem buracos; ausente vira null) ──
+const clean = (v: any): string | null => {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const up = s.toUpperCase();
+  if (up === "XX" || up === "NONE" || s === "-") return null;
+  return s;
+};
+const digits = (v: any): string | null => {
+  const s = clean(v);
+  if (!s) return null;
+  const d = s.replace(/\D/g, "");
+  return d || null;
+};
+const toISO = (v: any): string | null => {
+  const s = clean(v);
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return iso ? iso[0] : null;
+};
+const composeAddr = (...parts: any[]): string | null => {
+  const xs = parts.map(clean).filter(Boolean);
+  return xs.length ? xs.join(", ") : null;
+};
+const newBatchId = () => `fpkt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-type ColumnMap = Record<string, string>;
+type Dojo = { cod: string | null; name: string | null; status: string; address: string | null; phone: string | null };
+type Student = {
+  registration_number: string | null; name: string | null; birth_date: string | null;
+  cpf: string | null; rg: string | null; street: string | null; number: string | null;
+  neighborhood: string | null; city: string | null; state: string | null;
+  zip_code: string | null; phone: string | null; academia_name: string | null;
+};
+type Parsed = { dojos: Dojo[]; students: Student[]; fileName: string };
+type Summary = {
+  dojos: { created: number; updated: number };
+  students: { created: number; updated: number; skipped: number };
+};
 
-function UploadStep({ onNext }: { onNext: (file: FormData, cols: string[]) => void }) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [cols, setCols] = useState<string[]>([]);
-
-  async function handlePick() {
-    if (Platform.OS === "web") {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".csv";
-      input.onchange = (e: any) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setSelected(file.name);
-        // Lê primeira linha pra extrair cabeçalhos
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const text = ev.target?.result as string;
-          const firstLine = text.split("\n")[0];
-          setCols(firstLine.split(",").map((c) => c.trim()));
-        };
-        reader.readAsText(file);
-        const fd = new FormData();
-        fd.append("file", file);
-        // store para uso no próximo passo
-        (window as any).__karate_import_fd = fd;
-      };
-      input.click();
-    } else {
-      // TODO: react-native-document-picker
-      Alert.alert("Mobile", "Picker de arquivo mobile a ser implementado com react-native-document-picker.");
-    }
-  }
-
-  return (
-    <View style={s.stepContent}>
-      <Text style={s.stepTitle}>Selecione o arquivo CSV</Text>
-      <Text style={s.stepDesc}>O arquivo deve ter cabeçalhos na primeira linha.</Text>
-      <TouchableOpacity style={s.dropZone} onPress={handlePick} accessibilityRole="button" accessibilityLabel="Selecionar arquivo CSV">
-        <Ionicons name="cloud-upload-outline" size={40} color={KarateColors.primary} />
-        <Text style={s.dropLabel}>{selected ? selected : "Clique para selecionar"}</Text>
-        {cols.length > 0 && <Text style={s.dropSub}>{cols.length} colunas detectadas</Text>}
-      </TouchableOpacity>
-      <KarateButton
-        label="Próximo"
-        onPress={() => {
-          if (!selected) { Alert.alert("Selecione um arquivo"); return; }
-          onNext((window as any).__karate_import_fd ?? new FormData(), cols);
-        }}
-        disabled={!selected}
-      />
-    </View>
-  );
+// Lê uma aba pulando a 1ª linha (banner); a 2ª linha são os cabeçalhos reais.
+function sheetRows(wb: XLSX.WorkBook, name: string): any[] {
+  const ws = wb.Sheets[name];
+  if (!ws) return [];
+  return XLSX.utils.sheet_to_json(ws, { range: 1, defval: null, raw: false });
 }
 
-function MapeamentoStep({ cols, onNext, onBack }: { cols: string[]; onNext: (map: ColumnMap) => void; onBack: () => void }) {
-  const [map, setMap] = useState<ColumnMap>({});
+function parseWorkbook(wb: XLSX.WorkBook, fileName: string): Parsed {
+  const aca = sheetRows(wb, "Academias");
+  const alu = sheetRows(wb, "Alunos");
 
-  return (
-    <ScrollView contentContainerStyle={s.stepContent}>
-      <Text style={s.stepTitle}>Mapeamento de colunas</Text>
-      <Text style={s.stepDesc}>Associe as colunas do seu CSV aos campos do sistema.</Text>
-      {cols.map((col) => (
-        <View key={col} style={s.mapRow}>
-          <Text style={s.mapColLabel}>{col}</Text>
-          <Ionicons name="arrow-forward" size={14} color={KarateColors.ink3} />
-          <View style={s.fieldPicker}>
-            {KNOWN_FIELDS.map((f) => (
-              <TouchableOpacity
-                key={f}
-                style={[s.fieldOption, map[col] === f && s.fieldOptionActive]}
-                onPress={() => setMap((prev) => ({ ...prev, [col]: f }))}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: map[col] === f }}
-              >
-                <Text style={[s.fieldOptionText, map[col] === f && s.fieldOptionTextActive]}>{f}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      ))}
-      <View style={s.row2}>
-        <KarateButton label="Voltar" variant="secondary" onPress={onBack} style={{ flex: 1 }} />
-        <KarateButton label="Preview" onPress={() => onNext(map)} style={{ flex: 1 }} />
-      </View>
-    </ScrollView>
-  );
-}
+  const dojos: Dojo[] = aca.map((r) => ({
+    cod: clean(r["Cód."]),
+    name: clean(r["Academia"]),
+    // /^ativ/i: só "Ativo"/"Ativa" — NÃO casa "Inativo" (que contém "ativ")
+    status: /^ativ/i.test(String(r["Status"] ?? "")) ? "active" : "inactive",
+    address: composeAddr(r["Endereço"], r["Bairro"], r["Cidade"], r["Estado"]),
+    phone: clean(r["Telefone"]),
+  })).filter((d) => d.name);
 
-function PreviewStep({ result, onConfirm, onBack }: { result: ImportResult | null; loading: boolean; onConfirm: () => void; onBack: () => void }) {
-  return (
-    <View style={s.stepContent}>
-      <Text style={s.stepTitle}>Preview de importação</Text>
-      {!result ? (
-        <ActivityIndicator size="large" color={KarateColors.primary} />
-      ) : (
-        <>
-          <View style={s.previewStats}>
-            <View style={s.stat}><Text style={s.statVal}>{result.total_rows}</Text><Text style={s.statLabel}>Total</Text></View>
-            <View style={s.stat}><Text style={[s.statVal, { color: KarateColors.ok }]}>{result.valid_rows}</Text><Text style={s.statLabel}>Válidas</Text></View>
-            <View style={s.stat}><Text style={[s.statVal, { color: KarateColors.danger }]}>{result.errors.length}</Text><Text style={s.statLabel}>Erros</Text></View>
-          </View>
-          {result.errors.map((e, i) => (
-            <View key={i} style={s.errorRow}>
-              <Ionicons name="warning" size={14} color={KarateColors.warn} />
-              <Text style={s.errorText}>Linha {e.row} · {e.field}: {e.message}</Text>
-            </View>
-          ))}
-        </>
-      )}
-      <View style={s.row2}>
-        <KarateButton label="Voltar" variant="secondary" onPress={onBack} style={{ flex: 1 }} />
-        <KarateButton label="Confirmar" onPress={onConfirm} style={{ flex: 1 }} disabled={!result || result.valid_rows === 0} />
-      </View>
-    </View>
-  );
-}
+  const students: Student[] = alu.map((r) => ({
+    registration_number: clean(r["Número FPKT"]),
+    name: clean(r["Nome"]),
+    birth_date: toISO(r["Nascimento"]),
+    cpf: digits(r["CPF"]),
+    rg: clean(r["RG"]),
+    street: clean(r["Logradouro"]),
+    number: clean(r["Número"]),
+    neighborhood: clean(r["Bairro"]),
+    city: clean(r["Cidade"]),
+    state: clean(r["Estado"]),
+    zip_code: digits(r["CEP"]),
+    phone: clean(r["Telefone"]),
+    academia_name: clean(r["Academia"]),
+  })).filter((s) => s.name || s.registration_number);
 
-function SuccessStep({ result }: { result: ImportResult | null }) {
-  return (
-    <View style={s.stepContent}>
-      <Ionicons name="checkmark-circle" size={64} color={KarateColors.ok} />
-      <Text style={s.stepTitle}>Importação concluída!</Text>
-      {result && (
-        <Text style={s.stepDesc}>{result.committed} praticante(s) importado(s) com sucesso.</Text>
-      )}
-    </View>
-  );
+  return { dojos, students, fileName };
 }
 
 export default function ImportacaoScreen() {
   const { federationId } = useKarateFederation();
   const [step, setStep] = useState(0);
-  const [file, setFile] = useState<FormData | null>(null);
-  const [cols, setCols] = useState<string[]>([]);
-  const [colMap, setColMap] = useState<ColumnMap>({});
-  const [previewResult, setPreviewResult] = useState<ImportResult | null>(null);
-  const [commitResult, setCommitResult] = useState<ImportResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [parsed, setParsed] = useState<Parsed | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleMapeamentoDone(map: ColumnMap) {
-    setColMap(map);
-    setStep(2);
-    setLoading(true);
-    try {
-      if (!file) return;
-      const fd = new FormData();
-      // re-append fields from original fd
-      fd.append("column_map", JSON.stringify(map));
-      const result = await karateApi.importCSV(federationId, fd, "preview");
-      setPreviewResult(result);
-    } catch (e: any) {
-      Alert.alert("Não foi possível validar a planilha", e?.message ?? "Tente novamente.");
-      setStep(1);
-    } finally {
-      setLoading(false);
+  async function handlePick() {
+    setError(null);
+    if (Platform.OS !== "web") {
+      Alert.alert("Use no computador", "A importação de planilha funciona no Aura pelo navegador (desktop). Abra esta tela no computador para enviar o arquivo.");
+      return;
     }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setParsing(true);
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const p = parseWorkbook(wb, file.name);
+        if (!p.dojos.length && !p.students.length) {
+          setError("Não encontrei as abas 'Academias' e 'Alunos' na planilha.");
+          setParsing(false);
+          return;
+        }
+        setParsed(p);
+        setStep(1);
+      } catch (err: any) {
+        setError("Não consegui ler o arquivo. Confirme que é a planilha .xlsx da FPKT.");
+      } finally {
+        setParsing(false);
+      }
+    };
+    input.click();
   }
 
-  async function handleConfirm() {
-    setLoading(true);
+  const skipCount = parsed ? parsed.students.filter((s) => !s.registration_number).length : 0;
+  const importableStudents = parsed ? parsed.students.filter((s) => s.registration_number) : [];
+
+  async function runImport() {
+    if (!parsed) return;
+    setStep(2);
+    setError(null);
+    const batchId = newBatchId();
+    const chunks: Student[][] = [];
+    for (let i = 0; i < importableStudents.length; i += STUDENT_BATCH) {
+      chunks.push(importableStudents.slice(i, i + STUDENT_BATCH));
+    }
+    if (chunks.length === 0) chunks.push([]); // ao menos 1 req (sobe os dojôs)
+
+    const acc: Summary = { dojos: { created: 0, updated: 0 }, students: { created: 0, updated: 0, skipped: 0 } };
+    setProgress({ done: 0, total: chunks.length });
+
     try {
-      if (!file) return;
-      const fd = new FormData();
-      fd.append("column_map", JSON.stringify(colMap));
-      const result = await karateApi.importCSV(federationId, fd, "commit");
-      setCommitResult(result);
+      for (let i = 0; i < chunks.length; i++) {
+        const res: any = await request(`/federation/${federationId}/practitioners/import/batch-fpkt`, {
+          method: "POST",
+          body: {
+            import_batch_id: batchId,
+            dojos: i === 0 ? parsed.dojos : [], // dojôs só no 1º lote
+            students: chunks[i],
+          },
+        });
+        acc.dojos.created += res?.dojos?.created ?? 0;
+        acc.dojos.updated += res?.dojos?.updated ?? 0;
+        acc.students.created += res?.students?.created ?? 0;
+        acc.students.updated += res?.students?.updated ?? 0;
+        acc.students.skipped += res?.students?.skipped ?? 0;
+        setProgress({ done: i + 1, total: chunks.length });
+      }
+      setSummary(acc);
       setStep(3);
-    } catch (e: any) {
-      Alert.alert("Erro", e?.message ?? "Falha na importação");
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      setError(err?.message ?? "Falha ao importar. Os lotes já enviados foram salvos; reenviar é seguro (idempotente).");
     }
   }
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.stepperWrap}>
-        <Stepper steps={STEPS} currentStep={step} />
-      </View>
+    <ShojiBackground>
+      <ScrollView contentContainerStyle={styles.content}>
+        <PageHead
+          eyebrow="Planilha consolidada FPKT"
+          title="Importar dados"
+          sub="Suba a planilha (.xlsx) com as abas Academias e Alunos. Os dados que faltam ficam como estão — você completa quando for prioridade."
+        />
+        <View style={{ marginVertical: 18 }}>
+          <Stepper steps={STEPS} currentStep={step} />
+        </View>
 
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        {error ? (
+          <Card style={styles.errCard}>
+            <Ionicons name="warning" size={16} color={P.red} />
+            <Body style={{ flex: 1, color: P.red }}>{error}</Body>
+          </Card>
+        ) : null}
+
+        {/* 1 — UPLOAD */}
         {step === 0 && (
-          <UploadStep
-            onNext={(fd, columns) => {
-              setFile(fd); setCols(columns); setStep(1);
-            }}
-          />
+          <Card>
+            <TouchableOpacity style={styles.drop} onPress={handlePick} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Selecionar planilha xlsx">
+              {parsing ? <ActivityIndicator size="large" color={P.red} /> : <Ionicons name="cloud-upload-outline" size={40} color={C.ink2} />}
+              <Text style={styles.dropLabel}>{parsing ? "Lendo a planilha…" : "Clique para escolher o arquivo .xlsx"}</Text>
+              <Body muted style={{ fontSize: 12 }}>Abas esperadas: Academias e Alunos</Body>
+            </TouchableOpacity>
+          </Card>
         )}
-        {step === 1 && (
-          <MapeamentoStep
-            cols={cols}
-            onNext={handleMapeamentoDone}
-            onBack={() => setStep(0)}
-          />
+
+        {/* 2 — PRÉVIA */}
+        {step === 1 && parsed && (
+          <View style={{ gap: 14 }}>
+            <Card>
+              <Text style={styles.fileRow}><Ionicons name="document-text-outline" size={14} color={C.ink3} /> <Mono style={{ fontSize: 12 }}>{parsed.fileName}</Mono></Text>
+              <View style={styles.statRow}>
+                <Stat n={parsed.dojos.length} label="academias" />
+                <Stat n={importableStudents.length} label="alunos" />
+                {skipCount > 0 ? <Stat n={skipCount} label="sem Nº FPKT" tone="muted" /> : null}
+              </View>
+            </Card>
+            <Card style={{ gap: 6 }}>
+              <Body style={{ fontWeight: "700" as any }}>Como vai funcionar</Body>
+              <Body muted style={{ fontSize: 12.5 }}>• Academias entram primeiro; alunos são vinculados ao dojô pelo nome.</Body>
+              <Body muted style={{ fontSize: 12.5 }}>• Registros que já existem são <Text style={{ fontWeight: "700" as any }}>complementados</Text> — nunca sobrescritos.</Body>
+              <Body muted style={{ fontSize: 12.5 }}>• Reenviar a mesma planilha é seguro (não duplica).</Body>
+              {skipCount > 0 ? <Body muted style={{ fontSize: 12.5 }}>• {skipCount} aluno(s) sem Número FPKT ficam de fora (sem chave para vincular).</Body> : null}
+              <Body muted style={{ fontSize: 12.5 }}>• A faixa atual não entra nesta importação (fica para um passo dedicado).</Body>
+            </Card>
+            <View style={styles.row2}>
+              <ShojiButton label="Trocar arquivo" variant="ghost" onPress={() => { setParsed(null); setStep(0); }} style={{ flex: 1 }} />
+              <ShojiButton label={`Importar ${importableStudents.length} aluno(s)`} variant="sumi" onPress={runImport} style={{ flex: 1 }} />
+            </View>
+          </View>
         )}
+
+        {/* 3 — IMPORTANDO */}
         {step === 2 && (
-          <PreviewStep
-            result={previewResult}
-            loading={loading}
-            onConfirm={handleConfirm}
-            onBack={() => setStep(1)}
-          />
+          <Card style={{ alignItems: "center", gap: 12, paddingVertical: 28 }}>
+            <ActivityIndicator size="large" color={P.red} />
+            <Body style={{ fontWeight: "700" as any }}>Importando…</Body>
+            <Body muted>Lote {progress.done} de {progress.total}</Body>
+          </Card>
         )}
-        {step === 3 && <SuccessStep result={commitResult} />}
+
+        {/* 4 — RESUMO */}
+        {step === 3 && summary && (
+          <View style={{ gap: 14 }}>
+            <Card style={{ alignItems: "center", gap: 8, paddingVertical: 24 }}>
+              <Ionicons name="checkmark-circle" size={56} color={C.ok} />
+              <Text style={styles.doneTitle}>Importação concluída</Text>
+            </Card>
+            <Card style={{ gap: 10 }}>
+              <SumRow label="Academias" created={summary.dojos.created} updated={summary.dojos.updated} />
+              <SumRow label="Alunos" created={summary.students.created} updated={summary.students.updated} skipped={summary.students.skipped} />
+            </Card>
+            <ShojiButton label="Importar outra planilha" variant="ghost" onPress={() => { setParsed(null); setSummary(null); setProgress({ done: 0, total: 0 }); setStep(0); }} />
+          </View>
+        )}
       </ScrollView>
+    </ShojiBackground>
+  );
+}
+
+function Stat({ n, label, tone }: { n: number; label: string; tone?: "muted" }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={[styles.statN, tone === "muted" && { color: C.ink3 }]}>{n}</Text>
+      <Body muted style={{ fontSize: 11 }}>{label}</Body>
+    </View>
+  );
+}
+function SumRow({ label, created, updated, skipped }: { label: string; created: number; updated: number; skipped?: number }) {
+  return (
+    <View style={styles.sumRow}>
+      <Body style={{ fontWeight: "700" as any, width: 96 }}>{label}</Body>
+      <Body muted style={{ flex: 1 }}>
+        <Text style={{ color: C.ok, fontWeight: "700" as any }}>{created}</Text> novos · <Text style={{ fontWeight: "700" as any }}>{updated}</Text> complementados{typeof skipped === "number" && skipped > 0 ? <> · {skipped} pulados</> : null}
+      </Body>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen:      { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  stepperWrap: { padding: 16, paddingBottom: 8, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-});
-
-const s = StyleSheet.create({
-  stepContent: { padding: 20, gap: 16, alignItems: "stretch" } as ViewStyle,
-  stepTitle:   { fontSize: 18, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  stepDesc:    { fontSize: 13, color: KarateColors.ink3, lineHeight: 20 } as TextStyle,
-  dropZone: {
-    borderWidth: 2, borderColor: KarateColors.primaryLine,
-    borderStyle: "dashed", borderRadius: KarateRadius.lg,
-    padding: 32, alignItems: "center", gap: 10,
-    backgroundColor: KarateColors.primarySoft,
-  } as ViewStyle,
-  dropLabel: { fontSize: 14, fontWeight: "600", color: KarateColors.primary } as TextStyle,
-  dropSub:   { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
-  mapRow:    { gap: 8 } as ViewStyle,
-  mapColLabel: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
-  fieldPicker: { flexDirection: "row", flexWrap: "wrap", gap: 6 } as ViewStyle,
-  fieldOption: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
-  fieldOptionActive: { borderColor: KarateColors.primary, backgroundColor: KarateColors.primarySoft } as ViewStyle,
-  fieldOptionText: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
-  fieldOptionTextActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
+  content: { padding: 40, paddingTop: 40, paddingBottom: 72, maxWidth: 820, width: "100%", alignSelf: "center" } as ViewStyle,
+  errCard: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14, borderColor: P.red } as ViewStyle,
+  drop: { borderWidth: 2, borderStyle: "dashed", borderColor: C.line, borderRadius: R.lg, paddingVertical: 40, alignItems: "center", gap: 10 } as ViewStyle,
+  dropLabel: { fontFamily: F.body, fontSize: 14, fontWeight: "700", color: C.ink } as TextStyle,
+  fileRow: { fontFamily: F.body, fontSize: 12, color: C.ink3, marginBottom: 12 } as TextStyle,
+  statRow: { flexDirection: "row", gap: 12 } as ViewStyle,
+  stat: { flex: 1, alignItems: "center", paddingVertical: 12, backgroundColor: P.glass, borderRadius: R.md, borderWidth: 1, borderColor: C.line } as ViewStyle,
+  statN: { fontFamily: F.heading, fontSize: 26, color: P.red, lineHeight: 30 } as TextStyle,
   row2: { flexDirection: "row", gap: 10 } as ViewStyle,
-  previewStats: { flexDirection: "row", gap: 0, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
-  stat: { flex: 1, padding: 16, alignItems: "center", backgroundColor: "#fff", gap: 4 } as ViewStyle,
-  statVal: { fontSize: 22, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  statLabel: { fontSize: 11, color: KarateColors.ink3, fontWeight: "600" } as TextStyle,
-  errorRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: KarateColors.warnSoft, padding: 10, borderRadius: KarateRadius.sm } as ViewStyle,
-  errorText: { fontSize: 12, color: KarateColors.warn, flex: 1 } as TextStyle,
+  doneTitle: { fontFamily: F.heading, fontSize: 20, color: C.ink } as TextStyle,
+  sumRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
 });
