@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Badge } from "@/components/karate/Badge";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
@@ -210,11 +210,11 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   headerCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 4 } as ViewStyle,
   headerTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } as ViewStyle,
-  title: { flex: 1, fontSize: 20, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  title: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statsRow: { flexDirection: "row", gap: 18, marginTop: 6 } as ViewStyle,
   stat: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
-  statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   sectionTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, marginTop: 4 } as TextStyle,
   catCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
   catHead: { flexDirection: "row", alignItems: "center", padding: 14, gap: 10 } as ViewStyle,
@@ -224,16 +224,16 @@ const styles = StyleSheet.create({
   emptyEntries: { fontSize: 12, color: KarateColors.ink3, padding: 14 } as TextStyle,
   entryRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   placeBadge: { width: 34, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.surface } as ViewStyle,
-  placeText: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2, fontFamily: "monospace" } as TextStyle,
+  placeText: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
   entryName: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   entryMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
-  entryPts: { fontSize: 13, fontWeight: "800", color: KarateColors.primary, fontFamily: "monospace" } as TextStyle,
+  entryPts: { fontSize: 13, fontWeight: "800", color: KarateColors.primary, fontFamily: KarateFonts.mono } as TextStyle,
   resultBtn: { padding: 6, borderRadius: 8, backgroundColor: KarateColors.primarySoft } as ViewStyle,
   overlay: { flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
   sheet: { width: "100%", maxWidth: 360, backgroundColor: KarateColors.bg, borderRadius: KarateRadius.lg, padding: 20, gap: 8 } as ViewStyle,
   sheetTitle: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   sheetSub: { fontSize: 13, color: KarateColors.ink3, marginBottom: 4 } as TextStyle,
   inputLabel: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2, marginTop: 4 } as TextStyle,
-  input: { borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: KarateColors.ink, backgroundColor: KarateColors.surface, fontFamily: "monospace" } as TextStyle,
+  input: { borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: KarateColors.ink, backgroundColor: KarateColors.surface, fontFamily: KarateFonts.mono } as TextStyle,
   sheetActions: { flexDirection: "row", gap: 8, marginTop: 12 } as ViewStyle,
 });

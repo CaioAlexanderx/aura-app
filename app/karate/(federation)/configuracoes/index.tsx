@@ -37,7 +37,7 @@ import {
   TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateApi,
@@ -48,6 +48,8 @@ import {
   FederationMember,
   KarateFlags,
   FederationIdentity,
+  FederationPayments,
+  PixKeyType,
 } from "@/services/karateApi";
 
 // ── Constantes ──────────────────────────────────────────────────
@@ -338,6 +340,8 @@ function AnuidadeTab({ federationId }: { federationId: string }) {
       </Card>
       <SaveToast visible={toast} />
 
+      <PixSection federationId={federationId} />
+
       {/* Modal Histórico */}
       <Modal visible={historyOpen} transparent animationType="fade" onRequestClose={() => setHistoryOpen(false)}>
         <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setHistoryOpen(false)}>
@@ -382,6 +386,168 @@ function AnuidadeTab({ federationId }: { federationId: string }) {
     </ScrollView>
   );
 }
+
+// ── Chave PIX de recebimento (usada nas anuidades/filiação) ────
+
+const PIX_TYPES: { key: PixKeyType; label: string }[] = [
+  { key: "CPF", label: "CPF" },
+  { key: "CNPJ", label: "CNPJ" },
+  { key: "EMAIL", label: "E-mail" },
+  { key: "PHONE", label: "Telefone" },
+  { key: "RANDOM", label: "Aleatória" },
+];
+
+function PixSection({ federationId }: { federationId: string }) {
+  const [pix, setPix] = useState<FederationPayments | null>(null);
+  const [keyType, setKeyType] = useState<PixKeyType | null>(null);
+  const [pixKey, setPixKey] = useState("");
+  const [holder, setHolder] = useState("");
+  const [city, setCity] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    karateSettingsApi.getPayments(federationId)
+      .then((p) => {
+        if (!alive) return;
+        setPix(p);
+        setPixKey(p.pix_key || "");
+        setKeyType(p.pix_key_type ?? null);
+        setHolder(p.pix_holder_name || "");
+        setCity(p.pix_holder_city || "");
+      })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [federationId]);
+
+  const save = async () => {
+    setErr(null);
+    if (!pixKey.trim()) { setErr("Informe a chave PIX."); return; }
+    if (!holder.trim()) { setErr("Informe o nome do recebedor."); return; }
+    setSaving(true);
+    try {
+      const r = await karateSettingsApi.updatePayments(federationId, {
+        pix_key: pixKey.trim(),
+        pix_key_type: keyType,
+        pix_holder_name: holder.trim(),
+        pix_holder_city: city.trim() || null,
+      });
+      setPix((prev) => ({
+        pix_key: pixKey.trim(),
+        pix_key_type: keyType,
+        pix_holder_name: holder.trim(),
+        pix_holder_city: city.trim() || null,
+        configured: r.configured,
+        ...(prev ? {} : {}),
+      }));
+      setToast(true);
+      setTimeout(() => setToast(false), 3000);
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao salvar a chave PIX.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={{ marginTop: 28 }}>
+      <SectionHeader
+        title="Chave PIX de recebimento"
+        sub="Para onde caem as anuidades de dojô e a 1ª anuidade de filiação"
+        right={
+          <View style={[st.badge, pix?.configured ? st.badgeOk : st.badgeWarn]}>
+            <View style={st.badgeDot} />
+            <Text style={st.badgeText}>{pix?.configured ? "Configurada" : "Pendente"}</Text>
+          </View>
+        }
+      />
+      <Card style={{ gap: 14 }}>
+        {loading ? (
+          <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 16 }} />
+        ) : (
+          <>
+            <View>
+              <Text style={pixSt.label}>Tipo da chave</Text>
+              <View style={pixSt.chipRow}>
+                {PIX_TYPES.map((t) => {
+                  const active = keyType === t.key;
+                  return (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[st.monthChip, active && st.monthChipActive]}
+                      onPress={() => setKeyType(active ? null : t.key)}
+                      accessibilityLabel={`Tipo ${t.label}`}
+                    >
+                      <Text style={[st.monthChipText, active && st.monthChipTextActive]}>{t.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View>
+              <Text style={pixSt.label}>Chave PIX</Text>
+              <TextInput
+                style={pixSt.input}
+                value={pixKey}
+                onChangeText={setPixKey}
+                placeholder={keyType === "EMAIL" ? "tesouraria@federacao.com" : keyType === "PHONE" ? "+5511999990000" : "Chave de recebimento"}
+                placeholderTextColor={KarateColors.ink4}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={pixSt.row2}>
+              <View style={{ flex: 2 }}>
+                <Text style={pixSt.label}>Nome do recebedor</Text>
+                <TextInput
+                  style={pixSt.input}
+                  value={holder}
+                  onChangeText={setHolder}
+                  placeholder="Federação Paulista de Karatê-Dô"
+                  placeholderTextColor={KarateColors.ink4}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={pixSt.label}>Cidade</Text>
+                <TextInput
+                  style={pixSt.input}
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="São Paulo"
+                  placeholderTextColor={KarateColors.ink4}
+                />
+              </View>
+            </View>
+
+            {err ? <Text style={pixSt.err}>{err}</Text> : null}
+
+            <View style={pixSt.actions}>
+              <TouchableOpacity style={[st.btn, st.btnPrimary]} onPress={save} disabled={saving}>
+                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.btnPrimaryText}>Salvar chave PIX</Text>}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </Card>
+      <SaveToast visible={toast} />
+    </View>
+  );
+}
+
+const pixSt = StyleSheet.create({
+  label: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2, marginBottom: 6 } as TextStyle,
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  input: { borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, paddingVertical: 11, paddingHorizontal: 13, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.glass, fontFamily: KarateFonts.mono } as TextStyle,
+  row2: { flexDirection: "row", gap: 12 } as ViewStyle,
+  actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: 2 } as ViewStyle,
+  err: { fontSize: 13, color: KarateColors.danger } as TextStyle,
+});
 
 // ── Seção 2: Régua de cobrança ────────────────────────────────
 
@@ -1052,7 +1218,7 @@ const st = StyleSheet.create({
   // Page head
   pageHead:  { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 } as ViewStyle,
   eyebrow:   { fontSize: 10, fontWeight: "700", color: KarateColors.ink4, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 4 } as TextStyle,
-  pageTitle: { fontSize: 28, fontWeight: "300", color: KarateColors.ink, letterSpacing: -0.5 } as TextStyle,
+  pageTitle: { fontFamily: KarateFonts.heading, fontSize: 32, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   pageSub:   { fontSize: 13, color: KarateColors.ink3, marginTop: 6, lineHeight: 18 } as TextStyle,
 
   // Tab bar
@@ -1069,18 +1235,18 @@ const st = StyleSheet.create({
 
   // Section header
   sectionHead:  { flexDirection: "row", alignItems: "flex-start", marginBottom: 12 } as ViewStyle,
-  sectionTitle: { fontSize: 20, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  sectionTitle: { fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   sectionSub:   { fontSize: 12, color: KarateColors.ink3, marginTop: 3 } as TextStyle,
 
   // Card
-  card:      { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16 } as ViewStyle,
-  cardFlush: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
+  card:      { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 16 } as ViewStyle,
+  cardFlush: { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
 
   // Fee cards
   feeGrid:      { gap: 12 } as ViewStyle,
   feeCard:      { gap: 4 } as ViewStyle,
   feeCardHead:  { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
-  feeCardTitle: { fontSize: 18, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  feeCardTitle: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   feeCardSub:   { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   feeRow:       { flexDirection: "row", alignItems: "baseline", gap: 6, marginVertical: 12 } as ViewStyle,
   feeCurrency:  { fontSize: 22, color: KarateColors.ink3, fontWeight: "300" } as TextStyle,
@@ -1127,7 +1293,7 @@ const st = StyleSheet.create({
 
   // Section divider
   sectionDivider:     { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingVertical: 16, marginVertical: 8, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-  sectionDividerTitle: { fontSize: 22, fontWeight: "300", color: KarateColors.ink } as TextStyle,
+  sectionDividerTitle: { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   sectionDividerLine:  { height: 2, width: 34, backgroundColor: KarateColors.primary, opacity: 0.7, marginTop: 10 } as ViewStyle,
   sectionDividerSub:   { fontSize: 11, color: KarateColors.ink4, marginTop: 6 } as TextStyle,
   rowGap:              { flexDirection: "row", gap: 8, alignItems: "center" } as ViewStyle,
@@ -1138,7 +1304,7 @@ const st = StyleSheet.create({
   tableRow:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   tableCell:      { fontSize: 13, color: KarateColors.ink2 } as TextStyle,
   tableCellBold:  { fontWeight: "600", color: KarateColors.ink } as TextStyle,
-  tableCellMono:  { fontFamily: "monospace" } as TextStyle,
+  tableCellMono:  { fontFamily: KarateFonts.mono } as TextStyle,
   personCell:     { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   personName:     { fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   personEmail:    { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
@@ -1165,13 +1331,13 @@ const st = StyleSheet.create({
   drawerPanel: { position: "absolute", top: 0, right: 0, bottom: 0, width: 420, maxWidth: "94%", backgroundColor: KarateColors.bg2, borderLeftWidth: 1, borderLeftColor: KarateColors.border, padding: 28 } as ViewStyle,
   drawerHead:  { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 } as ViewStyle,
   drawerEyebrow: { fontSize: 10, fontWeight: "600", color: KarateColors.ink3, letterSpacing: 1.4, textTransform: "uppercase" } as TextStyle,
-  drawerTitle:   { fontSize: 22, fontWeight: "300", color: KarateColors.ink, marginTop: 6 } as TextStyle,
+  drawerTitle:   { fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink, marginTop: 6 } as TextStyle,
   historyRow:    { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   historyRowHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } as ViewStyle,
-  historyFrom:   { fontSize: 12, color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  historyFrom:   { fontSize: 12, color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   historyVals:   { flexDirection: "row", gap: 20 } as ViewStyle,
   historyValLabel: { fontSize: 9, fontWeight: "700", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
-  historyValAmt:   { fontSize: 13, color: KarateColors.ink, fontFamily: "monospace", marginTop: 4 } as TextStyle,
+  historyValAmt:   { fontSize: 13, color: KarateColors.ink, fontFamily: KarateFonts.mono, marginTop: 4 } as TextStyle,
 
   // Invite modal
   roleOpt:        { paddingVertical: 10, paddingHorizontal: 14, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, marginTop: 6 } as ViewStyle,
@@ -1202,7 +1368,7 @@ const st = StyleSheet.create({
   logoSub:      { fontSize: 11, color: KarateColors.ink3, marginTop: 3 } as TextStyle,
   slugRow:      { flexDirection: "row", borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, overflow: "hidden", marginTop: 4 } as ViewStyle,
   slugPrefix:   { backgroundColor: KarateColors.bg2, borderRightWidth: 1, borderRightColor: KarateColors.border, paddingHorizontal: 10, paddingVertical: 9, justifyContent: "center" } as ViewStyle,
-  slugPrefixText: { fontSize: 12, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  slugPrefixText: { fontSize: 12, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
 
   // Regime
   regimeRow:          { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 } as ViewStyle,

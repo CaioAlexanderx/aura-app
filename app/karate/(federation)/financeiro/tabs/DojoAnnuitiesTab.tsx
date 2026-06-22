@@ -25,7 +25,7 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -304,7 +304,7 @@ const st = StyleSheet.create({
   content:      { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
   sectionHeader:{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, marginBottom: 6 } as ViewStyle,
   sectionTitle: { fontSize: 11, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase" } as TextStyle,
-  card:         { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 10 } as ViewStyle,
+  card:         { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 10 } as ViewStyle,
 
   editBtn:      { flexDirection: "row", alignItems: "center", gap: 4, padding: 4 } as ViewStyle,
   editBtnLabel: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
@@ -319,11 +319,11 @@ const st = StyleSheet.create({
   filterChipLabel:   { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   filterChipLabelActive: { color: KarateColors.primary, fontWeight: "800" } as TextStyle,
 
-  annuityCard:  { flexDirection: "row", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
+  annuityCard:  { flexDirection: "row", backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
   annuityName:  { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   annuityMeta:  { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   annuityOverdue: { fontSize: 11, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
-  annuityAmount:{ fontSize: 16, fontWeight: "900", color: KarateColors.ink } as TextStyle,
+  annuityAmount:{ fontFamily: KarateFonts.mono, fontSize: 16, fontWeight: "700", color: KarateColors.ink } as TextStyle,
 
   pixBtn:       { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:  { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,

@@ -21,7 +21,7 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -219,7 +219,7 @@ const st = StyleSheet.create({
   summaryValue:  { fontSize: 20, fontWeight: "900", color: KarateColors.danger } as TextStyle,
   summaryLabel:  { fontSize: 11, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
 
-  card:          { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 } as ViewStyle,
+  card:          { backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 } as ViewStyle,
   cardHeader:    { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   typeChip:      { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 2, paddingHorizontal: 6, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.bg2 } as ViewStyle,
   typeLabel:     { fontSize: 10, fontWeight: "700", color: KarateColors.ink3 } as TextStyle,
@@ -227,7 +227,7 @@ const st = StyleSheet.create({
   statusText:    { fontSize: 10, fontWeight: "700" } as TextStyle,
   name:          { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   metaRow:       { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" } as ViewStyle,
-  amount:        { fontSize: 17, fontWeight: "900", color: KarateColors.danger } as TextStyle,
+  amount:        { fontFamily: KarateFonts.mono, fontSize: 17, fontWeight: "700", color: KarateColors.danger } as TextStyle,
   overdueDays:   { fontSize: 12, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
   lastReminder:  { fontSize: 11, color: KarateColors.ink4 } as TextStyle,
   actions:       { flexDirection: "row", gap: 8, marginTop: 4 } as ViewStyle,

@@ -50,7 +50,7 @@ function SenseiShell() {
     <SafeAreaView style={styles.root}>
       {/* Topbar light */}
       <View style={styles.topbar}>
-        <View style={styles.logoMark}><Text style={styles.kanji}>空</Text></View>
+        <FpktLogo size={36} />
         <View style={{ flex: 1 }}>
           <Text style={styles.dojo} numberOfLines={1}>{dojoName}</Text>
           {dojoId && (

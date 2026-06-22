@@ -19,7 +19,7 @@ import {
   TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -196,10 +196,10 @@ const st = StyleSheet.create({
   filterChipActive:  { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primaryLine } as ViewStyle,
   filterLabel:       { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   filterLabelActive: { color: KarateColors.primary, fontWeight: "800" } as TextStyle,
-  card:              { flexDirection: "row", backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
+  card:              { flexDirection: "row", backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
   name:              { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   meta:              { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
-  amount:            { fontSize: 15, fontWeight: "900", color: KarateColors.ink } as TextStyle,
+  amount:            { fontFamily: KarateFonts.mono, fontSize: 15, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   badge:             { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: KarateRadius.sm } as ViewStyle,
   badgeText:         { fontSize: 10, fontWeight: "700" } as TextStyle,
   pixBtn:            { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,

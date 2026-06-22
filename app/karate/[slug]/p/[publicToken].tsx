@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karatePortalApi, PublicProfile } from "@/services/karatePortalApi";
 
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   wrap: { alignItems: "center", padding: 24, paddingTop: 40, paddingBottom: 56 } as ViewStyle,
   card: {
-    width: "100%", maxWidth: 400, backgroundColor: "#fff", borderWidth: 1, borderColor: KarateColors.border,
+    width: "100%", maxWidth: 400, backgroundColor: KarateColors.glass, borderWidth: 1, borderColor: KarateColors.border,
     borderRadius: KarateRadius.lg, overflow: "hidden",
     ...Platform.select({
       web: { boxShadow: "0 16px 40px rgba(28,23,20,0.14)" } as any,
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   ph: { backgroundColor: "#221d17", paddingVertical: 28, paddingHorizontal: 26, alignItems: "center" } as ViewStyle,
   av: { width: 88, height: 88, borderRadius: 44, backgroundColor: "#a85c4f", alignItems: "center", justifyContent: "center", marginBottom: 14 } as ViewStyle,
   avTxt: { fontSize: 38, fontWeight: "800", color: "#fbeee4" } as TextStyle,
-  name: { fontSize: 24, fontWeight: "800", color: "#f3ece0" } as TextStyle,
+  name: { fontFamily: KarateFonts.heading, fontSize: 26, fontWeight: "400", color: "#f3ece0" } as TextStyle,
   bl: { fontSize: 13, color: "rgba(243,236,224,0.7)", marginTop: 5 } as TextStyle,
 
   beltWrap: { paddingHorizontal: 26, paddingTop: 18 } as ViewStyle,
@@ -129,28 +129,28 @@ const styles = StyleSheet.create({
 
   grid: { flexDirection: "row", flexWrap: "wrap", padding: 18 } as ViewStyle,
   gCell: { width: "50%", paddingVertical: 8 } as ViewStyle,
-  k: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  k: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   v: { fontSize: 14, fontWeight: "600", color: KarateColors.ink, marginTop: 3 } as TextStyle,
-  mono: { fontFamily: "monospace", fontWeight: "400" } as TextStyle,
+  mono: { fontFamily: KarateFonts.mono, fontWeight: "400" } as TextStyle,
 
   path: { paddingHorizontal: 18, paddingBottom: 14 } as ViewStyle,
-  pathLbl: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: "monospace", marginBottom: 8 } as TextStyle,
+  pathLbl: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono, marginBottom: 8 } as TextStyle,
   pathRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 } as ViewStyle,
   pathItem: { alignItems: "center", gap: 4 } as ViewStyle,
   pathDot: { width: 22, height: 14, borderRadius: 3, borderWidth: 1, borderColor: "rgba(0,0,0,0.12)" } as ViewStyle,
-  pathYear: { fontSize: 11, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  pathYear: { fontSize: 11, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
 
   foot: { flexDirection: "row", alignItems: "center", gap: 8, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   footTxt: { fontSize: 11.5, color: KarateColors.ink3 } as TextStyle,
 
   nfGlyph: { width: 66, height: 66, borderRadius: 33, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center", alignSelf: "center", marginTop: 32, marginBottom: 16 } as ViewStyle,
-  nfH: { fontSize: 20, fontWeight: "800", color: KarateColors.ink, textAlign: "center" } as TextStyle,
+  nfH: { fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink, textAlign: "center" } as TextStyle,
   nfP: { fontSize: 14, color: KarateColors.ink2, textAlign: "center", marginTop: 8, paddingHorizontal: 28, paddingBottom: 32, lineHeight: 20 } as TextStyle,
 
   note: { maxWidth: 400, fontSize: 12, color: KarateColors.ink3, textAlign: "center", marginTop: 16, lineHeight: 18 } as TextStyle,
   auraFooter: { flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center", marginTop: 24 } as ViewStyle,
   footSeal: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: KarateColors.border, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  footSealK: { fontSize: 14, color: KarateColors.ink3 } as TextStyle,
-  footWm: { fontSize: 13, fontWeight: "800", color: KarateColors.ink2 } as TextStyle,
+  footSealK: { fontFamily: KarateFonts.heading, fontSize: 16, color: KarateColors.ink3 } as TextStyle,
+  footWm: { fontFamily: KarateFonts.heading, fontSize: 14, color: KarateColors.ink2 } as TextStyle,
   footSub: { fontSize: 11, color: KarateColors.ink4 } as TextStyle,
 });

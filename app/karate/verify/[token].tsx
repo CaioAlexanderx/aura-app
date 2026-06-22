@@ -19,9 +19,10 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karateCardApi, CardVerification, VerifyStatus } from "@/services/karateCardApi";
+import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 // ── helpers ──────────────────────────────────────────────
 function fmtDate(iso?: string | null): string {
@@ -89,6 +90,7 @@ function Cell({ k, v, mono, valueColor, full }: { k: string; v: string; mono?: b
 
 // ── main ─────────────────────────────────────────────────
 export default function VerifyCardScreen() {
+  useShojiFonts();
   const { token } = useLocalSearchParams<{ token: string }>();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<CardVerification | null>(null);
@@ -117,7 +119,7 @@ export default function VerifyCardScreen() {
           {data?.federation_logo ? (
             <Image source={{ uri: data.federation_logo }} style={styles.govLogo} resizeMode="contain" />
           ) : (
-            <View style={styles.seal}><Text style={styles.sealKanji}>空</Text></View>
+            <FpktLogo size={42} />
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.govTitle}>{data?.federation_name || "FPKT"}</Text>
@@ -293,23 +295,23 @@ const styles = StyleSheet.create({
   gov:      { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   govLogo:  { width: 42, height: 42 } as any,
   seal:     { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  sealKanji:{ fontSize: 20, color: KarateColors.primary, fontWeight: "700" } as TextStyle,
-  govTitle: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  sealKanji:{ fontFamily: KarateFonts.heading, fontSize: 22, color: KarateColors.primary } as TextStyle,
+  govTitle: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   govSub:   { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
-  govK:     { fontSize: 9.5, letterSpacing: 1.4, color: KarateColors.ink4, fontFamily: "monospace" } as TextStyle,
-  govTok:   { fontSize: 13, color: KarateColors.ink2, fontFamily: "monospace" } as TextStyle,
+  govK:     { fontSize: 9.5, letterSpacing: 1.4, color: KarateColors.ink4, fontFamily: KarateFonts.mono } as TextStyle,
+  govTok:   { fontSize: 13, color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
 
   intro:      { alignItems: "center", paddingVertical: 24 } as ViewStyle,
   eyebrow:    { backgroundColor: KarateColors.primarySoft, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 12, marginBottom: 12 } as ViewStyle,
   eyebrowTxt: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
-  h1:         { fontSize: 22, fontWeight: "800", color: KarateColors.ink, textAlign: "center", lineHeight: 28 } as TextStyle,
+  h1:         { fontFamily: KarateFonts.heading, fontSize: 26, fontWeight: "400", color: KarateColors.ink, textAlign: "center", lineHeight: 30 } as TextStyle,
   lead:       { fontSize: 14, color: KarateColors.ink2, textAlign: "center", marginTop: 8, lineHeight: 20 } as TextStyle,
 
   loadingBox: { alignItems: "center", gap: 10, paddingVertical: 48 } as ViewStyle,
   loadingTxt: { fontSize: 13, color: KarateColors.ink3 } as TextStyle,
 
   card: {
-    backgroundColor: "#fff", borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border,
+    backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border,
     overflow: "hidden",
     ...Platform.select({
       web: { boxShadow: "0 10px 30px rgba(28,23,20,0.10)" } as any,
@@ -318,7 +320,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
 
   statusBar: { flexDirection: "row", alignItems: "center", gap: 14, padding: 18 } as ViewStyle,
-  ring:      { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderWidth: 1, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  ring:      { width: 46, height: 46, borderRadius: 23, backgroundColor: KarateColors.glass, borderWidth: 1, alignItems: "center", justifyContent: "center" } as ViewStyle,
   stL:       { fontSize: 19, fontWeight: "800" } as TextStyle,
   stS:       { fontSize: 12.5, color: KarateColors.ink2, marginTop: 3 } as TextStyle,
 
@@ -327,7 +329,7 @@ const styles = StyleSheet.create({
   avatar:       { width: 72, height: 72, borderRadius: KarateRadius.md, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
   avatarHidden: { backgroundColor: KarateColors.bg2, borderColor: KarateColors.border } as ViewStyle,
   avatarInitial:{ fontSize: 30, fontWeight: "800", color: KarateColors.primary } as TextStyle,
-  name:         { fontSize: 22, fontWeight: "800", color: KarateColors.ink, lineHeight: 26 } as TextStyle,
+  name:         { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink, lineHeight: 28 } as TextStyle,
   beltNameRow:  { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
   beltNameTxt:  { fontSize: 13, color: KarateColors.ink2 } as TextStyle,
 
@@ -337,37 +339,37 @@ const styles = StyleSheet.create({
   beltBlock: { gap: 7 } as ViewStyle,
   beltBar:   { height: 26, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.12)" } as ViewStyle,
   beltCap:   { flexDirection: "row", justifyContent: "space-between" } as ViewStyle,
-  beltCapTxt:{ fontSize: 11, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  beltCapTxt:{ fontSize: 11, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
 
   grid:    { borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
   gridRow: { flexDirection: "row" } as ViewStyle,
-  cell:    { flex: 1, padding: 14, backgroundColor: "#fff", borderTopWidth: 1, borderColor: KarateColors.border } as ViewStyle,
+  cell:    { flex: 1, padding: 14, backgroundColor: KarateColors.glass, borderTopWidth: 1, borderColor: KarateColors.border } as ViewStyle,
   cellFull:{ borderTopWidth: 1 } as ViewStyle,
-  cellK:   { fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: "monospace", marginBottom: 5 } as TextStyle,
+  cellK:   { fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono, marginBottom: 5 } as TextStyle,
   cellV:   { fontSize: 15, color: KarateColors.ink, fontWeight: "500" } as TextStyle,
-  mono:    { fontFamily: "monospace", fontWeight: "400" } as TextStyle,
+  mono:    { fontFamily: KarateFonts.mono, fontWeight: "400" } as TextStyle,
 
   privacy:   { flexDirection: "row", alignItems: "flex-start", gap: 9 } as ViewStyle,
   privacyTxt:{ flex: 1, fontSize: 12, color: KarateColors.ink3, lineHeight: 18 } as TextStyle,
 
   cardFoot: { flexDirection: "row", justifyContent: "flex-end", padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   footItem: { flexDirection: "row", alignItems: "center", gap: 7 } as ViewStyle,
-  footTxt:  { fontSize: 11, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  footTxt:  { fontSize: 11, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
 
   // not found
   nf:       { padding: 36, alignItems: "center" } as ViewStyle,
   nfGlyph:  { width: 72, height: 72, borderRadius: 36, backgroundColor: KarateColors.dangerSoft, alignItems: "center", justifyContent: "center", marginBottom: 20 } as ViewStyle,
-  nfH2:     { fontSize: 22, fontWeight: "800", color: KarateColors.ink, textAlign: "center" } as TextStyle,
+  nfH2:     { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink, textAlign: "center" } as TextStyle,
   nfP:      { fontSize: 14, color: KarateColors.ink2, textAlign: "center", marginTop: 10, lineHeight: 20 } as TextStyle,
   tokenBox: { marginTop: 20, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, borderStyle: "dashed", alignSelf: "stretch" } as ViewStyle,
-  tokenBoxTxt: { fontSize: 12, color: KarateColors.ink2, fontFamily: "monospace", textAlign: "center" } as TextStyle,
+  tokenBoxTxt: { fontSize: 12, color: KarateColors.ink2, fontFamily: KarateFonts.mono, textAlign: "center" } as TextStyle,
   nfList:   { marginTop: 20, gap: 10, alignSelf: "stretch" } as ViewStyle,
   nfLi:     { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
   nfLiTxt:  { flex: 1, fontSize: 13, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
 
   auraFooter: { flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center", marginTop: 28 } as ViewStyle,
   footSeal:   { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: KarateColors.border, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  footSealK:  { fontSize: 14, color: KarateColors.ink3 } as TextStyle,
+  footSealK:  { fontFamily: KarateFonts.heading, fontSize: 16, color: KarateColors.ink3 } as TextStyle,
   footWm:     { fontSize: 13, fontWeight: "800", color: KarateColors.ink2 } as TextStyle,
   footSub:    { fontSize: 11, color: KarateColors.ink4 } as TextStyle,
 });
