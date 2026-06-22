@@ -84,7 +84,8 @@ function parseWorkbook(wb: XLSX.WorkBook, fileName: string): Parsed {
   const dojos: Dojo[] = aca.map((r) => ({
     cod: clean(r["Cód."]),
     name: clean(r["Academia"]),
-    status: /ativ/i.test(String(r["Status"] ?? "")) ? "active" : "inactive",
+    // /^ativ/i: só "Ativo"/"Ativa" — NÃO casa "Inativo" (que contém "ativ")
+    status: /^ativ/i.test(String(r["Status"] ?? "")) ? "active" : "inactive",
     address: composeAddr(r["Endereço"], r["Bairro"], r["Cidade"], r["Estado"]),
     phone: clean(r["Telefone"]),
   })).filter((d) => d.name);
