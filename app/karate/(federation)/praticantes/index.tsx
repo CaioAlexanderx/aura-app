@@ -1,6 +1,7 @@
 // ============================================================
 // Praticantes — Lista — Aura Karatê (federação) · Shoji
 // Fiel ao pane "alunos" do standalone v5. Dados reais.
+// Ficha (cadastro + edição) abre em MODAL sobre a lista (navegação fluida).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -15,6 +16,7 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, BeltTag, Avatar, ShojiButton, Mono, Body,
 } from "@/components/karate/shoji";
+import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import { karateApi, PractitionerListItem, AffiliationStatus } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
@@ -35,6 +37,8 @@ export default function PraticantesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<AffiliationStatus | "all">("all");
+  // Modal da ficha: open + id (null = cadastro, string = edição)
+  const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -55,7 +59,7 @@ export default function PraticantesScreen() {
         sub="Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
         actions={<>
           <ShojiButton label="Importar" icon="cloud-upload-outline" variant="ghost" onPress={() => router.push("/karate/importacao" as any)} />
-          <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={() => router.push("/karate/praticantes/novo" as any)} />
+          <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />
         </>}
       />
       <SearchField value={q} onChangeText={setQ} onSubmit={() => load()} placeholder="Buscar por nome, código FPKT, CPF ou RG..." style={{ marginBottom: 14 }} />
@@ -75,7 +79,7 @@ export default function PraticantesScreen() {
   );
 
   function Row({ item }: { item: PractitionerListItem }) {
-    const onPress = () => router.push(`/karate/praticantes/${item.id}` as any);
+    const onPress = () => setModal({ open: true, id: item.id });
     if (wide) return (
       <TouchableOpacity style={styles.tr} onPress={onPress} activeOpacity={0.7}>
         <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>
@@ -107,7 +111,17 @@ export default function PraticantesScreen() {
     );
   }
 
-  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
+  const fichaModal = (
+    <PraticanteFichaModal
+      federationId={federationId}
+      visible={modal.open}
+      practitionerId={modal.id}
+      onClose={() => setModal({ open: false, id: null })}
+      onSaved={() => load(true)}
+    />
+  );
+
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} />{fichaModal}</ShojiBackground>;
 
   return (
     <ShojiBackground>
@@ -122,6 +136,7 @@ export default function PraticantesScreen() {
           ListEmptyComponent={<KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />}
         />
       )}
+      {fichaModal}
     </ShojiBackground>
   );
 }
