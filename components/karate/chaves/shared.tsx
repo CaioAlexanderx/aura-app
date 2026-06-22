@@ -95,6 +95,9 @@ export function PendingText() {
 
 // ── Estilos compartilhados ─────────────────────────────────────────────
 export const styles = StyleSheet.create({
+  // layout
+  grid2: { gap: 16 } as ViewStyle,
+
   // cards / heads
   card: {
     backgroundColor: P.glass, borderRadius: R.lg,
@@ -160,4 +163,44 @@ export const styles = StyleSheet.create({
   winMark: { fontFamily: F.body, fontSize: 11, fontWeight: "700", color: P.red, marginLeft: 4 } as TextStyle,
   byeText: { fontFamily: F.body, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.2, color: C.ink4 } as TextStyle,
   pendingText: { fontFamily: F.body, fontSize: 11, color: C.ink4, fontStyle: "italic" } as TextStyle,
+
+  // ── bracket-only ──
+  reopenBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: P.glass2 } as ViewStyle,
+  reopenText: { fontFamily: F.body, fontSize: 11, fontWeight: "600", color: C.ink3 } as TextStyle,
+  bracketHint: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 } as ViewStyle,
+  bracketHintText: { fontFamily: F.body, fontSize: 11.5, color: C.ink3 } as TextStyle,
+  bracketScroll: { borderWidth: 1, borderColor: C.line, borderRadius: R.lg, backgroundColor: P.glass2 } as ViewStyle,
+  bracketInner: { flexDirection: "row", padding: 22, gap: 60, minWidth: 400 } as ViewStyle,
+  bracketCol: { gap: 8, width: 200 } as ViewStyle,
+  champCol: { width: 180, justifyContent: "center" } as ViewStyle,
+  roundLabel: { fontFamily: F.body, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.4, color: C.ink3, textAlign: "center", marginBottom: 8 } as TextStyle,
+  champCard: { backgroundColor: P.redWash, borderRadius: R.md, borderWidth: 1, borderColor: P.red, padding: 16, alignItems: "center", gap: 4 } as ViewStyle,
+  champLabel: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.4, color: C.ink3 } as TextStyle,
+  champName: { fontFamily: F.heading, fontSize: 16, fontWeight: "700", color: C.ink } as TextStyle,
+  champDojo: { fontFamily: F.body, fontSize: 11, color: C.ink3 } as TextStyle,
+  champPending: { padding: 16, alignItems: "center", borderRadius: R.md, borderWidth: 1, borderColor: C.line, borderStyle: "dashed" } as ViewStyle,
+  champPendingLabel: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.4, color: C.ink4 } as TextStyle,
+  champPendingName: { fontFamily: F.heading, fontSize: 16, color: C.ink3, marginTop: 4 } as TextStyle,
+  thirdLabel: { fontFamily: F.body, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.0, color: C.ink3, marginBottom: 6 } as TextStyle,
+  scrollHint: { fontFamily: F.body, fontSize: 11, color: C.ink4, textAlign: "right", marginTop: 6 } as TextStyle,
+
+  // ── kata-only ──
+  kataGrid: { gap: 16 } as ViewStyle,
+  kataTableHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", borderBottomWidth: 1, borderBottomColor: C.line, paddingBottom: 8 } as ViewStyle,
+  kataTableTitle: { fontFamily: F.heading, fontSize: 18, fontWeight: "400", color: C.ink } as TextStyle,
+  kataTableSub: { fontFamily: F.body, fontSize: 11, color: C.ink3 } as TextStyle,
+  kataRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
+  kataRowFirst: { backgroundColor: P.redWash } as ViewStyle,
+  kataPos: { fontFamily: F.mono, fontSize: 13, fontWeight: "600", color: C.ink3, width: 24, textAlign: "right" } as TextStyle,
+  kataNota: { fontFamily: F.mono, fontSize: 14, fontWeight: "700", color: C.ink, fontVariant: ["tabular-nums"] } as TextStyle,
+  medalText: { fontFamily: F.body, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 } as TextStyle,
+  editScoreBtn: { padding: 5, borderRadius: 8, backgroundColor: P.redWash } as ViewStyle,
+
+  // kata classification pill
+  pill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: R.pill, backgroundColor: P.neutralWash, borderWidth: 1, borderColor: C.line } as ViewStyle,
+  pillAccent: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
+  pillNeutral: { backgroundColor: P.neutralWash, borderColor: C.line } as ViewStyle,
+  pillText: { fontFamily: F.body, fontSize: 11, color: C.ink3, fontWeight: "500" } as TextStyle,
+  pillTextAccent: { color: P.red, fontWeight: "700" } as TextStyle,
+  pillTextNeutral: { color: C.ink3 } as TextStyle,
 });
