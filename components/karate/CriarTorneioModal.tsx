@@ -8,6 +8,10 @@
 //
 // Wired: karateCompetitionsApi.createCompetition + createCategory.
 // Em falha, mostra erro honesto (sem simular sucesso).
+//
+// NOTA: os pickers de graduação oferecem TODAS as faixas de propósito —
+// um torneio tem categorias para qualquer graduação. A regra "só Marrom →
+// Preta" vale apenas para EXAMES da federação, não para competições.
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -22,6 +26,18 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { karateCompetitionsApi, Modality, Sex } from "@/services/karateCompetitionsApi";
 
 const STEPS = ["Dados", "Categorias", "Revisão"];
+
+const onlyD = (v: string) => (v || "").replace(/\D/g, "");
+function maskDate(v: string) {
+  const d = onlyD(v).slice(0, 8);
+  if (d.length > 4) return d.replace(/(\d{2})(\d{2})(\d+)/, "$1/$2/$3");
+  if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "$1/$2");
+  return d;
+}
+function toISO(v: string): string | null {
+  const m = (v || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
 
 const MODALITIES: { value: Modality; label: string }[] = [
   { value: "kata",        label: "Kata" },
@@ -93,6 +109,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
 
   const handleStep1Next = () => {
     if (!name.trim()) { setError("Informe o nome do torneio."); return; }
+    if (eventDate && !toISO(eventDate)) { setError("Data inválida — use dd/mm/aaaa."); return; }
     setError(null); setStep(1);
   };
 
@@ -111,7 +128,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
       const comp = await karateCompetitionsApi.createCompetition(federationId, {
         name: name.trim(),
         season: parseInt(season, 10) || new Date().getFullYear(),
-        event_date: eventDate || null,
+        event_date: toISO(eventDate),
         location: location || null,
         circuit_round: circuitRound ? parseInt(circuitRound, 10) : null,
         fee_amount: fee ? parseFloat(fee) : 0,
@@ -161,7 +178,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
             <View style={styles.stepContent}>
               <FormField label="Nome do torneio *" value={name} onChangeText={setName} placeholder="Ex: Copa Interior 2026 — 1ª Etapa" />
               <FormField label="Temporada" value={season} onChangeText={setSeason} placeholder="2026" keyboardType="numeric" />
-              <FormField label="Data do evento (AAAA-MM-DD)" value={eventDate} onChangeText={setEventDate} placeholder="2026-10-10" keyboardType="numeric" />
+              <FormField label="Data do evento" value={eventDate} onChangeText={(v) => setEventDate(maskDate(v))} placeholder="dd/mm/aaaa" keyboardType="numeric" />
               <FormField label="Local" value={location} onChangeText={setLocation} placeholder="Ginásio Municipal — Jacareí/SP" />
               <FormField label="Etapa do circuito" value={circuitRound} onChangeText={setCircuitRound} placeholder="1" keyboardType="numeric" />
               <FormField label="Taxa padrão de inscrição (R$)" value={fee} onChangeText={setFee} placeholder="60" keyboardType="numeric" />
