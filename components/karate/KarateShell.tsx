@@ -18,13 +18,22 @@
 //    vivem em "Eventos"). Renomeado de "Exames" p/ desfazer a confusão.
 // Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
 //
+// IA/Nav P1:
+//   • isActive — o item índice (Dashboard, route "/karate/") casa por
+//     IGUALDADE EXATA ("/karate" | "/karate/"); os demais por startsWith.
+//     Antes o Dashboard ficava sempre ativo (todas as rotas começam por
+//     "/karate/"), o que tirava o "onde estou".
+//   • Busca global na sidebar (web): submeter navega para
+//     /karate/praticantes?q=<termo>. Ocultada no mobile.
+//
 // Ícones: nomes Ionicons válidos (@expo/vector-icons). A fonte já é
 //   carregada pelas telas Shoji; qualquer nome inválido renderiza tofu.
 // ============================================================
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -70,6 +79,17 @@ function visibleNav(role: string | null): readonly NavItem[] {
   );
 }
 
+// IA/Nav P1 — estado ativo correto:
+//   • O item índice (Dashboard, route terminando em "/karate/") casa SÓ
+//     na rota índice, por igualdade exata ("/karate" ou "/karate/").
+//   • Os demais itens casam por prefixo (startsWith), preservando o
+//     destaque ao navegar para sub-rotas (ex.: /karate/dojos/123).
+function isItemActive(item: NavItem, path: string): boolean {
+  const isIndex = item.route === "/karate/" || item.route === "/karate";
+  if (isIndex) return path === "/karate" || path === "/karate/";
+  return path.startsWith(item.route);
+}
+
 const BREAKPOINT_SIDEBAR = 768;
 
 function SidebarNav() {
@@ -78,12 +98,20 @@ function SidebarNav() {
   const { federationName, karateRole } = useKarateFederation();
   const items = visibleNav(karateRole);
 
+  // Busca global (web): submeter leva à lista de Praticantes já filtrada.
+  const [term, setTerm] = useState("");
+  const submitSearch = () => {
+    const q = term.trim();
+    if (!q) return;
+    router.push(("/karate/praticantes?q=" + encodeURIComponent(q)) as any);
+  };
+
   // Separa os itens "normais" dos items de rodapé (Configurações)
   const mainItems   = items.filter((i) => i.label !== "Configurações");
   const footerItems = items.filter((i) => i.label === "Configurações");
 
   const renderItem = (item: NavItem) => {
-    const active = path.startsWith(item.route.replace("/karate", "/karate"));
+    const active = isItemActive(item, path);
     return (
       <TouchableOpacity
         key={item.route}
@@ -116,6 +144,21 @@ function SidebarNav() {
         </View>
       </View>
 
+      {/* Busca global → lista de Praticantes filtrada (?q=) */}
+      <View style={styles.searchBox}>
+        <Ionicons name="search-outline" size={15} color={KarateColors.ink3} />
+        <TextInput
+          style={styles.searchInput as any}
+          value={term}
+          onChangeText={setTerm}
+          placeholder="Buscar praticante…"
+          placeholderTextColor={KarateColors.ink4}
+          returnKeyType="search"
+          onSubmitEditing={submitSearch}
+          accessibilityLabel="Buscar praticante"
+        />
+      </View>
+
       {/* Navigation principal */}
       <View style={{ flex: 1 }}>
         {mainItems.map(renderItem)}
@@ -143,7 +186,7 @@ function BottomTabNav() {
   return (
     <View style={styles.bottomBar}>
       {MOBILE_TABS.map((item) => {
-        const active = path.startsWith(item.route.replace("/karate", "/karate"));
+        const active = isItemActive(item, path);
         return (
           <TouchableOpacity
             key={item.route}
@@ -239,6 +282,26 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     marginTop: 8,
   } as ViewStyle,
+  // Busca global na sidebar
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: KarateColors.bg,
+    borderWidth: 1,
+    borderColor: KarateColors.border,
+    borderRadius: KarateRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+  } as ViewStyle,
+  searchInput: {
+    flex: 1,
+    fontSize: 12.5,
+    color: KarateColors.ink,
+    minHeight: 20,
+    outlineStyle: "none",
+  } as any,
   logoMark: {
     width: 36, height: 36,
     borderRadius: KarateRadius.sm,
