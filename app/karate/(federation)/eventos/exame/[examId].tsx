@@ -6,21 +6,30 @@
 // e solicitar certificado (sob demanda — Decisão FPKT #3).
 // Dados reais via karateApi.getBeltExam. Sem mock: loading →
 // spinner, falha → ErrorState; close/cert não fingem sucesso.
+//
+// Nav P2: sem candidatos inscritos, a tela usa o KarateEmptyState padrão
+//   do kit (mesmo componente das outras telas karatê) com a ação
+//   "Compartilhar link de inscrição" — copia o link público da federação
+//   (microsite). A ação só aparece se o slug público resolver; caso
+//   contrário o empty state fica só com a mensagem (sem link fantasma).
 // ============================================================
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
-  StyleSheet, RefreshControl, ViewStyle, TextStyle,
+  StyleSheet, RefreshControl, ViewStyle, TextStyle, Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { LancarResultadosModal } from "@/components/karate/LancarResultadosModal";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateApi, ExamCandidate, BeltExam } from "@/services/karateApi";
+import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
+import { copyToClipboard } from "@/utils/clipboard";
 
 const RESULT_BADGE: Record<string, "ok" | "alert" | "neutral"> = {
   approved: "ok", rejected: "alert", pending: "neutral",
@@ -55,6 +64,8 @@ export default function ExameDetalhe() {
   const [showResultados, setShowResultados] = useState(false);
   const [closingExam, setClosingExam] = useState(false);
   const [issuingCert, setIssuingCert] = useState<string | null>(null);
+  // Nav P2: slug público da federação para o link de inscrição (empty state).
+  const [pubSlug, setPubSlug] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (!examId) return;
@@ -72,6 +83,30 @@ export default function ExameDetalhe() {
   }, [federationId, examId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Resolve o slug público da federação (best-effort, sem bloquear a tela).
+  useEffect(() => {
+    let alive = true;
+    const fromHost = getMicrositeSlug();
+    if (fromHost) { setPubSlug(fromHost); return; }
+    if (!federationId) return;
+    karateApi.getFederationIdentity(federationId)
+      .then((id) => { if (alive && id?.slug) setPubSlug(id.slug); })
+      .catch(() => { /* sem slug → empty state sem ação de link */ });
+    return () => { alive = false; };
+  }, [federationId]);
+
+  // Link público da federação (microsite) — usado pela ação do empty state.
+  const publicUrl = pubSlug ? buildMicrositeUrl(pubSlug, "/") : null;
+
+  const shareInscription = async () => {
+    if (!publicUrl) return;
+    const ok = await copyToClipboard(publicUrl);
+    Alert.alert(
+      ok ? "Link copiado" : "Não foi possível copiar",
+      ok ? `Compartilhe a página pública da federação:\n${publicUrl}` : "Copie manualmente: " + publicUrl
+    );
+  };
 
   const handleCandidateUpdate = (updated: ExamCandidate) => {
     setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
@@ -170,7 +205,22 @@ export default function ExameDetalhe() {
 
         <Text style={styles.sectionTitle}>Candidatos ({candidates.length})</Text>
         {candidates.length === 0 ? (
-          <Text style={styles.emptyTxt}>Nenhum candidato inscrito neste exame.</Text>
+          <KarateEmptyState
+            icon="people-outline"
+            title="Nenhum candidato inscrito"
+            subtitle="Assim que houver inscrições neste exame, os candidatos aparecem aqui para lançar resultados."
+            style={{ paddingVertical: 40 }}
+            action={
+              publicUrl ? (
+                <KarateButton
+                  label="Compartilhar link de inscrição"
+                  variant="secondary"
+                  size="sm"
+                  onPress={shareInscription}
+                />
+              ) : undefined
+            }
+          />
         ) : (
           candidates.map((c) => (
             <View key={c.id} style={styles.candidateCard}>
