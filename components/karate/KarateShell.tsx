@@ -13,8 +13,13 @@
 //   (Financeiro=admin; Conexões/Importar=admin+staff; resto=todos).
 //   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
 // Track H: adicionado item Configurações (só federation_admin, só sidebar).
-// Track J: adicionado item Exames (todos os papéis, visível no mobile).
+// Track J: adicionado item Certificados (todos os papéis, visível no mobile).
+//   (rota /karate/exames = tela de Certificados/Selo; exames de faixa
+//    vivem em "Eventos"). Renomeado de "Exames" p/ desfazer a confusão.
 // Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
+//
+// Ícones: nomes Ionicons válidos (@expo/vector-icons). A fonte já é
+//   carregada pelas telas Shoji; qualquer nome inválido renderiza tofu.
 // ============================================================
 import React from "react";
 import {
@@ -37,15 +42,17 @@ import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
 // sidebarOnly=true → não aparece na bottom tab bar mobile.
+// icon → nome Ionicons válido (renderizado via <Ionicons name=… />).
 const NAV_ITEMS = [
   { label: "Dashboard",       icon: "grid-outline",          route: "/karate/",              roles: null,          sidebarOnly: false },
   { label: "Saúde da Rede",   icon: "pulse-outline",         route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Dojôs",           icon: "home-outline",          route: "/karate/dojos",         roles: null,          sidebarOnly: false },
+  { label: "Dojôs",           icon: "business-outline",      route: "/karate/dojos",         roles: null,          sidebarOnly: false },
   { label: "Praticantes",     icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
-  { label: "Conexões",        icon: "link-outline",          route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Financeiro",      icon: "card-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
-  // Track J: Exames — visível para todos, aparece no mobile e na sidebar
-  { label: "Exames",          icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
+  { label: "Conexões",        icon: "git-network-outline",   route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Financeiro",      icon: "cash-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
+  // Track J: Certificados (rota /karate/exames = tela de Selo/Certificados).
+  //   Visível para todos, aparece no mobile e na sidebar.
+  { label: "Certificados",    icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
   { label: "Eventos",         icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
   { label: "Competições",    icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
   { label: "Importar",        icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
