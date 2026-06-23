@@ -22,12 +22,20 @@
 // um torneio tem categorias para qualquer graduação. A regra "só Marrom →
 // Preta" vale apenas para EXAMES da federação, não para competições.
 //
-// Comportamento de criação INTOCADO: createCompetition + createCategory.
+// Criação de categorias (P2) — transacional no FRONT (backend não muda):
+//   A criação NÃO é atômica no backend (1 POST por categoria). Para não
+//   fechar com "sucesso" enganoso quando uma categoria falha no meio:
+//   - progresso "Criando categorias… N/Total" durante o envio;
+//   - status por categoria (pending/ok/error) com a mensagem real;
+//   - se alguma falhar, mantém o modal aberto, mostra o estado real e oferece
+//     "Tentar novamente as que falharam" — re-envia SÓ as pendentes, reusando
+//     a competição já criada (sem re-criar, sem duplicar as que já entraram).
+//   - a competição criada é preservada (sem rollback no front).
 // ============================================================
 import React, { useState } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, TouchableOpacity, Pressable,
-  StyleSheet, Alert, useWindowDimensions, ViewStyle, TextStyle,
+  StyleSheet, useWindowDimensions, ViewStyle, TextStyle, ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F, KarateBelts, BeltKey } from "@/constants/karateTheme";
@@ -75,6 +83,8 @@ const SEXES: { value: Sex; label: string }[] = [
   { value: "mixed", label: "Misto" },
 ];
 
+type CatState = "pending" | "ok" | "error";
+
 interface DraftCategory {
   key: string;
   name: string;
@@ -87,6 +97,9 @@ interface DraftCategory {
   weight: string;
   maxEntries: string;
   fee: string;
+  // estado de envio (transacional no front) — não enviado ao backend
+  state?: CatState;
+  errorMsg?: string;
 }
 
 const BELT_KEYS = Object.keys(KarateBelts) as BeltKey[];
@@ -126,12 +139,25 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ── estado de criação transacional (front) ──────────────────
+  // competição já criada nesta tentativa (reusada em retries → não re-cria)
+  const [createdCompId, setCreatedCompId] = useState<string | null>(null);
+  // progresso do envio das categorias
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // resultado por categoria (após pelo menos uma tentativa)
+  const [catResult, setCatResult] = useState<Record<string, { state: CatState; errorMsg?: string }>>({});
+  const [toast, setToast] = useState<string | null>(null);
+
   const dateBad = eventDate.length === 10 && parseBrDate(eventDate) === null;
+  const failedCount = Object.values(catResult).filter((r) => r.state === "error").length;
+  const okCount = Object.values(catResult).filter((r) => r.state === "ok").length;
+  const attempted = Object.keys(catResult).length > 0;
 
   const resetAndClose = () => {
     setStep(0); setName(""); setSeason(String(new Date().getFullYear()));
     setEventDate(""); setLocation(""); setCircuitRound(""); setFee("");
     setCategories([]); setDraft(emptyDraft()); setLoading(false); setError(null);
+    setCreatedCompId(null); setProgress(null); setCatResult({}); setToast(null);
     onClose();
   };
 
@@ -147,22 +173,20 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
     setCategories((prev) => [...prev, draft]);
     setDraft(emptyDraft());
   };
-  const removeCategory = (key: string) =>
+  const removeCategory = (key: string) => {
     setCategories((prev) => prev.filter((c) => c.key !== key));
+    setCatResult((prev) => { const n = { ...prev }; delete n[key]; return n; });
+  };
 
-  const handleFinish = async () => {
-    setLoading(true); setError(null);
-    try {
-      const comp = await karateCompetitionsApi.createCompetition(federationId, {
-        name: name.trim(),
-        season: parseInt(season, 10) || new Date().getFullYear(),
-        event_date: parseBrDate(eventDate),
-        location: location || null,
-        circuit_round: circuitRound ? parseInt(circuitRound, 10) : null,
-        fee_amount: fee ? moneyToNumber(fee) : 0,
-      });
-      for (const c of categories) {
-        await karateCompetitionsApi.createCategory(federationId, comp.id, {
+  // Envia (ou re-envia) categorias. Só processa as que ainda NÃO entraram (ok).
+  // Reusa a competição já criada se houver (createdCompId) — não re-cria.
+  const sendCategories = async (compId: string, toSend: DraftCategory[]) => {
+    let done = 0;
+    setProgress({ done: 0, total: toSend.length });
+    const results: Record<string, { state: CatState; errorMsg?: string }> = {};
+    for (const c of toSend) {
+      try {
+        await karateCompetitionsApi.createCategory(federationId, compId, {
           name: c.name.trim(), modality: c.modality,
           min_age: c.ageMin ? parseInt(c.ageMin, 10) : null,
           max_age: c.ageMax ? parseInt(c.ageMax, 10) : null,
@@ -171,15 +195,95 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           max_entries: c.maxEntries ? parseInt(c.maxEntries, 10) : null,
           fee_amount: c.fee ? moneyToNumber(c.fee) : null,
         });
+        results[c.key] = { state: "ok" };
+      } catch (e: any) {
+        results[c.key] = { state: "error", errorMsg: e?.message || "Falha ao criar categoria." };
       }
-      Alert.alert("Torneio criado!", `"${name}" criado com ${categories.length} categoria(s).`,
-        [{ text: "OK", onPress: () => { onCreated?.(); resetAndClose(); } }]);
+      done += 1;
+      setProgress({ done, total: toSend.length });
+      // atualização incremental do mapa de resultados (UI ao vivo)
+      setCatResult((prev) => ({ ...prev, [c.key]: results[c.key] }));
+    }
+    return results;
+  };
+
+  const finishUp = (allOk: boolean) => {
+    setProgress(null);
+    if (allOk) {
+      setToast(`"${name}" criado com ${categories.length} categoria(s).`);
+      onCreated?.();
+      setTimeout(() => resetAndClose(), 700);
+    }
+    // se NÃO allOk, não fecha: o passo de revisão renderiza o estado real + retry
+  };
+
+  const handleFinish = async () => {
+    setLoading(true); setError(null);
+    try {
+      // cria a competição UMA vez; em retries ela já existe e é reusada
+      let compId = createdCompId;
+      if (!compId) {
+        const comp = await karateCompetitionsApi.createCompetition(federationId, {
+          name: name.trim(),
+          season: parseInt(season, 10) || new Date().getFullYear(),
+          event_date: parseBrDate(eventDate),
+          location: location || null,
+          circuit_round: circuitRound ? parseInt(circuitRound, 10) : null,
+          fee_amount: fee ? moneyToNumber(fee) : 0,
+        });
+        compId = comp.id;
+        setCreatedCompId(compId);
+      }
+
+      // sem categorias → competição criada é o suficiente
+      if (categories.length === 0) {
+        finishUp(true);
+        return;
+      }
+
+      const results = await sendCategories(compId, categories);
+      const allOk = categories.every((c) => results[c.key]?.state === "ok");
+      finishUp(allOk);
+      if (!allOk) setError("Algumas categorias não entraram. Veja abaixo e tente novamente as que falharam.");
     } catch (e: any) {
-      Alert.alert("Não foi possível criar o torneio", e?.message ?? "Tente novamente.");
+      // falha ao CRIAR A COMPETIÇÃO (antes das categorias) — nada parcial ainda
+      setError(e?.message || "Não foi possível criar o torneio. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
+
+  // Re-tenta SÓ as categorias que falharam (as ok não são reenviadas → sem duplicar).
+  const handleRetryFailed = async () => {
+    if (!createdCompId) return;
+    const toRetry = categories.filter((c) => catResult[c.key]?.state === "error");
+    if (toRetry.length === 0) return;
+    setLoading(true); setError(null);
+    try {
+      const results = await sendCategories(createdCompId, toRetry);
+      // allOk considera TODAS as categorias (as já-ok + as reenviadas agora)
+      const allOk = categories.every((c) =>
+        (catResult[c.key]?.state === "ok") || results[c.key]?.state === "ok");
+      finishUp(allOk);
+      if (!allOk) setError("Ainda há categorias com falha. Você pode tentar novamente ou concluir depois no detalhe do torneio.");
+    } catch (e: any) {
+      setError(e?.message || "Falha ao reenviar. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // rótulo do botão de criação no passo 3
+  const finishLabel = (() => {
+    if (loading) {
+      if (progress) return `Criando categorias… ${progress.done}/${progress.total}`;
+      return createdCompId ? "Reenviando…" : "Criando torneio…";
+    }
+    if (attempted && failedCount > 0) return `Tentar novamente (${failedCount})`;
+    return "Criar torneio";
+  })();
+
+  const onFinishPress = attempted && failedCount > 0 && createdCompId ? handleRetryFailed : handleFinish;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={resetAndClose}>
@@ -331,16 +435,50 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                   {!!location && <Text style={styles.reviewMeta}>{location}</Text>}
                   {!!eventDate && <Text style={styles.reviewMeta}>{eventDate}</Text>}
                   <Text style={styles.reviewMeta}>Taxa padrão: {fee ? `R$ ${fee}` : "—"}</Text>
+                  {createdCompId ? (
+                    <View style={styles.createdTag}>
+                      <Ionicons name="checkmark-circle" size={13} color={P.ok} />
+                      <Text style={styles.createdTagTxt}>Competição criada — concluindo as categorias.</Text>
+                    </View>
+                  ) : null}
                 </View>
+
+                {/* progresso ao vivo durante o envio */}
+                {progress ? (
+                  <View style={styles.progressRow}>
+                    <ActivityIndicator size="small" color={P.red} />
+                    <Text style={styles.progressTxt}>Criando categorias… {progress.done}/{progress.total}</Text>
+                  </View>
+                ) : null}
+
+                {/* resumo do resultado (após tentativa) */}
+                {attempted && !progress ? (
+                  <View style={[styles.resultBanner, failedCount > 0 ? styles.resultBannerWarn : styles.resultBannerOk]}>
+                    <Ionicons name={failedCount > 0 ? "warning" : "checkmark-circle"} size={15} color={failedCount > 0 ? P.red : P.ok} />
+                    <Text style={styles.resultTxt}>
+                      {okCount} entraram{failedCount > 0 ? ` · ${failedCount} falharam` : ""}. {failedCount > 0 ? "Tente novamente as que falharam." : "Tudo certo."}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <Text style={styles.fieldLabel}>{categories.length} categoria(s)</Text>
                 {categories.length === 0 ? (
                   <Text style={styles.stepHint}>Nenhuma categoria adicionada. Você pode adicioná-las depois no detalhe do torneio.</Text>
                 ) : (
-                  categories.map((c) => (
-                    <View key={c.key} style={styles.catRow}>
-                      <Text style={styles.catName}>{c.name}</Text>
-                    </View>
-                  ))
+                  categories.map((c) => {
+                    const r = catResult[c.key];
+                    return (
+                      <View key={c.key} style={[styles.catRow, r?.state === "error" && styles.catRowError, r?.state === "ok" && styles.catRowOk]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.catName}>{c.name}</Text>
+                          {r?.state === "error" && r.errorMsg ? <Text style={styles.catErr}>{r.errorMsg}</Text> : null}
+                        </View>
+                        {r?.state === "ok" ? <Ionicons name="checkmark-circle" size={18} color={P.ok} accessibilityLabel="Criada" /> : null}
+                        {r?.state === "error" ? <Ionicons name="close-circle" size={18} color={P.red} accessibilityLabel="Falhou" /> : null}
+                        {r?.state === "pending" || (loading && !r) ? <ActivityIndicator size="small" color={P.ink3} /> : null}
+                      </View>
+                    );
+                  })
                 )}
                 <Text style={styles.stepHint}>O torneio será criado como rascunho. Você poderá abrir inscrições e lançar resultados no detalhe.</Text>
               </View>
@@ -348,8 +486,8 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           </ScrollView>
 
           <View style={styles.footer}>
-            {step > 0 && (
-              <KarateButton label="Voltar" variant="ghost" size="md" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
+            {step > 0 && !attempted && (
+              <KarateButton label="Voltar" variant="ghost" size="md" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} disabled={loading} />
             )}
             {step === 0 && (
               <KarateButton label="Próximo" variant="primary" size="md" onPress={handleStep1Next} style={{ flex: 1 }} />
@@ -358,9 +496,23 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
               <KarateButton label="Próximo" variant="primary" size="md" onPress={() => { setError(null); setStep(2); }} style={{ flex: 1 }} />
             )}
             {step === 2 && (
-              <KarateButton label={loading ? "Criando..." : "Criar torneio"} variant="primary" size="md" loading={loading} onPress={handleFinish} style={{ flex: 1 }} />
+              <>
+                {attempted && failedCount === 0 && okCount === 0 ? null : null}
+                {attempted && (failedCount > 0) ? (
+                  <KarateButton label="Concluir depois" variant="ghost" size="md" onPress={resetAndClose} style={{ flex: 1 }} disabled={loading} />
+                ) : null}
+                <KarateButton label={finishLabel} variant="primary" size="md" loading={loading} onPress={onFinishPress} style={{ flex: 1 }} />
+              </>
             )}
           </View>
+
+          {/* toast de sucesso (inline) */}
+          {toast ? (
+            <View pointerEvents="none" style={styles.toast}>
+              <Ionicons name="checkmark-circle" size={16} color="#bfe3c4" />
+              <Text style={styles.toastTxt}>Torneio criado — {toast}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -436,14 +588,31 @@ const styles = StyleSheet.create({
   editor: { backgroundColor: P.glassHi, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, padding: 14, gap: 4, marginTop: 4 } as ViewStyle,
   editorTitle: { fontFamily: F.body, fontSize: 14, fontWeight: "800", color: P.ink, marginBottom: 4 } as TextStyle,
   catRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, backgroundColor: P.glassHi, borderRadius: R.sm, borderWidth: 1, borderColor: P.line2, marginBottom: 8 } as ViewStyle,
+  catRowError: { borderColor: P.redLine, backgroundColor: "rgba(184,70,58,0.06)" } as ViewStyle,
+  catRowOk: { borderColor: P.line2, opacity: 0.85 } as ViewStyle,
   catName: { fontFamily: F.body, fontSize: 14, fontWeight: "700", color: P.ink } as TextStyle,
   catMeta: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 2 } as TextStyle,
+  catErr: { fontFamily: F.body, fontSize: 11, color: P.red2, marginTop: 2 } as TextStyle,
   reviewCard: { backgroundColor: P.glassHi, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, padding: 14, gap: 3, marginBottom: 4 } as ViewStyle,
   reviewTitle: { fontFamily: F.heading, fontSize: 16, color: P.ink } as TextStyle,
   reviewMeta: { fontFamily: F.body, fontSize: 12, color: P.ink3 } as TextStyle,
+  createdTag: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 } as ViewStyle,
+  createdTagTxt: { fontFamily: F.body, fontSize: 11.5, color: P.ink2 } as TextStyle,
+
+  progressRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 } as ViewStyle,
+  progressTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: P.ink } as TextStyle,
+
+  resultBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, padding: 11, marginBottom: 4 } as ViewStyle,
+  resultBannerOk: { backgroundColor: "rgba(74,124,89,0.08)", borderColor: "rgba(74,124,89,0.35)" } as ViewStyle,
+  resultBannerWarn: { backgroundColor: "rgba(184,70,58,0.08)", borderColor: P.redLine } as ViewStyle,
+  resultTxt: { fontFamily: F.body, fontSize: 12.5, color: P.ink, flex: 1 } as TextStyle,
 
   errorBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(184,70,58,0.08)", borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 11 } as ViewStyle,
   errorText: { fontFamily: F.body, fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
 
   footer: { flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: P.line, backgroundColor: P.glassHi } as ViewStyle,
+
+  // toast de sucesso (inline, ancorado no rodapé do card)
+  toast: { position: "absolute", left: 16, right: 16, bottom: 74, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.ink, borderRadius: R.md, paddingVertical: 11, paddingHorizontal: 14 } as ViewStyle,
+  toastTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2", flex: 1 } as TextStyle,
 });
