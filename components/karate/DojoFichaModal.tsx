@@ -14,11 +14,14 @@
 //    valores vigentes FPKT como referência.
 //  - Data validada de verdade: a conversão no envio usa parseBrDate (round-trip
 //    de Date → rejeita 31/02). A máscara de digitação continua dd/mm/aaaa.
+//  - Feedback de sucesso leve: toast Shoji inline ("Dojô salvo") — o app não
+//    tem sistema de toast/snackbar global, então fazemos um mínimo aqui.
+//    "Duplicar último" não se aplica ao dojô (decisão Caio).
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
-  ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle,
+  ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
@@ -110,6 +113,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   const [saving, setSaving] = useState(false);
   const [cepStatus, setCepStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // toast de sucesso (inline, sem sistema global)
+  const [toast, setToast] = useState<string | null>(null);
 
   // refs p/ Enter avançar os campos de texto
   const nameRef = useRef<TextInput>(null);
@@ -125,7 +130,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
 
   useEffect(() => {
     if (!visible) return;
-    setErrorMsg(null); setCepStatus(null);
+    setErrorMsg(null); setCepStatus(null); setToast(null);
     if (!dojoId) { setForm(EMPTY); setFpkt(null); setStatusLabel(null); return; }
     setLoading(true);
     karateApi.getDojo(federationId, dojoId)
@@ -150,6 +155,21 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       return () => clearTimeout(t);
     }
   }, [visible, dojoId, loading]);
+
+  // animação do toast (slide + fade)
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    toastAnim.setValue(0);
+    Animated.timing(toastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+        .start(() => setToast(null));
+    }, 2400);
+  }, [toastAnim]);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const onCep = useCallback(async (raw: string) => {
     set("cep", maskCEP(raw));
@@ -204,7 +224,11 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     try {
       if (isEdit) await karateApi.updateDojo(federationId, dojoId!, body);
       else await karateApi.createDojo(federationId, body);
-      setSaving(false); onSaved(); onClose();
+      setSaving(false);
+      showToast(isEdit ? "Alterações salvas" : "Dojô salvo");
+      onSaved();
+      // dá um instante p/ o toast aparecer antes de fechar
+      setTimeout(() => onClose(), 480);
     } catch (e: any) {
       setSaving(false); setErrorMsg(e?.message || "Erro ao salvar. Tente novamente.");
     }
@@ -318,6 +342,17 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.btnPrimaryTxt}>{isEdit ? "Salvar alterações" : "Salvar dojô"}</Text>}
             </TouchableOpacity>
           </View>
+
+          {/* toast de sucesso (inline) */}
+          {toast ? (
+            <Animated.View pointerEvents="none" style={[styles.toast, {
+              opacity: toastAnim,
+              transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            }]}>
+              <Ionicons name="checkmark-circle" size={16} color="#bfe3c4" />
+              <Text style={styles.toastTxt}>{toast}</Text>
+            </Animated.View>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -399,6 +434,10 @@ const styles = StyleSheet.create({
   btnGhostTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
   btnPrimary: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: R.md, backgroundColor: P.ink, minWidth: 150, alignItems: "center" } as ViewStyle,
   btnPrimaryTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+
+  // toast de sucesso (inline, ancorado no rodapé do card)
+  toast: { position: "absolute", left: 16, right: 16, bottom: 74, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.ink, borderRadius: R.md, paddingVertical: 11, paddingHorizontal: 14 } as ViewStyle,
+  toastTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2", flex: 1 } as TextStyle,
 });
 
 export default DojoFichaModal;

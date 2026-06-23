@@ -14,11 +14,17 @@
 //    passaporte = fluxo de Dan, adiado).
 //  - Data validada de verdade: a conversão no envio usa parseBrDate (round-trip
 //    de Date → rejeita 31/02). A máscara de digitação continua dd/mm/aaaa.
+//  - Feedback de sucesso leve: toast Shoji inline ("Praticante salvo") — o app
+//    não tem sistema de toast/snackbar global, então fazemos um mínimo aqui.
+//  - "Repetir dados do último cadastro" (P2): opt-in, só no cadastro novo.
+//    Pré-preenche o que TENDE a se repetir num mesmo dojô (dojô + endereço),
+//    nunca os campos únicos (nome, CPF, RG, nascimento, telefone, e-mail).
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, FlatList,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
@@ -45,6 +51,17 @@ type Form = typeof EMPTY;
 // Lembra o último dojô selecionado na sessão (cadastro em massa do mesmo dojô).
 // Module-level simples — sem libs, vive enquanto o app está aberto.
 let lastDojo: { id: string; name: string } | null = null;
+
+// Lembra os campos COMPARTILHÁVEIS do último praticante criado nesta sessão
+// (dojô + endereço, que tendem a se repetir num mesmo dojô). NUNCA guarda
+// campos únicos: nome, CPF, RG, nascimento, telefone, e-mail. Module-level
+// simples, mesma filosofia do lastDojo — opt-in via botão, nunca automático.
+type SharedSnapshot = {
+  dojo_id: string; dojo_name: string;
+  zip_code: string; street: string; number: string; complement: string;
+  neighborhood: string; city: string; state: string;
+};
+let lastShared: SharedSnapshot | null = null;
 
 // ── máscaras BR ──────────────────────────────────────────────
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
@@ -109,6 +126,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [saving, setSaving] = useState(false);
   const [cepStatus, setCepStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // toast de sucesso (inline, sem sistema global)
+  const [toast, setToast] = useState<string | null>(null);
+  // "repetir dados do último cadastro" só faz sentido se já houve um nesta sessão
+  const [canRepeat, setCanRepeat] = useState(false);
 
   // refs p/ Enter avançar os campos de texto
   const nameRef = useRef<TextInput>(null);
@@ -123,13 +144,15 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   // carrega ficha em edição
   useEffect(() => {
     if (!visible) return;
-    setErrorMsg(null); setCepStatus(null);
+    setErrorMsg(null); setCepStatus(null); setToast(null);
     if (!practitionerId) {
       // cadastro novo: pré-seleciona o último dojô da sessão (se houver)
       setForm(lastDojo ? { ...EMPTY, dojo_id: lastDojo.id, dojo_name: lastDojo.name } : EMPTY);
       setFpkt(null); setBeltName(null);
+      setCanRepeat(!!lastShared);
       return;
     }
+    setCanRepeat(false);
     setLoading(true);
     karateApi.getPractitioner(federationId, practitionerId)
       .then((p: any) => {
@@ -155,6 +178,36 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       return () => clearTimeout(t);
     }
   }, [visible, practitionerId, loading]);
+
+  // animação do toast (slide + fade)
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    toastAnim.setValue(0);
+    Animated.timing(toastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+        .start(() => setToast(null));
+    }, 2400);
+  }, [toastAnim]);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  // "Repetir dados do último cadastro" — opt-in, só campos compartilháveis
+  const repeatLast = useCallback(() => {
+    if (!lastShared) return;
+    const s = lastShared;
+    setForm((p) => ({
+      ...p,
+      dojo_id: s.dojo_id, dojo_name: s.dojo_name,
+      zip_code: s.zip_code, street: s.street, number: s.number, complement: s.complement,
+      neighborhood: s.neighborhood, city: s.city, state: s.state,
+    }));
+    if (s.dojo_id) lastDojo = { id: s.dojo_id, name: s.dojo_name };
+    setCepStatus(null);
+    showToast("Dados do último cadastro aplicados");
+  }, [showToast]);
 
   // CEP autofill (ViaCEP) quando completa 8 dígitos
   const onCep = useCallback(async (raw: string) => {
@@ -216,7 +269,19 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     try {
       if (isEdit) await request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body });
       else await request(`/federation/${federationId}/practitioners`, { method: "POST", body });
-      setSaving(false); onSaved(); onClose();
+      // guarda os campos compartilháveis p/ "repetir dados do último" (só cadastro novo)
+      if (!isEdit) {
+        lastShared = {
+          dojo_id: form.dojo_id, dojo_name: form.dojo_name || (lastDojo?.id === form.dojo_id ? lastDojo.name : ""),
+          zip_code: form.zip_code, street: form.street, number: form.number, complement: form.complement,
+          neighborhood: form.neighborhood, city: form.city, state: form.state,
+        };
+      }
+      setSaving(false);
+      showToast(isEdit ? "Alterações salvas" : "Praticante salvo");
+      onSaved();
+      // dá um instante p/ o toast aparecer antes de fechar
+      setTimeout(() => onClose(), 480);
     } catch (e: any) {
       setSaving(false); setErrorMsg(e?.message || "Erro ao salvar. Tente novamente.");
     }
@@ -247,6 +312,15 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
             <ActivityIndicator style={{ paddingVertical: 48 }} color={P.red} />
           ) : (
             <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 20, paddingTop: 6 }} keyboardShouldPersistTaps="handled">
+              {/* repetir dados do último cadastro (opt-in, discreto, só cadastro novo) */}
+              {!isEdit && canRepeat && (
+                <TouchableOpacity style={styles.repeat} onPress={repeatLast} activeOpacity={0.7} accessibilityLabel="Repetir dados do último cadastro">
+                  <Ionicons name="copy-outline" size={14} color={P.ink2} />
+                  <Text style={styles.repeatTxt}>Repetir dados do último cadastro</Text>
+                  <Text style={styles.repeatHint}>dojô e endereço</Text>
+                </TouchableOpacity>
+              )}
+
               {/* completar (neutro) */}
               {empties.length > 0 && (
                 <View style={styles.completar}>
@@ -335,6 +409,17 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.btnPrimaryTxt}>{isEdit ? "Salvar alterações" : "Salvar ficha"}</Text>}
             </TouchableOpacity>
           </View>
+
+          {/* toast de sucesso (inline) */}
+          {toast ? (
+            <Animated.View pointerEvents="none" style={[styles.toast, {
+              opacity: toastAnim,
+              transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            }]}>
+              <Ionicons name="checkmark-circle" size={16} color="#bfe3c4" />
+              <Text style={styles.toastTxt}>{toast}</Text>
+            </Animated.View>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -486,6 +571,10 @@ const styles = StyleSheet.create({
   subMono: { fontFamily: F.mono, fontSize: 12, color: P.red, marginTop: 4 } as TextStyle,
   close: { padding: 4, borderRadius: 999 } as ViewStyle,
 
+  repeat: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13, marginBottom: 10 } as ViewStyle,
+  repeatTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.ink } as TextStyle,
+  repeatHint: { fontFamily: F.body, fontSize: 11, color: P.ink3 } as TextStyle,
+
   completar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 } as ViewStyle,
   completarTtl: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.ink2 } as TextStyle,
   completarList: { fontFamily: F.body, fontSize: 12, color: P.ink3, flex: 1 } as TextStyle,
@@ -537,6 +626,10 @@ const styles = StyleSheet.create({
   btnGhostTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
   btnPrimary: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: R.md, backgroundColor: P.ink, minWidth: 140, alignItems: "center" } as ViewStyle,
   btnPrimaryTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+
+  // toast de sucesso (inline, ancorado no rodapé do card)
+  toast: { position: "absolute", left: 16, right: 16, bottom: 74, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.ink, borderRadius: R.md, paddingVertical: 11, paddingHorizontal: 14 } as ViewStyle,
+  toastTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2", flex: 1 } as TextStyle,
 });
 
 export default PraticanteFichaModal;
