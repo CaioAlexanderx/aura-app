@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karatePortalApi, PublicProfile } from "@/services/karatePortalApi";
 
@@ -118,11 +118,12 @@ const styles = StyleSheet.create({
     }),
   } as ViewStyle,
 
-  ph: { backgroundColor: "#221d17", paddingVertical: 28, paddingHorizontal: 26, alignItems: "center" } as ViewStyle,
-  av: { width: 88, height: 88, borderRadius: 44, backgroundColor: "#a85c4f", alignItems: "center", justifyContent: "center", marginBottom: 14 } as ViewStyle,
-  avTxt: { fontSize: 38, fontWeight: "800", color: "#fbeee4" } as TextStyle,
-  name: { fontFamily: KarateFonts.heading, fontSize: 26, fontWeight: "400", color: "#f3ece0" } as TextStyle,
-  bl: { fontSize: 13, color: "rgba(243,236,224,0.7)", marginTop: 5 } as TextStyle,
+  // Header escuro do documento — tokens Shoji (ink/headRed/paper), não hex solto.
+  ph: { backgroundColor: ShojiPalette.ink, paddingVertical: 28, paddingHorizontal: 26, alignItems: "center" } as ViewStyle,
+  av: { width: 88, height: 88, borderRadius: 44, backgroundColor: ShojiPalette.headRed, alignItems: "center", justifyContent: "center", marginBottom: 14 } as ViewStyle,
+  avTxt: { fontSize: 38, fontWeight: "800", color: ShojiPalette.paperWarm } as TextStyle,
+  name: { fontFamily: KarateFonts.heading, fontSize: 26, fontWeight: "400", color: ShojiPalette.paper } as TextStyle,
+  bl: { fontSize: 13, color: ShojiPalette.ink4, marginTop: 5 } as TextStyle,
 
   beltWrap: { paddingHorizontal: 26, paddingTop: 18 } as ViewStyle,
   beltBar: { height: 22, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.12)" } as ViewStyle,
