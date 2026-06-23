@@ -58,7 +58,7 @@ export default function EventosOverview() {
           sub="Critérios oficiais, calendário de exames e cursos, e lançamento de resultados."
           actions={<>
             <ShojiButton label="Critérios" icon="list-outline" variant="ghost" onPress={() => router.push("/karate/eventos/criterios" as any)} />
-            <ShojiButton label="Criar exame" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />
+            <ShojiButton label="Criar evento" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />
           </>}
         />
 
