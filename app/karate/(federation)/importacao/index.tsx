@@ -11,6 +11,11 @@
 // (não é erro/pendência); só sinalizamos linhas sem o Número FPKT (a chave).
 // Upsert "completar o que falta" no backend.
 //
+// Vocabulário: a planilha FPKT fala "Academias/Alunos"; o resto do app fala
+// "Dojôs/Praticantes". Mantemos os rótulos da planilha aqui (casam a origem)
+// e exibimos uma nota de equivalência discreta (TermNote) para não criar
+// degrau de vocabulário entre esta tela e as demais.
+//
 // Histórico: eventos "Mudança de Faixa" (COM data) → trajetória em
 // karate_belt_history; eventos "Transferência" → karate_practitioner_transfers.
 // Aluno resolvido por Cód.Aluno→Número FPKT (a chave do customers).
@@ -325,6 +330,7 @@ export default function ImportacaoScreen() {
                 <Stat n={transfers.length} label="transferências" />
                 {skipCount > 0 ? <Stat n={skipCount} label="sem Nº FPKT" tone="muted" /> : null}
               </View>
+              <TermNote />
             </Card>
             <Card style={{ gap: 6 }}>
               <Body style={{ fontWeight: "700" as any }}>Como vai funcionar</Body>
@@ -373,6 +379,7 @@ export default function ImportacaoScreen() {
                   <Text style={{ color: C.ok, fontWeight: "700" as any }}>{summary.transfers.inserted}</Text> registradas{summary.transfers.skipped > 0 ? <> · {summary.transfers.skipped} fora da lista/puladas</> : null}
                 </Body>
               </View>
+              <TermNote />
             </Card>
             {/* Atalhos: sair do beco sem saída depois de importar */}
             <View style={styles.row2}>
@@ -384,6 +391,20 @@ export default function ImportacaoScreen() {
         )}
       </ScrollView>
     </ShojiBackground>
+  );
+}
+
+// Nota de equivalência de termos: a planilha FPKT fala "Academias/Alunos",
+// o resto do app fala "Dojôs/Praticantes". Discreta, só para alinhar o
+// vocabulário sem renomear os rótulos que casam a planilha.
+function TermNote() {
+  return (
+    <View style={styles.termNote}>
+      <Ionicons name="information-circle-outline" size={13} color={C.ink3} />
+      <Body muted style={{ fontSize: 11.5, flex: 1 }}>
+        Academias = Dojôs · Alunos = Praticantes — termos da planilha FPKT; no app aparecem como dojôs e praticantes.
+      </Body>
+    </View>
   );
 }
 
@@ -415,6 +436,7 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: "row", gap: 12, flexWrap: "wrap" } as ViewStyle,
   stat: { flex: 1, minWidth: 80, alignItems: "center", paddingVertical: 12, backgroundColor: P.glass, borderRadius: R.md, borderWidth: 1, borderColor: C.line } as ViewStyle,
   statN: { fontFamily: F.heading, fontSize: 26, color: P.red, lineHeight: 30 } as TextStyle,
+  termNote: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 } as ViewStyle,
   row2: { flexDirection: "row", gap: 10 } as ViewStyle,
   doneTitle: { fontFamily: F.heading, fontSize: 20, color: C.ink } as TextStyle,
   sumRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,

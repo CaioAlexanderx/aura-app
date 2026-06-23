@@ -4,10 +4,12 @@
 //
 // Navegação: esta é a página de DETALHE full-page (destino do row-tap da lista).
 // O botão "Editar" (header) abre o modal de ficha para edição rápida.
+// IA/Nav P1: o botão "Ver praticantes" leva à lista já filtrada por este
+//   dojô (/karate/praticantes?dojo_id=<id> — a lista lê o param dojo_id).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import { ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -25,6 +27,7 @@ const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimu
 
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
+  const router = useRouter();
   const { federationId } = useKarateFederation();
   const [data, setData] = useState<DojoDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +56,15 @@ export default function DojoDetailScreen() {
           </View>
           <View style={styles.headActions}>
             <ShojiBadge dojoStatus={data.status} />
-            <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
+            <View style={styles.headBtns}>
+              <ShojiButton
+                label="Ver praticantes"
+                icon="people-outline"
+                variant="ghost"
+                onPress={() => router.push(("/karate/praticantes?dojo_id=" + encodeURIComponent(dojoId!)) as any)}
+              />
+              <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
+            </View>
           </View>
         </View>
 
@@ -118,6 +129,7 @@ const styles = StyleSheet.create({
   content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 920, width: "100%", alignSelf: "center" } as ViewStyle,
   head: { flexDirection: "row", alignItems: "flex-start", gap: 16, flexWrap: "wrap" } as ViewStyle,
   headActions: { alignItems: "flex-end", gap: 10 } as ViewStyle,
+  headBtns: { flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" } as ViewStyle,
   teamRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   noBorder: { borderBottomWidth: 0 } as ViewStyle,
   teamName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
