@@ -3,17 +3,17 @@
 //
 // Fluxo da planilha consolidada FPKT (abas Academias + Alunos + Histórico):
 //   1 Upload  — escolhe o .xlsx e lê as abas (SheetJS, já no app)
-//   2 Prévia  — quantos dojôs/alunos/faixas, quantos serão pulados
+//   2 Prévia  — quantos dojôs/alunos/faixas/transferências, quantos serão pulados
 //   3 Importar— sobe em lotes pro POST .../practitioners/import/batch-fpkt
-//   4 Resumo  — criados/atualizados/pulados + faixas inseridas
+//   4 Resumo  — criados/atualizados/pulados + faixas + transferências
 //
 // Filosofia: a base legada tem buracos legítimos. Dado AUSENTE é neutro
 // (não é erro/pendência); só sinalizamos linhas sem o Número FPKT (a chave).
 // Upsert "completar o que falta" no backend.
 //
-// Faixa: a aba Histórico tem os eventos "Mudança de Faixa" COM data → vira a
-// trajetória em karate_belt_history (idempotente). Aluno resolvido por
-// Cód.Aluno→Número FPKT (a chave do customers).
+// Histórico: eventos "Mudança de Faixa" (COM data) → trajetória em
+// karate_belt_history; eventos "Transferência" → karate_practitioner_transfers.
+// Aluno resolvido por Cód.Aluno→Número FPKT (a chave do customers).
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -31,6 +31,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 const STEPS = ["Upload", "Prévia", "Importar", "Resumo"];
 const STUDENT_BATCH = 500;
 const BELT_BATCH = 1000;
+const TRANSFER_BATCH = 1000;
 
 // ── Normalização (a base legada tem buracos; ausente vira null) ──
 const clean = (v: any): string | null => {
@@ -77,6 +78,7 @@ function parseBeltPhrase(raw: string): { level: string; name: string } | null {
   return { level: key, name: s.charAt(0).toUpperCase() + s.slice(1) };
 }
 const BELT_EVT_RE = /^(\d{2}\/\d{2}\/\d{4})\s*-\s*mudan[çc]a para a faixa\s+([^.]+)/i;
+const TRANSFER_RE = /^(\d{2}\/\d{2}\/\d{4})\s*-\s*mudan[çc]a da academia\s+(.+?)\s+para a academia\s+(.+?)\s*$/i;
 
 type Dojo = { cod: string | null; name: string | null; status: string; address: string | null; phone: string | null };
 type Student = {
@@ -86,11 +88,13 @@ type Student = {
   zip_code: string | null; phone: string | null; academia_name: string | null;
 };
 type BeltEvent = { registration_number: string; belt_level: string; belt_name: string; graduated_at: string };
-type Parsed = { dojos: Dojo[]; students: Student[]; beltEvents: BeltEvent[]; fileName: string };
+type Transfer = { registration_number: string; origin_name: string; destination_name: string; transferred_at: string };
+type Parsed = { dojos: Dojo[]; students: Student[]; beltEvents: BeltEvent[]; transfers: Transfer[]; fileName: string };
 type Summary = {
   dojos: { created: number; updated: number };
   students: { created: number; updated: number; skipped: number };
   belt_events: { inserted: number; skipped: number };
+  transfers: { inserted: number; skipped: number };
 };
 
 // Lê uma aba pulando a 1ª linha (banner); a 2ª linha são os cabeçalhos reais.
@@ -139,20 +143,29 @@ function parseWorkbook(wb: XLSX.WorkBook, fileName: string): Parsed {
 
   // Trajetória de faixa: eventos "Mudança de Faixa" com data, vinculados por Cód.→Reg
   const beltEvents: BeltEvent[] = [];
+  const transfers: Transfer[] = [];
   for (const r of hist) {
-    if (!/mudan/i.test(String(r["Tipo"] ?? ""))) continue;
-    const m = String(r["Evento"] ?? "").match(BELT_EVT_RE);
-    if (!m) continue;
-    const grad = toISO(m[1]);
-    const belt = parseBeltPhrase(m[2]);
-    if (!grad || !belt) continue;
+    const tipo = String(r["Tipo"] ?? "");
+    const ev = String(r["Evento"] ?? "");
     const cod = clean(r["Cód. Aluno"]);
     const reg = cod ? codToReg.get(cod) : null;
     if (!reg) continue;
-    beltEvents.push({ registration_number: reg, belt_level: belt.level, belt_name: belt.name, graduated_at: grad });
+
+    if (/mudan.*faixa/i.test(tipo) || (/faixa/i.test(tipo))) {
+      const m = ev.match(BELT_EVT_RE);
+      if (!m) continue;
+      const grad = toISO(m[1]);
+      const belt = parseBeltPhrase(m[2]);
+      if (grad && belt) beltEvents.push({ registration_number: reg, belt_level: belt.level, belt_name: belt.name, graduated_at: grad });
+    } else if (/transfer/i.test(tipo)) {
+      const m = ev.match(TRANSFER_RE);
+      if (!m) continue;
+      const date = toISO(m[1]);
+      if (date) transfers.push({ registration_number: reg, origin_name: m[2].trim(), destination_name: m[3].trim(), transferred_at: date });
+    }
   }
 
-  return { dojos, students, beltEvents, fileName };
+  return { dojos, students, beltEvents, transfers, fileName };
 }
 
 export default function ImportacaoScreen() {
@@ -200,6 +213,7 @@ export default function ImportacaoScreen() {
   const skipCount = parsed ? parsed.students.filter((s) => !s.registration_number).length : 0;
   const importableStudents = parsed ? parsed.students.filter((s) => s.registration_number) : [];
   const beltEvents = parsed ? parsed.beltEvents : [];
+  const transfers = parsed ? parsed.transfers : [];
 
   async function runImport() {
     if (!parsed) return;
@@ -217,13 +231,19 @@ export default function ImportacaoScreen() {
     for (let i = 0; i < beltEvents.length; i += BELT_BATCH) {
       bChunks.push(beltEvents.slice(i, i + BELT_BATCH));
     }
+    const tChunks: Transfer[][] = [];
+    for (let i = 0; i < transfers.length; i += TRANSFER_BATCH) {
+      tChunks.push(transfers.slice(i, i + TRANSFER_BATCH));
+    }
 
     const acc: Summary = {
       dojos: { created: 0, updated: 0 },
       students: { created: 0, updated: 0, skipped: 0 },
       belt_events: { inserted: 0, skipped: 0 },
+      transfers: { inserted: 0, skipped: 0 },
     };
-    setProgress({ done: 0, total: sChunks.length + bChunks.length });
+    const totalBatches = sChunks.length + bChunks.length + tChunks.length;
+    setProgress({ done: 0, total: totalBatches });
     let done = 0;
 
     const post = (b: any) =>
@@ -238,14 +258,21 @@ export default function ImportacaoScreen() {
         acc.students.created += res?.students?.created ?? 0;
         acc.students.updated += res?.students?.updated ?? 0;
         acc.students.skipped += res?.students?.skipped ?? 0;
-        setProgress({ done: ++done, total: sChunks.length + bChunks.length });
+        setProgress({ done: ++done, total: totalBatches });
       }
       // 2) Faixas (depois que os alunos existem)
       for (let i = 0; i < bChunks.length; i++) {
         const res: any = await post({ belt_events: bChunks[i] });
         acc.belt_events.inserted += res?.belt_events?.inserted ?? 0;
         acc.belt_events.skipped += res?.belt_events?.skipped ?? 0;
-        setProgress({ done: ++done, total: sChunks.length + bChunks.length });
+        setProgress({ done: ++done, total: totalBatches });
+      }
+      // 3) Transferências (precisam de aluno + dojôs já existentes)
+      for (let i = 0; i < tChunks.length; i++) {
+        const res: any = await post({ transfers: tChunks[i] });
+        acc.transfers.inserted += res?.transfers?.inserted ?? 0;
+        acc.transfers.skipped += res?.transfers?.skipped ?? 0;
+        setProgress({ done: ++done, total: totalBatches });
       }
       setSummary(acc);
       setStep(3);
@@ -293,6 +320,7 @@ export default function ImportacaoScreen() {
                 <Stat n={parsed.dojos.length} label="academias" />
                 <Stat n={importableStudents.length} label="alunos" />
                 <Stat n={beltEvents.length} label="faixas" />
+                <Stat n={transfers.length} label="transferências" />
                 {skipCount > 0 ? <Stat n={skipCount} label="sem Nº FPKT" tone="muted" /> : null}
               </View>
             </Card>
@@ -300,6 +328,7 @@ export default function ImportacaoScreen() {
               <Body style={{ fontWeight: "700" as any }}>Como vai funcionar</Body>
               <Body muted style={{ fontSize: 12.5 }}>• Academias entram primeiro; alunos são vinculados ao dojô pelo nome.</Body>
               <Body muted style={{ fontSize: 12.5 }}>• A trajetória de faixa (aba Histórico) vira o histórico de graduação — a faixa atual é a mais recente.</Body>
+              <Body muted style={{ fontSize: 12.5 }}>• Transferências entre dojôs entram no histórico do praticante (as que apontam para dojô fora da lista ficam de fora).</Body>
               <Body muted style={{ fontSize: 12.5 }}>• Registros que já existem são <Text style={{ fontWeight: "700" as any }}>complementados</Text> — nunca sobrescritos.</Body>
               <Body muted style={{ fontSize: 12.5 }}>• Reenviar a mesma planilha é seguro (não duplica).</Body>
               {skipCount > 0 ? <Body muted style={{ fontSize: 12.5 }}>• {skipCount} aluno(s) sem Número FPKT ficam de fora (sem chave para vincular).</Body> : null}
@@ -331,9 +360,15 @@ export default function ImportacaoScreen() {
               <SumRow label="Academias" created={summary.dojos.created} updated={summary.dojos.updated} />
               <SumRow label="Alunos" created={summary.students.created} updated={summary.students.updated} skipped={summary.students.skipped} />
               <View style={styles.sumRow}>
-                <Body style={{ fontWeight: "700" as any, width: 96 }}>Faixas</Body>
+                <Body style={{ fontWeight: "700" as any, width: 110 }}>Faixas</Body>
                 <Body muted style={{ flex: 1 }}>
                   <Text style={{ color: C.ok, fontWeight: "700" as any }}>{summary.belt_events.inserted}</Text> registradas{summary.belt_events.skipped > 0 ? <> · {summary.belt_events.skipped} já existentes/puladas</> : null}
+                </Body>
+              </View>
+              <View style={styles.sumRow}>
+                <Body style={{ fontWeight: "700" as any, width: 110 }}>Transferências</Body>
+                <Body muted style={{ flex: 1 }}>
+                  <Text style={{ color: C.ok, fontWeight: "700" as any }}>{summary.transfers.inserted}</Text> registradas{summary.transfers.skipped > 0 ? <> · {summary.transfers.skipped} fora da lista/puladas</> : null}
                 </Body>
               </View>
             </Card>
@@ -356,7 +391,7 @@ function Stat({ n, label, tone }: { n: number; label: string; tone?: "muted" }) 
 function SumRow({ label, created, updated, skipped }: { label: string; created: number; updated: number; skipped?: number }) {
   return (
     <View style={styles.sumRow}>
-      <Body style={{ fontWeight: "700" as any, width: 96 }}>{label}</Body>
+      <Body style={{ fontWeight: "700" as any, width: 110 }}>{label}</Body>
       <Body muted style={{ flex: 1 }}>
         <Text style={{ color: C.ok, fontWeight: "700" as any }}>{created}</Text> novos · <Text style={{ fontWeight: "700" as any }}>{updated}</Text> complementados{typeof skipped === "number" && skipped > 0 ? <> · {skipped} pulados</> : null}
       </Body>
