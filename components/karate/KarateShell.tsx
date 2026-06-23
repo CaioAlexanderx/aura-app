@@ -26,6 +26,15 @@
 //   • Busca global na sidebar (web): submeter navega para
 //     /karate/praticantes?q=<termo>. Ocultada no mobile.
 //
+// Nav P2 (3.5):
+//   • Breadcrumb leve no topo da área de conteúdo, APENAS em rotas de 2º
+//     nível (detalhe de praticante/dojô, chaves de torneio, detalhe de
+//     evento/exame). Ex.: "Praticantes › Detalhe". Deriva da pathname +
+//     mapa de rótulos das seções (reusa NAV_ITEMS). O 1º nível é clicável
+//     (volta para a lista); o segmento final dinâmico mostra "Detalhe"
+//     (não buscamos dado novo só pro breadcrumb). Telas de 1º nível
+//     (lista/painel) NÃO mostram breadcrumb. Discreto: Mono/muted.
+//
 // Ícones: nomes Ionicons válidos (@expo/vector-icons). A fonte já é
 //   carregada pelas telas Shoji; qualquer nome inválido renderiza tofu.
 // ============================================================
@@ -88,6 +97,64 @@ function isItemActive(item: NavItem, path: string): boolean {
   const isIndex = item.route === "/karate/" || item.route === "/karate";
   if (isIndex) return path === "/karate" || path === "/karate/";
   return path.startsWith(item.route);
+}
+
+// ── Nav P2 (3.5) — breadcrumb leve ───────────────────────────
+// Mapa segmento-da-seção → rótulo, derivado de NAV_ITEMS (a sidebar já
+// tem os rótulos). Ex.: "dojos" → "Dojôs". Inclui apelidos para seções
+// que não são item de menu mas são destino de detalhe.
+const SECTION_LABEL: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const it of NAV_ITEMS) {
+    const seg = it.route.replace(/^\/karate\/?/, "").replace(/\/$/, "");
+    if (seg) map[seg] = it.label;
+  }
+  // apelido: a rota de detalhe do exame vive sob /karate/eventos/exame/<id>
+  // (a seção é "Eventos"); nada a mapear além do que já veio de NAV_ITEMS.
+  return map;
+})();
+
+// Deriva o breadcrumb da pathname. Retorna null nas telas de 1º nível
+// (lista/painel) — só aparece em rotas aninhadas (2º nível ou mais).
+//   /karate                       → null (Dashboard)
+//   /karate/dojos                 → null (lista)
+//   /karate/dojos/<id>            → { section: "Dojôs", route: "/karate/dojos" }
+//   /karate/praticantes/<id>      → { section: "Praticantes", route: "/karate/praticantes" }
+//   /karate/eventos/exame/<id>    → { section: "Eventos", route: "/karate/eventos" }
+function deriveBreadcrumb(path: string): { section: string; route: string } | null {
+  if (!path) return null;
+  // remove query/hash defensivamente (usePathname já remove, mas garantimos)
+  const clean = path.split("?")[0].split("#")[0];
+  const parts = clean.split("/").filter(Boolean); // ["karate", "dojos", "<id>", ...]
+  if (parts[0] !== "karate") return null;
+  // parts.length <= 2 → "/karate" ou "/karate/<seção>" = 1º nível, sem breadcrumb.
+  if (parts.length <= 2) return null;
+  const sectionSeg = parts[1];
+  const label = SECTION_LABEL[sectionSeg];
+  if (!label) return null; // seção desconhecida → não arrisca breadcrumb errado
+  return { section: label, route: `/karate/${sectionSeg}` };
+}
+
+function Breadcrumb() {
+  const path = usePathname();
+  const router = useRouter();
+  const crumb = deriveBreadcrumb(path);
+  if (!crumb) return null; // 1º nível: nada renderizado
+
+  return (
+    <View style={styles.breadcrumb} accessibilityRole="header">
+      <TouchableOpacity
+        onPress={() => router.push(crumb.route as any)}
+        accessibilityRole="link"
+        accessibilityLabel={`Voltar para ${crumb.section}`}
+        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+      >
+        <Text style={styles.crumbLink}>{crumb.section}</Text>
+      </TouchableOpacity>
+      <Ionicons name="chevron-forward" size={12} color={KarateColors.ink4} style={styles.crumbSep} />
+      <Text style={styles.crumbCurrent} numberOfLines={1}>Detalhe</Text>
+    </View>
+  );
 }
 
 const BREAKPOINT_SIDEBAR = 768;
@@ -221,6 +288,8 @@ export function KarateShell() {
       <View style={styles.wideContainer}>
         <SidebarNav />
         <View style={styles.content}>
+          {/* Nav P2: breadcrumb leve só em rotas aninhadas */}
+          <Breadcrumb />
           <Slot />
         </View>
       </View>
@@ -235,6 +304,8 @@ export function KarateShell() {
         <Text style={styles.topbarTitle}>Aura Karatê</Text>
       </View>
       <View style={styles.content}>
+        {/* Nav P2: breadcrumb leve só em rotas aninhadas */}
+        <Breadcrumb />
         <Slot />
       </View>
       <BottomTabNav />
@@ -256,6 +327,32 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: "hidden" as any,
   } as ViewStyle,
+
+  // Breadcrumb (Nav P2) — discreto, Mono/muted, no topo do conteúdo
+  breadcrumb: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 2,
+  } as ViewStyle,
+  crumbLink: {
+    fontFamily: KarateFonts.mono,
+    fontSize: 11.5,
+    color: KarateColors.ink3,
+    letterSpacing: 0.2,
+  } as TextStyle,
+  crumbSep: {
+    marginTop: 1,
+  } as TextStyle,
+  crumbCurrent: {
+    fontFamily: KarateFonts.mono,
+    fontSize: 11.5,
+    color: KarateColors.ink4,
+    letterSpacing: 0.2,
+    flexShrink: 1,
+  } as TextStyle,
 
   // Sidebar
   sidebar: {

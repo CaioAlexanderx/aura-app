@@ -6,9 +6,17 @@
 // O botão "Editar" (header) abre o modal de ficha para edição rápida.
 // IA/Nav P1: o botão "Ver praticantes" leva à lista já filtrada por este
 //   dojô (/karate/praticantes?dojo_id=<id> — a lista lê o param dojo_id).
+//
+// Nav P2 (7.3): ações de link público no header — "Página pública" (abre)
+//   e "Copiar link". Não há rota pública POR-DOJÔ (o portal do dojô abre
+//   por link/token fixo, e o microsite expõe ranking/portais a nível de
+//   FEDERAÇÃO). Então o link relevante e que resolve é a página pública da
+//   federação — o RANKING do microsite (/karate/[slug]/ranking servido em
+//   {slug}.getaura.com.br/ranking), onde os atletas deste dojô aparecem.
+//   O slug vem de getFederationIdentity (fallback: slug do host atual).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
-import { ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -19,6 +27,8 @@ import {
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import { karateApi, DojoDetail, AffiliationModel } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
+import { copyToClipboard } from "@/utils/clipboard";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
@@ -34,6 +44,9 @@ export default function DojoDetailScreen() {
   const [error, setError] = useState(false);
   // Modal de edição (reusa a ficha de cadastro com o id atual)
   const [editOpen, setEditOpen] = useState(false);
+  // Nav P2: slug público da federação (para montar o link do microsite).
+  // null = ainda não resolvido / federação sem slug → ações ficam ocultas.
+  const [pubSlug, setPubSlug] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!dojoId) return;
@@ -41,6 +54,35 @@ export default function DojoDetailScreen() {
     karateApi.getDojo(federationId, dojoId).then(setData).catch(() => setError(true)).finally(() => setLoading(false));
   }, [federationId, dojoId]);
   useEffect(() => { load(); }, [load]);
+
+  // Resolve o slug público da federação UMA vez (não bloqueia a tela).
+  // Preferimos o slug do host (quando já estamos sob o microsite) e, se não,
+  // buscamos na identidade da federação. Best-effort: erro = sem ações.
+  useEffect(() => {
+    let alive = true;
+    const fromHost = getMicrositeSlug();
+    if (fromHost) { setPubSlug(fromHost); return; }
+    if (!federationId) return;
+    karateApi.getFederationIdentity(federationId)
+      .then((id) => { if (alive && id?.slug) setPubSlug(id.slug); })
+      .catch(() => { /* sem slug → ações simplesmente não aparecem */ });
+    return () => { alive = false; };
+  }, [federationId]);
+
+  // URL pública relevante do dojô = página pública (ranking) da federação.
+  const publicUrl = pubSlug ? buildMicrositeUrl(pubSlug, "/ranking") : null;
+
+  const openPublic = () => {
+    if (!publicUrl) return;
+    Linking.openURL(publicUrl).catch(() =>
+      Alert.alert("Não foi possível abrir", "Tente copiar o link e abrir no navegador.")
+    );
+  };
+  const copyPublic = async () => {
+    if (!publicUrl) return;
+    const ok = await copyToClipboard(publicUrl);
+    Alert.alert(ok ? "Link copiado" : "Não foi possível copiar", ok ? publicUrl : "Copie manualmente: " + publicUrl);
+  };
 
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
@@ -57,6 +99,22 @@ export default function DojoDetailScreen() {
           <View style={styles.headActions}>
             <ShojiBadge dojoStatus={data.status} />
             <View style={styles.headBtns}>
+              {publicUrl && (
+                <>
+                  <ShojiButton
+                    label="Página pública"
+                    icon="open-outline"
+                    variant="ghost"
+                    onPress={openPublic}
+                  />
+                  <ShojiButton
+                    label="Copiar link"
+                    icon="link-outline"
+                    variant="ghost"
+                    onPress={copyPublic}
+                  />
+                </>
+              )}
               <ShojiButton
                 label="Ver praticantes"
                 icon="people-outline"
