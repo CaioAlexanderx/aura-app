@@ -7,13 +7,15 @@
 //
 // Princípios (decisões Caio):
 //  - Dado AUSENTE é neutro/opcional ("Completar quando quiser"), NÃO é erro.
-//    Só dado INVÁLIDO (ex.: CPF) é sinalizado.
+//    Só dado INVÁLIDO (ex.: CPF, data impossível) é sinalizado.
 //  - CEP em destaque + autofill (ViaCEP).
 //  - Nº FPKT é gerado no backend (NNNNN-D) — aqui só exibimos.
 //  - Faixa e passaporte NÃO entram nesta ficha (faixa = histórico imutável;
 //    passaporte = fluxo de Dan, adiado).
+//  - Data validada de verdade: a conversão no envio usa parseBrDate (round-trip
+//    de Date → rejeita 31/02). A máscara de digitação continua dd/mm/aaaa.
 // ============================================================
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, FlatList,
@@ -22,6 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, Dojo } from "@/services/karateApi";
 import { request } from "@/services/api";
+import { parseBrDate } from "@/components/inputs/DateInput";
 
 interface Props {
   federationId: string;
@@ -38,6 +41,10 @@ const EMPTY = {
   is_arbiter: false, is_instructor: false, is_examiner: false,
 };
 type Form = typeof EMPTY;
+
+// Lembra o último dojô selecionado na sessão (cadastro em massa do mesmo dojô).
+// Module-level simples — sem libs, vive enquanto o app está aberto.
+let lastDojo: { id: string; name: string } | null = null;
 
 // ── máscaras BR ──────────────────────────────────────────────
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
@@ -71,20 +78,17 @@ function cpfValido(c: string) {
   s = 0; for (let i = 0; i < 10; i++) s += +c[i] * (11 - i);
   d = 11 - (s % 11); if (d >= 10) d = 0; return d === +c[10];
 }
-function ageFromDisplay(v: string): number | null {
-  const m = (v || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+// idade a partir do ISO validado (YYYY-MM-DD)
+function ageFromISO(iso: string | null): number | null {
+  if (!iso) return null;
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  const d = new Date(+m[3], +m[2] - 1, +m[1]);
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
   if (isNaN(d.getTime())) return null;
   const t = new Date(); let a = t.getFullYear() - d.getFullYear();
   const mm = t.getMonth() - d.getMonth();
   if (mm < 0 || (mm === 0 && t.getDate() < d.getDate())) a--;
   return a;
-}
-// dd/mm/aaaa → YYYY-MM-DD (ou null)
-function toISO(v: string): string | null {
-  const m = (v || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 // API (YYYY-MM-DD ou ISO) → dd/mm/aaaa
 function fromISO(v: string | null | undefined): string {
@@ -106,13 +110,26 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [cepStatus, setCepStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // refs p/ Enter avançar os campos de texto
+  const nameRef = useRef<TextInput>(null);
+  const birthRef = useRef<TextInput>(null);
+  const cpfRef = useRef<TextInput>(null);
+  const rgRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
 
   // carrega ficha em edição
   useEffect(() => {
     if (!visible) return;
     setErrorMsg(null); setCepStatus(null);
-    if (!practitionerId) { setForm(EMPTY); setFpkt(null); setBeltName(null); return; }
+    if (!practitionerId) {
+      // cadastro novo: pré-seleciona o último dojô da sessão (se houver)
+      setForm(lastDojo ? { ...EMPTY, dojo_id: lastDojo.id, dojo_name: lastDojo.name } : EMPTY);
+      setFpkt(null); setBeltName(null);
+      return;
+    }
     setLoading(true);
     karateApi.getPractitioner(federationId, practitionerId)
       .then((p: any) => {
@@ -130,6 +147,14 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       .catch(() => setErrorMsg("Não foi possível carregar a ficha."))
       .finally(() => setLoading(false));
   }, [visible, practitionerId, federationId]);
+
+  // autofocus no Nome ao abrir (cadastro novo, após render)
+  useEffect(() => {
+    if (visible && !practitionerId && !loading) {
+      const t = setTimeout(() => nameRef.current?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [visible, practitionerId, loading]);
 
   // CEP autofill (ViaCEP) quando completa 8 dígitos
   const onCep = useCallback(async (raw: string) => {
@@ -150,7 +175,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     } catch { setCepStatus({ msg: "Falha ao buscar o CEP — preencha manualmente.", ok: false }); }
   }, []);
 
-  const age = ageFromDisplay(form.birth_date);
+  // data: ISO validado (parseBrDate rejeita 31/02). Completo mas inválido = sinaliza.
+  const birthIso = parseBrDate(form.birth_date);
+  const dateComplete = form.birth_date.length === 10;
+  const dateBad = dateComplete && birthIso === null;
+  const age = ageFromISO(birthIso);
   const cpfBad = form.cpf.length > 0 && !cpfValido(form.cpf);
 
   // campos vazios (neutro, opcional)
@@ -167,13 +196,14 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   async function handleSave() {
     if (!form.full_name.trim()) { setErrorMsg("Informe o nome completo."); return; }
     if (!form.dojo_id) { setErrorMsg("Selecione o dojô."); return; }
+    if (dateBad) { setErrorMsg("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
     if (cpfBad) { setErrorMsg("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
     const body: any = {
       full_name: form.full_name.trim(),
       cpf: onlyD(form.cpf) || null,
       rg: form.rg || null,
-      birth_date: toISO(form.birth_date),
+      birth_date: birthIso,
       email: form.email || null,
       phone: onlyD(form.phone) || null,
       dojo_id: form.dojo_id,
@@ -228,18 +258,23 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
 
               {/* IDENTIDADE */}
               <SectionTitle>Identidade</SectionTitle>
-              <Field label="Nome completo" req value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="Ex.: Maria Tanaka de Souza" />
+              <Field label="Nome completo" req value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="Ex.: Maria Tanaka de Souza"
+                inputRef={nameRef} returnKeyType="next" onSubmitEditing={() => birthRef.current?.focus()} />
               <DojoSelect federationId={federationId} valueId={form.dojo_id} valueName={form.dojo_name}
-                onSelect={(d) => setForm((p) => ({ ...p, dojo_id: d.id, dojo_name: d.name }))} />
+                onSelect={(d) => { lastDojo = { id: d.id, name: d.name }; setForm((p) => ({ ...p, dojo_id: d.id, dojo_name: d.name })); }} />
               <Row2>
                 <Field flex label="Nascimento" hint="dd/mm/aaaa" mono value={form.birth_date}
                   onChangeText={(v) => set("birth_date", maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa"
-                  note={age != null ? `${age} anos${age < 18 ? " · menor de idade" : ""}` : undefined} />
+                  inputRef={birthRef} returnKeyType="next" onSubmitEditing={() => cpfRef.current?.focus()}
+                  bad={dateBad}
+                  note={dateBad ? "Data inválida" : (age != null ? `${age} anos${age < 18 ? " · menor de idade" : ""}` : undefined)} />
                 <Field flex label="CPF" mono value={form.cpf} onChangeText={(v) => set("cpf", maskCPF(v))}
                   keyboardType="numeric" placeholder="000.000.000-00" bad={cpfBad}
+                  inputRef={cpfRef} returnKeyType="next" onSubmitEditing={() => rgRef.current?.focus()}
                   note={cpfBad ? "Dígitos não conferem" : form.cpf ? "CPF válido" : undefined} noteOk={!cpfBad && !!form.cpf} />
               </Row2>
-              <Field label="RG" mono value={form.rg} onChangeText={(v) => set("rg", v)} placeholder="00.000.000-0" />
+              <Field label="RG" mono value={form.rg} onChangeText={(v) => set("rg", v)} placeholder="00.000.000-0"
+                inputRef={rgRef} returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} />
               {age != null && age < 18 && (
                 <View style={styles.lgpd}>
                   <Ionicons name="shield-checkmark-outline" size={14} color={P.ink2} />
@@ -250,8 +285,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {/* CONTATO & ENDEREÇO — CEP em destaque */}
               <SectionTitle>Contato &amp; endereço</SectionTitle>
               <Row2>
-                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000" />
-                <Field flex label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="nome@exemplo.com" />
+                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
+                  inputRef={phoneRef} returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
+                <Field flex label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="nome@exemplo.com"
+                  inputRef={emailRef} returnKeyType="done" onSubmitEditing={handleSave} />
               </Row2>
 
               {/* CEP destacado */}
@@ -259,7 +296,8 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 <Text style={styles.cepLabel}>CEP <Text style={styles.cepHint}>· preenche o endereço automaticamente</Text></Text>
                 <View style={styles.cepRow}>
                   <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.zip_code}
-                    onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9} />
+                    onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9}
+                    accessibilityLabel="CEP" returnKeyType="next" />
                   {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Ionicons name="search" size={18} color={P.ink3} style={{ width: 36, textAlign: "center" }} />}
                 </View>
                 {cepStatus ? <Text style={[styles.note, cepStatus.ok ? styles.noteOk : styles.noteBad]}>{cepStatus.msg}</Text> : null}
@@ -319,14 +357,18 @@ function Field(props: {
   label: string; value: string; onChangeText: (v: string) => void; placeholder?: string;
   hint?: string; req?: boolean; mono?: boolean; flex?: boolean; flex2?: boolean; bad?: boolean;
   note?: string; noteOk?: boolean; keyboardType?: any; autoCapitalize?: any; maxLength?: number;
+  inputRef?: React.RefObject<TextInput>; returnKeyType?: any; onSubmitEditing?: () => void;
 }) {
   return (
     <View style={[styles.field, props.flex && { flex: 1 }, props.flex2 && { flex: 2 }]}>
       <Text style={styles.label}>{props.label}{props.req ? <Text style={{ color: P.red }}> *</Text> : null}{props.hint ? <Text style={styles.labelHint}>  · {props.hint}</Text> : null}</Text>
       <TextInput
+        ref={props.inputRef}
         style={[styles.input, props.mono && styles.mono, props.bad && styles.inputBad]}
         value={props.value} onChangeText={props.onChangeText} placeholder={props.placeholder}
         placeholderTextColor={P.ink4} keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize} maxLength={props.maxLength}
+        accessibilityLabel={props.label}
+        returnKeyType={props.returnKeyType} onSubmitEditing={props.onSubmitEditing} blurOnSubmit={props.returnKeyType === "done"}
       />
       {props.note ? <Text style={[styles.note, props.noteOk ? styles.noteOk : props.bad ? styles.noteBad : null]}>{props.note}</Text> : null}
     </View>
@@ -352,20 +394,62 @@ function DojoSelect({ federationId, valueId, valueName, onSelect }: {
   const [q, setQ] = useState("");
   const [list, setList] = useState<Dojo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [label, setLabel] = useState(valueName || "");
+  const [label, setLabel] = useState(valueName || (valueId && lastDojo?.id === valueId ? lastDojo.name : ""));
 
-  useEffect(() => { setLabel(valueName || ""); }, [valueName]);
+  useEffect(() => {
+    if (valueName) { setLabel(valueName); return; }
+    if (valueId && lastDojo?.id === valueId) setLabel(lastDojo.name);
+  }, [valueName, valueId]);
+
   const fetchDojos = useCallback(async (term: string) => {
     setLoading(true);
-    try { const res = await karateApi.listDojos(federationId, { q: term || undefined, pageSize: 50 }); setList(res.data); }
-    catch { setList([]); } finally { setLoading(false); }
+    try { const res = await karateApi.listDojos(federationId, { q: term || undefined, pageSize: 50 }); return res.data; }
+    catch { return [] as Dojo[]; } finally { setLoading(false); }
   }, [federationId]);
-  useEffect(() => { if (open) fetchDojos(""); }, [open, fetchDojos]);
+
+  // ao abrir, carrega a lista (e se só houver 1 dojô e nada selecionado, pré-seleciona)
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    fetchDojos("").then((data) => {
+      if (!alive) return;
+      setList(data);
+      if (!valueId && data.length === 1) {
+        const only = data[0];
+        lastDojo = { id: only.id, name: only.name };
+        setLabel(only.name);
+        onSelect(only);
+        setOpen(false);
+      }
+    });
+    return () => { alive = false; };
+  }, [open, fetchDojos]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // pré-seleciona único dojô já na montagem (sem precisar abrir o dropdown)
+  useEffect(() => {
+    if (valueId) return;
+    let alive = true;
+    fetchDojos("").then((data) => {
+      if (!alive) return;
+      if (!valueId && data.length === 1) {
+        const only = data[0];
+        lastDojo = { id: only.id, name: only.name };
+        setLabel(only.name);
+        onSelect(only);
+      }
+    });
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onSearch = useCallback((t: string) => {
+    setQ(t);
+    fetchDojos(t).then(setList);
+  }, [fetchDojos]);
 
   return (
     <View style={styles.field}>
       <Text style={styles.label}>Dojô <Text style={{ color: P.red }}>*</Text></Text>
-      <TouchableOpacity style={styles.input} onPress={() => setOpen((o) => !o)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.input} onPress={() => setOpen((o) => !o)} activeOpacity={0.7} accessibilityLabel="Dojô">
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ fontFamily: F.body, fontSize: 14, color: label ? P.ink : P.ink4 }} numberOfLines={1}>{label || "Selecionar dojô…"}</Text>
           <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color={P.ink3} />
@@ -374,7 +458,7 @@ function DojoSelect({ federationId, valueId, valueName, onSelect }: {
       {open && (
         <View style={styles.dropdown}>
           <TextInput style={styles.dropdownSearch} placeholder="Buscar por nome ou FPKT-NNN" placeholderTextColor={P.ink4}
-            value={q} onChangeText={(t) => { setQ(t); fetchDojos(t); }} autoFocus />
+            value={q} onChangeText={onSearch} autoFocus accessibilityLabel="Buscar dojô" />
           {loading ? <ActivityIndicator style={{ margin: 12 }} color={P.red} /> : list.length === 0 ? (
             <Text style={styles.dropdownEmpty}>Nenhum dojô encontrado</Text>
           ) : (
