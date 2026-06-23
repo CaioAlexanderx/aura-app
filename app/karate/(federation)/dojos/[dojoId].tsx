@@ -1,6 +1,9 @@
 // ============================================================
 // Detalhe do Dojô — Aura Karatê (federação) · Shoji
 // Dados reais via GET /federation/{id}/dojos/{dojoId}.
+//
+// Navegação: esta é a página de DETALHE full-page (destino do row-tap da lista).
+// O botão "Editar" (header) abre o modal de ficha para edição rápida.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import { ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
@@ -9,8 +12,9 @@ import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
-  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, Mono, Body, Eyebrow, H1,
+  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1,
 } from "@/components/karate/shoji";
+import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import { karateApi, DojoDetail, AffiliationModel } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
@@ -25,6 +29,8 @@ export default function DojoDetailScreen() {
   const [data, setData] = useState<DojoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Modal de edição (reusa a ficha de cadastro com o id atual)
+  const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(() => {
     if (!dojoId) return;
@@ -45,7 +51,10 @@ export default function DojoDetailScreen() {
             <H1 dot style={{ marginTop: 12 }}>{data.name}</H1>
             <Body muted style={{ marginTop: 12 }}>{data.region || "—"} · {MODEL_LABEL[data.affiliation_model] ?? "—"}</Body>
           </View>
-          <ShojiBadge dojoStatus={data.status} />
+          <View style={styles.headActions}>
+            <ShojiBadge dojoStatus={data.status} />
+            <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
+          </View>
         </View>
 
         <Card style={{ marginTop: SP[6] }}>
@@ -92,6 +101,15 @@ export default function DojoDetailScreen() {
             ))}
         </Card>
       </ScrollView>
+
+      {/* Modal de edição da ficha (reusa o cadastro com o id atual) */}
+      <DojoFichaModal
+        federationId={federationId}
+        visible={editOpen}
+        dojoId={dojoId!}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => load()}
+      />
     </ShojiBackground>
   );
 }
@@ -99,6 +117,7 @@ export default function DojoDetailScreen() {
 const styles = StyleSheet.create({
   content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 920, width: "100%", alignSelf: "center" } as ViewStyle,
   head: { flexDirection: "row", alignItems: "flex-start", gap: 16, flexWrap: "wrap" } as ViewStyle,
+  headActions: { alignItems: "flex-end", gap: 10 } as ViewStyle,
   teamRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   noBorder: { borderBottomWidth: 0 } as ViewStyle,
   teamName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,

@@ -5,7 +5,7 @@
 //   1 Upload  — escolhe o .xlsx e lê as abas (SheetJS, já no app)
 //   2 Prévia  — quantos dojôs/alunos/faixas/transferências, quantos serão pulados
 //   3 Importar— sobe em lotes pro POST .../practitioners/import/batch-fpkt
-//   4 Resumo  — criados/atualizados/pulados + faixas + transferências
+//   4 Resumo  — criados/atualizados/pulados + faixas + transferências + atalhos
 //
 // Filosofia: a base legada tem buracos legítimos. Dado AUSENTE é neutro
 // (não é erro/pendência); só sinalizamos linhas sem o Número FPKT (a chave).
@@ -21,6 +21,7 @@ import {
   ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import * as XLSX from "xlsx";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
@@ -169,6 +170,7 @@ function parseWorkbook(wb: XLSX.WorkBook, fileName: string): Parsed {
 }
 
 export default function ImportacaoScreen() {
+  const router = useRouter();
   const { federationId } = useKarateFederation();
   const [step, setStep] = useState(0);
   const [parsed, setParsed] = useState<Parsed | null>(null);
@@ -372,6 +374,11 @@ export default function ImportacaoScreen() {
                 </Body>
               </View>
             </Card>
+            {/* Atalhos: sair do beco sem saída depois de importar */}
+            <View style={styles.row2}>
+              <ShojiButton label="Ver praticantes" icon="people-outline" variant="sumi" onPress={() => router.push("/karate/praticantes" as any)} style={{ flex: 1 }} />
+              <ShojiButton label="Ver dojôs" icon="home-outline" variant="ghost" onPress={() => router.push("/karate/dojos" as any)} style={{ flex: 1 }} />
+            </View>
             <ShojiButton label="Importar outra planilha" variant="ghost" onPress={() => { setParsed(null); setSummary(null); setProgress({ done: 0, total: 0 }); setStep(0); }} />
           </View>
         )}

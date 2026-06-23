@@ -1,7 +1,8 @@
 // ============================================================
 // Praticantes — Lista — Aura Karatê (federação) · Shoji
 // Fiel ao pane "alunos" do standalone v5. Dados reais.
-// Ficha (cadastro + edição) abre em MODAL sobre a lista (navegação fluida).
+// Tocar numa linha → DETALHE full-page (trajetória, carteirinha, transferências).
+// "Novo praticante" → MODAL (cadastro rápido).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -37,7 +38,7 @@ export default function PraticantesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<AffiliationStatus | "all">("all");
-  // Modal da ficha: open + id (null = cadastro, string = edição)
+  // Modal da ficha: usado SÓ para cadastro rápido ("Novo praticante").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const load = useCallback(async (isRefresh = false) => {
@@ -79,7 +80,7 @@ export default function PraticantesScreen() {
   );
 
   function Row({ item }: { item: PractitionerListItem }) {
-    const onPress = () => setModal({ open: true, id: item.id });
+    const onPress = () => router.push(`/karate/praticantes/${item.id}` as any);
     if (wide) return (
       <TouchableOpacity style={styles.tr} onPress={onPress} activeOpacity={0.7}>
         <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>

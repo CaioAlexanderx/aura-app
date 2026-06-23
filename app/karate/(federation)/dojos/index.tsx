@@ -3,7 +3,8 @@
 //
 // Fiel ao pane "dojos" do standalone v5. Dados reais via
 // GET /federation/{id}/dojos. Estados honestos.
-// Ficha (cadastro + edição) abre em MODAL sobre a lista (navegação fluida).
+// Tocar numa linha → DETALHE full-page (cadastro, equipe técnica, anuidades).
+// "Novo dojô" → MODAL (cadastro rápido).
 // ============================================================
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -42,7 +43,7 @@ export default function DojosScreen() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<DojoStatus | "all">("all");
   const [region, setRegion] = useState<string | "all">("all");
-  // Modal da ficha: open + id (null = cadastro, string = edição)
+  // Modal da ficha: usado SÓ para cadastro rápido ("Novo dojô").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const load = useCallback(async (isRefresh = false) => {
@@ -92,7 +93,7 @@ export default function DojosScreen() {
   );
 
   function Row({ d }: { d: Dojo }) {
-    const onPress = () => setModal({ open: true, id: d.id });
+    const onPress = () => router.push(`/karate/dojos/${d.id}` as any);
     if (wide) return (
       <TouchableOpacity style={styles.tr} onPress={onPress} activeOpacity={0.7}>
         <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>

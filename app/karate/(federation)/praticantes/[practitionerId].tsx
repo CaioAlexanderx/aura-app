@@ -9,6 +9,9 @@
 // Track N: aba "Transferência" mostra o histórico imutável + botão transferir
 //   (gated por papel: federation_admin / federation_staff).
 // DECISÃO FPKT #3: certificado sob demanda via karateApi.issueCertificate.
+//
+// Navegação: esta é a página de DETALHE full-page (destino do row-tap da lista).
+// O botão "Editar" (header) abre o modal de ficha para edição rápida.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -25,6 +28,7 @@ import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { CarteirinhaPanel } from "@/components/karate/CarteirinhaPanel";
 import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
+import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate, TransferRecord } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -287,6 +291,8 @@ export default function FichaPraticanteScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("Cadastro");
+  // Modal de edição (reusa a ficha de cadastro com o id atual)
+  const [editOpen, setEditOpen] = useState(false);
 
   const reload = useCallback(() => {
     if (!practitionerId) return;
@@ -328,7 +334,18 @@ export default function FichaPraticanteScreen() {
               />
             )}
           </View>
-          <Badge affiliationStatus={data.affiliation_status as AffiliationStatus} />
+          <View style={styles.headerActions}>
+            <Badge affiliationStatus={data.affiliation_status as AffiliationStatus} />
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => setEditOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Editar praticante"
+            >
+              <Ionicons name="create-outline" size={15} color={KarateColors.primary} />
+              <Text style={styles.editBtnText}>Editar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -356,6 +373,15 @@ export default function FichaPraticanteScreen() {
         {activeTab === "Transferência"  && <TransferenciaTab federationId={federationId} practitioner={data} karateRole={karateRole} onTransferred={reload} />}
         {activeTab === "Documentos"     && <PlaceholderTab label="Documentos" />}
       </ScrollView>
+
+      {/* Modal de edição da ficha (reusa o cadastro com o id atual) */}
+      <PraticanteFichaModal
+        federationId={federationId}
+        visible={editOpen}
+        practitionerId={practitionerId!}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => reload()}
+      />
     </View>
   );
 }
@@ -364,6 +390,9 @@ const styles = StyleSheet.create({
   screen:     { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   headerCard: { backgroundColor: "#fff", padding: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   headerRow:  { flexDirection: "row", alignItems: "flex-start", gap: 12 } as ViewStyle,
+  headerActions: { alignItems: "flex-end", gap: 8 } as ViewStyle,
+  editBtn:    { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
+  editBtnText: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   avatar:     { width: 52, height: 52, borderRadius: 26, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center" } as ViewStyle,
   regNum:     { fontSize: 11, fontWeight: "800", color: KarateColors.primary, letterSpacing: 0.8, fontFamily: KarateFonts.mono } as TextStyle,
   fullName:   { fontFamily: KarateFonts.heading, fontSize: 20, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
