@@ -3,6 +3,12 @@
 // Fiel ao pane "alunos" do standalone v5. Dados reais.
 // Tocar numa linha → DETALHE full-page (trajetória, carteirinha, transferências).
 // "Novo praticante" → MODAL (cadastro rápido).
+//
+// IA/Nav P1: a tela lê os params de rota `q` e `dojo_id` (via
+//   useLocalSearchParams) e já carrega pré-filtrada:
+//     • `q`       — pré-popula o campo de busca (vem da busca global do shell).
+//     • `dojo_id` — filtra pelos praticantes do dojô (vem do CTA "Ver
+//                   praticantes" no detalhe do dojô). A API já aceita dojo_id.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -10,7 +16,7 @@ import {
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -25,31 +31,48 @@ const STATUS_FILTERS: { key: AffiliationStatus | "all"; label: string }[] = [
   { key: "all", label: "Todos" }, { key: "active", label: "Em dia" }, { key: "pending", label: "Pendente" }, { key: "inactive", label: "Inativo" },
 ];
 
+// Params de rota podem chegar como string | string[]; normaliza para string.
+const firstParam = (v: string | string[] | undefined): string =>
+  (Array.isArray(v) ? v[0] : v) ?? "";
+
 export default function PraticantesScreen() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const { width } = useWindowDimensions();
   const wide = width >= 860;
 
+  // IA/Nav P1 — pré-filtros vindos da rota (busca global / CTA do dojô).
+  const params = useLocalSearchParams<{ q?: string | string[]; dojo_id?: string | string[] }>();
+  const qParam = firstParam(params.q);
+  const dojoIdParam = firstParam(params.dojo_id);
+
   const [items, setItems] = useState<PractitionerListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(qParam);
   const [status, setStatus] = useState<AffiliationStatus | "all">("all");
   // Modal da ficha: usado SÓ para cadastro rápido ("Novo praticante").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+
+  // Sincroniza o campo de busca quando o param `q` muda (ex.: nova busca do shell).
+  useEffect(() => { setQ(qParam); }, [qParam]);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
-      const res = await karateApi.listPractitioners(federationId, { q: q || undefined, affiliation_status: status === "all" ? undefined : status, pageSize: 100 });
+      const res = await karateApi.listPractitioners(federationId, {
+        q: q || undefined,
+        dojo_id: dojoIdParam || undefined,
+        affiliation_status: status === "all" ? undefined : status,
+        pageSize: 100,
+      });
       setItems(res.data); setTotal(res.total ?? res.data.length);
     } catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
-  }, [federationId, q, status]);
+  }, [federationId, q, status, dojoIdParam]);
   useEffect(() => { load(); }, [load]);
 
   const header = (
