@@ -11,6 +11,10 @@
 // Fase 0 Dojô (17/06/2026): usa company.name como nome do dojô em vez
 // do mock SENSEI_DOJO. Mantém SENSEI_DOJO apenas como fallback de display.
 // Track J: adicionada aba Certificados → /karate/sensei/certificados
+//
+// Fontes Shoji: este shell é um mount point próprio de karatê (fora do
+// KarateShell da federação), então carrega as fontes via useShojiFonts —
+// no nativo registra as famílias por expo-font, no web injeta o Google Fonts.
 // ============================================================
 import React from "react";
 import {
@@ -22,6 +26,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/stores/auth";
 import { KarateFederationProvider, useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
 
@@ -36,6 +41,7 @@ const TABS = [
 ] as const;
 
 function SenseiShell() {
+  useShojiFonts();   // carrega as fontes Shoji (web Google Fonts · nativo expo-font)
   const router = useRouter();
   const path = usePathname();
   const { dojoId } = useKarateFederation();
