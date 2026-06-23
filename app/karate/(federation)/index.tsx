@@ -6,6 +6,9 @@
 //
 // NOTA (D0): a busca rápida e o painel de notificações do Track P foram
 // removidos NESTA prova visual; serão reintroduzidos estilizados na D1.
+//
+// Empty state: quando a federação está vazia (0 dojôs e 0 praticantes),
+// mostramos boas-vindas com ação primária "Importar planilha".
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -66,6 +69,46 @@ export default function KaratePainel() {
   const beltTotal = belts.reduce((s, b) => s + b.count, 0);
   const beltMax = belts.reduce((m, b) => Math.max(m, b.count), 0) || 1;
   const overdueTotal = overdue.reduce((s, d) => s + d.amount, 0);
+  // Federação vazia: sem dojôs E sem praticantes → tela de boas-vindas.
+  const isEmpty = !loading && !!data && data.kpis.dojo_count === 0 && data.kpis.practitioner_count === 0;
+
+  const pageHead = (
+    <PageHead
+      eyebrow={`Temporada ${now.getFullYear()} · ${MONTHS[now.getMonth()]}`}
+      title="Painel"
+      sub={`Indicadores de ${federationName || "sua federação"}.`}
+      actions={isEmpty ? undefined : <ShojiButton label="Exportar" icon="download-outline" variant="ghost" onPress={() => {}} />}
+    />
+  );
+
+  // ── Estado de boas-vindas (federação ainda sem dados) ──
+  if (isEmpty) {
+    return (
+      <ShojiBackground>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+        >
+          {pageHead}
+          <Card style={styles.welcome}>
+            <View style={styles.welcomeIcon}>
+              <Ionicons name="sparkles-outline" size={28} color={P.red} />
+            </View>
+            <Text style={styles.welcomeTitle}>Bem-vindo à {federationName || "sua federação"}</Text>
+            <Body muted style={styles.welcomeSub}>
+              Ainda não há dojôs nem praticantes por aqui. O jeito mais rápido de começar é importar
+              a planilha consolidada da FPKT — as academias, os alunos e a trajetória de faixas entram de uma vez só.
+            </Body>
+            <View style={styles.welcomeActions}>
+              <ShojiButton label="Importar planilha" icon="cloud-upload-outline" variant="sumi" onPress={() => router.push("/karate/importacao" as any)} />
+              <ShojiButton label="Cadastrar dojô" icon="home-outline" variant="ghost" onPress={() => router.push("/karate/dojos" as any)} />
+              <ShojiButton label="Cadastrar praticante" icon="person-add-outline" variant="ghost" onPress={() => router.push("/karate/praticantes" as any)} />
+            </View>
+          </Card>
+        </ScrollView>
+      </ShojiBackground>
+    );
+  }
 
   return (
     <ShojiBackground>
@@ -73,12 +116,7 @@ export default function KaratePainel() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
       >
-        <PageHead
-          eyebrow={`Temporada ${now.getFullYear()} · ${MONTHS[now.getMonth()]}`}
-          title="Painel"
-          sub={`Indicadores de ${federationName || "sua federação"}.`}
-          actions={<ShojiButton label="Exportar" icon="download-outline" variant="ghost" onPress={() => {}} />}
-        />
+        {pageHead}
 
         {/* KPIs */}
         {loading ? (
@@ -184,4 +222,10 @@ const styles = StyleSheet.create({
   dateBox: { width: 54, paddingVertical: 7, borderRadius: R.sm, backgroundColor: P.redWash, alignItems: "center" } as ViewStyle,
   rowTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
   rowDanger: { fontFamily: F.body, fontSize: 11.5, color: P.red, marginTop: 2 } as TextStyle,
+  // Empty state de boas-vindas
+  welcome: { marginTop: SP[6], alignItems: "center", gap: 12, paddingVertical: 36, paddingHorizontal: 24 } as ViewStyle,
+  welcomeIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: P.redWash, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  welcomeTitle: { fontFamily: F.heading, fontSize: 22, color: C.ink, textAlign: "center" } as TextStyle,
+  welcomeSub: { fontSize: 13.5, textAlign: "center", maxWidth: 520, lineHeight: 20 } as TextStyle,
+  welcomeActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 6 } as ViewStyle,
 });
