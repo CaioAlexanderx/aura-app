@@ -7,6 +7,7 @@ import { Platform } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
+import { isMicrositeHost } from "@/utils/microsite";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
@@ -14,6 +15,10 @@ import { startAutoSync } from "@/services/offlineSync";
 import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
 
 const queryClient = new QueryClient();
+
+// URL do app administrativo (login/painel da federação). O microsite
+// ({slug}.getaura.com.br) é PÚBLICO-only e manda admin/login pra cá.
+const APP_URL = "https://app.getaura.com.br";
 
 function checkVerifiedParam() {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
@@ -54,6 +59,29 @@ function AuthGuard() {
   }, [isHydrated, token]);
 
   useEffect(() => {
+    // Microsite ({slug}.getaura.com.br): domínio PÚBLICO-only. Só as páginas
+    // públicas (hub, portal do dojô, portal/perfil do praticante, inscrição,
+    // ranking embed, verificação de carteirinha) renderizam aqui. Qualquer
+    // rota de login/admin sai do subdomínio para o app principal — redirect de
+    // página inteira (não router.replace, que é mesmo host). Gateado por
+    // isMicrositeHost() → no domínio principal e no nativo este bloco é inerte.
+    if (isMicrositeHost() && segments.length > 0) {
+      const onPublicMicrosite = segments[0] === "karate" && (
+        segments.length <= 2 ||                 // hub: /karate/{slug}
+        segments[1] === "verify" ||             // carteirinha pública
+        segments[2] === "dojo" ||               // portal do dojô (OTP)
+        segments[2] === "praticante" ||         // portal do praticante (OTP)
+        segments[2] === "p" ||                  // perfil público reduzido
+        segments[2] === "inscricao" ||          // inscrição pública
+        segments[2] === "ranking"               // ranking embed
+      );
+      if (!onPublicMicrosite) {
+        if (typeof window !== "undefined") window.location.href = APP_URL;
+        return;
+      }
+      return; // rota pública do microsite: renderiza sem o guard de auth
+    }
+
     if (!isHydrated) return;
 
     const inAuth     = segments[0] === "(auth)";
