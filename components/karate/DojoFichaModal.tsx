@@ -7,13 +7,15 @@
 //
 // Princípios (decisões Caio):
 //  - Dado AUSENTE é neutro/opcional ("Completar quando quiser"), NÃO é erro.
-//    Só dado INVÁLIDO (CNPJ/CPF) é sinalizado.
+//    Só dado INVÁLIDO (CNPJ/CPF/data impossível) é sinalizado.
 //  - CEP em destaque → compõe o endereço (campo de texto único do dojô) via ViaCEP.
 //  - FPKT-ID é gerado no backend — aqui só exibimos.
 //  - Modelo de filiação (obrigatório): Anual/Semestral/Trimestral, com os
 //    valores vigentes FPKT como referência.
+//  - Data validada de verdade: a conversão no envio usa parseBrDate (round-trip
+//    de Date → rejeita 31/02). A máscara de digitação continua dd/mm/aaaa.
 // ============================================================
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle,
@@ -21,6 +23,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, AffiliationModel, DojoInput } from "@/services/karateApi";
+import { parseBrDate } from "@/components/inputs/DateInput";
 
 interface Props {
   federationId: string;
@@ -83,10 +86,6 @@ function cnpjValido(v: string) {
   };
   return calc(12) === +c[12] && calc(13) === +c[13];
 }
-function toISO(v: string): string | undefined {
-  const m = (v || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : undefined;
-}
 function fromISO(v: string | null | undefined): string {
   if (!v) return "";
   const m = String(v).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -112,6 +111,16 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   const [cepStatus, setCepStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // refs p/ Enter avançar os campos de texto
+  const nameRef = useRef<TextInput>(null);
+  const regionRef = useRef<TextInput>(null);
+  const cnpjRef = useRef<TextInput>(null);
+  const senseiRef = useRef<TextInput>(null);
+  const sinceRef = useRef<TextInput>(null);
+  const foundedRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -134,6 +143,14 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       .finally(() => setLoading(false));
   }, [visible, dojoId, federationId]);
 
+  // autofocus no Nome ao abrir (cadastro novo, após render)
+  useEffect(() => {
+    if (visible && !dojoId && !loading) {
+      const t = setTimeout(() => nameRef.current?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [visible, dojoId, loading]);
+
   const onCep = useCallback(async (raw: string) => {
     set("cep", maskCEP(raw));
     const d = onlyD(raw);
@@ -151,6 +168,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
 
   const cnpjBad = form.cnpj.length > 0 && !cnpjValido(form.cnpj);
   const senseiBad = form.sensei_cpf.length > 0 && !cpfValido(form.sensei_cpf);
+  // data "Filiado desde": ISO validado (parseBrDate rejeita 31/02). Completo mas inválido = sinaliza.
+  const sinceIso = parseBrDate(form.affiliation_since);
+  const sinceBad = form.affiliation_since.length === 10 && sinceIso === null;
 
   const empties = useMemo(() => {
     const e: string[] = [];
@@ -167,6 +187,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     if (!form.affiliation_model) { setErrorMsg("Escolha o modelo de filiação."); return; }
     if (cnpjBad) { setErrorMsg("O CNPJ informado é inválido. Corrija ou deixe em branco."); return; }
     if (senseiBad) { setErrorMsg("O CPF do sensei é inválido. Corrija ou deixe em branco."); return; }
+    if (sinceBad) { setErrorMsg("A data \"Filiado desde\" é inválida. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
     const body: DojoInput = {
       name: form.name.trim(),
@@ -174,7 +195,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       cnpj: onlyD(form.cnpj) || null,
       sensei_cpf: onlyD(form.sensei_cpf) || null,
       region: form.region || undefined,
-      affiliation_since: toISO(form.affiliation_since),
+      affiliation_since: sinceIso || undefined,
       dojo_founded_year: form.dojo_founded_year ? parseInt(form.dojo_founded_year, 10) : null,
       address: form.address || null,
       phone: onlyD(form.phone) || null,
@@ -220,7 +241,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               )}
 
               <SectionTitle>Identidade</SectionTitle>
-              <Field label="Nome do dojô" req value={form.name} onChangeText={(v) => set("name", v)} placeholder="Ex.: Associação Shobu-Kan Karatê-Dô" />
+              <Field label="Nome do dojô" req value={form.name} onChangeText={(v) => set("name", v)} placeholder="Ex.: Associação Shobu-Kan Karatê-Dô"
+                inputRef={nameRef} returnKeyType="next" onSubmitEditing={() => regionRef.current?.focus()} />
 
               {/* Modelo de filiação (obrigatório) */}
               <Text style={styles.label}>Modelo de filiação <Text style={{ color: P.red }}>*</Text></Text>
@@ -228,7 +250,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                 {MODELS.map((m) => {
                   const on = form.affiliation_model === m.key;
                   return (
-                    <TouchableOpacity key={m.key} style={[styles.model, on && styles.modelOn]} onPress={() => set("affiliation_model", m.key)} activeOpacity={0.8}>
+                    <TouchableOpacity key={m.key} style={[styles.model, on && styles.modelOn]} onPress={() => set("affiliation_model", m.key)} activeOpacity={0.8} accessibilityLabel={`Modelo ${m.label}`}>
                       <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.modelLabel, on && { color: P.ink }]}>{m.label}</Text>
@@ -240,31 +262,39 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               </View>
 
               <Row2>
-                <Field flex label="Região" value={form.region} onChangeText={(v) => set("region", v)} placeholder="Ex.: Vale do Paraíba" />
+                <Field flex label="Região" value={form.region} onChangeText={(v) => set("region", v)} placeholder="Ex.: Vale do Paraíba"
+                  inputRef={regionRef} returnKeyType="next" onSubmitEditing={() => cnpjRef.current?.focus()} />
                 <Field flex label="CNPJ" hint="opcional" mono value={form.cnpj} onChangeText={(v) => set("cnpj", maskCNPJ(v))} keyboardType="numeric" placeholder="00.000.000/0000-00" bad={cnpjBad}
+                  inputRef={cnpjRef} returnKeyType="next" onSubmitEditing={() => senseiRef.current?.focus()}
                   note={cnpjBad ? "CNPJ inválido" : undefined} />
               </Row2>
 
               <SectionTitle>Sensei &amp; fundação</SectionTitle>
               <Row2>
                 <Field flex label="CPF do sensei responsável" mono value={form.sensei_cpf} onChangeText={(v) => set("sensei_cpf", maskCPF(v))} keyboardType="numeric" placeholder="000.000.000-00" bad={senseiBad}
+                  inputRef={senseiRef} returnKeyType="next" onSubmitEditing={() => sinceRef.current?.focus()}
                   note={senseiBad ? "CPF inválido" : (form.sensei_cpf && !senseiBad ? "CPF válido" : undefined)} noteOk={!!form.sensei_cpf && !senseiBad} />
               </Row2>
               <Row2>
-                <Field flex label="Filiado desde" hint="dd/mm/aaaa" mono value={form.affiliation_since} onChangeText={(v) => set("affiliation_since", maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" />
-                <Field flex label="Ano de fundação" mono value={form.dojo_founded_year} onChangeText={(v) => set("dojo_founded_year", onlyD(v).slice(0, 4))} keyboardType="numeric" placeholder="1996" maxLength={4} />
+                <Field flex label="Filiado desde" hint="dd/mm/aaaa" mono value={form.affiliation_since} onChangeText={(v) => set("affiliation_since", maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa"
+                  inputRef={sinceRef} returnKeyType="next" onSubmitEditing={() => foundedRef.current?.focus()}
+                  bad={sinceBad} note={sinceBad ? "Data inválida" : undefined} />
+                <Field flex label="Ano de fundação" mono value={form.dojo_founded_year} onChangeText={(v) => set("dojo_founded_year", onlyD(v).slice(0, 4))} keyboardType="numeric" placeholder="1996" maxLength={4}
+                  inputRef={foundedRef} returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} />
               </Row2>
 
               <SectionTitle>Contato &amp; endereço</SectionTitle>
               <Row2>
-                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000" />
-                <Field flex label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="dojo@exemplo.com" />
+                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
+                  inputRef={phoneRef} returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
+                <Field flex label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="dojo@exemplo.com"
+                  inputRef={emailRef} returnKeyType="done" onSubmitEditing={handleSave} />
               </Row2>
 
               <View style={styles.cepBox}>
                 <Text style={styles.cepLabel}>CEP <Text style={styles.cepHint}>· preenche o endereço automaticamente</Text></Text>
                 <View style={styles.cepRow}>
-                  <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.cep} onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9} />
+                  <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.cep} onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9} accessibilityLabel="CEP" />
                   {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Ionicons name="search" size={18} color={P.ink3} style={{ width: 36, textAlign: "center" }} />}
                 </View>
                 {cepStatus ? <Text style={[styles.note, cepStatus.ok ? styles.noteOk : styles.noteBad]}>{cepStatus.msg}</Text> : null}
@@ -273,7 +303,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               <View style={styles.field}>
                 <Text style={styles.label}>Endereço</Text>
                 <TextInput style={[styles.input, { minHeight: 64, textAlignVertical: "top" }]} value={form.address} onChangeText={(v) => set("address", v)}
-                  placeholder="Logradouro, número, bairro, cidade - UF" placeholderTextColor={P.ink4} multiline />
+                  placeholder="Logradouro, número, bairro, cidade - UF" placeholderTextColor={P.ink4} multiline accessibilityLabel="Endereço" />
               </View>
 
               {errorMsg ? (
@@ -302,12 +332,17 @@ function Field(props: {
   label: string; value: string; onChangeText: (v: string) => void; placeholder?: string;
   hint?: string; req?: boolean; mono?: boolean; flex?: boolean; bad?: boolean;
   note?: string; noteOk?: boolean; keyboardType?: any; autoCapitalize?: any; maxLength?: number;
+  inputRef?: React.RefObject<TextInput>; returnKeyType?: any; onSubmitEditing?: () => void;
 }) {
   return (
     <View style={[styles.field, props.flex && { flex: 1 }]}>
       <Text style={styles.label}>{props.label}{props.req ? <Text style={{ color: P.red }}> *</Text> : null}{props.hint ? <Text style={styles.labelHint}>  · {props.hint}</Text> : null}</Text>
-      <TextInput style={[styles.input, props.mono && styles.mono, props.bad && styles.inputBad]} value={props.value} onChangeText={props.onChangeText}
-        placeholder={props.placeholder} placeholderTextColor={P.ink4} keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize} maxLength={props.maxLength} />
+      <TextInput
+        ref={props.inputRef}
+        style={[styles.input, props.mono && styles.mono, props.bad && styles.inputBad]} value={props.value} onChangeText={props.onChangeText}
+        placeholder={props.placeholder} placeholderTextColor={P.ink4} keyboardType={props.keyboardType} autoCapitalize={props.autoCapitalize} maxLength={props.maxLength}
+        accessibilityLabel={props.label}
+        returnKeyType={props.returnKeyType} onSubmitEditing={props.onSubmitEditing} blurOnSubmit={props.returnKeyType === "done"} />
       {props.note ? <Text style={[styles.note, props.noteOk ? styles.noteOk : props.bad ? styles.noteBad : null]}>{props.note}</Text> : null}
     </View>
   );
