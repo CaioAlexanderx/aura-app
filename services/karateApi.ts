@@ -230,6 +230,87 @@ export interface ImportResult {
   errors: Array<{ row: number; field: string; message: string }>;
 }
 
+// ── Export de dados do dojô (round-trip com o import FPKT) ──────
+/** Filtros do export — espelham os query params do endpoint. */
+export interface ExportDojoParams {
+  status?: "all" | "active" | "inactive";
+  include_belts?: boolean;
+  include_transfers?: boolean;
+  belt?: string;
+}
+
+/** Academia (dojô) no payload de export. */
+export interface ExportDojoInfo {
+  id: string;
+  cod: string | null;
+  name: string | null;
+  fpkt_affiliation_id: string | null;
+  status: string | null;
+  is_active?: boolean;
+  cnpj: string | null;
+  region: string | null;
+  address: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+/** Aluno (praticante) no payload de export. */
+export interface ExportPraticante {
+  id: string;
+  cod_aluno: string | null;
+  numero_fpkt: string | null;
+  nome: string | null;
+  nascimento: string | null;
+  cpf: string | null;
+  rg: string | null;
+  email: string | null;
+  telefone: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  cep: string | null;
+  situacao: string | null;
+  faixa_atual: string | null;
+  faixa_level: string | null;
+  academia_name: string | null;
+}
+
+/** Evento de faixa (trajetória) no payload de export. */
+export interface ExportBeltEvent {
+  practitioner_ref: string | null;
+  practitioner_name: string | null;
+  faixa: string | null;
+  belt_level: string | null;
+  data: string | null;
+}
+
+/** Transferência no payload de export. */
+export interface ExportTransfer {
+  practitioner_ref: string | null;
+  practitioner_name: string | null;
+  origem: string | null;
+  destino: string | null;
+  data: string | null;
+}
+
+export interface ExportDojoPayload {
+  federation_id: string;
+  generated_at: string;
+  filters: { status: string; include_belts: boolean; include_transfers: boolean; belt: string | null };
+  dojo: ExportDojoInfo;
+  praticantes: ExportPraticante[];
+  belt_events: ExportBeltEvent[];
+  transfers: ExportTransfer[];
+}
+
 // Track P — busca rápida
 export interface SearchDojoResult {
   id: string;
@@ -792,6 +873,21 @@ export const karateApi = {
 
   updateDojo: (federationId: string, dojoId: string, body: Partial<DojoInput>): Promise<Dojo> =>
     request(`/federation/${federationId}/dojos/${dojoId}`, { method: "PATCH", body }),
+
+  /** Export de dados do dojô no formato do import (abas Academias/Alunos/Histórico). */
+  exportDojoData: (
+    federationId: string,
+    dojoId: string,
+    params?: ExportDojoParams
+  ): Promise<ExportDojoPayload> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.include_belts !== undefined) qs.set("include_belts", String(params.include_belts));
+    if (params?.include_transfers !== undefined) qs.set("include_transfers", String(params.include_transfers));
+    if (params?.belt) qs.set("belt", params.belt);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/dojos/${dojoId}/export-data${query}`);
+  },
 
   // Praticantes
   listPractitioners: (
