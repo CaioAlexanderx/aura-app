@@ -1,7 +1,13 @@
 // ============================================================
 // KarateButton — Aura Karatê primitive
 //
-// Variantes: primary (vermelho Shoji) | secondary | ghost
+// Variantes:
+//   sumi      — CTA primário do guia Shoji (sumi/ink escuro, mesmo do
+//               "Salvar ficha"). Use para ações primárias afirmativas.
+//   primary   — vermelhão (P.red). RARO: reservado a ações destrutivas/
+//               críticas (cancelar/excluir/recusar). Não usar como CTA padrão.
+//   secondary — contorno (outline) discreto.
+//   ghost     — texto, sem caixa.
 // Sizes: sm | md | lg
 // Sempre acessível: accessibilityRole="button" + states.
 // ============================================================
@@ -16,7 +22,7 @@ import {
 } from "react-native";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
-export type KarateButtonVariant = "primary" | "secondary" | "ghost";
+export type KarateButtonVariant = "sumi" | "primary" | "secondary" | "ghost";
 export type KarateButtonSize    = "sm" | "md" | "lg";
 
 interface KarateButtonProps {
@@ -32,7 +38,7 @@ interface KarateButtonProps {
 export function KarateButton({
   label,
   onPress,
-  variant  = "primary",
+  variant  = "sumi",
   size     = "md",
   loading  = false,
   disabled = false,
@@ -59,7 +65,7 @@ export function KarateButton({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === "primary" ? "#fff" : KarateColors.primary}
+          color={variant === "sumi" || variant === "primary" ? "#fdf8f2" : KarateColors.primary}
         />
       ) : (
         <Text style={[styles.label, styles[`label_${variant}`], styles[`label_${size}`]]}>
@@ -79,6 +85,9 @@ const styles = StyleSheet.create({
   } as ViewStyle,
 
   // Variant
+  sumi: {
+    backgroundColor: KarateColors.ink,
+  } as ViewStyle,
   primary: {
     backgroundColor: KarateColors.primary,
   } as ViewStyle,
@@ -100,6 +109,7 @@ const styles = StyleSheet.create({
 
   // Labels
   label:           { fontWeight: "700", letterSpacing: 0.2 } as TextStyle,
+  label_sumi:      { color: "#fdf8f2"                       } as TextStyle,
   label_primary:   { color: "#fff"                         } as TextStyle,
   label_secondary: { color: KarateColors.primary           } as TextStyle,
   label_ghost:     { color: KarateColors.primary           } as TextStyle,
