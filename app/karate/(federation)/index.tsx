@@ -9,6 +9,11 @@
 //
 // Empty state: quando a federação está vazia (0 dojôs e 0 praticantes),
 // mostramos boas-vindas com ação primária "Importar planilha".
+//
+// C6: o card "Praticantes por graduação" reflete só a graduação ATIVA —
+// a Vermelha é histórica (a federação não usa mais) e fica fora dos
+// gráficos/relatórios (continua no histórico do praticante, Trajetória).
+// As barras saem ordenadas pela hierarquia oficial (beltRank).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -17,7 +22,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, resolveBeltKey, KarateBelts } from "@/constants/karateTheme";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, resolveBeltKey, KarateBelts, beltRank, isActiveBelt } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -64,7 +69,12 @@ export default function KaratePainel() {
   const now = new Date();
   const events = data?.upcoming_events ?? [];
   const overdue = data?.overdue_dojos ?? [];
-  const belts = data?.belt_distribution ?? [];
+  // C6: graduação ATIVA — exclui a Vermelha (histórica) e ordena pela
+  // hierarquia oficial. O total/legenda e o max consideram só os exibidos.
+  const belts = (data?.belt_distribution ?? [])
+    .filter((b) => isActiveBelt(b.belt_level) && isActiveBelt(b.belt_name))
+    .slice()
+    .sort((a, b) => beltRank(a.belt_level || a.belt_name) - beltRank(b.belt_level || b.belt_name));
   const apiAlerts: DashboardAlert[] = (data as any)?.alerts ?? [];
   const beltTotal = belts.reduce((s, b) => s + b.count, 0);
   const beltMax = belts.reduce((m, b) => Math.max(m, b.count), 0) || 1;
@@ -154,7 +164,7 @@ export default function KaratePainel() {
           </View>
         )}
 
-        {/* Distribuição por graduação */}
+        {/* Distribuição por graduação (ativa — Vermelha histórica fica de fora) */}
         <View style={styles.section}>
           <SectionHead title="Praticantes por graduação" sub={beltTotal > 0 ? `${beltTotal} praticantes graduados` : undefined} />
           <Card>
