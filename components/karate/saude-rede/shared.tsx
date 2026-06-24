@@ -96,25 +96,58 @@ export function SectionRow({
   );
 }
 
+// ── Chart empty state (discreto) ──────────────────────────────
+// Mostrado quando a série não tem nenhum ponto (vão branco → empty).
+
+export function ChartEmpty({ h, label }: { h: number; label?: string }) {
+  return (
+    <View style={[st.chartEmpty, { height: h }]} accessibilityLabel="Sem dados no período">
+      <Ionicons name="bar-chart-outline" size={22} color={C.ink4} />
+      <Text style={st.chartEmptyText}>{label || "Sem dados no período"}</Text>
+    </View>
+  );
+}
+
 // ── Bar chart helper ─────────────────────────────────────────
+// Casos:
+//  • 0 itens  → empty state (não deixa vão branco).
+//  • 1 item   → barra de tamanho normal: largura fixa centralizada e
+//               altura escalada por um teto sensato (não vira bloco
+//               full-width/full-height).
+//  • 2+ itens → comportamento original (colunas flex preenchendo a largura).
 
 export function BarChart({
   items,
   maxVal,
   barColor,
   projColor,
+  emptyLabel,
 }: {
   items: Array<{ label: string; sublabel?: string; value: number; isProj?: boolean }>;
   maxVal: number;
   barColor: string;
   projColor?: string;
+  emptyLabel?: string;
 }) {
   const chartH = 120;
+  const containerH = chartH + 28;
+
+  // D2.2 — série vazia: empty state no lugar do plot em branco.
+  if (!items || items.length === 0) {
+    return <ChartEmpty h={containerH} label={emptyLabel} />;
+  }
+
+  const single = items.length === 1;
+  // D2.1 — com 1 ponto, value/maxVal=1 colaria a barra no topo (bloco).
+  // Teto de altura para uma barra única ficar com aparência normal.
+  const SINGLE_H_CAP = 0.62;
+
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-end", height: chartH + 28, gap: 4 }}>
+    <View style={{ flexDirection: "row", alignItems: "flex-end", height: containerH, gap: 4 }}>
       {items.map((item, i) => {
         const pct = maxVal > 0 ? item.value / maxVal : 0;
-        const barH = Math.max(4, Math.round(pct * chartH));
+        const scaled = single ? pct * SINGLE_H_CAP : pct;
+        const barH = item.value > 0 ? Math.max(4, Math.round(scaled * chartH)) : 4;
         const bg = item.isProj ? (projColor || barColor) : barColor;
         return (
           <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "flex-end" }}>
@@ -124,6 +157,7 @@ export function BarChart({
             <View
               style={[
                 st.bar,
+                single ? st.barSingle : null,
                 {
                   height: barH,
                   backgroundColor: bg,
@@ -179,9 +213,14 @@ export const st = StyleSheet.create({
 
   // Bar chart
   bar:          { borderRadius: 4, width: "100%" } as ViewStyle,
+  barSingle:    { width: 56, maxWidth: 56, alignSelf: "center" } as ViewStyle,
   barValLabel:  { fontFamily: F.mono, fontSize: 9, color: C.ink3, marginBottom: 2, textAlign: "center" } as TextStyle,
   barLabel:     { fontFamily: F.body, fontSize: 10, color: C.ink3, marginTop: 4, textAlign: "center" } as TextStyle,
   barSublabel:  { fontFamily: F.body, fontSize: 9, color: C.ink4, textAlign: "center" } as TextStyle,
+
+  // Chart empty state
+  chartEmpty:     { alignItems: "center", justifyContent: "center", gap: 8, borderRadius: R.md, borderWidth: 1, borderColor: C.line, backgroundColor: P.glass2 } as ViewStyle,
+  chartEmptyText: { fontFamily: F.body, fontSize: 12, color: C.ink4 } as TextStyle,
 
   // Coverage
   covRow:   { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
