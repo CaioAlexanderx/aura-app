@@ -17,6 +17,10 @@
 // Orquestrador slim: data-fetching/state/handlers preservados; UI e
 // subcomponentes vivem em components/karate/certificados/* (Shoji).
 // Sem deps novas. Mock-fallback se migration 182 pendente (503).
+//
+// F4.2: o título da página é "Certificados" para casar com o item de menu
+//   "Certificados" que o usuário clicou (a rota é /karate/exames; as abas
+//   Bancas/Graduações/Certificados continuam dentro da página).
 // ============================================================
 import React, { useState, useCallback, useEffect } from "react";
 import {
@@ -153,7 +157,7 @@ export default function ExamesScreen() {
         {/* Page head */}
         <PageHead
           eyebrow="Federação · Operação"
-          title="Exames"
+          title="Certificados"
           sub="Bancas, lançamento de graduações e a caixa de certificados — pedidos dos dojôs que a federação imprime e expede."
         />
 
