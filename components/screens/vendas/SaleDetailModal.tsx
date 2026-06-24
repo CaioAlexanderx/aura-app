@@ -49,7 +49,7 @@ import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 // devolução) mantém o link oficial (pdf_url/consulta).
 // ============================================================
 
-var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
+var fmt = function(n: number) { return "R$ " + Number(n != null ? n : 0).toFixed(2).replace(".", ","); };
 var fmtDateTime = function(iso: string) {
   try {
     return new Date(iso).toLocaleString("pt-BR", {
