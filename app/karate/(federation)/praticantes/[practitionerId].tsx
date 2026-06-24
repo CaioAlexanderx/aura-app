@@ -23,6 +23,10 @@
 //   BELT_DATE_UNKNOWN ('1900-01-01'). Tratamos essa data como DESCONHECIDA:
 //   não renderizamos o "Desde:" nem a data do registro histórico — a faixa
 //   continua aparecendo, só sem uma data que não significa nada.
+//
+// F4.3: CPF e telefone são formatados SÓ na exibição (máscaras BR). Não muda
+//   o dado salvo; se o valor não tiver dígitos suficientes (dado ruim da
+//   planilha), exibe como veio.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -61,6 +65,22 @@ function isUnknownBeltDate(v: string | null | undefined): boolean {
   return String(v).slice(0, 10) === BELT_DATE_UNKNOWN;
 }
 
+// F4.3: máscaras só de EXIBIÇÃO (não alteram o dado salvo). Se o valor não
+// tiver dígitos suficientes (dado ruim da planilha), exibe como veio.
+function formatCpfDisplay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length !== 11) return String(v); // dado incompleto/estranho: mostra cru
+  return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+function formatPhoneDisplay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  return String(v); // fora do padrão BR: mostra como veio
+}
+
 const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
 type Tab = typeof TABS[number];
 
@@ -78,11 +98,11 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
   return (
     <View style={tabStyles.tab}>
       <Row icon="person-outline"   label="Nome"         val={p.full_name} />
-      <Row icon="id-card-outline"  label="CPF"          val={p.cpf ?? null} />
+      <Row icon="id-card-outline"  label="CPF"          val={formatCpfDisplay(p.cpf)} />
       <Row icon="document-outline" label="RG"           val={p.rg ?? null} />
       <Row icon="calendar-outline" label="Nascimento"   val={p.birth_date ? formatIsoToBr(p.birth_date) : null} />
       <Row icon="mail-outline"     label="E-mail"       val={p.email ?? null} />
-      <Row icon="call-outline"     label="Telefone"     val={p.phone ?? null} />
+      <Row icon="call-outline"     label="Telefone"     val={formatPhoneDisplay(p.phone)} />
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
       <View style={tabStyles.rolesRow}>
         {p.is_instructor && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Instrutor</Text></View>}
