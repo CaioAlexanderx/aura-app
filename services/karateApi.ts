@@ -105,6 +105,8 @@ export interface PractitionerInput {
   is_instructor?: boolean;
   is_examiner?: boolean;
   photo_url?: string | null;
+  /** Status do praticante: ativo/inativo (editável na ficha). */
+  is_active?: boolean;
 }
 
 export interface Practitioner extends PractitionerInput {
@@ -116,6 +118,15 @@ export interface Practitioner extends PractitionerInput {
 
 export interface PractitionerDetail extends Practitioner {
   belt_history: BeltHistoryEntry[];
+}
+
+/** Graduação manual registrada pelo detalhe (append em karate_belt_history). */
+export interface GraduationInput {
+  belt_level: string;        // chave canônica ou nome de cor
+  belt_name?: string;        // rótulo exibido (default = belt_level)
+  belt_schema?: BeltSchema;  // 'fpkt_shotokan' (default) | 'legacy'
+  graduated_at?: string;     // 'YYYY-MM-DD' (default hoje)
+  notes?: string | null;
 }
 
 // ── Track N — Transferência de praticante entre dojôs ──────────
@@ -786,6 +797,22 @@ export const karateApi = {
 
   createPractitioner: (federationId: string, body: PractitionerInput): Promise<Practitioner> =>
     request(`/federation/${federationId}/practitioners`, { method: "POST", body }),
+
+  /** Atualiza a ficha do praticante (inclui is_active / status). */
+  updatePractitioner: (
+    federationId: string,
+    practitionerId: string,
+    body: Partial<PractitionerInput> & { is_active?: boolean }
+  ): Promise<PractitionerDetail> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body }),
+
+  /** Registra uma graduação manual (faixa + data) no histórico do praticante. */
+  addBeltGraduation: (
+    federationId: string,
+    practitionerId: string,
+    body: GraduationInput
+  ): Promise<BeltHistoryEntry> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/graduations`, { method: "POST", body }),
 
   // ── Track N — Transferência de praticante entre dojôs ──────────
   listTransfers: (
