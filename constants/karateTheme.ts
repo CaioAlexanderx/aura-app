@@ -243,19 +243,66 @@ export const KarateBelts: Record<BeltKey, {
   preta:       { label: "Preta",       color: "#2b2620", textColor: "#fdf8f2" },
 } as const;
 
-// Helper: resolve belt key a partir do belt_level da API
+// Normaliza um rótulo de faixa: minúsculo, sem acento, ordinais/separadores
+// virando espaço. "Preta 1º Dan" → "preta 1 dan" · "Roxa" → "roxa" ·
+// "azul-claro" → "azul claro". Base para casar nomes reais vindos do banco.
+function normalizeBeltText(raw: string): string {
+  return String(raw || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // remove acentos
+    .replace(/[º°ª]/g, " ")          // ordinais → espaço
+    .replace(/[_\-/]/g, " ")         // separadores → espaço
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Helper: resolve belt key a partir do belt_level OU belt_name da API.
+//
+// O banco (karate_current_belt / karate_belt_history) traz tanto códigos
+// canônicos (ex.: '9kyu', '1dan') quanto nomes humanos da base importada
+// (ex.: 'Preta', 'Preta 1º Dan', 'Roxa', 'Azul Claro', 'Vermelha'). Antes,
+// só os códigos/chaves exatos casavam — 'Roxa' (a chave era 'roxo'),
+// 'Preta 1º Dan' e similares caíam no fallback neutro, deixando a bolinha
+// de faixa com a cor errada (roxa e preta foram os casos reportados).
+// Agora normalizamos (acento/caixa/ordinal) e casamos por código kyu/dan
+// e por nome de cor. É o helper compartilhado: conserta lista + detalhe.
 export function resolveBeltKey(beltLevel: string): BeltKey | null {
-  const map: Record<string, BeltKey> = {
-    branca: "branca", amarela: "amarela", laranja: "laranja",
-    verde: "verde", azul_claro: "azul_claro", roxo: "roxo",
-    azul_escuro: "azul_escuro", vermelha: "vermelha",
-    marrom: "marrom", preta: "preta",
+  if (!beltLevel) return null;
+  const n = normalizeBeltText(beltLevel);
+  if (!n) return null;
+
+  // 1) Códigos canônicos kyu/dan (qualquer dan = preta).
+  const code = n.replace(/\s+/g, ""); // "1 dan" → "1dan"
+  const codeMap: Record<string, BeltKey> = {
+    "10kyu": "branca",
     "9kyu": "branca", "8kyu": "amarela", "7kyu": "laranja",
     "6kyu": "verde",  "5kyu": "azul_claro", "4kyu": "azul_escuro",
     "3kyu": "marrom", "2kyu": "marrom", "1kyu": "marrom",
-    "1dan": "preta",  "2dan": "preta", "3dan": "preta",
   };
-  return map[beltLevel.toLowerCase()] ?? null;
+  if (codeMap[code]) return codeMap[code];
+  if (/\bdan\b/.test(n)) return "preta"; // "1dan", "preta 1 dan", "2 dan"...
+
+  // 2) Nomes de cor (base importada). Ordem importa: compostas e roxa
+  //    antes das simples para não confundir azul claro/escuro etc.
+  if (n.includes("azul"))   return n.includes("escur") ? "azul_escuro" : "azul_claro";
+  if (n.includes("rox"))    return "roxo";        // roxa / roxo
+  if (n.includes("marrom") || n.includes("marron")) return "marrom";
+  if (n.includes("preta") || n.includes("preto"))   return "preta";
+  if (n.includes("vermelh")) return "vermelha";
+  if (n.includes("verde"))   return "verde";
+  if (n.includes("laranja")) return "laranja";
+  if (n.includes("amarel"))  return "amarela";    // amarela / amarelo
+  if (n.includes("branc"))   return "branca";     // branca / branco
+
+  // 3) Chaves canônicas exatas (compat antiga).
+  const exact: Record<string, BeltKey> = {
+    branca: "branca", amarela: "amarela", laranja: "laranja",
+    verde: "verde", "azul claro": "azul_claro", roxo: "roxo", roxa: "roxo",
+    "azul escuro": "azul_escuro", vermelha: "vermelha",
+    marrom: "marrom", preta: "preta",
+  };
+  return exact[n] ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────

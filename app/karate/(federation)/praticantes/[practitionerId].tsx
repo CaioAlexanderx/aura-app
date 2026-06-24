@@ -17,10 +17,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   StyleSheet, ViewStyle, TextStyle, ActivityIndicator,
+  Modal, TextInput, Pressable,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts, KarateBelts, BeltKey } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -30,6 +31,7 @@ import { CarteirinhaPanel } from "@/components/karate/CarteirinhaPanel";
 import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate, TransferRecord } from "@/services/karateApi";
+import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 
@@ -58,7 +60,7 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       <Row icon="person-outline"   label="Nome"         val={p.full_name} />
       <Row icon="id-card-outline"  label="CPF"          val={p.cpf ?? null} />
       <Row icon="document-outline" label="RG"           val={p.rg ?? null} />
-      <Row icon="calendar-outline" label="Nascimento"   val={p.birth_date ?? null} />
+      <Row icon="calendar-outline" label="Nascimento"   val={p.birth_date ? formatIsoToBr(p.birth_date) : null} />
       <Row icon="mail-outline"     label="E-mail"       val={p.email ?? null} />
       <Row icon="call-outline"     label="Telefone"     val={p.phone ?? null} />
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
@@ -71,41 +73,207 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
   );
 }
 
-function TrajetoriaTab({ history, currentBelt }: { history: BeltHistoryEntry[]; currentBelt: PractitionerDetail["current_belt"] }) {
-  if (history.length === 0) {
-    return <EmptyState icon="ribbon-outline" title="Sem histórico de faixas" style={{ paddingVertical: 32 }} />;
-  }
+function TrajetoriaTab({
+  history, currentBelt, federationId, practitionerId, karateRole, onGraduationAdded,
+}: {
+  history: BeltHistoryEntry[];
+  currentBelt: PractitionerDetail["current_belt"];
+  federationId: string;
+  practitionerId: string;
+  karateRole: string | null;
+  onGraduationAdded: () => void;
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const allowed = canTransfer(karateRole); // mesmos papéis de escrita (admin/staff)
+
+  const AddButton = allowed ? (
+    <KarateButton
+      label="Registrar graduação"
+      variant="primary"
+      size="md"
+      onPress={() => setModalOpen(true)}
+    />
+  ) : null;
+
   return (
     <View style={tabStyles.tab}>
-      {/* Nova faixa após aprovação — Track C */}
+      {AddButton}
+
+      {/* Faixa atual (derivada do histórico) — Track C */}
       {currentBelt && (
         <View style={tabStyles.currentBeltBanner}>
           <Ionicons name="ribbon" size={16} color={KarateColors.primary} />
           <View style={tabStyles.currentBeltInfo}>
             <Text style={tabStyles.currentBeltLabel}>Faixa atual</Text>
             <BeltBadge beltLevel={currentBelt.belt_level} beltName={currentBelt.belt_name} />
-            <Text style={tabStyles.currentBeltSince}>Desde: {currentBelt.current_since}</Text>
+            <Text style={tabStyles.currentBeltSince}>Desde: {formatIsoToBr(currentBelt.current_since) || currentBelt.current_since}</Text>
           </View>
         </View>
       )}
-      {history.map((entry) => (
-        <View key={entry.id} style={tabStyles.beltEntry}>
-          <View style={tabStyles.beltLine} />
-          <View style={{ flex: 1, gap: 4 }}>
-            <BeltBadge
-              beltLevel={entry.belt_level}
-              beltName={entry.belt_name}
-              isLegacy={entry.is_legacy}
-            />
-            <Text style={tabStyles.beltDate}>
-              {new Date(entry.graduated_at).toLocaleDateString("pt-BR")}
-              {entry.belt_schema === "legacy" ? " · Registro histórico" : ""}
-              {entry.exam_id ? ` · Exame: ${entry.exam_id}` : ""}
+
+      {history.length === 0 ? (
+        <EmptyState
+          icon="ribbon-outline"
+          title="Sem histórico de faixas"
+          subtitle={allowed ? "Use “Registrar graduação” para adicionar a primeira faixa." : undefined}
+          style={{ paddingVertical: 32 }}
+        />
+      ) : (
+        history.map((entry) => (
+          <View key={entry.id} style={tabStyles.beltEntry}>
+            <View style={tabStyles.beltLine} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <BeltBadge
+                beltLevel={entry.belt_level}
+                beltName={entry.belt_name}
+                isLegacy={entry.is_legacy}
+              />
+              <Text style={tabStyles.beltDate}>
+                {formatIsoToBr(entry.graduated_at) || new Date(entry.graduated_at).toLocaleDateString("pt-BR")}
+                {entry.belt_schema === "legacy" ? " · Registro histórico" : ""}
+                {entry.exam_id ? ` · Exame: ${entry.exam_id}` : ""}
+              </Text>
+            </View>
+          </View>
+        ))
+      )}
+
+      <RegistrarGraduacaoModal
+        visible={modalOpen}
+        onClose={() => setModalOpen(false)}
+        federationId={federationId}
+        practitionerId={practitionerId}
+        onDone={() => { setModalOpen(false); onGraduationAdded(); }}
+      />
+    </View>
+  );
+}
+
+// Opções de faixa para a graduação manual (deriva do mapa canônico de cores).
+const BELT_OPTIONS: Array<{ key: BeltKey; label: string }> = (Object.keys(KarateBelts) as BeltKey[])
+  .map((k) => ({ key: k, label: KarateBelts[k].label }));
+
+// Track A (fix 23/06): registrar uma graduação manual (faixa + data) no
+// histórico do praticante. karate_belt_history é append-only — isto é o
+// "editar trajetória": adiciona uma faixa, nunca altera registros antigos.
+// A faixa atual é derivada automaticamente (view karate_current_belt).
+function RegistrarGraduacaoModal({
+  visible, onClose, federationId, practitionerId, onDone,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  federationId: string;
+  practitionerId: string;
+  onDone: () => void;
+}) {
+  const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [dateBr, setDateBr] = useState("");
+  const [legacy, setLegacy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // reset ao abrir
+  useEffect(() => {
+    if (visible) { setBeltKey(null); setDateBr(""); setLegacy(false); setErr(null); setSaving(false); }
+  }, [visible]);
+
+  const dateComplete = dateBr.length === 10;
+  const dateIso = parseBrDate(dateBr); // null se incompleto/ inválido
+  const dateBad = dateComplete && dateIso === null;
+
+  async function handleSave() {
+    if (!beltKey) { setErr("Selecione a faixa."); return; }
+    if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco (usa hoje)."); return; }
+    setErr(null); setSaving(true);
+    try {
+      await karateApi.addBeltGraduation(federationId, practitionerId, {
+        belt_level: beltKey,
+        belt_name: KarateBelts[beltKey].label,
+        belt_schema: legacy ? "legacy" : "fpkt_shotokan",
+        graduated_at: dateIso || undefined, // sem data → backend usa hoje
+      });
+      setSaving(false);
+      onDone();
+    } catch (e: any) {
+      setSaving(false);
+      setErr(e?.message || "Não foi possível registrar a graduação.");
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Registrar graduação</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Text style={gradStyles.hint}>
+              Adiciona uma faixa ao histórico (registro permanente). A faixa atual passa a ser a mais recente.
             </Text>
+
+            <Text style={gradStyles.label}>Faixa</Text>
+            <View style={gradStyles.beltGrid}>
+              {BELT_OPTIONS.map((opt) => {
+                const active = beltKey === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setBeltKey(opt.key)}
+                    activeOpacity={0.7}
+                    style={[gradStyles.beltChip, { backgroundColor: KarateBelts[opt.key].color }, active && gradStyles.beltChipActive]}
+                  >
+                    <Text style={[gradStyles.beltChipTxt, { color: KarateBelts[opt.key].textColor }]}>{opt.label}</Text>
+                    {active && <Ionicons name="checkmark-circle" size={14} color={KarateBelts[opt.key].textColor} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={gradStyles.label}>Data da graduação · dd/mm/aaaa <Text style={gradStyles.labelHint}>(vazio = hoje)</Text></Text>
+            <TextInput
+              style={[gradStyles.input, dateBad && gradStyles.inputBad]}
+              value={dateBr}
+              onChangeText={(v) => setDateBr(maskBrDate(v))}
+              keyboardType="numeric"
+              placeholder="dd/mm/aaaa"
+              placeholderTextColor={KarateColors.ink4}
+              maxLength={10}
+              accessibilityLabel="Data da graduação"
+            />
+            {dateBad ? <Text style={gradStyles.errInline}>Data inválida</Text> : null}
+
+            <TouchableOpacity style={gradStyles.legacyRow} onPress={() => setLegacy((v) => !v)} activeOpacity={0.7}>
+              <View style={[gradStyles.checkbox, legacy && gradStyles.checkboxOn]}>
+                {legacy && <Ionicons name="checkmark" size={13} color="#fff" />}
+              </View>
+              <Text style={gradStyles.legacyTxt}>Registro histórico (sistema legado)</Text>
+            </TouchableOpacity>
+
+            {err ? (
+              <View style={gradStyles.errBox}>
+                <Ionicons name="alert-circle" size={15} color={KarateColors.primary} />
+                <Text style={gradStyles.errTxt}>{err}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View style={gradStyles.footer}>
+            <TouchableOpacity onPress={onClose} style={gradStyles.btnGhost}>
+              <Text style={gradStyles.btnGhostTxt}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSave} disabled={saving} style={[gradStyles.btnPrimary, saving && { opacity: 0.6 }]}>
+              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={gradStyles.btnPrimaryTxt}>Registrar</Text>}
+            </TouchableOpacity>
           </View>
         </View>
-      ))}
-    </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -367,7 +535,7 @@ export default function FichaPraticanteScreen() {
       {/* Tab Content */}
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
         {activeTab === "Cadastro"       && <CadastroTab p={data} />}
-        {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} />}
+        {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} federationId={federationId} practitionerId={practitionerId!} karateRole={karateRole} onGraduationAdded={reload} />}
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Transferência"  && <TransferenciaTab federationId={federationId} practitioner={data} karateRole={karateRole} onTransferred={reload} />}
@@ -441,4 +609,33 @@ const tabStyles = StyleSheet.create({
   certTitle:        { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   certMeta:         { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   certUrl:          { fontSize: 11, color: KarateColors.primary } as TextStyle,
+});
+
+// Estilos do modal de registro de graduação (Shoji)
+const gradStyles = StyleSheet.create({
+  backdrop:  { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 12 } as ViewStyle,
+  card:      { width: "100%", maxWidth: 520, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.xl, overflow: "hidden", borderWidth: 1, borderColor: KarateColors.border2, maxHeight: "92%" } as ViewStyle,
+  head:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  title:     { fontFamily: KarateFonts.heading, fontSize: 18, color: KarateColors.ink } as TextStyle,
+  hint:      { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  label:     { fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: KarateColors.ink2, marginTop: 4 } as TextStyle,
+  labelHint: { fontWeight: "500", color: KarateColors.ink4 } as TextStyle,
+  beltGrid:  { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  beltChip:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: "rgba(0,0,0,0.12)" } as ViewStyle,
+  beltChipActive: { borderColor: KarateColors.ink, borderWidth: 2 } as ViewStyle,
+  beltChipTxt: { fontSize: 12, fontWeight: "700", letterSpacing: 0.2 } as TextStyle,
+  input:     { fontFamily: KarateFonts.mono, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.glassHi, borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 11, letterSpacing: 0.5 } as TextStyle,
+  inputBad:  { borderColor: KarateColors.primary } as ViewStyle,
+  errInline: { fontSize: 11, color: KarateColors.primary } as TextStyle,
+  legacyRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 4 } as ViewStyle,
+  checkbox:  { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: KarateColors.border2, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.glassHi } as ViewStyle,
+  checkboxOn:{ backgroundColor: KarateColors.primary, borderColor: KarateColors.primary } as ViewStyle,
+  legacyTxt: { fontSize: 13, color: KarateColors.ink2, flex: 1 } as TextStyle,
+  errBox:    { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine, borderRadius: 12, padding: 11 } as ViewStyle,
+  errTxt:    { fontSize: 12.5, color: KarateColors.primary2, flex: 1 } as TextStyle,
+  footer:    { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  btnGhost:  { paddingVertical: 11, paddingHorizontal: 18, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border2 } as ViewStyle,
+  btnGhostTxt: { fontSize: 13.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  btnPrimary: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: KarateRadius.md, backgroundColor: KarateColors.ink, minWidth: 130, alignItems: "center" } as ViewStyle,
+  btnPrimaryTxt: { fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
 });

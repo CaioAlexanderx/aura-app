@@ -11,7 +11,8 @@
 //  - CEP em destaque + autofill (ViaCEP).
 //  - Nº FPKT é gerado no backend (NNNNN-D) — aqui só exibimos.
 //  - Faixa e passaporte NÃO entram nesta ficha (faixa = histórico imutável;
-//    passaporte = fluxo de Dan, adiado).
+//    passaporte = fluxo de Dan, adiado). Graduação entra pela aba Trajetória.
+//  - Status (ativo/inativo) é editável só no modo edição (cadastro nasce ativo).
 //  - Data validada de verdade: a conversão no envio usa parseBrDate (round-trip
 //    de Date → rejeita 31/02). A máscara de digitação continua dd/mm/aaaa.
 //  - Feedback de sucesso leve: toast Shoji inline ("Praticante salvo") — o app
@@ -45,6 +46,7 @@ const EMPTY = {
   dojo_id: "", dojo_name: "",
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
   is_arbiter: false, is_instructor: false, is_examiner: false,
+  is_active: true,
 };
 type Form = typeof EMPTY;
 
@@ -163,6 +165,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           zip_code: p.zip_code ? maskCEP(p.zip_code) : "", street: p.street || "", number: p.number || "",
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
           is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner,
+          is_active: p.is_active !== false, // default ativo
         });
         setFpkt(p.karate_registration_number || null);
         setBeltName(p.current_belt?.belt_name || null);
@@ -261,6 +264,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       phone: onlyD(form.phone) || null,
       dojo_id: form.dojo_id,
       is_arbiter: form.is_arbiter, is_instructor: form.is_instructor, is_examiner: form.is_examiner,
+      is_active: form.is_active,
       street: form.street || null, number: form.number || null, complement: form.complement || null,
       neighborhood: form.neighborhood || null, city: form.city || null,
       state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
@@ -395,6 +399,19 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               <Toggle label="Árbitro" hint="Atua em competições" on={form.is_arbiter} onPress={() => set("is_arbiter", !form.is_arbiter)} />
               <Toggle label="Instrutor" hint="Ministra aulas no dojô" on={form.is_instructor} onPress={() => set("is_instructor", !form.is_instructor)} />
               <Toggle label="Examinador" hint="Banca de graduação" on={form.is_examiner} onPress={() => set("is_examiner", !form.is_examiner)} />
+
+              {/* STATUS — só na edição (no cadastro o praticante já nasce ativo) */}
+              {isEdit && (
+                <>
+                  <SectionTitle>Status</SectionTitle>
+                  <Toggle
+                    label={form.is_active ? "Ativo" : "Inativo"}
+                    hint={form.is_active ? "Aparece como ativo na federação" : "Mantido no histórico, fora da contagem de ativos"}
+                    on={form.is_active}
+                    onPress={() => set("is_active", !form.is_active)}
+                  />
+                </>
+              )}
 
               {errorMsg ? (
                 <View style={styles.errBox}><Ionicons name="alert-circle" size={15} color={P.red} /><Text style={styles.errTxt}>{errorMsg}</Text></View>
