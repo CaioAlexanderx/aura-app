@@ -10,14 +10,19 @@
 //     • `dojo_id` — filtra pelos praticantes do dojô (vem do CTA "Ver
 //                   praticantes" no detalhe do dojô). A API já aceita dojo_id.
 //
-// Fix 6 (foco/busca): o campo de busca perdia o foco a cada letra porque o
-//   header (que contém o SearchField) era recriado a cada render e entregue
-//   como ELEMENTO ao ListHeaderComponent; somado ao refetch por keystroke, a
-//   FlatList re-renderizava o header e o input desmontava/remontava. Agora:
+// Fix 6/8 (foco/busca) — CAUSA RAIZ corrigida na v2:
+//   O campo de busca perdia o foco a cada letra porque o SearchField (e os
+//   chips de filtro) viviam DENTRO do ListHeaderComponent da FlatList. Mesmo
+//   com useCallback, a FlatList reconcilia o elemento de header a cada render
+//   e o renderHeader trocava de identidade a cada tecla (deps q/status/role/…),
+//   o que DESMONTAVA o TextInput → foco perdido (a v1/PR #306, com debounce +
+//   header memoizado + Row memo, NÃO resolveu por isso).
+//   Correção definitiva: a busca e os filtros agora são um <View> PERSISTENTE,
+//   FORA da FlatList, montado UMA única vez no corpo da tela. Quando os dados/
+//   linhas re-renderizam, o input não é tocado e mantém o foco. O header da
+//   FlatList passou a conter SÓ o PageHead + o cabeçalho da tabela (thead).
 //     • o texto (`q`) atualiza imediatamente (responsivo ao digitar);
-//     • o fetch é DEBOUNCED (~350ms) — só o termo "assentado" dispara a busca;
-//     • ListHeaderComponent recebe um COMPONENTE estável (renderHeader via
-//       useCallback) e o Row foi extraído do render — nada remonta a cada tecla.
+//     • o fetch é DEBOUNCED (~350ms) — só o termo "assentado" dispara a busca.
 //
 // Fix 7 (filtros de papel): chips Instrutor/Examinador/Árbitro filtram
 //   server-side via ?role=instructor|examiner|arbiter (o backend GET já aceita
@@ -25,7 +30,7 @@
 //   aceita UM papel por vez, os chips de papel são single-select e coexistem
 //   com o filtro de status e o pré-filtro dojo_id.
 // ============================================================
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView,
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
@@ -151,20 +156,12 @@ export default function PraticantesScreen() {
   // Submeter no teclado força a busca imediata (assenta o termo agora).
   const submitSearch = useCallback(() => { setDebouncedQ(q); }, [q]);
 
-  // Header como COMPONENTE estável (referência via useCallback) — a FlatList
-  // não o remonta a cada render/keystroke, preservando o foco do TextInput.
-  const showThead = wide && items.length > 0;
-  const renderHeader = useCallback(() => (
+  // ── Busca + filtros: bloco PERSISTENTE, FORA da FlatList ─────────────
+  // Montado UMA vez no corpo da tela. Como NÃO é o ListHeaderComponent, a
+  // FlatList nunca o reconcilia/remonta ao re-renderizar as linhas → o
+  // TextInput de busca mantém o foco entre teclas. (Causa raiz da v1.)
+  const searchAndFilters = (
     <View>
-      <PageHead
-        eyebrow={`${total} ${total === 1 ? "praticante" : "praticantes"} · carteirinha FPKT`}
-        title="Praticantes"
-        sub="Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
-        actions={<>
-          <ShojiButton label="Importar" icon="cloud-upload-outline" variant="ghost" onPress={() => router.push("/karate/importacao" as any)} />
-          <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />
-        </>}
-      />
       <SearchField value={q} onChangeText={setQ} onSubmit={submitSearch} placeholder="Buscar por nome, código FPKT, CPF ou RG..." style={{ marginBottom: 14 }} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         {STATUS_FILTERS.map((s) => <Chip key={s.key} label={s.label} active={status === s.key} onPress={() => setStatus(s.key)} />)}
@@ -173,17 +170,36 @@ export default function PraticantesScreen() {
           <Chip key={r.key} label={r.label} active={role === r.key} onPress={() => setRole(role === r.key ? null : r.key)} />
         ))}
       </ScrollView>
-      {showThead && (
-        <View style={[styles.tr, styles.thead]}>
-          <Text style={[styles.th, { flex: 2 }]}>Praticante</Text>
-          <Text style={[styles.th, { flex: 1.4 }]}>Dojô</Text>
-          <Text style={[styles.th, { width: 150 }]}>Graduação</Text>
-          <Text style={[styles.th, { width: 120 }]}>Status</Text>
-          <View style={{ width: 18 }} />
-        </View>
-      )}
     </View>
-  ), [q, total, status, role, showThead, submitSearch, router]);
+  );
+
+  // Cabeçalho da tela (título + CTAs). Fica acima da busca; não tem input.
+  const pageHead = (
+    <PageHead
+      eyebrow={`${total} ${total === 1 ? "praticante" : "praticantes"} · carteirinha FPKT`}
+      title="Praticantes"
+      sub="Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
+      actions={<>
+        <ShojiButton label="Importar" icon="cloud-upload-outline" variant="ghost" onPress={() => router.push("/karate/importacao" as any)} />
+        <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />
+      </>}
+    />
+  );
+
+  // Header da FlatList: SÓ o cabeçalho da tabela (thead) no modo wide. Sem
+  // input/chips aqui — por isso não há mais remontagem do TextInput.
+  const showThead = wide && items.length > 0;
+  const renderHeader = useCallback(() => (
+    showThead ? (
+      <View style={[styles.tr, styles.thead]}>
+        <Text style={[styles.th, { flex: 2 }]}>Praticante</Text>
+        <Text style={[styles.th, { flex: 1.4 }]}>Dojô</Text>
+        <Text style={[styles.th, { width: 150 }]}>Graduação</Text>
+        <Text style={[styles.th, { width: 120 }]}>Status</Text>
+        <View style={{ width: 18 }} />
+      </View>
+    ) : null
+  ), [showThead]);
 
   const renderItem = useCallback(({ item }: { item: PractitionerListItem }) => (
     <Row item={item} wide={wide} onPress={() => router.push(`/karate/praticantes/${item.id}` as any)} />
@@ -203,24 +219,32 @@ export default function PraticantesScreen() {
 
   return (
     <ShojiBackground>
-      {loading ? (
-        <View style={styles.content}>{renderHeader()}<ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} /></View>
-      ) : (
-        <FlatList
-          data={items} keyExtractor={(i) => i.id} ListHeaderComponent={renderHeader}
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
-          renderItem={renderItem}
-          ListEmptyComponent={<KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />}
-        />
-      )}
+      <View style={styles.content}>
+        {pageHead}
+        {searchAndFilters}
+        {loading ? (
+          <ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} />
+        ) : (
+          <FlatList
+            data={items} keyExtractor={(i) => i.id} ListHeaderComponent={renderHeader}
+            contentContainerStyle={styles.listContent}
+            style={{ width: "100%" }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+            renderItem={renderItem}
+            ListEmptyComponent={<KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />}
+          />
+        )}
+      </View>
       {fichaModal}
     </ShojiBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  // `content` agora envolve a tela inteira (head + busca + lista). A FlatList
+  // recebe `flex: 1` via listContent não-paddado; o padding externo mora aqui.
+  content: { flex: 1, padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  listContent: { paddingBottom: 24 } as ViewStyle,
   chips: { gap: 8, paddingBottom: 18, alignItems: "center" } as ViewStyle,
   chipDivider: { width: 1, height: 22, backgroundColor: C.line2, marginHorizontal: 4, alignSelf: "center" } as ViewStyle,
   tr: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line, gap: 8 } as ViewStyle,
