@@ -130,6 +130,8 @@ export interface Practitioner extends PractitionerInput {
   karate_registration_number: string;
   affiliation_status: AffiliationStatus;
   current_belt: CurrentBelt | null;
+  /** Nome do dojô atual — usado para pré-selecionar o dojô no modal de edição. */
+  dojo_name?: string | null;
 }
 
 export interface PractitionerDetail extends Practitioner {

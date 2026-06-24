@@ -9,9 +9,17 @@
 // - Emitir/Renovar via POST .../issue-card; exibe warnings do backend.
 //
 // Carteirinha é DATA-ONLY: nenhuma imagem é gerada no app/servidor.
+//
+// Fix C5 (23/06): o botão "Emitir carteirinha" não fazia nada ao clicar.
+//   Causa: a confirmação usava Alert.alert com DOIS botões (Cancelar + Emitir),
+//   e no React Native Web o Alert.alert com botões é um no-op — o onPress de
+//   confirmação nunca disparava, então issueCard() jamais era chamado. Agora a
+//   confirmação usa window.confirm na web (e Alert.alert só em nativo, onde
+//   funciona), garantindo que a emissão de fato acontece. Feedback de
+//   sucesso/erro idem: window.alert na web, Alert.alert em nativo.
 // ============================================================
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Alert, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Platform, View, Text, TouchableOpacity, Alert, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { KarateColors } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
@@ -24,6 +32,29 @@ import { karateCardApi, MembershipCard } from "@/services/karateCardApi";
 interface CarteirinhaPanelProps {
   federationId: string;
   practitionerId: string;
+}
+
+// Feedback simples cross-plataforma. Na web o Alert.alert do RN só mostra o
+// título (sem corpo, sem botões com callback), então usamos window.alert.
+function notify(title: string, message?: string) {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
+// Confirmação cross-plataforma. Na web o Alert.alert com botões é um no-op
+// (o onPress nunca dispara) → usamos window.confirm. Em nativo, Alert.alert.
+function confirm(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: "Cancelar", style: "cancel" },
+      { text: confirmLabel, onPress: onConfirm },
+    ]);
+  }
 }
 
 export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPanelProps) {
@@ -50,12 +81,12 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       setCard(res);
       setFace("front");
       const warns = res.warnings || [];
-      Alert.alert(
+      notify(
         res.renewed ? "Carteirinha renovada" : "Carteirinha emitida",
         warns.length ? `Atenção:\n• ${warns.join("\n• ")}` : "Processada com sucesso."
       );
     } catch (e: any) {
-      Alert.alert("Não foi possível emitir", e?.message || "Tente novamente.");
+      notify("Não foi possível emitir", e?.message || "Tente novamente.");
     } finally {
       setIssuing(false);
     }
@@ -63,15 +94,13 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
 
   const confirmIssue = () => {
     const renew = !!card;
-    Alert.alert(
+    confirm(
       renew ? "Renovar carteirinha?" : "Emitir carteirinha?",
       renew
         ? "A carteirinha atual será substituída por uma nova (a anterior é arquivada)."
         : "Será gerada a carteirinha digital do praticante a partir dos dados atuais.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: renew ? "Renovar" : "Emitir", onPress: doIssue },
-      ]
+      renew ? "Renovar" : "Emitir",
+      doIssue
     );
   };
 

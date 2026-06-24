@@ -20,6 +20,9 @@
 //  - "Repetir dados do último cadastro" (P2): opt-in, só no cadastro novo.
 //    Pré-preenche o que TENDE a se repetir num mesmo dojô (dojô + endereço),
 //    nunca os campos únicos (nome, CPF, RG, nascimento, telefone, e-mail).
+//  - Edição: o dojô atual vem pré-selecionado (lê p.dojo_name do detalhe) —
+//    sem isso o campo obrigatório mostrava "Selecionar dojô…" e forçava
+//    reseleção (fix F1.2 23/06).
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -158,10 +161,16 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     setLoading(true);
     karateApi.getPractitioner(federationId, practitionerId)
       .then((p: any) => {
+        // F1.2: pré-seleciona o dojô atual. O detalhe retorna dojo_id + dojo_name;
+        // sem dojo_name o DojoSelect mostrava "Selecionar dojô…" (campo obrigatório
+        // aparentava vazio e forçava reseleção). Mantém o id no lastDojo p/ que o
+        // selector exiba o rótulo mesmo se o backend só devolver o id.
+        const dojoName = p.dojo_name || "";
+        if (p.dojo_id && dojoName) lastDojo = { id: p.dojo_id, name: dojoName };
         setForm({
           full_name: p.full_name || "", cpf: p.cpf ? maskCPF(p.cpf) : "", rg: p.rg || "",
           birth_date: fromISO(p.birth_date), email: p.email || "", phone: p.phone ? maskPhone(p.phone) : "",
-          dojo_id: p.dojo_id || "", dojo_name: "",
+          dojo_id: p.dojo_id || "", dojo_name: dojoName,
           zip_code: p.zip_code ? maskCEP(p.zip_code) : "", street: p.street || "", number: p.number || "",
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
           is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner,
@@ -542,6 +551,20 @@ function DojoSelect({ federationId, valueId, valueName, onSelect }: {
     });
     return () => { alive = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // F1.2: no modo edição o dojo_id já vem do detalhe mas o nome pode não ter
+  // chegado no primeiro render (corrida com o carregamento do dojo_name).
+  // Se temos id mas ainda não temos rótulo, busca a lista uma vez e resolve.
+  useEffect(() => {
+    if (!valueId || label) return;
+    let alive = true;
+    fetchDojos("").then((data) => {
+      if (!alive) return;
+      const hit = data.find((d) => d.id === valueId);
+      if (hit) { lastDojo = { id: hit.id, name: hit.name }; setLabel(hit.name); }
+    });
+    return () => { alive = false; };
+  }, [valueId, label, fetchDojos]);
 
   const onSearch = useCallback((t: string) => {
     setQ(t);
