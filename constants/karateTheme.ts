@@ -306,6 +306,65 @@ export function resolveBeltKey(beltLevel: string): BeltKey | null {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Rank hierárquico oficial da graduação (federação)
+//
+// Ordem ascendente (menor → maior grau) usada para ORDENAR faixas em
+// gráficos/relatórios da graduação ATIVA:
+//   Branca(1) · Amarela(2) · Laranja(3) · Verde(4) · (Azul Claro) ·
+//   Roxa(5) · (Azul Escuro) · Marrom(6) · Preta(7, Dan).
+// As graduações Dan (Preta 1º, 2º, …) ordenam DEPOIS das kyu, por grau.
+//
+// Vermelha é HISTÓRICA (isLegacy): a federação não usa mais essa cor.
+// Recebe rank 0 e deve ser EXCLUÍDA da graduação ativa (ver isActiveBelt).
+// Ela continua no histórico individual do praticante (aba Trajetória).
+//
+// Aceita tanto belt_level/código quanto belt_name humano (normaliza via
+// resolveBeltKey). Faixas não reconhecidas vão para o fim (rank 999).
+// ─────────────────────────────────────────────────────────────
+const BELT_KEY_RANK: Record<BeltKey, number> = {
+  branca:      1,
+  amarela:     2,
+  laranja:     3,
+  verde:       4,
+  azul_claro:  5,
+  roxo:        6,
+  azul_escuro: 7,
+  marrom:      8,
+  preta:       9,  // base Dan; o grau (1º, 2º…) refina via danDegree
+  vermelha:    0,  // histórica — excluída da graduação ativa
+};
+
+// Extrai o grau Dan de um rótulo ("Preta 1º Dan" → 1, "2 dan" → 2).
+// Retorna 0 quando não há grau explícito (Preta "crua").
+function danDegree(raw: string): number {
+  const n = String(raw || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (!/\bdan\b/.test(n)) return 0;
+  const m = n.match(/(\d+)\s*(?:º|o|a)?\s*dan/) || n.match(/dan\s*(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Rank hierárquico de uma faixa para ORDENAÇÃO. Recebe belt_level OU
+// belt_name. Preta ordena por grau Dan (Preta < Preta 1º Dan < 2º Dan…).
+// Vermelha (histórica) = 0; não reconhecida = 999 (vai pro fim).
+export function beltRank(beltLevelOrName: string): number {
+  const key = resolveBeltKey(beltLevelOrName);
+  if (!key) return 999;
+  const base = BELT_KEY_RANK[key];
+  if (key === "preta") return base * 100 + danDegree(beltLevelOrName);
+  return base * 100;
+}
+
+// True quando a faixa pertence à graduação ATIVA (exibível em gráficos/
+// relatórios). Falso para a Vermelha (histórica/isLegacy) e para faixas
+// marcadas isLegacy no mapa KarateBelts. NÃO afeta o histórico individual
+// (Trajetória), que mantém a Vermelha.
+export function isActiveBelt(beltLevelOrName: string): boolean {
+  const key = resolveBeltKey(beltLevelOrName);
+  if (!key) return true; // desconhecida → não esconder por engano
+  return !KarateBelts[key].isLegacy;
+}
+
+// ─────────────────────────────────────────────────────────────
 // KarateStatus — alias curto (Badge, KPIStrip)
 // ─────────────────────────────────────────────────────────────
 export const KarateStatus = {
