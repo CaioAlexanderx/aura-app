@@ -12,6 +12,11 @@
 //
 // Navegação: esta é a página de DETALHE full-page (destino do row-tap da lista).
 // O botão "Editar" (header) abre o modal de ficha para edição rápida.
+//
+// Fix C4 (23/06): o backfill de faixas sem data conhecida usa a data-sentinela
+//   BELT_DATE_UNKNOWN ('1900-01-01'). Tratamos essa data como DESCONHECIDA:
+//   não renderizamos o "Desde:" nem a data do registro histórico — a faixa
+//   continua aparecendo, só sem uma data que não significa nada.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -39,6 +44,15 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 const TRANSFER_ROLES = ["federation_admin", "federation_staff"];
 function canTransfer(role: string | null): boolean {
   return role == null || TRANSFER_ROLES.includes(role);
+}
+
+// Fix C4: data-sentinela usada pelo backfill para faixas sem data conhecida.
+// Pode vir como '1900-01-01' (date) ou '1900-01-01T00:00:00...' (timestamp);
+// comparamos pelos 10 primeiros chars (mais robusto que igualdade exata).
+const BELT_DATE_UNKNOWN = "1900-01-01";
+function isUnknownBeltDate(v: string | null | undefined): boolean {
+  if (!v) return true;
+  return String(v).slice(0, 10) === BELT_DATE_UNKNOWN;
 }
 
 const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
@@ -95,6 +109,9 @@ function TrajetoriaTab({
     />
   ) : null;
 
+  // Fix C4: só mostra "Desde:" quando a data é conhecida (≠ sentinela 1900).
+  const currentSinceUnknown = currentBelt ? isUnknownBeltDate(currentBelt.current_since) : true;
+
   return (
     <View style={tabStyles.tab}>
       {AddButton}
@@ -106,7 +123,9 @@ function TrajetoriaTab({
           <View style={tabStyles.currentBeltInfo}>
             <Text style={tabStyles.currentBeltLabel}>Faixa atual</Text>
             <BeltBadge beltLevel={currentBelt.belt_level} beltName={currentBelt.belt_name} />
-            <Text style={tabStyles.currentBeltSince}>Desde: {formatIsoToBr(currentBelt.current_since) || currentBelt.current_since}</Text>
+            {!currentSinceUnknown && (
+              <Text style={tabStyles.currentBeltSince}>Desde: {formatIsoToBr(currentBelt.current_since) || currentBelt.current_since}</Text>
+            )}
           </View>
         </View>
       )}
@@ -119,23 +138,36 @@ function TrajetoriaTab({
           style={{ paddingVertical: 32 }}
         />
       ) : (
-        history.map((entry) => (
-          <View key={entry.id} style={tabStyles.beltEntry}>
-            <View style={tabStyles.beltLine} />
-            <View style={{ flex: 1, gap: 4 }}>
-              <BeltBadge
-                beltLevel={entry.belt_level}
-                beltName={entry.belt_name}
-                isLegacy={entry.is_legacy}
-              />
-              <Text style={tabStyles.beltDate}>
-                {formatIsoToBr(entry.graduated_at) || new Date(entry.graduated_at).toLocaleDateString("pt-BR")}
-                {entry.belt_schema === "legacy" ? " · Registro histórico" : ""}
-                {entry.exam_id ? ` · Exame: ${entry.exam_id}` : ""}
-              </Text>
+        history.map((entry) => {
+          // Fix C4: data-sentinela 1900 = data desconhecida (backfill).
+          // Não renderizamos a data; mantemos o rótulo "Registro histórico".
+          const dateUnknown = isUnknownBeltDate(entry.graduated_at);
+          const dateLabel = dateUnknown
+            ? null
+            : (formatIsoToBr(entry.graduated_at) || new Date(entry.graduated_at).toLocaleDateString("pt-BR"));
+          const isLegacy = entry.belt_schema === "legacy";
+          const metaParts: string[] = [];
+          if (dateLabel) metaParts.push(dateLabel);
+          if (isLegacy) metaParts.push("Registro histórico");
+          if (entry.exam_id) metaParts.push(`Exame: ${entry.exam_id}`);
+          return (
+            <View key={entry.id} style={tabStyles.beltEntry}>
+              <View style={tabStyles.beltLine} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <BeltBadge
+                  beltLevel={entry.belt_level}
+                  beltName={entry.belt_name}
+                  isLegacy={entry.is_legacy}
+                />
+                {metaParts.length > 0 ? (
+                  <Text style={tabStyles.beltDate}>{metaParts.join(" · ")}</Text>
+                ) : (
+                  <Text style={tabStyles.beltDate}>Data não informada</Text>
+                )}
+              </View>
             </View>
-          </View>
-        ))
+          );
+        })
       )}
 
       <RegistrarGraduacaoModal
