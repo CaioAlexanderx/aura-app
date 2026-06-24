@@ -17,6 +17,9 @@
 //     centavos e envia em reais corretamente (antes era parseFloat de texto livre).
 //   - Data com validação de calendário real (parseBrDate) — rejeita 31/02.
 //   - Validação inline; asterisco real nos obrigatórios; autofocus; Enter avança.
+//   - CTA do rodapé ("Próximo"/"Criar torneio") é primário em sumi (escuro),
+//     consistente com "Salvar"; full-width no footer (padrão de form). O
+//     vermelhão fica reservado a ações destrutivas.
 //
 // NOTA: os pickers de graduação oferecem TODAS as faixas de propósito —
 // um torneio tem categorias para qualquer graduação. A regra "só Marrom →
@@ -490,10 +493,10 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
               <KarateButton label="Voltar" variant="ghost" size="md" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} disabled={loading} />
             )}
             {step === 0 && (
-              <KarateButton label="Próximo" variant="primary" size="md" onPress={handleStep1Next} style={{ flex: 1 }} />
+              <KarateButton label="Próximo" variant="sumi" size="md" onPress={handleStep1Next} style={{ flex: 1 }} />
             )}
             {step === 1 && (
-              <KarateButton label="Próximo" variant="primary" size="md" onPress={() => { setError(null); setStep(2); }} style={{ flex: 1 }} />
+              <KarateButton label="Próximo" variant="sumi" size="md" onPress={() => { setError(null); setStep(2); }} style={{ flex: 1 }} />
             )}
             {step === 2 && (
               <>
@@ -501,7 +504,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                 {attempted && (failedCount > 0) ? (
                   <KarateButton label="Concluir depois" variant="ghost" size="md" onPress={resetAndClose} style={{ flex: 1 }} disabled={loading} />
                 ) : null}
-                <KarateButton label={finishLabel} variant="primary" size="md" loading={loading} onPress={onFinishPress} style={{ flex: 1 }} />
+                <KarateButton label={finishLabel} variant="sumi" size="md" loading={loading} onPress={onFinishPress} style={{ flex: 1 }} />
               </>
             )}
           </View>
