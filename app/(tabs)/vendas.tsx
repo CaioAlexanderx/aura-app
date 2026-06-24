@@ -71,7 +71,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   debit: "Debito", debito: "Debito", voucher: "Voucher",
 };
 
-var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
+var fmt = function(n: number) { return "R$ " + Number(n != null ? n : 0).toFixed(2).replace(".", ","); };
 var fmtTime = function(iso: string) {
   try {
     return new Date(iso).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
