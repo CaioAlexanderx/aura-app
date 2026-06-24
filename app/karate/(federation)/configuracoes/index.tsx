@@ -262,6 +262,13 @@ function AnuidadeTab({ federationId }: { federationId: string }) {
     <ScrollView style={st.tabContent} contentContainerStyle={st.tabPad}>
       <SectionHeader title="Modelos de anuidade" sub="Valores e meses de vencimento por modelo de cobrança" />
 
+      <View style={st.anuidadeIntro}>
+        <Text style={st.anuidadeIntroText}>
+          Estes são os valores e meses de vencimento que a federação cobra dos dojôs.
+          Escolha um modelo de cobrança e ajuste o valor e os meses em que a anuidade vence.
+        </Text>
+      </View>
+
       {loading ? (
         <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 24 }} />
       ) : (
@@ -1232,6 +1239,10 @@ const st = StyleSheet.create({
   // Tab content
   tabContent: { flex: 1 } as ViewStyle,
   tabPad:     { padding: 16, paddingBottom: 48, gap: 16 } as ViewStyle,
+
+  // Anuidade intro (contexto da seção)
+  anuidadeIntro: { marginTop: -4, marginBottom: 4 } as ViewStyle,
+  anuidadeIntroText: { fontSize: 13, lineHeight: 19, color: KarateColors.ink2 } as TextStyle,
 
   // Section header
   sectionHead:  { flexDirection: "row", alignItems: "flex-start", marginBottom: 12 } as ViewStyle,
