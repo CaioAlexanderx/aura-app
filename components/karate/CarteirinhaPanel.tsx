@@ -10,6 +10,11 @@
 //
 // Carteirinha é DATA-ONLY: nenhuma imagem é gerada no app/servidor.
 //
+// Padronização de CTAs (Shoji): "Emitir carteirinha" é CTA primário em sumi
+//   (escuro), tamanho normal, alinhado à direita — não mais faixa vermelha
+//   full-width. "Renovar" segue como ação secundária. O vermelhão fica
+//   reservado a ações destrutivas/críticas.
+//
 // Fix C5 (23/06): o botão "Emitir carteirinha" não fazia nada ao clicar.
 //   Causa: a confirmação usava Alert.alert com DOIS botões (Cancelar + Emitir),
 //   e no React Native Web o Alert.alert com botões é um no-op — o onPress de
@@ -122,12 +127,14 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
           subtitle="Emita a carteirinha digital do praticante. Os dados (faixa, dojô, registro) são capturados no momento da emissão."
           style={{ paddingVertical: 24 }}
         />
-        <KarateButton
-          label={issuing ? "Emitindo…" : "Emitir carteirinha"}
-          variant="primary"
-          loading={issuing}
-          onPress={confirmIssue}
-        />
+        <View style={styles.actions}>
+          <KarateButton
+            label={issuing ? "Emitindo…" : "Emitir carteirinha"}
+            variant="sumi"
+            loading={issuing}
+            onPress={confirmIssue}
+          />
+        </View>
       </View>
     );
   }
@@ -180,12 +187,14 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       </View>
 
       {/* ações */}
-      <KarateButton
-        label={issuing ? "Renovando…" : "Renovar carteirinha"}
-        variant="secondary"
-        loading={issuing}
-        onPress={confirmIssue}
-      />
+      <View style={styles.actions}>
+        <KarateButton
+          label={issuing ? "Renovando…" : "Renovar carteirinha"}
+          variant="secondary"
+          loading={issuing}
+          onPress={confirmIssue}
+        />
+      </View>
     </View>
   );
 }
@@ -199,6 +208,8 @@ function fmtBR(iso?: string | null): string {
 
 const styles = StyleSheet.create({
   tab:        { padding: 16, gap: 14 } as ViewStyle,
+  // Ações em tamanho normal, alinhadas à direita (padrão de ação da aba).
+  actions:    { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 8 } as ViewStyle,
   statusRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 } as ViewStyle,
   statusLabel:{ fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   flipRow:    { flexDirection: "row", gap: 8, alignSelf: "center" } as ViewStyle,
