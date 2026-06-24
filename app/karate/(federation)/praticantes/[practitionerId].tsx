@@ -13,6 +13,12 @@
 // Navegação: esta é a página de DETALHE full-page (destino do row-tap da lista).
 // O botão "Editar" (header) abre o modal de ficha para edição rápida.
 //
+// Padronização de CTAs (Shoji): as ações das abas de detalhe ("Registrar
+//   graduação", "Transferir para outro dojô") são CTAs primários em sumi
+//   (escuro), em tamanho normal e alinhados à direita — não mais faixas
+//   vermelhas full-width. O vermelhão (primary) fica reservado a ações
+//   destrutivas/críticas.
+//
 // Fix C4 (23/06): o backfill de faixas sem data conhecida usa a data-sentinela
 //   BELT_DATE_UNKNOWN ('1900-01-01'). Tratamos essa data como DESCONHECIDA:
 //   não renderizamos o "Desde:" nem a data do registro histórico — a faixa
@@ -100,13 +106,16 @@ function TrajetoriaTab({
   const [modalOpen, setModalOpen] = useState(false);
   const allowed = canTransfer(karateRole); // mesmos papéis de escrita (admin/staff)
 
+  // CTA primário em sumi, tamanho normal, alinhado à direita (ação da aba).
   const AddButton = allowed ? (
-    <KarateButton
-      label="Registrar graduação"
-      variant="primary"
-      size="md"
-      onPress={() => setModalOpen(true)}
-    />
+    <View style={tabStyles.tabActions}>
+      <KarateButton
+        label="Registrar graduação"
+        variant="sumi"
+        size="md"
+        onPress={() => setModalOpen(true)}
+      />
+    </View>
   ) : null;
 
   // Fix C4: só mostra "Desde:" quando a data é conhecida (≠ sentinela 1900).
@@ -342,12 +351,15 @@ function TransferenciaTab({
   return (
     <View style={tabStyles.tab}>
       {allowed && (
-        <KarateButton
-          label="Transferir para outro dojô"
-          variant="primary"
-          size="md"
-          onPress={() => setModalOpen(true)}
-        />
+        // CTA primário em sumi, tamanho normal, alinhado à direita (ação da aba).
+        <View style={tabStyles.tabActions}>
+          <KarateButton
+            label="Transferir para outro dojô"
+            variant="sumi"
+            size="md"
+            onPress={() => setModalOpen(true)}
+          />
+        </View>
       )}
 
       {loading ? (
@@ -607,6 +619,8 @@ const styles = StyleSheet.create({
 
 const tabStyles = StyleSheet.create({
   tab:              { padding: 16, gap: 10 } as ViewStyle,
+  // Ações da aba (CTA primário sumi em tamanho normal, alinhado à direita).
+  tabActions:       { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 8 } as ViewStyle,
   infoRow:          { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   infoLabel:        { fontSize: 12, color: KarateColors.ink3, width: 88 } as TextStyle,
   infoVal:          { fontSize: 13, color: KarateColors.ink, flex: 1 } as TextStyle,
