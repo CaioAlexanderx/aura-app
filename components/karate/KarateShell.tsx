@@ -207,7 +207,17 @@ function SidebarNav() {
         <FpktLogo size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.brandTitle}>Aura Karatê</Text>
-          <Text style={styles.brandSub} numberOfLines={1}>{federationName}</Text>
+          {/* C1: nome da federação em até 2 linhas para não cortar; na web,
+              title/accessibilityLabel exibem o nome completo como tooltip. */}
+          <Text
+            style={styles.brandSub}
+            numberOfLines={2}
+            {...(Platform.OS === "web"
+              ? ({ accessibilityLabel: federationName, title: federationName } as any)
+              : {})}
+          >
+            {federationName}
+          </Text>
         </View>
       </View>
 
@@ -408,7 +418,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   logoText:         { fontSize: 13, fontWeight: "900", color: "#fff", letterSpacing: 0.5 } as TextStyle,
   brandTitle:       { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  brandSub:         { fontSize: 10, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
+  brandSub:         { fontSize: 10, color: KarateColors.ink3, marginTop: 1, lineHeight: 13 } as TextStyle,
   sidebarItem: {
     flexDirection: "row",
     alignItems: "center",
