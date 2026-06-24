@@ -19,6 +19,11 @@
 //    tem sistema de toast/snackbar global, então fazemos um mínimo aqui.
 //    "Duplicar último" não se aplica ao dojô (decisão Caio).
 //
+// D3.5.2 (copy coerente): os obrigatórios são Nome e Modelo de filiação. O
+//   subtítulo reflete isso e o nudge "Completar quando quiser" lista APENAS
+//   campos realmente opcionais — nunca os obrigatórios — para não contradizer
+//   a mensagem.
+//
 // Endereço estruturado (Fix 5): o dojô agora usa os MESMOS campos do praticante
 // (street/number/complement/neighborhood/city/state/zip = colunas address_* do
 // companies, as mesmas da NF-e). O backend ainda aceita `address` texto legado;
@@ -217,10 +222,10 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   const sinceIso = parseBrDate(form.affiliation_since);
   const sinceBad = form.affiliation_since.length === 10 && sinceIso === null;
 
+  // D3.5.2: NÃO listamos os obrigatórios (Nome, Modelo de filiação) aqui — o
+  // "Completar quando quiser" é só para opcionais, sem contradizer o subtítulo.
   const empties = useMemo(() => {
     const e: string[] = [];
-    if (!form.name.trim()) e.push("Nome");
-    if (!form.affiliation_model) e.push("Modelo de filiação");
     if (!form.region) e.push("Região");
     if (!form.sensei_cpf) e.push("Sensei (CPF)");
     if (!form.phone) e.push("Telefone");
@@ -285,7 +290,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               {isEdit && fpkt ? (
                 <Text style={styles.subMono}>{fpkt}{statusLabel ? `  ·  ${statusLabel}` : ""}</Text>
               ) : (
-                <Text style={styles.sub}>O código FPKT é gerado automaticamente ao salvar.</Text>
+                <Text style={styles.sub}>Só o nome e o modelo de filiação são obrigatórios — o resto você completa quando quiser. O código FPKT é gerado automaticamente ao salvar.</Text>
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}><Ionicons name="close" size={20} color={P.ink2} /></TouchableOpacity>
