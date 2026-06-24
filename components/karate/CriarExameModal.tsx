@@ -22,6 +22,9 @@
 //     não aceita 31/02 etc.
 //   - Dado INVÁLIDO é sinalizado; dado AUSENTE é neutro/opcional.
 //   - autofocus no 1º campo; Enter avança (returnKeyType).
+//   - CTA do rodapé ("Próximo"/"Concluir") é primário em sumi (escuro),
+//     consistente com "Salvar"; full-width no footer (padrão de form).
+//     O vermelhão fica reservado a ações destrutivas.
 //
 // Comportamento de criação INTOCADO: o create envia { name, event_date,
 // location, exam_type:'dan', fee_amount, max_candidates } via request()
@@ -342,13 +345,13 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
               <KarateButton label="Voltar" variant="ghost" size="md" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
             )}
             {step === 0 && (
-              <KarateButton label={loading ? "Criando..." : "Próximo"} variant="primary" size="md" loading={loading} onPress={handleStep1Next} style={{ flex: 1 }} />
+              <KarateButton label={loading ? "Criando..." : "Próximo"} variant="sumi" size="md" loading={loading} onPress={handleStep1Next} style={{ flex: 1 }} />
             )}
             {step === 1 && (
-              <KarateButton label="Próximo" variant="primary" size="md" onPress={() => setStep(2)} style={{ flex: 1 }} />
+              <KarateButton label="Próximo" variant="sumi" size="md" onPress={() => setStep(2)} style={{ flex: 1 }} />
             )}
             {step === 2 && (
-              <KarateButton label="Concluir" variant="primary" size="md" onPress={handleFinish} style={{ flex: 1 }} />
+              <KarateButton label="Concluir" variant="sumi" size="md" onPress={handleFinish} style={{ flex: 1 }} />
             )}
           </View>
         </View>
