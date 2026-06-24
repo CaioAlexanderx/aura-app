@@ -23,6 +23,12 @@
 //  - Edição: o dojô atual vem pré-selecionado (lê p.dojo_name do detalhe) —
 //    sem isso o campo obrigatório mostrava "Selecionar dojô…" e forçava
 //    reseleção (fix F1.2 23/06).
+//
+// D3.5.2 (copy coerente): o único campo obrigatório é o Nome (o Dojô também,
+//   mas é pré-selecionado quando há um único dojô). O subtítulo reflete isso
+//   ("Só o nome é obrigatório…") e o nudge "Completar quando quiser" lista
+//   APENAS campos realmente opcionais — nunca os obrigatórios (Nome/Dojô) —
+//   para não contradizer a mensagem.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -247,11 +253,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const age = ageFromISO(birthIso);
   const cpfBad = form.cpf.length > 0 && !cpfValido(form.cpf);
 
-  // campos vazios (neutro, opcional)
+  // campos vazios (neutro, opcional). D3.5.2: NÃO listamos os obrigatórios
+  // (Nome, Dojô) aqui — o "Completar quando quiser" é só para opcionais, sem
+  // contradizer o subtítulo "Só o nome é obrigatório".
   const empties = useMemo(() => {
     const e: string[] = [];
-    if (!form.full_name.trim()) e.push("Nome");
-    if (!form.dojo_id) e.push("Dojô");
     if (!form.birth_date) e.push("Nascimento");
     if (!form.cpf) e.push("CPF");
     if (!form.phone) e.push("Telefone");
@@ -313,7 +319,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {isEdit && fpkt ? (
                 <Text style={styles.subMono}>{fpkt}{beltName ? `  ·  ${beltName}` : ""}</Text>
               ) : (
-                <Text style={styles.sub}>Preencha o que tiver — campos vazios não bloqueiam nada.</Text>
+                <Text style={styles.sub}>Só o nome é obrigatório — o resto você completa quando quiser.</Text>
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
