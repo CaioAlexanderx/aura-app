@@ -7,6 +7,10 @@
 // IA/Nav P1: o botão "Ver praticantes" leva à lista já filtrada por este
 //   dojô (/karate/praticantes?dojo_id=<id> — a lista lê o param dojo_id).
 //
+// Export (round-trip com o import): o botão "Exportar" abre um modal que baixa
+//   os dados atuais do dojô no MESMO formato da Importação (abas Academias/
+//   Alunos/Histórico) para o dojô editar e reimportar. Ver DojoExportModal.
+//
 // Nav P2 (7.3): ações de link público no header — "Página pública" (abre)
 //   e "Copiar link". Não há rota pública POR-DOJÔ (o portal do dojô abre
 //   por link/token fixo, e o microsite expõe ranking/portais a nível de
@@ -25,6 +29,7 @@ import {
   ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1,
 } from "@/components/karate/shoji";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
+import DojoExportModal from "@/components/karate/DojoExportModal";
 import { karateApi, DojoDetail, AffiliationModel } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
@@ -44,6 +49,8 @@ export default function DojoDetailScreen() {
   const [error, setError] = useState(false);
   // Modal de edição (reusa a ficha de cadastro com o id atual)
   const [editOpen, setEditOpen] = useState(false);
+  // Modal de exportação (round-trip com o import)
+  const [exportOpen, setExportOpen] = useState(false);
   // Nav P2: slug público da federação (para montar o link do microsite).
   // null = ainda não resolvido / federação sem slug → ações ficam ocultas.
   const [pubSlug, setPubSlug] = useState<string | null>(null);
@@ -121,6 +128,7 @@ export default function DojoDetailScreen() {
                 variant="ghost"
                 onPress={() => router.push(("/karate/praticantes?dojo_id=" + encodeURIComponent(dojoId!)) as any)}
               />
+              <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
               <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
             </View>
           </View>
@@ -178,6 +186,16 @@ export default function DojoDetailScreen() {
         dojoId={dojoId!}
         onClose={() => setEditOpen(false)}
         onSaved={() => load()}
+      />
+
+      {/* Modal de exportação (round-trip com o import) */}
+      <DojoExportModal
+        federationId={federationId}
+        visible={exportOpen}
+        dojoId={dojoId!}
+        dojoName={data.name}
+        fpktId={data.fpkt_affiliation_id}
+        onClose={() => setExportOpen(false)}
       />
     </ShojiBackground>
   );
