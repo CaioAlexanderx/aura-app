@@ -8,7 +8,8 @@
 // Princípios (decisões Caio):
 //  - Dado AUSENTE é neutro/opcional ("Completar quando quiser"), NÃO é erro.
 //    Só dado INVÁLIDO (CNPJ/CPF/data impossível) é sinalizado.
-//  - CEP em destaque → compõe o endereço (campo de texto único do dojô) via ViaCEP.
+//  - CEP em destaque → preenche o endereço ESTRUTURADO (campos separados,
+//    igual à ficha do praticante) via ViaCEP: logradouro, bairro, cidade, UF.
 //  - FPKT-ID é gerado no backend — aqui só exibimos.
 //  - Modelo de filiação (obrigatório): Anual/Semestral/Trimestral, com os
 //    valores vigentes FPKT como referência.
@@ -17,6 +18,12 @@
 //  - Feedback de sucesso leve: toast Shoji inline ("Dojô salvo") — o app não
 //    tem sistema de toast/snackbar global, então fazemos um mínimo aqui.
 //    "Duplicar último" não se aplica ao dojô (decisão Caio).
+//
+// Endereço estruturado (Fix 5): o dojô agora usa os MESMOS campos do praticante
+// (street/number/complement/neighborhood/city/state/zip = colunas address_* do
+// companies, as mesmas da NF-e). O backend ainda aceita `address` texto legado;
+// na edição, se o registro só tiver `address` (sem campos), exibimos o texto
+// num campo "Endereço (registro antigo)" read-friendly para não perder o dado.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -45,7 +52,11 @@ const MODELS: { key: AffiliationModel; label: string; detail: string }[] = [
 const EMPTY = {
   name: "", affiliation_model: "" as AffiliationModel | "", region: "", cnpj: "",
   sensei_cpf: "", affiliation_since: "", dojo_founded_year: "",
-  phone: "", email: "", cep: "", address: "",
+  phone: "", email: "",
+  // endereço estruturado (igual ao praticante)
+  zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
+  // só leitura: texto legado de registros antigos que ainda não migraram p/ campos
+  legacy_address: "",
 };
 type Form = typeof EMPTY;
 
@@ -103,7 +114,7 @@ function maskDate(v: string) {
 
 export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved }: Props) {
   const { width } = useWindowDimensions();
-  const cardW = Math.min(680, width - 24);
+  const cardW = Math.min(720, width - 24);
   const isEdit = !!dojoId;
 
   const [form, setForm] = useState<Form>(EMPTY);
@@ -135,11 +146,20 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     setLoading(true);
     karateApi.getDojo(federationId, dojoId)
       .then((d: any) => {
+        // Se o registro tem campos estruturados, usa-os; senão guarda o texto
+        // legado p/ não perder o dado (campo read-friendly).
+        const hasStructured = !!(d.address_street || d.address_city || d.address_zip ||
+          d.address_neighborhood || d.address_number || d.address_state);
         setForm({
           name: d.name || "", affiliation_model: d.affiliation_model || "", region: d.region || "",
           cnpj: d.cnpj ? maskCNPJ(d.cnpj) : "", sensei_cpf: d.sensei_cpf ? maskCPF(d.sensei_cpf) : "",
           affiliation_since: fromISO(d.affiliation_since), dojo_founded_year: d.dojo_founded_year ? String(d.dojo_founded_year) : "",
-          phone: d.phone ? maskPhone(d.phone) : "", email: d.email || "", cep: "", address: d.address || "",
+          phone: d.phone ? maskPhone(d.phone) : "", email: d.email || "",
+          zip_code: d.address_zip ? maskCEP(d.address_zip) : "",
+          street: d.address_street || "", number: d.address_number || "",
+          complement: d.address_complement || "", neighborhood: d.address_neighborhood || "",
+          city: d.address_city || "", state: d.address_state || "",
+          legacy_address: hasStructured ? "" : (d.address || ""),
         });
         setFpkt(d.fpkt_affiliation_id || null);
         setStatusLabel(d.status || null);
@@ -171,8 +191,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   }, [toastAnim]);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
+  // CEP autofill (ViaCEP) — preenche os campos ESTRUTURADOS, igual ao praticante.
   const onCep = useCallback(async (raw: string) => {
-    set("cep", maskCEP(raw));
+    set("zip_code", maskCEP(raw));
     const d = onlyD(raw);
     if (d.length !== 8) { setCepStatus(null); return; }
     setCepStatus({ msg: "Buscando endereço…", ok: true });
@@ -180,9 +201,13 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       const r = await fetch(`https://viacep.com.br/ws/${d}/json/`);
       const j = await r.json();
       if (j?.erro) { setCepStatus({ msg: "CEP não encontrado — preencha o endereço manualmente.", ok: false }); return; }
-      const composed = [j.logradouro, j.bairro, j.localidade && j.uf ? `${j.localidade} - ${j.uf}` : j.localidade].filter(Boolean).join(", ");
-      set("address", composed);
-      setCepStatus({ msg: "Endereço preenchido — adicione o número.", ok: true });
+      setForm((p) => ({
+        ...p,
+        street: j.logradouro || p.street, neighborhood: j.bairro || p.neighborhood,
+        city: j.localidade || p.city, state: j.uf || p.state,
+        legacy_address: "", // CEP preenchido → substitui qualquer texto legado
+      }));
+      setCepStatus({ msg: "Endereço preenchido — confira o número.", ok: true });
     } catch { setCepStatus({ msg: "Falha ao buscar o CEP — preencha manualmente.", ok: false }); }
   }, []);
 
@@ -209,6 +234,11 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     if (senseiBad) { setErrorMsg("O CPF do sensei é inválido. Corrija ou deixe em branco."); return; }
     if (sinceBad) { setErrorMsg("A data \"Filiado desde\" é inválida. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
+    // Endereço: envia campos estruturados (address_*). Mantém compat com o texto
+    // legado — se o registro só tinha `address` e o usuário não tocou nos campos,
+    // reenviamos o texto p/ não apagá-lo silenciosamente.
+    const hasStructured = !!(form.street || form.number || form.complement ||
+      form.neighborhood || form.city || form.state || form.zip_code);
     const body: DojoInput = {
       name: form.name.trim(),
       affiliation_model: form.affiliation_model as AffiliationModel,
@@ -217,9 +247,18 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       region: form.region || undefined,
       affiliation_since: sinceIso || undefined,
       dojo_founded_year: form.dojo_founded_year ? parseInt(form.dojo_founded_year, 10) : null,
-      address: form.address || null,
       phone: onlyD(form.phone) || null,
       email: form.email || null,
+      // endereço estruturado
+      address_street: form.street || null,
+      address_number: form.number || null,
+      address_complement: form.complement || null,
+      address_neighborhood: form.neighborhood || null,
+      address_city: form.city || null,
+      address_state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
+      address_zip: onlyD(form.zip_code) || null,
+      // texto legado: só preserva se NÃO houver estruturado preenchido
+      address: hasStructured ? null : (form.legacy_address || null),
     };
     try {
       if (isEdit) await karateApi.updateDojo(federationId, dojoId!, body);
@@ -315,20 +354,38 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                   inputRef={emailRef} returnKeyType="done" onSubmitEditing={handleSave} />
               </Row2>
 
+              {/* CEP destacado — preenche os campos estruturados (igual praticante) */}
               <View style={styles.cepBox}>
                 <Text style={styles.cepLabel}>CEP <Text style={styles.cepHint}>· preenche o endereço automaticamente</Text></Text>
                 <View style={styles.cepRow}>
-                  <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.cep} onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9} accessibilityLabel="CEP" />
+                  <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.zip_code} onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9} accessibilityLabel="CEP" />
                   {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Ionicons name="search" size={18} color={P.ink3} style={{ width: 36, textAlign: "center" }} />}
                 </View>
                 {cepStatus ? <Text style={[styles.note, cepStatus.ok ? styles.noteOk : styles.noteBad]}>{cepStatus.msg}</Text> : null}
               </View>
 
-              <View style={styles.field}>
-                <Text style={styles.label}>Endereço</Text>
-                <TextInput style={[styles.input, { minHeight: 64, textAlignVertical: "top" }]} value={form.address} onChangeText={(v) => set("address", v)}
-                  placeholder="Logradouro, número, bairro, cidade - UF" placeholderTextColor={P.ink4} multiline accessibilityLabel="Endereço" />
-              </View>
+              <Row2>
+                <Field flex2 label="Logradouro" value={form.street} onChangeText={(v) => set("street", v)} placeholder="Rua, avenida…" />
+                <Field flex label="Número" mono value={form.number} onChangeText={(v) => set("number", v)} placeholder="000" keyboardType="numeric" />
+              </Row2>
+              <Row2>
+                <Field flex label="Complemento" value={form.complement} onChangeText={(v) => set("complement", v)} placeholder="Sala, bloco…" />
+                <Field flex label="Bairro" value={form.neighborhood} onChangeText={(v) => set("neighborhood", v)} />
+              </Row2>
+              <Row2>
+                <Field flex2 label="Cidade" value={form.city} onChangeText={(v) => set("city", v)} />
+                <Field flex label="UF" mono value={form.state} onChangeText={(v) => set("state", v.toUpperCase().slice(0, 2))} maxLength={2} placeholder="SP" />
+              </Row2>
+
+              {/* Texto legado: só aparece em registros antigos que ainda não têm campos.
+                  Editável, mas ao preencher o CEP/campos ele é substituído. */}
+              {form.legacy_address ? (
+                <View style={styles.field}>
+                  <Text style={styles.label}>Endereço (registro antigo)<Text style={styles.labelHint}>  · preencha os campos acima para estruturar</Text></Text>
+                  <TextInput style={[styles.input, { minHeight: 52, textAlignVertical: "top" }]} value={form.legacy_address} onChangeText={(v) => set("legacy_address", v)}
+                    placeholder="Endereço em texto livre" placeholderTextColor={P.ink4} multiline accessibilityLabel="Endereço (registro antigo)" />
+                </View>
+              ) : null}
 
               {errorMsg ? (
                 <View style={styles.errBox}><Ionicons name="alert-circle" size={15} color={P.red} /><Text style={styles.errTxt}>{errorMsg}</Text></View>
@@ -365,12 +422,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function Row2({ children }: { children: React.ReactNode }) { return <View style={styles.row2}>{children}</View>; }
 function Field(props: {
   label: string; value: string; onChangeText: (v: string) => void; placeholder?: string;
-  hint?: string; req?: boolean; mono?: boolean; flex?: boolean; bad?: boolean;
+  hint?: string; req?: boolean; mono?: boolean; flex?: boolean; flex2?: boolean; bad?: boolean;
   note?: string; noteOk?: boolean; keyboardType?: any; autoCapitalize?: any; maxLength?: number;
   inputRef?: React.RefObject<TextInput>; returnKeyType?: any; onSubmitEditing?: () => void;
 }) {
   return (
-    <View style={[styles.field, props.flex && { flex: 1 }]}>
+    <View style={[styles.field, props.flex && { flex: 1 }, props.flex2 && { flex: 2 }]}>
       <Text style={styles.label}>{props.label}{props.req ? <Text style={{ color: P.red }}> *</Text> : null}{props.hint ? <Text style={styles.labelHint}>  · {props.hint}</Text> : null}</Text>
       <TextInput
         ref={props.inputRef}

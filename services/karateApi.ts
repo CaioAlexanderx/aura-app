@@ -27,7 +27,15 @@ export interface Dojo {
   affiliation_model: AffiliationModel;
   affiliation_since: string;
   dojo_founded_year: number | null;
+  // Endereço: `address` (texto livre legado) + campos estruturados (NF-e).
   address: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
   phone: string | null;
   email: string | null;
   status: DojoStatus;
@@ -42,7 +50,15 @@ export interface DojoInput {
   affiliation_model: AffiliationModel;
   affiliation_since?: string;
   dojo_founded_year?: number | null;
+  // Endereço: `address` legado opcional + campos estruturados (NF-e).
   address?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
   phone?: string | null;
   email?: string | null;
 }
