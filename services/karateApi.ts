@@ -219,6 +219,8 @@ export interface BeltDistributionItem {
   belt_level: string;
   belt_name: string;
   count: number;
+  /** back#252: ordem canônica de hierarquia (Branca<…<Preta 1º→2º<…<Vermelha por último). Opcional. */
+  rank?: number;
 }
 
 export interface DashboardKPIs {
@@ -258,6 +260,8 @@ export interface DashboardPayload {
   upcoming_events: UpcomingEvent[];
   overdue_dojos: OverdueDojo[];
   belt_distribution: BeltDistributionItem[];
+  /** back#252: total real de praticantes (independe da distribuição visível, que oculta a Vermelha). Opcional. */
+  practitioner_total?: number;
   /** Track P: alertas derivados (opcional — backend pode não retornar ainda) */
   alerts?: DashboardAlert[];
 }

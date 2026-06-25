@@ -152,13 +152,20 @@ export function BarChart({
   // Item 6 — com 2+ barras, headroom pra a maior (value/maxVal=1) não bater no
   // topo do plot. Mantém a proporção RELATIVA (todas escalam pelo mesmo fator).
   const MULTI_H_CAP = 0.82;
+  // Item 3 (back#252) — a barra-valor (barValLabel) é renderizada DENTRO da
+  // coluna, ACIMA da barra. Sem reservar esse espaço, a barra mais alta
+  // (value/maxVal=1) somada ao rótulo estourava o plot e saía desproporcional
+  // ("1ª barra fora de proporção"). Escalamos a altura contra a área ÚTIL
+  // (plot menos a reserva do rótulo), preservando a proporção entre as barras.
+  const VALUE_LABEL_RESERVE = 16;
+  const plotH = Math.max(1, chartH - VALUE_LABEL_RESERVE);
 
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-end", height: containerH, gap: 4 }}>
       {items.map((item, i) => {
-        const pct = maxVal > 0 ? item.value / maxVal : 0;
+        const pct = maxVal > 0 ? Math.min(1, item.value / maxVal) : 0;
         const scaled = single ? pct * SINGLE_H_CAP : pct * MULTI_H_CAP;
-        const barH = item.value > 0 ? Math.max(4, Math.round(scaled * chartH)) : 4;
+        const barH = item.value > 0 ? Math.max(4, Math.round(scaled * plotH)) : 4;
         const bg = item.isProj ? (projColor || barColor) : barColor;
         return (
           <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "flex-end" }}>
