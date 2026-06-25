@@ -64,9 +64,10 @@ export interface CoberturaRegion {
 }
 export interface CoberturaPayload {
   regions: CoberturaRegion[];
-  gap_count: number;
-  gap_mun_total: number;
-  gap_names: string;
+  // Lacunas de cobertura removidas (Item 5) — opcionais por compat.
+  gap_count?: number;
+  gap_mun_total?: number;
+  gap_names?: string;
 }
 
 // Inadimplência

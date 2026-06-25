@@ -1,5 +1,5 @@
 // ============================================================
-// Saúde da Rede — Relatório periódico (DESIGN-28) · Shoji
+// Saúde da Rede — Relatório periódico · Shoji
 // Resume o painel e envia por e-mail ao admin. CTA sumi.
 // ============================================================
 import React, { useCallback, useState } from "react";
@@ -34,7 +34,7 @@ export function ReportWidget({ federationId }: { federationId: string }) {
         <View style={{ flex: 1 }}>
           <Text style={st.shTitle}>Relatório periódico</Text>
           <View style={st.filete} />
-          <Text style={st.shSub}>Resume Saúde da Rede e envia por e-mail ao admin · DESIGN-28</Text>
+          <Text style={st.shSub}>Resume Saúde da Rede e envia por e-mail ao admin</Text>
         </View>
       </View>
       <TouchableOpacity

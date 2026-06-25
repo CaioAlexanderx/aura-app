@@ -114,7 +114,15 @@ export function ChartEmpty({ h, label }: { h: number; label?: string }) {
 //  • 1 item   → barra de tamanho normal: largura fixa centralizada e
 //               altura escalada por um teto sensato (não vira bloco
 //               full-width/full-height).
-//  • 2+ itens → comportamento original (colunas flex preenchendo a largura).
+//  • 2+ itens → colunas flex, MAS com largura máxima por barra (não viram
+//               blocos largos quando há poucas barras) e um teto de altura
+//               (headroom) pra a barra mais alta não estourar o card.
+//
+// Item 6 (proporção entre VÁRIAS barras): antes, com 2–3 pontos as barras
+// ocupavam toda a largura da coluna (flex:1 + width:100%) e a maior subia
+// até o topo do plot — três blocões dominando o card. Agora cada barra tem
+// maxWidth e a escala de altura usa MULTI_H_CAP de headroom. O #311 (barra de
+// período ÚNICO) continua intacto via SINGLE_H_CAP/barSingle.
 
 export function BarChart({
   items,
@@ -141,12 +149,15 @@ export function BarChart({
   // D2.1 — com 1 ponto, value/maxVal=1 colaria a barra no topo (bloco).
   // Teto de altura para uma barra única ficar com aparência normal.
   const SINGLE_H_CAP = 0.62;
+  // Item 6 — com 2+ barras, headroom pra a maior (value/maxVal=1) não bater no
+  // topo do plot. Mantém a proporção RELATIVA (todas escalam pelo mesmo fator).
+  const MULTI_H_CAP = 0.82;
 
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-end", height: containerH, gap: 4 }}>
       {items.map((item, i) => {
         const pct = maxVal > 0 ? item.value / maxVal : 0;
-        const scaled = single ? pct * SINGLE_H_CAP : pct;
+        const scaled = single ? pct * SINGLE_H_CAP : pct * MULTI_H_CAP;
         const barH = item.value > 0 ? Math.max(4, Math.round(scaled * chartH)) : 4;
         const bg = item.isProj ? (projColor || barColor) : barColor;
         return (
@@ -157,7 +168,7 @@ export function BarChart({
             <View
               style={[
                 st.bar,
-                single ? st.barSingle : null,
+                single ? st.barSingle : st.barMulti,
                 {
                   height: barH,
                   backgroundColor: bg,
@@ -214,6 +225,8 @@ export const st = StyleSheet.create({
   // Bar chart
   bar:          { borderRadius: 4, width: "100%" } as ViewStyle,
   barSingle:    { width: 56, maxWidth: 56, alignSelf: "center" } as ViewStyle,
+  // Item 6 — largura sensata por barra (não estica em bloco com poucas barras).
+  barMulti:     { maxWidth: 44, alignSelf: "center" } as ViewStyle,
   barValLabel:  { fontFamily: F.mono, fontSize: 9, color: C.ink3, marginBottom: 2, textAlign: "center" } as TextStyle,
   barLabel:     { fontFamily: F.body, fontSize: 10, color: C.ink3, marginTop: 4, textAlign: "center" } as TextStyle,
   barSublabel:  { fontFamily: F.body, fontSize: 9, color: C.ink4, textAlign: "center" } as TextStyle,

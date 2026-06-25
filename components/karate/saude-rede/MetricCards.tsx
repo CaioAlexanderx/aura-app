@@ -97,16 +97,6 @@ export function CoberturaCard({
               </View>
             ))}
           </View>
-          {/* Lacunas */}
-          {data.gap_count > 0 && (
-            <View style={st.gapBox}>
-              <Text style={st.gapTitle}>Lacunas de cobertura</Text>
-              <Text style={st.gapBody}>
-                <Text style={{ fontWeight: "700" }}>{data.gap_count} regiões</Text>
-                {" sem dojô afiliado — "}{data.gap_names}.
-              </Text>
-            </View>
-          )}
         </>
       )}
     </View>
