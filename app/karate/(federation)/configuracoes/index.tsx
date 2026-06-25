@@ -16,6 +16,12 @@
 //   Recursos   → karateSettingsApi.getFlags / updateFlags
 //   Identidade → karateSettingsApi.getIdentity / updateIdentity
 //
+// Notas de escopo (contexto FEDERAÇÃO):
+//   - Sem upload de "Logo da federação" aqui: o logo oficial é gerido pela
+//     Aura (Caio). O contexto "Aura Dojô" (app/karate/sensei) é separado.
+//   - Sem menção de emissão automática de NF-e/NFS-e na UI: a FPKT não emite
+//     notas pelo app. O código fiscal do backend segue dormente.
+//
 // Guardrails:
 //   - StyleSheet.create: todos os valores são objetos (sem strings soltas no top-level)
 //   - Sem deps novas: apenas RN core + @expo/vector-icons (já no projeto)
@@ -261,13 +267,6 @@ function AnuidadeTab({ federationId }: { federationId: string }) {
   return (
     <ScrollView style={st.tabContent} contentContainerStyle={st.tabPad}>
       <SectionHeader title="Modelos de anuidade" sub="Valores e meses de vencimento por modelo de cobrança" />
-
-      <View style={st.anuidadeIntro}>
-        <Text style={st.anuidadeIntroText}>
-          Estes são os valores e meses de vencimento que a federação cobra dos dojôs.
-          Escolha um modelo de cobrança e ajuste o valor e os meses em que a anuidade vence.
-        </Text>
-      </View>
 
       {loading ? (
         <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 24 }} />
@@ -1069,17 +1068,9 @@ function RecursosTab({ federationId }: { federationId: string }) {
         <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 24 }} />
       ) : (
         <View style={st.identityGrid}>
-          {/* Logo + Nome */}
+          {/* Nome + Slug — o logo oficial da federação é gerido pela Aura,
+              por isso não há upload de logo aqui (contexto federação). */}
           <Card>
-            <View style={st.logoRow}>
-              <View style={st.logoBox}>
-                <Text style={st.logoBoxText}>空</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={st.logoLabel}>Logo da federação</Text>
-                <Text style={st.logoSub}>PNG ou SVG, fundo transparente</Text>
-              </View>
-            </View>
             <Text style={st.fieldLabel}>Nome da federação</Text>
             <TextInput style={st.field} value={f.name || ""} onChangeText={(v) => updateField("name", v)} accessibilityLabel="Nome da federação" />
             <Text style={[st.fieldLabel, { marginTop: 12 }]}>Slug público</Text>
@@ -1108,7 +1099,7 @@ function RecursosTab({ federationId }: { federationId: string }) {
       )}
 
       {/* Dados fiscais */}
-      <SectionHeader title="Dados fiscais" sub="Emissão automática de NFS-e para anuidades e taxas" />
+      <SectionHeader title="Dados fiscais" sub="Dados cadastrais da federação para registro" />
       {!loadingIdentity && (
         <Card>
           <Text style={st.fieldLabel}>Razão social</Text>
@@ -1143,13 +1134,6 @@ function RecursosTab({ federationId }: { federationId: string }) {
           <View style={st.identityGrid}>
             <TextInput style={[st.field, { flex: 2 }]} value={f.city || ""} onChangeText={(v) => updateField("city", v)} placeholder="Município" placeholderTextColor={KarateColors.ink4} accessibilityLabel="Município" />
             <TextInput style={[st.field, { flex: 1 }]} value={f.state || ""} onChangeText={(v) => updateField("state", v.toUpperCase().slice(0, 2))} placeholder="UF" placeholderTextColor={KarateColors.ink4} maxLength={2} accessibilityLabel="Estado" />
-          </View>
-
-          <View style={st.nfseBlock}>
-            <View style={st.nfseTag}><Text style={st.nfseTagText}>NFS-e</Text></View>
-            <Text style={st.nfseDesc}>
-              As notas de anuidade e taxas são emitidas automaticamente com estes dados. Alterações valem para emissões futuras.
-            </Text>
           </View>
 
           <TouchableOpacity style={[st.btn, st.btnPrimary, { marginTop: 20, alignSelf: "flex-end" }]} onPress={saveIdentity} disabled={savingIdentity}>
@@ -1239,10 +1223,6 @@ const st = StyleSheet.create({
   // Tab content
   tabContent: { flex: 1 } as ViewStyle,
   tabPad:     { padding: 16, paddingBottom: 48, gap: 16 } as ViewStyle,
-
-  // Anuidade intro (contexto da seção)
-  anuidadeIntro: { marginTop: -4, marginBottom: 4 } as ViewStyle,
-  anuidadeIntroText: { fontSize: 13, lineHeight: 19, color: KarateColors.ink2 } as TextStyle,
 
   // Section header
   sectionHead:  { flexDirection: "row", alignItems: "flex-start", marginBottom: 12 } as ViewStyle,
@@ -1388,7 +1368,7 @@ const st = StyleSheet.create({
   regimeChipText:     { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   regimeChipTextActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
-  // NFS-e block
+  // NFS-e block (estilos legados — bloco de UI removido; mantidos inertes p/ diff mínimo)
   nfseBlock:   { flexDirection: "row", gap: 12, marginTop: 20, padding: 14, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, alignItems: "flex-start" } as ViewStyle,
   nfseTag:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: KarateColors.primary } as ViewStyle,
   nfseTagText: { fontSize: 11, fontWeight: "800", color: "#fff" } as TextStyle,
