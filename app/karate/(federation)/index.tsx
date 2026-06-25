@@ -13,8 +13,14 @@
 // C6: o card "Praticantes por graduação" reflete só a graduação ATIVA —
 // a Vermelha é histórica (a federação não usa mais) e fica fora dos
 // gráficos/relatórios (continua no histórico do praticante, Trajetória).
-// As barras saem ordenadas pela hierarquia oficial (beltRank); dentro da
-// Preta, em ordem ASCENDENTE por grau Dan (1º → 2º → … → 7º).
+// As barras saem ordenadas pela hierarquia oficial; quando o backend
+// (back#252) envia `rank` numérico em cada item, usamos ele direto; senão
+// caímos no beltRank local. Dentro da Preta, em ordem ASCENDENTE por grau
+// Dan (1º → 2º → … → 7º).
+//
+// back#252: o número-destaque de "Praticantes por graduação" usa o
+// practitioner_total do payload (total REAL da rede), não a soma das barras
+// visíveis — a distribuição oculta a Vermelha, então somar barras subestima.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -75,12 +81,21 @@ export default function KaratePainel() {
   const belts = (data?.belt_distribution ?? [])
     .filter((b) => isActiveBelt(b.belt_level) && isActiveBelt(b.belt_name))
     .slice()
-    // Ordena pela hierarquia oficial; na Preta o grau Dan vem do belt_name
-    // ('Preta 1°', 'Preta 2°'…) → 1º Dan, 2º Dan… em ordem ASCENDENTE.
-    .sort((a, b) => beltRank(a.belt_level || a.belt_name, a.belt_name) - beltRank(b.belt_level || b.belt_name, b.belt_name));
+    // back#252: ordena pela ordem canônica. Preferimos o `rank` numérico que
+    // o backend já manda (Branca<…<Preta 1º→2º<…<Vermelha por último); na
+    // ausência dele, caímos no beltRank local — que na Preta lê o grau Dan
+    // do belt_name ('Preta 1°', 'Preta 2°'…) em ordem ASCENDENTE.
+    .sort((a, b) => {
+      if (a.rank != null && b.rank != null) return a.rank - b.rank;
+      return beltRank(a.belt_level || a.belt_name, a.belt_name) - beltRank(b.belt_level || b.belt_name, b.belt_name);
+    });
   const apiAlerts: DashboardAlert[] = (data as any)?.alerts ?? [];
   const beltTotal = belts.reduce((s, b) => s + b.count, 0);
   const beltMax = belts.reduce((m, b) => Math.max(m, b.count), 0) || 1;
+  // back#252: total REAL da rede. Usa practitioner_total quando vier; senão
+  // cai no KPI practitioner_count (e por último na soma das barras visíveis).
+  const practitionerTotal =
+    data?.practitioner_total ?? data?.kpis?.practitioner_count ?? beltTotal;
   const overdueTotal = overdue.reduce((s, d) => s + d.amount, 0);
   // Federação vazia: sem dojôs E sem praticantes → tela de boas-vindas.
   const isEmpty = !loading && !!data && data.kpis.dojo_count === 0 && data.kpis.practitioner_count === 0;
@@ -169,7 +184,7 @@ export default function KaratePainel() {
 
         {/* Distribuição por graduação (ativa — Vermelha histórica fica de fora) */}
         <View style={styles.section}>
-          <SectionHead title="Praticantes por graduação" sub={beltTotal > 0 ? `${beltTotal} praticantes graduados` : undefined} />
+          <SectionHead title="Praticantes por graduação" sub={practitionerTotal > 0 ? `${practitionerTotal.toLocaleString("pt-BR")} praticantes` : undefined} />
           <Card>
             {loading ? [1, 2, 3, 4].map((k) => <Skeleton key={k} height={18} style={{ marginBottom: 14 }} />)
               : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes graduados" style={{ paddingVertical: 24 }} />
