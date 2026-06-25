@@ -417,6 +417,16 @@ export type ExpenseCategory =
   | "expense_certificate"
   | "expense_award"
   | "expense_other";
+// Lançamentos (Track B v2) — receitas + despesas num só extrato.
+export type EntryKind = "income" | "expense";
+export type IncomeCategory =
+  | "income_event"
+  | "income_sponsorship"
+  | "income_donation"
+  | "income_sale"
+  | "income_other";
+// Categoria de um lançamento (depende do kind).
+export type EntryCategory = ExpenseCategory | IncomeCategory;
 export type NfseStatus = "pending" | "issued" | "error" | "cancelled";
 export type OverdueTargetType = "dojo" | "cpf";
 export type ReminderChannel = "whatsapp" | "email";
@@ -513,6 +523,8 @@ export interface CpfAnnuity {
 
 export interface Expense {
   id: string;
+  /** 'income' | 'expense' — default 'expense' p/ compat com respostas antigas. */
+  kind?: EntryKind;
   amount: number;
   category: ExpenseCategory;
   description: string;
@@ -530,6 +542,46 @@ export interface ExpenseInput {
   due_date?: string;
   reference_type?: string | null;
   reference_id?: string | null;
+}
+
+// ── Lançamentos (entradas + saídas) — /financial/expenses v2 ──────
+/** Item do extrato unificado retornado por GET /financial/expenses. */
+export interface FinancialEntry {
+  id: string;
+  kind: EntryKind;
+  amount: number;
+  category: EntryCategory;
+  description: string;
+  due_date: string | null;
+  status: string;
+  created_at: string;
+}
+
+/** Payload de criação de lançamento (POST /financial/expenses). */
+export interface FinancialEntryInput {
+  kind?: EntryKind;            // default 'expense' no backend
+  amount: number;              // > 0
+  category: EntryCategory;
+  description: string;
+  due_date?: string;           // YYYY-MM-DD (default hoje no backend)
+}
+
+/** Campos editáveis de um lançamento (PATCH /financial/expenses/:id). kind NÃO muda. */
+export interface FinancialEntryUpdate {
+  amount?: number;
+  category?: EntryCategory;
+  description?: string;
+  due_date?: string;
+}
+
+export interface EntriesQuery {
+  kind?: EntryKind;
+  category?: EntryCategory;
+  q?: string;
+  from?: string;               // YYYY-MM-DD
+  to?: string;                 // YYYY-MM-DD
+  page?: number;
+  pageSize?: number;
 }
 
 export interface NfseItem {
@@ -1242,6 +1294,43 @@ export const karateApi = {
 
   createExpense: (federationId: string, body: ExpenseInput): Promise<Expense> =>
     request(`/federation/${federationId}/financial/expenses`, { method: "POST", body }),
+
+  // ── Lançamentos (entradas + saídas) — extrato unificado v2 ──────
+  /** Lista lançamentos (income + expense) com filtros opcionais. */
+  listEntries: (
+    federationId: string,
+    filters?: EntriesQuery
+  ): Promise<Paginated<FinancialEntry>> => {
+    const qs = new URLSearchParams();
+    if (filters?.kind) qs.set("kind", filters.kind);
+    if (filters?.category) qs.set("category", filters.category);
+    if (filters?.q) qs.set("q", filters.q);
+    if (filters?.from) qs.set("from", filters.from);
+    if (filters?.to) qs.set("to", filters.to);
+    if (filters?.page) qs.set("page", String(filters.page));
+    if (filters?.pageSize) qs.set("pageSize", String(filters.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/expenses${query}`);
+  },
+
+  /** Cria um lançamento (entrada ou saída). */
+  createEntry: (federationId: string, body: FinancialEntryInput): Promise<FinancialEntry> =>
+    request(`/federation/${federationId}/financial/expenses`, { method: "POST", body }),
+
+  /** Edita um lançamento existente (kind não muda). */
+  updateEntry: (
+    federationId: string,
+    entryId: string,
+    body: FinancialEntryUpdate
+  ): Promise<FinancialEntry> =>
+    request(`/federation/${federationId}/financial/expenses/${entryId}`, { method: "PATCH", body }),
+
+  /** Exclui um lançamento. */
+  deleteEntry: (
+    federationId: string,
+    entryId: string
+  ): Promise<{ deleted: boolean; id: string }> =>
+    request(`/federation/${federationId}/financial/expenses/${entryId}`, { method: "DELETE" }),
 
   listNfse: (
     federationId: string,

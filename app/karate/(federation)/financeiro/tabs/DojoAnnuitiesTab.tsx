@@ -42,6 +42,8 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
 import { SearchField } from "@/components/karate/shoji";
+import { Icon } from "@/components/Icon";
+import { downloadCsv } from "./EntriesTab";
 import {
   karateApi,
   DojoAnnuity,
@@ -90,6 +92,10 @@ function AnnuityStatusBadge({ status }: { status: AnnuityStatus }) {
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+const STATUS_CSV_LABEL: Record<AnnuityStatus, string> = {
+  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso",
+};
 
 interface Props { federationId: string; }
 
@@ -145,6 +151,21 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
       (a.fpkt_affiliation_id ?? "").toLowerCase().includes(needle)
     );
   }, [annuities, filter, q]);
+
+  // Export CSV das cobranças JÁ filtradas (status + busca). Client-side.
+  const handleExport = () => {
+    if (filteredAnnuities.length === 0) return;
+    const header = ["Dojô", "Código FPKT", "Período", "Valor", "Status", "Dias em atraso"];
+    const rows = filteredAnnuities.map((a) => [
+      a.dojo_name ?? "",
+      a.fpkt_affiliation_id ?? "",
+      a.reference_period ?? "",
+      a.amount.toFixed(2).replace(".", ","),
+      STATUS_CSV_LABEL[a.status] ?? a.status,
+      String(a.days_overdue ?? 0),
+    ]);
+    downloadCsv("anuidades_dojo", header, rows);
+  };
 
   // Fee editor helpers
   const getFeeEditValue = (fee: AnnualFee) =>
@@ -242,7 +263,18 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
       </View>
 
       {/* Filtro de status */}
-      <Text style={[st.sectionTitle, { marginTop: 16 }]}>COBRANÇAS</Text>
+      <View style={[st.sectionHeader, { marginTop: 16 }]}>
+        <Text style={st.sectionTitle}>COBRANÇAS</Text>
+        <TouchableOpacity
+          style={st.exportBtn}
+          onPress={handleExport}
+          accessibilityRole="button"
+          accessibilityLabel="Exportar CSV"
+        >
+          <Icon name="download" size={14} color={KarateColors.ink2} />
+          <Text style={st.exportLabel}>Exportar</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Busca — bloco PERSISTENTE, fora de qualquer header de lista. O campo é
           montado uma vez aqui no corpo; como a lista de cobranças é um `.map()`
@@ -371,4 +403,6 @@ const st = StyleSheet.create({
 
   badge:        { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: KarateRadius.sm } as ViewStyle,
   badgeText:    { fontSize: 10, fontWeight: "700" } as TextStyle,
+  exportBtn:    { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  exportLabel:  { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
 });

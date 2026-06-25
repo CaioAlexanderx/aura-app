@@ -2,6 +2,7 @@
 // CpfAnnuitiesTab — Anuidades CPF (praticantes individuais)
 //
 // Lista de anuidades por CPF com status, filtro e cobrança PIX.
+// Exibida na aba "Anuidades Praticantes".
 //
 // Wired: GET /financial/annuities/cpf
 //        POST /financial/annuities/cpf/{practitionerId}/pix (dados reais).
@@ -24,6 +25,8 @@ import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { Icon } from "@/components/Icon";
+import { downloadCsv } from "./EntriesTab";
 import { karateApi, CpfAnnuity, AnnuityStatus } from "@/services/karateApi";
 
 const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
@@ -51,6 +54,10 @@ type CpfAnnuityWithTx = CpfAnnuity & { transaction_id?: string | null };
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+const STATUS_CSV_LABEL: Record<AnnuityStatus, string> = {
+  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso",
+};
 
 interface Props { federationId: string; }
 
@@ -86,6 +93,20 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
     a.karate_registration_number.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Export CSV das anuidades JÁ filtradas (busca + status). Client-side.
+  const handleExport = () => {
+    if (filtered.length === 0) return;
+    const header = ["Praticante", "Registro", "Período", "Valor", "Status"];
+    const rows = filtered.map((a) => [
+      a.full_name ?? "",
+      a.karate_registration_number ?? "",
+      a.reference_period ?? "",
+      a.amount.toFixed(2).replace(".", ","),
+      STATUS_CSV_LABEL[a.status] ?? a.status,
+    ]);
+    downloadCsv("anuidades_praticantes", header, rows);
+  };
+
   return (
     <ScrollView
       style={st.screen}
@@ -94,6 +115,19 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />
       }
     >
+      {/* Exportar CSV (lista filtrada) */}
+      <View style={st.exportRow}>
+        <TouchableOpacity
+          style={st.exportBtn}
+          onPress={handleExport}
+          accessibilityRole="button"
+          accessibilityLabel="Exportar CSV"
+        >
+          <Icon name="download" size={14} color={KarateColors.ink2} />
+          <Text style={st.exportLabel}>Exportar</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Busca */}
       <View style={st.searchRow}>
         <Ionicons name="search" size={16} color={KarateColors.ink4} style={{ marginLeft: 10 }} />
@@ -204,4 +238,7 @@ const st = StyleSheet.create({
   badgeText:         { fontSize: 10, fontWeight: "700" } as TextStyle,
   pixBtn:            { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:       { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+  exportRow:         { flexDirection: "row", justifyContent: "flex-end", marginBottom: 4 } as ViewStyle,
+  exportBtn:         { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  exportLabel:       { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
 });

@@ -1,12 +1,14 @@
 // ============================================================
 // Financeiro — Aura Karatê
 //
-// Tela principal com 5 sub-tabs:
+// Tela principal com sub-tabs:
 //   1. Visão Geral (DRE + fluxo de caixa)
 //   2. Anuidades Dojô (tabela editável de porte + cobrança PIX)
-//   3. Anuidades CPF (praticantes individuais)
-//   4. Saídas (despesas)
-//   5. Inadimplentes (lista completa + cobrança)
+//   3. Anuidades Praticantes (praticantes individuais — ex "Anuidades CPF")
+//   4. Lançamentos (entradas + saídas — ex "Saídas")
+//
+// A aba "Inadimplentes" foi removida: a visão já é coberta pelos filtros
+// de status (Vencido/Inadimplente) das abas Dojô e Praticantes.
 //
 // Wired against karate-fase1-openapi.yaml.
 // ============================================================
@@ -25,17 +27,15 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { OverviewTab }       from "./tabs/OverviewTab";
 import { DojoAnnuitiesTab }  from "./tabs/DojoAnnuitiesTab";
 import { CpfAnnuitiesTab }   from "./tabs/CpfAnnuitiesTab";
-import { ExpensesTab }       from "./tabs/ExpensesTab";
-import { InadimplentesTab }  from "./tabs/InadimplentesTab";
+import { EntriesTab }        from "./tabs/EntriesTab";
 
-type Tab = "overview" | "dojos" | "cpf" | "saidas" | "inadimplentes";
+type Tab = "overview" | "dojos" | "cpf" | "entries";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "overview",        label: "Visão Geral" },
-  { key: "dojos",           label: "Anuidades Dojô" },
-  { key: "cpf",             label: "Anuidades CPF" },
-  { key: "saidas",          label: "Saídas" },
-  { key: "inadimplentes",   label: "Inadimplentes" },
+  { key: "overview", label: "Visão Geral" },
+  { key: "dojos",    label: "Anuidades Dojô" },
+  { key: "cpf",      label: "Anuidades Praticantes" },
+  { key: "entries",  label: "Lançamentos" },
 ];
 
 export default function FinanceiroScreen() {
@@ -77,11 +77,10 @@ export default function FinanceiroScreen() {
 
       {/* Tab content */}
       <View style={styles.content}>
-        {activeTab === "overview"      && <OverviewTab      federationId={federationId} />}
-        {activeTab === "dojos"         && <DojoAnnuitiesTab federationId={federationId} />}
-        {activeTab === "cpf"           && <CpfAnnuitiesTab  federationId={federationId} />}
-        {activeTab === "saidas"        && <ExpensesTab       federationId={federationId} />}
-        {activeTab === "inadimplentes" && <InadimplentesTab  federationId={federationId} />}
+        {activeTab === "overview" && <OverviewTab      federationId={federationId} />}
+        {activeTab === "dojos"    && <DojoAnnuitiesTab federationId={federationId} />}
+        {activeTab === "cpf"      && <CpfAnnuitiesTab  federationId={federationId} />}
+        {activeTab === "entries"  && <EntriesTab       federationId={federationId} />}
       </View>
     </View>
   );
