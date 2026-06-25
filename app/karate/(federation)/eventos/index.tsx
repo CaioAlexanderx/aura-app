@@ -55,9 +55,8 @@ export default function EventosOverview() {
         <PageHead
           eyebrow="Calendário oficial FPKT"
           title="Eventos"
-          sub="Critérios oficiais, calendário de exames e cursos, e lançamento de resultados."
+          sub="Calendário de exames e cursos, e lançamento de resultados."
           actions={<>
-            <ShojiButton label="Critérios" icon="list-outline" variant="ghost" onPress={() => router.push("/karate/eventos/criterios" as any)} />
             <ShojiButton label="Criar evento" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />
           </>}
         />
