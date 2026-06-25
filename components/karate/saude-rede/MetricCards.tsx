@@ -2,8 +2,12 @@
 // Saúde da Rede — Cards de indicadores · Shoji
 //
 // Afiliação · Cobertura · Inadimplência · Projeção de receita
-// Graduações · Relação de faixas · Dormência · Concentração.
+// Graduações · Relação de faixas.
 // Cada card recebe data/loading + callbacks de CSV/detalhe por props.
+//
+// NOTA: os cards "Dojô ativo × dormente" (dormência) e "Concentração"
+// foram removidos da UI a pedido da federação. O backend segue
+// computando esses indicadores (endpoints intactos).
 // ============================================================
 import React from "react";
 import { View, Text } from "react-native";
@@ -12,7 +16,7 @@ import {
 } from "@/constants/karateTheme";
 import {
   AfiliacaoPayload, CoberturaPayload, InadimplenciaPayload, ProjecaoPayload,
-  GraduacoesPayload, RelacaoFaixasPayload, DormenciaPayload, ConcentracaoPayload,
+  GraduacoesPayload, RelacaoFaixasPayload,
 } from "@/services/karateNetworkHealthApi";
 import { st, fmtBRL, fmtPct, fmtN, Sk, SectionRow, BarChart } from "./shared";
 
@@ -322,66 +326,6 @@ export function RelacaoFaixasCard({
                 </Text>
               </View>
             ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ── Dormência (compact) ───────────────────────────────
-export function DormenciaCard({
-  data, loading, onCsv, onDetail,
-}: { data: DormenciaPayload | null; loading: boolean } & CardCallbacks) {
-  return (
-    <View style={st.card}>
-      <SectionRow
-        title="Dojô ativo × dormente"
-        sub="Registrou exame e/ou inscrição em competição na season"
-        onCsv={onCsv}
-        onDetail={onDetail}
-      />
-      {loading || !data ? (
-        <Sk h={60} />
-      ) : (
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={[st.twinBox, st.twinBoxOk]}>
-            <Text style={st.twinBoxNum}>{data.ativos}</Text>
-            <Text style={st.twinBoxLabel}>ativos · {data.season}</Text>
-          </View>
-          <View style={[st.twinBox, st.twinBoxWarn]}>
-            <Text style={[st.twinBoxNum, { color: C.warn }]}>{data.dormentes}</Text>
-            <Text style={st.twinBoxLabel}>dormentes · {data.season}</Text>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ── Concentração (compact) ────────────────────────────
-export function ConcentracaoCard({
-  data, loading, onCsv, onDetail,
-}: { data: ConcentracaoPayload | null; loading: boolean } & CardCallbacks) {
-  return (
-    <View style={st.card}>
-      <SectionRow
-        title="Concentração"
-        sub="Share da rede nos top-5 dojôs (praticantes + receita)"
-        onCsv={onCsv}
-        onDetail={onDetail}
-      />
-      {loading || !data ? (
-        <Sk h={60} />
-      ) : (
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={st.twinBox}>
-            <Text style={st.twinBoxNum}>{fmtPct(data.top5_pct_practitioners)}</Text>
-            <Text style={st.twinBoxLabel}>praticantes top-5</Text>
-          </View>
-          <View style={st.twinBox}>
-            <Text style={st.twinBoxNum}>{fmtPct(data.top5_pct_revenue)}</Text>
-            <Text style={st.twinBoxLabel}>receita top-5</Text>
           </View>
         </View>
       )}
