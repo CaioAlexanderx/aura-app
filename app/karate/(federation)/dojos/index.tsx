@@ -17,8 +17,21 @@
 //      funcionando porque status/região são pedaços de estado ortogonais.
 //   4. Botão "Limpar filtros" reseta de forma previsível (sem precisar trocar
 //      de aba).
+//
+// Fix 12 (foco/busca) — MESMA causa raiz do PR #309 (praticantes):
+//   O campo de busca perdia o foco a cada letra porque o SearchField (e os
+//   chips de filtro status/região + "Limpar filtros") viviam DENTRO do
+//   ListHeaderComponent da FlatList. A FlatList reconcilia/remonta o elemento
+//   de header a cada render — e como o estado muda a cada tecla, o TextInput
+//   era DESMONTADO → foco perdido após 1 caractere.
+//   Correção definitiva: a busca e os filtros agora são um <View> PERSISTENTE,
+//   FORA da FlatList, montado UMA única vez no corpo da tela. Quando os dados/
+//   linhas re-renderizam, o input não é tocado e mantém o foco. O header da
+//   FlatList passou a conter SÓ o cabeçalho da tabela (thead) no modo wide.
+//   Comportamento das listas preservado integralmente (não havia debounce
+//   nesta tela — o fetch por mudança de `q` foi mantido como estava).
 // ============================================================
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView,
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
@@ -108,14 +121,23 @@ export default function DojosScreen() {
   const hasFilters = status !== "all" || region !== "all" || !!q;
   const clearFilters = useCallback(() => { setStatus("all"); setRegion("all"); setQ(""); }, []);
 
-  const header = (
+  // Cabeçalho da tela (título + CTA "Novo dojô"). Fica acima da busca; não tem
+  // input — pode ser recriado sem afetar o foco.
+  const pageHead = (
+    <PageHead
+      eyebrow={`${total} ${total === 1 ? "dojô filiado" : "dojôs filiados"} · ${allRegions.length || "—"} regiões`}
+      title="Dojôs filiados"
+      sub="Gestão da rede federativa. Cadastro, anuidades e estado de cada afiliado."
+      actions={<ShojiButton label="Novo dojô" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />}
+    />
+  );
+
+  // ── Busca + filtros: bloco PERSISTENTE, FORA da FlatList ─────────────
+  // Montado UMA vez no corpo da tela. Como NÃO é o ListHeaderComponent, a
+  // FlatList nunca o reconcilia/remonta ao re-renderizar as linhas → o
+  // TextInput de busca mantém o foco entre teclas. (Causa raiz do Fix 12.)
+  const searchAndFilters = (
     <View>
-      <PageHead
-        eyebrow={`${total} ${total === 1 ? "dojô filiado" : "dojôs filiados"} · ${allRegions.length || "—"} regiões`}
-        title="Dojôs filiados"
-        sub="Gestão da rede federativa. Cadastro, anuidades e estado de cada afiliado."
-        actions={<ShojiButton label="Novo dojô" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />}
-      />
       <SearchField value={q} onChangeText={setQ} onSubmit={() => load()} placeholder="Buscar por nome, código FPKT ou sensei..." style={{ marginBottom: 14 }} />
 
       {/* Linha de STATUS (independente) */}
@@ -142,19 +164,24 @@ export default function DojosScreen() {
           <Text style={styles.clearTxt}>Limpar filtros</Text>
         </TouchableOpacity>
       )}
-
-      {wide && dojos.length > 0 && (
-        <View style={[styles.tr, styles.thead]}>
-          <Text style={[styles.th, { flex: 2 }]}>Dojô</Text>
-          <Text style={[styles.th, { flex: 1.2 }]}>Região</Text>
-          <Text style={[styles.th, { width: 100 }]}>Modelo</Text>
-          <Text style={[styles.th, { width: 90, textAlign: "right" }]}>Pratic.</Text>
-          <Text style={[styles.th, { width: 130 }]}>Status</Text>
-          <View style={{ width: 18 }} />
-        </View>
-      )}
     </View>
   );
+
+  // Header da FlatList: SÓ o cabeçalho da tabela (thead) no modo wide. Sem
+  // input/chips aqui — por isso não há mais remontagem do TextInput.
+  const showThead = wide && dojos.length > 0;
+  const renderHeader = useCallback(() => (
+    showThead ? (
+      <View style={[styles.tr, styles.thead]}>
+        <Text style={[styles.th, { flex: 2 }]}>Dojô</Text>
+        <Text style={[styles.th, { flex: 1.2 }]}>Região</Text>
+        <Text style={[styles.th, { width: 100 }]}>Modelo</Text>
+        <Text style={[styles.th, { width: 90, textAlign: "right" }]}>Pratic.</Text>
+        <Text style={[styles.th, { width: 130 }]}>Status</Text>
+        <View style={{ width: 18 }} />
+      </View>
+    ) : null
+  ), [showThead]);
 
   function Row({ d }: { d: Dojo }) {
     const onPress = () => router.push(`/karate/dojos/${d.id}` as any);
@@ -207,17 +234,22 @@ export default function DojosScreen() {
 
   return (
     <ShojiBackground>
-      {loading ? (
-        <View style={styles.content}>{header}<ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} /></View>
-      ) : (
-        <FlatList
-          data={dojos} keyExtractor={(d) => d.id} ListHeaderComponent={header}
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={P.red} />}
-          renderItem={({ item }) => <Row d={item} />}
-          ListEmptyComponent={<KarateEmptyState icon="home-outline" title="Nenhum dojô encontrado" subtitle="Ajuste a busca/filtros ou cadastre um novo dojô." style={{ paddingVertical: 40 }} />}
-        />
-      )}
+      <View style={styles.content}>
+        {pageHead}
+        {searchAndFilters}
+        {loading ? (
+          <ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} />
+        ) : (
+          <FlatList
+            data={dojos} keyExtractor={(d) => d.id} ListHeaderComponent={renderHeader}
+            contentContainerStyle={styles.listContent}
+            style={{ width: "100%" }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={P.red} />}
+            renderItem={({ item }) => <Row d={item} />}
+            ListEmptyComponent={<KarateEmptyState icon="home-outline" title="Nenhum dojô encontrado" subtitle="Ajuste a busca/filtros ou cadastre um novo dojô." style={{ paddingVertical: 40 }} />}
+          />
+        )}
+      </View>
       {fichaModal}
     </ShojiBackground>
   );
@@ -228,7 +260,10 @@ function Meta({ icon, text }: { icon: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  // `content` agora envolve a tela inteira (head + busca + lista). A FlatList
+  // recebe `flex: 1` via listContent não-paddado; o padding externo mora aqui.
+  content: { flex: 1, padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  listContent: { paddingBottom: 24 } as ViewStyle,
   chips: { gap: 8, paddingBottom: 12, alignItems: "center" } as ViewStyle,
   regionTag: { flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 4 } as ViewStyle,
   regionTagTxt: { fontFamily: F.body, fontSize: 10, fontWeight: "700", color: C.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
