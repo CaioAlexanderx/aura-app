@@ -107,7 +107,6 @@ export function DetailDrawer({
                         <Text
                           key={c.key}
                           style={[dst.tblTd, c.align === "right" && { textAlign: "right" }]}
-                          numberOfLines={1}
                         >
                           {String(item[c.key] ?? "")}
                         </Text>
@@ -122,7 +121,6 @@ export function DetailDrawer({
           {/* Footer */}
           <View style={dst.drawerFooter}>
             <Text style={dst.drawerCount}>{filtered.length} de {rows.length} registros</Text>
-            <Text style={dst.drawerClause}>Exportação CSV · Cláusula 17</Text>
           </View>
         </View>
       </View>
@@ -140,16 +138,15 @@ const dst = StyleSheet.create({
   drawerClose:   { padding: 6, backgroundColor: P.glass2, borderWidth: 1, borderColor: C.line, borderRadius: R.md } as ViewStyle,
   drawerToolbar: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   drawerEmpty:   { padding: 32, textAlign: "center", color: C.ink3, fontFamily: F.body, fontSize: 12 } as TextStyle,
-  drawerFooter:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
+  drawerFooter:  { flexDirection: "row", alignItems: "center", justifyContent: "flex-start", paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
   drawerCount:   { fontFamily: F.mono, fontSize: 11, color: C.ink3, fontVariant: ["tabular-nums"] as any } as TextStyle,
-  drawerClause:  { fontFamily: F.body, fontSize: 10, color: C.ink4 } as TextStyle,
 
   // Drawer table
   tblHead:  { flexDirection: "row", backgroundColor: P.glass2, paddingVertical: 8, paddingHorizontal: 12 } as ViewStyle,
   tblTh:    { flex: 1, fontFamily: F.body, fontSize: 11, fontWeight: "700", color: C.ink3, textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 4 } as TextStyle,
   tblRow:   { flexDirection: "row", paddingVertical: 9, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   tblRowAlt: { backgroundColor: P.glass2 } as ViewStyle,
-  tblTd:    { flex: 1, fontFamily: F.body, fontSize: 12, color: C.ink, paddingHorizontal: 4 } as TextStyle,
+  tblTd:    { flex: 1, fontFamily: F.body, fontSize: 12, color: C.ink, paddingHorizontal: 4, flexWrap: "wrap" } as TextStyle,
 
   // Search
   searchBox:   { flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: P.glass2, borderRadius: R.md, borderWidth: 1, borderColor: C.line2, paddingHorizontal: 10, paddingVertical: 6 } as ViewStyle,

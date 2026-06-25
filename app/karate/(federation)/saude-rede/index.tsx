@@ -46,6 +46,14 @@ type DrawerKey =
   | "graduacoes" | "relacao-faixas"
   | null;
 
+// Formata data ISO (ou dd/mm/yyyy de dateSlice) para "dd/mm" sem ano e sem
+// dia da semana. Usa dateSlice para normalizar primeiro (→ "dd/mm/yyyy"),
+// depois fatia os primeiros 5 caracteres.
+function dateDayMonth(s: string | null | undefined): string {
+  const full = dateSlice(s); // "dd/mm/yyyy" ou ""
+  return full ? full.slice(0, 5) : "";
+}
+
 export default function SaudeRedeScreen() {
   const { federationId } = useKarateFederation();
 
@@ -108,7 +116,7 @@ export default function SaudeRedeScreen() {
           name: d.name,
           city: d.city || "",
           region: d.region || "",
-          affiliated_since: dateSlice(d.affiliated_since),
+          affiliated_since: dateDayMonth(d.affiliated_since),
           annuity_status: d.annuity_status || "sem registro",
         })),
       };
@@ -151,7 +159,7 @@ export default function SaudeRedeScreen() {
         rows: inad.rows.map((r) => ({
           dojo_name: r.dojo_name,
           city: r.city || "",
-          due_date: dateSlice(r.due_date),
+          due_date: dateDayMonth(r.due_date),
           amount: fmtBRL(r.amount),
           status: r.status,
         })),
@@ -194,7 +202,7 @@ export default function SaudeRedeScreen() {
           { key: "examiner", label: "Banca" },
         ],
         rows: graduacoes.list.map((g) => ({
-          exam_date: dateSlice(g.exam_date),
+          exam_date: dateDayMonth(g.exam_date),
           dojo_name: g.dojo_name || "",
           student_name: g.student_name,
           from_belt: g.from_belt || "",
