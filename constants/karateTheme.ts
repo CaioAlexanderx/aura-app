@@ -344,13 +344,25 @@ function danDegree(raw: string): number {
 }
 
 // Rank hierárquico de uma faixa para ORDENAÇÃO. Recebe belt_level OU
-// belt_name. Preta ordena por grau Dan (Preta < Preta 1º Dan < 2º Dan…).
+// belt_name. Preta ordena por grau Dan (Preta < Preta 1º Dan < 2º Dan…),
+// ASCENDENTE: 1º Dan < 2º Dan < … < 7º Dan.
+//
+// IMPORTANTE: na base FPKT o belt_level da preta é só 'preta' (sem grau) e o
+// GRAU vive no belt_name ('Preta 1°', 'Preta 2°'…). Por isso aceitamos um
+// segundo argumento opcional `nameForDegree`: quando informado, o grau Dan é
+// extraído dele (e cai no beltLevelOrName se não houver). Sem o name, todas as
+// pretas colapsavam no mesmo rank e não saíam ordenadas por grau (Item 4).
+//
 // Vermelha (histórica) = 0; não reconhecida = 999 (vai pro fim).
-export function beltRank(beltLevelOrName: string): number {
+export function beltRank(beltLevelOrName: string, nameForDegree?: string): number {
   const key = resolveBeltKey(beltLevelOrName);
   if (!key) return 999;
   const base = BELT_KEY_RANK[key];
-  if (key === "preta") return base * 100 + danDegree(beltLevelOrName);
+  if (key === "preta") {
+    // grau Dan: prioriza o belt_name (carrega '1°'/'2°'…), cai no level se vazio.
+    const degree = danDegree(nameForDegree || "") || danDegree(beltLevelOrName);
+    return base * 100 + degree;
+  }
   return base * 100;
 }
 
