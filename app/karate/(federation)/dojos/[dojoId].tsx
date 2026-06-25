@@ -11,6 +11,11 @@
 //   os dados atuais do dojô no MESMO formato da Importação (abas Academias/
 //   Alunos/Histórico) para o dojô editar e reimportar. Ver DojoExportModal.
 //
+// Endereço estruturado: o detalhe exibe os campos address_* (Logradouro,
+//   Número, COMPLEMENTO, Bairro, Cidade/UF, CEP) — os mesmos da ficha (modal)
+//   e da NF-e. O Complemento é vital para envio de certificados/carteirinhas.
+//   Se o registro ainda não tem campos estruturados, cai no `address` legado.
+//
 // Nav P2 (7.3): ações de link público no header — "Página pública" (abre)
 //   e "Copiar link". Não há rota pública POR-DOJÔ (o portal do dojô abre
 //   por link/token fixo, e o microsite expõe ranking/portais a nível de
@@ -39,6 +44,29 @@ const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannua
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
 const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Máscara leve de CEP só para exibição (não altera o dado).
+const fmtCep = (v: string | null | undefined): string | null => {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length === 8) return d.replace(/(\d{5})(\d{3})/, "$1-$2");
+  return String(v);
+};
+
+// "Logradouro, Número" numa linha só (componível com os demais KVs).
+const fmtStreetLine = (street?: string | null, number?: string | null): string | null => {
+  const s = (street || "").trim();
+  const n = (number || "").trim();
+  if (s && n) return `${s}, ${n}`;
+  return s || n || null;
+};
+
+const fmtCityLine = (city?: string | null, state?: string | null): string | null => {
+  const c = (city || "").trim();
+  const u = (state || "").trim();
+  if (c && u) return `${c} · ${u}`;
+  return c || u || null;
+};
 
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
@@ -94,6 +122,13 @@ export default function DojoDetailScreen() {
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
 
+  // Endereço estruturado (address_*). Se nenhum campo estruturado vier do
+  // backend, caímos no `address` legado (texto livre) numa linha só.
+  const streetLine = fmtStreetLine(data.address_street, data.address_number);
+  const cityLine = fmtCityLine(data.address_city, data.address_state);
+  const cepLine = fmtCep(data.address_zip);
+  const hasStructuredAddress = !!(streetLine || data.address_complement || data.address_neighborhood || cityLine || cepLine);
+
   return (
     <ShojiBackground>
       <ScrollView contentContainerStyle={styles.content}>
@@ -139,7 +174,6 @@ export default function DojoDetailScreen() {
           <KV k="Nome do dojô" v={data.name} />
           <KV k="Código FPKT" v={data.fpkt_affiliation_id} />
           <KV k="CNPJ" v={data.cnpj} />
-          <KV k="Endereço" v={data.address} />
           <KV k="Telefone" v={data.phone} />
           <KV k="E-mail" v={data.email} />
           <KV k="Região" v={data.region} />
@@ -147,6 +181,25 @@ export default function DojoDetailScreen() {
           <KV k="Filiação desde" v={fmtDate(data.affiliation_since)} />
           <KV k="Modelo" v={MODEL_LABEL[data.affiliation_model] ?? null} />
           <KV k="Praticantes" v={String(data.practitioner_count)} />
+        </Card>
+
+        {/* Endereço — estruturado (com Complemento) ou texto legado.
+            Complemento é vital para envio de certificados/carteirinhas. */}
+        <Card style={{ marginTop: SP[6] }}>
+          <SectionHead title="Endereço" sub="Usado no envio de certificados e carteirinhas" />
+          {hasStructuredAddress ? (
+            <>
+              <KV k="Logradouro" v={streetLine} />
+              <KV k="Complemento" v={data.address_complement} />
+              <KV k="Bairro" v={data.address_neighborhood} />
+              <KV k="Cidade / UF" v={cityLine} />
+              <KV k="CEP" v={cepLine} />
+            </>
+          ) : data.address ? (
+            <KV k="Endereço" v={data.address} />
+          ) : (
+            <Body muted>Endereço não informado.</Body>
+          )}
         </Card>
 
         <Card style={{ marginTop: SP[6] }}>
