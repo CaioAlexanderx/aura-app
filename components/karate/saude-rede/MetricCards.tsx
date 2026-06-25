@@ -18,21 +18,25 @@ import {
   AfiliacaoPayload, CoberturaPayload, InadimplenciaPayload, ProjecaoPayload,
   GraduacoesPayload, RelacaoFaixasPayload,
 } from "@/services/karateNetworkHealthApi";
-import { st, fmtBRL, fmtPct, fmtN, Sk, SectionRow, BarChart } from "./shared";
+import { st, fmtBRL, fmtPct, fmtN, fmtMesAno, Sk, SectionRow, BarChart } from "./shared";
 
-type CardCallbacks = { onCsv: () => void; onDetail: () => void };
+type CardCallbacks = { onDetail: () => void };
 
 // ── Afiliação ──────────────────────────────────────────
 export function AfiliacaoCard({
-  data, loading, onCsv, onDetail,
+  data, loading, onDetail,
 }: { data: AfiliacaoPayload | null; loading: boolean } & CardCallbacks) {
   return (
     <View style={st.card}>
       <SectionRow
         title="Afiliação da rede"
         sub="Dojôs afiliados · evolução anual"
-        onCsv={onCsv}
         onDetail={onDetail}
+        csvData={{
+          filename: "afiliacao-rede",
+          headers: ["Ano", "Novas afiliações"],
+          rows: (data?.yearly || []).map((y) => [String(y.ano), String(y.new_affiliations)]),
+        }}
       />
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={80} /></>
@@ -67,7 +71,7 @@ export function AfiliacaoCard({
 
 // ── Cobertura geográfica ─────────────────────────────────
 export function CoberturaCard({
-  data, loading, onCsv, onDetail,
+  data, loading, onDetail,
 }: { data: CoberturaPayload | null; loading: boolean } & CardCallbacks) {
   const top5 = data ? [...data.regions].sort((a, b) => b.dojos - a.dojos).slice(0, 5) : [];
   const maxD = top5[0]?.dojos || 1;
@@ -77,8 +81,12 @@ export function CoberturaCard({
       <SectionRow
         title="Cobertura geográfica"
         sub="Densidade de dojôs por região administrativa de SP"
-        onCsv={onCsv}
         onDetail={onDetail}
+        csvData={{
+          filename: "cobertura-geografica",
+          headers: ["Região", "Dojôs"],
+          rows: top5.map((r) => [r.regiao, String(r.dojos)]),
+        }}
       />
       {loading || !data ? (
         <><Sk h={120} mb={8} /><Sk h={60} /></>
@@ -88,7 +96,7 @@ export function CoberturaCard({
           <View style={{ gap: 8, marginBottom: 12 }}>
             {top5.map((r) => (
               <View key={r.regiao} style={st.covRow}>
-                <Text style={st.covLabel} numberOfLines={1}>{r.short}</Text>
+                <Text style={[st.covLabel, { flex: 1, width: undefined }]}>{r.regiao}</Text>
                 <View style={st.covBarBg}>
                   <View
                     style={[
@@ -109,15 +117,23 @@ export function CoberturaCard({
 
 // ── Inadimplência ────────────────────────────────────
 export function InadimplenciaCard({
-  data, loading, onCsv, onDetail,
+  data, loading, onDetail,
 }: { data: InadimplenciaPayload | null; loading: boolean } & CardCallbacks) {
   return (
     <View style={st.card}>
       <SectionRow
         title="Inadimplência da rede"
         sub="Status das anuidades de afiliação dos dojôs"
-        onCsv={onCsv}
         onDetail={onDetail}
+        csvData={{
+          filename: "inadimplencia-rede",
+          headers: ["Status", "Dojôs", "Percentual"],
+          rows: data ? [
+            ["Em dia", String(data.em_dia ?? ""), fmtPct(data.em_dia / data.total * 100)],
+            ["Vencendo (7d)", String(data.vencendo ?? ""), fmtPct(data.vencendo / data.total * 100)],
+            ["Vencido", String(data.vencido ?? ""), fmtPct(data.vencido / data.total * 100)],
+          ] : [],
+        }}
       />
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={60} /></>
@@ -174,7 +190,7 @@ export function InadimplenciaCard({
 
 // ── Projeção de receita ────────────────────────────────
 export function ProjecaoCard({
-  data, loading, onCsv, onDetail,
+  data, loading, onDetail,
 }: { data: ProjecaoPayload | null; loading: boolean } & CardCallbacks) {
   const items = data?.data || [];
   const maxVal = items.length ? Math.max(...items.map((d) => d.total), 1) : 1;
@@ -184,8 +200,16 @@ export function ProjecaoCard({
       <SectionRow
         title="Projeção de receita"
         sub="Por mês de vencimento de anuidade · próximos 8 meses"
-        onCsv={onCsv}
         onDetail={onDetail}
+        csvData={{
+          filename: "projecao-receita",
+          headers: ["Mês/Ano", "Total (R$)", "Tipo"],
+          rows: (data?.data || []).map((d) => [
+            fmtMesAno(d.mes, d.ano),
+            String(d.total),
+            d.kind === "proj" ? "Projetado" : "Realizado",
+          ]),
+        }}
       />
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={120} /></>
@@ -199,8 +223,7 @@ export function ProjecaoCard({
           </View>
           <BarChart
             items={items.map((d) => ({
-              label: d.mes,
-              sublabel: d.ano,
+              label: fmtMesAno(d.mes, d.ano),
               value: d.total,
               isProj: d.kind === "proj",
             }))}
@@ -226,7 +249,7 @@ export function ProjecaoCard({
 
 // ── Graduações registradas ─────────────────────────────
 export function GraduacoesCard({
-  data, loading, onCsv, onDetail,
+  data, loading, onDetail,
 }: { data: GraduacoesPayload | null; loading: boolean } & CardCallbacks) {
   const items = data?.monthly || [];
   const maxVal = items.length ? Math.max(...items.map((d) => d.total), 1) : 1;
@@ -236,8 +259,12 @@ export function GraduacoesCard({
       <SectionRow
         title="Graduações registradas — YTD"
         sub="Exames Kyu → Dan registrados na federação"
-        onCsv={onCsv}
         onDetail={onDetail}
+        csvData={{
+          filename: "graduacoes-ytd",
+          headers: ["Mês/Ano", "Graduações"],
+          rows: (data?.monthly || []).map((d) => [fmtMesAno(d.mes, d.ano), String(d.total)]),
+        }}
       />
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={120} /></>
@@ -248,7 +275,7 @@ export function GraduacoesCard({
             <Text style={st.heroSub}>graduações YTD (no ano corrente)</Text>
           </View>
           <BarChart
-            items={items.map((d) => ({ label: d.mes, sublabel: d.ano, value: d.total }))}
+            items={items.map((d) => ({ label: fmtMesAno(d.mes, d.ano), value: d.total }))}
             maxVal={maxVal}
             barColor={C.ink2}
           />
@@ -279,7 +306,7 @@ const BELT_HEX: Record<string, string> = {
 };
 
 export function RelacaoFaixasCard({
-  data, loading, onCsv, onDetail,
+  data, loading, onDetail,
 }: { data: RelacaoFaixasPayload | null; loading: boolean } & CardCallbacks) {
   const maxN = data ? Math.max(...data.buckets.map((b) => b.n), 1) : 1;
 
@@ -288,8 +315,12 @@ export function RelacaoFaixasCard({
       <SectionRow
         title="Relação de faixas"
         sub="Distribuição atual de atletas por graduação · snapshot da rede"
-        onCsv={onCsv}
         onDetail={onDetail}
+        csvData={{
+          filename: "relacao-faixas",
+          headers: ["Faixa", "Praticantes", "Percentual"],
+          rows: (data?.buckets || []).map((b) => [b.faixa, String(b.n), fmtPct(b.pct)]),
+        }}
       />
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={100} /></>
