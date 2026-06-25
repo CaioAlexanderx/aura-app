@@ -7,13 +7,12 @@
 // ============================================================
 import React from "react";
 import {
-  View, Text, TouchableOpacity, Linking, Platform, StyleSheet, ViewStyle, TextStyle,
+  View, Text, TouchableOpacity, Platform, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP,
 } from "@/constants/karateTheme";
-import { karateNetworkHealthApi } from "@/services/karateNetworkHealthApi";
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -32,11 +31,38 @@ export function dateSlice(s: string | null | undefined): string {
   return s.slice(0, 10).split("-").reverse().join("/");
 }
 
-// Download CSV via Linking (web: opens in new tab; native: opens browser)
-export function downloadCsv(fedId: string, indicator: string, token?: string): void {
-  let url = karateNetworkHealthApi.csvUrl(fedId, indicator);
-  if (token) url += `&token=${encodeURIComponent(token)}`;
-  Linking.openURL(url);
+// ── CSV export client-side ─────────────────────────────────────
+// Gera um CSV em memória e dispara download via Blob + anchor.
+// BOM UTF-8 para abrir corretamente no Excel.
+// Sem window.open de rota autenticada.
+
+export function exportRowsToCsv(
+  filename: string,
+  headers: string[],
+  rows: string[][],
+): void {
+  if (Platform.OS !== "web") return; // nativo: sem-op (não há filesystem público)
+  const BOM = "﻿";
+  const escape = (cell: string) => {
+    const s = String(cell ?? "");
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  const lines = [
+    headers.map(escape).join(","),
+    ...rows.map((r) => r.map(escape).join(",")),
+  ];
+  const csv = BOM + lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── Skeleton placeholder ────────────────────────────────────────
@@ -51,18 +77,32 @@ export function Sk({ h, mb }: { h: number; mb?: number }) {
 }
 
 // ── Section header (título + sub + ações CSV / Ver detalhe) ──────
+// csvData: quando fornecido, o export é feito client-side via Blob.
+//          Quando ausente, chama onCsv() (backward-compat).
 
 export function SectionRow({
   title,
   sub,
   onCsv,
   onDetail,
+  csvData,
 }: {
   title: string;
   sub: string;
   onCsv?: () => void;
   onDetail?: () => void;
+  csvData?: { filename?: string; headers: string[]; rows: string[][] };
 }) {
+  function handleCsv() {
+    if (csvData) {
+      exportRowsToCsv(csvData.filename ?? title, csvData.headers, csvData.rows);
+    } else if (onCsv) {
+      onCsv();
+    }
+  }
+
+  const showCsv = !!(onCsv || csvData);
+
   return (
     <View style={st.shRow}>
       <View style={{ flex: 1 }}>
@@ -71,13 +111,13 @@ export function SectionRow({
         <Text style={st.shSub}>{sub}</Text>
       </View>
       <View style={st.shActions}>
-        {onCsv && (
+        {showCsv && (
           <TouchableOpacity
             style={st.btnCsv}
-            onPress={onCsv}
+            onPress={handleCsv}
             accessibilityLabel={`Exportar CSV: ${title}`}
           >
-            <Ionicons name="download-outline" size={13} color={C.ink3} />
+            <Icon name="download" size={13} color={C.ink3} />
             <Text style={st.btnCsvLabel}>CSV</Text>
           </TouchableOpacity>
         )}
@@ -88,7 +128,7 @@ export function SectionRow({
             accessibilityLabel={`Ver detalhe: ${title}`}
           >
             <Text style={st.btnDetailLabel}>Ver detalhe</Text>
-            <Ionicons name="arrow-forward" size={13} color={P.red} />
+            <Icon name="arrow_right" size={13} color={P.red} />
           </TouchableOpacity>
         )}
       </View>
@@ -102,7 +142,7 @@ export function SectionRow({
 export function ChartEmpty({ h, label }: { h: number; label?: string }) {
   return (
     <View style={[st.chartEmpty, { height: h }]} accessibilityLabel="Sem dados no período">
-      <Ionicons name="bar-chart-outline" size={22} color={C.ink4} />
+      <Icon name="bar_chart" size={22} color={C.ink4} />
       <Text style={st.chartEmptyText}>{label || "Sem dados no período"}</Text>
     </View>
   );
