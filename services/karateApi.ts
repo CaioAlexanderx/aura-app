@@ -9,7 +9,54 @@
 // Track J (certificado como fluxo de pedido: estados, lote, entrega, e-mail).
 // Usa o request() core de services/api.ts (Bearer JWT auto).
 // ============================================================
-import { request } from "@/services/api";
+import { request, ApiError } from "@/services/api";
+
+// ─────────────────────────────────────────────────────────────────
+// HAS_HISTORY — propagação estruturada do 409 de exclusão
+//
+// O backend responde 409 com body { code:'HAS_HISTORY', counts:{...} }
+// quando um dojô/praticante tem histórico que impede o hard delete; a
+// tela então oferece "Desativar" em vez de "Excluir definitivamente".
+//
+// O request() core já lança ApiError(status:409, data) nesse caso; aqui
+// re-lançamos um erro com `code:'HAS_HISTORY'`, `counts` e `status:409`
+// expostos no próprio objeto, para a tela não precisar cavar `err.data`.
+// ─────────────────────────────────────────────────────────────────
+export type HasHistoryCounts = Record<string, number>;
+
+export class HasHistoryError extends Error {
+  code: "HAS_HISTORY";
+  status: 409;
+  counts: HasHistoryCounts;
+  data: any;
+  constructor(counts: HasHistoryCounts, data?: any) {
+    super("Registro possui histórico vinculado (HAS_HISTORY).");
+    this.name = "HasHistoryError";
+    this.code = "HAS_HISTORY";
+    this.status = 409;
+    this.counts = counts || {};
+    this.data = data ?? null;
+  }
+}
+
+/**
+ * Executa um delete e converte o 409 HAS_HISTORY do backend num
+ * HasHistoryError estruturado. Qualquer outro erro é propagado intacto;
+ * o caminho de sucesso retorna o JSON da resposta.
+ */
+async function withHasHistory<T>(p: Promise<T>): Promise<T> {
+  try {
+    return await p;
+  } catch (err: any) {
+    const status = err?.status;
+    const data = err instanceof ApiError ? err.data : err?.data;
+    const code = data?.code ?? err?.code;
+    if (status === 409 && code === "HAS_HISTORY") {
+      throw new HasHistoryError(data?.counts ?? {}, data);
+    }
+    throw err;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────
 export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended";
@@ -386,6 +433,15 @@ export interface ChargeInput {
   amount: number;
   due_date: string;
   reference_period: string;
+}
+
+/** Campos editáveis de uma anuidade (dojô/CPF) — todos opcionais (PATCH). */
+export interface AnnuityUpdateInput {
+  amount?: number;
+  due_date?: string;
+  reference_period?: string;
+  status?: AnnuityStatus;
+  paid_at?: string | null;
 }
 
 export interface DojoPixInput {
@@ -871,8 +927,31 @@ export const karateApi = {
   createDojo: (federationId: string, body: DojoInput): Promise<Dojo> =>
     request(`/federation/${federationId}/dojos`, { method: "POST", body }),
 
-  updateDojo: (federationId: string, dojoId: string, body: Partial<DojoInput>): Promise<Dojo> =>
+  /** Atualiza o dojô (envia o patch inteiro; aceita is_active / name / legal_name). */
+  updateDojo: (
+    federationId: string,
+    dojoId: string,
+    body: Partial<DojoInput> & { is_active?: boolean; legal_name?: string | null }
+  ): Promise<Dojo> =>
     request(`/federation/${federationId}/dojos/${dojoId}`, { method: "PATCH", body }),
+
+  /**
+   * Exclui o dojô. Sem histórico → hard delete (204/JSON). Com histórico,
+   * o backend responde 409 { code:'HAS_HISTORY', counts } e este método
+   * rejeita com HasHistoryError (status:409, counts) para a tela decidir
+   * entre Desativar (updateDojo is_active:false) e Excluir definitivamente.
+   * `cascade:true` força a remoção em cascata do histórico.
+   */
+  deleteDojo: (
+    federationId: string,
+    dojoId: string,
+    { cascade }: { cascade?: boolean } = {}
+  ): Promise<{ deleted: boolean }> => {
+    const query = cascade ? "?cascade=true" : "";
+    return withHasHistory(
+      request(`/federation/${federationId}/dojos/${dojoId}${query}`, { method: "DELETE" })
+    );
+  },
 
   /** Export de dados do dojô no formato do import (abas Academias/Alunos/Histórico). */
   exportDojoData: (
@@ -928,6 +1007,47 @@ export const karateApi = {
   ): Promise<BeltHistoryEntry> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/graduations`, { method: "POST", body }),
 
+  /**
+   * Exclui o praticante. Sem histórico → hard delete. Com histórico
+   * (graduações, transferências, carteirinhas, ...), o backend responde
+   * 409 { code:'HAS_HISTORY', counts } e este método rejeita com
+   * HasHistoryError (status:409, counts) para a tela oferecer Desativar
+   * (updatePractitioner is_active:false) em vez de excluir. `cascade:true`
+   * remove o histórico em cascata.
+   */
+  deletePractitioner: (
+    federationId: string,
+    practitionerId: string,
+    { cascade }: { cascade?: boolean } = {}
+  ): Promise<{ deleted: boolean }> => {
+    const query = cascade ? "?cascade=true" : "";
+    return withHasHistory(
+      request(`/federation/${federationId}/practitioners/${practitionerId}${query}`, { method: "DELETE" })
+    );
+  },
+
+  /** Edita uma graduação do histórico (belt_level / belt_name / graduated_at). */
+  updateGraduation: (
+    federationId: string,
+    practitionerId: string,
+    graduationId: string,
+    payload: Partial<GraduationInput>
+  ): Promise<BeltHistoryEntry> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/graduations/${graduationId}`, {
+      method: "PATCH",
+      body: payload,
+    }),
+
+  /** Remove uma graduação do histórico do praticante. */
+  deleteGraduation: (
+    federationId: string,
+    practitionerId: string,
+    graduationId: string
+  ): Promise<{ deleted: boolean }> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/graduations/${graduationId}`, {
+      method: "DELETE",
+    }),
+
   // ── Track N — Transferência de praticante entre dojôs ──────────
   listTransfers: (
     federationId: string,
@@ -941,6 +1061,39 @@ export const karateApi = {
     body: TransferInput
   ): Promise<TransferRecord> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/transfer`, { method: "POST", body }),
+
+  /** Edita uma transferência registrada (reason / transferred_at). */
+  updateTransfer: (
+    federationId: string,
+    practitionerId: string,
+    transferId: string,
+    payload: Partial<Pick<TransferInput, "reason" | "transferred_at">>
+  ): Promise<TransferRecord> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/transfers/${transferId}`, {
+      method: "PATCH",
+      body: payload,
+    }),
+
+  /** Remove uma transferência registrada do praticante. */
+  deleteTransfer: (
+    federationId: string,
+    practitionerId: string,
+    transferId: string
+  ): Promise<{ deleted: boolean }> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/transfers/${transferId}`, {
+      method: "DELETE",
+    }),
+
+  // ── Carteirinha ────────────────────────────────────────────────
+  /** Revoga a carteirinha ativa do praticante. */
+  revokeCard: (
+    federationId: string,
+    practitionerId: string
+  ): Promise<{ revoked: boolean }> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/card/revoke`, {
+      method: "POST",
+      body: {},
+    }),
 
   // Importação CSV
   importCSV: (
@@ -1015,6 +1168,29 @@ export const karateApi = {
     request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/pix`, {
       method: "POST",
       body,
+    }),
+
+  /** Edita uma anuidade de dojô já lançada (valor, vencimento, período, status). */
+  updateAnnuity: (
+    federationId: string,
+    dojoId: string,
+    annuityId: string,
+    payload: AnnuityUpdateInput
+  ): Promise<DojoAnnuity> =>
+    request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/${annuityId}`, {
+      method: "PATCH",
+      body: payload,
+    }),
+
+  /** Anula (estorna) uma anuidade de dojô já lançada. */
+  voidAnnuity: (
+    federationId: string,
+    dojoId: string,
+    annuityId: string
+  ): Promise<DojoAnnuity> =>
+    request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/${annuityId}/void`, {
+      method: "POST",
+      body: {},
     }),
 
   listCpfAnnuities: (
