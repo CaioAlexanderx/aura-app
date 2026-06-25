@@ -11,6 +11,14 @@
 //   os dados atuais do dojô no MESMO formato da Importação (abas Academias/
 //   Alunos/Histórico) para o dojô editar e reimportar. Ver DojoExportModal.
 //
+// Gestão da federação (fix/karate-dojo-edit-delete-ui): a federação pode
+//   SUSPENDER/REATIVAR e EXCLUIR o dojô daqui, além de EDITAR/ESTORNAR
+//   anuidades lançadas. Exclusão segue o contrato HAS_HISTORY do backend:
+//   sem histórico → hard delete; com histórico → escolha entre Desativar
+//   (soft, is_active:false) e Excluir definitivamente (cascade). Confirmações
+//   destrutivas via window.confirm / modal in-app — NUNCA Alert.alert com
+//   botões (no-op em RN-Web).
+//
 // Endereço estruturado: o detalhe exibe os campos address_* (Logradouro,
 //   Número, COMPLEMENTO, Bairro, Cidade/UF, CEP) — os mesmos da ficha (modal)
 //   e da NF-e. O Complemento é vital para envio de certificados/carteirinhas.
@@ -24,8 +32,11 @@
 //   {slug}.getaura.com.br/ranking), onde os atletas deste dojô aparecem.
 //   O slug vem de getFederationIdentity (fallback: slug do host atual).
 // ============================================================
-import React, { useEffect, useState, useCallback } from "react";
-import { ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking } from "react-native";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import {
+  ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
+  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -33,9 +44,10 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1,
 } from "@/components/karate/shoji";
+import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
-import { karateApi, DojoDetail, AffiliationModel } from "@/services/karateApi";
+import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -44,6 +56,14 @@ const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannua
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
 const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Máscara leve de CPF só para exibição (não altera o dado).
+const fmtCpf = (v: string | null | undefined): string | null => {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  return String(v);
+};
 
 // Máscara leve de CEP só para exibição (não altera o dado).
 const fmtCep = (v: string | null | undefined): string | null => {
@@ -68,6 +88,48 @@ const fmtCityLine = (city?: string | null, state?: string | null): string | null
   return c || u || null;
 };
 
+// Rótulos PT-BR para os counts do HAS_HISTORY (back manda chaves canônicas).
+const COUNT_LABEL: Record<string, string> = {
+  practitioners: "praticantes",
+  annuities: "anuidades",
+  transactions: "transações",
+  belt_history: "histórico de faixas",
+  transfers: "transferências",
+  connections: "conexões",
+};
+
+// Máscara de data dd/mm/aaaa para o editor de anuidade.
+const onlyD = (v: string) => (v || "").replace(/\D/g, "");
+function maskDate(v: string) {
+  const d = onlyD(v).slice(0, 8);
+  if (d.length > 4) return d.replace(/(\d{2})(\d{2})(\d+)/, "$1/$2/$3");
+  if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "$1/$2");
+  return d;
+}
+function brToISO(v: string): string | null {
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  if (d.getFullYear() !== Number(yyyy) || d.getMonth() !== Number(mm) - 1 || d.getDate() !== Number(dd)) return null;
+  return `${yyyy}-${mm}-${dd}`;
+}
+function isoToBr(v: string | null | undefined): string {
+  if (!v) return "";
+  const m = String(v).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+// Tipo defensivo: a entrada do annuity_history PODE trazer o id da anuidade
+// (annuity_history_id / id). Sem id não dá para editar/estornar; nesse caso
+// as ações simplesmente não aparecem para aquela linha.
+type AnnuityRow = DojoDetail["annuity_history"][number] & {
+  annuity_history_id?: string | null;
+  id?: string | null;
+  due_date?: string | null;
+};
+const annuityId = (a: AnnuityRow): string | null => a.annuity_history_id || a.id || null;
+
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
   const router = useRouter();
@@ -83,6 +145,26 @@ export default function DojoDetailScreen() {
   // null = ainda não resolvido / federação sem slug → ações ficam ocultas.
   const [pubSlug, setPubSlug] = useState<string | null>(null);
 
+  // Gestão da federação: estado das ações destrutivas / de ciclo de vida.
+  const [busy, setBusy] = useState(false);                 // suspender/reativar/excluir em voo
+  const [histModal, setHistModal] = useState<HasHistoryCounts | null>(null); // 409 → escolha
+  const [annuityEdit, setAnnuityEdit] = useState<AnnuityRow | null>(null);   // anuidade em edição
+
+  // Toast inline (sem sistema global) — padrão das fichas Shoji.
+  const [toast, setToast] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    toastAnim.setValue(0);
+    Animated.timing(toastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setToast(null));
+    }, 2600);
+  }, [toastAnim]);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
   const load = useCallback(() => {
     if (!dojoId) return;
     setLoading(true); setError(false);
@@ -91,8 +173,6 @@ export default function DojoDetailScreen() {
   useEffect(() => { load(); }, [load]);
 
   // Resolve o slug público da federação UMA vez (não bloqueia a tela).
-  // Preferimos o slug do host (quando já estamos sob o microsite) e, se não,
-  // buscamos na identidade da federação. Best-effort: erro = sem ações.
   useEffect(() => {
     let alive = true;
     const fromHost = getMicrositeSlug();
@@ -119,6 +199,99 @@ export default function DojoDetailScreen() {
     Alert.alert(ok ? "Link copiado" : "Não foi possível copiar", ok ? publicUrl : "Copie manualmente: " + publicUrl);
   };
 
+  // ── Suspender / Reativar (toggle is_active via updateDojo) ──────────
+  // O backend não devolve is_active no detalhe; o sinal de "suspenso" é o
+  // status === "suspended". Suspenso → Reativar (is_active:true); senão →
+  // Suspender (is_active:false).
+  const isSuspended = data?.status === "suspended";
+  const toggleSuspend = useCallback(async () => {
+    if (!data || busy) return;
+    const next = isSuspended; // se está suspenso, vamos reativar (true)
+    const verb = next ? "reativar" : "suspender";
+    if (typeof window !== "undefined" && !window.confirm(`Deseja ${verb} o dojô "${data.name}"?`)) return;
+    setBusy(true);
+    try {
+      await karateApi.updateDojo(federationId, dojoId!, { is_active: next });
+      showToast(next ? "Dojô reativado" : "Dojô suspenso");
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível", e?.message || `Falha ao ${verb} o dojô.`);
+    } finally { setBusy(false); }
+  }, [data, busy, isSuspended, federationId, dojoId, load, showToast]);
+
+  // ── Excluir dojô ────────────────────────────────────────────────────
+  // Sem histórico → hard delete direto (após window.confirm). Com histórico,
+  // o backend responde 409 → HasHistoryError; abrimos o modal de escolha.
+  const deleteDojo = useCallback(async () => {
+    if (!data || busy) return;
+    if (typeof window !== "undefined" &&
+        !window.confirm(`Excluir o dojô "${data.name}"? Esta ação não pode ser desfeita.`)) return;
+    setBusy(true);
+    try {
+      await karateApi.deleteDojo(federationId, dojoId!);
+      showToast("Dojô excluído");
+      setTimeout(() => router.replace("/karate/dojos" as any), 320);
+    } catch (e: any) {
+      if (e instanceof HasHistoryError) {
+        setHistModal(e.counts || {}); // → modal de escolha (Desativar / Excluir definitivamente)
+      } else {
+        Alert.alert("Não foi possível excluir", e?.message || "Tente novamente.");
+      }
+    } finally { setBusy(false); }
+  }, [data, busy, federationId, dojoId, router, showToast]);
+
+  // Modal HAS_HISTORY → Desativar (soft delete)
+  const desativarFromModal = useCallback(async () => {
+    if (!dojoId || busy) return;
+    setBusy(true);
+    try {
+      await karateApi.updateDojo(federationId, dojoId, { is_active: false });
+      setHistModal(null);
+      showToast("Dojô desativado");
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível desativar", e?.message || "Tente novamente.");
+    } finally { setBusy(false); }
+  }, [dojoId, busy, federationId, load, showToast]);
+
+  // Modal HAS_HISTORY → Excluir definitivamente (cascade)
+  const excluirDefinitivo = useCallback(async () => {
+    if (!data || !dojoId || busy) return;
+    if (typeof window !== "undefined" && !window.confirm(
+      `EXCLUSÃO DEFINITIVA do dojô "${data.name}" e de TODO o histórico vinculado ` +
+      `(praticantes, anuidades, transações, faixas, transferências, conexões).\n\n` +
+      `Esta ação é IRREVERSÍVEL. Confirmar?`
+    )) return;
+    setBusy(true);
+    try {
+      await karateApi.deleteDojo(federationId, dojoId, { cascade: true });
+      setHistModal(null);
+      showToast("Dojô e histórico excluídos");
+      setTimeout(() => router.replace("/karate/dojos" as any), 320);
+    } catch (e: any) {
+      Alert.alert("Não foi possível excluir", e?.message || "Tente novamente.");
+    } finally { setBusy(false); }
+  }, [data, dojoId, busy, federationId, router, showToast]);
+
+  // ── Anuidades: estornar / editar ────────────────────────────────────
+  const voidAnnuity = useCallback(async (a: AnnuityRow) => {
+    const id = annuityId(a);
+    if (!id || busy) return;
+    const strong = !!a.paid_at;
+    const msg = strong
+      ? `A anuidade ${a.reference_period} consta como PAGA. Estornar mesmo assim? Esta ação reverte o pagamento.`
+      : `Estornar a anuidade ${a.reference_period}? O lançamento será cancelado.`;
+    if (typeof window !== "undefined" && !window.confirm(msg)) return;
+    setBusy(true);
+    try {
+      await karateApi.voidAnnuity(federationId, dojoId!, id);
+      showToast("Anuidade estornada");
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível estornar", e?.message || "Tente novamente.");
+    } finally { setBusy(false); }
+  }, [busy, federationId, dojoId, load, showToast]);
+
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
 
@@ -143,18 +316,8 @@ export default function DojoDetailScreen() {
             <View style={styles.headBtns}>
               {publicUrl && (
                 <>
-                  <ShojiButton
-                    label="Página pública"
-                    icon="open-outline"
-                    variant="ghost"
-                    onPress={openPublic}
-                  />
-                  <ShojiButton
-                    label="Copiar link"
-                    icon="link-outline"
-                    variant="ghost"
-                    onPress={copyPublic}
-                  />
+                  <ShojiButton label="Página pública" icon="open-outline" variant="ghost" onPress={openPublic} />
+                  <ShojiButton label="Copiar link" icon="link-outline" variant="ghost" onPress={copyPublic} />
                 </>
               )}
               <ShojiButton
@@ -165,6 +328,30 @@ export default function DojoDetailScreen() {
               />
               <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
               <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
+
+              {/* Suspender / Reativar — toggle is_active */}
+              <TouchableOpacity
+                style={[styles.iconBtn, busy && styles.btnDisabled]}
+                disabled={busy}
+                onPress={toggleSuspend}
+                accessibilityRole="button"
+                accessibilityLabel={isSuspended ? "Reativar dojô" : "Suspender dojô"}
+              >
+                <Icon name="power" size={14} color={C.ink} />
+                <Text style={styles.iconBtnTxt}>{isSuspended ? "Reativar" : "Suspender"}</Text>
+              </TouchableOpacity>
+
+              {/* Excluir dojô — destrutivo */}
+              <TouchableOpacity
+                style={[styles.dangerBtn, busy && styles.btnDisabled]}
+                disabled={busy}
+                onPress={deleteDojo}
+                accessibilityRole="button"
+                accessibilityLabel="Excluir dojô"
+              >
+                <Icon name="trash" size={14} color="#fdf8f2" />
+                <Text style={styles.dangerBtnTxt}>Excluir dojô</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -174,6 +361,7 @@ export default function DojoDetailScreen() {
           <KV k="Nome do dojô" v={data.name} />
           <KV k="Código FPKT" v={data.fpkt_affiliation_id} />
           <KV k="CNPJ" v={data.cnpj} />
+          <KV k="CPF do sensei" v={fmtCpf(data.sensei_cpf)} />
           <KV k="Telefone" v={data.phone} />
           <KV k="E-mail" v={data.email} />
           <KV k="Região" v={data.region} />
@@ -217,18 +405,34 @@ export default function DojoDetailScreen() {
         </Card>
 
         <Card style={{ marginTop: SP[6] }}>
-          <SectionHead title="Anuidades" />
+          <SectionHead title="Anuidades" sub="Editar ou estornar lançamentos da federação" />
           {data.annuity_history.length === 0 ? <Body muted>Nenhuma anuidade registrada.</Body>
-            : data.annuity_history.map((a, i) => (
-              <View key={i} style={[styles.annRow, i === data.annuity_history.length - 1 && styles.noBorder]}>
-                <Mono style={{ fontSize: 14, color: C.ink, width: 56 }}>{a.reference_period}</Mono>
-                <View style={{ flex: 1 }}>
-                  {a.paid_at ? <Text style={styles.paid}>Pago em {fmtDate(a.paid_at)}</Text> : <Text style={styles.due}>Em aberto</Text>}
+            : (data.annuity_history as AnnuityRow[]).map((a, i) => {
+              const id = annuityId(a);
+              const canActUnpaid = !a.paid_at;
+              return (
+                <View key={id || i} style={[styles.annRow, i === data.annuity_history.length - 1 && styles.noBorder]}>
+                  <Mono style={{ fontSize: 14, color: C.ink, width: 56 }}>{a.reference_period}</Mono>
+                  <View style={{ flex: 1 }}>
+                    {a.paid_at ? <Text style={styles.paid}>Pago em {fmtDate(a.paid_at)}</Text> : <Text style={styles.due}>Em aberto</Text>}
+                  </View>
+                  <Mono style={{ fontSize: 13.5, color: C.ink2 }}>{fmtMoney(a.amount)}</Mono>
+                  <ShojiBadge dojoStatus={a.status} />
+                  {id ? (
+                    <View style={styles.annActions}>
+                      {canActUnpaid ? (
+                        <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => setAnnuityEdit(a)} accessibilityLabel="Editar anuidade">
+                          <Icon name="edit" size={13} color={C.ink} />
+                        </TouchableOpacity>
+                      ) : null}
+                      <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => voidAnnuity(a)} accessibilityLabel="Estornar anuidade">
+                        <Icon name="repeat" size={13} color={P.red} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                 </View>
-                <Mono style={{ fontSize: 13.5, color: C.ink2 }}>{fmtMoney(a.amount)}</Mono>
-                <ShojiBadge dojoStatus={a.status} />
-              </View>
-            ))}
+              );
+            })}
         </Card>
       </ScrollView>
 
@@ -250,7 +454,156 @@ export default function DojoDetailScreen() {
         fpktId={data.fpkt_affiliation_id}
         onClose={() => setExportOpen(false)}
       />
+
+      {/* Modal HAS_HISTORY: Desativar (soft) × Excluir definitivamente (cascade) */}
+      <Modal visible={!!histModal} transparent animationType="fade" onRequestClose={() => setHistModal(null)}>
+        <View style={styles.backdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && setHistModal(null)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalEyebrow}>空  FPKT · Exclusão de dojô</Text>
+            <Text style={styles.modalTitle}>Este dojô tem histórico<Text style={{ color: P.red }}>.</Text></Text>
+            <Text style={styles.modalBody}>
+              Não dá para excluir direto porque há registros vinculados. Você pode
+              desativar (mantém os dados, some das listas ativas) ou excluir tudo
+              em cascata — irreversível.
+            </Text>
+
+            {histModal ? (
+              <View style={styles.countsBox}>
+                {Object.entries(histModal)
+                  .filter(([, n]) => Number(n) > 0)
+                  .map(([k, n]) => (
+                    <View key={k} style={styles.countRow}>
+                      <Mono style={styles.countNum}>{String(n)}</Mono>
+                      <Text style={styles.countLbl}>{COUNT_LABEL[k] || k}</Text>
+                    </View>
+                  ))}
+                {Object.values(histModal).every((n) => Number(n) === 0) ? (
+                  <Text style={styles.countLbl}>Registros vinculados encontrados.</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={desativarFromModal}>
+                {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Desativar</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={excluirDefinitivo}>
+                <Icon name="trash" size={14} color="#fdf8f2" />
+                <Text style={styles.dangerBtnTxt}>Excluir definitivamente</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={() => setHistModal(null)}>
+                <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de edição de anuidade (valor / vencimento / competência) */}
+      <AnnuityEditModal
+        visible={!!annuityEdit}
+        row={annuityEdit}
+        busy={busy}
+        onClose={() => setAnnuityEdit(null)}
+        onSave={async (payload) => {
+          const id = annuityEdit ? annuityId(annuityEdit) : null;
+          if (!id) return;
+          setBusy(true);
+          try {
+            await karateApi.updateAnnuity(federationId, dojoId!, id, payload);
+            setAnnuityEdit(null);
+            showToast("Anuidade atualizada");
+            load();
+          } catch (e: any) {
+            Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+          } finally { setBusy(false); }
+        }}
+      />
+
+      {/* Toast inline (sem sistema global) */}
+      {toast ? (
+        <Animated.View pointerEvents="none" style={[styles.toast, {
+          opacity: toastAnim,
+          transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+        }]}>
+          <Icon name="check" size={16} color="#bfe3c4" />
+          <Text style={styles.toastTxt}>{toast}</Text>
+        </Animated.View>
+      ) : null}
     </ShojiBackground>
+  );
+}
+
+// ── Modal de edição de anuidade ────────────────────────────────────────
+function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
+  visible: boolean;
+  row: AnnuityRow | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: { amount?: number; due_date?: string; reference_period?: string }) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [due, setDue] = useState("");
+  const [ref, setRef] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible || !row) return;
+    setErr(null);
+    setAmount(row.amount != null ? String(row.amount).replace(".", ",") : "");
+    setDue(isoToBr(row.due_date));
+    setRef(row.reference_period || "");
+  }, [visible, row]);
+
+  function submit() {
+    setErr(null);
+    const payload: { amount?: number; due_date?: string; reference_period?: string } = {};
+    if (amount.trim()) {
+      const n = Number(amount.replace(/\./g, "").replace(",", "."));
+      if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
+      payload.amount = n;
+    }
+    if (due.trim()) {
+      const iso = brToISO(due);
+      if (!iso) { setErr("Vencimento inválido (dd/mm/aaaa)."); return; }
+      payload.due_date = iso;
+    }
+    if (ref.trim()) payload.reference_period = ref.trim();
+    if (Object.keys(payload).length === 0) { setErr("Nada para alterar."); return; }
+    onSave(payload);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEyebrow}>空  FPKT · Editar anuidade</Text>
+          <Text style={styles.modalTitle}>{row?.reference_period || "Anuidade"}<Text style={{ color: P.red }}>.</Text></Text>
+
+          <Text style={styles.fieldLbl}>Valor (R$)</Text>
+          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
+
+          <Text style={styles.fieldLbl}>Vencimento</Text>
+          <TextInput style={[styles.input, styles.mono]} value={due} onChangeText={(v) => setDue(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Vencimento" />
+
+          <Text style={styles.fieldLbl}>Competência</Text>
+          <TextInput style={styles.input} value={ref} onChangeText={setRef} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
+
+          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
+              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Salvar</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
+              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -265,4 +618,44 @@ const styles = StyleSheet.create({
   annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
+
+  // Ações de anuidade (linha)
+  annActions: { flexDirection: "row", gap: 6, marginLeft: 4 } as ViewStyle,
+  annBtn: { width: 30, height: 30, borderRadius: R.sm, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+
+  // Botões do header (toggle + excluir)
+  iconBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  iconBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
+  dangerBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, backgroundColor: P.red } as ViewStyle,
+  dangerBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+  btnDisabled: { opacity: 0.5 } as ViewStyle,
+
+  // Modais in-app (HAS_HISTORY + edição de anuidade)
+  backdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 16 } as ViewStyle,
+  modalCard: { backgroundColor: P.paper, borderRadius: R.xl, borderWidth: 1, borderColor: P.line2, padding: 22, width: "100%", maxWidth: 460 } as ViewStyle,
+  modalEyebrow: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 1.4, color: P.ink3, textTransform: "uppercase" } as TextStyle,
+  modalTitle: { fontFamily: F.heading, fontSize: 24, color: P.ink, marginTop: 4 } as TextStyle,
+  modalBody: { fontFamily: F.body, fontSize: 13, color: P.ink2, marginTop: 8, lineHeight: 19 } as TextStyle,
+
+  countsBox: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 } as ViewStyle,
+  countRow: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 } as ViewStyle,
+  countNum: { fontFamily: F.mono, fontSize: 14, color: P.red, fontWeight: "700" } as TextStyle,
+  countLbl: { fontFamily: F.body, fontSize: 12.5, color: P.ink2 } as TextStyle,
+
+  modalActions: { gap: 10, marginTop: 20 } as ViewStyle,
+  primaryBtn: { paddingVertical: 12, borderRadius: R.md, backgroundColor: P.ink, alignItems: "center" } as ViewStyle,
+  primaryBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+  dangerBtnWide: { flexDirection: "row", gap: 8, paddingVertical: 12, borderRadius: R.md, backgroundColor: P.red, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  ghostBtn: { paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, alignItems: "center" } as ViewStyle,
+  ghostBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
+
+  // Campos do editor de anuidade
+  fieldLbl: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: P.ink2, marginTop: 12, marginBottom: 5 } as TextStyle,
+  input: { fontFamily: F.body, fontSize: 14, color: P.ink, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 11 } as TextStyle,
+  mono: { fontFamily: F.mono, letterSpacing: 0.5 } as TextStyle,
+  errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, marginTop: 12 } as TextStyle,
+
+  // Toast inline
+  toast: { position: "absolute", left: 20, right: 20, bottom: 24, alignSelf: "center", maxWidth: 460, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.ink, borderRadius: R.md, paddingVertical: 12, paddingHorizontal: 16 } as ViewStyle,
+  toastTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2", flex: 1 } as TextStyle,
 });
