@@ -102,7 +102,7 @@ export default function KaratePainel() {
 
   const pageHead = (
     <PageHead
-      eyebrow={`Temporada ${now.getFullYear()} · ${MONTHS[now.getMonth()]}`}
+      eyebrow={`${MONTHS[now.getMonth()]} ${now.getFullYear()}`}
       title="Painel"
       sub={`Indicadores de ${federationName || "sua federação"}.`}
     />

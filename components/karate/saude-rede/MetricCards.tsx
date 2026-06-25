@@ -314,7 +314,7 @@ export function RelacaoFaixasCard({
     <View style={st.card}>
       <SectionRow
         title="Relação de faixas"
-        sub="Distribuição atual de atletas por graduação · snapshot da rede"
+        sub="Distribuição atual de praticantes por graduação · snapshot da rede"
         onDetail={onDetail}
         csvData={{
           filename: "relacao-faixas",
@@ -332,7 +332,6 @@ export function RelacaoFaixasCard({
               {data.dan_pct.toFixed(0)}<Text style={st.beltHeroPctUnit}>%</Text>
             </Text>
             <Text style={st.beltHeroSub}>chegam ao Dan (faixa preta)</Text>
-            <Text style={st.beltHeroNote}>Snapshot — não é funil de coorte.</Text>
             <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
               <View><Text style={st.beltStat}>{fmtN(data.kyu)}</Text><Text style={st.beltStatLabel}>Kyu</Text></View>
               <View><Text style={st.beltStat}>{fmtN(data.dan)}</Text><Text style={st.beltStatLabel}>Dan</Text></View>

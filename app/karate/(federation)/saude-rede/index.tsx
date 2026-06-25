@@ -246,7 +246,6 @@ export default function SaudeRedeScreen() {
       >
         {/* Page head */}
         <PageHead
-          eyebrow={`Inteligência da rede · ${new Date().getFullYear()}`}
           title="Saúde da Rede"
           sub="Visão institucional da rede de afiliados. Indicadores numéricos derivados de dados que a federação possui — afiliação de dojôs, anuidades, graduações registradas e cobertura geográfica. Cada número abre os registros por trás dele e exporta em CSV."
         />
