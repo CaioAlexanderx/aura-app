@@ -32,6 +32,26 @@ export function dateSlice(s: string | null | undefined): string {
   return s.slice(0, 10).split("-").reverse().join("/");
 }
 
+/**
+ * Formata mês + ano em pt-BR sem dia da semana.
+ * @param mes  Número do mês 1–12 (ou string numérica)
+ * @param ano  Ano completo (ex.: 2026)
+ * @returns    Ex.: "jan/2026", "fev/2026"
+ */
+export function fmtMesAno(mes: number | string, ano: number | string): string {
+  const m = typeof mes === "string" ? parseInt(mes, 10) : mes;
+  const a = typeof ano === "string" ? parseInt(ano, 10) : ano;
+  if (isNaN(m) || isNaN(a)) return `${mes}/${ano}`;
+  try {
+    const d = new Date(a, m - 1, 1);
+    const label = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(d);
+    // Remove ponto final que alguns navegadores adicionam (ex.: "jan." → "jan")
+    return label.replace(/\.$/, "") + "/" + a;
+  } catch {
+    return `${mes}/${ano}`;
+  }
+}
+
 // Download CSV via Linking (web: opens in new tab; native: opens browser)
 export function downloadCsv(fedId: string, indicator: string, token?: string): void {
   let url = karateNetworkHealthApi.csvUrl(fedId, indicator);
@@ -244,7 +264,7 @@ export const st = StyleSheet.create({
 
   // Coverage
   covRow:   { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
-  covLabel: { width: 88, fontFamily: F.body, fontSize: 12, color: C.ink2 } as TextStyle,
+  covLabel: { flex: 1, fontFamily: F.body, fontSize: 12, color: C.ink2 } as TextStyle,
   covBarBg: { flex: 1, height: 7, borderRadius: 999, backgroundColor: "rgba(43,38,32,0.06)", overflow: "hidden" } as ViewStyle,
   covBarFill: { height: 7, borderRadius: 999, backgroundColor: C.ink2 } as ViewStyle,
   covCount:   { fontFamily: F.mono, fontSize: 12, color: C.ink, width: 24, textAlign: "right" } as TextStyle,
