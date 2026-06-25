@@ -83,6 +83,8 @@ const PATHS: Record<string, string> = {
   // (stroke feather-style), usado no botao "Cobrar" do crediario (16/06).
   whatsapp:       "M21 11.5a8.5 8.5 0 01-12.6 7.45L3.5 20l1.1-4.8A8.5 8.5 0 1121 11.5z M8.7 7.7c.2 0 .45.01.58.28.16.32.5 1.22.55 1.31.05.1.08.21.01.34-.07.13-.1.21-.2.32-.1.11-.21.25-.3.34-.1.1-.2.2-.09.4.11.19.5.83 1.08 1.34.74.66 1.37.86 1.56.96.19.1.3.08.41-.05.11-.13.47-.55.6-.74.13-.19.26-.16.43-.1.18.07 1.12.53 1.31.62.19.1.32.14.37.22.05.08.05.48-.12.94-.17.46-.99.88-1.37.91-.38.04-.74.18-2.5-.54-2.12-.86-3.46-3.05-3.56-3.19-.1-.14-.85-1.13-.85-2.15 0-1.02.53-1.52.72-1.73.19-.21.42-.26.56-.26z",
   headset:        "M3 18v-6a9 9 0 0118 0v6 M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z M3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z",
+  // Sino de notificacoes (badge de alerta na topbar da shell de karate)
+  bell:           "M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 01-3.46 0",
   // ── Content ─────────────────────────────────────────────────
   file_text:      "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8",
   // Imagem com sol (galeria Studio)
@@ -90,6 +92,16 @@ const PATHS: Record<string, string> = {
   clipboard:      "M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2 M9 2h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V3a1 1 0 011-1z",
   bar_chart:      "M12 20V10 M18 20V4 M6 20v-4",
   star:           "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
+  // Pulse / batimento — usado em "Saude da Rede" (dashboard de saude da federacao)
+  activity:       "M22 12h-4l-3 9L9 3l-3 9H2",
+  // Predio / estabelecimento — usado em "Dojos"
+  building:       "M3 21h18 M5 21V7l8-4v18 M19 21V11l-6-4 M9 9h.01 M9 12h.01 M9 15h.01 M9 18h.01",
+  // Rede de nos conectados — usado em "Conexoes" (conectividade dojo↔federacao)
+  network:        "M12 8a3 3 0 100-6 3 3 0 000 6z M6 22a3 3 0 100-6 3 3 0 000 6z M18 22a3 3 0 100-6 3 3 0 000 6z M12 8v5 M12 13l-5 4 M12 13l5 4",
+  // Medalha / fita — usado em "Certificados" (selo/certificado de faixa)
+  ribbon:         "M9 11a4 4 0 108 0 4 4 0 00-8 0z M13 14.5L16 22l-3-1.5-3 1.5 3-7.5",
+  // Trofeu — usado em "Competicoes" (ranking/torneios)
+  trophy:         "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 01-10 0V4z M7 4H5a2 2 0 000 4h.5 M17 4h2a2 2 0 010 4h-.5",
   alert:          "M12 9v4 M12 17h.01 M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
   // Circulo com exclamacao (KPI "aguardando arte")
   alert_circle:   "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8v4 M12 16h.01",
@@ -153,6 +165,37 @@ const ALIASES: Record<string, string> = {
   // WhatsApp (16/06) — aceita variacoes comuns de nome.
   "whats-app":       "whatsapp",
   "whatsApp":        "whatsapp",
+  // Karate shell (fix/karate-shell-logos-icones) — variantes Ionicons-style
+  // (-outline) e nomes alternativos mapeados pros glifos canonicos. A shell
+  // de karate usava @expo/vector-icons (fonte nunca carregada → retangulo);
+  // agora renderiza via este componente SVG-inline.
+  "bell-outline":         "bell",
+  "notifications":        "bell",
+  "notifications-outline": "bell",
+  "activity-outline":     "activity",
+  "pulse":                "activity",
+  "pulse-outline":        "activity",
+  "building-outline":     "building",
+  "business":             "building",
+  "business-outline":     "building",
+  "network-outline":      "network",
+  "git-network":          "network",
+  "git-network-outline":  "network",
+  "ribbon-outline":       "ribbon",
+  "trophy-outline":       "trophy",
+  "grid-outline":         "grid",
+  "people":               "users",
+  "people-outline":       "users",
+  "cash":                 "wallet",
+  "cash-outline":         "wallet",
+  "calendar-outline":     "calendar",
+  "cloud-upload":         "upload",
+  "cloud-upload-outline": "upload",
+  "settings-outline":     "settings",
+  "search-outline":       "search",
+  "log-out":              "logout",
+  "log-out-outline":      "logout",
+  "chevron-forward":      "chevron_right",
 };
 
 function resolveName(name: string): string {
@@ -214,6 +257,8 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     // Novos (fix/studio-icons)
     arrow_right: ">", arrow_left: "<", external_link: "^", box: "B",
     truck: "T", resize: "R", location: "P",
+    // Novos (fix/karate-shell) — glifos da shell de karate
+    bell: "N", activity: "~", building: "D", network: "C", ribbon: "M", trophy: "T",
   };
 
   return (
