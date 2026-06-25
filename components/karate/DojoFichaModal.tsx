@@ -24,6 +24,10 @@
 //   campos realmente opcionais — nunca os obrigatórios — para não contradizer
 //   a mensagem.
 //
+// Status (edição): no modo edição a ficha expõe um toggle Ativo/Suspenso que
+//   envia is_active no PATCH. Suspender mantém todos os dados (mesma semântica
+//   do "Suspender" do detalhe). No cadastro o controle não aparece.
+//
 // Endereço estruturado (Fix 5): o dojô agora usa os MESMOS campos do praticante
 // (street/number/complement/neighborhood/city/state/zip = colunas address_* do
 // companies, as mesmas da NF-e). O backend ainda aceita `address` texto legado;
@@ -62,6 +66,8 @@ const EMPTY = {
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
   // só leitura: texto legado de registros antigos que ainda não migraram p/ campos
   legacy_address: "",
+  // status do dojô (edição): true = Ativo, false = Suspenso. Envia is_active.
+  is_active: true,
 };
 type Form = typeof EMPTY;
 
@@ -165,6 +171,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
           complement: d.address_complement || "", neighborhood: d.address_neighborhood || "",
           city: d.address_city || "", state: d.address_state || "",
           legacy_address: hasStructured ? "" : (d.address || ""),
+          // status → is_active: "suspended" = inativo; demais status = ativo.
+          // (o backend também aceita d.is_active explícito quando presente)
+          is_active: typeof d.is_active === "boolean" ? d.is_active : d.status !== "suspended",
         });
         setFpkt(d.fpkt_affiliation_id || null);
         setStatusLabel(d.status || null);
@@ -266,8 +275,13 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       address: hasStructured ? null : (form.legacy_address || null),
     };
     try {
-      if (isEdit) await karateApi.updateDojo(federationId, dojoId!, body);
-      else await karateApi.createDojo(federationId, body);
+      if (isEdit) {
+        // No modo edição enviamos também o status (is_active). O backend
+        // mapeia is_active:false → status "suspended" (suspender/reativar).
+        await karateApi.updateDojo(federationId, dojoId!, { ...body, is_active: form.is_active });
+      } else {
+        await karateApi.createDojo(federationId, body);
+      }
       setSaving(false);
       showToast(isEdit ? "Alterações salvas" : "Dojô salvo");
       onSaved();
@@ -306,6 +320,34 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                   <Text style={styles.completarTtl}>Completar quando quiser:</Text>
                   <Text style={styles.completarList}>{empties.join("  ·  ")}</Text>
                 </View>
+              )}
+
+              {/* Status do dojô (só edição): Ativo ⇄ Suspenso → is_active.
+                  Suspenso mantém os dados e some das listas ativas. */}
+              {isEdit && (
+                <>
+                  <SectionTitle>Status</SectionTitle>
+                  <View style={styles.statusRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.statusTtl}>{form.is_active ? "Ativo" : "Suspenso"}</Text>
+                      <Text style={styles.statusSub}>
+                        {form.is_active
+                          ? "O dojô aparece nas listas e relatórios ativos."
+                          : "Suspenso: os dados são mantidos, mas o dojô sai das listas ativas."}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => set("is_active", !form.is_active)}
+                      activeOpacity={0.85}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: form.is_active }}
+                      accessibilityLabel="Status do dojô (Ativo/Suspenso)"
+                      style={[styles.switch, form.is_active ? styles.switchOn : styles.switchOff]}
+                    >
+                      <View style={[styles.knob, form.is_active ? styles.knobOn : styles.knobOff]} />
+                    </TouchableOpacity>
+                  </View>
+                </>
               )}
 
               <SectionTitle>Identidade</SectionTitle>
@@ -473,6 +515,17 @@ const styles = StyleSheet.create({
   note: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 4 } as TextStyle,
   noteOk: { color: P.ok } as TextStyle,
   noteBad: { color: P.red } as TextStyle,
+
+  // Status (toggle Ativo/Suspenso) — só no modo edição.
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 11 } as ViewStyle,
+  statusTtl: { fontFamily: F.body, fontSize: 13.5, fontWeight: "700", color: P.ink } as TextStyle,
+  statusSub: { fontFamily: F.body, fontSize: 11.5, color: P.ink3, marginTop: 2 } as TextStyle,
+  switch: { width: 46, height: 26, borderRadius: 999, padding: 3, justifyContent: "center" } as ViewStyle,
+  switchOn: { backgroundColor: P.ok } as ViewStyle,
+  switchOff: { backgroundColor: P.line2 } as ViewStyle,
+  knob: { width: 20, height: 20, borderRadius: 999, backgroundColor: "#fdf8f2" } as ViewStyle,
+  knobOn: { alignSelf: "flex-end" } as ViewStyle,
+  knobOff: { alignSelf: "flex-start" } as ViewStyle,
 
   models: { gap: 8, marginBottom: 11 } as ViewStyle,
   model: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14 } as ViewStyle,
