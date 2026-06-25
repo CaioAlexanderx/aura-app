@@ -120,7 +120,7 @@ export default function SaudeRedeScreen() {
     if (drawerKey === "cobertura" && cobertura) {
       return {
         title: "Cobertura geográfica",
-        sub: "Regiões administrativas de SP · densidade e lacunas",
+        sub: "Regiões administrativas de SP · densidade de dojôs ativos",
         cols: [
           { key: "regiao", label: "Região" },
           { key: "dojos", label: "Dojôs", align: "right" },
@@ -357,7 +357,7 @@ export default function SaudeRedeScreen() {
           </View>
         </View>
 
-        {/* Periodic report (DESIGN-28) */}
+        {/* Relatório periódico */}
         <ReportWidget federationId={federationId} />
 
         <View style={{ height: 32 }} />
