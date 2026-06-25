@@ -27,15 +27,28 @@
 // F4.3: CPF e telefone são formatados SÓ na exibição (máscaras BR). Não muda
 //   o dado salvo; se o valor não tiver dígitos suficientes (dado ruim da
 //   planilha), exibe como veio.
+//
+// Edição/Exclusão (federação manda em tudo):
+//   - Header: "Excluir praticante" ao lado de "Editar". Sem histórico → confirma
+//     e exclui (volta à lista). Com histórico (HasHistoryError) → modal in-app
+//     com os counts oferecendo Desativar (is_active:false) / Excluir
+//     definitivamente (cascade, confirmação forte) / Cancelar.
+//   - Trajetória: cada graduação ganha Editar (faixa + data) e Excluir; a faixa
+//     atual recalcula sozinha no backend (view) após o refetch.
+//   - Transferência: cada registro ganha Editar (motivo + data) e Excluir.
+//   ARMADILHA: Alert.alert com botões é NO-OP no React Native Web. Confirmações
+//   usam window.confirm / window.alert; a escolha tripla do delete usa modal
+//   in-app. Ícones dos NOVOS controles via <Icon> (components/Icon.tsx).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Alert,
+  View, Text, ScrollView, TouchableOpacity, Alert, Platform,
   StyleSheet, ViewStyle, TextStyle, ActivityIndicator,
   Modal, TextInput, Pressable,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, KarateBelts, BeltKey } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
@@ -45,7 +58,7 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { CarteirinhaPanel } from "@/components/karate/CarteirinhaPanel";
 import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
-import { karateApi, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate, TransferRecord } from "@/services/karateApi";
+import { karateApi, HasHistoryError, PractitionerDetail, AffiliationStatus, BeltHistoryEntry, Certificate, TransferRecord } from "@/services/karateApi";
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -54,6 +67,22 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 const TRANSFER_ROLES = ["federation_admin", "federation_staff"];
 function canTransfer(role: string | null): boolean {
   return role == null || TRANSFER_ROLES.includes(role);
+}
+
+// ── Confirmação/feedback cross-plataforma ──────────────────────
+// ARMADILHA: no React Native Web o Alert.alert COM BOTÕES é um no-op (o
+// onPress nunca dispara). Para confirmar/avisar usamos window.confirm /
+// window.alert na web (e Alert.alert só em nativo, onde funciona).
+function webConfirm(message: string): boolean {
+  if (Platform.OS === "web" && typeof window !== "undefined") return window.confirm(message);
+  return true; // nativo: o caller usa Alert.alert próprio quando necessário
+}
+function webNotify(title: string, message?: string) {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
 }
 
 // Fix C4: data-sentinela usada pelo backfill para faixas sem data conhecida.
@@ -80,6 +109,12 @@ function formatPhoneDisplay(v: string | null | undefined): string | null {
   if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
   return String(v); // fora do padrão BR: mostra como veio
 }
+function formatCepDisplay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length !== 8) return String(v);
+  return d.replace(/(\d{5})(\d{3})/, "$1-$2");
+}
 
 const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
 type Tab = typeof TABS[number];
@@ -95,6 +130,18 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       </View>
     );
   }
+
+  // Endereço (B): hoje existe no banco/modal mas não era exibido aqui.
+  // Os campos vêm flat no detalhe (street/number/.../zip_code), como o modal
+  // de edição lê. Linha única + 2ª linha bairro/cidade/UF. Campos ausentes são
+  // neutros (não renderizamos — sem "—" feio), conforme padrão do app.
+  const pa: any = p;
+  const line1Parts = [pa.street, pa.number].filter(Boolean).join(", ");
+  const line1 = [line1Parts, pa.complement].filter(Boolean).join(" — ");
+  const line2 = [pa.neighborhood, pa.city, pa.state].filter(Boolean).join(" · ");
+  const cep = formatCepDisplay(pa.zip_code);
+  const hasAddress = !!(line1 || line2 || cep);
+
   return (
     <View style={tabStyles.tab}>
       <Row icon="person-outline"   label="Nome"         val={p.full_name} />
@@ -104,6 +151,20 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       <Row icon="mail-outline"     label="E-mail"       val={p.email ?? null} />
       <Row icon="call-outline"     label="Telefone"     val={formatPhoneDisplay(p.phone)} />
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
+
+      {/* Endereço (só leitura — edição é pelo modal). Campos vazios ocultos. */}
+      {hasAddress && (
+        <View style={tabStyles.addressBlock}>
+          <View style={tabStyles.addressHead}>
+            <Ionicons name="location-outline" size={14} color={KarateColors.ink3} />
+            <Text style={tabStyles.addressTitle}>Endereço</Text>
+          </View>
+          {cep ?    <Text style={tabStyles.addressLine}>CEP {cep}</Text> : null}
+          {line1 ?  <Text style={tabStyles.addressLine}>{line1}</Text> : null}
+          {line2 ?  <Text style={tabStyles.addressLine}>{line2}</Text> : null}
+        </View>
+      )}
+
       <View style={tabStyles.rolesRow}>
         {p.is_instructor && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Instrutor</Text></View>}
         {p.is_arbiter    && <View style={tabStyles.roleChip}><Text style={tabStyles.roleChipText}>Árbitro</Text></View>}
@@ -114,16 +175,18 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
 }
 
 function TrajetoriaTab({
-  history, currentBelt, federationId, practitionerId, karateRole, onGraduationAdded,
+  history, currentBelt, federationId, practitionerId, karateRole, onChanged,
 }: {
   history: BeltHistoryEntry[];
   currentBelt: PractitionerDetail["current_belt"];
   federationId: string;
   practitionerId: string;
   karateRole: string | null;
-  onGraduationAdded: () => void;
+  onChanged: () => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<BeltHistoryEntry | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const allowed = canTransfer(karateRole); // mesmos papéis de escrita (admin/staff)
 
   // CTA primário em sumi, tamanho normal, alinhado à direita (ação da aba).
@@ -137,6 +200,20 @@ function TrajetoriaTab({
       />
     </View>
   ) : null;
+
+  // Excluir graduação: a faixa atual é derivada por view → recalcula no refetch.
+  async function handleDelete(entry: BeltHistoryEntry) {
+    if (!webConfirm("Excluir esta graduação? A faixa atual será recalculada.")) return;
+    setBusyId(entry.id);
+    try {
+      await karateApi.deleteGraduation(federationId, practitionerId, entry.id);
+      onChanged();
+    } catch (e: any) {
+      webNotify("Não foi possível excluir", e?.message || "Tente novamente.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   // Fix C4: só mostra "Desde:" quando a data é conhecida (≠ sentinela 1900).
   const currentSinceUnknown = currentBelt ? isUnknownBeltDate(currentBelt.current_since) : true;
@@ -194,6 +271,30 @@ function TrajetoriaTab({
                   <Text style={tabStyles.beltDate}>Data não informada</Text>
                 )}
               </View>
+              {allowed && (
+                <View style={tabStyles.itemActions}>
+                  <TouchableOpacity
+                    style={tabStyles.iconBtn}
+                    onPress={() => setEditEntry(entry)}
+                    disabled={busyId === entry.id}
+                    accessibilityRole="button"
+                    accessibilityLabel="Editar graduação"
+                  >
+                    <Icon name="edit" size={15} color={KarateColors.ink2} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[tabStyles.iconBtn, tabStyles.iconBtnDanger]}
+                    onPress={() => handleDelete(entry)}
+                    disabled={busyId === entry.id}
+                    accessibilityRole="button"
+                    accessibilityLabel="Excluir graduação"
+                  >
+                    {busyId === entry.id
+                      ? <ActivityIndicator size="small" color={KarateColors.danger} />
+                      : <Icon name="trash" size={15} color={KarateColors.danger} />}
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           );
         })
@@ -204,7 +305,15 @@ function TrajetoriaTab({
         onClose={() => setModalOpen(false)}
         federationId={federationId}
         practitionerId={practitionerId}
-        onDone={() => { setModalOpen(false); onGraduationAdded(); }}
+        onDone={() => { setModalOpen(false); onChanged(); }}
+      />
+
+      <EditarGraduacaoModal
+        entry={editEntry}
+        onClose={() => setEditEntry(null)}
+        federationId={federationId}
+        practitionerId={practitionerId}
+        onDone={() => { setEditEntry(null); onChanged(); }}
       />
     </View>
   );
@@ -338,6 +447,127 @@ function RegistrarGraduacaoModal({
   );
 }
 
+// Editar uma graduação existente (C): faixa (belt_level/belt_name) + data.
+// PATCH via karateApi.updateGraduation. A faixa atual recalcula no refetch.
+function EditarGraduacaoModal({
+  entry, onClose, federationId, practitionerId, onDone,
+}: {
+  entry: BeltHistoryEntry | null;
+  onClose: () => void;
+  federationId: string;
+  practitionerId: string;
+  onDone: () => void;
+}) {
+  const visible = !!entry;
+  const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [dateBr, setDateBr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // pré-preenche ao abrir a partir do registro selecionado
+  useEffect(() => {
+    if (!entry) return;
+    const match = (Object.keys(KarateBelts) as BeltKey[]).find(
+      (k) => k === entry.belt_level || KarateBelts[k].label === entry.belt_name
+    ) ?? null;
+    setBeltKey(match);
+    setDateBr(isUnknownBeltDate(entry.graduated_at) ? "" : (formatIsoToBr(entry.graduated_at) || ""));
+    setErr(null); setSaving(false);
+  }, [entry]);
+
+  const dateComplete = dateBr.length === 10;
+  const dateIso = parseBrDate(dateBr);
+  const dateBad = dateComplete && dateIso === null;
+
+  async function handleSave() {
+    if (!entry) return;
+    if (!beltKey) { setErr("Selecione a faixa."); return; }
+    if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco."); return; }
+    setErr(null); setSaving(true);
+    try {
+      await karateApi.updateGraduation(federationId, practitionerId, entry.id, {
+        belt_level: beltKey,
+        belt_name: KarateBelts[beltKey].label,
+        graduated_at: dateIso || undefined,
+      });
+      setSaving(false);
+      onDone();
+    } catch (e: any) {
+      setSaving(false);
+      setErr(e?.message || "Não foi possível salvar a graduação.");
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Editar graduação</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Text style={gradStyles.hint}>
+              Corrige a faixa e/ou a data deste registro do histórico. A faixa atual é recalculada automaticamente.
+            </Text>
+
+            <Text style={gradStyles.label}>Faixa</Text>
+            <View style={gradStyles.beltGrid}>
+              {BELT_OPTIONS.map((opt) => {
+                const active = beltKey === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setBeltKey(opt.key)}
+                    activeOpacity={0.7}
+                    style={[gradStyles.beltChip, { backgroundColor: KarateBelts[opt.key].color }, active && gradStyles.beltChipActive]}
+                  >
+                    <Text style={[gradStyles.beltChipTxt, { color: KarateBelts[opt.key].textColor }]}>{opt.label}</Text>
+                    {active && <Ionicons name="checkmark-circle" size={14} color={KarateBelts[opt.key].textColor} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={gradStyles.label}>Data da graduação · dd/mm/aaaa <Text style={gradStyles.labelHint}>(vazio = mantém atual)</Text></Text>
+            <TextInput
+              style={[gradStyles.input, dateBad && gradStyles.inputBad]}
+              value={dateBr}
+              onChangeText={(v) => setDateBr(maskBrDate(v))}
+              keyboardType="numeric"
+              placeholder="dd/mm/aaaa"
+              placeholderTextColor={KarateColors.ink4}
+              maxLength={10}
+              accessibilityLabel="Data da graduação"
+            />
+            {dateBad ? <Text style={gradStyles.errInline}>Data inválida</Text> : null}
+
+            {err ? (
+              <View style={gradStyles.errBox}>
+                <Ionicons name="alert-circle" size={15} color={KarateColors.primary} />
+                <Text style={gradStyles.errTxt}>{err}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View style={gradStyles.footer}>
+            <TouchableOpacity onPress={onClose} style={gradStyles.btnGhost}>
+              <Text style={gradStyles.btnGhostTxt}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSave} disabled={saving} style={[gradStyles.btnPrimary, saving && { opacity: 0.6 }]}>
+              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={gradStyles.btnPrimaryTxt}>Salvar</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // Track N: aba de transferências — histórico imutável + ação de transferir
 function TransferenciaTab({
   federationId,
@@ -353,6 +583,8 @@ function TransferenciaTab({
   const [transfers, setTransfers] = useState<TransferRecord[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editTransfer, setEditTransfer] = useState<TransferRecord | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -367,6 +599,21 @@ function TransferenciaTab({
   const handleDone = () => { load(); onTransferred(); };
 
   const allowed = canTransfer(karateRole);
+
+  // Excluir registro de transferência: NÃO move o praticante de volta —
+  // só remove a linha do histórico (decisão de produto).
+  async function handleDelete(t: TransferRecord) {
+    if (!webConfirm("Excluir este registro de transferência? Isso NÃO move o praticante de volta — use uma nova transferência para isso.")) return;
+    setBusyId(t.id);
+    try {
+      await karateApi.deleteTransfer(federationId, practitioner.id, t.id);
+      load();
+    } catch (e: any) {
+      webNotify("Não foi possível excluir", e?.message || "Tente novamente.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <View style={tabStyles.tab}>
@@ -394,7 +641,7 @@ function TransferenciaTab({
       ) : (
         <View style={{ gap: 10, marginTop: 4 }}>
           <Text style={tabStyles.transferHint}>
-            Histórico permanente de transferências (registro imutável).
+            Histórico de transferências do praticante.
           </Text>
           {transfers.map((t) => (
             <View key={t.id} style={tabStyles.transferCard}>
@@ -404,6 +651,30 @@ function TransferenciaTab({
                 <Text style={[tabStyles.transferDojo, { color: KarateColors.primary }]} numberOfLines={1}>
                   {t.destination_dojo_name || "—"}
                 </Text>
+                {allowed && (
+                  <View style={tabStyles.itemActions}>
+                    <TouchableOpacity
+                      style={tabStyles.iconBtn}
+                      onPress={() => setEditTransfer(t)}
+                      disabled={busyId === t.id}
+                      accessibilityRole="button"
+                      accessibilityLabel="Editar transferência"
+                    >
+                      <Icon name="edit" size={15} color={KarateColors.ink2} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[tabStyles.iconBtn, tabStyles.iconBtnDanger]}
+                      onPress={() => handleDelete(t)}
+                      disabled={busyId === t.id}
+                      accessibilityRole="button"
+                      accessibilityLabel="Excluir transferência"
+                    >
+                      {busyId === t.id
+                        ? <ActivityIndicator size="small" color={KarateColors.danger} />
+                        : <Icon name="trash" size={15} color={KarateColors.danger} />}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
               <Text style={tabStyles.transferMeta}>
                 {new Date(t.transferred_at).toLocaleDateString("pt-BR")}
@@ -425,7 +696,122 @@ function TransferenciaTab({
         originDojoName={transfers && transfers[0]?.destination_dojo_name ? transfers[0].destination_dojo_name : null}
         onDone={handleDone}
       />
+
+      <EditarTransferenciaModal
+        transfer={editTransfer}
+        onClose={() => setEditTransfer(null)}
+        federationId={federationId}
+        practitionerId={practitioner.id}
+        onDone={() => { setEditTransfer(null); load(); }}
+      />
     </View>
+  );
+}
+
+// Editar uma transferência registrada (D): motivo + data → updateTransfer.
+function EditarTransferenciaModal({
+  transfer, onClose, federationId, practitionerId, onDone,
+}: {
+  transfer: TransferRecord | null;
+  onClose: () => void;
+  federationId: string;
+  practitionerId: string;
+  onDone: () => void;
+}) {
+  const visible = !!transfer;
+  const [reason, setReason] = useState("");
+  const [dateBr, setDateBr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!transfer) return;
+    setReason(transfer.reason || "");
+    setDateBr(formatIsoToBr(transfer.transferred_at) || "");
+    setErr(null); setSaving(false);
+  }, [transfer]);
+
+  const dateComplete = dateBr.length === 10;
+  const dateIso = parseBrDate(dateBr);
+  const dateBad = dateComplete && dateIso === null;
+
+  async function handleSave() {
+    if (!transfer) return;
+    if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco."); return; }
+    setErr(null); setSaving(true);
+    try {
+      await karateApi.updateTransfer(federationId, practitionerId, transfer.id, {
+        reason: reason.trim() || undefined,
+        transferred_at: dateIso || undefined,
+      });
+      setSaving(false);
+      onDone();
+    } catch (e: any) {
+      setSaving(false);
+      setErr(e?.message || "Não foi possível salvar a transferência.");
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Editar transferência</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Text style={gradStyles.hint}>
+              Ajusta o motivo e a data deste registro de transferência. Não move o praticante de dojô.
+            </Text>
+
+            <Text style={gradStyles.label}>Data da transferência · dd/mm/aaaa</Text>
+            <TextInput
+              style={[gradStyles.input, dateBad && gradStyles.inputBad]}
+              value={dateBr}
+              onChangeText={(v) => setDateBr(maskBrDate(v))}
+              keyboardType="numeric"
+              placeholder="dd/mm/aaaa"
+              placeholderTextColor={KarateColors.ink4}
+              maxLength={10}
+              accessibilityLabel="Data da transferência"
+            />
+            {dateBad ? <Text style={gradStyles.errInline}>Data inválida</Text> : null}
+
+            <Text style={gradStyles.label}>Motivo <Text style={gradStyles.labelHint}>(opcional)</Text></Text>
+            <TextInput
+              style={[gradStyles.input, { minHeight: 64, textAlignVertical: "top" }]}
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Ex.: mudança de cidade"
+              placeholderTextColor={KarateColors.ink4}
+              multiline
+              accessibilityLabel="Motivo da transferência"
+            />
+
+            {err ? (
+              <View style={gradStyles.errBox}>
+                <Ionicons name="alert-circle" size={15} color={KarateColors.primary} />
+                <Text style={gradStyles.errTxt}>{err}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View style={gradStyles.footer}>
+            <TouchableOpacity onPress={onClose} style={gradStyles.btnGhost}>
+              <Text style={gradStyles.btnGhostTxt}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSave} disabled={saving} style={[gradStyles.btnPrimary, saving && { opacity: 0.6 }]}>
+              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={gradStyles.btnPrimaryTxt}>Salvar</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -516,6 +902,85 @@ function PlaceholderTab({ label }: { label: string }) {
   );
 }
 
+// Modal de exclusão com histórico (A): escolha tripla in-app a partir dos
+// counts do HasHistoryError. Desativar (primário, soft) / Excluir
+// definitivamente (destrutivo, cascade) / Cancelar.
+function ExcluirComHistoricoModal({
+  counts, name, busy, onDesativar, onExcluir, onClose,
+}: {
+  counts: Record<string, number> | null;
+  name: string;
+  busy: boolean;
+  onDesativar: () => void;
+  onExcluir: () => void;
+  onClose: () => void;
+}) {
+  const visible = !!counts;
+  const c = counts || {};
+  const rows: Array<{ label: string; n: number }> = [
+    { label: "Graduações", n: c.graduations ?? 0 },
+    { label: "Transferências", n: c.transfers ?? 0 },
+    { label: "Carteirinhas", n: c.cards ?? 0 },
+  ];
+  if ((c.transactions ?? 0) > 0) rows.push({ label: "Lançamentos financeiros", n: c.transactions });
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Excluir praticante</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10} disabled={busy}>
+              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+            <Text style={gradStyles.hint}>
+              <Text style={{ fontWeight: "700", color: KarateColors.ink }}>{name}</Text> possui histórico
+              vinculado. Você pode <Text style={{ fontWeight: "700" }}>Desativar</Text> (mantém o histórico,
+              tira da contagem de ativos) ou <Text style={{ fontWeight: "700", color: KarateColors.danger }}>Excluir
+              definitivamente</Text> (remove o praticante e todo o histórico em cascata — não há volta).
+            </Text>
+
+            <View style={delStyles.countsBox}>
+              {rows.map((r) => (
+                <View key={r.label} style={delStyles.countRow}>
+                  <Text style={delStyles.countLabel}>{r.label}</Text>
+                  <Text style={delStyles.countNum}>{r.n}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={delStyles.footerCol}>
+            <KarateButton
+              label="Desativar praticante"
+              variant="sumi"
+              size="md"
+              loading={busy}
+              onPress={onDesativar}
+              style={{ width: "100%" }}
+            />
+            <KarateButton
+              label="Excluir definitivamente"
+              variant="primary"
+              size="md"
+              disabled={busy}
+              onPress={onExcluir}
+              style={{ width: "100%" }}
+            />
+            <TouchableOpacity onPress={onClose} style={delStyles.cancelBtn} disabled={busy}>
+              <Text style={delStyles.cancelTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function FichaPraticanteScreen() {
   const { practitionerId } = useLocalSearchParams<{ practitionerId: string }>();
   const { federationId, karateRole } = useKarateFederation();
@@ -525,6 +990,9 @@ export default function FichaPraticanteScreen() {
   const [activeTab, setActiveTab] = useState<Tab>("Cadastro");
   // Modal de edição (reusa a ficha de cadastro com o id atual)
   const [editOpen, setEditOpen] = useState(false);
+  // Exclusão: counts do HasHistoryError (null = modal fechado) + flag de busy
+  const [historyCounts, setHistoryCounts] = useState<Record<string, number> | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const reload = useCallback(() => {
     if (!practitionerId) return;
@@ -536,6 +1004,68 @@ export default function FichaPraticanteScreen() {
   }, [federationId, practitionerId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // A) Excluir praticante — fluxo idêntico ao do dojô.
+  const goToList = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/karate/praticantes");
+  }, []);
+
+  const handleExcluir = useCallback(async () => {
+    if (!practitionerId || !data) return;
+    // Sem cascade: tenta o hard delete. Sem histórico → confirma e volta.
+    if (!webConfirm(`Excluir o praticante ${data.full_name}?`)) return;
+    setDeleting(true);
+    try {
+      await karateApi.deletePractitioner(federationId, practitionerId);
+      setDeleting(false);
+      webNotify("Praticante excluído");
+      goToList();
+    } catch (e: any) {
+      setDeleting(false);
+      if (e instanceof HasHistoryError) {
+        // Com histórico → abre a escolha tripla in-app.
+        setHistoryCounts(e.counts || {});
+      } else {
+        webNotify("Não foi possível excluir", e?.message || "Tente novamente.");
+      }
+    }
+  }, [federationId, practitionerId, data, goToList]);
+
+  // Desativar (soft) — usa o update de praticante existente (is_active:false).
+  const handleDesativar = useCallback(async () => {
+    if (!practitionerId) return;
+    setDeleting(true);
+    try {
+      await karateApi.updatePractitioner(federationId, practitionerId, { is_active: false });
+      setDeleting(false);
+      setHistoryCounts(null);
+      webNotify("Praticante desativado", "Mantido no histórico, fora da contagem de ativos.");
+      reload();
+    } catch (e: any) {
+      setDeleting(false);
+      webNotify("Não foi possível desativar", e?.message || "Tente novamente.");
+    }
+  }, [federationId, practitionerId, reload]);
+
+  // Excluir definitivamente (cascade) — confirmação FORTE via window.confirm.
+  const handleHardDelete = useCallback(async () => {
+    if (!practitionerId || !data) return;
+    if (!webConfirm(
+      `EXCLUSÃO DEFINITIVA\n\nIsto remove ${data.full_name} e TODO o histórico (graduações, transferências, carteirinhas) em cascata. Esta ação não pode ser desfeita.\n\nConfirmar?`
+    )) return;
+    setDeleting(true);
+    try {
+      await karateApi.deletePractitioner(federationId, practitionerId, { cascade: true });
+      setDeleting(false);
+      setHistoryCounts(null);
+      webNotify("Praticante excluído definitivamente");
+      goToList();
+    } catch (e: any) {
+      setDeleting(false);
+      webNotify("Não foi possível excluir", e?.message || "Tente novamente.");
+    }
+  }, [federationId, practitionerId, data, goToList]);
 
   if (loading) {
     return (
@@ -568,15 +1098,29 @@ export default function FichaPraticanteScreen() {
           </View>
           <View style={styles.headerActions}>
             <Badge affiliationStatus={data.affiliation_status as AffiliationStatus} />
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => setEditOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Editar praticante"
-            >
-              <Ionicons name="create-outline" size={15} color={KarateColors.primary} />
-              <Text style={styles.editBtnText}>Editar</Text>
-            </TouchableOpacity>
+            <View style={styles.headerBtns}>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => setEditOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Editar praticante"
+              >
+                <Icon name="edit" size={15} color={KarateColors.primary} />
+                <Text style={styles.editBtnText}>Editar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={handleExcluir}
+                disabled={deleting}
+                accessibilityRole="button"
+                accessibilityLabel="Excluir praticante"
+              >
+                {deleting && !historyCounts
+                  ? <ActivityIndicator size="small" color={KarateColors.danger} />
+                  : <Icon name="trash" size={15} color={KarateColors.danger} />}
+                <Text style={styles.deleteBtnText}>Excluir</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -599,7 +1143,7 @@ export default function FichaPraticanteScreen() {
       {/* Tab Content */}
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
         {activeTab === "Cadastro"       && <CadastroTab p={data} />}
-        {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} federationId={federationId} practitionerId={practitionerId!} karateRole={karateRole} onGraduationAdded={reload} />}
+        {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} federationId={federationId} practitionerId={practitionerId!} karateRole={karateRole} onChanged={reload} />}
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Transferência"  && <TransferenciaTab federationId={federationId} practitioner={data} karateRole={karateRole} onTransferred={reload} />}
@@ -614,6 +1158,16 @@ export default function FichaPraticanteScreen() {
         onClose={() => setEditOpen(false)}
         onSaved={() => reload()}
       />
+
+      {/* Modal de exclusão com histórico (escolha tripla) */}
+      <ExcluirComHistoricoModal
+        counts={historyCounts}
+        name={data.full_name}
+        busy={deleting}
+        onDesativar={handleDesativar}
+        onExcluir={handleHardDelete}
+        onClose={() => { if (!deleting) setHistoryCounts(null); }}
+      />
     </View>
   );
 }
@@ -623,8 +1177,11 @@ const styles = StyleSheet.create({
   headerCard: { backgroundColor: "#fff", padding: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   headerRow:  { flexDirection: "row", alignItems: "flex-start", gap: 12 } as ViewStyle,
   headerActions: { alignItems: "flex-end", gap: 8 } as ViewStyle,
+  headerBtns: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   editBtn:    { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
   editBtnText: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  deleteBtn:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.dangerSoft, borderWidth: 1, borderColor: KarateColors.danger } as ViewStyle,
+  deleteBtnText: { fontSize: 12, fontWeight: "700", color: KarateColors.danger } as TextStyle,
   avatar:     { width: 52, height: 52, borderRadius: 26, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center" } as ViewStyle,
   regNum:     { fontSize: 11, fontWeight: "800", color: KarateColors.primary, letterSpacing: 0.8, fontFamily: KarateFonts.mono } as TextStyle,
   fullName:   { fontFamily: KarateFonts.heading, fontSize: 20, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
@@ -647,6 +1204,15 @@ const tabStyles = StyleSheet.create({
   rolesRow:         { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
   roleChip:         { paddingVertical: 3, paddingHorizontal: 10, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
   roleChipText:     { fontSize: 11, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  // Endereço (B): bloco só leitura na aba Cadastro.
+  addressBlock:     { marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: KarateColors.border, gap: 3 } as ViewStyle,
+  addressHead:      { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 } as ViewStyle,
+  addressTitle:     { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
+  addressLine:      { fontSize: 13, color: KarateColors.ink, marginLeft: 22 } as TextStyle,
+  // Ações por item (Editar/Excluir) na trajetória e nas transferências.
+  itemActions:      { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  iconBtn:          { width: 32, height: 32, borderRadius: KarateRadius.sm, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: KarateColors.border2, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  iconBtnDanger:    { borderColor: KarateColors.danger, backgroundColor: KarateColors.dangerSoft } as ViewStyle,
   // Track C: nova faixa banner
   currentBeltBanner: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,
@@ -677,7 +1243,18 @@ const tabStyles = StyleSheet.create({
   certUrl:          { fontSize: 11, color: KarateColors.primary } as TextStyle,
 });
 
-// Estilos do modal de registro de graduação (Shoji)
+// Estilos do modal de exclusão com histórico
+const delStyles = StyleSheet.create({
+  countsBox:  { backgroundColor: KarateColors.glassHi, borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, overflow: "hidden" } as ViewStyle,
+  countRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: KarateColors.border } as ViewStyle,
+  countLabel: { fontSize: 13, color: KarateColors.ink2 } as TextStyle,
+  countNum:   { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
+  footerCol:  { gap: 8, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  cancelBtn:  { alignItems: "center", paddingVertical: 8 } as ViewStyle,
+  cancelTxt:  { fontSize: 13.5, fontWeight: "600", color: KarateColors.ink2 } as TextStyle,
+});
+
+// Estilos do modal de registro/edição de graduação (Shoji)
 const gradStyles = StyleSheet.create({
   backdrop:  { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 12 } as ViewStyle,
   card:      { width: "100%", maxWidth: 520, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.xl, overflow: "hidden", borderWidth: 1, borderColor: KarateColors.border2, maxHeight: "92%" } as ViewStyle,
