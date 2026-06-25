@@ -30,6 +30,19 @@ export function dateSlice(s: string | null | undefined): string {
   if (!s) return "";
   return s.slice(0, 10).split("-").reverse().join("/");
 }
+export function fmtMesAno(mes: string, ano: string | number): string {
+  // mes pode ser "Jan","Feb","fev" etc — monta uma data e formata em pt-BR curto
+  // Fallback: se não parsear, retorna mes+"/"+ano
+  try {
+    // tenta parsear "Jan 2026" → Date
+    const d = new Date(`${mes} 1, ${ano}`);
+    if (isNaN(d.getTime())) return `${mes}/${ano}`;
+    const m = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(d).replace(".", "");
+    return `${m}/${ano}`;
+  } catch {
+    return `${mes}/${ano}`;
+  }
+}
 
 // ── CSV export client-side ─────────────────────────────────────
 // Gera um CSV em memória e dispara download via Blob + anchor.
