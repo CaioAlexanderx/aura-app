@@ -12,6 +12,10 @@
 //
 // Orquestrador slim: mantém todo o data-fetching e a montagem dos
 // drawers; UI extraída para components/karate/saude-rede/*.
+//
+// NOTA: os indicadores "Dojô ativo × dormente" (dormência) e
+// "Concentração" foram removidos da UI a pedido da federação. O backend
+// segue computando esses dados (endpoints intactos); só não renderizamos.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import { View, ScrollView, RefreshControl, StyleSheet, ViewStyle } from "react-native";
@@ -27,8 +31,6 @@ import {
   ProjecaoPayload,
   GraduacoesPayload,
   RelacaoFaixasPayload,
-  DormenciaPayload,
-  ConcentracaoPayload,
 } from "@/services/karateNetworkHealthApi";
 import { st, fmtBRL, fmtPct, fmtN, dateSlice, downloadCsv } from "@/components/karate/saude-rede/shared";
 import { KpiStrip } from "@/components/karate/saude-rede/KpiStrip";
@@ -36,12 +38,12 @@ import { DetailDrawer, DrawerCol, DrawerRow } from "@/components/karate/saude-re
 import { ReportWidget } from "@/components/karate/saude-rede/ReportWidget";
 import {
   AfiliacaoCard, CoberturaCard, InadimplenciaCard, ProjecaoCard,
-  GraduacoesCard, RelacaoFaixasCard, DormenciaCard, ConcentracaoCard,
+  GraduacoesCard, RelacaoFaixasCard,
 } from "@/components/karate/saude-rede/MetricCards";
 
 type DrawerKey =
   | "afiliacao" | "cobertura" | "inadimplencia" | "projecao-receita"
-  | "dormencia" | "concentracao" | "graduacoes" | "relacao-faixas"
+  | "graduacoes" | "relacao-faixas"
   | null;
 
 export default function SaudeRedeScreen() {
@@ -58,15 +60,13 @@ export default function SaudeRedeScreen() {
   const [projecao, setProjecao] = useState<ProjecaoPayload | null>(null);
   const [graduacoes, setGraduacoes] = useState<GraduacoesPayload | null>(null);
   const [faixas, setFaixas] = useState<RelacaoFaixasPayload | null>(null);
-  const [dormencia, setDormencia] = useState<DormenciaPayload | null>(null);
-  const [concentracao, setConcentracao] = useState<ConcentracaoPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(
     async (isRefresh = false) => {
       try {
         isRefresh ? setRefreshing(true) : setLoading(true);
-        const [s, a, cob, i, p, g, f, d, c] = await Promise.allSettled([
+        const [s, a, cob, i, p, g, f] = await Promise.allSettled([
           karateNetworkHealthApi.getSummary(federationId),
           karateNetworkHealthApi.getAfiliacao(federationId),
           karateNetworkHealthApi.getCobertura(federationId),
@@ -74,8 +74,6 @@ export default function SaudeRedeScreen() {
           karateNetworkHealthApi.getProjecaoReceita(federationId),
           karateNetworkHealthApi.getGraduacoes(federationId),
           karateNetworkHealthApi.getRelacaoFaixas(federationId),
-          karateNetworkHealthApi.getDormencia(federationId),
-          karateNetworkHealthApi.getConcentracao(federationId),
         ]);
         if (s.status === "fulfilled") setSummary(s.value);
         if (a.status === "fulfilled") setAfiliacao(a.value);
@@ -84,8 +82,6 @@ export default function SaudeRedeScreen() {
         if (p.status === "fulfilled") setProjecao(p.value);
         if (g.status === "fulfilled") setGraduacoes(g.value);
         if (f.status === "fulfilled") setFaixas(f.value);
-        if (d.status === "fulfilled") setDormencia(d.value);
-        if (c.status === "fulfilled") setConcentracao(c.value);
       } finally {
         isRefresh ? setRefreshing(false) : setLoading(false);
       }
@@ -183,50 +179,6 @@ export default function SaudeRedeScreen() {
             accum: fmtBRL(acc),
           };
         }),
-      };
-    }
-    if (drawerKey === "dormencia" && dormencia) {
-      return {
-        title: "Dojô ativo × dormente",
-        sub: `Season ${dormencia.season}: exames e inscrições em competição`,
-        cols: [
-          { key: "name", label: "Dojô" },
-          { key: "city", label: "Cidade" },
-          { key: "region", label: "Região" },
-          { key: "has_exam", label: "Exame" },
-          { key: "has_comp", label: "Competição" },
-          { key: "situacao", label: "Situação" },
-        ],
-        rows: dormencia.dojos.map((d) => ({
-          name: d.name,
-          city: d.city || "",
-          region: d.region || "",
-          has_exam: d.has_exam ? "Sim" : "Não",
-          has_comp: d.has_comp ? "Sim" : "Não",
-          situacao: d.active ? "Ativo" : "Dormente",
-        })),
-      };
-    }
-    if (drawerKey === "concentracao" && concentracao) {
-      const tp = concentracao.total_practitioners;
-      const tr = concentracao.total_revenue;
-      return {
-        title: "Concentração",
-        sub: "Share dos dojôs em praticantes e receita de anuidade",
-        cols: [
-          { key: "name", label: "Dojô" },
-          { key: "practitioners", label: "Praticantes", align: "right" },
-          { key: "pct_pract", label: "% praticantes", align: "right" },
-          { key: "revenue_fmt", label: "Receita", align: "right" },
-          { key: "pct_rev", label: "% receita", align: "right" },
-        ],
-        rows: concentracao.all.map((d) => ({
-          name: d.name,
-          practitioners: d.practitioners,
-          pct_pract: tp > 0 ? fmtPct(d.practitioners / tp * 100) : "—",
-          revenue_fmt: fmtBRL(d.revenue),
-          pct_rev: tr > 0 ? fmtPct(d.revenue / tr * 100) : "—",
-        })),
       };
     }
     if (drawerKey === "graduacoes" && graduacoes) {
@@ -338,24 +290,6 @@ export default function SaudeRedeScreen() {
           onCsv={() => downloadCsv(federationId, "relacao-faixas")}
           onDetail={() => setDrawerKey("relacao-faixas")}
         />
-        <View style={st.row2}>
-          <View style={{ flex: 1 }}>
-            <DormenciaCard
-              data={dormencia}
-              loading={loading}
-              onCsv={() => downloadCsv(federationId, "dormencia")}
-              onDetail={() => setDrawerKey("dormencia")}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <ConcentracaoCard
-              data={concentracao}
-              loading={loading}
-              onCsv={() => downloadCsv(federationId, "concentracao")}
-              onDetail={() => setDrawerKey("concentracao")}
-            />
-          </View>
-        </View>
 
         {/* Relatório periódico */}
         <ReportWidget federationId={federationId} />
