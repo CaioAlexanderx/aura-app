@@ -32,9 +32,26 @@ const DOJO_KUN = [
   "Fidelidade para com o verdadeiro caminho da razão",
 ];
 
+/**
+ * Formata uma string de data para pt-BR.
+ *
+ * Strings date-only "YYYY-MM-DD" são tratadas como data LOCAL (split em "-")
+ * para evitar o off-by-one causado por `new Date("YYYY-MM-DD")`, que é
+ * interpretado como UTC midnight e cai no dia anterior em UTC-3 (Brasil).
+ *
+ * Strings com hora (ISO 8601 completo, ex.: "2024-06-01T12:00:00Z") passam
+ * direto para `new Date()` — o horário já ancora o dia correto.
+ */
 function fmtBR(iso?: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  let d: Date;
+  // Detecta strings date-only: exatamente "YYYY-MM-DD" (10 chars, sem 'T')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, day] = iso.split("-").map(Number);
+    d = new Date(y, m - 1, day);
+  } else {
+    d = new Date(iso);
+  }
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
