@@ -28,18 +28,20 @@
 // ── Shell premium (v5 Shoji / 障子) ──────────────────────────
 //   Resgate da "chrome" premium do mock v5:
 //   • Topbar OXBLOOD (head-red #a44c3e) no topo da área de conteúdo (web):
-//       – breadcrumb claro à esquerda (FPKT / <página atual>), integrando a
-//         lógica de breadcrumb (1º nível = seção; 2º nível acrescenta
-//         "› Detalhe"), agora em texto claro sobre o vermelho;
+//       – LOGOS no início (2 quadrantes): (1) marca Aura Karatê (selo 空 +
+//         wordmark, ê vermelho) e (2) logo oficial FPKT (FpktLogo) + nome da
+//         federação, separados por um filete claro;
+//       – breadcrumb claro (FPKT / <página atual>), integrando a lógica de
+//         breadcrumb (1º nível = seção; 2º nível acrescenta "› Detalhe");
 //       – busca global à direita (MOVIDA da sidebar; mesmo comportamento:
 //         submeter → /karate/praticantes?q=<termo>), estilizada sobre o
 //         vermelho;
-//       – sino de notificações (Ionicons) com dot.
+//       – sino de notificações com dot.
 //   • Chip de usuário no rodapé da sidebar (sb-foot): avatar com iniciais +
 //     nome + papel (mapeado do karateRole) + botão Sair (logout do store).
 //   • Logo "mark" (quadrado vermelho com selo) + wordmark "Aura Karatê" com
 //     o "ê" em vermelho + org-slug (nome da federação) com separadores
-//     vermelhos.
+//     vermelhos (sidebar).
 //   • Sidebar refinada: nav-labels em maiúsculas + separadores vermelhos.
 //
 //   Usuário/papel: useAuthStore (user.name || user.email;
@@ -48,7 +50,12 @@
 //   Mobile preservado: topbar enxuta + bottom tabs (sem oxblood/chip —
 //   essa chrome é do layout web/sidebar).
 //
-// Ícones: nomes Ionicons válidos (@expo/vector-icons).
+// ⚠️ ÍCONES (fix 25/06): a shell renderizava ícones via @expo/vector-icons
+//   Ionicons, que NÃO é dependência deste app — a fonte de glifos nunca é
+//   carregada na web e cada ícone virava um retângulo vazio (tofu). Agora
+//   usamos <Icon> (components/Icon.tsx), o motor SVG-inline já padrão no
+//   app: sem fonte, sem gate de carregamento, glyphs sempre presentes.
+//   Os nomes em NAV_ITEMS são chaves válidas do Icon (ou aliases mapeados).
 // ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem ser
 //   objetos (cor/string solta crasha "Invalid value used as weak map key").
 // ============================================================
@@ -66,7 +73,7 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
@@ -75,21 +82,21 @@ import { useAuthStore } from "@/stores/auth";
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
 // sidebarOnly=true → não aparece na bottom tab bar mobile.
-// icon → nome Ionicons válido (renderizado via <Ionicons name=… />).
+// icon → chave válida do componente <Icon> (components/Icon.tsx) ou alias.
 const NAV_ITEMS = [
-  { label: "Dashboard",       icon: "grid-outline",          route: "/karate/",              roles: null,          sidebarOnly: false },
-  { label: "Saúde da Rede",   icon: "pulse-outline",         route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Dojôs",           icon: "business-outline",      route: "/karate/dojos",         roles: null,          sidebarOnly: false },
-  { label: "Praticantes",     icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
-  { label: "Conexões",        icon: "git-network-outline",   route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Financeiro",      icon: "cash-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
+  { label: "Dashboard",       icon: "grid",      route: "/karate/",              roles: null,          sidebarOnly: false },
+  { label: "Saúde da Rede",   icon: "activity",  route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Dojôs",           icon: "building",  route: "/karate/dojos",         roles: null,          sidebarOnly: false },
+  { label: "Praticantes",     icon: "users",     route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
+  { label: "Conexões",        icon: "network",   route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Financeiro",      icon: "wallet",    route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
   // Track J: Certificados (rota /karate/exames = tela de Selo/Certificados).
-  { label: "Certificados",    icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
-  { label: "Eventos",         icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
-  { label: "Competições",    icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
-  { label: "Importar",        icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Certificados",    icon: "ribbon",    route: "/karate/exames",        roles: null,          sidebarOnly: false },
+  { label: "Eventos",         icon: "calendar",  route: "/karate/eventos",       roles: null,          sidebarOnly: false },
+  { label: "Competições",    icon: "trophy",    route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
+  { label: "Importar",        icon: "upload",    route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   // Track H: Configurações — só federation_admin, posicionado no rodapé da sidebar
-  { label: "Configurações",   icon: "settings-outline",      route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
+  { label: "Configurações",   icon: "settings",  route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
 ] as const;
 
 type NavItem = (typeof NAV_ITEMS)[number];
@@ -164,11 +171,51 @@ function deriveLocation(path: string): { section: string; route: string; detail:
 
 const BREAKPOINT_SIDEBAR = 768;
 
-// ── Topbar oxblood (web) — breadcrumb + busca global + sino ───
+// ── Lockup de logos do header (web) ──────────────────────────
+//   Quadrante 1: marca Aura Karatê (selo 空 vermelho + wordmark, ê vermelho).
+//   Quadrante 2: logo oficial FPKT (FpktLogo) + nome da federação.
+//   NB: não existe asset de imagem dedicado da "Aura Karatê"; a marca é a
+//   composição selo+wordmark já estabelecida no app (sidebar). O FPKT tem
+//   bitmap oficial (assets/karate/logo-fpkt.png via FpktLogo).
+function HeaderLogos({ federationName }: { federationName: string }) {
+  return (
+    <View style={styles.headLogos}>
+      {/* Quadrante 1 — Aura Karatê */}
+      <View style={styles.headBrand} accessibilityRole="header" accessibilityLabel="Aura Karatê">
+        <View style={styles.headMark}>
+          <Text style={styles.headMarkSeal}>空</Text>
+        </View>
+        <View style={styles.headBrandWm}>
+          <Text style={styles.headBrandWord} numberOfLines={1}>
+            Aura Karat<Text style={styles.headBrandWordRed}>ê</Text>
+          </Text>
+          <Text style={styles.headBrandSub}>FEDERAÇÃO</Text>
+        </View>
+      </View>
+
+      {/* filete separador claro */}
+      <View style={styles.headDivider} />
+
+      {/* Quadrante 2 — FPKT */}
+      <View style={styles.headFpkt}>
+        <View style={styles.headFpktMark}>
+          <FpktLogo size={30} />
+        </View>
+        <View style={styles.headFpktWm}>
+          <Text style={styles.headFpktName} numberOfLines={1}>FPKT</Text>
+          <Text style={styles.headFpktSub} numberOfLines={1}>{federationName}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ── Topbar oxblood (web) — logos + breadcrumb + busca global + sino ───
 function Topbar() {
   const router = useRouter();
   const path = usePathname();
   const loc = deriveLocation(path);
+  const { federationName } = useKarateFederation();
 
   // Busca global (movida da sidebar): submeter → lista de Praticantes (?q=).
   const [term, setTerm] = useState("");
@@ -181,6 +228,12 @@ function Topbar() {
   return (
     <View style={styles.topbar}>
       <View style={styles.topbarInner}>
+        {/* Logos: Aura Karatê (1º) + FPKT (2º) */}
+        <HeaderLogos federationName={federationName} />
+
+        {/* filete separador antes do breadcrumb */}
+        <View style={styles.headDivider} />
+
         {/* Breadcrumb: FPKT / <seção> [ › Detalhe ] em texto claro */}
         <View style={styles.crumbs} accessibilityRole="header">
           <Text style={styles.crumbRoot}>FPKT</Text>
@@ -207,7 +260,7 @@ function Topbar() {
 
         {/* Busca global → /karate/praticantes?q= */}
         <View style={styles.topSearch}>
-          <Ionicons name="search-outline" size={15} color="rgba(253,248,242,0.72)" />
+          <Icon name="search" size={15} color="rgba(253,248,242,0.72)" />
           <TextInput
             style={styles.topSearchInput as any}
             value={term}
@@ -227,7 +280,7 @@ function Topbar() {
           accessibilityLabel="Notificações"
           activeOpacity={0.8}
         >
-          <Ionicons name="notifications-outline" size={18} color="#fdf8f2" />
+          <Icon name="bell" size={18} color="#fdf8f2" />
           <View style={styles.iconBtnDot} />
         </TouchableOpacity>
       </View>
@@ -262,8 +315,8 @@ function SidebarNav() {
         accessibilityLabel={item.label}
         accessibilityState={{ selected: active }}
       >
-        <Ionicons
-          name={item.icon as any}
+        <Icon
+          name={item.icon}
           size={18}
           color={active ? KarateColors.primary : KarateColors.ink3}
         />
@@ -334,7 +387,7 @@ function SidebarNav() {
           accessibilityLabel="Sair"
           activeOpacity={0.8}
         >
-          <Ionicons name="log-out-outline" size={17} color={KarateColors.ink3} />
+          <Icon name="logout" size={17} color={KarateColors.ink3} />
         </TouchableOpacity>
       </View>
     </View>
@@ -363,8 +416,8 @@ function BottomTabNav() {
             accessibilityLabel={item.label}
             accessibilityState={{ selected: active }}
           >
-            <Ionicons
-              name={item.icon as any}
+            <Icon
+              name={item.icon}
               size={22}
               color={active ? KarateColors.primary : KarateColors.ink4}
             />
@@ -388,7 +441,7 @@ export function KarateShell() {
       <View style={styles.wideContainer}>
         <SidebarNav />
         <View style={styles.content}>
-          {/* Topbar oxblood: breadcrumb + busca global + sino */}
+          {/* Topbar oxblood: logos + breadcrumb + busca global + sino */}
           <Topbar />
           <Slot />
         </View>
@@ -436,9 +489,103 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
   } as ViewStyle,
+
+  // ── Lockup de logos do header ──────────────────────────────
+  headLogos: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    flexShrink: 0,
+  } as ViewStyle,
+  // Quadrante 1 — Aura Karatê
+  headBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  } as ViewStyle,
+  headMark: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ShojiPalette.red,
+    borderWidth: 1,
+    borderColor: "rgba(253,248,242,0.32)",
+  } as ViewStyle,
+  headMarkSeal: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 19,
+    color: "#fbeee4",
+    lineHeight: 24,
+  } as TextStyle,
+  headBrandWm: {
+    minWidth: 0,
+  } as ViewStyle,
+  headBrandWord: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 17,
+    fontWeight: "500",
+    letterSpacing: 0.3,
+    color: "#fdf8f2",
+    lineHeight: 19,
+  } as TextStyle,
+  headBrandWordRed: {
+    color: "#f4c9bf",
+  } as TextStyle,
+  headBrandSub: {
+    fontFamily: KarateFonts.body,
+    fontSize: 8,
+    fontWeight: "600",
+    letterSpacing: 2,
+    color: "rgba(253,248,242,0.66)",
+    marginTop: 2,
+  } as TextStyle,
+  // filete separador claro entre quadrantes / antes do breadcrumb
+  headDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "rgba(253,248,242,0.26)",
+  } as ViewStyle,
+  // Quadrante 2 — FPKT
+  headFpkt: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  } as ViewStyle,
+  headFpktMark: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(253,248,242,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(253,248,242,0.5)",
+    overflow: "hidden",
+  } as ViewStyle,
+  headFpktWm: {
+    minWidth: 0,
+    maxWidth: 150,
+  } as ViewStyle,
+  headFpktName: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: "#fdf8f2",
+    lineHeight: 16,
+  } as TextStyle,
+  headFpktSub: {
+    fontFamily: KarateFonts.body,
+    fontSize: 9,
+    color: "rgba(253,248,242,0.66)",
+    marginTop: 2,
+  } as TextStyle,
+
   crumbs: {
     flexDirection: "row",
     alignItems: "center",
@@ -476,8 +623,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    width: 260,
-    maxWidth: "36%",
+    width: 240,
+    maxWidth: "30%",
     backgroundColor: "rgba(253,248,242,0.14)",
     borderWidth: 1,
     borderColor: "rgba(253,248,242,0.28)",
