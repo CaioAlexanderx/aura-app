@@ -105,7 +105,6 @@ export default function KaratePainel() {
       eyebrow={`Temporada ${now.getFullYear()} · ${MONTHS[now.getMonth()]}`}
       title="Painel"
       sub={`Indicadores de ${federationName || "sua federação"}.`}
-      actions={isEmpty ? undefined : <ShojiButton label="Exportar" icon="download-outline" variant="ghost" onPress={() => {}} />}
     />
   );
 
