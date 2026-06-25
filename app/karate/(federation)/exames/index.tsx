@@ -2,7 +2,7 @@
 // Exames — Federação (Track J) · Shoji
 //
 // Breadcrumb: FPKT / Exames / Certificados
-// Sub-tabs: Bancas | Graduações | Certificados
+// Sub-tabs: Graduações | Certificados   (Bancas removida — fora de escopo)
 //
 // Aba Certificados (Track J):
 //   — Caixa de certificados: todos os pedidos dos dojôs
@@ -13,6 +13,10 @@
 //   — Drawer detalhe com timeline + processar
 //   — Modal recusar (com motivo)
 //
+// Aba Graduações: no escopo, ainda sem fluxo dedicado nesta tela → mostra um
+//   empty state limpo (sem placeholder poluído). O lançamento de graduações
+//   acontece hoje na ficha do praticante.
+//
 // E-mail dispara no backend (best-effort post-commit), não no FE.
 // Orquestrador slim: data-fetching/state/handlers preservados; UI e
 // subcomponentes vivem em components/karate/certificados/* (Shoji).
@@ -20,7 +24,7 @@
 //
 // F4.2: o título da página é "Certificados" para casar com o item de menu
 //   "Certificados" que o usuário clicou (a rota é /karate/exames; as abas
-//   Bancas/Graduações/Certificados continuam dentro da página).
+//   Graduações/Certificados continuam dentro da página).
 // ============================================================
 import React, { useState, useCallback, useEffect } from "react";
 import {
@@ -158,7 +162,7 @@ export default function ExamesScreen() {
         <PageHead
           eyebrow="Federação · Operação"
           title="Certificados"
-          sub="Bancas, lançamento de graduações e a caixa de certificados — pedidos dos dojôs que a federação imprime e expede."
+          sub="Lançamento de graduações e a caixa de certificados — pedidos dos dojôs que a federação imprime e expede."
         />
 
         {/* Sub-tabs */}
@@ -173,10 +177,15 @@ export default function ExamesScreen() {
           </ScrollView>
         </View>
 
-        {/* Stub content for non-cert tabs */}
+        {/* Graduações: empty state limpo (sem placeholder poluído) */}
         {sub !== "certificados" ? (
-          <View style={cs.stubBox}>
-            <Text style={cs.stubText}>{sub === "bancas" ? "Bancas examinadoras — fora do escopo deste fluxo." : "Lançamento de graduações — fora do escopo deste fluxo."}</Text>
+          <View style={cs.emptyState}>
+            <Ionicons name="school-outline" size={34} color={C.ink4} />
+            <Text style={cs.emptyStateTitle}>Graduações</Text>
+            <Text style={cs.emptyStateText}>
+              O lançamento de graduações é feito hoje na ficha de cada praticante.
+              Em breve, o histórico de graduações da rede aparecerá aqui.
+            </Text>
           </View>
         ) : (
           <>
