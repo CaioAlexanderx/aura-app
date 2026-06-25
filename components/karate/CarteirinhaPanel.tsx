@@ -25,10 +25,13 @@
 //   confirmação usa window.confirm na web (e Alert.alert só em nativo, onde
 //   funciona), garantindo que a emissão de fato acontece. Feedback de
 //   sucesso/erro idem: window.alert na web, Alert.alert em nativo.
+//
+// Fix tz (25/06): fmtBR usava new Date("YYYY-MM-DD") que parseia como UTC
+//   midnight e exibe o dia anterior no Brasil (UTC-3). Corrigido para parsear
+//   a parte da data manualmente e construir Date em hora local.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import { Platform, View, Text, TouchableOpacity, Alert, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { Icon } from "@/components/Icon";
 import { KarateColors } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
@@ -125,7 +128,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       await karateApi.revokeCard(federationId, practitionerId);
       // refetch para refletir o novo status (chip vira "Revogada")
       fetchCard();
-      notify("Carteirinha revogada", "A carteirinha foi revogada. Use “Emitir” para gerar uma nova.");
+      notify("Carteirinha revogada", "A carteirinha foi revogada. Use "Emitir" para gerar uma nova.");
     } catch (e: any) {
       notify("Não foi possível revogar", e?.message || "Tente novamente.");
     } finally {
@@ -208,11 +211,11 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       {/* meta */}
       <View style={styles.meta}>
         <View style={styles.metaItem}>
-          <Ionicons name="calendar-outline" size={13} color={KarateColors.ink3} />
+          <Icon name="calendar-outline" size={13} color={KarateColors.ink3} />
           <Text style={styles.metaTxt}>Emitida em {fmtBR(card.issued_at)}</Text>
         </View>
         <View style={styles.metaItem}>
-          <Ionicons name="qr-code-outline" size={13} color={KarateColors.ink3} />
+          <Icon name="qr-code-outline" size={13} color={KarateColors.ink3} />
           <Text style={styles.metaTxt} numberOfLines={1} selectable>
             app.getaura.com.br/karate/verify/{card.verify_token}
           </Text>
@@ -255,9 +258,25 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   );
 }
 
+// tz-safe date formatter.
+//
+// new Date("YYYY-MM-DD") is parsed as UTC midnight per the ES spec. In Brazil
+// (UTC-3) that shifts the display to the previous calendar day. Instead we
+// detect date-only strings and construct the Date in LOCAL time so the date
+// shown always matches the calendar date stored in the database.
 function fmtBR(iso?: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  // Detect date-only ISO string (YYYY-MM-DD), possibly with time suffix.
+  const datePart = iso.split("T")[0];
+  const parts = datePart.split("-");
+  let d: Date;
+  if (parts.length === 3) {
+    // Parse as local time to avoid UTC-midnight off-by-one in UTC-3 (Brazil).
+    const [y, m, day] = parts.map(Number);
+    d = new Date(y, m - 1, day);
+  } else {
+    d = new Date(iso);
+  }
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
