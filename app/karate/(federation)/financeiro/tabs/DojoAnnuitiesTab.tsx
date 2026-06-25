@@ -9,8 +9,17 @@
 //        POST /financial/annuities/dojos/{dojoId}/charge
 //        POST /financial/annuities/dojos/{dojoId}/pix
 //        GET /financial/fees  PUT /financial/fees (dados reais).
+//
+// Fix (busca/foco) — MESMA causa raiz do PR #309 (praticantes) e do Fix 12
+//   da lista de dojôs: o campo de busca precisa viver FORA de qualquer header
+//   de lista que seja reconciliado/remontado a cada render, senão o TextInput
+//   é desmontado e perde o foco a cada tecla. Aqui a lista de cobranças é um
+//   `.map()` dentro de um ScrollView, então o SearchField fica como um bloco
+//   PERSISTENTE no corpo da tela (acima da lista), com `onChangeText` estável
+//   e o filtro derivado por `useMemo` (combina status + texto: nome do dojô e
+//   código FPKT). NÃO altera o endpoint nem a lógica de dados — só a busca.
 // ============================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
@@ -32,6 +41,7 @@ import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { SearchField } from "@/components/karate/shoji";
 import {
   karateApi,
   DojoAnnuity,
@@ -90,6 +100,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   const [error, setError]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
+  const [q, setQ]                 = useState("");
   const [showFeeEditor, setShowFeeEditor] = useState(false);
   const [feeEdits, setFeeEdits]   = useState<Record<string, string>>({});
   const [savingFees, setSavingFees] = useState(false);
@@ -114,11 +125,26 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Handler estável da busca — evita recriar a função a cada render, o que
+  // (junto do campo viver fora de qualquer header de lista remontável) garante
+  // que o TextInput não perca o foco entre teclas.
+  const handleSearch = useCallback((t: string) => setQ(t), []);
+
   if (error) return <KarateErrorState onRetry={() => load()} />;
 
-  const filteredAnnuities = filter === "all"
-    ? annuities
-    : annuities.filter((a) => a.status === filter);
+  // Filtro derivado (status × texto), client-side. NÃO toca no endpoint:
+  // o status já vai no fetch; aqui só refinamos por nome do dojô / código FPKT.
+  const filteredAnnuities = useMemo(() => {
+    const byStatus = filter === "all"
+      ? annuities
+      : annuities.filter((a) => a.status === filter);
+    const needle = q.trim().toLowerCase();
+    if (!needle) return byStatus;
+    return byStatus.filter((a) =>
+      (a.dojo_name ?? "").toLowerCase().includes(needle) ||
+      (a.fpkt_affiliation_id ?? "").toLowerCase().includes(needle)
+    );
+  }, [annuities, filter, q]);
 
   // Fee editor helpers
   const getFeeEditValue = (fee: AnnualFee) =>
@@ -148,6 +174,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
     <ScrollView
       style={st.screen}
       contentContainerStyle={st.content}
+      keyboardShouldPersistTaps="handled"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />
       }
@@ -216,6 +243,17 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
 
       {/* Filtro de status */}
       <Text style={[st.sectionTitle, { marginTop: 16 }]}>COBRANÇAS</Text>
+
+      {/* Busca — bloco PERSISTENTE, fora de qualquer header de lista. O campo é
+          montado uma vez aqui no corpo; como a lista de cobranças é um `.map()`
+          e não um header reconciliado, o TextInput mantém o foco entre teclas. */}
+      <SearchField
+        value={q}
+        onChangeText={handleSearch}
+        placeholder="Buscar por nome do dojô ou código FPKT..."
+        style={{ marginTop: 4, marginBottom: 4 }}
+      />
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -242,7 +280,10 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
       {loading ? (
         [1,2,3].map((k) => <Skeleton key={k} height={72} style={{ marginBottom: 8 }} />)
       ) : filteredAnnuities.length === 0 ? (
-        <KarateEmptyState icon="document-text-outline" title="Sem cobranças neste filtro" />
+        <KarateEmptyState
+          icon="document-text-outline"
+          title={q.trim() ? "Nenhum dojô encontrado" : "Sem cobranças neste filtro"}
+        />
       ) : (
         filteredAnnuities.map((ann) => (
           <View key={ann.dojo_id} style={st.annuityCard}>
