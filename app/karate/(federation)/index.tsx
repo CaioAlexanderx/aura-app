@@ -13,7 +13,8 @@
 // C6: o card "Praticantes por graduação" reflete só a graduação ATIVA —
 // a Vermelha é histórica (a federação não usa mais) e fica fora dos
 // gráficos/relatórios (continua no histórico do praticante, Trajetória).
-// As barras saem ordenadas pela hierarquia oficial (beltRank).
+// As barras saem ordenadas pela hierarquia oficial (beltRank); dentro da
+// Preta, em ordem ASCENDENTE por grau Dan (1º → 2º → … → 7º).
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -74,7 +75,9 @@ export default function KaratePainel() {
   const belts = (data?.belt_distribution ?? [])
     .filter((b) => isActiveBelt(b.belt_level) && isActiveBelt(b.belt_name))
     .slice()
-    .sort((a, b) => beltRank(a.belt_level || a.belt_name) - beltRank(b.belt_level || b.belt_name));
+    // Ordena pela hierarquia oficial; na Preta o grau Dan vem do belt_name
+    // ('Preta 1°', 'Preta 2°'…) → 1º Dan, 2º Dan… em ordem ASCENDENTE.
+    .sort((a, b) => beltRank(a.belt_level || a.belt_name, a.belt_name) - beltRank(b.belt_level || b.belt_name, b.belt_name));
   const apiAlerts: DashboardAlert[] = (data as any)?.alerts ?? [];
   const beltTotal = belts.reduce((s, b) => s + b.count, 0);
   const beltMax = belts.reduce((m, b) => Math.max(m, b.count), 0) || 1;
