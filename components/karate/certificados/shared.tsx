@@ -12,10 +12,10 @@ import {
 import { CertOrderStatus } from "@/components/karate/EstadoSelo";
 
 // ── Sub-tabs ──────────────────────────────────────────────────
-export type SubTab = "bancas" | "graduacoes" | "certificados";
+// "Bancas" foi removida (fora do escopo atual). Restam Graduações e Certificados.
+export type SubTab = "graduacoes" | "certificados";
 
 export const SUB_TABS: { id: SubTab; label: string }[] = [
-  { id: "bancas",       label: "Bancas" },
   { id: "graduacoes",   label: "Graduações" },
   { id: "certificados", label: "Certificados" },
 ];
@@ -67,6 +67,11 @@ export const cs = StyleSheet.create({
 
   stubBox: { paddingVertical: 48, alignItems: "center" } as ViewStyle,
   stubText: { fontFamily: F.body, fontSize: 13, color: C.ink3 } as TextStyle,
+
+  // ── Empty state (limpo) ──
+  emptyState: { alignItems: "center", paddingVertical: 56, gap: 10 } as ViewStyle,
+  emptyStateTitle: { fontFamily: F.heading, fontSize: 17, color: C.ink, marginTop: 4 } as TextStyle,
+  emptyStateText: { fontFamily: F.body, fontSize: 13, color: C.ink3, textAlign: "center", maxWidth: 380, lineHeight: 19 } as TextStyle,
 
   // ── Section / alert badge ──
   alertBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: P.redWash, borderRadius: R.pill, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: P.redLine } as ViewStyle,
