@@ -25,6 +25,8 @@ const PATHS: Record<string, string> = {
   copy:           "M20 9h-9a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-9a2 2 0 00-2-2z M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1",
   refresh:        "M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15",
   repeat:         "M17 1l4 4-4 4 M3 11V9a4 4 0 014-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 01-4 4H3",
+  // Power / liga-desliga (Feather \"power\") — usado no toggle Suspender/Reativar
+  power:          "M18.36 6.64a9 9 0 11-12.73 0 M12 2v10",
   drag_handle:    "M8 6h.01 M8 12h.01 M8 18h.01 M16 6h.01 M16 12h.01 M16 18h.01",
   // Setas direcionais — usadas em CTAs e onboarding do Studio
   arrow_right:    "M5 12h14 M12 5l7 7-7 7",
@@ -61,7 +63,7 @@ const PATHS: Record<string, string> = {
   // Usado em PDV troca v2: Step 1 (QR cupom NFC-e) e Step 3 (QR produto).
   qr_code:        "M3 3h7v7H3z M5 5h3v3H5z M14 3h7v7h-7z M16 5h3v3h-3z M3 14h7v7H3z M5 16h3v3H5z M14 14h3v3h-3z M19 14h2v2h-2z M14 19h2v2h-2z M19 19h2v2h-2z",
   camera:         "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z M12 17a4 4 0 100-8 4 4 0 000 8z",
-  // Caixa 3D (mantido para retrocompatibilidade) — Feather "box"
+  // Caixa 3D (mantido para retrocompatibilidade) — Feather \"box\"
   box:            "M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
   // Caminhao de entrega — logistica/frete no storefront
   truck:          "M1 3h15v13H1z M16 8h4l3 3v5h-7V8z M5.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z M18.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
@@ -80,7 +82,7 @@ const PATHS: Record<string, string> = {
   // Balao circular com cantos arredondados (WhatsApp link na home Studio)
   message_circle: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z",
   // WhatsApp — balao com cauda inferior-esquerda + fone dentro. Glifo proprio
-  // (stroke feather-style), usado no botao "Cobrar" do crediario (16/06).
+  // (stroke feather-style), usado no botao \"Cobrar\" do crediario (16/06).
   whatsapp:       "M21 11.5a8.5 8.5 0 01-12.6 7.45L3.5 20l1.1-4.8A8.5 8.5 0 1121 11.5z M8.7 7.7c.2 0 .45.01.58.28.16.32.5 1.22.55 1.31.05.1.08.21.01.34-.07.13-.1.21-.2.32-.1.11-.21.25-.3.34-.1.1-.2.2-.09.4.11.19.5.83 1.08 1.34.74.66 1.37.86 1.56.96.19.1.3.08.41-.05.11-.13.47-.55.6-.74.13-.19.26-.16.43-.1.18.07 1.12.53 1.31.62.19.1.32.14.37.22.05.08.05.48-.12.94-.17.46-.99.88-1.37.91-.38.04-.74.18-2.5-.54-2.12-.86-3.46-3.05-3.56-3.19-.1-.14-.85-1.13-.85-2.15 0-1.02.53-1.52.72-1.73.19-.21.42-.26.56-.26z",
   headset:        "M3 18v-6a9 9 0 0118 0v6 M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z M3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z",
   // Sino de notificacoes (badge de alerta na topbar da shell de karate)
@@ -92,18 +94,18 @@ const PATHS: Record<string, string> = {
   clipboard:      "M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2 M9 2h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V3a1 1 0 011-1z",
   bar_chart:      "M12 20V10 M18 20V4 M6 20v-4",
   star:           "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
-  // Pulse / batimento — usado em "Saude da Rede" (dashboard de saude da federacao)
+  // Pulse / batimento — usado em \"Saude da Rede\" (dashboard de saude da federacao)
   activity:       "M22 12h-4l-3 9L9 3l-3 9H2",
-  // Predio / estabelecimento — usado em "Dojos"
+  // Predio / estabelecimento — usado em \"Dojos\"
   building:       "M3 21h18 M5 21V7l8-4v18 M19 21V11l-6-4 M9 9h.01 M9 12h.01 M9 15h.01 M9 18h.01",
-  // Rede de nos conectados — usado em "Conexoes" (conectividade dojo↔federacao)
+  // Rede de nos conectados — usado em \"Conexoes\" (conectividade dojo↔federacao)
   network:        "M12 8a3 3 0 100-6 3 3 0 000 6z M6 22a3 3 0 100-6 3 3 0 000 6z M18 22a3 3 0 100-6 3 3 0 000 6z M12 8v5 M12 13l-5 4 M12 13l5 4",
-  // Medalha / fita — usado em "Certificados" (selo/certificado de faixa)
+  // Medalha / fita — usado em \"Certificados\" (selo/certificado de faixa)
   ribbon:         "M9 11a4 4 0 108 0 4 4 0 00-8 0z M13 14.5L16 22l-3-1.5-3 1.5 3-7.5",
-  // Trofeu — usado em "Competicoes" (ranking/torneios)
+  // Trofeu — usado em \"Competicoes\" (ranking/torneios)
   trophy:         "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 01-10 0V4z M7 4H5a2 2 0 000 4h.5 M17 4h2a2 2 0 010 4h-.5",
   alert:          "M12 9v4 M12 17h.01 M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
-  // Circulo com exclamacao (KPI "aguardando arte")
+  // Circulo com exclamacao (KPI \"aguardando arte\")
   alert_circle:   "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8v4 M12 16h.01",
   info:           "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8h.01 M12 12v4",
   // ── Date / Time ─────────────────────────────────────────────
@@ -116,7 +118,7 @@ const PATHS: Record<string, string> = {
   globe:          "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z",
   brain:          "M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a3 3 0 01-3 3h-2a3 3 0 01-3-3v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z M9 22v-2 M15 22v-2 M12 17v5",
   // ── Verticals ───────────────────────────────────────────────
-  // Dente (odontologia) — duas raizes, coroa arredondada. Baseado em Tabler Icons "tooth" (MIT).
+  // Dente (odontologia) — duas raizes, coroa arredondada. Baseado em Tabler Icons \"tooth\" (MIT).
   tooth:          "M9 3c-1.66 0-3 1.34-3 3 0 1.46-.91 2.62-1.5 4-.5 1.2-.5 2 .5 3 1 .5 1.5 2 1 4.5C5.5 20 6 22 7 22c1.5 0 2-2 2-4 0-3 2-3 2-3s2 0 2 3c0 2 .5 4 2 4 1 0 1.5-2 1-4.5C14.5 15 15 13.5 16 13c1-1 1-1.8.5-3-.59-1.38-1.5-2.54-1.5-4 0-1.66-1.34-3-3-3-2 0-2 1-3 1s-1-1-3-1z",
   // Tesoura (barbearia) — duas laminas cruzadas
   scissors:       "M6 9a3 3 0 100-6 3 3 0 000 6z M6 21a3 3 0 100-6 3 3 0 000 6z M20 4L8.12 15.88 M14.47 14.48L20 20 M8.12 8.12L12 12",
@@ -196,6 +198,9 @@ const ALIASES: Record<string, string> = {
   "log-out":              "logout",
   "log-out-outline":      "logout",
   "chevron-forward":      "chevron_right",
+  // Power / liga-desliga (toggle Suspender/Reativar — dojo karate)
+  "power-outline":        "power",
+  "power-off":            "power",
 };
 
 function resolveName(name: string): string {
@@ -248,7 +253,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
     download: "D", upload: "U", copy: "C", refresh: "R", repeat: "T", eye: "O", menu: "=",
     grid: "#", clock: "T", tag: "#", barcode: "|||", qr_code: "[#]", camera: "O",
-    drag_handle: "=", eye_off: "O", shield: "U",
+    drag_handle: "=", eye_off: "O", shield: "U", power: "O",
     tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
     // Novos (25/05)
     shopping_bag: "B", shopping_cart: "C", credit_card: "$",

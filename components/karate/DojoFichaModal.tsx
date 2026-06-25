@@ -19,6 +19,11 @@
 //    tem sistema de toast/snackbar global, então fazemos um mínimo aqui.
 //    "Duplicar último" não se aplica ao dojô (decisão Caio).
 //
+// Status (fix/karate-dojo-edit-delete-ui): em modo EDIÇÃO há um controle
+//   segmentado Ativo/Suspenso que envia `is_active` no PATCH (a federação
+//   pode suspender/reativar daqui também, além do botão no detalhe). Em
+//   cadastro novo o controle não aparece — o dojô nasce ativo.
+//
 // D3.5.2 (copy coerente): os obrigatórios são Nome e Modelo de filiação. O
 //   subtítulo reflete isso e o nudge "Completar quando quiser" lista APENAS
 //   campos realmente opcionais — nunca os obrigatórios — para não contradizer
@@ -62,6 +67,8 @@ const EMPTY = {
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
   // só leitura: texto legado de registros antigos que ainda não migraram p/ campos
   legacy_address: "",
+  // status (edição): true = Ativo, false = Suspenso. Cadastro novo nasce ativo.
+  active: true,
 };
 type Form = typeof EMPTY;
 
@@ -155,6 +162,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
         // legado p/ não perder o dado (campo read-friendly).
         const hasStructured = !!(d.address_street || d.address_city || d.address_zip ||
           d.address_neighborhood || d.address_number || d.address_state);
+        // Status: o detalhe traz `status` (DojoStatus). "suspended" → Suspenso.
+        // Se o backend expuser is_active, ele tem precedência.
+        const active = d.is_active !== undefined ? !!d.is_active : d.status !== "suspended";
         setForm({
           name: d.name || "", affiliation_model: d.affiliation_model || "", region: d.region || "",
           cnpj: d.cnpj ? maskCNPJ(d.cnpj) : "", sensei_cpf: d.sensei_cpf ? maskCPF(d.sensei_cpf) : "",
@@ -165,6 +175,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
           complement: d.address_complement || "", neighborhood: d.address_neighborhood || "",
           city: d.address_city || "", state: d.address_state || "",
           legacy_address: hasStructured ? "" : (d.address || ""),
+          active,
         });
         setFpkt(d.fpkt_affiliation_id || null);
         setStatusLabel(d.status || null);
@@ -244,7 +255,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     // reenviamos o texto p/ não apagá-lo silenciosamente.
     const hasStructured = !!(form.street || form.number || form.complement ||
       form.neighborhood || form.city || form.state || form.zip_code);
-    const body: DojoInput = {
+    const body: DojoInput & { is_active?: boolean } = {
       name: form.name.trim(),
       affiliation_model: form.affiliation_model as AffiliationModel,
       cnpj: onlyD(form.cnpj) || null,
@@ -265,6 +276,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       // texto legado: só preserva se NÃO houver estruturado preenchido
       address: hasStructured ? null : (form.legacy_address || null),
     };
+    // Status: só envia is_active na EDIÇÃO (cadastro novo nasce ativo no back).
+    if (isEdit) body.is_active = form.active;
     try {
       if (isEdit) await karateApi.updateDojo(federationId, dojoId!, body);
       else await karateApi.createDojo(federationId, body);
@@ -305,6 +318,31 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                   <Ionicons name="create-outline" size={14} color={P.ink3} />
                   <Text style={styles.completarTtl}>Completar quando quiser:</Text>
                   <Text style={styles.completarList}>{empties.join("  ·  ")}</Text>
+                </View>
+              )}
+
+              {/* Status (Ativo/Suspenso) — só na edição, envia is_active no PATCH */}
+              {isEdit && (
+                <View style={styles.statusBox}>
+                  <Text style={styles.statusLabel}>Status</Text>
+                  <View style={styles.segment}>
+                    <TouchableOpacity
+                      style={[styles.segBtn, form.active && styles.segBtnOn]}
+                      onPress={() => set("active", true)}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Status Ativo"
+                    >
+                      <Text style={[styles.segTxt, form.active && styles.segTxtOn]}>Ativo</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.segBtn, !form.active && styles.segBtnOnRed]}
+                      onPress={() => set("active", false)}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Status Suspenso"
+                    >
+                      <Text style={[styles.segTxt, !form.active && styles.segTxtOnRed]}>Suspenso</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
 
@@ -458,6 +496,17 @@ const styles = StyleSheet.create({
   completar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 } as ViewStyle,
   completarTtl: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.ink2 } as TextStyle,
   completarList: { fontFamily: F.body, fontSize: 12, color: P.ink3, flex: 1 } as TextStyle,
+
+  // Status segmentado (edição)
+  statusBox: { marginTop: 6, marginBottom: 4 } as ViewStyle,
+  statusLabel: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: P.ink2, marginBottom: 6 } as TextStyle,
+  segment: { flexDirection: "row", gap: 8 } as ViewStyle,
+  segBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glassHi } as ViewStyle,
+  segBtnOn: { borderColor: P.ok, backgroundColor: P.okWash } as ViewStyle,
+  segBtnOnRed: { borderColor: P.redLine, backgroundColor: P.redWash } as ViewStyle,
+  segTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: P.ink3 } as TextStyle,
+  segTxtOn: { color: P.ok } as TextStyle,
+  segTxtOnRed: { color: P.red } as TextStyle,
 
   sectionH: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 16, marginBottom: 6 } as ViewStyle,
   sectionTtl: { fontFamily: F.heading, fontSize: 16, color: P.ink } as TextStyle,
