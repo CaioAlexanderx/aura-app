@@ -26,22 +26,20 @@
 // Nav P2 (3.5): breadcrumb leve em rotas aninhadas.
 //
 // ── Shell premium (v5 Shoji / 障子) ──────────────────────────
-//   Resgate da "chrome" premium do mock v5:
+//   Identidade e navegação concentradas na SIDEBAR (web); o header fica
+//   limpo, só com o caminho atual. Layout (25/06, feedback Caio):
+//   • Sidebar — topo: marca Aura Karatê (selo 空 sobre gradiente oxblood +
+//     wordmark, "ê" vermelho).
+//   • Sidebar — bloco da federação: FpktLogo (pirâmide oficial) + nome da
+//     federação ("FEDERAÇÃO PAULISTA DE KARATE-DO …"), empilhado logo
+//     abaixo da marca Aura Karatê, no separador vermelho que já existia.
+//   • Sidebar — busca global (de volta à sidebar): abaixo do bloco da
+//     federação, acima da navegação; submeter → /karate/praticantes?q=.
+//   • Sidebar — rodapé: chip de usuário (avatar com iniciais + nome +
+//     papel + botão Sair).
 //   • Topbar OXBLOOD (head-red #a44c3e) no topo da área de conteúdo (web):
-//       – LOGOS no início (2 quadrantes): (1) marca Aura Karatê (selo 空 +
-//         wordmark, ê vermelho) e (2) logo oficial FPKT (FpktLogo) + nome da
-//         federação, separados por um filete claro;
-//       – breadcrumb claro (FPKT / <página atual>), integrando a lógica de
-//         breadcrumb (1º nível = seção; 2º nível acrescenta "› Detalhe");
-//       – busca global à direita (MOVIDA da sidebar; mesmo comportamento:
-//         submeter → /karate/praticantes?q=<termo>), estilizada sobre o
-//         vermelho;
-//       – sino de notificações com dot.
-//   • Chip de usuário no rodapé da sidebar (sb-foot): avatar com iniciais +
-//     nome + papel (mapeado do karateRole) + botão Sair (logout do store).
-//   • Logo "mark" (quadrado vermelho com selo) + wordmark "Aura Karatê" com
-//     o "ê" em vermelho + org-slug (nome da federação) com separadores
-//     vermelhos (sidebar).
+//     SÓ o breadcrumb (FPKT / <página atual>) em texto claro. Sem logos,
+//     sem busca, sem sino — header reduzido a uma faixa fina com o caminho.
 //   • Sidebar refinada: nav-labels em maiúsculas + separadores vermelhos.
 //
 //   Usuário/papel: useAuthStore (user.name || user.email;
@@ -171,69 +169,17 @@ function deriveLocation(path: string): { section: string; route: string; detail:
 
 const BREAKPOINT_SIDEBAR = 768;
 
-// ── Lockup de logos do header (web) ──────────────────────────
-//   Quadrante 1: marca Aura Karatê (selo 空 vermelho + wordmark, ê vermelho).
-//   Quadrante 2: logo oficial FPKT (FpktLogo) + nome da federação.
-//   NB: não existe asset de imagem dedicado da "Aura Karatê"; a marca é a
-//   composição selo+wordmark já estabelecida no app (sidebar). O FPKT tem
-//   bitmap oficial (assets/karate/logo-fpkt.png via FpktLogo).
-function HeaderLogos({ federationName }: { federationName: string }) {
-  return (
-    <View style={styles.headLogos}>
-      {/* Quadrante 1 — Aura Karatê */}
-      <View style={styles.headBrand} accessibilityRole="header" accessibilityLabel="Aura Karatê">
-        <View style={styles.headMark}>
-          <Text style={styles.headMarkSeal}>空</Text>
-        </View>
-        <View style={styles.headBrandWm}>
-          <Text style={styles.headBrandWord} numberOfLines={1}>
-            Aura Karat<Text style={styles.headBrandWordRed}>ê</Text>
-          </Text>
-          <Text style={styles.headBrandSub}>FEDERAÇÃO</Text>
-        </View>
-      </View>
-
-      {/* filete separador claro */}
-      <View style={styles.headDivider} />
-
-      {/* Quadrante 2 — FPKT */}
-      <View style={styles.headFpkt}>
-        <View style={styles.headFpktMark}>
-          <FpktLogo size={30} />
-        </View>
-        <View style={styles.headFpktWm}>
-          <Text style={styles.headFpktName} numberOfLines={1}>FPKT</Text>
-          <Text style={styles.headFpktSub} numberOfLines={1}>{federationName}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ── Topbar oxblood (web) — logos + breadcrumb + busca global + sino ───
+// ── Topbar oxblood (web) — SÓ o breadcrumb (caminho atual) ───
+//   Header reduzido a uma faixa fina oxblood com o caminho de navegação.
+//   Logos, busca global e sino foram movidos/removidos (vivem na sidebar).
 function Topbar() {
   const router = useRouter();
   const path = usePathname();
   const loc = deriveLocation(path);
-  const { federationName } = useKarateFederation();
-
-  // Busca global (movida da sidebar): submeter → lista de Praticantes (?q=).
-  const [term, setTerm] = useState("");
-  const submitSearch = () => {
-    const q = term.trim();
-    if (!q) return;
-    router.push(("/karate/praticantes?q=" + encodeURIComponent(q)) as any);
-  };
 
   return (
     <View style={styles.topbar}>
       <View style={styles.topbarInner}>
-        {/* Logos: Aura Karatê (1º) + FPKT (2º) */}
-        <HeaderLogos federationName={federationName} />
-
-        {/* filete separador antes do breadcrumb */}
-        <View style={styles.headDivider} />
-
         {/* Breadcrumb: FPKT / <seção> [ › Detalhe ] em texto claro */}
         <View style={styles.crumbs} accessibilityRole="header">
           <Text style={styles.crumbRoot}>FPKT</Text>
@@ -257,32 +203,6 @@ function Topbar() {
         </View>
 
         <View style={{ flex: 1 }} />
-
-        {/* Busca global → /karate/praticantes?q= */}
-        <View style={styles.topSearch}>
-          <Icon name="search" size={15} color="rgba(253,248,242,0.72)" />
-          <TextInput
-            style={styles.topSearchInput as any}
-            value={term}
-            onChangeText={setTerm}
-            placeholder="Buscar praticante…"
-            placeholderTextColor="rgba(253,248,242,0.6)"
-            returnKeyType="search"
-            onSubmitEditing={submitSearch}
-            accessibilityLabel="Buscar praticante"
-          />
-        </View>
-
-        {/* Sino de notificações com dot */}
-        <TouchableOpacity
-          style={styles.iconBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Notificações"
-          activeOpacity={0.8}
-        >
-          <Icon name="bell" size={18} color="#fdf8f2" />
-          <View style={styles.iconBtnDot} />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -299,6 +219,14 @@ function SidebarNav() {
   const logout = useAuthStore((s) => s.logout);
   const userName = (user?.name || user?.email || "Usuário") as string;
   const userRole = roleLabel(karateRole);
+
+  // Busca global (de volta à sidebar): submeter → lista de Praticantes (?q=).
+  const [term, setTerm] = useState("");
+  const submitSearch = () => {
+    const q = term.trim();
+    if (!q) return;
+    router.push(("/karate/praticantes?q=" + encodeURIComponent(q)) as any);
+  };
 
   // Separa os itens "normais" dos itens de rodapé (Configurações).
   const mainItems   = items.filter((i) => i.label !== "Configurações");
@@ -329,10 +257,10 @@ function SidebarNav() {
 
   return (
     <View style={styles.sidebar}>
-      {/* Logo mark + wordmark "Aura Karatê" (ê vermelho) */}
+      {/* Marca Aura Karatê: selo 空 (gradiente oxblood) + wordmark (ê vermelho) */}
       <View style={styles.brand}>
         <View style={styles.brandMark}>
-          <FpktLogo size={26} />
+          <Text style={styles.brandMarkSeal}>空</Text>
         </View>
         <View style={styles.brandWm}>
           <Text style={styles.brandWord}>
@@ -342,18 +270,38 @@ function SidebarNav() {
         </View>
       </View>
 
-      {/* org-slug: nome da federação com separadores vermelhos */}
+      {/* Bloco da federação: FpktLogo + nome (separadores vermelhos) */}
       <View style={styles.orgSlug}>
-        <Text style={styles.orgSlugLabel}>Federação</Text>
-        <Text
-          style={styles.orgSlugName}
-          numberOfLines={2}
-          {...(Platform.OS === "web"
-            ? ({ accessibilityLabel: federationName, title: federationName } as any)
-            : {})}
-        >
-          {federationName}
-        </Text>
+        <View style={styles.orgSlugFpktMark}>
+          <FpktLogo size={26} />
+        </View>
+        <View style={styles.orgSlugMeta}>
+          <Text style={styles.orgSlugLabel}>Federação</Text>
+          <Text
+            style={styles.orgSlugName}
+            numberOfLines={2}
+            {...(Platform.OS === "web"
+              ? ({ accessibilityLabel: federationName, title: federationName } as any)
+              : {})}
+          >
+            {federationName}
+          </Text>
+        </View>
+      </View>
+
+      {/* Busca global → /karate/praticantes?q= */}
+      <View style={styles.sbSearch}>
+        <Icon name="search" size={15} color={KarateColors.ink3} />
+        <TextInput
+          style={styles.sbSearchInput as any}
+          value={term}
+          onChangeText={setTerm}
+          placeholder="Buscar praticante…"
+          placeholderTextColor={KarateColors.ink4}
+          returnKeyType="search"
+          onSubmitEditing={submitSearch}
+          accessibilityLabel="Buscar praticante"
+        />
       </View>
 
       {/* Navigation principal */}
@@ -441,7 +389,7 @@ export function KarateShell() {
       <View style={styles.wideContainer}>
         <SidebarNav />
         <View style={styles.content}>
-          {/* Topbar oxblood: logos + breadcrumb + busca global + sino */}
+          {/* Topbar oxblood: só o breadcrumb (caminho atual) */}
           <Topbar />
           <Slot />
         </View>
@@ -479,7 +427,7 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // ── Topbar oxblood (web) ───────────────────────────────────
+  // ── Topbar oxblood (web) — só breadcrumb ───────────────────
   topbar: {
     backgroundColor: KarateColors.headRed,
     borderBottomWidth: 1,
@@ -492,99 +440,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
   } as ViewStyle,
-
-  // ── Lockup de logos do header ──────────────────────────────
-  headLogos: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    flexShrink: 0,
-  } as ViewStyle,
-  // Quadrante 1 — Aura Karatê
-  headBrand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  } as ViewStyle,
-  headMark: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: ShojiPalette.red,
-    borderWidth: 1,
-    borderColor: "rgba(253,248,242,0.32)",
-  } as ViewStyle,
-  headMarkSeal: {
-    fontFamily: KarateFonts.heading,
-    fontSize: 19,
-    color: "#fbeee4",
-    lineHeight: 24,
-  } as TextStyle,
-  headBrandWm: {
-    minWidth: 0,
-  } as ViewStyle,
-  headBrandWord: {
-    fontFamily: KarateFonts.heading,
-    fontSize: 17,
-    fontWeight: "500",
-    letterSpacing: 0.3,
-    color: "#fdf8f2",
-    lineHeight: 19,
-  } as TextStyle,
-  headBrandWordRed: {
-    color: "#f4c9bf",
-  } as TextStyle,
-  headBrandSub: {
-    fontFamily: KarateFonts.body,
-    fontSize: 8,
-    fontWeight: "600",
-    letterSpacing: 2,
-    color: "rgba(253,248,242,0.66)",
-    marginTop: 2,
-  } as TextStyle,
-  // filete separador claro entre quadrantes / antes do breadcrumb
-  headDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(253,248,242,0.26)",
-  } as ViewStyle,
-  // Quadrante 2 — FPKT
-  headFpkt: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  } as ViewStyle,
-  headFpktMark: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(253,248,242,0.92)",
-    borderWidth: 1,
-    borderColor: "rgba(253,248,242,0.5)",
-    overflow: "hidden",
-  } as ViewStyle,
-  headFpktWm: {
-    minWidth: 0,
-    maxWidth: 150,
-  } as ViewStyle,
-  headFpktName: {
-    fontFamily: KarateFonts.heading,
-    fontSize: 14,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-    color: "#fdf8f2",
-    lineHeight: 16,
-  } as TextStyle,
-  headFpktSub: {
-    fontFamily: KarateFonts.body,
-    fontSize: 9,
-    color: "rgba(253,248,242,0.66)",
-    marginTop: 2,
-  } as TextStyle,
 
   crumbs: {
     flexDirection: "row",
@@ -618,51 +473,6 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // Busca global na topbar (sobre o vermelho)
-  topSearch: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    width: 240,
-    maxWidth: "30%",
-    backgroundColor: "rgba(253,248,242,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(253,248,242,0.28)",
-    borderRadius: KarateRadius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  } as ViewStyle,
-  topSearchInput: {
-    flex: 1,
-    fontFamily: KarateFonts.body,
-    fontSize: 12.5,
-    color: "#fdf8f2",
-    minHeight: 20,
-    outlineStyle: "none",
-  } as any,
-
-  // Botão de ícone (sino) sobre o vermelho
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: KarateRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(253,248,242,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(253,248,242,0.26)",
-    position: "relative",
-  } as ViewStyle,
-  iconBtnDot: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#fdf8f2",
-  } as ViewStyle,
-
   // ── Sidebar ────────────────────────────────────────────────
   sidebar: {
     width: 236,
@@ -675,7 +485,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   } as ViewStyle,
 
-  // Logo mark + wordmark
+  // Marca Aura Karatê: selo 空 + wordmark
   brand: {
     flexDirection: "row",
     alignItems: "center",
@@ -686,14 +496,23 @@ const styles = StyleSheet.create({
   brandMark: {
     width: 42,
     height: 42,
-    borderRadius: 11,
+    borderRadius: 10,  // ~23% de 42
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: ShojiPalette.red,
+    backgroundColor: "#a44230",  // fallback sólido oxblood (gradiente no web)
     borderWidth: 1,
     borderColor: "rgba(43,38,32,0.14)",
     overflow: "hidden",
+    ...(Platform.OS === "web"
+      ? ({ backgroundImage: "linear-gradient(150deg,#c0503f,#983429)" } as any)
+      : {}),
   } as ViewStyle,
+  brandMarkSeal: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 23,
+    color: "#fbeee4",
+    lineHeight: 28,
+  } as TextStyle,
   brandWm: {
     flex: 1,
     minWidth: 0,
@@ -718,8 +537,11 @@ const styles = StyleSheet.create({
     marginTop: 5,
   } as TextStyle,
 
-  // org-slug (nome da federação) com separadores vermelhos
+  // Bloco da federação: FpktLogo + nome (separadores vermelhos)
   orgSlug: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
     paddingVertical: 14,
     paddingHorizontal: 8,
     borderTopWidth: 1,
@@ -727,6 +549,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: ShojiPalette.redLine,
     marginBottom: 16,
+  } as ViewStyle,
+  orgSlugFpktMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: KarateColors.glass2,
+    borderWidth: 1,
+    borderColor: KarateColors.border2,
+    overflow: "hidden",
+  } as ViewStyle,
+  orgSlugMeta: {
+    flex: 1,
+    minWidth: 0,
   } as ViewStyle,
   orgSlugLabel: {
     fontFamily: KarateFonts.body,
@@ -744,6 +581,28 @@ const styles = StyleSheet.create({
     color: KarateColors.ink,
     lineHeight: 18,
   } as TextStyle,
+
+  // Busca global na sidebar
+  sbSearch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: KarateColors.glass2,
+    borderWidth: 1,
+    borderColor: KarateColors.border2,
+    borderRadius: KarateRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 16,
+  } as ViewStyle,
+  sbSearchInput: {
+    flex: 1,
+    fontFamily: KarateFonts.body,
+    fontSize: 12.5,
+    color: KarateColors.ink,
+    minHeight: 20,
+    outlineStyle: "none",
+  } as any,
 
   // nav sections
   navSection: {
