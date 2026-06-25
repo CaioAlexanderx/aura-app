@@ -18,7 +18,7 @@ import {
   AfiliacaoPayload, CoberturaPayload, InadimplenciaPayload, ProjecaoPayload,
   GraduacoesPayload, RelacaoFaixasPayload,
 } from "@/services/karateNetworkHealthApi";
-import { st, fmtBRL, fmtPct, fmtN, Sk, SectionRow, BarChart } from "./shared";
+import { st, fmtBRL, fmtPct, fmtN, fmtMesAno, Sk, SectionRow, BarChart } from "./shared";
 
 type CardCallbacks = { onCsv: () => void; onDetail: () => void };
 
@@ -84,11 +84,11 @@ export function CoberturaCard({
         <><Sk h={120} mb={8} /><Sk h={60} /></>
       ) : (
         <>
-          {/* Ranking */}
+          {/* Ranking — nomes completos sem truncamento */}
           <View style={{ gap: 8, marginBottom: 12 }}>
             {top5.map((r) => (
               <View key={r.regiao} style={st.covRow}>
-                <Text style={st.covLabel} numberOfLines={1}>{r.short}</Text>
+                <Text style={st.covLabel}>{r.regiao}</Text>
                 <View style={st.covBarBg}>
                   <View
                     style={[
@@ -199,8 +199,7 @@ export function ProjecaoCard({
           </View>
           <BarChart
             items={items.map((d) => ({
-              label: d.mes,
-              sublabel: d.ano,
+              label: fmtMesAno(d.mes, d.ano),
               value: d.total,
               isProj: d.kind === "proj",
             }))}
@@ -248,7 +247,7 @@ export function GraduacoesCard({
             <Text style={st.heroSub}>graduações YTD (no ano corrente)</Text>
           </View>
           <BarChart
-            items={items.map((d) => ({ label: d.mes, sublabel: d.ano, value: d.total }))}
+            items={items.map((d) => ({ label: fmtMesAno(d.mes, d.ano), value: d.total }))}
             maxVal={maxVal}
             barColor={C.ink2}
           />
