@@ -1,34 +1,27 @@
 // ============================================================
 // CriarExameModal — Aura Karatê (federação) · Shoji
 //
-// Wizard 3 passos, agora em MODAL CENTRADO (overlay + card), igual às
-// fichas de ouro (PraticanteFichaModal / DojoFichaModal). Antes abria em
-// <Modal presentationStyle="pageSheet"> que no web vira TELA CHEIA.
+// Wizard em MODAL CENTRADO (overlay + card), igual às fichas de ouro
+// (PraticanteFichaModal / DojoFichaModal).
 //
-//   1 — Dados (título, data, local, taxa, vagas) → POST /belt-exams
-//   2 — Banca (busca praticantes reais → addExaminer)
-//   3 — Candidatos (busca praticantes reais → enrollCandidate;
-//       elegibilidade é aviso, nunca bloqueia — Decisão FPKT #1)
+// TIPO DE EVENTO (Decisão Caio 25/06): a federação realiza eventos AMPLOS.
+// Dois tipos, sem especificar grau:
+//   • Exame  → exam_type: 'exame'  — 3 passos (Dados · Banca · Candidatos)
+//   • Curso  → exam_type: 'curso'  — 1 passo (Dados); curso não gradua,
+//              logo não tem banca nem candidatos.
 //
-// CONTEXTO FPKT: a federação realiza APENAS o exame de Dan (Marrom → Preta).
-// Os exames de kyu são promovidos pelos dojôs. Por isso a faixa-alvo é fixa
-// em Preta (1º Dan) — sem seletor de todas as faixas.
+// O backend passou a aceitar os tipos amplos 'exame' e 'curso' no
+// /belt-exams (antes a constraint só aceitava os Dan e o FE mandava um
+// valor inválido → 500 ao criar).
 //
 // Metodologia de forms (decisões Caio):
-//   - Máscara de dinheiro consistente (maskMoney): formata centavos e envia
-//     o valor em reais corretamente. Corrige o bug Number(onlyD(fee))/100,
-//     em que digitar "50" virava R$ 0,50.
-//   - Data com validação de calendário real (parseBrDate do DateInput):
-//     não aceita 31/02 etc.
+//   - maskMoney consistente (centavos → reais) · parseBrDate valida calendário.
 //   - Dado INVÁLIDO é sinalizado; dado AUSENTE é neutro/opcional.
-//   - autofocus no 1º campo; Enter avança (returnKeyType).
-//   - CTA do rodapé ("Próximo"/"Concluir") é primário em sumi (escuro),
-//     consistente com "Salvar"; full-width no footer (padrão de form).
-//     O vermelhão fica reservado a ações destrutivas.
+//   - CTA do rodapé é primário em sumi (escuro), full-width.
 //
-// Comportamento de criação INTOCADO: o create envia { name, event_date,
-// location, exam_type:'dan', fee_amount, max_candidates } via request()
-// direto (o tipo de karateApi está dessincronizado).
+// O create envia { name, event_date, location, exam_type, fee_amount,
+// max_candidates } via request() direto (o tipo de karateApi está
+// dessincronizado para este payload amplo).
 // ============================================================
 import React, { useState, useCallback } from "react";
 import {
@@ -36,7 +29,7 @@ import {
   StyleSheet, ActivityIndicator, Alert, useWindowDimensions, ViewStyle, TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F, KarateBelts } from "@/constants/karateTheme";
+import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { EligibilityChecklist } from "@/components/karate/EligibilityChecklist";
@@ -46,10 +39,17 @@ import {
 } from "@/services/karateApi";
 import { request } from "@/services/api";
 
-const STEPS = ["Dados", "Banca", "Candidatos"];
+// Tipo de evento amplo (sem grau). Mapeia 1:1 para exam_type do backend.
+type EventKind = "exame" | "curso";
 
-// A federação só faz o exame de Dan (Marrom → Preta). Alvo fixo.
-const TARGET_BELT = "preta";
+// Passos por tipo: Exame monta banca + candidatos; Curso é só Dados.
+const STEPS_EXAME = ["Dados", "Banca", "Candidatos"];
+const STEPS_CURSO = ["Dados"];
+
+// Faixa-alvo default da inscrição de candidato no Exame amplo. Não é exposta
+// no form (não forçamos grau); serve só para o enroll do candidato, cuja
+// elegibilidade é apenas um aviso (Decisão FPKT #1).
+const DEFAULT_TARGET_BELT = "preta";
 
 interface Props {
   visible:      boolean;
@@ -70,8 +70,6 @@ function maskDate(v: string) {
 }
 
 // Máscara de dinheiro consistente: trabalha em centavos e exibe R$ X,YY.
-// "50" → "0,50"? Não — entrada é por centavos crescentes: digitar 5,0,0,0 → 50,00.
-// Mantemos a convenção padrão de campos monetários (último dígito = centavo).
 function maskMoney(v: string) {
   const cents = onlyD(v).slice(0, 11); // teto generoso
   if (!cents) return "";
@@ -89,6 +87,10 @@ function moneyToNumber(v: string): number {
 export function CriarExameModal({ visible, onClose, federationId, onCreated }: Props) {
   const { width } = useWindowDimensions();
   const cardW = Math.min(680, width - 24);
+
+  // Tipo de evento (default Exame). Define os passos e o exam_type enviado.
+  const [kind, setKind] = useState<EventKind>("exame");
+  const STEPS = kind === "exame" ? STEPS_EXAME : STEPS_CURSO;
 
   const [step, setStep] = useState(0);
 
@@ -120,7 +122,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
   const dateBad = examDate.length === 10 && parseBrDate(examDate) === null;
 
   const resetAndClose = () => {
-    setStep(0); setTitle(""); setExamDate(""); setLocation(""); setFee(""); setMaxCandidates("");
+    setKind("exame"); setStep(0); setTitle(""); setExamDate(""); setLocation(""); setFee(""); setMaxCandidates("");
     setCreatedExamId(null); setPool([]); setPoolQ(""); setExaminers([]);
     setSelected([]); setEligibilityMap({}); setLoading(false); setBusyId(null); setError(null);
     onClose();
@@ -146,23 +148,28 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
     }
     setError(null); setLoading(true);
     try {
-      // Campos corretos do backend: name, event_date, location, exam_type, fee_amount, max_candidates
+      // Payload amplo: exam_type = 'exame' | 'curso' (sem grau).
       const exam: any = await request(`/federation/${federationId}/belt-exams`, {
         method: "POST",
         body: {
           name: title.trim(),
           event_date: iso,
           location: location.trim(),
-          exam_type: "dan",
+          exam_type: kind, // 'exame' ou 'curso'
           fee_amount: fee ? moneyToNumber(fee) : undefined,
           max_candidates: maxCandidates ? parseInt(maxCandidates, 10) : undefined,
         },
       });
       setCreatedExamId(exam?.id ?? null);
+      if (kind === "curso") {
+        // Curso não gradua: não há banca nem candidatos. Conclui direto.
+        handleFinish();
+        return;
+      }
       setStep(1);
       searchPool("");
     } catch (e: any) {
-      setError(e?.message ?? "Não foi possível criar o exame. Tente novamente.");
+      setError(e?.message ?? "Não foi possível criar o evento. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -188,7 +195,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
     try {
       const candidate = await karateApi.enrollCandidate(federationId, createdExamId, {
         practitioner_id: p.id,
-        target_belt: TARGET_BELT,
+        target_belt: DEFAULT_TARGET_BELT,
       });
       setSelected((prev) => [...prev, p.id]);
       if (candidate.eligibility) {
@@ -203,9 +210,11 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
 
   const handleFinish = () => {
     onCreated?.();
-    Alert.alert("Exame criado!", `"${title}" criado com ${selected.length} candidato(s) e ${examiners.length} examinador(es).`, [
-      { text: "OK", onPress: resetAndClose },
-    ]);
+    const what = kind === "curso" ? "Curso" : "Exame";
+    const detail = kind === "curso"
+      ? `"${title}" criado.`
+      : `"${title}" criado com ${selected.length} candidato(s) e ${examiners.length} examinador(es).`;
+    Alert.alert(`${what} criado!`, detail, [{ text: "OK", onPress: resetAndClose }]);
   };
 
   const PoolList = ({ mode }: { mode: "examiner" | "candidate" }) => (
@@ -260,7 +269,8 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
     </View>
   );
 
-  const preta = KarateBelts.preta;
+  // CTA do rodapé depende do tipo: no Curso o passo Dados é o último.
+  const isLastStep = kind === "curso" || step === STEPS_EXAME.length - 1;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={resetAndClose}>
@@ -270,9 +280,9 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
           {/* header */}
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.eyebrow}>空  FPKT · Novo exame</Text>
-              <Text style={styles.title}>Criar exame de Dan<Text style={{ color: P.red }}>.</Text></Text>
-              <Text style={styles.sub}>Graduação Marrom → Preta. Preencha os dados e monte a banca.</Text>
+              <Text style={styles.eyebrow}>空  FPKT · Novo evento</Text>
+              <Text style={styles.title}>Criar evento<Text style={{ color: P.red }}>.</Text></Text>
+              <Text style={styles.sub}>Escolha o tipo, preencha os dados{kind === "exame" ? " e monte a banca" : ""}.</Text>
             </View>
             <TouchableOpacity onPress={resetAndClose} hitSlop={10} style={styles.close} accessibilityLabel="Fechar modal">
               <Ionicons name="close" size={20} color={P.ink2} />
@@ -291,21 +301,26 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
 
             {step === 0 && (
               <View style={styles.stepContent}>
-                {/* Contexto: exame de Dan, Marrom → Preta */}
-                <View style={styles.danCard}>
-                  <View style={styles.beltDot}>
-                    <View style={[styles.beltSwatch, { backgroundColor: KarateBelts.marrom.color }]} />
-                    <Ionicons name="arrow-forward" size={13} color={P.ink3} />
-                    <View style={[styles.beltSwatch, { backgroundColor: preta.color }]} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.danTitle}>Exame de Faixa Preta (Dan)</Text>
-                    <Text style={styles.danSub}>A federação realiza apenas a graduação Marrom → Preta. Exames de kyu são promovidos pelos dojôs.</Text>
-                  </View>
+                {/* Seletor de tipo de evento (amplo, sem grau) */}
+                <View style={styles.kindRow}>
+                  <KindOption
+                    label="Exame"
+                    desc="Avaliação com banca e candidatos"
+                    icon="ribbon-outline"
+                    active={kind === "exame"}
+                    onPress={() => { setKind("exame"); setStep(0); }}
+                  />
+                  <KindOption
+                    label="Curso"
+                    desc="Formação / seminário (sem banca)"
+                    icon="school-outline"
+                    active={kind === "curso"}
+                    onPress={() => { setKind("curso"); setStep(0); }}
+                  />
                 </View>
 
-                <Field label="Título do exame" req value={title} onChangeText={setTitle}
-                  placeholder="Ex.: Exame de Dan · Jun/2026" autoFocus returnKeyType="next" />
+                <Field label={kind === "curso" ? "Título do curso" : "Título do exame"} req value={title} onChangeText={setTitle}
+                  placeholder={kind === "curso" ? "Ex.: Curso de Arbitragem · Jun/2026" : "Ex.: Exame · Jun/2026"} autoFocus returnKeyType="next" />
                 <Row2>
                   <Field flex label="Data" req hint="dd/mm/aaaa" mono value={examDate}
                     onChangeText={(v) => setExamDate(maskDate(v))} keyboardType="numeric" maxLength={10}
@@ -315,7 +330,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
                     placeholder="Dojô / ginásio" returnKeyType="next" />
                 </Row2>
                 <Row2>
-                  <Field flex label="Taxa de exame" hint="opcional" mono value={fee}
+                  <Field flex label="Taxa" hint="opcional" mono value={fee}
                     onChangeText={(v) => setFee(maskMoney(v))} keyboardType="numeric"
                     placeholder="0,00" prefix="R$" />
                   <Field flex label="Vagas" hint="opcional" mono value={maxCandidates}
@@ -325,16 +340,16 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
               </View>
             )}
 
-            {step === 1 && (
+            {kind === "exame" && step === 1 && (
               <View style={styles.stepContent}>
                 <Text style={styles.stepHint}>Adicione os examinadores da banca ({examiners.length} na banca). O primeiro vira presidente.</Text>
                 <PoolList mode="examiner" />
               </View>
             )}
 
-            {step === 2 && (
+            {kind === "exame" && step === 2 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepHint}>Inscreva os candidatos (faixas marrons aptas ao Dan). A elegibilidade é só um aviso — não impede a inscrição (Decisão FPKT #1).</Text>
+                <Text style={styles.stepHint}>Inscreva os candidatos. A elegibilidade é só um aviso — não impede a inscrição (Decisão FPKT #1).</Text>
                 <PoolList mode="candidate" />
               </View>
             )}
@@ -345,12 +360,14 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
               <KarateButton label="Voltar" variant="ghost" size="md" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
             )}
             {step === 0 && (
-              <KarateButton label={loading ? "Criando..." : "Próximo"} variant="sumi" size="md" loading={loading} onPress={handleStep1Next} style={{ flex: 1 }} />
+              <KarateButton
+                label={loading ? "Criando..." : (isLastStep ? "Concluir" : "Próximo")}
+                variant="sumi" size="md" loading={loading} onPress={handleStep1Next} style={{ flex: 1 }} />
             )}
-            {step === 1 && (
+            {kind === "exame" && step === 1 && (
               <KarateButton label="Próximo" variant="sumi" size="md" onPress={() => setStep(2)} style={{ flex: 1 }} />
             )}
-            {step === 2 && (
+            {kind === "exame" && step === 2 && (
               <KarateButton label="Concluir" variant="sumi" size="md" onPress={handleFinish} style={{ flex: 1 }} />
             )}
           </View>
@@ -361,6 +378,28 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
 }
 
 // ── subcomponentes (padrão das fichas) ───────────────────────
+function KindOption({ label, desc, icon, active, onPress }: {
+  label: string; desc: string; icon: string; active: boolean; onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      style={[styles.kindOpt, active && styles.kindOptActive]}
+    >
+      <View style={[styles.kindIcon, active && styles.kindIconActive]}>
+        <Ionicons name={icon as any} size={16} color={active ? P.paper : P.ink2} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.kindLabel, active && styles.kindLabelActive]}>{label}</Text>
+        <Text style={styles.kindDesc}>{desc}</Text>
+      </View>
+      {active && <Ionicons name="checkmark-circle" size={16} color={P.red} />}
+    </Pressable>
+  );
+}
 function Row2({ children }: { children: React.ReactNode }) {
   return <View style={styles.row2}>{children}</View>;
 }
@@ -403,11 +442,15 @@ const styles = StyleSheet.create({
   stepContent: { gap: 4 } as ViewStyle,
   stepHint: { fontFamily: F.body, fontSize: 12, color: P.ink3, marginBottom: 4 } as TextStyle,
 
-  danCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: R.md, padding: 12, marginBottom: 8 } as ViewStyle,
-  beltDot: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
-  beltSwatch: { width: 16, height: 16, borderRadius: 999, borderWidth: 1, borderColor: "rgba(43,38,32,0.18)" } as ViewStyle,
-  danTitle: { fontFamily: F.body, fontSize: 14, fontWeight: "800", color: P.ink } as TextStyle,
-  danSub: { fontFamily: F.body, fontSize: 11.5, color: P.ink3, marginTop: 2 } as TextStyle,
+  // Seletor de tipo de evento
+  kindRow: { flexDirection: "row", gap: 10, marginBottom: 10 } as ViewStyle,
+  kindOpt: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, padding: 12 } as ViewStyle,
+  kindOptActive: { borderColor: P.red, backgroundColor: P.redWash } as ViewStyle,
+  kindIcon: { width: 30, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: P.paper3 } as ViewStyle,
+  kindIconActive: { backgroundColor: P.ink } as ViewStyle,
+  kindLabel: { fontFamily: F.body, fontSize: 14, fontWeight: "800", color: P.ink } as TextStyle,
+  kindLabelActive: { color: P.ink } as TextStyle,
+  kindDesc: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 1 } as TextStyle,
 
   row2: { flexDirection: "row", gap: 12 } as ViewStyle,
   field: { marginBottom: 11 } as ViewStyle,
