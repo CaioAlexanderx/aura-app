@@ -7,13 +7,16 @@
 //   no SHELL do app (não no cartão — decisão Caio 08/06).
 // - Renderiza o cartão (frente/verso) via CarteirinhaCard.
 // - Emitir/Renovar via POST .../issue-card; exibe warnings do backend.
+// - Revogar (fix/karate-practitioner-edit-delete-ui): quando há carteirinha
+//   ativa, botão destrutivo "Revogar" → window.confirm → karateApi.revokeCard
+//   → refetch (chip vira "Revogada"). Após revogar, "Emitir" gera uma nova.
 //
 // Carteirinha é DATA-ONLY: nenhuma imagem é gerada no app/servidor.
 //
 // Padronização de CTAs (Shoji): "Emitir carteirinha" é CTA primário em sumi
 //   (escuro), tamanho normal, alinhado à direita — não mais faixa vermelha
 //   full-width. "Renovar" segue como ação secundária. O vermelhão fica
-//   reservado a ações destrutivas/críticas.
+//   reservado a ações destrutivas/críticas ("Revogar").
 //
 // Fix C5 (23/06): o botão "Emitir carteirinha" não fazia nada ao clicar.
 //   Causa: a confirmação usava Alert.alert com DOIS botões (Cancelar + Emitir),
@@ -26,6 +29,7 @@
 import React, { useEffect, useState } from "react";
 import { Platform, View, Text, TouchableOpacity, Alert, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
@@ -33,6 +37,7 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { CarteirinhaCard } from "@/components/karate/CarteirinhaCard";
 import { karateCardApi, MembershipCard } from "@/services/karateCardApi";
+import { karateApi } from "@/services/karateApi";
 
 interface CarteirinhaPanelProps {
   federationId: string;
@@ -66,9 +71,10 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   const [card, setCard] = useState<MembershipCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
+  const [revoking, setRevoking] = useState(false);
   const [face, setFace] = useState<"front" | "back">("front");
 
-  useEffect(() => {
+  const fetchCard = () => {
     let alive = true;
     setLoading(true);
     karateCardApi
@@ -77,6 +83,10 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       .catch(() => { if (alive) setCard(null); }) // 404 = sem carteirinha
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
+  };
+
+  useEffect(() => {
+    return fetchCard();
   }, [federationId, practitionerId]);
 
   const doIssue = async () => {
@@ -98,7 +108,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   };
 
   const confirmIssue = () => {
-    const renew = !!card;
+    const renew = !!card && card.status !== "revoked";
     confirm(
       renew ? "Renovar carteirinha?" : "Emitir carteirinha?",
       renew
@@ -106,6 +116,29 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
         : "Será gerada a carteirinha digital do praticante a partir dos dados atuais.",
       renew ? "Renovar" : "Emitir",
       doIssue
+    );
+  };
+
+  const doRevoke = async () => {
+    setRevoking(true);
+    try {
+      await karateApi.revokeCard(federationId, practitionerId);
+      // refetch para refletir o novo status (chip vira "Revogada")
+      fetchCard();
+      notify("Carteirinha revogada", "A carteirinha foi revogada. Use “Emitir” para gerar uma nova.");
+    } catch (e: any) {
+      notify("Não foi possível revogar", e?.message || "Tente novamente.");
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  const confirmRevoke = () => {
+    confirm(
+      "Revogar carteirinha?",
+      "A carteirinha ativa será marcada como revogada. Esta ação é registrada. Você pode emitir uma nova depois.",
+      "Revogar",
+      doRevoke
     );
   };
 
@@ -188,12 +221,35 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
 
       {/* ações */}
       <View style={styles.actions}>
-        <KarateButton
-          label={issuing ? "Renovando…" : "Renovar carteirinha"}
-          variant="secondary"
-          loading={issuing}
-          onPress={confirmIssue}
-        />
+        {revoked ? (
+          // Após revogar, "Emitir" gera uma nova carteirinha.
+          <KarateButton
+            label={issuing ? "Emitindo…" : "Emitir carteirinha"}
+            variant="sumi"
+            loading={issuing}
+            onPress={confirmIssue}
+          />
+        ) : (
+          <>
+            {/* Revogar — destrutivo (vermelho) */}
+            <TouchableOpacity
+              onPress={confirmRevoke}
+              disabled={revoking}
+              style={[styles.revokeBtn, revoking && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Revogar carteirinha"
+            >
+              <Icon name="x" size={15} color={KarateColors.primary} />
+              <Text style={styles.revokeTxt}>{revoking ? "Revogando…" : "Revogar"}</Text>
+            </TouchableOpacity>
+            <KarateButton
+              label={issuing ? "Renovando…" : "Renovar carteirinha"}
+              variant="secondary"
+              loading={issuing}
+              onPress={confirmIssue}
+            />
+          </>
+        )}
       </View>
     </View>
   );
@@ -209,7 +265,10 @@ function fmtBR(iso?: string | null): string {
 const styles = StyleSheet.create({
   tab:        { padding: 16, gap: 14 } as ViewStyle,
   // Ações em tamanho normal, alinhadas à direita (padrão de ação da aba).
-  actions:    { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  actions:    { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  // Revogar — botão destrutivo (vermelho/primary).
+  revokeBtn:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
+  revokeTxt:  { fontSize: 13.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   statusRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 } as ViewStyle,
   statusLabel:{ fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   flipRow:    { flexDirection: "row", gap: 8, alignSelf: "center" } as ViewStyle,
