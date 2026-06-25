@@ -230,7 +230,7 @@ export function GraduacoesCard({
   return (
     <View style={st.card}>
       <SectionRow
-        title="Graduações registradas"
+        title="Graduações registradas — YTD"
         sub="Exames Kyu → Dan registrados na federação"
         onCsv={onCsv}
         onDetail={onDetail}
@@ -241,7 +241,7 @@ export function GraduacoesCard({
         <>
           <View style={st.heroRow}>
             <Text style={st.heroNum}>{data.total}</Text>
-            <Text style={st.heroSub}>graduações nos últimos 8 meses</Text>
+            <Text style={st.heroSub}>graduações YTD (no ano corrente)</Text>
           </View>
           <BarChart
             items={items.map((d) => ({ label: d.mes, sublabel: d.ano, value: d.total }))}
