@@ -23,8 +23,8 @@
 //     recalcula sozinha no backend (view karate_current_belt) → refetch.
 //   - Transferência: cada registro ganha Editar (motivo+data) e Excluir.
 //   ARMADILHA: Alert.alert com botões é NO-OP no RN-Web → confirmação via
-//     window.confirm / modal in-app. Os controles NOVOS usam <Icon> (não
-//     migramos os Ionicons já existentes).
+//     window.confirm / modal in-app. Todos os ícones usam <Icon> (SVG inline);
+//     @expo/vector-icons foi removido deste arquivo (fix/karate-trajetoria-graduacao).
 //
 // Padronização de CTAs (Shoji): as ações das abas de detalhe ("Registrar
 //   graduação", "Transferir para outro dojô") são CTAs primários em sumi
@@ -48,7 +48,6 @@ import {
   Modal, TextInput, Pressable,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, KarateBelts, BeltKey } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
@@ -129,7 +128,7 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
     if (!val) return null;
     return (
       <View style={tabStyles.infoRow}>
-        <Ionicons name={icon as any} size={14} color={KarateColors.ink3} />
+        <Icon name={icon} size={14} color={KarateColors.ink3} />
         <Text style={tabStyles.infoLabel}>{label}</Text>
         <Text style={tabStyles.infoVal}>{val}</Text>
       </View>
@@ -219,7 +218,7 @@ function TrajetoriaTab({
       {/* Faixa atual (derivada do histórico) — Track C */}
       {currentBelt && (
         <View style={tabStyles.currentBeltBanner}>
-          <Ionicons name="ribbon" size={16} color={KarateColors.primary} />
+          <Icon name="ribbon" size={16} color={KarateColors.primary} />
           <View style={tabStyles.currentBeltInfo}>
             <Text style={tabStyles.currentBeltLabel}>Faixa atual</Text>
             <BeltBadge beltLevel={currentBelt.belt_level} beltName={currentBelt.belt_name} />
@@ -234,7 +233,7 @@ function TrajetoriaTab({
         <EmptyState
           icon="ribbon-outline"
           title="Sem histórico de faixas"
-          subtitle={allowed ? "Use “Registrar graduação” para adicionar a primeira faixa." : undefined}
+          subtitle={allowed ? "Use "Registrar graduação" para adicionar a primeira faixa." : undefined}
           style={{ paddingVertical: 32 }}
         />
       ) : (
@@ -317,6 +316,30 @@ function TrajetoriaTab({
 const BELT_OPTIONS: Array<{ key: BeltKey; label: string }> = (Object.keys(KarateBelts) as BeltKey[])
   .map((k) => ({ key: k, label: KarateBelts[k].label }));
 
+// Graus Dan (Preta): 1º a 10º
+const DAN_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+// Kyu por faixa (FPKT Shotokan): lista de kyus que a faixa pode representar.
+// Ex.: Marrom pode ser 3kyu, 2kyu ou 1kyu.
+const BELT_KYUS: Partial<Record<BeltKey, number[]>> = {
+  branca:      [10, 9],
+  amarela:     [8],
+  laranja:     [7],
+  verde:       [6],
+  azul_claro:  [5],
+  roxo:        [4],
+  azul_escuro: [3],
+  marrom:      [3, 2, 1],
+};
+
+/** Monta o belt_name legível para uma faixa + grau opcional. */
+function buildBeltName(key: BeltKey, dan?: number, kyu?: number): string {
+  const label = KarateBelts[key].label;
+  if (key === "preta" && dan) return `${label} ${dan}°`;
+  if (kyu) return `${label} ${kyu}°kyu`;
+  return label;
+}
+
 // Track A (fix 23/06): registrar uma graduação manual (faixa + data) no
 // histórico do praticante. A faixa atual é derivada automaticamente
 // (view karate_current_belt).
@@ -330,6 +353,8 @@ function RegistrarGraduacaoModal({
   onDone: () => void;
 }) {
   const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [danDeg, setDanDeg] = useState<number | null>(null);
+  const [kyuDeg, setKyuDeg] = useState<number | null>(null);
   const [dateBr, setDateBr] = useState("");
   const [legacy, setLegacy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -337,8 +362,15 @@ function RegistrarGraduacaoModal({
 
   // reset ao abrir
   useEffect(() => {
-    if (visible) { setBeltKey(null); setDateBr(""); setLegacy(false); setErr(null); setSaving(false); }
+    if (visible) { setBeltKey(null); setDanDeg(null); setKyuDeg(null); setDateBr(""); setLegacy(false); setErr(null); setSaving(false); }
   }, [visible]);
+
+  // Reset grau ao trocar faixa
+  function handleBeltSelect(k: BeltKey) {
+    setBeltKey(k);
+    setDanDeg(null);
+    setKyuDeg(null);
+  }
 
   const dateComplete = dateBr.length === 10;
   const dateIso = parseBrDate(dateBr); // null se incompleto/ inválido
@@ -351,9 +383,9 @@ function RegistrarGraduacaoModal({
     try {
       await karateApi.addBeltGraduation(federationId, practitionerId, {
         belt_level: beltKey,
-        belt_name: KarateBelts[beltKey].label,
+        belt_name: buildBeltName(beltKey, danDeg ?? undefined, kyuDeg ?? undefined),
         belt_schema: legacy ? "legacy" : "fpkt_shotokan",
-        graduated_at: dateIso || undefined, // sem data → backend usa hoje
+        graduated_at: dateIso ?? undefined, // sem data → backend usa hoje
       });
       setSaving(false);
       onDone();
@@ -371,7 +403,7 @@ function RegistrarGraduacaoModal({
           <View style={gradStyles.head}>
             <Text style={gradStyles.title}>Registrar graduação</Text>
             <TouchableOpacity onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+              <Icon name="x" size={20} color={KarateColors.ink3} />
             </TouchableOpacity>
           </View>
 
@@ -387,16 +419,58 @@ function RegistrarGraduacaoModal({
                 return (
                   <TouchableOpacity
                     key={opt.key}
-                    onPress={() => setBeltKey(opt.key)}
+                    onPress={() => handleBeltSelect(opt.key)}
                     activeOpacity={0.7}
                     style={[gradStyles.beltChip, { backgroundColor: KarateBelts[opt.key].color }, active && gradStyles.beltChipActive]}
                   >
                     <Text style={[gradStyles.beltChipTxt, { color: KarateBelts[opt.key].textColor }]}>{opt.label}</Text>
-                    {active && <Ionicons name="checkmark-circle" size={14} color={KarateBelts[opt.key].textColor} />}
+                    {active && <Icon name="check" size={14} color={KarateBelts[opt.key].textColor} />}
                   </TouchableOpacity>
                 );
               })}
             </View>
+
+            {/* Sub-seletor: Dan para Preta / Kyu para as demais */}
+            {beltKey === "preta" && (
+              <>
+                <Text style={gradStyles.label}>Grau Dan</Text>
+                <View style={gradStyles.beltGrid}>
+                  {DAN_OPTIONS.map((d) => {
+                    const active = danDeg === d;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => setDanDeg(active ? null : d)}
+                        activeOpacity={0.7}
+                        style={[gradStyles.beltChip, { backgroundColor: active ? KarateColors.ink : KarateColors.bg2 }, active && gradStyles.beltChipActive]}
+                      >
+                        <Text style={[gradStyles.beltChipTxt, { color: active ? "#fdf8f2" : KarateColors.ink2 }]}>{d}°</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+            {beltKey && beltKey !== "preta" && (BELT_KYUS[beltKey]?.length ?? 0) > 1 && (
+              <>
+                <Text style={gradStyles.label}>Kyu</Text>
+                <View style={gradStyles.beltGrid}>
+                  {(BELT_KYUS[beltKey] ?? []).map((k) => {
+                    const active = kyuDeg === k;
+                    return (
+                      <TouchableOpacity
+                        key={k}
+                        onPress={() => setKyuDeg(active ? null : k)}
+                        activeOpacity={0.7}
+                        style={[gradStyles.beltChip, { backgroundColor: active ? KarateColors.ink : KarateColors.bg2 }, active && gradStyles.beltChipActive]}
+                      >
+                        <Text style={[gradStyles.beltChipTxt, { color: active ? "#fdf8f2" : KarateColors.ink2 }]}>{k}°kyu</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
             <Text style={gradStyles.label}>Data da graduação · dd/mm/aaaa <Text style={gradStyles.labelHint}>(vazio = hoje)</Text></Text>
             <TextInput
@@ -413,14 +487,14 @@ function RegistrarGraduacaoModal({
 
             <TouchableOpacity style={gradStyles.legacyRow} onPress={() => setLegacy((v) => !v)} activeOpacity={0.7}>
               <View style={[gradStyles.checkbox, legacy && gradStyles.checkboxOn]}>
-                {legacy && <Ionicons name="checkmark" size={13} color="#fff" />}
+                {legacy && <Icon name="check" size={13} color="#fff" />}
               </View>
               <Text style={gradStyles.legacyTxt}>Registro histórico (sistema legado)</Text>
             </TouchableOpacity>
 
             {err ? (
               <View style={gradStyles.errBox}>
-                <Ionicons name="alert-circle" size={15} color={KarateColors.primary} />
+                <Icon name="alert_circle" size={15} color={KarateColors.primary} />
                 <Text style={gradStyles.errTxt}>{err}</Text>
               </View>
             ) : null}
@@ -453,6 +527,8 @@ function EditarGraduacaoModal({
 }) {
   const visible = !!entry;
   const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [danDeg, setDanDeg] = useState<number | null>(null);
+  const [kyuDeg, setKyuDeg] = useState<number | null>(null);
   const [dateBr, setDateBr] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -462,10 +538,22 @@ function EditarGraduacaoModal({
     // pré-seleciona a faixa se o belt_level casar com uma chave canônica
     const match = (Object.keys(KarateBelts) as BeltKey[]).find((k) => k === entry.belt_level);
     setBeltKey(match ?? null);
+    // pré-seleciona Dan se o belt_name carregar o grau (ex.: "Preta 2°")
+    const danMatch = entry.belt_name?.match(/(\d+)°/);
+    setDanDeg(match === "preta" && danMatch ? parseInt(danMatch[1], 10) : null);
+    // pré-seleciona kyu se o belt_name carregar (ex.: "Marrom 2°kyu")
+    const kyuMatch = entry.belt_name?.match(/(\d+)°kyu/i);
+    setKyuDeg(kyuMatch ? parseInt(kyuMatch[1], 10) : null);
     const known = !isUnknownBeltDate(entry.graduated_at);
     setDateBr(known ? (formatIsoToBr(entry.graduated_at) || "") : "");
     setErr(null); setSaving(false);
   }, [entry]);
+
+  function handleBeltSelect(k: BeltKey) {
+    setBeltKey(k);
+    setDanDeg(null);
+    setKyuDeg(null);
+  }
 
   const dateComplete = dateBr.length === 10;
   const dateIso = parseBrDate(dateBr);
@@ -476,10 +564,13 @@ function EditarGraduacaoModal({
     if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco."); return; }
     setErr(null); setSaving(true);
     try {
+      const resolvedKey = beltKey ?? (entry.belt_level as BeltKey);
       await karateApi.updateGraduation(federationId, practitionerId, entry.id, {
-        belt_level: beltKey ?? entry.belt_level,
-        belt_name: beltKey ? KarateBelts[beltKey].label : entry.belt_name,
-        graduated_at: dateIso || undefined,
+        belt_level: resolvedKey,
+        belt_name: beltKey
+          ? buildBeltName(beltKey, danDeg ?? undefined, kyuDeg ?? undefined)
+          : entry.belt_name,
+        ...(dateIso ? { graduated_at: dateIso } : {}),
       });
       setSaving(false);
       onDone();
@@ -497,7 +588,7 @@ function EditarGraduacaoModal({
           <View style={gradStyles.head}>
             <Text style={gradStyles.title}>Editar graduação</Text>
             <TouchableOpacity onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+              <Icon name="x" size={20} color={KarateColors.ink3} />
             </TouchableOpacity>
           </View>
 
@@ -513,16 +604,58 @@ function EditarGraduacaoModal({
                 return (
                   <TouchableOpacity
                     key={opt.key}
-                    onPress={() => setBeltKey(opt.key)}
+                    onPress={() => handleBeltSelect(opt.key)}
                     activeOpacity={0.7}
                     style={[gradStyles.beltChip, { backgroundColor: KarateBelts[opt.key].color }, active && gradStyles.beltChipActive]}
                   >
                     <Text style={[gradStyles.beltChipTxt, { color: KarateBelts[opt.key].textColor }]}>{opt.label}</Text>
-                    {active && <Ionicons name="checkmark-circle" size={14} color={KarateBelts[opt.key].textColor} />}
+                    {active && <Icon name="check" size={14} color={KarateBelts[opt.key].textColor} />}
                   </TouchableOpacity>
                 );
               })}
             </View>
+
+            {/* Sub-seletor: Dan para Preta / Kyu para as demais */}
+            {beltKey === "preta" && (
+              <>
+                <Text style={gradStyles.label}>Grau Dan</Text>
+                <View style={gradStyles.beltGrid}>
+                  {DAN_OPTIONS.map((d) => {
+                    const active = danDeg === d;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => setDanDeg(active ? null : d)}
+                        activeOpacity={0.7}
+                        style={[gradStyles.beltChip, { backgroundColor: active ? KarateColors.ink : KarateColors.bg2 }, active && gradStyles.beltChipActive]}
+                      >
+                        <Text style={[gradStyles.beltChipTxt, { color: active ? "#fdf8f2" : KarateColors.ink2 }]}>{d}°</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+            {beltKey && beltKey !== "preta" && (BELT_KYUS[beltKey]?.length ?? 0) > 1 && (
+              <>
+                <Text style={gradStyles.label}>Kyu</Text>
+                <View style={gradStyles.beltGrid}>
+                  {(BELT_KYUS[beltKey] ?? []).map((k) => {
+                    const active = kyuDeg === k;
+                    return (
+                      <TouchableOpacity
+                        key={k}
+                        onPress={() => setKyuDeg(active ? null : k)}
+                        activeOpacity={0.7}
+                        style={[gradStyles.beltChip, { backgroundColor: active ? KarateColors.ink : KarateColors.bg2 }, active && gradStyles.beltChipActive]}
+                      >
+                        <Text style={[gradStyles.beltChipTxt, { color: active ? "#fdf8f2" : KarateColors.ink2 }]}>{k}°kyu</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
             <Text style={gradStyles.label}>Data da graduação · dd/mm/aaaa <Text style={gradStyles.labelHint}>(vazio = mantém)</Text></Text>
             <TextInput
@@ -539,7 +672,7 @@ function EditarGraduacaoModal({
 
             {err ? (
               <View style={gradStyles.errBox}>
-                <Ionicons name="alert-circle" size={15} color={KarateColors.primary} />
+                <Icon name="alert_circle" size={15} color={KarateColors.primary} />
                 <Text style={gradStyles.errTxt}>{err}</Text>
               </View>
             ) : null}
@@ -636,7 +769,7 @@ function TransferenciaTab({
             <View key={t.id} style={tabStyles.transferCard}>
               <View style={tabStyles.transferRow}>
                 <Text style={tabStyles.transferDojo} numberOfLines={1}>{t.origin_dojo_name || "Sem dojô"}</Text>
-                <Ionicons name="arrow-forward" size={15} color={KarateColors.primary} />
+                <Icon name="arrow_right" size={15} color={KarateColors.primary} />
                 <Text style={[tabStyles.transferDojo, { color: KarateColors.primary }]} numberOfLines={1}>
                   {t.destination_dojo_name || "—"}
                 </Text>
@@ -749,7 +882,7 @@ function EditarTransferenciaModal({
           <View style={gradStyles.head}>
             <Text style={gradStyles.title}>Editar transferência</Text>
             <TouchableOpacity onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+              <Icon name="x" size={20} color={KarateColors.ink3} />
             </TouchableOpacity>
           </View>
 
@@ -780,7 +913,7 @@ function EditarTransferenciaModal({
 
             {err ? (
               <View style={gradStyles.errBox}>
-                <Ionicons name="alert-circle" size={15} color={KarateColors.primary} />
+                <Icon name="alert_circle" size={15} color={KarateColors.primary} />
                 <Text style={gradStyles.errTxt}>{err}</Text>
               </View>
             ) : null}
@@ -915,7 +1048,7 @@ function ExcluirComHistoricoModal({
           <View style={gradStyles.head}>
             <Text style={gradStyles.title}>Excluir praticante</Text>
             <TouchableOpacity onPress={onClose} hitSlop={10} disabled={!!busy}>
-              <Ionicons name="close" size={20} color={KarateColors.ink3} />
+              <Icon name="x" size={20} color={KarateColors.ink3} />
             </TouchableOpacity>
           </View>
 
@@ -1063,7 +1196,7 @@ export default function FichaPraticanteScreen() {
       <View style={styles.headerCard}>
         <View style={styles.headerRow}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={24} color={KarateColors.ink3} />
+            <Icon name="users" size={24} color={KarateColors.ink3} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.regNum}>{data.karate_registration_number}</Text>
@@ -1085,7 +1218,7 @@ export default function FichaPraticanteScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Editar praticante"
               >
-                <Ionicons name="create-outline" size={15} color={KarateColors.primary} />
+                <Icon name="edit" size={15} color={KarateColors.primary} />
                 <Text style={styles.editBtnText}>Editar</Text>
               </TouchableOpacity>
               {allowed && (
