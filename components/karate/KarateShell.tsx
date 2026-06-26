@@ -29,10 +29,9 @@
 //   Identidade e navegação concentradas na SIDEBAR (web); o header fica
 //   limpo, só com o caminho atual. Layout (25/06, feedback Caio):
 //   • Sidebar — topo: marca Aura Karatê (selo 空 sobre gradiente oxblood +
-//     wordmark, "ê" vermelho).
+//     wordmark, "Karatê" inteiro vermelho — G2).
 //   • Sidebar — bloco da federação: FpktLogo (pirâmide oficial) + nome da
-//     federação ("FEDERAÇÃO PAULISTA DE KARATE-DO …"), empilhado logo
-//     abaixo da marca Aura Karatê, no separador vermelho que já existia.
+//     federação (nome completo sem truncamento — G4), no separador vermelho.
 //   • Sidebar — busca global (de volta à sidebar): abaixo do bloco da
 //     federação, acima da navegação; submeter → /karate/praticantes?q=.
 //   • Sidebar — rodapé: chip de usuário (avatar com iniciais + nome +
@@ -257,16 +256,15 @@ function SidebarNav() {
 
   return (
     <View style={styles.sidebar}>
-      {/* Marca Aura Karatê: selo 空 (gradiente oxblood) + wordmark (ê vermelho) */}
+      {/* G2: Marca Aura Karatê — "Karatê" inteiro no vermelho */}
       <View style={styles.brand}>
         <View style={styles.brandMark}>
           <Text style={styles.brandMarkSeal}>空</Text>
         </View>
         <View style={styles.brandWm}>
           <Text style={styles.brandWord}>
-            Aura Karat<Text style={styles.brandWordRed}>ê</Text>
+            Aura <Text style={styles.brandWordRed}>Karatê</Text>
           </Text>
-          <Text style={styles.brandSubMark}>FEDERAÇÃO</Text>
         </View>
       </View>
 
@@ -279,7 +277,6 @@ function SidebarNav() {
           <Text style={styles.orgSlugLabel}>Federação</Text>
           <Text
             style={styles.orgSlugName}
-            numberOfLines={2}
             {...(Platform.OS === "web"
               ? ({ accessibilityLabel: federationName, title: federationName } as any)
               : {})}
@@ -485,7 +482,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   } as ViewStyle,
 
-  // Marca Aura Karatê: selo 空 + wordmark
+  // Marca Aura Karatê: selo 空 + wordmark ("Karatê" inteiro vermelho — G2)
   brand: {
     flexDirection: "row",
     alignItems: "center",
@@ -528,14 +525,6 @@ const styles = StyleSheet.create({
   brandWordRed: {
     color: ShojiPalette.red,
   } as TextStyle,
-  brandSubMark: {
-    fontFamily: KarateFonts.body,
-    fontSize: 9,
-    fontWeight: "500",
-    letterSpacing: 2.4,
-    color: KarateColors.ink3,
-    marginTop: 5,
-  } as TextStyle,
 
   // Bloco da federação: FpktLogo + nome (separadores vermelhos)
   orgSlug: {
@@ -574,12 +563,14 @@ const styles = StyleSheet.create({
     color: KarateColors.ink4,
     marginBottom: 5,
   } as TextStyle,
+  // G4: fontSize reduzido (14→12) e lineHeight (18→16) para o nome completo
+  // caber em 2 linhas sem truncamento (numberOfLines removido do JSX).
   orgSlugName: {
     fontFamily: KarateFonts.heading,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "500",
     color: KarateColors.ink,
-    lineHeight: 18,
+    lineHeight: 16,
   } as TextStyle,
 
   // Busca global na sidebar
