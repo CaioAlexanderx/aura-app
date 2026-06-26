@@ -7,7 +7,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C } from "@/constants/karateTheme";
 import { EstadoSelo, normalizeCertStatus } from "@/components/karate/EstadoSelo";
 import { Avatar } from "@/components/karate/shoji";
@@ -26,7 +26,7 @@ export function OrderRow({
     <View style={[cs.orderRow, selected && cs.orderRowSel]}>
       <TouchableOpacity onPress={() => onToggle(order.id)} style={cs.checkbox}>
         <View style={[cs.checkboxBox, selected && cs.checkboxBoxSel]}>
-          {selected ? <Ionicons name="checkmark" size={11} color="#fdf8f2" /> : null}
+          {selected ? <Icon name="check" size={11} color="#fdf8f2" /> : null}
         </View>
       </TouchableOpacity>
       <Avatar name={order.nome_impresso} size={34} />
