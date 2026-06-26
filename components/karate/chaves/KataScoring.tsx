@@ -15,7 +15,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P } from "@/constants/karateTheme";
 import { KataScore } from "@/services/karateBracketsApi";
 import { styles as S, initials, MiniAvatar } from "./shared";
@@ -50,7 +50,7 @@ export function KataView({
       </View>
 
       <View style={S.infoRow}>
-        <Ionicons name="information-circle-outline" size={13} color={C.ink3} />
+        <Icon name="info" size={13} color={C.ink3} />
         <Text style={S.infoText}>
           Cinco jurados; desconsidera a maior e a menor nota. Ordem de apresentação sorteada. Os melhores da eliminatória avançam à final.
         </Text>
@@ -78,7 +78,7 @@ export function KataView({
                 </Text>
               </View>
               <TouchableOpacity onPress={() => onEditScore(s)} style={S.editScoreBtn}>
-                <Ionicons name="create-outline" size={15} color={P.red} />
+                <Icon name="edit" size={15} color={P.red} />
               </TouchableOpacity>
             </View>
           ))}
@@ -104,7 +104,7 @@ export function KataView({
                   <Text style={[S.medalText, { color: MEDAL_COLORS[i] }]}>{MEDALS[i]}</Text>
                 )}
                 <TouchableOpacity onPress={() => onEditScore(s)} style={S.editScoreBtn}>
-                  <Ionicons name="create-outline" size={15} color={P.red} />
+                  <Icon name="edit" size={15} color={P.red} />
                 </TouchableOpacity>
               </View>
             ))}
