@@ -28,7 +28,7 @@ import {
   Modal, View, Text, ScrollView, TouchableOpacity, TextInput, Pressable,
   StyleSheet, ActivityIndicator, Alert, useWindowDimensions, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -220,7 +220,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
   const PoolList = ({ mode }: { mode: "examiner" | "candidate" }) => (
     <View style={{ gap: 8 }}>
       <View style={styles.searchRow}>
-        <Ionicons name="search-outline" size={15} color={P.ink3} />
+        <Icon name="search" size={15} color={P.ink3} />
         <TextInput
           style={styles.searchInput}
           placeholder="Buscar praticante por nome ou registro…"
@@ -248,7 +248,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
                 </View>
                 {added ? (
                   <View style={styles.enrolledTag}>
-                    <Ionicons name="checkmark-circle" size={14} color={P.ok} />
+                    <Icon name="check" size={14} color={P.ok} />
                     <Text style={styles.enrolledText}>{mode === "examiner" ? "Na banca" : "Inscrito"}</Text>
                   </View>
                 ) : (
@@ -285,7 +285,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
               <Text style={styles.sub}>Escolha o tipo, preencha os dados{kind === "exame" ? " e monte a banca" : ""}.</Text>
             </View>
             <TouchableOpacity onPress={resetAndClose} hitSlop={10} style={styles.close} accessibilityLabel="Fechar modal">
-              <Ionicons name="close" size={20} color={P.ink2} />
+              <Icon name="x" size={20} color={P.ink2} />
             </TouchableOpacity>
           </View>
 
@@ -294,7 +294,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
           <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="handled">
             {error ? (
               <View style={styles.errorBanner}>
-                <Ionicons name="alert-circle" size={15} color={P.red} />
+                <Icon name="alert_circle" size={15} color={P.red} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
@@ -306,14 +306,14 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
                   <KindOption
                     label="Exame"
                     desc="Avaliação com banca e candidatos"
-                    icon="ribbon-outline"
+                    icon="ribbon"
                     active={kind === "exame"}
                     onPress={() => { setKind("exame"); setStep(0); }}
                   />
                   <KindOption
                     label="Curso"
                     desc="Formação / seminário (sem banca)"
-                    icon="school-outline"
+                    icon="users"
                     active={kind === "curso"}
                     onPress={() => { setKind("curso"); setStep(0); }}
                   />
@@ -390,13 +390,13 @@ function KindOption({ label, desc, icon, active, onPress }: {
       style={[styles.kindOpt, active && styles.kindOptActive]}
     >
       <View style={[styles.kindIcon, active && styles.kindIconActive]}>
-        <Ionicons name={icon as any} size={16} color={active ? P.paper : P.ink2} />
+        <Icon name={icon as any} size={16} color={active ? P.paper : P.ink2} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.kindLabel, active && styles.kindLabelActive]}>{label}</Text>
         <Text style={styles.kindDesc}>{desc}</Text>
       </View>
-      {active && <Ionicons name="checkmark-circle" size={16} color={P.red} />}
+      {active && <Icon name="check" size={16} color={P.red} />}
     </Pressable>
   );
 }
