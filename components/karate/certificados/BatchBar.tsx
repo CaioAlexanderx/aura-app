@@ -7,7 +7,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C } from "@/constants/karateTheme";
 import { CertOrderStatus } from "@/components/karate/EstadoSelo";
 import { cs, ADVANCE_OPTIONS } from "./shared";
@@ -45,7 +45,7 @@ export function BatchBar({
         <Text style={cs.btnGhostText}>Recusar</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={onClear}>
-        <Ionicons name="close" size={18} color={C.ink3} />
+        <Icon name="x" size={18} color={C.ink3} />
       </TouchableOpacity>
     </View>
   );
