@@ -11,7 +11,7 @@ import {
   Modal, View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, Alert, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -73,7 +73,7 @@ export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Pr
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Conectar dojô</Text>
-          <TouchableOpacity onPress={reset} accessibilityLabel="Fechar"><Ionicons name="close" size={24} color={KarateColors.ink} /></TouchableOpacity>
+          <TouchableOpacity onPress={reset} accessibilityLabel="Fechar"><Icon name="x" size={24} color={KarateColors.ink} /></TouchableOpacity>
         </View>
         <Stepper steps={STEPS} currentStep={step} style={styles.stepper} />
 
@@ -91,12 +91,12 @@ export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Pr
                   <TouchableOpacity key={d.id} onPress={() => setDojo(d)}
                     style={[styles.pickRow, dojo?.id === d.id && styles.pickRowSel]}
                     accessibilityRole="radio" accessibilityState={{ checked: dojo?.id === d.id }}>
-                    <View style={styles.avatar}><Ionicons name="home" size={16} color={KarateColors.ink3} /></View>
+                    <View style={styles.avatar}><Icon name="dashboard" size={16} color={KarateColors.ink3} /></View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.dojoName}>{d.name}</Text>
                       <Text style={styles.dojoMeta}>{d.code}</Text>
                     </View>
-                    {dojo?.id === d.id && <Ionicons name="checkmark-circle" size={20} color={KarateColors.primary} />}
+                    {dojo?.id === d.id && <Icon name="check" size={20} color={KarateColors.primary} />}
                   </TouchableOpacity>
                 ))
               )}
@@ -109,17 +109,17 @@ export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Pr
               <Text style={styles.hint}>Como o {dojo?.name} vai se conectar à federação? Isso define o que chega aqui sozinho.</Text>
               <TouchableOpacity onPress={() => setVia("native")} style={[styles.viaCard, via === "native" && styles.viaCardSel]}>
                 <View style={styles.viaTop}>
-                  <Ionicons name="sync-circle" size={22} color={KarateColors.primary} />
+                  <Icon name="refresh" size={22} color={KarateColors.primary} />
                   <Text style={styles.viaTitle}>O dojô usa o Aura Karatê</Text>
-                  {via === "native" && <Ionicons name="checkmark-circle" size={20} color={KarateColors.primary} />}
+                  {via === "native" && <Icon name="check" size={20} color={KarateColors.primary} />}
                 </View>
                 <Text style={styles.viaDesc}>Tudo se atualiza sozinho: alunos, faixas, presenças e pagamentos chegam aqui automaticamente. É só o dojô aceitar o convite.</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setVia("manual")} style={[styles.viaCard, via === "manual" && styles.viaCardSel]}>
                 <View style={styles.viaTop}>
-                  <Ionicons name="shield-checkmark" size={22} color={KarateColors.ink3} />
+                  <Icon name="shield" size={22} color={KarateColors.ink3} />
                   <Text style={styles.viaTitle}>O dojô não usa nenhum sistema</Text>
-                  {via === "manual" && <Ionicons name="checkmark-circle" size={20} color={KarateColors.primary} />}
+                  {via === "manual" && <Icon name="check" size={20} color={KarateColors.primary} />}
                 </View>
                 <Text style={styles.viaDesc}>A federação cadastra e cuida de tudo. O sensei recebe um acesso para acompanhar os alunos e um convite para usar o Aura.</Text>
               </TouchableOpacity>
@@ -129,7 +129,7 @@ export function ConectarDojoModal({ visible, onClose, federationId, onDone }: Pr
           {/* Passo 3 — pronto */}
           {step === 2 && (
             <View style={styles.doneWrap}>
-              <View style={styles.doneIco}><Ionicons name="checkmark" size={34} color={KarateColors.ok} /></View>
+              <View style={styles.doneIco}><Icon name="check" size={34} color={KarateColors.ok} /></View>
               {via === "native" ? (
                 <>
                   <Text style={styles.doneT}>Convite enviado!</Text>
