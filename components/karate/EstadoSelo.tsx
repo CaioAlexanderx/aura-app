@@ -12,7 +12,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 
 export type CertOrderStatus =
@@ -24,7 +24,7 @@ export type CertOrderStatus =
 
 interface SeloConfig {
   label: string;
-  icon: "mail-outline" | "cog-outline" | "print-outline" | "send-outline" | "close-circle-outline";
+  icon: string;
   fg: string;
   bg: string;
   border: string;
@@ -32,11 +32,11 @@ interface SeloConfig {
 }
 
 const SELO_MAP: Record<CertOrderStatus, SeloConfig> = {
-  requested:     { label: "Solicitado",  icon: "mail-outline",         fg: ShojiPalette.ink3,   bg: "rgba(43,38,32,0.05)",   border: "rgba(43,38,32,0.16)",  dot: "#9b9180" },
-  in_production: { label: "Em produção", icon: "cog-outline",          fg: "#876721",            bg: "rgba(207,170,72,0.14)", border: "rgba(207,170,72,0.48)", dot: "#c79a35" },
-  printed:       { label: "Impresso",    icon: "print-outline",        fg: ShojiPalette.ink2,   bg: "rgba(122,78,48,0.10)",  border: "rgba(122,78,48,0.36)",  dot: "#7a4e30" },
-  shipped:       { label: "Enviado",     icon: "send-outline",         fg: "#3f6b3d",            bg: "rgba(74,122,72,0.10)",  border: "rgba(74,122,72,0.34)",  dot: "#4a7a48" },
-  refused:       { label: "Recusado",    icon: "close-circle-outline", fg: "#a23c31",            bg: "rgba(184,70,58,0.08)",  border: "rgba(184,70,58,0.42)",  dot: "#b8463a" },
+  requested:     { label: "Solicitado",  icon: "message",   fg: ShojiPalette.ink3,   bg: "rgba(43,38,32,0.05)",   border: "rgba(43,38,32,0.16)",  dot: "#9b9180" },
+  in_production: { label: "Em produção", icon: "settings",  fg: "#876721",            bg: "rgba(207,170,72,0.14)", border: "rgba(207,170,72,0.48)", dot: "#c79a35" },
+  printed:       { label: "Impresso",    icon: "download",  fg: ShojiPalette.ink2,   bg: "rgba(122,78,48,0.10)",  border: "rgba(122,78,48,0.36)",  dot: "#7a4e30" },
+  shipped:       { label: "Enviado",     icon: "arrow_right", fg: "#3f6b3d",          bg: "rgba(74,122,72,0.10)",  border: "rgba(74,122,72,0.34)",  dot: "#4a7a48" },
+  refused:       { label: "Recusado",    icon: "x",         fg: "#a23c31",            bg: "rgba(184,70,58,0.08)",  border: "rgba(184,70,58,0.42)",  dot: "#b8463a" },
 };
 
 export function EstadoSelo({
@@ -56,7 +56,7 @@ export function EstadoSelo({
       accessibilityLabel={cfg.label}
     >
       <View style={[st.dot, { backgroundColor: cfg.dot }]}>
-        <Ionicons name={cfg.icon} size={9} color="#fff" />
+        <Icon name={cfg.icon as any} size={9} color="#fff" />
       </View>
       {showLabel && (
         <Text style={[st.label, { color: cfg.fg }]}>{cfg.label}</Text>
